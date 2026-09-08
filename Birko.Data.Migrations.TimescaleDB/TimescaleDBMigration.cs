@@ -97,14 +97,19 @@ namespace Birko.Data.Migrations.TimescaleDB
     /// finds a decision that has been reopened rather than a constraint that no longer exists.
     /// </para>
     /// <para>
-    /// <b>Schema-qualified names ARE supported by the EMITTERS</b> (TASK-262) — but <b>not by the two
-    /// catalogue READERS</b>, and this paragraph claimed otherwise until TASK-260's close gate.
-    /// <see cref="IsHypertable"/> and <see cref="GetChunkInterval"/> compare the caller's name against
-    /// <c>timescaledb_information.hypertables.hypertable_name</c>, which holds the <i>bare</i> name with the
-    /// schema in a separate column — so <c>IsHypertable(context, "reporting.evts")</c> answers <b>false</b>
-    /// for a hypertable that exists, and the common guard
-    /// <c>if (!IsHypertable(t)) CreateHypertable(t)</c> then re-issues the conversion. <b>[[TASK-280]] owns
-    /// that</b>; it is stated here because a remark asserting the opposite is worse than no remark.
+    /// <b>Schema-qualified names are supported by the emitters (TASK-262) and, since TASK-280, by the two
+    /// catalogue readers too.</b> This paragraph claimed the readers were covered when they were not, which
+    /// is what let the gap sit unnoticed — so the correction is worth keeping rather than deleting.
+    /// <see cref="IsHypertable"/> and <see cref="GetChunkInterval"/> used to compare the caller's name
+    /// against <c>timescaledb_information.hypertables.hypertable_name</c>, which holds the <i>bare</i> name
+    /// with the schema in a separate column. Measured on 2.29.2 with <c>public."Evts"</c> and
+    /// <c>reporting."Evts"</c> both hypertables: a qualified name matched <b>0</b> rows — so
+    /// <c>IsHypertable(context, "reporting.Evts")</c> answered <b>false</b> for a hypertable that exists,
+    /// and the common guard <c>if (!IsHypertable(t)) CreateHypertable(t)</c> re-issued the conversion —
+    /// while an unqualified name matched <b>2</b> and <c>ExecuteScalar</c> took one arbitrarily. Both now
+    /// resolve the name through the server's own <c>to_regclass</c>, which is the same resolver
+    /// <c>::regclass</c> gives the emitters, so a name means one thing on both doors and an unqualified
+    /// name follows the <c>search_path</c>. See <c>CatalogueRowMatchesSql</c>.
     /// <para>
     /// Every object-name argument to an <i>emitter</i> goes through
     /// <see cref="Birko.Data.SQL.Connectors.AbstractConnectorBase.QualifiedIdentifier"/>, which splits on
@@ -593,19 +598,25 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// Checks if a table is a hypertable.
         /// </summary>
         /// <remarks>
-        /// <b>Parameterised, and the name is passed through unfolded — deliberately.</b>
-        /// <c>timescaledb_information.hypertables.hypertable_name</c> stores the name with its case intact, so
-        /// a PascalCase table is found by its PascalCase name. Folding it here (for symmetry with
-        /// <see cref="BuildCreateHypertableSql"/>, which must fold its <i>column</i>) would break this: a
-        /// lowercased lookup returns 0 for a hypertable that exists, which is how TASK-472 briefly mistook a
-        /// working fix for a broken one.
+        /// <b>Parameterised, and the name is passed through unfolded — deliberately.</b> The catalogue
+        /// stores names with their case intact, so a PascalCase table is found by its PascalCase name.
+        /// Folding it here (for symmetry with <see cref="BuildCreateHypertableSql"/>, which must fold its
+        /// <i>column</i>) would break this: a lowercased lookup returns 0 for a hypertable that exists,
+        /// which is how TASK-472 briefly mistook a working fix for a broken one.
+        /// <para>
+        /// The parameter carries <see cref="AbstractConnectorBase.QualifiedIdentifier"/>'s output rather
+        /// than the raw name, because the row is matched by resolving both sides to the same object — see
+        /// <c>CatalogueRowMatchesSql</c> (TASK-280).
+        /// </para>
         /// </remarks>
         protected virtual bool IsHypertable(IMigrationContext context, string tableName)
         {
-            var (connection, _, _) = GetSqlConnection(context);
+            var (connection, _, connector) = GetSqlConnection(context);
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(*) FROM timescaledb_information.hypertables WHERE hypertable_name = @table";
-            AddParameter(command, "@table", tableName);
+            command.CommandText =
+                "SELECT COUNT(*) FROM timescaledb_information.hypertables "
+              + $"WHERE {CatalogueRowMatchesSql}";
+            AddParameter(command, "@table", connector.QualifiedIdentifier(tableName));
             var result = command.ExecuteScalar();
             return result != null && Convert.ToInt32(result) > 0;
         }
@@ -649,16 +660,51 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// </remarks>
         protected virtual string? GetChunkInterval(IMigrationContext context, string tableName)
         {
-            var (connection, _, _) = GetSqlConnection(context);
+            var (connection, _, connector) = GetSqlConnection(context);
             using var command = connection.CreateCommand();
             command.CommandText =
                 "SELECT COALESCE(time_interval::text, integer_interval::text) "
               + "FROM timescaledb_information.dimensions "
-              + "WHERE hypertable_name = @table AND dimension_number = 1";
-            AddParameter(command, "@table", tableName);
+              + $"WHERE {CatalogueRowMatchesSql} AND dimension_number = 1";
+            AddParameter(command, "@table", connector.QualifiedIdentifier(tableName));
             var result = command.ExecuteScalar();
             return result == DBNull.Value ? null : result?.ToString();
         }
+
+        /// <summary>
+        /// Matches a <c>timescaledb_information</c> row against the <c>@table</c> parameter by resolving
+        /// <b>both sides to the same object</b>, rather than comparing name text.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-280. These views hold the <b>bare</b> table name in <c>hypertable_name</c> with the schema
+        /// in a separate column, so the previous <c>hypertable_name = @table</c> was wrong twice over.
+        /// Measured on 2.29.2 with <c>public."Evts"</c> and <c>reporting."Evts"</c> both hypertables:
+        /// a <b>qualified</b> name matched <b>0</b> rows — so <see cref="IsHypertable"/> answered false for
+        /// a hypertable that exists and <see cref="GetChunkInterval"/> returned null, which its own doc
+        /// defines as "not a hypertable" — while an <b>unqualified</b> name matched <b>2</b>, and
+        /// <c>ExecuteScalar</c> silently took whichever the planner emitted first (<c>1 day</c> or
+        /// <c>7 days</c>). A wrong answer wearing the costume of a legitimate absence, and an arbitrary one.
+        /// </para>
+        /// <para>
+        /// <b>Why <c>to_regclass</c> rather than splitting the name into schema and table.</b> The emitters
+        /// resolve the caller's name through <c>::regclass</c> — that is what
+        /// <see cref="AbstractConnectorBase.RegclassLiteral"/> produces — so the probe must resolve it the
+        /// same way or the two doors give different answers about what a name means (§ Conventions,
+        /// TASK-274). It also answers this task's open question with the server rather than by taste: an
+        /// <b>unqualified</b> name follows the <c>search_path</c>, exactly as <c>create_hypertable</c> did
+        /// when it created the thing. And it needs no second splitter — <c>QualifiedIdentifier</c> is the
+        /// one producer, and its output is handed straight to the server's own resolver.
+        /// </para>
+        /// <para>
+        /// <c>to_regclass</c>, not <c>::regclass</c>: the cast <b>throws</b> for a name that does not exist,
+        /// and <see cref="IsHypertable"/> must answer <see langword="false"/> for a table that is absent
+        /// rather than fault. Measured: a non-existent name yields 0 rows and no error.
+        /// </para>
+        /// </remarks>
+        private const string CatalogueRowMatchesSql =
+            "(quote_ident(hypertable_schema) || '.' || quote_ident(hypertable_name))::regclass "
+          + "= to_regclass(@table)";
 
         private static (DbConnection connection, DbTransaction? transaction, AbstractConnector connector) GetSqlConnection(IMigrationContext context)
         {
