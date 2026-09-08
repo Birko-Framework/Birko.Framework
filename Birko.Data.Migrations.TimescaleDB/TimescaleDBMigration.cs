@@ -239,26 +239,36 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// <summary>
         /// Adds a compression policy to a hypertable.
         /// </summary>
-        protected virtual void AddCompressionPolicy(IMigrationContext context, string tableName, string compressAfterInterval, string orderByColumn = "time", string? segmentByColumn = null)
+        protected virtual void AddCompressionPolicy(IMigrationContext context, string tableName, string compressAfterInterval, string orderByColumn, string? segmentByColumn = null)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
             ExecuteScript(connection, transaction, BuildCompressionPolicySql(connector, tableName, compressAfterInterval, orderByColumn, segmentByColumn));
         }
 
         /// <summary>
-        /// Builds the compression-policy DDL. Don't hardcode the order/segment columns
-        /// (CR-H070: 'time'/'device_id' fail on any table without a literal device_id column and are
-        /// wrong for most schemas). orderby defaults to the conventional 'time'; segmentby is opt-in
-        /// and omitted when not supplied.
+        /// Builds the compression-policy DDL. The order and segment columns are the caller's
+        /// (CR-H070: the original <c>'time'</c>/<c>'device_id'</c> literals fail on any table without those
+        /// exact columns and are wrong for most schemas).
         /// <para>
-        /// <b>CR-H070 is now closed in both methods</b> — <see cref="BuildContinuousAggregateSql"/> kept the
-        /// hardcoded bucketing column until TASK-255, with this very comment sitting four lines above it.
-        /// <b>One half of the finding remains here:</b> the <c>orderByColumn = "time"</c> default was added
-        /// by commit <c>531d816</c> to keep then-existing callers compiling, and no framework-created table
-        /// can have a column of that name — so it is a default that cannot work, which TASK-279 owns.
-        /// Its value is an expression fragment (<c>ts DESC</c> is legitimate), so it is escaped for its
-        /// literal and deliberately <i>not</i> identifier-validated: do not "unify" it with
-        /// <see cref="BuildContinuousAggregateSql"/>'s column guard.
+        /// <b>CR-H070 is closed in both methods, and in this one it took two goes.</b>
+        /// <see cref="BuildContinuousAggregateSql"/> kept its hardcoded bucketing column until TASK-255 —
+        /// with this very comment sitting four lines above it — and <b>this</b> method kept its
+        /// <c>"time"</c> default until TASK-279. That default was a source-compatibility artefact of commit
+        /// <c>531d816</c>, which introduced the parameter and defaulted it so then-existing calls still
+        /// compiled; it was never a judgement that <c>"time"</c> is a good value. No framework-created
+        /// table can have such a column — column definitions are emitted bare and every Birko entity is
+        /// PascalCase — so it was <i>a default that cannot work</i>. It is now required, matching
+        /// <see cref="BuildCreateHypertableSql"/>'s convention for a time column.
+        /// </para>
+        /// <para>
+        /// ⚠ <b><paramref name="segmentByColumn"/> keeps its <see langword="null"/> default, deliberately.</b>
+        /// That is a different thing: the <c>compress_segmentby</c> line is <i>omitted</i> when it is unset,
+        /// so the default is a real, working "no segmenting" rather than a value that cannot apply.
+        /// </para>
+        /// <para>
+        /// Both values are expression fragments (<c>ts DESC</c> is legitimate), so they are escaped for
+        /// their literal and deliberately <i>not</i> identifier-validated: do not "unify" them with
+        /// <see cref="BuildContinuousAggregateSql"/>'s column guard, which would refuse working migrations.
         /// </para>
         /// </summary>
         /// <remarks>
@@ -273,7 +283,7 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// more. Escaping is complete containment there, since they sit inside quotes.
         /// </para>
         /// </remarks>
-        internal static string BuildCompressionPolicySql(AbstractConnector connector, string tableName, string compressAfterInterval, string orderByColumn = "time", string? segmentByColumn = null)
+        internal static string BuildCompressionPolicySql(AbstractConnector connector, string tableName, string compressAfterInterval, string orderByColumn, string? segmentByColumn = null)
         {
             var segmentBySql = string.IsNullOrEmpty(segmentByColumn)
                 ? ""
@@ -391,11 +401,12 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// it, an opt-out would be speculative API.
         /// </para>
         /// <para>
-        /// <b>It is required, with no default</b>, unlike <see cref="BuildCompressionPolicySql"/>'s
-        /// <c>orderByColumn</c>. That default was a source-compatibility artefact of commit
-        /// <c>531d816</c> — the parameter did not exist before it — not a judgement that <c>"time"</c> is a
-        /// good value; no framework-created table can have such a column. This method's convention instead
-        /// follows <see cref="BuildCreateHypertableSql"/>, where a time-dimension column is required.
+        /// <b>It is required, with no default</b> — as is
+        /// <see cref="BuildCompressionPolicySql"/>'s <c>orderByColumn</c> since TASK-279. That one had
+        /// carried a <c>"time"</c> default, a source-compatibility artefact of commit <c>531d816</c> which
+        /// introduced the parameter — not a judgement that <c>"time"</c> is a good value; no
+        /// framework-created table can have such a column. Both now follow
+        /// <see cref="BuildCreateHypertableSql"/>'s convention, where a time-dimension column is required.
         /// </para>
         /// </remarks>
         internal static string BuildContinuousAggregateSql(AbstractConnector connector, string viewName,
