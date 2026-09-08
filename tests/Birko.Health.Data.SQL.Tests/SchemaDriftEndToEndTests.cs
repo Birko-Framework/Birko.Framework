@@ -44,6 +44,7 @@ namespace Birko.Health.Data.SQL.Tests;
 public class SchemaDriftEndToEndTests : IDisposable
 {
     private readonly string _root;
+    private readonly List<string> _connectionStrings = new();
     private static int _seq;
 
     public SchemaDriftEndToEndTests()
@@ -54,7 +55,12 @@ public class SchemaDriftEndToEndTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        // TASK-276 -- precise, never process-wide: a process-wide clear disposes the sqlite3 handle a
+        // PARALLEL sibling class is mid-statement on, and the victim is never the file that called it.
+        foreach (var cs in _connectionStrings)
+        {
+            try { using var probe = new SqliteConnection(cs); SqliteConnection.ClearPool(probe); } catch { }
+        }
         try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
     }
 
@@ -65,8 +71,17 @@ public class SchemaDriftEndToEndTests : IDisposable
         public int Amount { get; set; }
     }
 
-    private SqLiteSettings NewDatabase() =>
-        new SqLiteSettings(_root, $"drift{Interlocked.Increment(ref _seq)}.db") { CommandTimeout = 5 };
+    /// <summary>
+    /// Records each database's connection string so <see cref="Dispose"/> can clear exactly this
+    /// fixture's pools -- the pool key is the whole connection string, so nothing here has to guess
+    /// (TASK-276).
+    /// </summary>
+    private SqLiteSettings NewDatabase()
+    {
+        var settings = new SqLiteSettings(_root, $"drift{Interlocked.Increment(ref _seq)}.db") { CommandTimeout = 5 };
+        _connectionStrings.Add(settings.GetConnectionString());
+        return settings;
+    }
 
     private static SqLiteConnector Connector(SqLiteSettings settings) => new SqLiteConnector(settings);
 
