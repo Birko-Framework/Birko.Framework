@@ -109,8 +109,11 @@ public class QualifiedNameEmitterLiveTests : IDisposable
         public override void Down(IMigrationContext context) { }
 
         public void Hypertable(IMigrationContext c, string t, string col) => CreateHypertable(c, t, col);
+        public void HypertableWithInterval(IMigrationContext c, string t, string col, string interval)
+            => CreateHypertable(c, t, col, interval);
         public void Retention(IMigrationContext c, string t, string after) => AddRetentionPolicy(c, t, after);
         public bool Hyper(IMigrationContext c, string t) => IsHypertable(c, t);
+        public string? Chunk(IMigrationContext c, string t) => GetChunkInterval(c, t);
     }
 
     private void Reset()
@@ -195,8 +198,10 @@ public class QualifiedNameEmitterLiveTests : IDisposable
     }
 
     /// <summary>
-    /// <c>IsHypertable</c> reads a catalogue <c>name</c> column rather than a regclass, so it is the one
-    /// emitter whose qualified form has a different shape. Pinned so a later "unify them" edit has to notice.
+    /// ⚠ <b>This test used to assert the defect as a "documented limitation".</b> It created the hypertable
+    /// as <c>reporting.QualMetrics</c> and then asked <c>IsHypertable</c> for the <b>bare</b> name, because
+    /// the qualified form answered <see langword="false"/> — a hypertable that exists reported as absent.
+    /// TASK-280 fixed it, so the probe is now asked for the name it was actually given.
     /// </summary>
     [Fact]
     public void The_hypertable_probe_answers_for_a_qualified_table()
@@ -212,12 +217,59 @@ public class QualifiedNameEmitterLiveTests : IDisposable
             var probe = new Probe();
             probe.Hypertable(ctx, $"{Schema}.{Table}", "ts");
 
-            // Documented limitation rather than a promise: IsHypertable compares against a catalogue NAME
-            // column, so it takes the bare table name and does not filter by schema. Asserted as-is so the
-            // behaviour is recorded; TASK-272 owns first-class schema support, where this would gain a schema.
-            probe.Hyper(ctx, Table).Should().BeTrue(
-                "the probe matches on the unqualified name -- correct here, and a known limitation once two "
-              + "schemas hold same-named tables");
+            probe.Hyper(ctx, $"{Schema}.{Table}").Should().BeTrue(
+                "the probe must answer for the same name the emitter accepted -- both resolve it through "
+              + "the server's own regclass resolver, so a name means one thing on both doors");
         }
+    }
+
+    /// <summary>
+    /// The fixture that distinguishes a fix from a no-op (TASK-280): the <b>same table name in two
+    /// schemas</b>, each with a different chunk interval. A single-schema database cannot tell a
+    /// schema-aware lookup from a name-only one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Measured on 2.29.2 before the fix: the name-only <c>WHERE hypertable_name = @table</c> matched
+    /// <b>2</b> rows for an unqualified name and <c>ExecuteScalar</c> took whichever the planner emitted
+    /// first — so <c>GetChunkInterval</c> could return <c>1 day</c> or <c>7 days</c> arbitrarily. Same
+    /// shape as TASK-261's <c>dimension_number</c> finding one level up: a view with one row per object
+    /// needs its row pinned, and <c>ExecuteScalar</c> will not tell you.
+    /// </para>
+    /// <para>
+    /// The unqualified case asserts the <c>search_path</c> answer (<c>public</c>), which is not a
+    /// preference: it is what <c>create_hypertable</c>'s own <c>::regclass</c> does, so the reader and the
+    /// emitter agree about what an unqualified name means.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void Two_schemas_holding_the_same_table_name_get_their_own_answers()
+    {
+        if (!RequireServer()) return;
+        Reset();
+        Exec($"DROP TABLE IF EXISTS \"{Table}\" CASCADE");
+        Exec($"CREATE SCHEMA \"{Schema}\"");
+        Exec($"CREATE TABLE \"{Table}\" (ts timestamptz NOT NULL, v double precision)");
+        Exec($"CREATE TABLE \"{Schema}\".\"{Table}\" (ts timestamptz NOT NULL, v double precision)");
+
+        var (conn, ctx) = NewContext();
+        using (conn)
+        {
+            var probe = new Probe();
+            // Deliberately different intervals, so the wrong schema's answer is distinguishable.
+            probe.HypertableWithInterval(ctx, Table, "ts", "1 day");
+            probe.HypertableWithInterval(ctx, $"{Schema}.{Table}", "ts", "7 days");
+
+            probe.Hyper(ctx, Table).Should().BeTrue();
+            probe.Hyper(ctx, $"{Schema}.{Table}").Should().BeTrue();
+
+            probe.Chunk(ctx, $"{Schema}.{Table}").Should().Be("7 days",
+                "the qualified name must read ITS schema's dimension, not whichever row came first");
+            probe.Chunk(ctx, Table).Should().Be("1 day",
+                "and an unqualified name follows the search_path, which is what create_hypertable's own "
+              + "regclass did when it created the thing");
+        }
+
+        Exec($"DROP TABLE IF EXISTS \"{Table}\" CASCADE");
     }
 }
