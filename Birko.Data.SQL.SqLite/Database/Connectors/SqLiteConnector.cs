@@ -310,7 +310,11 @@ namespace Birko.Data.SQL.Connectors
                 // column, and — worse — emitted for a NON-primary-key increment field (e.g. a dual-key
                 // model with a [PrimaryField] Guid + a separate [IncrementField] Id), which SQLite
                 // rejects outright, so CreateTable threw.
-                if (field.IsPrimary && field.IsAutoincrement)
+                // TASK-303 -- the AUTOINCREMENT form is inline-only by construction: SQLite
+                // rejects "INTEGER PRIMARY KEY AUTOINCREMENT" alongside a table-level clause
+                // ("table has more than one primary key", measured). CreateTable refuses that
+                // combination up front, so reaching here means this is the sole primary.
+                if (field.UsesInlinePrimaryConstraint && field.IsAutoincrement)
                 {
                     result.Append(field.Name);
                     result.Append(" INTEGER PRIMARY KEY AUTOINCREMENT");
@@ -319,7 +323,11 @@ namespace Birko.Data.SQL.Connectors
 
                 result.Append(field.Name);
                 result.AppendFormat(" {0}", ConvertType(field.Type, field));
-                if (field.IsPrimary)
+                // TASK-303 -- inline only when this is the ONLY primary field. With more than one,
+                // AbstractConnector.CreateTable emits a table-level PRIMARY KEY (a, b) instead;
+                // two inline clauses are rejected by every provider (PostgreSQL 42P16, SQLite
+                // "more than one primary key").
+                if (field.UsesInlinePrimaryConstraint)
                 {
                     result.AppendFormat(" PRIMARY KEY");
                 }
