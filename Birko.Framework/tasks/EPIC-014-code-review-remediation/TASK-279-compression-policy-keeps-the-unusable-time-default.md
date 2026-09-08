@@ -3,7 +3,7 @@ id: TASK-279
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-24
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-255, TASK-253]
 findings: [CR-H070]
-pr: null
+pr: "Birko.Data.Migrations.TimescaleDB 47a0d4c + .Tests c13c170"
 github-issue: null
 jira-key: null
 affects: [Birko.Data.Migrations.TimescaleDB]
@@ -68,23 +68,23 @@ fix is not simply "TASK-255 did it, do the same".
 
 ## Acceptance criteria
 
-- [ ] Re-measure the two counts above before changing anything — they were taken on 2026-08-24 at
+- [x] Re-measure the two counts above before changing anything — they were taken on 2026-08-24 at
       TASK-255's grill and this task may be picked much later. A stale blast radius is what got TASK-247's
       "0 uses of `ISchemaBuilder`" claim corrected after the fact (§ Conventions, TASK-259).
-- [ ] `orderByColumn` becomes **required** on both `AddCompressionPolicy` and `BuildCompressionPolicySql`,
+- [x] `orderByColumn` becomes **required** on both `AddCompressionPolicy` and `BuildCompressionPolicySql`,
       *if and only if* the re-measurement still shows no caller relying on the default. If a caller has
       appeared, say so and keep the default — the decision is the measurement's, not symmetry with
       TASK-255.
-- [ ] `segmentByColumn` is explicitly **left alone** and the reason recorded: it is `null`-defaulted and
+- [x] `segmentByColumn` is explicitly **left alone** and the reason recorded: it is `null`-defaulted and
       genuinely optional (the `compress_segmentby` line is omitted when unset), which is a different thing
       from a default that cannot work.
-- [ ] The `compress_orderby` value keeps its **expression-fragment** treatment — `ts DESC` is legitimate,
+- [x] The `compress_orderby` value keeps its **expression-fragment** treatment — `ts DESC` is legitimate,
       so it is escaped for its literal and **not** identifier-validated. Do not "unify" it with
       TASK-255's column guard; that would refuse working migrations. A test pins the direction keyword
       (`CompressionPolicy_AcceptsADirectionKeyword`) and must stay green.
-- [ ] The doc comment recording CR-H070 is updated so the finding reads as fully closed across both
+- [x] The doc comment recording CR-H070 is updated so the finding reads as fully closed across both
       methods, rather than half-closed with the other half unexplained.
-- [ ] Proven able to fail: a mutation restoring the default reds at least one test — a reflection pin on
+- [x] Proven able to fail: a mutation restoring the default reds at least one test — a reflection pin on
       `HasDefaultValue`, per § Conventions (TASK-117), since required-ness is otherwise invisible to the
       suite. TASK-255 establishes that shape.
 
@@ -99,5 +99,52 @@ fix is not simply "TASK-255 did it, do the same".
 
 ## Human test plan
 
-- [ ] N/A — mechanical; the proof is a reflection assertion that the parameter carries no default, plus the
+- [x] N/A — mechanical; the proof is a reflection assertion that the parameter carries no default, plus the
       existing live compression tests staying green.
+
+---
+
+## Worked 2026-09-08
+
+### ⚠ Criterion 1 caught a stale count — the task's own blast radius was wrong
+
+This file said the default *"is never exercised"* and *"the only call sites are the live suite's probe
+wrapper … No other caller anywhere."* Re-measured 2026-09-08:
+
+| claim | re-measured |
+|---|---|
+| 0 of 16 consumer repos call it | **0 of 16** — unchanged, and this is the number that decides |
+| "no other caller anywhere" relies on the default | **4 test call sites do** — `TimescaleDBMigrationSqlTests` ×2, `TimescaleDBMigrationInjectionTests` ×2 |
+
+The criterion said to keep the default if a caller had appeared. The callers that appeared are the
+framework's **own tests**, updated in the same commit — not someone the change can break — so the fix
+proceeded, with the count corrected rather than quietly reused. Fourth stale count re-measured this week.
+
+### The silent-rebind hazard TASK-255 recorded does NOT apply here, and that is worth stating
+
+TASK-255 warns that with all-`string` parameters a 6-argument call can **silently rebind** when a
+parameter is inserted, and that it was affordable only at 0 consumers. Here nothing is inserted — a
+parameter merely loses its default — so arity and order are unchanged and no call can rebind. Measured:
+all 4 affected sites failed with **`CS7036`**, loudly, which is the whole difference.
+
+### ⚠ A test was pinning the default, again
+
+`CompressionPolicy_DefaultsOrderByTime_AndOmitsSegmentBy` asserted
+`timescaledb.compress_orderby = 'time'` — so the default was a *named, asserted contract*, which is why it
+survived CR-H070's own remediation. Exactly TASK-284's shape one day earlier, where an `[InlineData("")]`
+row pinned that defect. Renamed to `CompressionPolicy_OmitsSegmentBy_WhenItIsNotSupplied`, keeping the
+half that is CR-H070's real point, with the history in its remarks.
+
+### `segmentByColumn` deliberately untouched
+
+Its `null` default is a *working* "no segmenting" — the `compress_segmentby` line is omitted when unset —
+which is a different thing from a value that cannot apply. The reflection pin asserts **both** sides, so a
+change that stripped both defaults cannot pass half the test unnoticed.
+
+### Verified
+
+`BIRKO_REQUIRE_LIVE` set against live TimescaleDB 2.29.2 / PostgreSQL 16: Migrations.TimescaleDB **85
+passed** (84 → 85), 0 failed. **Mutation:** restoring the default reds exactly the reflection pin and
+nothing else — required-ness is invisible to every other test in the file, which is why that pin exists.
+`CompressionPolicy_AcceptsADirectionKeyword` stayed green throughout, so the expression-fragment treatment
+is intact and `ts DESC` is still legitimate.

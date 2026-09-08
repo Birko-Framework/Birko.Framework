@@ -2396,6 +2396,31 @@ The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (n
 
 
 
+
+### CR-H070's other half: a default that could not work on any Birko entity (2026-09-08)
+
+TASK-279, the sibling TASK-255 deliberately refused to fix from symmetry.
+`BuildCompressionPolicySql` declared `orderByColumn = "time"`, and no framework-created table can have such
+a column — definitions are emitted bare and every Birko entity is PascalCase. Verified against live
+TimescaleDB 2.29.2: **85 passed, 0 failed**. Four things worth carrying:
+
+- **The default was a source-compatibility artefact, and only `git show 531d816` shows that.** The commit
+  that *fixed* CR-H070 introduced the parameter and defaulted it so then-existing calls kept compiling —
+  never a judgement that `"time"` is good. TASK-255 recorded the rule (*measure a precedent's motivation,
+  not its shape*) and left this half so it would be measured rather than copied.
+- **⚠ A test was pinning the default.** `CompressionPolicy_DefaultsOrderByTime_AndOmitsSegmentBy` asserted
+  `compress_orderby = 'time'`, making it a named, asserted contract — which is why it survived CR-H070's
+  own remediation. **Second instance in two days**, after TASK-284's `[InlineData("")]`. When a defect
+  survives a well-covered area, check whether a test is holding it in place.
+- **⚠ And the task's own blast radius was stale.** It said "no other caller anywhere" relies on the
+  default; four test call sites did. The number that actually decided was 0 of 16 consumer repos, which
+  was unchanged — but the claim was corrected rather than reused.
+- **TASK-255's silent-rebind hazard does not apply, and saying so matters.** That warning is about an
+  *inserted* parameter letting a call rebind quietly. Removing a default changes neither arity nor order,
+  so all four sites failed `CS7036`, loudly. `segmentByColumn` keeps its `null` — the
+  `compress_segmentby` line is *omitted* when unset, so that default works, and the reflection pin asserts
+  both sides so a change stripping both cannot pass half the test unnoticed.
+
 ### An empty config value silently widened a refresh policy to all of history (2026-09-08)
 
 TASK-284. `add_continuous_aggregate_policy`'s `start_offset` takes `NULL` to mean *"from the beginning of
