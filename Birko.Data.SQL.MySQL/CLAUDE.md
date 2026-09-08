@@ -204,6 +204,12 @@ re-wraps every command failure as `new Exception(commandText, ex)`.
 
 ## Limitations
 - Requires MySQL 5.7 or later
+  - ⚠ **Except `ISchemaBuilder.RenameField`, which needs MySQL 8.0+.** It emits `ALTER TABLE … RENAME
+    COLUMN`, added in 8.0. The 5.7 form is `CHANGE old new <type>`, and measured on 8.4.11 a type-less
+    `CHANGE` is `ERROR 1064` — so a fallback must read the column's full definition from the catalogue and
+    restate it, which risks silently altering a column a rename should leave alone. Decided not to fix at
+    TASK-252 #1: **0** callers in the framework, its tests, or any of the 16 consumer repos. If one appears
+    on 5.7, the fix is a connector-level rename behind a capability flag.
 - JSON type requires MySQL 5.7.8+
 - Some features may vary by MySQL edition
 - **An indexed `string` is silently capped at 255 characters** unless `[MaxLengthField(n)]` says otherwise
