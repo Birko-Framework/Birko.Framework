@@ -3,7 +3,10 @@
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
 
+# Accepts both while the default branch is renamed master -> main (2026-09-08).
+# Drop 'master' once the rename has landed and nothing references it.
 trigger:
+- main
 - master
 
 pool:
