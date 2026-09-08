@@ -3,7 +3,7 @@ id: TASK-271
 parent: EPIC-014
 feature: FEATURE-014
 status: todo
-priority: P2
+priority: P3
 assignee: ai
 created: 2026-08-21
 depends-on: []
@@ -79,3 +79,23 @@ This task is to decide whether to take the option that reopened, **not** to assu
 
 - [ ] N/A — mechanical; the proof is which connection the statements run on and whether a rollback undoes the
       hypertable conversion, both observable against a live server.
+
+---
+
+## Merged with TASK-282, 2026-09-08 — and re-prioritised P2 → P3
+
+[[TASK-282]] was filed at TASK-281's close gate as *"an option TASK-259 reopened and nobody owns"* — but
+**this task already owned it**, since 2026-08-21. The spawn sweep looked for floating prose and did not
+look for an existing task with the same subject, which is worth remembering: *before filing a spawn for
+work that has "been floating", search the backlog for it.* TASK-282 is cancelled, pointing here.
+
+Its one piece of better reasoning is adopted, and it lowers the priority:
+
+> Nothing is broken. The current shape works, is tested, and TASK-281 has just measured its most important
+> limit (`25001` on two statements) and routed around it **without** needing the connector — which is
+> worth noting, because it removes the most obvious argument for doing this. This is a consistency and
+> capability-reuse question, not a defect.
+
+So this is P3. It remains a real decision — the emitters reuse none of the connector's provider
+capabilities, DDL funnel, retry policy or exception classification — but the case for making it is weaker
+than when TASK-259 reopened the option.

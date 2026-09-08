@@ -2,8 +2,8 @@
 id: TASK-282
 parent: EPIC-014
 feature: FEATURE-014
-# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+# status: cancelled | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: cancelled
 priority: P3
 assignee: ai
 created: 2026-08-24
@@ -78,3 +78,19 @@ capability-reuse question, not a defect.
 
 - [ ] N/A — mechanical, and possibly a documentation-only outcome; the proof is either a live-verified
       behaviour-preserving rewrite or a recorded decision with its reason.
+
+---
+
+## Cancelled 2026-09-08 — duplicate of [[TASK-271]]
+
+Same subject, same reasoning, same origin: *the TimescaleDB emitters bypass the connector for a reason
+TASK-259 removed*. **TASK-271 has owned this since 2026-08-21**, three days before this file was created.
+
+This file was filed on the grounds that the work "has been floating as prose since TASK-259 … and owned by
+nothing", which was simply not true — the spawn sweep searched for the prose and not for an existing task
+with the same subject. Recorded rather than deleted, because the way the duplicate arose is the reusable
+part: **a spawn sweep must search the backlog before filing, not only the prose it found.**
+
+The one thing this file had that TASK-271 did not — the argument for P3 over P2, that TASK-281 routed
+around the `25001` limit *without* the connector and so removed the strongest reason to do this — has been
+copied across, and TASK-271 re-prioritised accordingly. Nothing is lost by cancelling this.

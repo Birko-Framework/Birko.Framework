@@ -2146,6 +2146,32 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   5 stores → 5 entries, 5 re-executed failing DDL statements). Key such collections by their identity,
   fire events on the **transition** into the condition, and **clear the record when it no longer holds** —
   a report that cannot un-report is a report an operator learns to ignore.
+- **`IsNullOrEmpty` on a parameter whose `null` MEANS something converts a missing configuration value
+  into a different behaviour — and the tell is that its neighbours fail loudly on the same input.**
+  TASK-284. `add_continuous_aggregate_policy`'s `start_offset` takes `NULL` to mean *"refresh from the
+  beginning of time"*, and the emitter used `string.IsNullOrEmpty`, so a value that came back `""` rather
+  than null produced a far **wider** policy than the author intended — every chunk, on every run of the
+  job, with no error anywhere. Config binding, `LoadFrom` and JSON/env deserialisation all produce `""`
+  where nothing was written. Four parts generalise:
+  - **Look along the row before deciding a null-check is harmless.** Every other interval in that class —
+    `endOffset`, `scheduleInterval`, `compressAfterInterval`, `dropAfterInterval`, the chunk interval —
+    already failed loudly on `""`, because an empty string reaches `INTERVAL ''` and PostgreSQL answers
+    `22007`. One parameter behaving differently from its five neighbours is the signal; the fix is to make
+    it behave like them, not to make them tolerant.
+  - **The dangerous half is that the wrong value fails by WORKING.** An over-wide refresh policy is a
+    valid policy — it runs, it succeeds, it is simply much heavier and covers history the author did not
+    ask for. Nothing surfaces it, which is why both behaviours are now written on the method: the caller
+    has no other signal that `null` and `""` differ.
+  - **⚠ Measure an "untested escape hatch" before assuming it is broken — a clean answer is a result.**
+    The same task suspected that the door its refusal names (*"pass a null startOffset"*) might not open,
+    since `add_continuous_aggregate_policy` declares its parameters `"any"` and an untyped bare `NULL` is
+    exactly what a server can reject. Measured on 2.29.2: **accepted**. So the fix was not to change the
+    message but to give the door a *live* test, because it had only ever been asserted as a rendered
+    string. § SH-H037 requires the opt-out to be checked, not assumed broken.
+  - **⚠ A suite can ENCODE the defect, in which case testing was never going to find it.** The empty-string
+    behaviour was an `[InlineData("")]` row asserting it meant all-of-history — a documented, asserted
+    contract rather than an untested corner. When a defect survives a well-tested area, check whether a
+    test is asserting it.
 - **A test teardown that reaches process-wide state damages a PARALLEL sibling, and the victim is never
   the file that caused it.** TASK-276. `SqliteConnection.ClearAllPools()` drops the pooled connections for
   every connection string in the process; xUnit runs test classes in parallel by default here, so a class
@@ -2368,6 +2394,33 @@ The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (n
 
 
 
+
+
+### An empty config value silently widened a refresh policy to all of history (2026-09-08)
+
+TASK-284. `add_continuous_aggregate_policy`'s `start_offset` takes `NULL` to mean *"from the beginning of
+time"*, and the emitter used `string.IsNullOrEmpty` — so a configuration value that came back `""` rather
+than null produced a far heavier policy than the author intended, on every run of the job, with no error
+anywhere. Verified with `BIRKO_REQUIRE_LIVE` set against live **TimescaleDB 2.29.2 / PostgreSQL 16** plus
+four other providers: **1,363 tests, 0 failed** across seven suites. The standing rule is in § Conventions.
+Five things worth carrying:
+
+- **The asymmetry was the tell.** Every other interval in that class already failed loudly on `""` —
+  `INTERVAL ''` is `22007`. One parameter behaving differently from its five neighbours is the signal.
+- **⚠ The second finding was a false alarm, and measuring it first is what the task demanded.** It
+  suspected the door its own refusal names — *"pass a null startOffset"* — might not open, since the
+  server declares those parameters `"any"` and an untyped bare `NULL` is what a server can reject.
+  Measured: **accepted**. So the fix was a *live* test for a path that had only ever been asserted as a
+  rendered string, not a change to the message.
+- **⚠ The suite was asserting the defect.** `[InlineData("")]` on the null-rendering theory made
+  "empty means all of history" a documented contract, not an untested corner. When a defect survives a
+  well-covered area, check whether a test is pinning it.
+- **The wrong value failed by working** — an over-wide policy is a valid policy. Both behaviours are now
+  on the method's remarks, because the caller has no other signal.
+- **⚠ Two fixture faults of mine.** The live helper first asked for "the only policy in the database" and
+  read my own probe's leftover as the answer; and the obvious catalogue join was wrong — measured,
+  `jobs.hypertable_name` is the **view** name, not the materialisation hypertable, so the join matched
+  nothing and every assertion read `<none>` while looking green.
 
 ### A test teardown was disposing parallel siblings' database handles, and the production question is answered (2026-09-08)
 
