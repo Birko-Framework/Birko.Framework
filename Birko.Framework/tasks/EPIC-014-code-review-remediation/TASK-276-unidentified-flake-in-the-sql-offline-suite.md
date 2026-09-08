@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-273, TASK-259]
 findings: []
-pr: null
+pr: "Birko.Data.SQL.SqLite.Tests (pool helper + guard) + Birko.Health.Data.SQL.Tests"
 github-issue: null
 jira-key: null
 ---
@@ -477,3 +477,94 @@ running the full suite ~10 times, since 5 was enough to see it once.
 
 **Do not "fix" it by weakening the assertion.** The behaviour it pins is TASK-277's: a write to a missing
 table must never report success. That rule is right and the test is right; only its isolation is wrong.
+
+---
+
+## Worked 2026-09-08 — the production question is ANSWERED, and the calls are gone
+
+This session deliberately took the question this file names as the priority — *"can this happen in
+production, or does it need `ClearAllPools`?"* — rather than "make the suite green".
+
+### The production question: answered, NO
+
+Measured 2026-09-08: **0** calls in the framework's production code, and **0** in any of the 16 consumer
+repos' production code. The 14 consumer hits are every one of them in `Symbio.Tests.Unit`. So a consumer
+web app cannot reach this, and **it is test hygiene rather than a product defect** — which is what the
+expensive concurrent-harness experiment this file designed would have been run to establish.
+
+### ⚠ Consumer Symbio had already answered it, and their evidence is stronger than this file's
+
+`Symbio.Tests.Unit/SqlitePool.cs` and `SqlitePoolIsolationTests.cs` (their TASK-657) record the same
+mechanism, independently: process-wide clear → xUnit parallel classes → a sibling's `sqlite3` handle
+disposed mid-statement → `ObjectDisposedException: 'SQLitePCL.sqlite3'`, random victim, always
+mid-statement, always passing in isolation. **Fourteen consecutive full-suite runs, 2 failed, both that
+exception, in two different classes**, with a third originally reported. They built the per-database
+helper and a static guard.
+
+So the mechanism is now confirmed **three independent ways** — their 14 runs, TASK-290's dose-response in
+this suite, and their analysis — and the harness experiment was not needed. *Check whether a cost is real
+before paying to avoid it.*
+
+### ⚠ I could NOT reproduce it today, and that is stated rather than glossed
+
+| arm | runs | failures |
+|---|---|---|
+| before, idle | 12 | **0** |
+| before, under CPU load (the lever this file identified) | 6 | **0** |
+| after, idle | 12 | **0** |
+
+**So the before/after measurement distinguishes nothing.** The fix is justified by the confirmed
+mechanism, not by these numbers, and nobody should later read "0 failures after" as evidence that it
+worked. Recorded in the same spirit as § TASK-261's defensive-not-witnessed distinction.
+
+### ⚠ The measurement that changed the fix's shape
+
+The obvious fix is to delete the calls outright — TASK-290's own note says *"nothing here needs a pool
+clear, every test owns its own database file"*. Measured before choosing: of **400 sampled leaked temp
+directories, 164 still held files**. So the pool really does hold handles and the clear really does
+release them; deleting outright would have made the leak worse rather than neutral. My first 6-directory
+sample showed all-empty and would have led me straight to the wrong conclusion — **the sample size was
+the whole difference.**
+
+### What changed
+
+- `SqlitePool` — `ClearFor(settings)` (precise; the pool key is the whole connection string, so asking the
+  settings for their own string cannot guess wrong) and `ClearForDirectory(root, timeouts)` (best-effort,
+  with its limits written on it) .
+- **All 11 process-wide calls converted** across 8 files: 7 best-effort teardowns → `ClearForDirectory`,
+  4 mid-test clears → `ClearFor` with the exact string, because a miss there changes a test's outcome.
+  Seven further files only *mentioned* the call in prose and were rephrased.
+- `SqlitePoolIsolationTests` — a static guard, plus a scan control (a scanner looking in the wrong place
+  would pass forever) and a test pinning the pool-key premise the helper's whole shape rests on.
+- The same two calls I had introduced in `Birko.Health.Data.SQL.Tests` the day before were converted too.
+
+**The guard caught its own file on the first run** — the literal was still in its `<remarks>` — which is
+exactly the trap its `Forbidden` field documents, and a fair demonstration that it works.
+
+### Verified
+
+`BIRKO_REQUIRE_LIVE` set, live PostgreSQL 16 / MySQL 8.4 / SQL Server 2022 / on-disk SQLite:
+**1,483 tests, 0 failed** across seven suites. SQLite 341 → 344. Incidentally the suite got **faster**,
+11 s → 6 s: two dozen process-wide pool clears were not free.
+
+Mutations: reintroduce the process-wide call → the guard reds; point the scan at a non-existent directory
+→ the control reds *and* the guard reds (a scanner that sees nothing reports clean).
+
+### Still open — deliberately
+
+- **The original `Birko.Data.SQL.Tests` flake is still unidentified.** It has never recurred; 678/678
+  today. This session did not chase it.
+- **[[TASK-302]] spawned**: ~90,000 leaked `%TEMP%\birko-*` directories, because every teardown swallows
+  its delete failure. Found while measuring the above, unrelated to the pools, and its own defect.
+
+### ⚠ Why this task is NOT done
+
+Its titular subject — *one test in `Birko.Data.SQL.Tests` fails about 10% of full-suite runs* — is still
+**unidentified**. That suite ran 678/678 today and the original failure has never recurred; nothing in
+this session touched it, and the pool family fixed here is a different mechanism in a different project
+(`Birko.Data.SQL.SqLite.Tests`).
+
+What closed: the `ClearAllPools` family — mechanism established, fixed, guarded, and the production
+question answered. What remains: the original flake, which has no reproduction and no captured identity.
+The route this file already suggested still stands — loop the suite until failure with each run's output
+retained. Do not close this task on the strength of the pool work.

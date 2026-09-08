@@ -2146,6 +2146,37 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   5 stores → 5 entries, 5 re-executed failing DDL statements). Key such collections by their identity,
   fire events on the **transition** into the condition, and **clear the record when it no longer holds** —
   a report that cannot un-report is a report an operator learns to ignore.
+- **A test teardown that reaches process-wide state damages a PARALLEL sibling, and the victim is never
+  the file that caused it.** TASK-276. `SqliteConnection.ClearAllPools()` drops the pooled connections for
+  every connection string in the process; xUnit runs test classes in parallel by default here, so a class
+  calling it in `Dispose` disposes the `sqlite3` handle a sibling is mid-statement on. That sibling fails
+  with `ObjectDisposedException: 'SQLitePCL.sqlite3'` — at random, always mid-statement, always passing in
+  isolation. Five parts generalise beyond SQLite:
+  - **Nothing about the symptom points back at the cause, which is why it needs a static guard and not a
+    fix.** The failing file is innocent, so a future author debugging it has no path to the teardown that
+    did it. `SqlitePoolIsolationTests` scans the project for the call; the helper (`SqlitePool.ClearFor`)
+    is what they use instead. A cleanup without a guard in the same change comes back — and this call is
+    especially prone to it, being the obvious one and the one every example online uses.
+  - **A guard that must NAME the thing it forbids has to assemble the name**, or it reports itself — and
+    the usual fix for that, excluding its own file, makes that file the one place the rule is unenforced.
+    Measured: it caught itself on the first run because the literal was still in its `<remarks>`.
+  - **⚠ Sample size decided the fix, and a small sample pointed the wrong way.** The obvious remedy is to
+    delete the calls (*"every test owns its own database file, so the clear buys nothing"*). Of **400**
+    sampled leaked temp directories **164 still held files**, so the pool does hold handles and the clear
+    does release them — deleting outright would have made things worse. The first **6**-directory sample
+    was all-empty and supported the wrong conclusion.
+  - **Where a clear is per-key, the key is the whole connection string, not the resource.**
+    `SqLiteSettings.GetConnectionString()` emits `Data Source={Path};Default Timeout={n}`, so two settings
+    over one file are two pools. Asking the settings object for its own string cannot guess wrong; a
+    path-only sweep can, and its limits belong on the method rather than in a reviewer's head. Both the
+    premise and the sweep's fallibility are pinned by tests.
+  - **⚠ A fix whose before/after shows nothing is justified by MECHANISM, and must say so.** Measured here:
+    12 idle runs and 6 under load before, 12 after, **0 failures in all of them** — the flake did not
+    reproduce on that machine that day, so the numbers distinguish nothing. What justified the change was
+    the mechanism confirmed three independent ways (a dose-response in this suite, a consumer's 14-run
+    measurement of the same exception in two different classes, and their analysis). *A revert that fails
+    nothing is a missing test; a **fix** whose before/after fails nothing is a missing **reproduction**,
+    and the two must not be reported the same way.*
 - **A process-wide cached object keeps attracting per-caller state, and the only thing that stops the
   next instance is a test.** TASK-270. `DataBase.GetConnector` caches a connector per (type, settings id)
   for the life of the process, so it is reachable, shared and long-lived — and **four** independent
@@ -2336,6 +2367,33 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+
+
+### A test teardown was disposing parallel siblings' database handles, and the production question is answered (2026-09-08)
+
+TASK-276, taking the question that file names as its priority — *can this happen in production, or does it
+need `ClearAllPools`?* — rather than "make the suite green". Answered **no**: measured, 0 calls in the
+framework's production code and 0 in any of the 16 consumer repos' production code, so consumers cannot
+reach it and it is test hygiene. Verified with `BIRKO_REQUIRE_LIVE` set against live PostgreSQL 16,
+MySQL 8.4, SQL Server 2022 and on-disk SQLite: **1,483 tests, 0 failed** across seven suites. The standing
+rule is in § Conventions. Six things worth carrying:
+
+- **⚠ The expensive experiment this task designed was unnecessary, because a consumer had already run it.**
+  Symbio's TASK-657 records the same mechanism independently, with 14 consecutive full-suite runs → 2
+  failures, both `ObjectDisposedException: 'SQLitePCL.sqlite3'`, in two *different* classes — and they had
+  already built the per-database helper and a guard. Check whether a cost is real before paying it.
+- **⚠ I could not reproduce the flake, and the before/after therefore proves nothing.** 12 idle + 6 loaded
+  runs before, 12 after, 0 failures throughout. The change is justified by the mechanism, confirmed three
+  ways; "0 after" is not evidence and is labelled as not evidence.
+- **⚠ Sample size decided the fix.** Deleting the calls outright was the obvious remedy and my first
+  6-directory sample supported it. At 400 directories, **164 still held files** — the pool does hold
+  handles, so deleting would have made the leak worse.
+- **The guard caught its own file on the first run**, because the forbidden literal was still in its
+  `<remarks>`. That is the trap its own `Forbidden` field documents, and a fair demonstration it works.
+- **The suite got faster**: 11 s → 6 s. Two dozen process-wide pool clears were not free.
+- **⚠ Spawned [[TASK-302]]**: ~**90,000** leaked `%TEMP%irko-*` directories, because every teardown
+  swallows its delete failure. Unrelated to the pools, found while measuring them, and invisible for as
+  long as the suites have existed.
 
 ### Four features had put per-caller state on the process-wide connector, and only a test can stop the fifth (2026-09-07)
 
