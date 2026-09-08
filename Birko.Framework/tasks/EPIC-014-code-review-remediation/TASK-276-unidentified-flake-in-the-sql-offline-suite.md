@@ -568,3 +568,56 @@ What closed: the `ClearAllPools` family — mechanism established, fixed, guarde
 question answered. What remains: the original flake, which has no reproduction and no captured identity.
 The route this file already suggested still stands — loop the suite until failure with each run's output
 retained. Do not close this task on the strength of the pool work.
+
+## 2026-09-08 — a third suite produced one unidentified failure, and I lost it the same way
+
+While sweeping nine suites at [[TASK-303]]'s close, `Birko.Data.Migrations.TimescaleDB.Tests` reported
+**1 failed of 88**. The identity was **not captured**, because the sweep loop greps only the summary line —
+the exact mistake this file already records me making with the MSSql instance earlier the same day, and
+the reason it asks for a trx logger.
+
+Immediately afterwards: **9 consecutive clean runs at 88 passed** (3 plain, then 6 with a trx logger),
+so nothing was captured and no `.trx` holds a failure.
+
+What is worth carrying rather than the non-result:
+
+- **It is a third suite**, after `Birko.Data.SQL.Tests` (still unidentified) and
+  `Birko.Data.SQL.MSSql.Tests` (identified 2026-09-08 as cross-class `SchemaGeneration` coupling).
+- **The shape matches**: appears in a multi-project sweep, never on a rerun, passes in isolation.
+- **A plausible mechanism exists and is untested.** That project's live classes share one TimescaleDB
+  database and xUnit runs classes in parallel; several of them create and drop hypertables, continuous
+  aggregates and the `__Migrations` table. `MigrationEmitterLiveTests.Reset()` drops `__Migrations`
+  outright, which any concurrently-running migration test would notice. That is the same *family* as the
+  MSSql instance — shared server state across parallel classes — but it is a hypothesis, not a finding.
+- **The fix for my own process is mechanical**: the sweep loop must keep each project's full output or a
+  `.trx`, not just the summary line. Losing an identity twice in one day is a tooling defect, not bad luck.
+
+### ⚠ Resolved the same day — caught, diagnosed and fixed
+
+The note above says the identity was lost. It was captured on the very next sweep, once the loop kept a
+`.trx` per project instead of grepping the summary line:
+
+```
+Birko.Data.Migrations.TimescaleDB.Tests
+  QualifiedNameEmitterLiveTests.Two_schemas_holding_the_same_table_name_get_their_own_answers
+  Npgsql.PostgresException : 42P01: relation
+      "_timescaledb_internal._materialized_hypertable_1048" does not exist
+```
+
+**Mechanism.** That relation is a **continuous aggregate's internal table**. The failing class creates
+none — so a *parallel sibling* dropped it while this test's read of `timescaledb_information` was
+resolving it. Five classes in that project read those catalogue views and three create and drop
+materialized views against the same database.
+
+**Fixed** by a shared xUnit collection over exactly those five classes, so they stop overlapping while the
+rest of the project still runs in parallel. Deliberately **not** `"parallelizeTestCollections": false`,
+which this task names as the wrong fix. 6 consecutive runs, 88 passed, 0 failed.
+
+**It is the same family as the MSSql instance** — parallel classes sharing one server, one class's DDL
+invalidating a catalogue read another is mid-query on — and the third confirmation that this project's
+live-suite flakes are shared-database coupling rather than anything in the framework. Two of the
+participating classes were added by me on 2026-09-07/08, so this one was plausibly a regression I
+introduced rather than a long-standing defect.
+
+**The generalisable half is the tooling:** a sweep loop that greps only the summary line destroys the
+evidence. Keeping a `.trx` per project turned two lost identities into a diagnosis on the first attempt.

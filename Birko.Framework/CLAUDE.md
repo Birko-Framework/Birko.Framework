@@ -2399,6 +2399,41 @@ The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (n
 
 
 
+
+### A composite PRIMARY KEY could not be declared at all, and TimescaleDB requires one (2026-09-08)
+
+TASK-303, split out of TASK-252 on pick. `FieldDefinition` rendered `PRIMARY KEY` inline per column, so
+two primary fields emitted **two clauses** and every provider rejected the statement. Verified with
+`BIRKO_REQUIRE_LIVE` set against live TimescaleDB 2.29.2, PostgreSQL 16, MySQL 8.4, SQL Server 2022 and
+on-disk SQLite: **1,639 tests, 0 failed** across nine suites, 14 new. Six things worth carrying:
+
+- **The server states the remedy itself.** `create_hypertable` over a Guid-keyed table answers
+  *"cannot create a unique index without the column ts (used in partitioning)"* and hints *"ensure the
+  partitioning column is part of the primary or composite key"* — so the framework could not express a
+  shape one of its own providers demands. With `PRIMARY KEY (Guid, Ts)` it converts cleanly.
+- **The veto measurement said go, where TASK-248's said stop.** 0 classes across the framework, its tests
+  and all 16 consumer repos declare more than one primary, so the change is purely additive.
+- **⚠ Two of this task's own premises were incomplete.** It cited only PostgreSQL's `42P16`; **SQLite
+  fails too** (`Error 1: table has more than one primary key`). And SQLite's
+  `INTEGER PRIMARY KEY AUTOINCREMENT` cannot join a table-level clause at all — refused up front with a
+  message naming autoincrement, which the server's own error does not.
+- **⚠ A mutation exposed a hole in my own tests.** With only the suppression asserted, deleting the
+  table-level clause left `Birko.Data.SQL.Tests` **entirely green (683)** — only the live tests caught it.
+  Suppression without emission is *worse than the original defect*: the table gets **no key at all**,
+  silently, and bulk update and delete key on `GetPrimaryFields()` and would quietly do nothing.
+  **A test that asserts a flag is not a test that asserts a statement.**
+- **⚠ And writing the round-trip test found a limitation the fix does not cover.**
+  `AbstractDatabaseModel` puts `[UniqueField]` *and* `[PrimaryField]` on `Guid`, so a subclass carries a
+  standalone `UNIQUE (Guid)` forbidding two rows that share one — measured as
+  `SQLite Error 19: 'UNIQUE constraint failed'`. The capability is real and **the framework's own base
+  model still cannot use it**; [[TASK-304]] owns that, and the qualification is on the task rather than
+  left implied by a passing suite.
+- **⚠ [[TASK-276]]'s TimescaleDB flake was caught and diagnosed** once the sweep kept a `.trx` per project
+  instead of grepping the summary line: a parallel class dropped a continuous aggregate's internal table
+  mid-catalogue-read (`42P01 … _materialized_hypertable_1048`). Fixed by serialising the five live classes
+  that share the database — not by disabling parallelism, which that task forbids. Two of them are ones I
+  added this week, so it was plausibly my own regression.
+
 ### Half of a grouped latent-gaps task had already been closed by other work (2026-09-08)
 
 TASK-252 collected six per-provider gaps that the index-DDL thread had left as prose in closed tasks'
