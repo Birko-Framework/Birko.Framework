@@ -1,10 +1,11 @@
 # Tasks — Birko.Framework
 
-> ⚠ **Feature drift (3 groups, 76 items)** — **DV9 recomputed 2026-09-08** after this session
-> filed 17 new tasks; the other two counts are carried from 2026-09-04 and are labelled as such.
-> **DV9 ×54** (tasks carry `feature: FEATURE-014` but its `decisions.md` `→ Tasks` column never lists
-> them — the ledger does not know about its own work; was ×31 on 2026-09-04, and **17 of the 23 new
-> ones were filed on 2026-09-08**: TASK-305/306 and the 15 `SH-H` triage tasks TASK-308–322) ·
+> ⚠ **Feature drift (3 groups, 81 items)** — **DV9 recomputed 2026-09-08** after this session
+> filed 22 new tasks; the other two counts are carried from 2026-09-04 and are labelled as such.
+> **DV9 ×59** (tasks carry `feature: FEATURE-014` but its `decisions.md` `→ Tasks` column never lists
+> them — the ledger does not know about its own work; was ×31 on 2026-09-04, and **22 of the 28 new
+> ones were filed on 2026-09-08**: TASK-305/306, the 15 `SH-H` triage tasks TASK-308–322, and the 5
+> recovered-findings fix tasks TASK-323–327) ·
 > **DV5 ×18** (every task in `_loose/` has no epic *and* no feature, so none appears in a feature row
 > — carried from 2026-09-04, not recomputed) · **DV3 ×4** (TASK-285/286/287/288 sit under EPIC-014
 > with `feature: null` while every sibling links to FEATURE-014 — a broken back-link; carried from
@@ -16,8 +17,9 @@
 > through `source-commits` — a cost this dashboard refresh did not pay. The last measured value was
 > **DV7 ×3** (`filter-expression-translation`, `bulk-filter-operations`,
 > `unit-of-work-and-transactions`), owned by [[TASK-251]]. ⚠ And note that
-> `filter-expression-translation` is now **also** the subject of [[TASK-308]] (P0, 7 findings), so its
-> spec is both stale and about to change again. DV8/DV10/DV11 were clean at the last measurement: all
+> **two of those three areas are now also subjects of new work** — `filter-expression-translation` of
+> [[TASK-308]] (P0, 7 findings) and `unit-of-work-and-transactions` of [[TASK-325]]/[[TASK-327]] (6
+> verified findings) — so their specs are both stale and about to change again. DV8/DV10/DV11 were clean at the last measurement: all
 > 25 mapped areas exist on disk and carry `shaped-by-derived: true`.
 >
 > ℹ **Known false positive, left as-is:** EPIC-018 reads `in-progress` with all 4 tasks `done`. It is
@@ -25,21 +27,21 @@
 > it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays `in-progress`
 > with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-08 20:12. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-08 20:41. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status      | Epics | Stories | Tasks |
 |-------------|-------|---------|-------|
 | planned     | 10    | 24      | —     |
-| todo        | —     | —       | 144    |
-| in-progress | 7    | 10      | 0    |
+| todo        | —     | —       | 148    |
+| in-progress | 7    | 9      | 0    |
 | review      | —     | —       | 11    |
 | blocked     | —     | —       | 2    |
-| done        | 1    | 22      | 133    |
+| done        | 1    | 23      | 134    |
 | cancelled   | 0    | 0      | 2    |
 
-`todo` by priority: 5× P0 · 35× P1 · 89× P2 · 15× P3.
+`todo` by priority: 5× P0 · 36× P1 · 92× P2 · 15× P3.
 
 ## In progress now
 
@@ -145,7 +147,7 @@ _None_
   - [x] TASK-037 Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
   - [ ] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export 🔍 review · FEATURE-013
   - [ ] TASK-307 The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (99/183 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (100/188 tasks done)
   - [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day · FEATURE-014
   - [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down · FEATURE-014
   - [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently · FEATURE-014
@@ -291,7 +293,7 @@ _None_
     - [x] TASK-207 `View.AddField` still drops a duplicate field key silently — the general case behind TASK-129's second defect · FEATURE-014
     - [x] TASK-215 Wire `RequireBoundedFilter` into the base wrappers, InMemory and ElasticSearch · FEATURE-014
     - [x] TASK-225 MongoDB's connection string is composed with no escape hatch — no driver option can be set · FEATURE-014
-  - STORY-053 Spec-harvest — medium findings — planned (0/22 done)
+  - STORY-053 Spec-harvest — medium findings — planned (0/25 done)
     - [ ] TASK-151 Triage the 36 medium spec-harvest findings in `views-and-aggregation` · FEATURE-014
     - [ ] TASK-152 Triage the 33 medium spec-harvest findings in `migrations` · FEATURE-014
     - [ ] TASK-153 Triage the 29 medium spec-harvest findings in `filter-expression-translation` · FEATURE-014
@@ -305,6 +307,8 @@ _None_
     - [ ] TASK-165 Triage the 15 medium spec-harvest findings in `security-and-authorization` · FEATURE-014
     - [ ] TASK-170 Triage the 13 medium spec-harvest findings in `bulk-filter-operations` · FEATURE-014
     - [ ] TASK-171 Triage the 12 medium spec-harvest findings in `specifications-and-paging` · FEATURE-014
+    - [ ] TASK-324 Fix the 1 verified medium finding in `store-lazy-initialization` · FEATURE-014
+    - [ ] TASK-325 Fix the 3 verified medium findings in `unit-of-work-and-transactions` · FEATURE-014
     - [ ] TASK-155 Triage the 24 medium spec-harvest findings in `event-bus-and-messaging` · FEATURE-014
     - [ ] TASK-158 Triage the 21 medium spec-harvest findings in `background-jobs` · FEATURE-014
     - [ ] TASK-160 Triage the 20 medium spec-harvest findings in `llm-provider-and-agents` · FEATURE-014
@@ -314,7 +318,8 @@ _None_
     - [ ] TASK-168 Triage the 14 medium spec-harvest findings in `entity-localization` · FEATURE-014
     - [ ] TASK-169 Triage the 14 medium spec-harvest findings in `caching` · FEATURE-014
     - [ ] TASK-172 Triage the 9 medium spec-harvest findings in `workflow-state-machine` · FEATURE-014
-  - STORY-054 Spec-harvest — low findings — planned (0/22 done)
+    - [ ] TASK-323 Fix the 3 verified medium findings in `core-model-contracts` · FEATURE-014
+  - STORY-054 Spec-harvest — low findings — planned (0/24 done)
     - [ ] TASK-173 Triage the 31 low spec-harvest findings in `llm-provider-and-agents` · FEATURE-014
     - [ ] TASK-174 Triage the 29 low spec-harvest findings in `event-bus-and-messaging` · FEATURE-014
     - [ ] TASK-175 Triage the 24 low spec-harvest findings in `background-jobs` · FEATURE-014
@@ -337,8 +342,10 @@ _None_
     - [ ] TASK-192 Triage the 10 low spec-harvest findings in `schema-index-and-ddl` · FEATURE-014
     - [ ] TASK-193 Triage the 10 low spec-harvest findings in `repository-contract` · FEATURE-014
     - [ ] TASK-194 Triage the 10 low spec-harvest findings in `entity-localization` · FEATURE-014
-  - STORY-055 Spec-harvest — the three unrated areas — in-progress (0/1 done)
-    - [ ] TASK-195 Rate, ID and fold the 16 recovered findings into the severity backlog · FEATURE-014
+    - [ ] TASK-326 Fix the 1 verified low finding in `core-model-contracts` · FEATURE-014
+    - [ ] TASK-327 Fix the 3 verified low findings in `unit-of-work-and-transactions` · FEATURE-014
+  - STORY-055 Spec-harvest — the three unrated areas — done (1/1 done) (done)
+    - [x] TASK-195 Rate, ID and fold the 16 recovered findings into the severity backlog · FEATURE-014
 - **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (10/22 tasks done)
   - [x] TASK-055 Xaml Form field-type parity with b-form (wire existing controls + FormField props) · FEATURE-015
   - [x] TASK-056 Xaml date & time picker controls + field types · FEATURE-015

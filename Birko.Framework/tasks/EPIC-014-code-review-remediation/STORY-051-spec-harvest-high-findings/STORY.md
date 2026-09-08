@@ -87,6 +87,19 @@ task bodies; every one of those mentions is an explicit **"separate task"**, **"
 - **`SH-H038` has been mis-cited once already** — [[TASK-197]] corrected a working tree that used it for
   an unrelated field-mapping defect. It is the ElasticSearch reindex finding and nothing else.
 
+## ⚠ The 2026-09-08 recovered-findings fold did NOT change this story
+
+[[TASK-195]] folded 11 recovered findings into the severity backlog, and **none of them is high**. Its one
+proposed high (`UOW-1` — an ElasticSearch commit failure leaving the buffer queued) was **downgraded to
+medium** on measurement: all three operations that UoW can buffer are idempotent, so the "retry
+double-applies" consequence is materially harmless, and the class's own doc comment already states it is
+not a true ACID transaction — so partial application is documented rather than silent. It is now `SH-M426`
+under [[TASK-325]].
+
+So `finding-count: 57` and `finding-ids: SH-H001 … SH-H057` stand unchanged, and the 15-task decomposition
+below still covers this tier completely. Recorded because [[TASK-195]]'s criteria asked for this story's
+count to be updated, and *"no change, for this reason"* is the answer rather than an omission.
+
 ## Progress
 
 **17 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],

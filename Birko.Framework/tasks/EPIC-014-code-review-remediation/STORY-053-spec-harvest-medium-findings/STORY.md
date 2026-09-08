@@ -5,15 +5,15 @@ status: planned
 created: 2026-07-30
 source: SPEC-HARVEST-FINDINGS-2026-07-30.md
 severity: medium
-finding-count: 421
-finding-ids: SH-M001 … SH-M421
+finding-count: 428
+finding-ids: SH-M001 … SH-M428
 ---
 
 # Spec-harvest — medium findings
 
 ## Progress
 
-**0 / 421 closed.** All are unverified harvester claims. Per-finding detail is in
+**0 / 428 closed.** All are unverified harvester claims. Per-finding detail is in
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md) § Medium severity.
 
 ## User story
@@ -68,6 +68,26 @@ fix there. That goes out via `/tasks spawn`, never as a ticked box with the work
 | [[TASK-170]] | `bulk-filter-operations` | 13 (`SH-M022`–`SH-M034`) | P1 |
 | [[TASK-171]] | `specifications-and-paging` | 12 (`SH-M290`–`SH-M301`) | P1 |
 | [[TASK-172]] | `workflow-state-machine` | 9 (`SH-M413`–`SH-M421`) | P2 |
+
+### ⚠ Three areas folded in on 2026-09-08 — and they are FIX tasks, not triage tasks
+
+[[TASK-195]] rated, ID'd and folded the 16 findings recovered from the harvest's lost first-schema pass.
+Three of those areas had **no per-area task at all** — the table above covers the 22 areas that had rated
+findings, and these three are exactly the ones that did not. Every finding below was **hand-verified
+against the code** during that rating pass, so the verdict is already in the findings doc and there is no
+confirm-or-refute step: the work is the fix. That is the one way these differ from the 22 tasks above.
+
+| Task | Area | Findings | Priority |
+|---|---|---|---|
+| [[TASK-325]] | `unit-of-work-and-transactions` | 3 (`SH-M426`–`SH-M428`) | **P1** |
+| [[TASK-323]] | `core-model-contracts` | 3 (`SH-M422`–`SH-M424`) | P2 |
+| [[TASK-324]] | `store-lazy-initialization` | 1 (`SH-M425`) | **P1** |
+
+**Only 11 of the 16 recovered findings survived**: five were exact duplicates of findings already filed
+under `store-crud-contract`, which globs the same `AbstractStore.cs` / `AbstractAsyncStore.cs` files. They
+are cross-referenced in the findings doc's § *Coverage gaps*, not re-filed. Two of the five were known
+before the pass; three were found by checking every recovered finding against the overlapping areas.
+
 
 P1 marks the security-&-tenancy and correctness-&-invariants themes of the intake ladder; P2 the rest.
 [[fix-next]] ranks by blast radius rather than by this field, so it is a tie-breaker, not the running order.

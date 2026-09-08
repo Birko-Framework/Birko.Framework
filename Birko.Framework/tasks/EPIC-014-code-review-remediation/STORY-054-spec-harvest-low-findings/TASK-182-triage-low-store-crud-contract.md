@@ -60,6 +60,23 @@ what the code *does*, defects included, which is exactly what let it find them. 
       with the work undone
 - [ ] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
 
+## ⚠ Two of these findings were independently re-reported (added 2026-09-08 by [[TASK-195]])
+
+The recovered `store-lazy-initialization` sweep hit the same two defects, because that area globs the same
+`AbstractStore.cs` / `AbstractAsyncStore.cs` files this area does — `SH-L297`'s own body already said so:
+
+| This task already owns | Also recovered as |
+|---|---|
+| `SH-L297` (non-volatile `_initialized` read outside the lock) | `SLI-4` |
+| `SH-L298` (`SemaphoreSlim _initLock` never disposed) | `SLI-6` |
+
+**Nothing was added to this task's `findings:` list** — the ids were already there. Both were re-verified
+as still present on 2026-09-08: `_initialized` is still `private bool` (not `volatile`) and still read
+outside the lock at `AbstractStore.cs:26` / `AbstractAsyncStore.cs:38`, and `AbstractAsyncStore<T>`
+declares only `IAsyncStore<T>` with **0** occurrences of `Dispose` in the file. The recovered text for
+`SLI-4` adds the reasoning worth keeping: correctness today rests on the stronger de-facto CLR/x86 memory
+model rather than on the code, and `volatile` costs nothing here.
+
 ## Out of scope
 
 - The other 368 low findings — they belong to the other 21 per-area tasks under [[STORY-054]].

@@ -1,7 +1,7 @@
 ---
 id: STORY-055
 parent: EPIC-014
-status: in-progress
+status: done
 created: 2026-07-30
 source: SPEC-HARVEST-FINDINGS-2026-07-30.md
 severity: unrated
@@ -13,8 +13,22 @@ finding-ids: recovered as CMC-1…4, SLI-1…6, UOW-1…6 — awaiting SH- ids
 
 ## Progress
 
-**16 / 16 recovered (2026-07-31)**, verbatim, in [`RECOVERED-FINDINGS.md`](RECOVERED-FINDINGS.md).
-Remaining: confirm severities, assign `SH-` ids, fold into the severity stories, correct the totals.
+**DONE 2026-09-08.** 16 / 16 recovered (2026-07-31), verbatim, in
+[`RECOVERED-FINDINGS.md`](RECOVERED-FINDINGS.md); rated, ID'd, folded and routed by [[TASK-195]].
+
+**Outcome: 16 recovered → 11 folded, 5 duplicates, 0 high.** All 16 were re-verified against current code
+first and all 16 still described it. Five were exact duplicates of findings already filed under
+`store-crud-contract`, which globs the same `AbstractStore.cs` / `AbstractAsyncStore.cs` files — only two
+of those five were known in advance; three were found by the overlap check TASK-195 required. The one
+proposed high (`UOW-1`) was **downgraded to medium** on measurement, so this story contributed no
+high-severity finding and [[STORY-051]] is unchanged.
+
+Totals corrected **865 → 876** (`57 · 428 · 391`), not the predicted 881. No id inside an existing range
+was renumbered, moved or reused. All 11 new ids are reachable from a `status: todo` task — three areas had
+no per-area task at all, so [[TASK-323]]–[[TASK-327]] were filed under [[STORY-053]] and [[STORY-054]].
+
+⚠ **What this story does not do: fix anything.** `SH-M425` through `SH-M428` and `SH-L388` through
+`SH-L391` are open defects owned by those five tasks.
 
 ## User story
 

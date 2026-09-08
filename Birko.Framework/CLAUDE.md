@@ -2393,6 +2393,66 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### 16 findings recovered from a lost harvest pass: 11 folded, 5 duplicates, and the one proposed high downgraded (2026-09-08)
+
+TASK-195, closing [[STORY-055]]. The 2026-07-30 harvest aggregated by `severity`, a field its **first**
+pass's output schema did not have, so three areas — `core-model-contracts` (4),
+`store-lazy-initialization` (6), `unit-of-work-and-transactions` (6) — matched no section of the findings
+doc and survived only as a count in a note that read *"complete"*. Recovered verbatim from the workflow
+journal on 2026-07-31; rated, ID'd, folded and routed today. Documentation and routing only — **no
+production code changed.** Totals **865 → 876** (`57 · 428 · 391`). Seven things worth carrying:
+
+- **Re-verify a recovered finding before rating it, not after.** All 16 were checked against current source
+  first, because 39 days and ~40 tasks had passed and several neighbouring mechanisms had moved
+  ([[TASK-270]] reworked re-entrancy in `DataBase`, [[TASK-288]] added `CanTrustRememberedInitialization`
+  to the store bases). **All 16 still described the shipped code** — but that was a measurement, not an
+  assumption, and it is the thing that makes the ratings worth anything.
+- **⚠ Five were duplicates, not the two that were known — and the three extra were found by the check the
+  task file insisted on.** `SLI-1` is `SH-M307` (same file, **same line 48**, same mechanism) and `SLI-2`
+  *and* `SLI-3` are both `SH-M316`, whose title — *"InitCore re-entrancy fails two different ways in the
+  sync and async bases"* — deliberately spans both halves, so two recovered ids collapse into one existing
+  finding. The reason the duplication exists is structural: `store-crud-contract`'s globs include the same
+  `AbstractStore.cs` / `AbstractAsyncStore.cs` files, so two agents reported the same defects.
+  **When folding a recovered or re-run sweep in, search the existing doc for every FILE the new findings
+  name** — that search returned 15 existing ids for the two store bases and **0** for
+  `AbstractModel.cs` / `AbstractLogModel.cs` / `SqlUnitOfWork.cs` / `SqlTransactionContext.cs` /
+  `ElasticSearchUnitOfWork.cs`, which is what makes "the other 10 are new" a claim rather than a hope.
+- **⚠ The one proposed high does not clear the bar, and two measurements settled it.** `UOW-1` (an ES
+  commit failure leaving the buffer queued) was filed as high on the strength of *"a retry double-applies
+  succeeded items"*. Measured: every operation `BulkOperationContext` can buffer is **idempotent** —
+  `Index` sends the full document, `Delete` is by id, `Update` uses `Doc(partialDocument)` rather than a
+  script, and there is no `create` — so a re-send overwrites with the same value. And the class's own doc
+  comment already says *"This is NOT a true ACID transaction. Individual operations within the bulk may
+  succeed or fail independently"*, so partial application is **documented rather than silent**, with the
+  caller holding an exception. Downgraded to medium as `SH-M426`. The residue is real (stale `IsActive`, an
+  intact buffer, no per-item outcomes for a targeted retry) and is not silent data loss.
+- **So the recovered set contributed NO high finding, and that is recorded on [[STORY-051]] as "no change,
+  for this reason".** Its `finding-count: 57` stands and the 15-task decomposition filed hours earlier
+  still covers the tier completely. An omission and a deliberate non-change look identical in a diff unless
+  one of them says so.
+- **A predicted total is a hypothesis.** [[STORY-055]] predicted **881** (`58 · 430 · 393`); the answer is
+  **876**. It double-counted two duplicates it knew about (the error TASK-195 anticipated), missed three it
+  did not, and assumed a high that measurement removed. **And the constraint that mattered more than the
+  total:** every id was appended past the existing maxima, because [[TASK-151]]–[[TASK-194]] carry
+  *explicit contiguous* `findings:` lists, so renumbering anywhere inside a range would silently invalidate
+  44+ task files at once. Verified mechanically — the id set went 865 → 876 with **0 lost**.
+- **Routing is the half that makes it real, and these three areas had no task at all.** The 44 per-area
+  tasks cover the 22 areas that *had* rated findings; these three are precisely the ones that did not, so
+  folding ids in alone would have left them *"filed, and scheduled by nothing"*. [[TASK-323]]–[[TASK-327]]
+  now own all 11, verified by grep: every new id resolves to a `status: todo` task's `findings:` list.
+- **⚠ They are named "Fix", not "Triage", and the distinction is load-bearing.** Their 44 siblings open
+  with confirm-or-refute; these arrive **pre-verified**, so a triage step would be busywork and would
+  invite the next reader to redo this pass. Each task says so explicitly. Priorities are measured too:
+  `SqlUnitOfWork` is named in **3** consumer `.cs` files (so `SH-M427`'s pooled-connection leak per failed
+  `BeginAsync` is live), `SH-M425` sits on the base every async store inherits, and the
+  `core-model-contracts` trio has **0** `.CopyTo(` call sites anywhere in the framework's non-test code —
+  real API defects, latent today.
+- **A cross-link that changed a finding's reachability the same day.** `SH-M428` (a failed commit skips
+  `CleanupAsync`) names a deadlock-victim commit as its trigger, which was hypothetical when filed;
+  [[TASK-306]] reproduced exactly that on live SQL Server 2022 hours earlier — error **1205**, *"Rerun the
+  transaction"*, 1 run in 12 under CPU load. A measured trigger is the difference between a theoretical
+  cleanup gap and one this tree has seen.
+
 ### 39 of the 57 high spec-harvest findings had no task, a month after the same defect was fixed for medium (2026-09-08)
 
 The intake nobody had run. [[STORY-051]] held **31 task files covering 18 of its 57 findings**; the other

@@ -60,6 +60,29 @@ what the code *does*, defects included, which is exactly what let it find them. 
       with the work undone
 - [ ] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
 
+## ⚠ Two of these findings were independently re-reported (added 2026-09-08 by [[TASK-195]])
+
+The recovered `store-lazy-initialization` sweep hit the same defects, because that area's source globs
+include the same `AbstractStore.cs` / `AbstractAsyncStore.cs` files this area globs:
+
+| This task already owns | Also recovered as | Note |
+|---|---|---|
+| `SH-M307` (Destroy does not reset the initialization latch) | `SLI-1` | Same file, same line 48, same mechanism |
+| `SH-M316` (InitCore re-entrancy fails two different ways) | `SLI-2` **and** `SLI-3` | `SH-M316` deliberately spans both halves, so two recovered ids collapse into it — `SLI-2` is the sync StackOverflow, `SLI-3` the async deadlock |
+
+**Nothing was added to this task's `findings:` list** — the ids were already there, and the recovered
+duplicates are cross-referenced in the findings doc rather than re-filed. What is worth carrying into the
+fix: the recovered text describes the **async** half independently and is more specific about it than
+`SH-M316`'s summary, so read `SLI-2`/`SLI-3` in
+[`STORY-055/RECOVERED-FINDINGS.md`](../STORY-055-spec-harvest-unrated-areas/RECOVERED-FINDINGS.md) before
+fixing — in particular that `SemaphoreSlim` has **no owner affinity**, which is why the async base hangs
+where the sync base (a re-entrant `Monitor`) recurses to a `StackOverflowException` instead. Both were
+re-verified as still present on 2026-09-08.
+
+⚠ And note the framework now contains the remedy both halves ask for, in a different class: [[TASK-270]]
+built an `AsyncLocal<bool>` re-entrancy scope for `DataBase.IsInitializing`, per call flow and per
+instance, restoring on exception. Reuse that shape rather than inventing a second one.
+
 ## Out of scope
 
 - The other 406 medium findings — they belong to the other 21 per-area tasks under [[STORY-053]].

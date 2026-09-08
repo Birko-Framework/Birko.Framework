@@ -4,7 +4,9 @@ Per-finding detail for **STORY-051** (high), **STORY-053** (medium), **STORY-054
 **STORY-055** (the unrated areas). Produced by the `/specs` harvest of the 25 cross-cutting
 areas in `docs/specs/.map.yml`, at code HEAD `f3ac675`.
 
-**57 high · 421 medium · 387 low = 865 findings** across 22 areas — every area that was ever capped.
+**57 high · 428 medium · 391 low = 876 findings** across **25** areas.
+
+⚠ **The count changed on 2026-09-08 and the arithmetic is not obvious** — see § *Coverage gaps*. It was `865 across 22 areas`; the three areas that predated the severity field were rated, ID'd and folded in by [[TASK-195]], which added **11** findings rather than the 16 recovered, because **5 were exact duplicates** of findings already filed under `store-crud-contract` (which globs the same `AbstractStore.cs` / `AbstractAsyncStore.cs`). [[STORY-055]] had predicted `881 (58 · 430 · 393)`; that over-counted by 5 — it double-counted two known duplicates and did not know about three more — and it assumed a high finding this rating pass **downgraded**.
 
 ## How to read this
 
@@ -12,17 +14,51 @@ Every finding here is **specced as-is** in the corresponding `docs/specs/<area>.
 record what the code does, defects included. This document is the review queue for changing it.
 
 Findings are **harvester claims, not confirmed defects**, except where a `Verdict:` line appears.
-15 were hand-verified against the code: **12 CONFIRMED**, **3 CONFIRMED-NARROWER**
-(real mechanism, but the claim overstates or mis-states its scope — read the verdict before fixing),
-0 refuted. The unverified remainder should be confirmed before or during its fix.
+26 have been hand-verified against the code: **12 CONFIRMED** and **3 CONFIRMED-NARROWER** at
+harvest time (real mechanism, but the claim overstates or mis-states its scope — read the verdict
+before fixing), plus the **11** folded in on 2026-09-08 (**8 CONFIRMED**, **3 CONFIRMED-NARROWER**,
+one of those also **downgraded** from the proposed high). **0 refuted so far.** The unverified
+remainder should be confirmed before or during its fix — and note that one finding has been
+re-verified *wider* than filed, so a claim is a starting point rather than a ceiling.
 
 ## Coverage gaps — do not read this as exhaustive
 
 - **No area is missing now.** All 22 capped areas have been swept uncapped, and every agent
   self-reported `sweptToExhaustion: true`. That claim is the agents' own, not independently checked.
-- **3 areas were never capped** and are complete, but predate the severity rating, so they carry no
-  high/medium/low split: `core-model-contracts` (4), `store-lazy-initialization` (6),
-  `unit-of-work-and-transactions` (6).
+- **3 areas were swept, then lost, then recovered — they were never "complete", and the word "complete"
+  is what hid the loss for a day.** `core-model-contracts` (4), `store-lazy-initialization` (6) and
+  `unit-of-work-and-transactions` (6) ran only under the **first** pass's output schema, which had no
+  `severity` field. The 2026-07-30 harvest aggregated by `severity`, so all 16 matched no section of this
+  document and survived only as a count in a note that read *"complete"*. They were recovered **verbatim**
+  from the harvest workflow's journal (`wf_0987dab2-cb0/journal.jsonl`) on 2026-07-31, off that perishable
+  source, into [`STORY-055/RECOVERED-FINDINGS.md`](STORY-055-spec-harvest-unrated-areas/RECOVERED-FINDINGS.md);
+  they were rated, ID'd and folded into the sections below by [[TASK-195]] on 2026-09-08. Nothing needed
+  re-sweeping: `/specs regen` is diff-based and none of the three areas' sources had moved.
+- ⚠ **5 of the 16 were exact duplicates, and that is a property of the area map rather than an accident.**
+  `store-crud-contract`'s source globs include the same `AbstractStore.cs` / `AbstractAsyncStore.cs` files as
+  `store-lazy-initialization`, so both agents reported the same defects. `SH-L297` even says so in its own
+  body. The mapping, cross-referenced rather than re-filed:
+
+  | Recovered | Already filed as | Owned by |
+  |---|---|---|
+  | `SLI-1` (Destroy cannot reset the init latch) | `SH-M307` | [[TASK-163]] |
+  | `SLI-2` (sync `InitCore` recursion → StackOverflow) | `SH-M316` | [[TASK-163]] |
+  | `SLI-3` (async `InitCoreAsync` deadlock) | `SH-M316` — same finding, which covers both halves | [[TASK-163]] |
+  | `SLI-4` (non-volatile `_initialized` read outside the lock) | `SH-L297` | [[TASK-182]] |
+  | `SLI-6` (`SemaphoreSlim _initLock` never disposed) | `SH-L298` | [[TASK-182]] |
+
+  Only `SLI-2`/`SLI-3` needed judgement: `SH-M316` is titled *"InitCore re-entrancy fails two different ways
+  in the sync and async bases for identical subclass code"*, i.e. one finding deliberately spanning both, so
+  two recovered ids collapse into it. **Only `SLI-4` and `SLI-6` were known before this pass**; the other
+  three were found by checking every recovered finding against the areas whose globs overlap, which is the
+  check [[TASK-195]] required before any id was minted.
+- ⚠ **`unit-of-work-and-transactions` and `core-model-contracts` had no overlap at all** — measured, this
+  document contains **0** references to `AbstractModel.cs`, `AbstractLogModel.cs`, `SqlUnitOfWork.cs`,
+  `SqlTransactionContext.cs` or `ElasticSearchUnitOfWork.cs` outside the blocks folded in on 2026-09-08. So
+  all 10 of their findings are genuinely new, and the duplication is confined to the store bases.
+- ⚠ **The recovered set contains no high-severity finding.** Its one proposed high (`UOW-1`) was
+  **downgraded to medium** on measurement — see `SH-M426`. So the high tier stays at 57 and
+  [[STORY-051]]'s decomposition is unaffected.
 - The first harvest pass capped findings at 8 per area and 22 of 25 areas hit that ceiling. The
   uncapped re-sweep below averaged 39 per area, so any earlier count of ~8 was an artefact.
 - Test coverage was explicitly out of scope for the sweep; a missing test is not reported here.
@@ -742,6 +778,26 @@ The collection overload caches the materialized List<T> instance and returns tha
 `../Birko.Caching.Hybrid/HybridCache.cs:125`
 
 RemoveAsync starts the L1 removal and the L2 removal without ordering or a tombstone. A concurrent GetAsync that misses L1 (just cleared) reads the value still present in L2 and writes it back into L1 (line 73); the L2 delete then completes, leaving L1 holding a value for a key the caller explicitly removed, served for up to L1DefaultExpiration.
+
+### area: core-model-contracts
+
+#### SH-M422 — `AbstractLogModel.CopyTo` is an overload, not an override, so timestamps are dropped via a base-typed reference
+
+`../Birko.Data.Core/Models/AbstractLogModel.cs:13`
+
+**Verdict: CONFIRMED-NARROWER (2026-09-08)** — the mechanism is exactly as filed: `AbstractModel` declares `virtual AbstractModel CopyTo(AbstractModel?)` and `AbstractLogModel` declares `AbstractLogModel CopyTo(AbstractLogModel?)` with no `override`, so it neither overrides nor hides. Via an `AbstractModel`-typed or `ICopyable<AbstractModel>` reference, `CreatedAt`/`UpdatedAt` stay `0001-01-01`. **Narrower than the impact clause:** measured 2026-09-08, there are **0** `.CopyTo(` call sites in the framework's non-test code and no `ICopyable<AbstractModel>`-typed variable anywhere, so the *"infrastructure holding models as AbstractModel loses audit timestamps"* consequence has no instance today. Real API defect, latent. Recovered as `CMC-1`.
+
+#### SH-M423 — `AbstractLogModel.LoadFrom` is an overload, not an override, so `ILoadable<IGuidEntity>` dispatch discards the timestamps the argument carries
+
+`../Birko.Data.Core/Models/AbstractLogModel.cs:26`
+
+**Verdict: CONFIRMED-NARROWER (2026-09-08)** — `AbstractModel.LoadFrom(IGuidEntity)` is virtual and still never overridden; `AbstractLogModel.LoadFrom(ILogEntity)` carries no `override`. So `ILoadable<IGuidEntity> il = target; il.LoadFrom(logEntitySource)` sets `Guid` and leaves `CreatedAt` at `0001-01-01` although the runtime argument carries it. **Narrower than the impact clause:** every `LoadFrom` call site in the framework is on a *concrete* model type (the seven `*JobDescriptorModel.cs` files), so the overload resolves statically to the most-derived one and no shipped path takes the low-fidelity contract. `Birko.Configuration/Settings.cs`'s `base.LoadFrom` belongs to the unrelated `Settings` hierarchy. Recovered as `CMC-2`.
+
+#### SH-M424 — `CopyTo` with a null or omitted target returns `this` instead of allocating, so the "clone" aliases the source
+
+`../Birko.Data.Core/Models/AbstractModel.cs:15`
+
+**Verdict: CONFIRMED (2026-09-08)** — `AbstractModel.CopyTo` still opens with `if (clone == null) { return this; }` while `ICopyable`'s XML doc says implementations allocate a fresh instance, so `ReferenceEquals(src.CopyTo(), src)` is true and mutating the "copy" mutates the source. `AbstractModel` is abstract and cannot self-allocate, so the honest options are to throw or to drop the default together with the doc claim. Latent in the same way as `SH-M422`: **0** framework call sites. Recovered as `CMC-3`.
 
 ### area: data-sync
 
@@ -2501,6 +2557,14 @@ Build probes IEventSourced, ITimestamped, IAuditable, ITenant, ISoftDeletable, I
 
 Build takes and returns IAsyncBulkStore<T>, and every decorator implements only that surface. A raw store additionally implementing IAsyncAggregatableStore<T>, ITransactionalStore or ISettingsStore loses those members once wrapped: `wrapped as IAggregatableStore<T>` returns null and the caller must walk GetInnerStore() to reach them, at which point the decorators' soft-delete exclusion and tenant scoping are bypassed for that operation. Nothing forwards or re-exposes those interfaces.
 
+### area: store-lazy-initialization
+
+#### SH-M425 — One-time async init runs under whichever concurrent caller's cancellation token wins the lock race
+
+`../Birko.Data.Stores/AbstractAsyncStore.cs:43`
+
+**Verdict: CONFIRMED (2026-09-08)** — `await InitCoreAsync(ct)` still receives the token of whichever caller acquired `_initLock`; it is neither replaced with `CancellationToken.None` nor linked with queued callers' tokens. A caller with a 50 ms timeout arriving first can abort the shared initialization mid-flight, possibly leaving the backend half-built, and a queued caller then repeats the whole init. Which token governs one-time setup is decided by arrival order. Recovered as `SLI-5`. ⚠ Its five siblings were **duplicates** of findings already filed under `store-crud-contract`, which shares these files — see § *Coverage gaps*.
+
 ### area: tenant-isolation
 
 #### SH-M337 — Filter-based bulk Delete/Update forward Filter()! so a null filter with no tenant hits every tenant's rows
@@ -2610,6 +2674,26 @@ When EventContext is null or its TenantGuid is null, RunWithScopeAsync runs the 
 `../Birko.Security.AspNetCore/Extensions/TenantHeaderGuardExtensions.cs:34`
 
 The option is read exclusively by TenantHeaderClaimGuardMiddleware, which nothing registers automatically — AddBirkoSecurity wires auth, ICurrentUser, ITenantResolver and ITenantContext but not this middleware, and no startup check verifies the guard is in the pipeline. An app that adopts AddBirkoSecurity and never adds the Use call reports RequireTenantHeaderMatchesClaim == true while performing no comparison, contradicting the 'secure by default; an opt-in guard protects nobody' rationale.
+
+### area: unit-of-work-and-transactions
+
+#### SH-M426 — An ElasticSearch commit failure leaves the buffer queued and the UoW active, so there is no way to retry only the failed subset
+
+`../Birko.Data.ElasticSearch/UnitOfWork/ElasticSearchUnitOfWork.cs:140`
+
+**Verdict: CONFIRMED-NARROWER, and DOWNGRADED from the proposed high (2026-09-08)** — `_context = null` does still sit after both throw sites (`!response.IsValid`, `response.Errors`), so a partially failed commit leaves the UoW `IsActive` with every operation still buffered. **Two corrections decide the severity.** First, the *"a retry double-applies succeeded items"* consequence is materially harmless: all three operations `BulkOperationContext` can buffer are **idempotent** — `Index` sends the full document, `Delete` is by id, and `Update` uses `Doc(partialDocument)` rather than a script — and there is no `create` op, so re-sending a succeeded item overwrites it with the same value. Second, the class's own doc comment already states *"This is NOT a true ACID transaction. Individual operations within the bulk may succeed or fail independently"*, so partial application is **documented** rather than silent, and the caller receives an exception. What remains is a real defect — stale `IsActive`, an intact buffer, and no per-item outcomes to drive a targeted retry — but it does not reach *silent* data loss, so it is medium. Needs cleanup in a `finally`, or per-item outcomes exposed. Recovered as `UOW-1`.
+
+#### SH-M427 — `SqlUnitOfWork` leaks the `DbConnection` when `OpenAsync` or `BeginTransactionAsync` throws
+
+`../Birko.Data.SQL/UnitOfWork/SqlUnitOfWork.cs:59`
+
+**Verdict: CONFIRMED (2026-09-08)** — `_connection` is still assigned before `OpenAsync` and `BeginTransactionAsync`, with no `try`/`catch` around them. If either throws, `IsActive` stays false (so `Commit`/`Rollback` raise `NoActiveTransactionException`) and the connection is released only by an eventual `Dispose`. Worse, a retried `BeginAsync` passes the `IsActive` guard and overwrites `_connection` without closing the previous one, so repeated failed Begins leak a pooled connection each. Recovered as `UOW-2`.
+
+#### SH-M428 — A failed SQL `CommitAsync`/`RollbackAsync` skips `CleanupAsync`, holding the connection open
+
+`../Birko.Data.SQL/UnitOfWork/SqlUnitOfWork.cs:72`
+
+**Verdict: CONFIRMED (2026-09-08)** — `await _transaction!.CommitAsync(ct); await CleanupAsync();` is still a sequential pair rather than a `try`/`finally`, and `RollbackAsync` has the identical shape. A commit that throws leaves `IsActive` true and `Context` non-null, so a caller using the idiomatic try-Commit/catch-Rollback pattern hits a second failure on an already-broken transaction. ⚠ Its reachability is now **measured rather than hypothetical**: the finding names a deadlock-victim commit, and [[TASK-306]] reproduced exactly that on live SQL Server 2022 (error 1205, 1 run in 12 under load). Recovered as `UOW-3`.
 
 ### area: validation-and-rules
 
@@ -3350,6 +3434,14 @@ The key format has no component identifying T. Two entity types mapped to the sa
 `../Birko.Data.SQL.Caching/Caching/SqlCacheOptions.cs:21`
 
 Enabled is a settable property and InvalidateCacheAsync returns before computing a prefix when it is false (CachedAsyncDataBaseBulkStore.cs:172). A second store over the same ICache and table with Enabled=true therefore keeps serving cached rows that the disabled store has already changed or deleted, until DefaultExpiration. Disabling the cache is documented as 'delegates directly to the base store', which reads as safe.
+
+### area: core-model-contracts
+
+#### SH-L388 — `LoadFrom`'s parameter is null-tolerant at runtime but not annotated nullable, forcing CS8625 on callers
+
+`../Birko.Data.Core/Models/AbstractModel.cs:21`
+
+**Verdict: CONFIRMED (2026-09-08)** — `public virtual void LoadFrom(IGuidEntity data)` still guards with `if (data != null)`, so null is an accepted and meaningful input while the parameter stays non-nullable. A caller passing null gets a nullable diagnostic the callee handles, which is friction against CLAUDE.md § Code Style's no-nullable-warnings rule. Same shape on `AbstractLogModel.LoadFrom(ILogEntity data)`. Either annotate `IGuidEntity?` or drop the guard and throw. Recovered as `CMC-4`.
 
 ### area: data-sync
 
@@ -5020,6 +5112,26 @@ TenantContextAdapter stores birkoContext with no ArgumentNullException, so a nul
 `../Birko.Data.Tenant/Stores/TenantBulkStoreWrapper.cs:23`
 
 `data.Select(item => { SetTenantGuidIfNeeded(item); return item; })` is not materialized, unlike bulk Update/Delete which were fixed to materialize once (CR-M173). The TenantScopeRequiredException a Strict wrapper owes the caller is therefore thrown from within the inner store's iteration — after a batch/transaction may have opened — and a store that enumerates the sequence twice re-runs the stamping pass. Same at AsyncTenantBulkStoreWrapper.cs:25.
+
+### area: unit-of-work-and-transactions
+
+#### SH-L389 — `SqlUnitOfWork` is declared in the global namespace
+
+`../Birko.Data.SQL/UnitOfWork/SqlUnitOfWork.cs:17`
+
+**Verdict: CONFIRMED (2026-09-08)** — measured: the file contains **0** `namespace` declarations while carrying eight usings and a doc comment, so the type lands in the global namespace, unlike `SqlTransactionContext` (`Birko.Data.SQL.Stores`) and `ElasticSearchUnitOfWork` (`Birko.Data.ElasticSearch.UnitOfWork`). It pollutes every compilation unit referencing `Birko.Data.SQL`. Almost certainly an omission. ⚠ Note it is *reachable* — global-namespace types need no using — so this is API hygiene, not a defect: `SqlUnitOfWork.FromStore` is in live use (see [[TASK-259]]). Recovered as `UOW-4`.
+
+#### SH-L390 — `SqlTransactionContext`'s constructor performs no null validation
+
+`../Birko.Data.SQL/Stores/SqlTransactionContext.cs:15`
+
+**Verdict: CONFIRMED (2026-09-08)** — both arguments are still assigned directly (`Connection = connection;`), while every sibling guards its constructor: `SqlUnitOfWork` throws `ArgumentNullException` for connector and settings, `ElasticSearchUnitOfWork` for its client. A context with a null `Connection` or `Transaction` reaches enlisted stores through `SetTransactionContext` and fails with a `NullReferenceException` at the first CRUD call, far from the cause. Recovered as `UOW-5`.
+
+#### SH-L391 — `response.OriginalException!` is null-suppressed but can be null on a ServerError-only response
+
+`../Birko.Data.ElasticSearch/UnitOfWork/ElasticSearchUnitOfWork.cs:129`
+
+**Verdict: CONFIRMED (2026-09-08)** — the adjacent line still handles `OriginalException` being null (`response.OriginalException?.Message`) and the next passes `response.OriginalException!` as the inner exception. Passing null is legal at runtime so nothing crashes, but the `!` asserts an invariant the line above contradicts, misleading readers and any future nullable-flow refactor about whether `InnerException` can be null. Recovered as `UOW-6`.
 
 ### area: validation-and-rules
 

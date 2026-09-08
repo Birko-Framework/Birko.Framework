@@ -179,13 +179,63 @@ nullable-flow refactor about whether `InnerException` can be null.
 
 ---
 
-## Proposed severity split
+## Outcome — rated, ID'd and folded on 2026-09-08 by [[TASK-195]]
+
+**All 16 were re-verified against the code first.** Every one still describes the shipped code — none had
+been fixed or gone stale in the 39 days since recovery. Then five turned out to be duplicates and one
+proposed severity did not survive measurement, so **11** findings were folded in, not 16.
+
+### Final mapping
+
+| Recovered | Verdict | Outcome | Owner |
+|---|---|---|---|
+| `CMC-1` | CONFIRMED-NARROWER | `SH-M422` | [[TASK-323]] |
+| `CMC-2` | CONFIRMED-NARROWER | `SH-M423` | [[TASK-323]] |
+| `CMC-3` | CONFIRMED | `SH-M424` | [[TASK-323]] |
+| `CMC-4` | CONFIRMED | `SH-L388` | [[TASK-326]] |
+| `SLI-1` | CONFIRMED | **duplicate of `SH-M307`** | [[TASK-163]] |
+| `SLI-2` | CONFIRMED | **duplicate of `SH-M316`** (sync half) | [[TASK-163]] |
+| `SLI-3` | CONFIRMED | **duplicate of `SH-M316`** (async half) | [[TASK-163]] |
+| `SLI-4` | CONFIRMED | **duplicate of `SH-L297`** | [[TASK-182]] |
+| `SLI-5` | CONFIRMED | `SH-M425` | [[TASK-324]] |
+| `SLI-6` | CONFIRMED | **duplicate of `SH-L298`** | [[TASK-182]] |
+| `UOW-1` | CONFIRMED-NARROWER, **downgraded high → medium** | `SH-M426` | [[TASK-325]] |
+| `UOW-2` | CONFIRMED | `SH-M427` | [[TASK-325]] |
+| `UOW-3` | CONFIRMED | `SH-M428` | [[TASK-325]] |
+| `UOW-4` | CONFIRMED | `SH-L389` | [[TASK-327]] |
+| `UOW-5` | CONFIRMED | `SH-L390` | [[TASK-327]] |
+| `UOW-6` | CONFIRMED | `SH-L391` | [[TASK-327]] |
+
+### Confirmed severity split — **0 high**, not 1
 
 | Severity | Count | Items |
 |---|---|---|
-| high | 1 | UOW-1 |
-| medium | 9 | CMC-1, CMC-2, CMC-3, SLI-1, SLI-2, SLI-3, SLI-5, UOW-2, UOW-3 |
-| low | 6 | CMC-4, SLI-4, SLI-6, UOW-4, UOW-5, UOW-6 |
+| high | **0** | — |
+| medium | 7 | CMC-1, CMC-2, CMC-3, SLI-5, UOW-1, UOW-2, UOW-3 |
+| low | 4 | CMC-4, UOW-4, UOW-5, UOW-6 |
+| duplicates | 5 | SLI-1, SLI-2, SLI-3, SLI-4, SLI-6 |
 | **total** | **16** | |
 
-Folding these in makes the totals **58 high · 430 medium · 393 low = 881**, replacing the current 865.
+Totals become **57 high · 428 medium · 391 low = 876**, replacing 865.
+
+### ⚠ Where the proposal above was wrong, and why it matters
+
+- **It predicted 881 and the answer is 876.** The proposal counted `SLI-4` and `SLI-6` even though it knew
+  they were duplicates (the over-count [[TASK-195]] anticipated), *and* it did not know that `SLI-1`,
+  `SLI-2` and `SLI-3` were duplicates too. Those three were found only by checking every recovered finding
+  against the areas whose globs overlap `Birko.Data.Stores` — the check TASK-195 required before any id was
+  minted, and it changed the count by 3.
+- **`UOW-1` does not clear the high bar.** Two measurements decided it: every operation
+  `BulkOperationContext` can buffer is **idempotent** (`Index` full-document, `Delete` by id, `Update` with
+  `Doc(partialDocument)` — no script, no `create`), so the *"a retry double-applies succeeded items"*
+  consequence overwrites with the same value; and the class's own doc comment already states *"This is NOT
+  a true ACID transaction. Individual operations within the bulk may succeed or fail independently"*, so
+  partial application is documented rather than silent — and the caller gets an exception. What remains is
+  real (stale `IsActive`, an intact buffer, no per-item outcomes for a targeted retry) but is medium.
+- **So the recovered set contains no high finding**, and [[STORY-051]]'s count and its 15-task
+  decomposition are unaffected. No id inside any existing range was renumbered, moved or reused — the
+  constraint that protects the explicit `findings:` lists on 44+ task files.
+- **`unit-of-work-and-transactions` and `core-model-contracts` had no overlap at all**: measured, the
+  findings doc contained **0** references to `AbstractModel.cs`, `AbstractLogModel.cs`, `SqlUnitOfWork.cs`,
+  `SqlTransactionContext.cs` or `ElasticSearchUnitOfWork.cs` before this fold. The duplication is confined
+  to the two store bases.

@@ -5,15 +5,15 @@ status: planned
 created: 2026-07-30
 source: SPEC-HARVEST-FINDINGS-2026-07-30.md
 severity: low
-finding-count: 387
-finding-ids: SH-L001 … SH-L387
+finding-count: 391
+finding-ids: SH-L001 … SH-L391
 ---
 
 # Spec-harvest — low findings
 
 ## Progress
 
-**0 / 387 closed.** All are unverified harvester claims. Per-finding detail is in
+**0 / 391 closed.** All are unverified harvester claims. Per-finding detail is in
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md) § Low severity.
 
 ## User story
@@ -67,6 +67,25 @@ the tasks actually written down.
 | [[TASK-192]] | `schema-index-and-ddl` | 10 (`SH-L207`–`SH-L216`) |
 | [[TASK-193]] | `repository-contract` | 10 (`SH-L197`–`SH-L206`) |
 | [[TASK-194]] | `entity-localization` | 10 (`SH-L078`–`SH-L087`) |
+
+### ⚠ Three areas folded in on 2026-09-08 — and they are FIX tasks, not triage tasks
+
+[[TASK-195]] rated, ID'd and folded the 16 findings recovered from the harvest's lost first-schema pass.
+Three of those areas had **no per-area task at all** — the table above covers the 22 areas that had rated
+findings, and these three are exactly the ones that did not. Every finding below was **hand-verified
+against the code** during that rating pass, so the verdict is already in the findings doc and there is no
+confirm-or-refute step: the work is the fix. That is the one way these differ from the 20 tasks above.
+
+| Task | Area | Findings | Priority |
+|---|---|---|
+| [[TASK-327]] | `unit-of-work-and-transactions` | 3 (`SH-L389`–`SH-L391`) |
+| [[TASK-326]] | `core-model-contracts` | 1 (`SH-L388`) |
+
+**Only 11 of the 16 recovered findings survived**: five were exact duplicates of findings already filed
+under `store-crud-contract`, which globs the same `AbstractStore.cs` / `AbstractAsyncStore.cs` files. They
+are cross-referenced in the findings doc's § *Coverage gaps*, not re-filed. Two of the five were known
+before the pass; three were found by checking every recovered finding against the overlapping areas.
+
 
 All P2 — low severity is the intake ladder's suggestion tier regardless of theme. [[fix-next]] ranks by
 blast radius, so a low finding on a tenancy surface still outranks a medium one on a doc comment.
