@@ -91,10 +91,29 @@ namespace Birko.Communication.SSE.Middleware
             string? queryString,
             string? remoteEndPoint)
         {
-            if (!_authService.IsAuthenticationEnabled())
+            // SH-H040: gate on the OPT-OUT, not on "enabled AND configured". This was
+            // `!_authService.IsAuthenticationEnabled()`, which is also false when authentication is
+            // switched ON and misconfigured to nothing — so an SSE connection was granted Success()
+            // before a token was ever extracted. Only a deliberate `Enabled = false` allows all; a
+            // misconfiguration must fall through and be refused. The same fix is applied at
+            // AuthenticationService.ValidateToken's own gate, and both now read one producer so a
+            // third caller cannot reintroduce the split.
+            if (_authService.IsAuthenticationDisabled)
             {
                 _logger?.LogDebug("Authentication is disabled, allowing connection");
                 return SseAuthenticationResult.Success(Guid.NewGuid().ToString("N"));
+            }
+
+            if (_authService.IsMisconfigured)
+            {
+                _logger?.LogError(
+                    "Authentication is enabled but nothing is configured; refusing the SSE connection from "
+                    + "{ClientIp}", GetClientIpAddress(headers, remoteEndPoint));
+                // Deliberately the SAME message an invalid token gets: the operator detail is in the
+                // LogError above, and telling an ANONYMOUS caller that the server is misconfigured
+                // hands a prober a distinguishable signal for a state in which the server is known to
+                // be misconfigured. Caught by the security pass on this very change.
+                return SseAuthenticationResult.Fail("Invalid authentication token");
             }
 
             var token = ExtractToken(headers, queryString);
