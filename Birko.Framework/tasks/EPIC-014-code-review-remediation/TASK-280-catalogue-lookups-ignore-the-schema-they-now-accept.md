@@ -3,7 +3,7 @@ id: TASK-280
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-24
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-262, TASK-261, TASK-255]
 findings: []
-pr: null
+pr: "Birko.Data.Migrations.TimescaleDB c16509f + .Tests c7dd903"
 github-issue: null
 jira-key: null
 affects: [Birko.Data.Migrations.TimescaleDB]
@@ -55,23 +55,23 @@ a claim gets written into a commit message and then corrected.
 
 ## Acceptance criteria
 
-- [ ] Both methods resolve the schema half: a qualified `tableName` is split and matched against
+- [x] Both methods resolve the schema half: a qualified `tableName` is split and matched against
       `hypertable_schema` **and** `hypertable_name`. Reuse the split that
       `AbstractConnectorBase.QualifiedIdentifier` already performs rather than writing a second one — the
       one-producer rule, and the shape TASK-262 established (its splitter is unquoted-dot-aware, so
       `"a.b"` stays one part).
-- [ ] An **unqualified** name keeps working exactly as it does today for the single-schema case, which is
+- [x] An **unqualified** name keeps working exactly as it does today for the single-schema case, which is
       every current caller. State whether it should then match any schema or default to the connection's
       search path, and answer it from a measurement on a live server rather than from taste.
-- [ ] The ambiguity is closed rather than reordered: two same-named hypertables in different schemas must
+- [x] The ambiguity is closed rather than reordered: two same-named hypertables in different schemas must
       give a deterministic, correct answer, not merely a stable one.
-- [ ] Verified against **live TimescaleDB** with two hypertables of the same name in different schemas —
+- [x] Verified against **live TimescaleDB** with two hypertables of the same name in different schemas —
       the fixture that distinguishes a fix from a no-op. Asserting against a single-schema database cannot.
-- [ ] Proven able to fail: revert the schema filter and watch the two-schema test go red while the existing
+- [x] Proven able to fail: revert the schema filter and watch the two-schema test go red while the existing
       single-schema tests stay green (they are the control, and
       `QualifiedNameEmitterLiveTests.The_hypertable_probe_answers_for_a_qualified_table` already pins the
       `IsHypertable` half).
-- [ ] The class-level remark claiming *"every object-name argument"* is qualified-safe is corrected or
+- [x] The class-level remark claiming *"every object-name argument"* is qualified-safe is corrected or
       narrowed in the same change — it is currently false for these two methods, which is what let this sit
       unnoticed.
 
@@ -84,5 +84,65 @@ a claim gets written into a commit message and then corrected.
 
 ## Human test plan
 
-- [ ] N/A — mechanical; the proof is a live two-schema fixture returning the right interval for each, which
+- [x] N/A — mechanical; the proof is a live two-schema fixture returning the right interval for each, which
       no human inspection improves on.
+
+---
+
+## Worked 2026-09-08
+
+### Step 0 — blast radius, and the defect reproduced before anything changed
+
+**0 of 16** consumer repos call either method (re-measured, not inherited); the only callers are the
+framework's own live tests. So this was latent — and the fix is a behaviour change nobody can be broken by.
+
+Reproduced on live TimescaleDB 2.29.2 with `public."Evts"` (1 day) and `reporting."Evts"` (7 days) both
+hypertables:
+
+| probe, as shipped | result |
+|---|---|
+| qualified `reporting."Evts"` | **0 rows** — `IsHypertable` false for a hypertable that exists |
+| unqualified `Evts` | **2 rows**, and `GetChunkInterval` returned `1 day` *or* `7 days` arbitrarily |
+
+### ⚠ The criterion's mechanism was not the one used, and the measurement is why
+
+Criterion 1 says to *"reuse the split that `QualifiedIdentifier` already performs"* and match
+`hypertable_schema` **and** `hypertable_name`. The implementation resolves both sides to the same object
+instead:
+
+```sql
+(quote_ident(hypertable_schema) || '.' || quote_ident(hypertable_name))::regclass = to_regclass(@table)
+```
+
+with `@table` carrying `QualifiedIdentifier`'s output. This satisfies the criterion's *purpose* more fully
+— there is no second splitter at all, because the name goes straight to the server's own resolver — and it
+answers criterion 2's open question with a measurement rather than taste: **an unqualified name follows the
+`search_path`**, which is exactly what `create_hypertable`'s `::regclass` did when it created the object.
+So the reader and the emitter cannot disagree about what a name means (§ TASK-274's two-doors rule).
+
+`to_regclass`, not `::regclass`: the cast **throws** for a name that does not exist, and `IsHypertable`
+must answer `false` for an absent table rather than fault. Measured: 0 rows, no error.
+
+### ⚠ A test was asserting the defect — third instance in three days
+
+`The_hypertable_probe_answers_for_a_qualified_table` created the hypertable as `reporting.QualMetrics` and
+then asked for the **bare** name, with a comment calling it *"a documented limitation rather than a
+promise"*. So the wrong answer was pinned. Inverted: the probe is now asked for the name it was given.
+After TASK-284's `[InlineData("")]` and TASK-279's `..._DefaultsOrderByTime_...`, that is three
+consecutive tasks where a test was holding the defect in place.
+
+### Verified
+
+`BIRKO_REQUIRE_LIVE` set against live TimescaleDB 2.29.2 / PostgreSQL 16:
+**1,021 tests, 0 failed** across six suites — Migrations.TimescaleDB 86 (85 → 86), TimescaleDB 56,
+TimescaleDB.ViewModel 7, SQL 678, PostgreSQL 107, Migrations.SQL 87.
+
+**Mutation:** restoring `hypertable_name = @table` reds exactly the two schema-aware tests and leaves the
+**84** single-schema tests green — which is criterion 5's shape precisely, the single-schema suite being
+the control that proves the fix did not simply reorder the ambiguity.
+
+### The false class remark is corrected, not deleted
+
+It claimed schema-qualified names were supported and was wrong for these two methods, which is what let
+the gap sit. It now records what was measured and why both doors agree — kept rather than removed, because
+a remark that was wrong is worth showing as corrected.

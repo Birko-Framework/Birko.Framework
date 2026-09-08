@@ -2397,6 +2397,34 @@ The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (n
 
 
 
+
+### A hypertable probe answered "no" for a hypertable that exists, and "maybe" for one that does (2026-09-08)
+
+TASK-280. `IsHypertable` and `GetChunkInterval` matched the caller's name against a catalogue column
+holding the **bare** table name, with the schema in a separate column. Verified against live
+TimescaleDB 2.29.2: **1,021 tests, 0 failed** across six suites. Five things worth carrying:
+
+- **Both failure modes measured before the fix**, with `public."Evts"` and `reporting."Evts"` both
+  hypertables: a **qualified** name matched **0** rows, so `IsHypertable` answered false for a hypertable
+  that exists and `GetChunkInterval` returned null — which its own doc defines as *"not a hypertable"*.
+  An **unqualified** name matched **2**, and `ExecuteScalar` took whichever the planner emitted first:
+  `1 day` or `7 days`, arbitrarily.
+- **The fix resolves both sides to the same OBJECT rather than comparing name text** —
+  `(quote_ident(schema)||'.'||quote_ident(name))::regclass = to_regclass(@table)`. That is the server's
+  own resolver, the same one `::regclass` gives the emitters, so a name means one thing on both doors
+  (§ TASK-274). It also needs **no splitter at all**, which serves the one-producer rule better than the
+  criterion's own suggestion of splitting and matching two columns.
+- **It answers "what does an unqualified name mean?" by measurement, not taste:** the `search_path` —
+  because that is what `create_hypertable` did when it created the object.
+- **`to_regclass`, never `::regclass`.** The cast *throws* for a name that does not exist, and a probe
+  must answer `false` for an absent table rather than fault.
+- **⚠ A test was asserting the defect — third consecutive task.** It created the hypertable qualified and
+  then asked for the bare name, calling it *"a documented limitation rather than a promise"*. After
+  TASK-284's `[InlineData("")]` and TASK-279's `..._DefaultsOrderByTime_...`, that is three in three days,
+  and it is now a standing rule: **when a defect survives a well-covered area, check whether a test is
+  holding it in place.** The mutation reds only the two schema-aware tests while the **84** single-schema
+  ones stay green — which is exactly why they never caught it.
+
 ### CR-H070's other half: a default that could not work on any Birko entity (2026-09-08)
 
 TASK-279, the sibling TASK-255 deliberately refused to fix from symmetry.
