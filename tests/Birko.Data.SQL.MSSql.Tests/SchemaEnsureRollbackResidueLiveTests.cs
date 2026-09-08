@@ -37,8 +37,41 @@ public class SchemaEnsureRollbackResidueLiveTests : IDisposable
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview";
     private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
+
+    /// <summary>The database every other class in this suite uses, and which this one deliberately avoids.</summary>
+    internal static string SharedDatabase => Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview";
+
+    /// <summary>
+    /// TASK-276 — this class gets a database of its own, and therefore a <b>connector</b> of its own.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not cosmetic, and not about the tables. <c>DataBase.GetConnector</c> caches one connector per
+    /// (type, settings id) for the life of the process, and <c>RemoteSettings.GetId()</c> is
+    /// <c>{Location}:{Name}:{UserName}:{Port}</c> — so every class here built the *same* id and shared one
+    /// connector. <c>AbstractConnector.SchemaGeneration</c> lives on that connector, and 13 of this
+    /// suite's ~20 classes drop a table under an initialised store, each bump invalidating every store's
+    /// remembered initialisation (TASK-288's healing, which is <b>correct</b> in production). This class's
+    /// tests deliberately leave a store believing it is initialised with its table gone, so a sibling's
+    /// bump made the store re-initialise, re-create the dropped table, and the expected failure never
+    /// came — measured at roughly 1 run in 5 in-suite and 8/8 clean in isolation.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>Do not "fix" a failure here by weakening an assertion.</b> What they pin is TASK-277's rule —
+    /// a write to a missing table must never report success — and that rule is right. Only the isolation
+    /// was ever wrong.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>And do not replace this with a shared xUnit collection.</b> That is how the TimescaleDB twin
+    /// was fixed (TASK-303) and it does not port: there the overlap was 5 classes, here it is 13 of ~20,
+    /// which is <c>"parallelizeTestCollections": false</c> in all but name — the fix TASK-276 explicitly
+    /// forbids, because it hides the coupling rather than removing it. A separate settings id makes this
+    /// class <b>immune by construction</b>: a class added later cannot reach this connector at all,
+    /// whereas a collection has to be remembered and extended.
+    /// </para>
+    /// </remarks>
+    private static string Database => SharedDatabase + "_residue";
 
     private readonly ITestOutputHelper _output;
 
@@ -46,12 +79,44 @@ public class SchemaEnsureRollbackResidueLiveTests : IDisposable
 
     private bool RequireServer()
     {
-        if (!string.IsNullOrWhiteSpace(Host)) return true;
+        if (!string.IsNullOrWhiteSpace(Host))
+        {
+            EnsureDatabase();
+            return true;
+        }
         const string message = "SKIPPED: no live SQL Server. Set BIRKO_MSSQL_HOST to exercise this test; "
                              + "set BIRKO_REQUIRE_LIVE to make its absence a failure.";
         _output.WriteLine(message);
         if (RequireLive) throw new InvalidOperationException(message);
         return false;
+    }
+
+    /// <summary>
+    /// Creates this class's own database if it is absent, so the isolation above costs the operator no
+    /// extra setup step — the suite is run by setting <c>BIRKO_MSSQL_HOST</c> and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// <c>CREATE DATABASE</c> cannot run against the database it creates, so this connects to
+    /// <c>master</c> — the one place in this class that does not use <see cref="Settings"/>. Idempotent:
+    /// every test's gate calls it.
+    /// </remarks>
+    private static void EnsureDatabase()
+    {
+        var master = new MSSqlSettings(Host!, "master", User, Password, Port) { TrustServerCertificate = true };
+        using var connection = new SqlConnection(master.GetConnectionString());
+        connection.Open();
+        using var command = connection.CreateCommand();
+        // The name is a compile-time constant plus an operator-supplied env var, and QUOTENAME contains it
+        // regardless; a database name cannot be a parameter in DDL.
+        // EXEC will not take a concatenated expression — it needs a variable, hence sp_executesql.
+        command.CommandText =
+            "IF DB_ID(@d) IS NULL "
+          + "BEGIN "
+          + "  DECLARE @sql nvarchar(max) = N'CREATE DATABASE ' + QUOTENAME(@d); "
+          + "  EXEC sp_executesql @sql; "
+          + "END";
+        command.Parameters.AddWithValue("@d", Database);
+        command.ExecuteNonQuery();
     }
 
     private static MSSqlSettings Settings() => new(Host!, Database, User, Password, Port) { TrustServerCertificate = true };
@@ -220,5 +285,99 @@ public class SchemaEnsureRollbackResidueLiveTests : IDisposable
         TableExists().Should().BeFalse(
             "and DoInit() does not create it either — it raises OnInit, which nothing in the framework "
           + "subscribes to; the fix is the report, not a repair that never existed");
+    }
+
+    /// <summary>
+    /// TASK-276 — the isolation the test above depends on, asserted rather than assumed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The flake this class carried was not a timing bug in any assertion; it was that a sibling class's
+    /// deliberate schema escape reached <b>this</b> class's store through a shared connector. Putting the
+    /// class on its own database fixes that, and nothing would notice if a later edit put it back — the
+    /// consequence is a 1-in-5 failure three suites away, not a compile error. Hence this test.
+    /// </para>
+    /// <para>
+    /// It is deterministic, which the flake never was: rather than hoping for the interleaving, it
+    /// provokes an escape on the shared connector <b>synchronously</b> and asserts that this class's
+    /// connector did not see it. That is the whole mechanism, with the concurrency removed.
+    /// </para>
+    /// <para>
+    /// ⚠ Note what it does <b>not</b> claim: nothing here says the shared connector's healing is wrong.
+    /// The bump asserted on the sibling connector is TASK-288 working. Both halves are asserted, so a
+    /// change that stopped the healing altogether would red this too rather than passing quietly.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task This_class_does_not_share_a_connector_with_the_rest_of_the_suite()
+    {
+        if (!RequireServer()) return;
+
+        var mine = Settings();
+        var shared = new MSSqlSettings(Host!, SharedDatabase, User, Password, Port) { TrustServerCertificate = true };
+
+        mine.GetId().Should().NotBe(shared.GetId(),
+            "GetId() is {Location}:{Name}:{UserName}:{Port} and the database is the only component that can "
+          + "differ while still reaching the same server");
+
+        var myConnector = DataBase.GetConnector<MSSqlConnector>(mine);
+        var sharedConnector = DataBase.GetConnector<MSSqlConnector>(shared);
+
+        myConnector.Should().NotBeSameAs(sharedConnector,
+            "GetConnector caches per (type, settings id), so a distinct id is a distinct connector — which "
+          + "is what makes this class immune to a sibling's SchemaGeneration bump");
+
+        // Provoke a real escape on the SHARED connector, synchronously: a store that believes it is
+        // initialised, writing to a table that has been dropped underneath it. This is exactly what 13 of
+        // this suite's classes do incidentally, and what used to reach into this class.
+        var mineBefore = myConnector.SchemaGeneration;
+        var sharedBefore = sharedConnector.SchemaGeneration;
+
+        var sharedStore = new AsyncMSSqlStore<SiblingRow>();
+        sharedStore.SetSettings(shared);
+        await sharedStore.InitAsync();
+        ExecOn(shared, $"DROP TABLE IF EXISTS [{SiblingTableName}]");
+
+        try
+        {
+            await sharedStore.CreateAsync(new SiblingRow { Guid = Guid.NewGuid(), Name = "escape" });
+        }
+        catch (Exception)
+        {
+            // Expected: TASK-277 — a write to a missing table reports rather than reporting success. The
+            // throw is incidental here; the bump it carries is the subject.
+        }
+        finally
+        {
+            try { ExecOn(shared, $"DROP TABLE IF EXISTS [{SiblingTableName}]"); } catch { }
+        }
+
+        sharedConnector.SchemaGeneration.Should().BeGreaterThan(sharedBefore,
+            "the escape was detected on the connector that owns that database — TASK-288's healing, working");
+
+        myConnector.SchemaGeneration.Should().Be(mineBefore,
+            "and it must NOT have reached this class's connector. Before TASK-276 this class shared the "
+          + "suite-wide connector, so a sibling's bump invalidated its store's remembered initialisation, "
+          + "the store re-created the table the test had just dropped, and "
+          + "A_write_to_a_missing_table_fails_instead_of_reporting_success saw its write succeed");
+    }
+
+    private const string SiblingTableName = "MsResidueSiblingRows";
+
+    /// <summary>A throwaway entity living in the SHARED database, used only to provoke an escape there.</summary>
+    [Table(SiblingTableName)]
+    public class SiblingRow : AbstractDatabaseLogModel
+    {
+        [MaxLengthField(64)]
+        public string? Name { get; set; }
+    }
+
+    private static void ExecOn(MSSqlSettings settings, string sql)
+    {
+        using var connection = new SqlConnection(settings.GetConnectionString());
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
     }
 }
