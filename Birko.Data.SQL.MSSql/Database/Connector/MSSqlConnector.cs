@@ -420,7 +420,11 @@ namespace Birko.Data.SQL.Connectors
             {
                 result.Append(field.Name);
                 result.AppendFormat(" {0}", ConvertType(field.Type, field));
-                if (field.IsPrimary)
+                // TASK-303 -- inline only when this is the ONLY primary field. With more than one,
+                // AbstractConnector.CreateTable emits a table-level PRIMARY KEY (a, b) instead;
+                // two inline clauses are rejected by every provider (PostgreSQL 42P16, SQLite
+                // "more than one primary key").
+                if (field.UsesInlinePrimaryConstraint)
                 {
                     result.AppendFormat(" PRIMARY KEY");
                 }
