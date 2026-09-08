@@ -138,7 +138,7 @@ public class TimescaleDBMigrationInjectionTests
     [Fact]
     public void CompressionPolicy_ContainsABreakoutInTheTable()
     {
-        var sql = TimescaleDBMigration.BuildCompressionPolicySql(Connector(), IdentifierBreakout, "7 days");
+        var sql = TimescaleDBMigration.BuildCompressionPolicySql(Connector(), IdentifierBreakout, "7 days", "ts");
 
         ContainedAsIdentifier(sql, IdentifierBreakout);   // the ALTER TABLE door
         ContainedAsRegclass(sql, IdentifierBreakout);     // the add_compression_policy door
@@ -154,7 +154,7 @@ public class TimescaleDBMigrationInjectionTests
 
     [Fact]
     public void CompressionPolicy_ContainsABreakoutInTheInterval()
-        => ContainedAsLiteral(TimescaleDBMigration.BuildCompressionPolicySql(Connector(), "Metrics", LiteralBreakout), LiteralBreakout);
+        => ContainedAsLiteral(TimescaleDBMigration.BuildCompressionPolicySql(Connector(), "Metrics", LiteralBreakout, "ts"), LiteralBreakout);
 
     [Fact]
     public void RetentionPolicy_ContainsABreakoutInTheTable()

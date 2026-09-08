@@ -107,21 +107,67 @@ public class TimescaleDBMigrationSqlTests
     [Fact]
     public void CompressionPolicy_TreatsTheTableAsIdentifierAndAsRegclass()
     {
-        var sql = TimescaleDBMigration.BuildCompressionPolicySql(Connector(), "SensorReadings", "7 days");
+        var sql = TimescaleDBMigration.BuildCompressionPolicySql(Connector(), "SensorReadings", "7 days", "ts");
 
         sql.Should().Contain("ALTER TABLE \"SensorReadings\" SET");
         sql.Should().Contain("add_compression_policy('\"SensorReadings\"', INTERVAL '7 days')");
     }
 
-    // CR-H070: segmentby must not be hardcoded to 'device_id' — it is opt-in and omitted by default.
+    /// <summary>
+    /// CR-H070's surviving half: <c>segmentby</c> must not be hardcoded to <c>'device_id'</c> — it is
+    /// opt-in and the line is omitted when unset.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ <b>This test used to be called <c>..._DefaultsOrderByTime_AndOmitsSegmentBy</c> and assert
+    /// <c>compress_orderby = 'time'</c>.</b> That made the <c>orderByColumn = "time"</c> default a pinned
+    /// contract, which is why it survived CR-H070's own remediation — the same shape as TASK-284, where an
+    /// <c>[InlineData("")]</c> row pinned a defect in a well-covered area. The default was a
+    /// source-compatibility artefact of commit <c>531d816</c> and no framework-created table can have a
+    /// column named <c>time</c>, so TASK-279 made the parameter required and this test lost that half.
+    /// <para>
+    /// The <c>segmentByColumn</c> half stays, because a <see langword="null"/> default there is genuinely
+    /// different: the line is <i>omitted</i>, so the default is a working "no segmenting" rather than a
+    /// value that cannot apply.
+    /// </para>
+    /// </remarks>
     [Fact]
-    public void CompressionPolicy_DefaultsOrderByTime_AndOmitsSegmentBy()
+    public void CompressionPolicy_OmitsSegmentBy_WhenItIsNotSupplied()
     {
-        var sql = TimescaleDBMigration.BuildCompressionPolicySql(Connector(), "metrics", "7 days");
+        var sql = TimescaleDBMigration.BuildCompressionPolicySql(Connector(), "metrics", "7 days", "ts");
 
-        sql.Should().Contain("timescaledb.compress_orderby = 'time'");
+        sql.Should().Contain("timescaledb.compress_orderby = 'ts'");
         sql.Should().NotContain("compress_segmentby");
         sql.Should().NotContain("device_id");
+    }
+
+    /// <summary>
+    /// TASK-279 — <c>orderByColumn</c> carries no default, and required-ness is invisible to every other
+    /// test in this file, so it is pinned by reflection (§ Conventions, TASK-117 / TASK-255).
+    /// </summary>
+    /// <remarks>
+    /// The paired assertion on <c>segmentByColumn</c> is what stops this being read as "no parameter here
+    /// may have a default": that one keeps its <see langword="null"/>, deliberately, and a change that
+    /// stripped both would otherwise pass half of this test unnoticed.
+    /// </remarks>
+    [Fact]
+    public void CompressionPolicy_OrderByColumnIsRequired_WhileSegmentByStaysOptional()
+    {
+        var method = typeof(TimescaleDBMigration).GetMethod(
+            nameof(TimescaleDBMigration.BuildCompressionPolicySql),
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic
+            | System.Reflection.BindingFlags.Static);
+
+        method.Should().NotBeNull();
+
+        var orderBy = method!.GetParameters().Single(x => x.Name == "orderByColumn");
+        orderBy.HasDefaultValue.Should().BeFalse(
+            "a \"time\" default cannot work on any framework-created table -- columns are emitted bare and "
+            + "every Birko entity is PascalCase -- so it was a default that could never apply (TASK-279)");
+
+        var segmentBy = method.GetParameters().Single(x => x.Name == "segmentByColumn");
+        segmentBy.HasDefaultValue.Should().BeTrue(
+            "segmentByColumn's null default is a working \"no segmenting\": the compress_segmentby line is "
+            + "omitted when it is unset, which is a different thing from a value that cannot apply");
     }
 
     /// <summary>
