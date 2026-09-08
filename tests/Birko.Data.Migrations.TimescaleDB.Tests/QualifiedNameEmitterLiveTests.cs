@@ -34,6 +34,7 @@ namespace Birko.Data.Migrations.TimescaleDB.Tests;
 /// (TASK-209), and reads it with case intact.
 /// </para>
 /// </summary>
+[Collection(TimescaleDbLiveCollection.Name)]
 public class QualifiedNameEmitterLiveTests : IDisposable
 {
     private const string Schema = "reporting";

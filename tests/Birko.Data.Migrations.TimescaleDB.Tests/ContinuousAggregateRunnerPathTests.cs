@@ -41,6 +41,7 @@ namespace Birko.Data.Migrations.TimescaleDB.Tests;
 /// </list>
 /// </para>
 /// </summary>
+[Collection(TimescaleDbLiveCollection.Name)]
 public class ContinuousAggregateRunnerPathTests : IDisposable
 {
     private const string Table = "RunMetrics";

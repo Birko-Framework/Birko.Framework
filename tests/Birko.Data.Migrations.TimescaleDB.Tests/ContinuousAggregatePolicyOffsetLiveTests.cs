@@ -33,6 +33,7 @@ namespace Birko.Data.Migrations.TimescaleDB.Tests;
 ///
 /// <para>Gated on <c>BIRKO_TS_HOST</c>; set <c>BIRKO_REQUIRE_LIVE</c> to make its absence a failure.</para>
 /// </summary>
+[Collection(TimescaleDbLiveCollection.Name)]
 public class ContinuousAggregatePolicyOffsetLiveTests : IDisposable
 {
     private const string Table = "OffMetrics";

@@ -38,6 +38,7 @@ namespace Birko.Data.Migrations.TimescaleDB.Tests;
 /// deprecated since 2.13) and the measurement says it has not been removed.
 /// </para>
 /// </summary>
+[Collection(TimescaleDbLiveCollection.Name)]
 public class MigrationEmitterLiveTests : IDisposable
 {
     private const string Table = "MigMetrics";
