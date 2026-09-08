@@ -3,7 +3,7 @@ id: TASK-252
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: unassigned
 created: 2026-08-18
@@ -103,18 +103,18 @@ Specific traps already visible:
 
 ## Acceptance criteria
 
-- [ ] Each of the six carries a recorded verdict: **fixed**, or **decided not to fix** with the measurement
+- [x] Each of the six carries a recorded verdict: **fixed**, or **decided not to fix** with the measurement
       that settled it. A verdict with no measurement behind it does not count.
-- [ ] **#2 split out as its own task on pick** — its measurement is already recorded above and it has a
+- [x] **#2 split out as its own task on pick** — its measurement is already recorded above and it has a
       dependent ([[TASK-254]]), so it no longer belongs in a grouped latent-gaps task. Do not re-survey it;
       do decide whether the fix is a table-level `PRIMARY KEY (…)` clause in `CreateTable` or an explicit
       refusal of a second `HasPrimary` (today's `42P16` is the DDL layer refusing, not the mapper).
-- [ ] Anything fixed ships with a regression test and a revert count, per this epic's standing practice.
-- [ ] Anything declined is written into the relevant `CLAUDE.md` so the next reader finds the decision
+- [x] Anything fixed ships with a regression test and a revert count, per this epic's standing practice.
+- [x] Anything declined is written into the relevant `CLAUDE.md` so the next reader finds the decision
       rather than rediscovering the gap — the point of this task is that these stop being invisible.
-- [ ] #6's coverage fact (an async loop with no production caller) is recorded wherever the outcome lands,
+- [x] #6's coverage fact (an async loop with no production caller) is recorded wherever the outcome lands,
       whether or not the `Task.Run` changes.
-- [ ] If any item turns out to be genuinely load-bearing for a consumer, split it out as its own task
+- [x] If any item turns out to be genuinely load-bearing for a consumer, split it out as its own task
       rather than growing this one — the same rule that produced these six in the first place.
 
 ## Out of scope
@@ -123,3 +123,61 @@ Specific traps already visible:
 - Spec regeneration for the affected areas — [[TASK-251]].
 - The `_loose` pile / DV5 ×17, and the story-level scheduling defect that made this task necessary
   ([[TASK-149]]).
+
+---
+
+## Worked 2026-09-08 — six verdicts, and half the list had already been closed by other work
+
+### ⚠ Step 0's headline: three of six were resolved by later tasks, and this file did not know
+
+Filed 2026-08-18. Between then and now, TASK-266 and TASK-274 landed in the same area. Checked against the
+current code before designing anything:
+
+| # | Gap | Verdict |
+|---|---|---|
+| 1 | `RENAME COLUMN` not universal | **Declined, measured** — see below |
+| 2 | Composite `PRIMARY KEY` inexpressible | **Split out → [[TASK-303]]**, per criterion 2 |
+| 3 | `Sparse()` / `WithProperty()` silent no-ops | **Already fixed by TASK-274** — real implementations in all six schema builders, compound `Sparse()` refused rather than given one of two readings, covered by `SparseIndexBuilderTests` |
+| 4 | MySQL's 3072-byte ceiling on *bounded* columns | **Already answered by TASK-266** — pinned rather than guarded, with the measurement (4 × `VARCHAR(255)` = 4080 bytes is `ERROR 1071` on MySQL, while SQL Server creates it with a warning and fails only on wide values, so a framework guard would duplicate one server and regress the other). `BinaryAndWideCompositeIndexLiveTests` records it |
+| 5 | `byte[]` unindexable on MySQL | **Already fixed by TASK-266** — `MySQLConnector.ConvertType` reads `IsInIndexKey` and bounds the column; `BinaryIndexKeyColumnTypeTests` covers it |
+| 6 | `InitCoreAsync` sync-over-async | **Code unchanged; the coverage claim corrected** — see below |
+
+So the substantive work here was two verdicts and a split, not six fixes. **A grouped latent-gaps task
+should be re-checked item by item before being worked** — its whole premise is that the items sat still,
+and adjacent tasks moving is exactly what makes them stop sitting still.
+
+### #1 — declined, with the measurement that settles it
+
+- **0 callers.** `ISchemaBuilder.RenameField` is called from nowhere in the framework, its tests, or any of
+  the 16 consumer repos (re-measured 2026-09-08). Only the six schema builders *implement* it.
+- **The fallback is not a dialect swap.** `Birko.Data.SQL.MySQL/CLAUDE.md` declares support from **5.7**
+  while `RENAME COLUMN` needs **8.0+**. Measured on 8.4.11: `ALTER TABLE t CHANGE b b2` without a type is
+  `ERROR 1064`; only `CHANGE b b2 VARCHAR(50)` works. So a 5.7 path must read the column's **full
+  definition** from the catalogue and restate it — which also risks silently altering a column that a
+  rename should leave alone.
+- Recorded **on the method** and, more importantly, **on the MySQL `CLAUDE.md` beside the version claim it
+  contradicts**, so it is discoverable from the promise rather than only from the implementation.
+
+### #6 — ⚠ this task's own premise was wrong, and the correction is the finding
+
+It predicted *"a revert of the async index loop fails **0** tests because nothing reaches it"*. Measured by
+making `CreateIndexesAsync` throw and running five suites: **5 failures**, in three of them.
+
+```
+SqLite      UnbuildableIndexEndToEndTests.TheAsyncSchemaEnsurePathDegradesTheSameWay
+PostgreSQL  DeclaredIndexLiveTests.Declared_indexes_are_created_by_the_async_schema_ensure_too
+MySQL       PartialIndexPolicyLiveTests.An_explicit_async_create_indexes_call_throws_for_a_where_null_declaration
+MySQL       DeclaredIndexLiveTests.Declared_indexes_are_present_after_async_schema_ensure
+MySQL       DeclaredIndexLiveTests.A_unique_index_over_violating_data_is_recorded_not_thrown_async
+```
+
+The claim was true when written; **TASK-273's close gate added the async-funnel coverage it said was
+missing**, and TASK-245's own note ("an async store's schema-ensure runs the *sync* `CreateTable`") remains
+true of the store path while these tests reach the loop through explicit `CreateTableAsync`. The
+`Task.Run` is unchanged — it keeps a sync connector off the caller's thread, and this task itself said it
+is "not obviously wrong". **A recorded coverage fact has an expiry date exactly like a blast radius does.**
+
+### Verified
+
+Doc and comment changes only, plus the split. `BIRKO_REQUIRE_LIVE` set against live PostgreSQL 16,
+MySQL 8.4 and SQL Server 2022: Migrations.SQL **87**, MySQL **119**, SQL **678** — 0 failed.

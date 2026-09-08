@@ -2398,6 +2398,37 @@ The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (n
 
 
 
+
+### Half of a grouped latent-gaps task had already been closed by other work (2026-09-08)
+
+TASK-252 collected six per-provider gaps that the index-DDL thread had left as prose in closed tasks'
+out-of-scope sections — filed so they would be schedulable rather than urgent. Worked today: **three of
+the six were already resolved**, one was declined on a measurement, one split out, and one turned out to
+have a stale premise. Verified against live PostgreSQL 16, MySQL 8.4 and SQL Server 2022: Migrations.SQL
+87, MySQL 119, SQL 678 — 0 failed. Four things worth carrying:
+
+- **⚠ A grouped latent-gaps task must be re-checked item by item before it is worked.** Its whole premise
+  is that the items sat still, and adjacent tasks landing is exactly what stops them sitting still. #3
+  (`Sparse()` / `WithProperty()` no-ops) was fixed by TASK-274; #4 (MySQL's 3072-byte ceiling on bounded
+  columns) was answered by TASK-266, pinned rather than guarded because SQL Server and MySQL behave
+  oppositely; #5 (`byte[]` unindexable on MySQL) was fixed by TASK-266. Working from the list as written
+  would have been three re-investigations of closed questions.
+- **⚠ And a recorded coverage fact expires exactly like a blast radius does.** The task predicted a revert
+  of the async index loop *"fails **0** tests because nothing reaches it"*. Measured by making
+  `CreateIndexesAsync` throw: **5 failures across three suites**. The claim was true when written, and
+  TASK-273's close gate then added the async-funnel coverage it said was missing. § TASK-283's rule
+  (re-measure before concluding) applies to *coverage* claims, not only to consumer counts.
+- **A decline is a verdict only if it carries the measurement.** `RenameField` needs MySQL 8.0+ while the
+  provider's own guide declares 5.7 support — a promise the code does not keep. Declined because there are
+  **0** callers anywhere, and because the fallback is not a dialect swap: measured on 8.4.11, a type-less
+  `CHANGE` is `ERROR 1064`, so a 5.7 path must read the column's full definition and restate it, which
+  risks silently altering a column a rename should leave alone. **Recorded beside the version claim it
+  contradicts**, not only on the method — a reader checking whether their MySQL is supported looks at the
+  provider guide.
+- **Splitting on pick worked as designed.** The task's own criterion said to split #2 out once it had a
+  measurement, a consumer-visible consequence and a dependent — it had all three, so composite primary
+  keys are now [[TASK-303]] rather than one row of a grouped table.
+
 ### A hypertable probe answered "no" for a hypertable that exists, and "maybe" for one that does (2026-09-08)
 
 TASK-280. `IsHypertable` and `GetChunkInterval` matched the caller's name against a catalogue column
