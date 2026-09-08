@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
@@ -517,7 +517,21 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// <para>
         /// <paramref name="startOffset"/> is nullable because TimescaleDB accepts <c>NULL</c> there to mean
         /// "from the beginning of time"; <c>NULL</c> is emitted unquoted, since a quoted <c>'NULL'</c> would
-        /// be the string rather than the keyword.
+        /// be the string rather than the keyword. Measured on 2.29.2: a <b>bare untyped</b> <c>NULL</c> is
+        /// accepted by <c>add_continuous_aggregate_policy</c> despite its parameters being declared
+        /// <c>"any"</c>, and the job's config records <c>"start_offset": null</c> — so the door
+        /// <see cref="RefreshContinuousAggregate"/>'s refusal points at really does open, and there is a
+        /// live test saying so rather than a rendering assertion (TASK-284).
+        /// </para>
+        /// <para>
+        /// ⚠ <b><see langword="null"/> and <c>""</c> are different, and only <see langword="null"/> means
+        /// all of history.</b> An empty <paramref name="startOffset"/> is an <b>error</b>, not a synonym —
+        /// it reaches <c>INTERVAL ''</c> and PostgreSQL rejects it with
+        /// <c>invalid input syntax for type interval: ""</c>. Until TASK-284 this method used
+        /// <c>IsNullOrEmpty</c>, so a configuration value that came back empty rather than null silently
+        /// produced a far heavier policy than the author intended — every chunk, on every run. It is
+        /// spelled out here because the caller has no other signal that the two differ, and because the
+        /// wrong one fails by working.
         /// </para>
         /// </remarks>
         protected virtual void AddContinuousAggregatePolicy(IMigrationContext context, string viewName,
@@ -535,7 +549,19 @@ namespace Birko.Data.Migrations.TimescaleDB
         internal static string BuildContinuousAggregatePolicySql(AbstractConnector connector, string viewName,
             string? startOffset, string endOffset, string scheduleInterval)
         {
-            var startOffsetSql = string.IsNullOrEmpty(startOffset)
+            // TASK-284 -- `== null`, deliberately NOT IsNullOrEmpty.
+            //
+            // NULL here means "refresh from the beginning of time", so treating "" as null converted an
+            // empty configuration value into a semantically much WIDER policy: every chunk, on every run
+            // of the job, silently. Config binding, LoadFrom and JSON/env deserialisation all produce ""
+            // where the author wrote nothing.
+            //
+            // Every neighbouring interval in this class -- endOffset, scheduleInterval,
+            // compressAfterInterval, dropAfterInterval, the chunk interval -- already fails LOUDLY on an
+            // empty string, because EscapeLiteral("") renders INTERVAL '' and PostgreSQL rejects it.
+            // Measured on TimescaleDB 2.29.2: `INTERVAL ''` is
+            // `invalid input syntax for type interval: ""`. This one now behaves like them.
+            var startOffsetSql = startOffset == null
                 ? "NULL"
                 : $"INTERVAL '{SqlLiteral.EscapeLiteral(startOffset)}'";
             return $"SELECT add_continuous_aggregate_policy('{connector.RegclassLiteral(viewName)}', "
