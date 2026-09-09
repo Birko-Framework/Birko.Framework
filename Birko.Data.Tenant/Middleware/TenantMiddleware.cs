@@ -20,30 +20,57 @@ namespace Birko.Data.Tenant.Middleware;
 public class TenantMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly ITenantContext _tenantContext;
+    private readonly ITenantContext? _tenantContext;
     private readonly TenantMiddlewareOptions _options;
     private readonly ISerializer _serializer;
 
     /// <summary>
-    /// Create a new tenant middleware
+    /// Create a new tenant middleware.
     /// </summary>
+    /// <remarks>
+    /// SH-H049: <paramref name="tenantContext"/> is <b>optional</b> and supplying it pins the middleware to
+    /// <i>one</i> instance for the application's lifetime. Prefer leaving it null and letting
+    /// <see cref="InvokeAsync(HttpContext, ITenantContext)"/> take the context per request, which is what
+    /// <c>UseTenantMiddleware</c> now does — see that method's remarks for why. It is kept as a parameter
+    /// so a caller constructing the middleware by hand (tests, a non-DI pipeline) can still supply one.
+    /// </remarks>
     public TenantMiddleware(
         RequestDelegate next,
-        ITenantContext tenantContext,
+        ITenantContext? tenantContext = null,
         TenantMiddlewareOptions? options = null,
         ISerializer? serializer = null)
     {
         _serializer = serializer ?? new SystemJsonSerializer();
         _next = next ?? throw new ArgumentNullException(nameof(next));
-        _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
+        _tenantContext = tenantContext;
         _options = options ?? new TenantMiddlewareOptions();
     }
 
     /// <summary>
-    /// Process the HTTP request
+    /// Process the HTTP request, taking the tenant context <b>per request</b>.
     /// </summary>
-    public async Task InvokeAsync(HttpContext context)
+    /// <remarks>
+    /// SH-H049. ASP.NET Core injects any extra <c>InvokeAsync</c> parameter from the <b>request</b> scope,
+    /// which is the only way a singleton middleware can observe a scoped <see cref="ITenantContext"/>.
+    /// Previously <c>UseTenantMiddleware</c> resolved the context once from
+    /// <c>builder.ApplicationServices</c> — the <b>root</b> provider — and passed it as a constructor
+    /// argument, so under the documented <c>AddTenantContextScoped()</c> the middleware set the tenant on a
+    /// different instance from the one every request-scoped store read. Because
+    /// <c>BelongsToCurrentTenant</c> deliberately fails open when <c>HasTenant == false</c> (CR-L229,
+    /// pinned by <c>TenantFailOpenTests</c>), those stores then read and wrote across <i>every</i> tenant.
+    /// In Development <c>ValidateScopes</c> turned the root resolution into a start-up throw; in Production
+    /// it is silent, which is the configuration that mattered.
+    /// <para>
+    /// A constructor-supplied context still wins, so a hand-built pipeline keeps working; the injected one
+    /// is used whenever none was supplied.
+    /// </para>
+    /// </remarks>
+    public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext)
     {
+        // A hand-supplied context wins; otherwise use the one injected from THIS request's scope.
+        var ambient = _tenantContext ?? tenantContext
+            ?? throw new ArgumentNullException(nameof(tenantContext));
+
         // Try to resolve tenant from configured sources
         var resolved = ResolveTenantGuid(context);
 
@@ -53,13 +80,13 @@ public class TenantMiddleware
 
             // Set the tenant for this request
             var tenantName = ResolveTenantName(context, tenantGuid);
-            _tenantContext.SetTenant(tenantGuid, tenantName);
+            ambient.SetTenant(tenantGuid, tenantName);
 
             // Add tenant to HTTP context for easy access
             context.Items[_options.TenantContextKey] = tenantGuid;
 
             // SH-H048: publish under the fixed key too, so the post-authentication tenant/claim guard can
-            // correlate whatever door was used. TenantContextKey above is configurable and _tenantContext
+            // correlate whatever door was used. TenantContextKey above is configurable and the context
             // may be a different instance from the one downstream middleware resolves — see ResolvedTenant.
             ResolvedTenant.Publish(context, tenantGuid, source);
         }
@@ -82,7 +109,7 @@ public class TenantMiddleware
         await _next(context);
 
         // Clear tenant after request completes
-        _tenantContext.ClearTenant();
+        ambient.ClearTenant();
     }
 
     /// <summary>
@@ -240,9 +267,21 @@ public static class TenantMiddlewareExtensions
         var options = new TenantMiddlewareOptions();
         configureOptions?.Invoke(options);
 
-        // Get ITenantContext from service provider
-        var tenantContext = builder.ApplicationServices.GetService<ITenantContext>();
-        if (tenantContext == null)
+        // SH-H049: do NOT resolve ITenantContext here. builder.ApplicationServices is the ROOT provider,
+        // so a `AddTenantContextScoped()` registration yielded an instance no request-scoped store ever
+        // reads — the middleware's SetTenant went to the wrong object and, because the tenant wrappers
+        // deliberately fail open on HasTenant == false (CR-L229), every store then operated across all
+        // tenants. The context is taken per request by InvokeAsync instead.
+        //
+        // The friendly start-up error is kept, using IServiceProviderIsService so the question "is it
+        // registered?" is answered WITHOUT instantiating anything: resolving a scoped service from the
+        // root provider is exactly the thing being removed, and under ValidateScopes it throws.
+        // The presence check is guarded because IServiceProviderIsService is a default-container service:
+        // a third-party DI container need not provide it, and in that case the check is skipped and the
+        // per-request resolve below raises its own (clear) error instead. Skipping it is deliberate, not
+        // an oversight — it only ever loses an earlier, friendlier message.
+        var isService = builder.ApplicationServices.GetService<IServiceProviderIsService>();
+        if (isService is not null && !isService.IsService(typeof(ITenantContext)))
         {
             throw new InvalidOperationException(
                 $"{nameof(ITenantContext)} is not registered in the DI container. " +
@@ -250,6 +289,17 @@ public static class TenantMiddlewareExtensions
             );
         }
 
-        return builder.UseMiddleware<TenantMiddleware>(tenantContext, options);
+        // ⚠ Deliberately NOT `UseMiddleware<TenantMiddleware>(...)`. That helper matches the supplied args
+        // to constructor parameters through ActivatorUtilities, which cannot bind a `null` — so passing
+        // null for the context would leave that parameter unmatched and let it be filled from the
+        // application (ROOT) provider, silently reinstating the very capture SH-H040's sibling SH-H049 is
+        // about. Resolving from `ctx.RequestServices` is unambiguous: that IS the request scope, so a
+        // scoped ITenantContext registration is the instance every store in the same request observes.
+        return builder.Use(next => async ctx =>
+        {
+            var perRequest = ctx.RequestServices.GetRequiredService<ITenantContext>();
+            var middleware = new TenantMiddleware(next, tenantContext: null, options: options);
+            await middleware.InvokeAsync(ctx, perRequest).ConfigureAwait(false);
+        });
     }
 }
