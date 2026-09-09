@@ -100,11 +100,17 @@ public class DestructiveFilterEndToEndTests : IDisposable
         var store = await SeededStore();
         Func<Row, bool> pred = r => r.Amount > 10;
 
-        // An InvocationExpression the parser cannot express. Before the guard this silently dropped the
+        // An InvocationExpression the parser cannot express. Before any guard this silently dropped the
         // filter and deleted all three rows while reporting success.
         var act = async () => await store.DeleteAsync(x => pred(x));
 
-        await act.Should().ThrowAsync<Birko.Data.Exceptions.WholeTableWriteException>();
+        // ⚠ TASK-308 (SH-H026) moved WHICH guard answers this, not whether one does. It used to be
+        // AddRequiredWhere's WholeTableWriteException — correct, but reachable only on a destructive
+        // statement, so the identical predicate on a READ returned 3 of 3 rows silently. The parser now
+        // refuses the node it has no branch for, which covers reads too. The rows are the invariant and
+        // they are unchanged; measured 0 consumer references to WholeTableWriteException, so no catch
+        // block anywhere selected the old type.
+        await act.Should().ThrowAsync<NotSupportedException>();
         (await CountAsync(store)).Should().Be(3);
     }
 
@@ -117,7 +123,8 @@ public class DestructiveFilterEndToEndTests : IDisposable
         var act = async () => await store.UpdateAsync(
             x => pred(x), new Birko.Data.Stores.PropertyUpdate<Row>().Set(r => r.Name, "clobbered"));
 
-        await act.Should().ThrowAsync<Birko.Data.Exceptions.WholeTableWriteException>();
+        // TASK-308: refused by the parser now rather than by AddRequiredWhere — see the delete twin above.
+        await act.Should().ThrowAsync<NotSupportedException>();
         (await store.ReadAsync(CancellationToken.None)).Select(r => r.Name)
             .Should().BeEquivalentTo(new[] { "r1", "r2", "r3" });
     }
@@ -149,7 +156,11 @@ public class DestructiveFilterEndToEndTests : IDisposable
 
         var thrown = await Record.ExceptionAsync(() => store.DeleteAsync(x => pred(x)));
 
-        thrown.Should().BeOfType<Birko.Data.Exceptions.WholeTableWriteException>(
+        // TASK-308: the TYPE this asserts changed (the parser refuses the untranslatable node before
+        // AddRequiredWhere is reached) but what the test is ABOUT did not — a refusal must arrive with its
+        // own type and no wrapper. The parser runs even earlier than the old guard, so the property holds
+        // for a stronger reason than before.
+        thrown.Should().BeOfType<NotSupportedException>(
             "the refusal must reach the caller with its own type, not wrapped");
         thrown!.InnerException.Should().BeNull();
     }
