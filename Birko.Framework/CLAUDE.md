@@ -2393,6 +2393,57 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### Two tenant-isolation findings, two different KINDS of fix — and the first attempt at the code one was wrong (2026-09-09)
+
+TASK-311 / `SH-H049` + `SH-H053`, the second `/fix-next` pick. Both confirmed. Both end in cross-tenant
+access, because the tenant wrappers **deliberately fail open** on `HasTenant == false` (CR-L229, pinned
+by `TenantFailOpenTests`) — so any defect that loses the ambient tenant becomes an isolation breach.
+**195 tests green** across four suites, three mutations. Eight things worth carrying:
+
+- **`SH-H049` needed code; `SH-H053` could not have it, and the difference is worth understanding.**
+  The middleware took `ITenantContext` from `builder.ApplicationServices` (the **root** provider), so a
+  documented `AddTenantContextScoped()` registration was never observed — fixed by taking the context
+  **per request**. The event bridge's mis-wiring, by contrast, is **undetectable where it does harm**: a
+  bridge reading the wrong instance and a *genuine system event* both arrive with `TenantGuid == null`,
+  and narrowing that branch would break cross-tenant system events, which are its documented purpose. So
+  its fix is corrected documentation plus pinned mechanism, and the residual design question was
+  **escalated** ([[TASK-328]]) rather than guessed at.
+- **⚠ The first version of the code fix was WRONG, and only a test written at the correctness pass caught
+  it.** It passed `null` to `UseMiddleware<TenantMiddleware>(null, options)`. That helper binds args to
+  constructor parameters through `ActivatorUtilities`, which **cannot match a null** — so the optional
+  `ITenantContext` would have been left unmatched and filled from the **root provider**, silently
+  reinstating the exact capture being removed. **Every existing test passed with it**, because
+  `UseTenantMiddleware` has 0 production callers and nothing covered it. Rewired to resolve from
+  `ctx.RequestServices`, which is unambiguous. **A fix in a code path nothing tests is a guess** — and
+  the reason to write the missing test is not coverage for its own sake, it is that the fix was wrong.
+- **⚠ Instance-level `AsyncLocal` is the load-bearing detail neither finding stated.**
+  `TenantContext` holds its state in `private readonly AsyncLocal<…>` **instance** fields, not static
+  ones — so two instances are two ambient scopes and share nothing. Had those been static, both findings
+  would have been false positives. **When a defect turns on "a different instance", check whether the
+  state is actually per-instance before believing it.**
+- **A contested downgrade was resolved by reading what each side was about, not by overriding one.**
+  Three closed tasks recorded `SH-H049` as *"downgraded, not tasked"*; [[TASK-118]] described a live
+  fail-open through it. Both are right: TASK-118's concern was the **guard**, and TASK-118 itself routed
+  the guard around the registration (it reads `HttpContext.Items`). What remained was the
+  middleware/store mismatch. **A contradiction between two records is often two different subjects.**
+- **The failure mode split by environment, and the dangerous half is the invisible one.** Development
+  throws (`ValidateScopes` refuses a scoped resolve from root); **Production is silent**. A defect that
+  announces itself in dev and hides in prod is worse than one that always throws.
+- **⚠ A registration-time guard was designed, then measured inert.** Inspecting the `IServiceCollection`
+  for an `ITenantContext` descriptor looked like the clean way to refuse a broken event-bridge wiring —
+  but the sole consumer calls `AddEventTenantScope()` at `Program.cs:101` and `AddBirkoSecurity` at
+  `:104`, so at guard time no descriptor exists. **Check the call ORDER of the real consumer before
+  building a registration-time check**; a guard that cannot fire on the only real pattern is worse than
+  none.
+- **The literal revert of a signature change is a compiler error, not a red test — say which.** Removing
+  the `InvokeAsync` parameter breaks the build at 5 call sites, so no test can run to fail. That is a
+  *stronger* signal (it cannot be ignored) and it is *not* a split, so two compiler-tolerated mutations
+  were run to produce one: 2 of 76 and 1 of 76, each naming its target.
+- **⚠ And the first draft of the regression test committed the very sin under repair** — a leftover
+  `provider.GetRequiredService<ITenantContext>()` resolving a scoped service from the root provider,
+  failing with *"Cannot resolve scoped service from root provider"*. Recorded because it is a fair
+  illustration of how easy the mistake is: the defect being fixed is a one-line habit.
+
 ### An authentication service allowed everything when it was switched ON but misconfigured (2026-09-08)
 
 TASK-312 / `SH-H040`, the first `/fix-next` pick from the newly-drainable high pool. A Birko service with

@@ -27,7 +27,7 @@
 > it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays `in-progress`
 > with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-08 21:31. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-09 06:28. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
@@ -38,10 +38,10 @@ _Generated 2026-09-08 21:31. Run `/tasks triage` to refresh. **Do not hand-edit*
 | in-progress | 7    | 9      | 0    |
 | review      | —     | —       | 11    |
 | blocked     | —     | —       | 2    |
-| done        | 1    | 23      | 135    |
+| done        | 1    | 23      | 136    |
 | cancelled   | 0    | 0      | 2    |
 
-`todo` by priority: 4× P0 · 36× P1 · 92× P2 · 15× P3.
+`todo` by priority: 3× P0 · 37× P1 · 92× P2 · 15× P3.
 
 ## In progress now
 
@@ -147,7 +147,7 @@ _None_
   - [x] TASK-037 Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
   - [ ] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export 🔍 review · FEATURE-013
   - [ ] TASK-307 The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (101/188 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (102/189 tasks done)
   - [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day · FEATURE-014
   - [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down · FEATURE-014
   - [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently · FEATURE-014
@@ -180,6 +180,7 @@ _None_
   - [x] TASK-293 The escape "anomaly" is decided by a substring of the statement, so it fabricates anomalies · FEATURE-014
   - [x] TASK-295 The escape and heal apparatus is SQLite-only: three providers record no created tables · FEATURE-014
   - [x] TASK-296 SQLite connection pooling serves a stale schema image, so a freshly created table reads as missing · FEATURE-014
+  - [ ] TASK-328 Decide: should the event↔tenant bridge REFUSE to widen when it cannot establish a tenant? · FEATURE-014
   - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) · FEATURE-014
   - [x] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire · FEATURE-014
   - [ ] TASK-150 `char?`, `TimeSpan` and `DateTimeOffset` have no column mapping — they now fail loudly instead of quietly · FEATURE-014
@@ -246,7 +247,7 @@ _None_
   - STORY-027 Low findings — done (0/0 done) (done)
   - STORY-042 Integration-test tier — the Docker-gated remediation findings — planned (0/0 done)
   - STORY-043 Workflow backends — unify the serialization seam (ISerializer everywhere) — done (0/0 done) (done)
-  - STORY-051 Spec-harvest — high findings — in-progress (31/46 done)
+  - STORY-051 Spec-harvest — high findings — in-progress (32/46 done)
     - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash · FEATURE-014
     - [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table · FEATURE-014
     - [x] TASK-110 ORDER BY identifiers reach SQL text unresolved and unquoted · FEATURE-014
@@ -258,7 +259,7 @@ _None_
     - [ ] TASK-308 Triage the 7 remaining high spec-harvest findings in `filter-expression-translation` · FEATURE-014
     - [ ] TASK-309 Triage the 7 remaining high spec-harvest findings in `data-sync` · FEATURE-014
     - [ ] TASK-310 Triage the 3 remaining high spec-harvest findings in `caching` · FEATURE-014
-    - [ ] TASK-311 Triage the 2 remaining high spec-harvest findings in `tenant-isolation` · FEATURE-014
+    - [x] TASK-311 Triage the 2 remaining high spec-harvest findings in `tenant-isolation` · FEATURE-014
     - [x] TASK-312 Triage the 1 remaining high spec-harvest finding in `security-and-authorization` · FEATURE-014
     - [x] TASK-111 `rule.Field` reaches the WHERE clause unresolved and unquoted · FEATURE-014
     - [x] TASK-115 A nested `WithTenant` does not narrow reads inside an all-tenants scope · FEATURE-014

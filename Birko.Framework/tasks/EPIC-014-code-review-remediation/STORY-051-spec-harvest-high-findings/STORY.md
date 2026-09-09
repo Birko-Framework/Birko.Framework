@@ -30,7 +30,7 @@ work.
 | [[TASK-308]] | `filter-expression-translation` | 7 (`SH-H021`,`022`,`024`–`028`) | **P0** |
 | [[TASK-309]] | `data-sync` | 7 (`SH-H008`–`SH-H014`) | **P0** |
 | [[TASK-310]] | `caching` | 3 (`SH-H004`,`005`,`007`) | **P0** |
-| [[TASK-311]] | `tenant-isolation` | 2 (`SH-H049`,`053`) | **P0** |
+| ~~[[TASK-311]]~~ | `tenant-isolation` | ~~2 (`SH-H049`,`053`)~~ | **P0** — **DONE 2026-09-09** |
 | ~~[[TASK-312]]~~ | `security-and-authorization` | ~~1 (`SH-H040`)~~ | **P0** — **DONE 2026-09-08** |
 | [[TASK-314]] | `migrations` | 5 (`SH-H029`–`SH-H033`) | P1 |
 | [[TASK-313]] | `entity-localization` | 4 (`SH-H015`–`SH-H018`) | P1 |
@@ -52,6 +52,17 @@ work.
   the SSE middleware that no finding had named. 128 tests green across five suites; two disjoint mutations
   red 3 of 57 and 2 of 24. ⚠ It also measured that **no spec area covers any of the four transports** that
   share this engine, so the SSE half produced no spec diff — recorded as a third instance on [[TASK-142]].
+
+- **[[TASK-311]]** (`tenant-isolation`, `SH-H049` + `SH-H053`) — **done 2026-09-09.** Both confirmed, and
+  they needed **different kinds of fix**: `SH-H049` a code change (the middleware took its
+  `ITenantContext` from the root provider, so a scoped registration was never observed and the tenant
+  wrappers' deliberate fail-open then spanned every tenant — now injected per request), `SH-H053` a
+  **documentation** correction, because a mis-wired event bridge and a genuine system event are
+  byte-identical from the event and narrowing the null branch would break cross-tenant system events. 193
+  tests green; the true revert of the code half is a **build break** rather than a red test, so a
+  compiler-tolerated mutation was run to produce a 2-of-74 split. ⚠ `SH-H049`'s contested downgrade is
+  **resolved**: TASK-118's fail-open was about the guard, which TASK-118 itself routed around. Escalated
+  as [[TASK-328]]: should the bridge refuse to widen rather than document the hazard?
 
 ### The priority rule, stated so it is not arbitrary
 
@@ -112,7 +123,7 @@ count to be updated, and *"no change, for this reason"* is the answer rather tha
 
 ## Progress
 
-**18 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
+**20 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
 SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]],
 SH-H002+SH-M023 via [[TASK-109]], SH-H041+SH-H042+SH-H043+SH-H044 via [[TASK-116]], SH-H036 via [[TASK-125]], SH-H019 via [[TASK-126]],
 SH-H023 via [[TASK-111]]) — and **18 of the 57 findings now have a task**, across 31 files: 29 done, 1 in review ([[TASK-118]]), 1 cancelled. The **other 39 findings were decomposed into 15 per-area triage tasks on 2026-09-08** — see the section above; the counts in the rest of this paragraph predate that and describe the original 23-task set. [[TASK-137]] closed the defect [[TASK-109]] filed against itself while being

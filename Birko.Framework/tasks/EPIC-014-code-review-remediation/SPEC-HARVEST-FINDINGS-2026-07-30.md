@@ -451,6 +451,24 @@ It reads only Headers["X-Tenant-Id"], on the stated grounds that anything else '
 
 `builder.ApplicationServices.GetService<ITenantContext>()` resolves once from the root provider and is passed as a constructor argument, so the singleton middleware holds that instance for the app's lifetime. With the documented AddTenantContextScoped(), request-scoped stores receive a different TenantContext, so the middleware's SetTenant is invisible and Permissive wrappers read/write across every tenant (in Development ValidateScopes throws at wiring instead). Birko.Security.AspNetCore.TenantMiddleware avoids this via InvokeAsync injection.
 
+**FIXED 2026-09-09 ([[TASK-311]]).** The downgrade was correct and its *scope* was re-measured before the
+fix: `UseTenantMiddleware` has **0** production callers in the framework or any of the 16 consumer repos —
+only doc comments — so this was latent, which is what made a signature change affordable.
+
+⚠ **The "contested" status is resolved rather than overridden.** [[TASK-118]] described a live fail-open
+*through* this finding, which reads as contradicting the downgrade. Both are right about different things:
+TASK-118's concern was the **header/claim guard**, and TASK-118 itself routed the guard around the
+`ITenantContext` registration (it reads `HttpContext.Items` via `ResolvedTenant.Publish`), so that path was
+already closed. What remained is the middleware/store instance mismatch, which is what was fixed.
+
+Fixed by the route this finding itself names: `InvokeAsync(HttpContext, ITenantContext)`, injected from the
+**request** scope — the only way a singleton middleware can observe a scoped registration. The constructor
+parameter is kept and still wins, so a hand-built pipeline is unaffected. The friendly start-up error
+survives via `IServiceProviderIsService`, which answers *"is it registered?"* **without instantiating** —
+deliberately, since resolving a scoped service from the root provider is the thing being removed and
+throws under `ValidateScopes`. Note the failure mode split by environment: Development threw, Production
+was silent.
+
 #### SH-H050 — TenantSyncProvider scopes knowledge by options.TenantGuid but scopes saves by the ambient tenant only
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:147`
@@ -479,7 +497,33 @@ GetAllItemsAsync is called with only LocalFetchPredicate/RemoteFetchPredicate, w
 
 `../Birko.EventBus.Tenant/Extensions/EventTenantScopeServiceCollectionExtensions.cs:28`
 
-The doc calls Tenant.Current 'the same context AddBirkoSecurity / AddTenantContext* register'. True only of AddBirkoSecurity (SecurityServiceExtensions.cs:128); every AddTenantContext overload registers typeof(TenantContext), a distinct instance. In that wiring TenantEventEnricher sees HasTenant == false, leaves EventContext.TenantGuid null, and TenantEventScopeAccessor then dispatches inside WithAllTenantsAsync — a tenant-scoped event runs with IsAllTenantsScope true and Strict repositories operate across all tenants.
+**Verdict: CONFIRMED (2026-09-09, [[TASK-311]]) — DOCUMENTED, not detectable**
+
+Holds exactly as written; every link traced. `AddBirkoSecurity` registers `_ => Tenant.Current`, while
+every `AddTenantContext*` registers `typeof(TenantContext)`. The load-bearing detail the finding implies
+and does not state: `TenantContext`'s `AsyncLocal` fields are **instance**, not static
+(`private readonly AsyncLocal<Guid?> _currentTenantGuid = new()`), so a second instance is a second
+ambient scope and shares nothing. Hence `TenantEventEnricher` sees `HasTenant == false`, leaves
+`EventContext.TenantGuid` null, and `TenantEventScopeAccessor` dispatches inside `WithAllTenantsAsync` —
+a tenant-scoped event across every tenant, with `Strict` repositories following it there. It matters
+because the tenant wrappers deliberately fail open on `HasTenant == false` (CR-L229).
+
+⚠ **Why the fix is documentation and not code.** A mis-wired bridge and a *genuine system event* are
+**byte-identical from the event** — both arrive with `TenantGuid == null` — so nothing at the dispatch
+point can distinguish them, and narrowing the null branch would break cross-tenant system events, which
+are its documented purpose. The false claim appeared in **two** files (the registration extension and
+`TenantEventScopeAccessor`'s own remarks); both now name which registrations are safe and why. The
+mechanism and both outcomes are pinned by
+`Birko.EventBus.Tenant.Tests/MismatchedTenantContextWidensToAllTenantsTests` (5 tests), including one
+that stops a future reader "fixing" the widening.
+
+⚠ **A harder limit found while fixing it:** with `AddTenantContextScoped` / `Transient`, **no** overload of
+`AddEventTenantScope` can work — both halves are registered *and consumed* as singletons, so there is no
+per-request instance for them to hold. Now stated on the API. Whether the bridge should **refuse to widen**
+rather than documenting the hazard is a design decision with consumer impact: [[TASK-328]].
+
+⚠ **A registration-time guard was considered and is measurably inert:** the sole consumer calls
+`AddEventTenantScope()` before `AddBirkoSecurity`, so at guard time no `ITenantContext` descriptor exists.
 
 #### SH-H054 — A nested WithTenant does not narrow reads inside an all-tenants scope, so the per-tenant admin loop reads every tenant
 

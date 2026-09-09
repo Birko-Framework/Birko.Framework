@@ -776,12 +776,23 @@ tenant.
 - **When** the middleware completes
 - **Then** `ClearTenant()` runs anyway and tenant `t` is discarded
 
-### Requirement: UseTenantMiddleware resolves ITenantContext from the application root provider
+### Requirement: UseTenantMiddleware takes ITenantContext per request, not from the root provider
 
-The system SHALL, in `TenantMiddlewareExtensions.UseTenantMiddleware`, build the options, resolve
-`ITenantContext` from `builder.ApplicationServices`, throw `InvalidOperationException` naming
-`AddTenantContext()` when it is not registered, and pass the resolved instance and options as
-constructor arguments to `UseMiddleware<TenantMiddleware>`.
+The system SHALL, in `TenantMiddlewareExtensions.UseTenantMiddleware`, build the options, verify that
+`ITenantContext` is registered **without instantiating it** (via `IServiceProviderIsService`), throw
+`InvalidOperationException` naming `AddTenantContext()` when it is not, and pass a **null** context plus
+the options as constructor arguments to `UseMiddleware<TenantMiddleware>`.
+`TenantMiddleware.InvokeAsync` SHALL accept `ITenantContext` as a second parameter, which ASP.NET Core
+injects from the **request** scope, and SHALL use a constructor-supplied context in preference to it when
+one was given.
+
+Resolving the context at wiring time is what SH-H049 removed: `builder.ApplicationServices` is the root
+provider, so under the documented `AddTenantContextScoped()` the middleware set the tenant on an instance
+no request-scoped store ever read. Because `TenantContext` keeps its state in **instance** `AsyncLocal`
+fields, those stores saw `HasTenant == false`, and the tenant wrappers deliberately fail open there — so
+they operated across every tenant. The presence check is deliberately made through
+`IServiceProviderIsService` rather than a resolve, because resolving a scoped service from the root
+provider is the thing being removed and throws under `ValidateScopes`.
 
 #### Scenario: Unregistered context fails at startup
 
@@ -789,11 +800,17 @@ constructor arguments to `UseMiddleware<TenantMiddleware>`.
 - **When** `UseTenantMiddleware()` runs
 - **Then** an `InvalidOperationException` is thrown whose message names `ITenantContext` and instructs the caller to call `services.AddTenantContext()`
 
-#### Scenario: The middleware captures one context instance for the app's lifetime
+#### Scenario: A scoped registration is observed by the request's own stores
 
 - **Given** `AddTenantContextScoped()` and `UseTenantMiddleware()`
-- **When** requests are served
-- **Then** the middleware holds the instance resolved once from the root provider, while stores injected per request receive the request-scoped instance — two different objects, so the middleware's `SetTenant` is not observed by those stores
+- **When** a request carrying a tenant identifier is served
+- **Then** the middleware sets the tenant on the `ITenantContext` resolved from **that request's** scope, so a store resolving `ITenantContext` from the same scope observes it — and the root-provider instance is never touched
+
+#### Scenario: A hand-supplied context still wins
+
+- **Given** `new TenantMiddleware(next, pinnedContext, options)` — a non-DI or test pipeline
+- **When** `InvokeAsync(context, injectedContext)` runs
+- **Then** the tenant is set on `pinnedContext` and `injectedContext` is left untouched, so a pipeline that deliberately pins one instance is unaffected
 
 ### Requirement: Tenant context DI lifetimes
 
@@ -1150,6 +1167,13 @@ overload SHALL use `Birko.Data.Tenant.Models.Tenant.Current`.
 - **Given** `services.AddEventTenantScope()`
 - **When** the bridge is used
 - **Then** it observes `Tenant.Current`, which only matches store/repository behaviour if the app's `ITenantContext` registration is that same instance
+
+#### Scenario: A mismatched registration widens a tenant-scoped event to all tenants
+
+- **Given** `services.AddEventTenantScope()` and `AddTenantContext*` — which registers `typeof(TenantContext)`, a **different** instance, whose `AsyncLocal` state is per-instance
+- **When** an event is published inside a request's tenant scope and later dispatched
+- **Then** the enricher reads the bridge's context, sees `HasTenant == false`, and leaves `EventContext.TenantGuid` null; the accessor cannot distinguish that from a genuine system event and runs the handler inside `WithAllTenantsAsync`, so a tenant-scoped event is dispatched across **every** tenant
+- **And** `AddBirkoSecurity` is unaffected, because it registers `_ => Tenant.Current` — the same instance the bridge holds
 
 ### Requirement: Tenant-scoped sync resolves exactly one tenant per run
 
