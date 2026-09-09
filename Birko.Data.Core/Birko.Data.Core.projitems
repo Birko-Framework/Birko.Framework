@@ -19,6 +19,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\DateTruncation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\PredicateScope.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\SpanContains.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\BoundedFilterGuard.cs" />
     <!-- Filters -->
     <Compile Include="$(MSBuildThisFileDirectory)Filters\IFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\ModelByGuid.cs" />
