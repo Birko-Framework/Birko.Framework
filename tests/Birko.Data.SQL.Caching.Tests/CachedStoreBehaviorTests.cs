@@ -252,4 +252,57 @@ public class CachedStoreBehaviorTests : IDisposable
         (await store.ReadAsync(inSet)).Should().BeEmpty(
             "an unkeyable filter is not cached, so this read goes to the database and sees the deletion");
     }
+    // ---- TASK-329: the decorator is the ONLY override of the guarded overload ----
+
+    /// <summary>
+    /// TASK-329 — <c>CachedAsyncDataBaseBulkStore</c> is the one class in the framework that overrides
+    /// <c>UpdateAsync(filter, Action&lt;T&gt;)</c>, measured across every SQL provider. It inherits the new
+    /// bounded-filter guard only because its override delegates to <c>base.UpdateAsync</c> rather than
+    /// re-implementing the read-then-loop.
+    /// </summary>
+    /// <remarks>
+    /// So this is a pin on the delegation, not on the guard: § Conventions records four times over that a
+    /// funnel with overrides is not a funnel, and a later edit that inlined the loop here to save a hop
+    /// would silently reopen a whole-table rewrite behind a decorator whose own tests were all green.
+    /// The rows are the assertion, because SQLite performs a whole-table rewrite without complaint.
+    /// </remarks>
+    [Fact]
+    public async Task A_filter_that_reduces_to_every_row_is_refused_THROUGH_the_caching_decorator()
+    {
+        var store = NewStore(new SqlCacheOptions { Enabled = true });
+        for (var i = 1; i <= 3; i++)
+        {
+            await store.CreateAsync(new[] { new Widget { Guid = Guid.NewGuid(), Name = $"r{i}", Body = "keep" } });
+        }
+
+        var empty = new List<string>();
+        var act = async () => await store.UpdateAsync(
+            x => !empty.Contains(x.Name!), w => w.Body = "WIPED");
+
+        await act.Should().ThrowAsync<Birko.Data.Exceptions.WholeTableWriteException>();
+
+        var rows = (await store.ReadAsync(x => true)).ToList();
+        rows.Should().HaveCount(3);
+        rows.Should().OnlyContain(w => w.Body == "keep",
+            "before TASK-329 the base loop rewrote 3 of 3 rows and threw nothing, and the decorator "
+            + "passed the filter straight down to it");
+    }
+
+    [Fact]
+    public async Task An_explicit_all_rows_predicate_still_updates_every_row_through_the_decorator()
+    {
+        // The opt-out has to work at every layer it passes through, or the refusal above is a wall
+        // (§ SH-H037). Executed rather than reasoned about.
+        var store = NewStore(new SqlCacheOptions { Enabled = true });
+        for (var i = 1; i <= 3; i++)
+        {
+            await store.CreateAsync(new[] { new Widget { Guid = Guid.NewGuid(), Name = $"r{i}", Body = "keep" } });
+        }
+
+        await store.UpdateAsync(x => true, w => w.Body = "ALL");
+
+        var rows = (await store.ReadAsync(x => true)).ToList();
+        rows.Should().HaveCount(3);
+        rows.Should().OnlyContain(w => w.Body == "ALL");
+    }
 }
