@@ -1,11 +1,12 @@
 ---
 area: bulk-filter-operations
-generated-at: c78cfca
-generated-on: 2026-08-15
+generated-at: 58cd3bf
+generated-on: 2026-09-09
 sources:
   - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
   - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
   - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
+  - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Delete.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Update.cs
@@ -21,12 +22,12 @@ sources:
   - ../Birko.Data.Stores/IBulkStore.cs
   - ../Birko.Data.Stores/OrderBy.cs
   - ../Birko.Data.Stores/PropertyUpdate.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-08-16 16:55:41,
-                  # commit f3e900a). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Core: aaa9b3e
+source-commits:   # recorded at this regen (TASK-329) for the three siblings it touched;
+                  # the rest still carry the 2026-08-16 reconstruction -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Core: fd3103c
   ../Birko.Data.MongoDB: 77d9aba
-  ../Birko.Data.SQL: 7b60044
-  ../Birko.Data.Stores: c828ef1
+  ../Birko.Data.SQL: adedea7
+  ../Birko.Data.Stores: c1af713
 shaped-by: [FEATURE-014]
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator at all.
 # Every source glob above points into a sibling repo, so no task's `pr:` sha resolves under `git show`
@@ -377,6 +378,9 @@ persisting each one individually through the single-entity `Update(item)`.
 - **When** `Update(filter, Action<T>)` is called
 - **Then** it uses the identical read-then-per-entity-`Update` loop as the abstract base — there is no
   native translation for the action overload
+- **And** both filter guards run **before** the read: `RequireFilter` for a null filter and
+  `RequireBoundedFilter` for one that covers every row, because once the loop starts every statement it
+  issues is individually key-bounded and nothing downstream can recognise the scope
 
 ### Requirement: Portable PropertyUpdate fallback rewrites whole entities
 
@@ -730,8 +734,15 @@ added and its failure mode is a refused destructive operation on working code.
 A filter being **non-null** does not make it bounded. The system SHALL refuse a filter-based destructive
 operation whose predicate covers every entity, unless every entity was requested explicitly, and SHALL
 decide that on the **LINQ expression** — before any backend translates it — via
-`AbstractBulkStore<T>.RequireBoundedFilter` / its async twin, backed by
+`Birko.Data.Expressions.BoundedFilterGuard.Require`, backed by
 `Birko.Data.Expressions.PredicateScope`.
+
+The rule SHALL have exactly **one implementation**. `BoundedFilterGuard` is that implementation, and every
+declaration site is a thin forwarder that supplies only the thing which genuinely differs — the name of the
+all-rows door **this** caller offers. Three sites forward to it: `AbstractBulkStore<T>.RequireBoundedFilter`,
+its twin on `AbstractAsyncBulkStore<T>`, and the private `RequireBoundedFilter` on each SQL bulk store.
+Re-inlining the checks at any of them SHALL NOT be done: the rule previously had two implementations and one
+uncovered hierarchy, which is exactly how the defect below survived.
 
 The guard SHALL be called by the **base classes' own** filter-based destructive wrappers — all six of
 `Delete(filter)`, `Update(filter, PropertyUpdate)`, `Update(filter, Action)` and their async twins — and
@@ -741,6 +752,23 @@ carries its own key, so no backend query guard downstream can see it. Enforcing 
 portable backend that overrides nothing (JSON, XML, RavenDB, CosmosDB, InfluxDB) correct by construction,
 and is the only placement under which a backend that overrides *some* of the six cannot end up with a
 `Delete` that refuses beside an `Update` that does not.
+
+**Enforcing it on those two bases does NOT reach the SQL bulk stores, because they derive from neither.**
+`DataBaseBulkStore<DB,T>` and `AsyncDataBaseBulkStore<DB,T>` implement `IBulkStore<T>` / `IAsyncBulkStore<T>`
+directly and carry their own copies of the six filter-based overloads — which is also why they declare their
+own private `RequireFilter`. So the guard SHALL be wired into that third hierarchy explicitly. Measured on
+on-disk SQLite before it was:
+`Update(x => !empty.Contains(x.Name), r => r.Name = "OVERWRITTEN")` gave **`thrown=NONE`, 3 of 3 rows
+rewritten**, sync and async alike.
+
+Which of the six need the wiring SHALL be **measured per overload, per direction**, not inferred. Measured:
+`Delete(filter)` and `Update(filter, PropertyUpdate<T>)` — four of the six — reach the connector, where
+`AddRequiredWhere` already refuses the same predicate, so they were already correct; the two
+`Update(filter, Action<T>)` overloads were not, because that path issues a `SELECT` (where an always-true
+predicate is legitimate) followed by per-row `UPDATE … WHERE Guid = @g` statements, each individually
+bounded, so no conditionless statement is ever emitted for a statement-level guard to see. Every overload's
+guard SHALL be present regardless of which mechanism supplies it, because a store presenting a `Delete`
+that refuses beside an `Update` that rewrites every row is the split this family keeps arriving in.
 
 The decision cannot be made on the translated query. Measured on MongoDB.Driver 3.2.0,
 `x => !empty.Contains(x.Field)` renders `{ "Field": { "$nin": [] } }` — a **one-element** document,
@@ -768,6 +796,33 @@ also refused is a wall rather than a door. Only a predicate that *happens* to co
 predicate which does constrain something breaks working code. Specifically it SHALL NOT treat as unbounded:
 a string `Contains` (a substring test, not set membership), a collection that references the entity (its
 emptiness varies per entity), a null collection, or a collection it cannot evaluate.
+
+#### Scenario: The SQL bulk stores refuse it on the action overload, sync and async
+
+- **Given** `SQLiteStore<Row>` or `AsyncSQLiteStore<Row>` over an on-disk database holding three rows, and
+  the filter `x => !empty.Contains(x.Name)`
+- **When** `Update(filter, r => r.Name = "WIPED")` / `UpdateAsync(filter, action, ct)` is called
+- **Then** each throws `WholeTableWriteException` and all three rows keep their original values — before
+  the guard was wired into this hierarchy the call rewrote **3 of 3** rows and threw nothing
+- **And** the async refusal names `UpdateAllAsync(updates)` while the sync one names `UpdateAll(updates)`
+
+#### Scenario: The other four SQL overloads are refused by the connector rather than by this guard
+
+- **Given** the same stores and the same filter
+- **When** `Delete(filter)` or `Update(filter, PropertyUpdate<T>)` is called
+- **Then** each throws `WholeTableWriteException` from `AddRequiredWhere`, because those paths do emit a
+  single conditionless statement — a different mechanism reaching the same refusal, which is why the scope
+  of the wiring had to be measured per overload instead of applied to all six
+
+#### Scenario: A decorator over the SQL bulk store inherits the guard by delegating
+
+- **Given** `CachedAsyncDataBaseBulkStore<SqLiteConnector, Widget>` — the only class in the framework that
+  overrides `UpdateAsync(filter, Action<T>)` — holding three rows
+- **When** `UpdateAsync(x => !empty.Contains(x.Name), w => w.Body = "WIPED")` is called
+- **Then** it is refused and all three rows keep their bodies, because the override wraps
+  `base.UpdateAsync` rather than re-implementing the read-then-loop
+- **And** `UpdateAsync(x => true, action)` still rewrites every row through the same decorator, so the
+  opt-out holds at every layer it passes through
 
 #### Scenario: An empty negated Contains is refused on all four MongoDB overrides
 
@@ -860,6 +915,12 @@ This SHALL be read together with the family convention that concrete stores over
 and **not** the public CRUD methods, precisely so the base can enforce invariants. The overrides that
 require the repeat predate the guard and stand against that convention; repeating the guard is the
 contained fix, and converting them to `*Core` is separate work.
+
+An override that **delegates** to the base rather than re-implementing it satisfies this requirement
+without repeating anything, and is the preferred shape where the override only wraps behaviour. That
+distinction is load-bearing rather than stylistic: an override which inlined the base's loop to save a
+call would silently lose the guard while its own tests stayed green, so where such an override exists the
+delegation SHALL be pinned by a test.
 
 #### Scenario: The InMemory store repeats the guard in its overriding Delete
 
@@ -1019,6 +1080,9 @@ be non-virtual while their `*Core` counterparts are `virtual` with a working def
 - **When** it needs provider-specific filter-based writes
 - **Then** `Update(filter, Action<T>)`, `Update(filter, PropertyUpdate<T>)` and `Delete(filter)` are
   declared `virtual` and can be overridden directly
+- **And** such an override carries the filter-guard obligation with it — either by delegating to `base` or
+  by calling `RequireFilter` and `RequireBoundedFilter` itself, since these three are the public methods
+  and the guards live in them rather than in a `*Core`
 
 ### Requirement: Cancellation tokens flow through every async bulk path
 

@@ -26,6 +26,16 @@ DataBaseStore<DB,T> -> DataBaseBulkStore<DB,T> (sync)
 AsyncDataBaseStore<DB,T> -> AsyncDataBaseBulkStore<DB,T> (async)
 ```
 
+⚠ **This is a SEPARATE hierarchy — it does not derive from `AbstractBulkStore` / `AbstractAsyncBulkStore`
+above.** `DataBaseStore<DB,T>` descends from `AbstractStore<T>` / `AbstractAsyncStore<T>`, but the *bulk*
+tier implements `IBulkStore<T>` / `IAsyncBulkStore<T>` **directly** and carries its own copies of the
+collection and filter-based overloads — which is why it also declares its own private `RequireFilter`. The
+two diagrams sitting next to each other read as one chain and are not: anything wired "into the base bulk
+store" reaches the portable backends (JSON, XML, InMemory, MongoDB, RavenDB, CosmosDB, InfluxDB) and
+**not** the SQL ones. Measured cost of assuming otherwise: TASK-215's whole-table write guard was absent
+from every SQL provider for a fortnight, so `Update(x => !empty.Contains(x.Name), action)` rewrote every
+row of the table with no exception on the framework's default provider (TASK-329, § Conventions).
+
 ### Repository Hierarchy
 ```
 AbstractRepository -> AbstractBulkRepository (sync)
@@ -246,6 +256,44 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
       again, so a side-effecting operand is now evaluated three times instead of once, on every portable
       backend. Both guards are kept deliberately — each covers a distinct partial-override case, and the
       placement mirrors `RequireFilter` — but put captured collections, not method calls, in a filter.
+    - **And "the shared base" is a claim about a TYPE HIERARCHY, so it has to be checked against the
+      concrete types rather than against the interface.** TASK-215 put the guard on `AbstractBulkStore` /
+      `AbstractAsyncBulkStore` and read as complete, because every backend in the sentence derives from
+      one of them. **The SQL bulk stores derive from neither** — `DataBaseBulkStore<DB,T>` and
+      `AsyncDataBaseBulkStore<DB,T>` implement `IBulkStore<T>` / `IAsyncBulkStore<T>` **directly** and
+      carry their own copies of the six filter-based overloads, which is also why they declare their own
+      private `RequireFilter`. So a third hierarchy had no guard for a fortnight on the framework's
+      **primary** provider: measured on SQLite,
+      `Update(x => !empty.Contains(x.Name), r => r.Name = "OVR")` gave `thrown=NONE | overwritten=3 of 3`,
+      sync and async (TASK-329). Sixth instance of § TASK-243's *a funnel with four overrides is not a
+      funnel*, arriving as **a base nothing derives from is not a base**. Four parts generalise:
+      - **Grep the DECLARATION, not the call.** `grep -rn RequireBoundedFilter Birko.Data.SQL/` returned
+        nothing, and that one command was the whole diagnosis. When a guard is described as living "on the
+        base", ask which file declares it and which files can see it.
+      - **The scope of the wiring is measured per overload, and it was 2 of 6 rather than 6 of 6.**
+        `Delete(filter)` and `Update(filter, PropertyUpdate<T>)` reach the connector, where SH-H002's
+        `AddRequiredWhere` already refuses the identical predicate — so four of the six were correct **by
+        a different mechanism** and blanket-wiring all six would have been indistinguishable from wiring
+        the two that mattered. Only `Update(filter, Action<T>)` was defective, because that path emits a
+        `SELECT` (where an always-true predicate is legitimate) followed by per-row
+        `UPDATE … WHERE Guid = @g`, each individually bounded, so **no conditionless statement is ever
+        emitted** for a statement-level guard to see. The task file's own guess ("very likely present on
+        the PropertyUpdate and Delete overloads") was wrong in the safe direction; measuring is what
+        turned a 6-line fix into a 2-line one and told the spec which half was which.
+      - **Two implementations plus one uncovered hierarchy is a fix at the WRONG LAYER, and the cheap diff
+        is the tell.** Adding copies three and four in the SQL layer was four lines and is precisely the
+        shape this file keeps recording as the cause. The rule now lives once, in
+        `Birko.Data.Core/Expressions/BoundedFilterGuard.cs`, and all three declaration sites forward to it
+        passing **only the door name** — the one thing that genuinely differs per caller. Behaviour
+        preservation is measured, not inspected: making the new producer a no-op reds 18 pre-existing
+        tests across three suites (SqLite, InMemory, JSON), so the delegation is live rather than merely
+        compiling.
+      - **A decorator that DELEGATES inherits a guard; one that re-implements silently loses it.**
+        `CachedAsyncDataBaseBulkStore.UpdateAsync(filter, Action<T>)` is the only override of a guarded
+        overload anywhere in the framework, and it wraps `base.UpdateAsync`, so it was correct the moment
+        the base was. That is luck until it is pinned — an edit inlining the loop to save a call would
+        reopen a whole-table rewrite behind a decorator whose own tests all stayed green — so the
+        delegation has its own test.
 - **A write that opens its own connection cannot be inside anybody's transaction — and a boundary is only
   as wide as its NARROWEST participant.** `AmbientSqlTransaction` (TASK-240) taught the single-command paths
   to join an open boundary; the bulk paths kept opening their own connection and their own transaction, so
@@ -2734,6 +2782,63 @@ reader can act on, which is why this was worth doing before picking anything new
 
 
 
+
+### A base nothing derives from is not a base: the SQL bulk stores had no bounded-filter guard (2026-09-09)
+
+TASK-329 / `SH-H002`, spawned while reading `AsyncDataBaseBulkStore` for [[TASK-310]] and worked next
+because a silent whole-table rewrite is data corruption. [[TASK-215]] wired `RequireBoundedFilter` into
+`AbstractBulkStore` / `AbstractAsyncBulkStore`; the SQL bulk stores derive from **neither**, so on the
+framework's primary provider `Update(x => !empty.Contains(x.Name), r => r.Name = "OVR")` rewrote
+**3 of 3 rows with `thrown=NONE`**, sync and async. Eight offline suites green: Core 102, SQL 686,
+SqLite 363, InMemory 69, JSON 23, XML 18, Caching 25, SQL.Providers 8 — **1,294 tests, 0 failed**, 33 new
+— and every test project in the family builds with 0 warnings and 0 errors. The standing rules are in
+§ Conventions and § Architecture. Nine things worth carrying:
+
+- **One `grep` was the whole diagnosis.** `grep -rn RequireBoundedFilter Birko.Data.SQL/` returned
+  nothing. When a guard is described as living "on the base", check which file **declares** it and which
+  concrete types can see it — `DataBaseBulkStore<DB,T>` implements `IBulkStore<T>` directly and carries
+  its own copies of all six filter-based overloads, which is also why it has its own private
+  `RequireFilter`.
+- **The scope was 2 of 6, not 6 of 6, and the task file guessed wrong.** It said the `PropertyUpdate` and
+  `Delete` overloads were "very likely" affected too. Measured: those four reach the connector, where
+  `AddRequiredWhere` already refuses the identical predicate. Only `Update(filter, Action<T>)` was
+  defective — it emits a `SELECT` then per-row `UPDATE … WHERE Guid = @g`, each individually bounded, so
+  **no conditionless statement is ever emitted** for a statement-level guard to see. Blanket-wiring all
+  six would have been indistinguishable from wiring the two that mattered.
+- **Two implementations plus one uncovered hierarchy is a fix at the wrong layer.** Copies three and four
+  in the SQL layer were four lines and are the shape § Conventions keeps naming as the cause. The rule now
+  lives once in `Birko.Data.Core/Expressions/BoundedFilterGuard.cs` and all three declaration sites
+  forward to it passing **only the door name** — the sole thing that differs per caller (§ SH-H037: an
+  async store has no `DeleteAll()`).
+- **The refactor's behaviour preservation is measured, not inspected.** Making the new producer a no-op
+  reds **18** pre-existing tests across three suites (6 SqLite, 10 InMemory, 2 JSON), so the delegation is
+  live rather than merely compiling. The two former copies are also byte-equivalent through the change:
+  their previous 4-argument `WholeTableWriteException` call defaulted `explicitDoor` to exactly the strings
+  they now pass explicitly.
+- **The one override of a guarded overload was correct by delegation, and that is now pinned.**
+  `CachedAsyncDataBaseBulkStore.UpdateAsync(filter, Action<T>)` — the only one in the framework, swept
+  across all seven SQL projects — wraps `base.UpdateAsync`, so it inherited the fix. An edit inlining the
+  loop to save a call would reopen a whole-table rewrite behind a decorator whose own tests stayed green.
+- **No live per-provider run, and the reason is stated rather than skipped.** Neither defective overload is
+  overridden by any provider, and the guard runs on the **expression** before any provider code executes —
+  so a PostgreSQL/MySQL/MSSql run would exercise the same statement on the same shared class. Recorded as a
+  reasoned scope decision with its measurement, not as a claim of live verification.
+- **⚠ The close gate found the new guard had no test in its DECLARING project — third instance.**
+  § TASK-255 records the rule (*a guard declared in `Birko.Data.SQL` is tested in `Birko.Data.SQL.Tests`,
+  not only from its consumer's suite*) and TASK-257's gate caught it for `IsInIndexKey`; here all 17 tests
+  of a `Birko.Data.Core` type lived in store projects. Writing
+  `Birko.Data.Core.Tests/BoundedFilterGuardTests.cs` immediately earned a fifth mutation: the producer's
+  two checks are **order-dependent** — `ReducesToAllRows(x => true)` is *also* true, so the explicit-door
+  check has to run first or the documented `DeleteAll()` synonym would be refused — and nothing pinned
+  that ordering. Swapping them reds 3 Core tests and 2 SqLite ones.
+- **⚠ And § Architecture had been stating the defect's premise all along.** Its store-hierarchy and
+  SQL-store diagrams sit next to each other with nothing saying they are **disjoint**, so they read as one
+  chain. That is the misreading, in the rulebook, for the life of the file. Now stated explicitly with the
+  measured cost — the register-on-introduce check earning its place by finding drift rather than a gap.
+- **⚠ Spawned [[TASK-330]] (P3):** the two SQL bulk stores declare no `UpdateAll(Action<T>)`, so an
+  action-overload caller is pointed at a door taking a `PropertyUpdate<T>`; the portable bases *do* declare
+  it and their message still names the sibling. Nothing does the wrong thing either way — a decision about
+  public surface, so filed rather than widened into a P0 defect fix.
 
 ### A composite PRIMARY KEY could not be declared at all, and TimescaleDB requires one (2026-09-08)
 

@@ -1,11 +1,12 @@
 # Tasks — Birko.Framework
 
-> ⚠ **Feature drift (3 groups, 81 items)** — **DV9 recomputed 2026-09-08** after this session
-> filed 22 new tasks; the other two counts are carried from 2026-09-04 and are labelled as such.
-> **DV9 ×59** (tasks carry `feature: FEATURE-014` but its `decisions.md` `→ Tasks` column never lists
-> them — the ledger does not know about its own work; was ×31 on 2026-09-04, and **22 of the 28 new
-> ones were filed on 2026-09-08**: TASK-305/306, the 15 `SH-H` triage tasks TASK-308–322, and the 5
-> recovered-findings fix tasks TASK-323–327) ·
+> ⚠ **Feature drift (3 groups, 84 items)** — **DV9 re-measured 2026-09-09**; the other two counts are
+> carried from 2026-09-04 and are labelled as such.
+> **DV9 ×62** — **re-measured 2026-09-09** at TASK-329's close: 187 tasks carry
+> `feature: FEATURE-014` and its `decisions.md` `→ Tasks` column lists 125 of them, so the ledger does
+> not know about 62 of its own tasks (×31 on 2026-09-04, ×59 on 2026-09-08; the three added since are
+> TASK-328, TASK-329 and TASK-330). Measured rather than incremented, because the count carried
+> forward from 2026-09-08 was already 3 short of the tree — the same expiry § TASK-283 records ·
 > **DV5 ×18** (every task in `_loose/` has no epic *and* no feature, so none appears in a feature row
 > — carried from 2026-09-04, not recomputed) · **DV3 ×4** (TASK-285/286/287/288 sit under EPIC-014
 > with `feature: null` while every sibling links to FEATURE-014 — a broken back-link; carried from
@@ -16,10 +17,16 @@
 > `git diff` per area against `generated-at`, and most areas here glob **sibling repos** resolved
 > through `source-commits` — a cost this dashboard refresh did not pay. The last measured value was
 > **DV7 ×3** (`filter-expression-translation`, `bulk-filter-operations`,
-> `unit-of-work-and-transactions`), owned by [[TASK-251]]. ⚠ And note that
-> **two of those three areas are now also subjects of new work** — `filter-expression-translation` of
-> [[TASK-308]] (P0, 7 findings) and `unit-of-work-and-transactions` of [[TASK-325]]/[[TASK-327]] (6
-> verified findings) — so their specs are both stale and about to change again. DV8/DV10/DV11 were clean at the last measurement: all
+> `unit-of-work-and-transactions`), owned by [[TASK-251]].
+> ℹ **Two of those three were regenerated on 2026-09-09** at TASK-329's close —
+> `bulk-filter-operations` (substantive: the bounded-filter producer, the SQL hierarchy the abstract
+> bases do not reach, three new scenarios) and `filter-expression-translation` (its pointer
+> requirement) — along with `store-lazy-initialization`, whose globs the same diff reached and whose
+> body was left **deliberately unchanged** because the change contradicts nothing it asserts; only its
+> provenance moved. So DV7 is very likely **×1** now, but that is arithmetic on a stale total rather
+> than a measurement, and it is not reported as one. ⚠ `filter-expression-translation` is also the
+> subject of [[TASK-308]] (P0, 7 findings) and `unit-of-work-and-transactions` of
+> [[TASK-325]]/[[TASK-327]] (6 verified findings), so both are about to change again. DV8/DV10/DV11 were clean at the last measurement: all
 > 25 mapped areas exist on disk and carry `shaped-by-derived: true`.
 >
 > ℹ **Known false positive, left as-is:** EPIC-018 reads `in-progress` with all 4 tasks `done`. It is
@@ -27,7 +34,7 @@
 > it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays `in-progress`
 > with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-09 08:33. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-09 (TASK-329 close). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
@@ -38,10 +45,10 @@ _Generated 2026-09-09 08:33. Run `/tasks triage` to refresh. **Do not hand-edit*
 | in-progress | 7    | 9      | 0    |
 | review      | —     | —       | 11    |
 | blocked     | —     | —       | 2    |
-| done        | 1    | 23      | 137    |
+| done        | 1    | 23      | 138    |
 | cancelled   | 0    | 0      | 2    |
 
-`todo` by priority: 3× P0 · 37× P1 · 92× P2 · 15× P3.
+`todo` by priority: 2× P0 · 37× P1 · 92× P2 · 16× P3.
 
 ## In progress now
 
@@ -147,11 +154,11 @@ _None_
   - [x] TASK-037 Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
   - [ ] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export 🔍 review · FEATURE-013
   - [ ] TASK-307 The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (103/190 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (104/191 tasks done)
   - [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day · FEATURE-014
   - [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down · FEATURE-014
   - [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently · FEATURE-014
-  - [ ] TASK-329 The SQL bulk stores never apply `RequireBoundedFilter`, so a filter that reduces to every row rewrites the table · FEATURE-014
+  - [x] TASK-329 The SQL bulk stores never apply `RequireBoundedFilter`, so a filter that reduces to every row rewrites the table · FEATURE-014
   - [x] TASK-211 On-the-fly views are broken on PostgreSQL — and the error is swallowed, so they return an empty result · FEATURE-014
   - [x] TASK-216 A filtered DELETE / UPDATE qualifies its `WHERE` with a bare table name, so every filtered write fails on PostgreSQL · FEATURE-014
   - [x] TASK-231 `Birko.EventBus.Outbox.SQL` shipped complete but registered nowhere — unbuilt, untested, invisible · FEATURE-014
@@ -182,6 +189,7 @@ _None_
   - [x] TASK-295 The escape and heal apparatus is SQLite-only: three providers record no created tables · FEATURE-014
   - [x] TASK-296 SQLite connection pooling serves a stale schema image, so a freshly created table reads as missing · FEATURE-014
   - [ ] TASK-328 Decide: should the event↔tenant bridge REFUSE to widen when it cannot establish a tenant? · FEATURE-014
+  - [ ] TASK-330 Decide whether the `Action<T>` destructive overloads need an all-rows door of their own shape · FEATURE-014
   - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) · FEATURE-014
   - [x] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire · FEATURE-014
   - [ ] TASK-150 `char?`, `TimeSpan` and `DateTimeOffset` have no column mapping — they now fail loudly instead of quietly · FEATURE-014

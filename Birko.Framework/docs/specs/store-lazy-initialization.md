@@ -1,14 +1,14 @@
 ---
 area: store-lazy-initialization
-generated-at: 96738ef
-generated-on: 2026-08-16
+generated-at: 58cd3bf
+generated-on: 2026-09-09
 sources:
   - ../Birko.Data.Stores/AbstractAsyncBulkStore.cs
   - ../Birko.Data.Stores/AbstractAsyncStore.cs
   - ../Birko.Data.Stores/AbstractBulkStore.cs
   - ../Birko.Data.Stores/AbstractStore.cs
 source-commits:   # recorded at this regen, not reconstructed
-  ../Birko.Data.Stores: c828ef1
+  ../Birko.Data.Stores: c1af713
 shaped-by: [FEATURE-014]
 shaped-by-derived: true
 shaped-by-unresolved: 80

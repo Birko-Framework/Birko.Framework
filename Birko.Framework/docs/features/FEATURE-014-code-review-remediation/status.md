@@ -1,6 +1,6 @@
 ---
 id: FEATURE-014
-generated: 2026-08-19
+generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329)
 ---
 
 # Code review — audit remediation — Status
@@ -21,7 +21,15 @@ generated: 2026-08-19
 
 ## Build progress
 
-69 / 140 tasks done (1 awaiting sign-off).
+100 / 187 tasks done (1 awaiting sign-off).
+
+> ⚠ **This file is a PARTIAL refresh, not a full `/feature status` regen.** The counts above were
+> re-measured 2026-09-09 at TASK-329's close and are accurate; the list below is not — it carries 147
+> of the feature's 187 tasks, because 40 were filed after this file was last fully generated
+> (2026-08-19). That gap is the same drift `tasks/README.md` reports as **DV9 ×62** (the feature's
+> `decisions.md` `→ Tasks` column does not know about 62 of its own tasks), owned by [[TASK-251]].
+> Run `/feature status FEATURE-014` for the real thing. Refreshing the counts while saying the list is
+> short beats leaving `69 / 140`, which was wrong in both numbers.
 
 - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
@@ -170,6 +178,8 @@ generated: 2026-08-19
 - [ ] TASK-276 One automated test fails about one run in ten and nobody has caught which one
 - [x] TASK-277 Saving a record into a table that is missing reported success and lost the data
 - [x] TASK-278 On SQL Server, asking for "just the first row" or a page of results failed outright
+- [x] TASK-329 A bulk update filtered by a condition that matches everything rewrote the whole table
+- [ ] TASK-330 Decide whether an all-rows update needs a second spelling that takes a change function
 
 ## What can be tested now
 

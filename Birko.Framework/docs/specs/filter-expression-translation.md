@@ -1,7 +1,7 @@
 ---
 area: filter-expression-translation
-generated-at: 96738ef
-generated-on: 2026-08-16
+generated-at: 58cd3bf
+generated-on: 2026-09-09
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
   - ../Birko.Data.Core/Expressions/ExpressionParameterReplacer.cs
@@ -32,7 +32,7 @@ sources:
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/SQL/DataBase_RuleField.cs
 source-commits:   # recorded at this regen, not reconstructed
-  ../Birko.Data.Core: 0308617
+  ../Birko.Data.Core: fd3103c
   ../Birko.Data.ElasticSearch: 9b523e2
   ../Birko.Data.SQL: 7b60044
   ../Birko.Data.SQL.MSSql: 64a4932
@@ -763,15 +763,19 @@ one child or when the group is negated, and SHALL prefix `NOT ` when the group's
 
 ### Requirement: Predicate SCOPE is analysed separately from predicate translation
 
-`Birko.Data.Expressions.PredicateScope` falls inside this area's `Expressions/*.cs` glob but answers a
-different question from everything else here: not *how does this predicate become a query* but *how much
-does it constrain*. It is consumed by the destructive-write guards, and its requirements and scenarios live
-with them in [`bulk-filter-operations`](bulk-filter-operations.md) — recorded here so a reader of this area
-knows the file is specced rather than uncovered.
+`Birko.Data.Expressions.PredicateScope` and `Birko.Data.Expressions.BoundedFilterGuard` fall inside this
+area's `Expressions/*.cs` glob but answer a different question from everything else here: not *how does this
+predicate become a query* but *how much does it constrain*. They are consumed by the destructive-write
+guards, and their requirements and scenarios live with them in
+[`bulk-filter-operations`](bulk-filter-operations.md) — recorded here so a reader of this area knows the
+files are specced rather than uncovered.
 
 In outline: `IsExplicitAllRows` is the one-node normalized-constant test (the `DeleteAll()` synonym) and
 `ReducesToAllRows` is the broader "covers every entity" reduction over `&&` / `||` / `!` and an empty
 negated `Contains`. It deliberately answers `false` when uncertain, because its consumers refuse writes.
+`BoundedFilterGuard.Require` is the single producer that composes those two answers into the refusal —
+explicit-door check first, then the reduction — so that every store hierarchy asks the question in exactly
+one way and supplies only its own all-rows door name.
 
 ### Requirement: SQL value-expression operands in predicates
 
