@@ -3,7 +3,7 @@ id: TASK-310
 parent: STORY-051
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: in-progress
+status: done
 priority: P0
 assignee: ai
 picked-by: fix-next
@@ -12,7 +12,7 @@ depends-on: []
 blocks: []
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
 findings: [SH-H004, SH-H005, SH-H007]
-pr: null
+pr: "[Birko.Data.SQL.Caching@328b2ee, Birko.Data.SQL.Caching.Tests@2a34e2e, Birko.Data.SQL.Tests@b57fd14]"
 github-issue: null
 jira-key: null
 ---
@@ -71,23 +71,23 @@ diff is the fix's evidence**.
 
 ## Acceptance criteria
 
-- [ ] All 3 findings are marked **confirmed**, **confirmed-narrower**, **confirmed-wider** or **refuted** against
+- [x] All 3 findings are marked **confirmed**, **confirmed-narrower**, **confirmed-wider** or **refuted** against
       the code, with the verdict and its evidence (`file:line` + the mechanism, not just the rule)
       written back into `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific
       code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers,
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers,
       and name any test that passes either way as a contract pin rather than as evidence
-- [ ] ⚠ For a claim of *silent* loss, corruption or leakage, the assertion is the **observed
+- [x] ⚠ For a claim of *silent* loss, corruption or leakage, the assertion is the **observed
       state** — rows counted, the value read back, the tenant that could see it — never that no
       exception was thrown. § Conventions records several defects that a "did not throw" assertion
       hid, including one in this epic that hid a live failure for weeks
-- [ ] Any behavioural fix is followed by `/specs regen caching`, with the spec diff reviewed as the
+- [x] Any behavioural fix is followed by `/specs regen caching`, with the spec diff reviewed as the
       change's evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a
       ticked box with the work undone, and never as an `## Out of scope` sentence describing work
-- [ ] [[STORY-051]]'s **Progress** line and its task table reflect this area's closed count
+- [x] [[STORY-051]]'s **Progress** line and its task table reflect this area's closed count
 
 ## Out of scope
 
@@ -104,11 +104,16 @@ diff is the fix's evidence**.
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the
-task on a step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write
-that explicitly with its reason rather than leaving the section as-is.
+**N/A — fully covered by automated tests.**
+
+Resolved at close (2026-09-09). The reason: every claim here is a string-equality or a stored-value
+question, and both are asserted directly. The key-identity halves are compared as keys; the two
+end-to-end halves run against a real SQLite database and assert the **stored column** after a
+concurrent out-of-band write, which is the observed state rather than the absence of an exception.
+
+A human could not see any of it: the whole defect is that two different queries produced the *same*
+key, and a cache serving the wrong rows looks exactly like a cache serving the right ones from outside.
+That indistinguishability is the finding.
 
 ## Implementation plan
 
@@ -213,6 +218,119 @@ or the installer from dotnet.microsoft.com) — a machine action, not a repo one
 this session added to CLAUDE.md an hour earlier says exactly that: *"A fix in a code path nothing tests is
 a guess."* Three confirmed high findings and no code is the honest state.
 
+## Outcome
+
+**What was broken.** A SQL query cache key did not identify the query it stood for, in two independent
+ways, and a third defect made a cached read corrupt a write.
+
+- **`SH-H004`** — the key was built from `filter.ToString()` of the **raw** expression. A
+  closure-captured local renders as `value(<>c__DisplayClass…).field`, identical for every value, so
+  `x => x.TenantGuid == tenant` produced **one key for every tenant** and the first tenant's rows were
+  served to all the others. Measured: two different `Guid`s render byte-identically; inline literals do
+  not, which is why every existing test — all of which used literals — passed.
+- **`SH-H005`** — the key carried no database identity, so two stores on different databases sharing one
+  `ICache` computed identical keys and each served the other's rows.
+- **`SH-H007`** — `UpdateAsync(filter, Action<T>)` is read-then-write, and its read came from the cache.
+  The loop mutated a snapshot up to 5 minutes old and `UpdateCoreAsync` wrote back **every mapped
+  column**, silently reverting whatever another writer had changed.
+
+**The fix.** `SqlCacheKeyBuilder` gained a `scope` segment (the database identity, hashed) that narrows
+both lookup **and** the invalidation prefix, and a `TryDescribeFilter` producer that funcletizes the
+filter and then **checks** the rendering. The store reads the scope lazily, bypasses the cache entirely
+for a filter that cannot be described, and wraps the base filter-update in a flow-scoped scope its reads
+honour.
+
+### ⚠ The design turned on a measurement that inverted the obvious fix
+
+Normalisation looked sufficient — the framework already ships `ExpressionNormalizer`, whose
+funcletization folds a captured local to its value, so reusing it was the one-producer answer. Measured
+before committing to it: it fixes **scalars** (`Guid`, `int`, `string` all render distinctly) and **does
+not** fix collections — `List<int>{1,2,3}` and `{9,9,9}` both render
+`value(System.Collections.Generic.List`1[System.Int32])`. So `ids.Contains(x.Id)`, the ordinary
+set-membership filter, would still have collided across different id sets, and a fix that stopped at
+normalisation would have closed the ticket while leaving the same class of leak live.
+
+Hence two steps, not one: normalise, then **verify the rendering distinguishes the values**, and refuse
+when it does not. Refusing costs a cache miss, which is always correct; sharing a key costs one caller
+another caller's rows. **The trade is stated rather than hidden: set-membership and object-valued filters
+are no longer cached at all.** Affordable because reach was measured at 0 consumer `.cs` files.
+
+### Step 6 — three disjoint mutations, one per finding
+
+| Mutation | Red |
+|---|---|
+| raw unnormalised filter, no opaque check | **4 of 23** — `Two_tenants_do_not_share_a_cache_key`, `Captured_strings_are_also_distinguished`, `A_set_membership_filter_is_refused_rather_than_keyed`, `A_set_membership_filter_reads_correctly_by_not_being_cached` |
+| drop the scope segment | **4 of 23** — `Two_databases_do_not_share_a_cache_key`, `..._an_invalidation_prefix`, `The_scope_is_hashed_so_a_connection_string_cannot_leak_into_a_key`, `BuildKey_HashSegments_Are16HexChars` |
+| stop honouring the read bypass | **1 of 23** — `FilterUpdate_DoesNotRevertAConcurrentWritersColumn` |
+
+**Contract pins, green throughout and pins rather than evidence:** `Inline_literals_keep_working`,
+`A_null_filter_is_describable_because_everything_is_a_real_query`,
+`A_keys_prefix_is_still_its_own_invalidation_prefix`, `Different_tables_in_one_database_still_differ`,
+`FilterUpdate_StillAppliesItsOwnChange`, `FilterUpdate_LeavesTheCacheUsableAfterwards`,
+`Read_IsServedFromCache_ThenInvalidatedByWrite`, `Disabled_Cache_AlwaysHitsTheDatabase`. And
+`The_raw_expression_really_does_collide_so_the_premise_is_pinned` pins the *premise* — if a future
+runtime changed how a closure renders, that test says so instead of the fix silently becoming pointless.
+
+**Suites:** Caching 23/23, `Birko.Data.SQL` 686/686, SqLite 348/348 — **1,057 green, 0 failed.**
+
+### Judgement calls
+
+- **Reused `ExpressionNormalizer` rather than writing a funcletizer.** One producer for "fold the
+  parameter-free subtrees", already in the framework and already tested. The *check* on top of it is new,
+  because that producer legitimately does not promise value-distinguishing renderings.
+- **The refuse-marker is `"value("`, not a type whitelist.** A whitelist of "safe" constant types would
+  have to be complete to be safe and silently wrong when it is not; the marker is what
+  `ConstantExpression` actually emits when a value does not describe itself, so it is total by
+  construction and errs toward not caching.
+- **The scope is hashed, not inlined.** `GetId()` is colon-delimited, so inlining it would make the key's
+  segments ambiguous — and a cache key is often visible in a log or a Redis keyspace where a host and
+  service account do not belong. The table name stays in clear so a key is still recognisable by eye.
+- **⚠ Rejected: scoping only the invalidation prefix, or only the key.** They must move together. A
+  scoped key under an unscoped prefix merely over-invalidates (a spurious miss, harmless — and that is
+  exactly what the code did before this change); an unscoped key under a scoped prefix would leave
+  entries nothing ever removes, which is **worse than the leak being fixed**. Both halves are asserted.
+- **⚠ Rejected: re-implementing the filter-update loop for `SH-H007`.** That was the planned shape and it
+  was wrong twice over: the guard it needs (`RequireFilter`) is **private** to `AsyncDataBaseBulkStore`
+  so it cannot be called, and copying the loop would duplicate a rule that already has one producer. The
+  override now delegates to the base and diverts only the read.
+- **The bypass is an `AsyncLocal` instance field with save-and-restore**, not a plain bool. A store can
+  be a singleton serving concurrent requests, so a plain field would let one request's update disable
+  another's cache — or leave it disabled. This is the mechanism TASK-270 established after exactly that
+  mistake, and the restore-on-dispose is why an exception cannot strand the flag.
+- **Rejected: shortening `DefaultExpiration` for `SH-H007`.** Any non-zero window is a lost update, and a
+  window short enough to be safe would make the cache pointless.
+- **A required parameter, not an overload.** Adding `scope` as the first parameter of `BuildKey` /
+  `GetTablePrefix` breaks every existing call **loudly** (`CS7036`, measured at 31 sites, 0 of them in a
+  consumer). An overload would have left the unscoped key reachable — a second implementation of the
+  thing being fixed.
+
+### Flagged, not fixed
+
+- **⚠ Three key-shape tests failed on purpose and were re-aimed, not deleted.**
+  `BuildKey_HashSegments_Are16HexChars`, `BuildKey_StartsWithSqlPrefix` and
+  `GetTablePrefix_ReturnsCorrectFormat` asserted the old segment layout; their failure *is* the evidence
+  the scope segment landed. The first now also asserts the table stays in clear, and the other two assert
+  through `GetTablePrefix` rather than a literal so key and prefix cannot drift apart again.
+- **`Widget` gained a second mapped column (`Body`)** in the existing test fixture. `SH-H007` is not
+  observable with one column — the update action overwrites it either way — which is part of why the
+  defect went unnoticed. Recorded because it changes a shared fixture.
+- **The new tests live in the existing `CachedStoreBehaviorTests` class deliberately.**
+  `ModelMapRegistry.ApplyToDatabase` mutates global table registration, and two parallel test classes
+  each doing that is the shared-global-state family [[TASK-276]] exists for. Reusing the fixture mutates
+  it once.
+- **⚠ [[TASK-329]] spawned, and it is a P0: the SQL bulk stores never apply `RequireBoundedFilter` at
+  all.** Noticed while reading `AsyncDataBaseBulkStore` for this fix, then **measured** with a throwaway
+  probe rather than filed as a reading:
+  `UpdateAsync(x => !empty.Contains(x.Name), r => r.Name = "OVERWRITTEN")` on on-disk SQLite gave
+  `thrown=NONE | overwritten=3 of 3 | untouched=0` — a silent whole-table rewrite, which is
+  [[TASK-137]]'s empty-`NOT IN` shape on the primary provider. Root cause is a hierarchy assumption:
+  TASK-215 wired that guard into `AbstractBulkStore`/`AbstractAsyncBulkStore`, and the SQL bulk stores
+  do **not** derive from them — they implement `IAsyncBulkStore<T>` directly and carry their own
+  filter-based overloads, which is also why they have their own private `RequireFilter`. Unrelated to
+  caching, so spawned rather than folded in; the probe was deleted.
+- **`CountAsync` is not cached at all**, so none of this applies to it. Stated because a reader comparing
+  the read paths would otherwise wonder.
+
 ## Progress log
 
 - step 2 — picked; **chosen by the user**, and it was already this run's ranked top after TASK-311 closed:
@@ -224,3 +342,33 @@ a guess."* Three confirmed high findings and no code is the honest state.
   defect it closed.
 - step 3 — verified: **all three HOLD**. `SH-H005` confirmed in both halves (`BuildKey` has no db/tenant component; `ResolveTableName` is static off `typeof(T)`), `SH-H007` confirmed against `AbstractAsyncBulkStore.UpdateAsync(filter, Action<T>)`'s verbatim read-then-write loop, `SH-H004` confirmed as code (raw `filter?.ToString()` in both overloads) with its closure-rendering premise **read but NOT measured** — the probe never ran. Two things recorded that the findings do not say: the missing key identity also causes **over**-invalidation (which a fix must not turn into a missed one), and an existing comment calls the `SH-H007` path *"already safe"* about invalidation in a way that reads as covering the stale read.
 - ⚠ **step 4 BLOCKED — the .NET 10 SDK was removed from the machine mid-session** (`dotnet --info` reports "No SDKs were found"; the `sdk/10.0.*` directories are empty and `host/fxr` has no 10.0 resolver, mtime today 07:45). Every project targets `net10.0`. **No fix was written**, deliberately: it could be neither compiled nor tested. Resume at step 4 once the SDK is reinstalled.
+
+### Resumed 2026-09-09 — the SDK blocker cleared and steps 4-8 ran
+
+The machine had a **new** SDK installed (10.0.401, 192 entries) and the `10.0.12` fxr resolver was back:
+it was a mid-flight upgrade that stripped the old 10.0.x SDKs, not an uninstall. `dotnet test` verified
+before resuming (7/7 on the caching suite), then the run picked up at step 4 from the log below.
+
+- step 3 (completed) — ⚠ **and one correction to it.** The premise I had recorded as *read but not
+  measured* is now **measured**: captured `t1` and `t2` render byte-identically as
+  `value(...DisplayClass5_0).tenant`, while inline literals render distinctly. ⚠ **And my step-3 note
+  cited the wrong class for `SH-H007`** — `AsyncDataBaseBulkStore` does **not** derive from
+  `AbstractAsyncBulkStore`; it implements `IAsyncBulkStore<T>` directly and has its own
+  `UpdateAsync(filter, Action<T>)`. The mechanism is identical (a `ReadAsync(filter, …)` feeding a
+  per-item update loop) so the verdict stands, but the citation was wrong and mattered: that class's
+  `RequireFilter` is **private**, which ruled out the fix shape I had planned.
+- step 4 — layer: **local**, all three. `Birko.Data.SQL.Caching`'s own key builder and store.
+- step 5 — fix in `Caching/SqlCacheKeyBuilder.cs` (scope segment + `TryDescribeFilter`) and
+  `Stores/CachedAsyncDataBaseBulkStore.cs` (both reads, invalidation prefix, filter-update read bypass);
+  tests in `Birko.Data.SQL.Caching.Tests/CrossDatabaseAndFilterKeyingTests.cs` (12 new) and 6 added to
+  `CachedStoreBehaviorTests.cs`; 31 existing call sites updated for the new signature, and 3 key-shape
+  pins re-aimed. Suites: Caching 23/23, `Birko.Data.SQL` 686/686, SqLite 348/348 — **1,057 green**.
+- step 6 — **three disjoint mutations, one per finding**: raw unnormalised filter + no opaque check →
+  **4 of 23** red (`Two_tenants_do_not_share_a_cache_key`,
+  `Captured_strings_are_also_distinguished`, `A_set_membership_filter_is_refused_rather_than_keyed`,
+  `A_set_membership_filter_reads_correctly_by_not_being_cached`); drop the scope segment → **4 of 23**
+  (`Two_databases_do_not_share_a_cache_key`, `..._an_invalidation_prefix`,
+  `The_scope_is_hashed_...`, `BuildKey_HashSegments_Are16HexChars`); stop honouring the read bypass →
+  **1 of 23** (`FilterUpdate_DoesNotRevertAConcurrentWritersColumn`).
+- step 7 — respecced `caching`. Requirement **retitled** *"SQL query cache keys are deterministic and table-scoped"* → *"…deterministic, database-scoped and table-scoped"* (the old title asserted the defect's scope), its SHALL rewritten for the `scopeHash` segment plus why it is hashed, and a *"Two databases do not collide"* scenario added. The read-path requirement no longer quotes `filter?.ToString()` and now specifies the `TryDescribeFilter` gate and the lazy scope. **Two new requirements**: *"A filter that cannot be described by value is not cached"* (SH-H004) and *"A read-then-write filter update reads past the cache"* (SH-H007) — the latter had **no** requirement at all, which is part of why the path went unexamined. Also corrected two scenarios that quoted the old key shape verbatim.
+- step 5d — out-of-scope sweep: one bullet described unowned work and now has an id. [[TASK-329]] (**P0**) — the SQL bulk stores never apply `RequireBoundedFilter`; **measured** at 3 of 3 rows silently rewritten by a reduces-to-everything filter on SQLite. Everything else in § Out of scope names an owner or states a limit.

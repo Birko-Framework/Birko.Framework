@@ -2393,6 +2393,58 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### A SQL cache key did not identify its query, in two independent ways — and the obvious fix was measurably insufficient (2026-09-09)
+
+TASK-310 / `SH-H004` + `SH-H005` + `SH-H007`, resumed after a mid-session SDK removal. **1,057 tests
+green**, three disjoint mutations. Eight things worth carrying:
+
+- **A key built from `filter.ToString()` is not a key for the query.** A closure-captured local renders
+  as `value(<>c__DisplayClass…).field` — **measured, byte-identical for every value** — so
+  `x => x.TenantGuid == tenant` produced **one cache key for every tenant** and the first tenant's rows
+  were served to all the others. Inline literals *do* render distinctly, which is why every pre-existing
+  test passed: all of them used literals. **A test suite built on constants cannot see a closure defect.**
+- **⚠ The obvious fix was measured and found insufficient, which changed the design.** The framework
+  already ships `ExpressionNormalizer`, whose funcletization folds a captured local to its value — so
+  reusing it was the one-producer answer and looked complete. Measured first: it fixes **scalars**
+  (`Guid`, `int`, `string` render distinctly) and **not collections** — `List<int>{1,2,3}` and `{9,9,9}`
+  both render `value(System.Collections.Generic.List`1[System.Int32])`. So `ids.Contains(x.Id)`, the
+  ordinary set-membership filter, would still have collided, and a fix stopping at normalisation would
+  have closed the finding while leaving the same class of leak live. Hence **normalise, then check the
+  rendering, then refuse** — and the refusal is the design, not a fallback.
+- **Refusing to cache is the safe direction, and the trade is stated rather than hidden.** A miss costs
+  a database round-trip and is always correct; a shared key costs one caller another caller's rows. So
+  set-membership and object-valued filters are now **not cached at all**. Affordable only because reach
+  was measured at 0 consumer `.cs` files — the same veto that has decided several of these.
+- **The refuse-marker is what the runtime actually emits, not a type whitelist.** A whitelist of "safe"
+  constant types must be complete to be safe and is silently wrong when it is not; `value(` is what
+  `ConstantExpression` renders when a value does not describe itself, so the check is total by
+  construction.
+- **⚠ A key and its invalidation prefix must be scoped in the SAME change, and the asymmetry is the
+  trap.** `SH-H005`'s missing database identity caused a leak on *reads* and **over**-invalidation on
+  *writes* (one store's write removed the other database's entries). Over-invalidation is
+  correctness-preserving — a spurious miss — so scoping only the prefix would have turned a harmless
+  over-reach into entries **nothing ever removes**, which is worse than the leak. Both halves are
+  asserted.
+- **⚠ A hierarchy assumption in an earlier fix left the primary provider uncovered — spawned as a P0.**
+  Reading `AsyncDataBaseBulkStore` for `SH-H007` showed it does **not** derive from
+  `AbstractAsyncBulkStore`: it implements `IAsyncBulkStore<T>` directly and carries its own filter-based
+  overloads (hence its own private `RequireFilter`). So [[TASK-215]]'s `RequireBoundedFilter` — wired
+  into the abstract bulk stores — is **never applied in `Birko.Data.SQL` at all**. Measured with a
+  throwaway probe rather than filed as a reading: `Update(x => !empty.Contains(x.Name), …)` gave
+  `thrown=NONE | overwritten=3 of 3` on SQLite, a silent whole-table rewrite. [[TASK-329]].
+  **When a fix is wired "into the base", check which bases the concrete types actually derive from.**
+- **⚠ The planned fix for `SH-H007` was impossible, and the reason improved it.** The plan was to
+  override the filter-update loop and read uncached — but that class's `RequireFilter` is **private**, so
+  the guard could not be called, and copying the loop would have duplicated a rule with one producer.
+  Instead the override delegates to the base and diverts only the *read*, through an `AsyncLocal`
+  instance scope with save-and-restore (TASK-270's mechanism, chosen because a singleton store serving
+  concurrent requests would race on a plain flag, and an exception must not strand it).
+- **⚠ And the correctness pass found a defect in my own fix.** Normalization compiles subtrees, so I had
+  put a possible throw on every cached read path where `filter?.ToString()` could not fail. Now
+  fail-safe: any failure means "cannot be described", so the read proceeds uncached. Labelled
+  **defensive, not witnessed** — `TryFold` already swallows the common case, so the catch is about a read
+  never failing for a *caching* reason rather than about an observed throw.
+
 ### Two tenant-isolation findings, two different KINDS of fix — and the first attempt at the code one was wrong (2026-09-09)
 
 TASK-311 / `SH-H049` + `SH-H053`, the second `/fix-next` pick. Both confirmed. Both end in cross-tenant

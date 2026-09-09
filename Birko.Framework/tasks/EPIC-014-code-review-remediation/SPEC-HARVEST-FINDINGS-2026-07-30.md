@@ -99,11 +99,49 @@ ReadCore passes orderBy?.ToDictionary() to Connector.Select as string keys; Crea
 
 filter?.ToString() is taken on the RAW expression (no funcletization/normalization at this point). A captured local renders as `value(<>c__DisplayClass0_0).tenantGuid`, identical for every captured value, so `x => x.TenantGuid == tenant` produces one cache key for ALL tenants. The first tenant's rows are then served to every other tenant from both read overloads. Only inline literals render distinctly.
 
+**Verdict: CONFIRMED and MEASURED (2026-09-09, [[TASK-310]]) — FIXED**
+
+Measured rather than read: `x => x.TenantGuid == tenant` built from two different `Guid`s renders
+byte-identically as `value(...DisplayClass5_0).tenant`, while inline literals render distinctly. Both
+read overloads took the raw string, so the leak was on every cached read path.
+
+⚠ **Normalisation alone would NOT have been enough, and that inverted the obvious fix.** Reusing
+`ExpressionNormalizer` (the framework's existing funcletizer) makes captured **scalars** distinct — but
+measured, `List<int>{1,2,3}` and `{9,9,9}` both render
+`value(System.Collections.Generic.List`1[System.Int32])`, so a set-membership filter such as
+`ids.Contains(x.Id)` would still have collided across different id sets. A fix that stopped at
+normalisation would have closed this finding while leaving the same class of leak live.
+
+Fixed in two steps at one producer, `SqlCacheKeyBuilder.TryDescribeFilter`: funcletize, then **check**
+the rendering, and **refuse to cache at all** when a `value(` marker survives. A refusal costs a cache
+miss, which is always correct; a shared key costs one caller another caller's rows. Stated trade:
+**set-membership and object-valued filters are no longer cached.**
+
 #### SH-H005 — SQL cache keys carry no database, connection or tenant identity
 
 `../Birko.Data.SQL.Caching/Caching/SqlCacheKeyBuilder.cs:24`  ·  _restates a first-pass finding_
 
 BuildKey keys on table name + filter/order/limit/offset only, and ResolveTableName() (CachedAsyncDataBaseBulkStore.cs:186) derives the table purely from typeof(T)'s mapping, deliberately before SetSettings. Two stores pointed at different databases/schemas but sharing one ICache compute identical keys, so each serves the other's rows.
+
+**Verdict: CONFIRMED in both halves (2026-09-09, [[TASK-310]]) — FIXED**
+
+Both parts hold exactly: the key was `sql:{table}:{filterHash}:{orderHash}:{limit}:{offset}` with no
+database component, and `ResolveTableName()` is `static` off `typeof(T)`'s mapping with a
+`typeof(T).Name` fallback.
+
+Fixed by a `scope` segment carrying `Connector.Settings.GetId()`, hashed (that value is itself
+colon-delimited, and a cache key is often visible in a log or a Redis keyspace where a host and service
+account do not belong) with the table name left in clear so a key stays recognisable.
+
+⚠ **The half the finding does not mention, and the trap in fixing it.** The same missing identity made
+invalidation *over*-reach: `RemoveByPrefixAsync("sql:{table}:")` removed the **other** database's
+entries too. That direction is correctness-preserving — a spurious miss — so key and prefix **must be
+scoped in the same change**: scoping only the prefix would leave entries nothing ever removes, which is
+worse than the leak. Both halves are asserted.
+
+⚠ **And it forced the key out of the constructor.** `ResolveTableName` deliberately runs before
+`SetSettings` (CR-L177) because a table name depends only on `T`'s mapping — but the database identity
+does not exist until a connector does, so the scope is read lazily per call.
 
 #### SH-H006 — RedisCache.ClearAsync issues FLUSHDB when no KeyPrefix is configured
 
@@ -118,6 +156,22 @@ RedisSettings.KeyPrefix defaults to null, so the default ClearAsync path is serv
 `../Birko.Data.SQL.Caching/Stores/CachedAsyncDataBaseBulkStore.cs:96`
 
 The base UpdateAsync(filter, Action<T>) does `ReadAsync(filter...)` then `UpdateAsync(item)` per row. That read is now served from the cache, so the loop mutates entities as they were up to DefaultExpiration (5 min) ago and UpdateCoreAsync issues a full-row UPDATE of every mapped column — silently overwriting any column another writer changed in the meantime. Lost updates with no error. Aggravated by the fact that the mutation is applied to the cached instance itself (see the shared-reference finding).
+
+**Verdict: CONFIRMED (2026-09-09, [[TASK-310]]) — FIXED**
+
+⚠ **One correction: the implementation is `AsyncDataBaseBulkStore`'s, not `AbstractAsyncBulkStore`'s.**
+The SQL bulk store does **not** derive from the abstract bulk store — it implements `IAsyncBulkStore<T>`
+directly and carries its own `UpdateAsync(filter, Action<T>)`. The mechanism is identical (a
+`ReadAsync(filter, …)` feeding a per-item update loop, with `UpdateCoreAsync` writing every mapped
+column), so the finding stands, but the distinction mattered: that class's `RequireFilter` is **private**,
+which ruled out re-implementing the loop.
+
+⚠ **An existing comment in the file said this path was "already safe"** — true of *invalidation*, silent
+about the *read*, and exactly the phrase that stopped anyone looking. Corrected with the fix.
+
+Fixed by overriding the overload to delegate to the base — preserving its guard and its loop — inside a
+flow-scoped `AsyncLocal` scope that both `ReadCoreAsync` overloads honour by going straight to the base
+store. Rejected: shortening `DefaultExpiration`, since any non-zero window is a lost update.
 
 ### area: data-sync
 

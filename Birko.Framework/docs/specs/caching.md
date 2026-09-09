@@ -895,47 +895,104 @@ The system SHALL reject null `l1` or `l2` at construction with `ArgumentNullExce
 - **When** `Dispose()` is called twice
 - **Then** the second call returns at the `_disposed` guard without re-disposing semaphores — a plain, non-`volatile` `bool`, so this holds for sequential calls only
 
-### Requirement: SQL query cache keys are deterministic and table-scoped
+### Requirement: SQL query cache keys are deterministic, database-scoped and table-scoped
 
 The system SHALL build SQL query cache keys as
-`"sql:{tableName}:{filterHash}:{orderHash}:{limit}:{offset}"`, where each hash is the first 8 bytes of
-the SHA-256 of the corresponding string rendered as 16 lowercase hex characters, and where a null or
-empty filter string, order string, limit or offset is rendered as the literal `"_"`. The invalidation
-prefix for a table SHALL be `"sql:{tableName}:"`.
+`"sql:{scopeHash}:{tableName}:{filterHash}:{orderHash}:{limit}:{offset}"`, where each hash is the first
+8 bytes of the SHA-256 of the corresponding string rendered as 16 lowercase hex characters, and where a
+null or empty filter string, order string, limit or offset is rendered as the literal `"_"`. The
+invalidation prefix for a table SHALL be `"sql:{scopeHash}:{tableName}:"`.
+
+The `scope` SHALL be the identity of the database the query runs against — the store supplies
+`Connector.Settings.GetId()` — and SHALL be hashed rather than inlined, both because `GetId()` is itself
+colon-delimited (`Location:Name:UserName:Port`) and would make the key's segments ambiguous, and because
+a cache key is often visible in a log or a Redis keyspace where a host and user name do not belong. The
+table name SHALL remain in clear, so a key is recognisable by eye.
+
+SH-H005: keys were previously table-relative only, so two stores pointed at different databases but
+sharing one `ICache` computed byte-identical keys and each served the other's rows. The scope narrows the
+invalidation prefix as well as the lookup, and the two SHALL move together: a scoped key under an
+unscoped prefix merely over-invalidates, but an unscoped key under a scoped prefix would leave entries
+that nothing ever removes.
 
 #### Scenario: All components absent
 
-- **Given** `BuildKey("User", null, null, null, null)`
+- **Given** `BuildKey("host:db", "User", null, null, null, null)`
 - **When** the key is built
-- **Then** it is exactly `"sql:User:_:_:_:_"`
+- **Then** it is `"sql:{scopeHash}:User:_:_:_:_"`, where `scopeHash` is 16 lowercase hex characters
 
 #### Scenario: Same inputs, same key
 
-- **Given** two calls with identical table, filter string, order string, limit and offset
+- **Given** two calls with identical scope, table, filter string, order string, limit and offset
 - **When** both keys are built
 - **Then** they are byte-identical, because SHA-256 is deterministic and no salt or timestamp is involved
 
-#### Scenario: Prefix covers every key for a table
+#### Scenario: Two databases do not collide
 
-- **Given** any key produced by `BuildKey("User", ...)`
-- **When** it is tested against `GetTablePrefix("User")`
-- **Then** it starts with `"sql:User:"`, so a single `RemoveByPrefixAsync` invalidates all of that table's cached queries
+- **Given** two stores over one `ICache`, one on `"hostA:appdb"` and one on `"hostB:appdb"`, both querying table `"User"`
+- **When** each builds a key for the same query
+- **Then** the keys differ, and so do their invalidation prefixes
+
+#### Scenario: Prefix covers every key for a table in that database
+
+- **Given** any key produced by `BuildKey(scope, "User", ...)`
+- **When** it is tested against `GetTablePrefix(scope, "User")`
+- **Then** it starts with that prefix, so a single `RemoveByPrefixAsync` invalidates all of that table's cached queries **in that database only**
 
 #### Scenario: Table names sharing a prefix are not isolated
 
 - **Given** tables `"User"` and `"UserRole"`
-- **When** `GetTablePrefix("User")` is used for invalidation
-- **Then** `"sql:UserRole:..."` keys do **not** match, because the prefix ends with the `:` separator
+- **When** `GetTablePrefix(scope, "User")` is used for invalidation
+- **Then** `"sql:{scopeHash}:UserRole:..."` keys do **not** match, because the prefix ends with the `:` separator
+
+### Requirement: A filter that cannot be described by value is not cached
+
+The system SHALL, in `SqlCacheKeyBuilder.TryDescribeFilter`, produce the filter description a key is
+built from, by funcletizing the expression through `Birko.Data.Expressions.ExpressionNormalizer` and then
+**checking** the rendering: a description containing the `"value("` marker SHALL be rejected, and a
+rejected filter SHALL cause the caller to bypass the cache entirely — neither reading from it nor writing
+to it. A null filter SHALL be accepted, describing the query "everything".
+
+SH-H004: the store previously keyed on `filter.ToString()` of the raw expression. A closure-captured
+local renders as `value(<>c__DisplayClass…).field` — the same text for every captured value — so
+`x => x.TenantGuid == tenant` produced one key for all tenants and the first tenant's rows were served
+to every other. Funcletization alone is insufficient: a collection constant renders as its type name, so
+a set-membership filter would still collide across different sets. Refusing costs a cache miss, which is
+always correct; sharing a key costs one caller another caller's rows.
+
+#### Scenario: Two captured values produce different keys
+
+- **Given** `x => x.TenantGuid == tenant` built twice from different captured `Guid`s
+- **When** each is described and keyed
+- **Then** the descriptions differ, because funcletization folded the captured local to its value, and the keys differ
+
+#### Scenario: A set-membership filter is refused
+
+- **Given** `x => ids.Contains(x.N)` for a captured `List<int>`
+- **When** it is described
+- **Then** the attempt fails and no description is produced, because the folded collection constant renders as its type name and would not distinguish one set from another
+
+#### Scenario: A refused filter reads correctly
+
+- **Given** a cached store and a set-membership filter
+- **When** the same read is issued twice with an out-of-band deletion in between
+- **Then** the second read observes the deletion, because such a query is never cached
 
 ### Requirement: Cached SQL store memoises both read paths
 
 The system SHALL override both `ReadCoreAsync` overloads of `AsyncDataBaseBulkStore<DB, T>` in
-`CachedAsyncDataBaseBulkStore<DB, T>`: the single-result overload keys on
-`BuildKey(table, filter?.ToString(), null, 1, null)` and caches a `T`, and the collection overload keys
-on `BuildKey(table, filter?.ToString(), orderString, limit, offset)` — where `orderString` is
+`CachedAsyncDataBaseBulkStore<DB, T>`. Both SHALL obtain the filter description from
+`TryDescribeFilter` and, when it reports the filter cannot be described, SHALL delegate to the base
+overload without touching the cache. Otherwise the single-result overload keys on
+`BuildKey(scope, table, description, null, 1, null)` and caches a `T`, and the collection overload keys
+on `BuildKey(scope, table, description, orderString, limit, offset)` — where `orderString` is
 `orderBy?.ToDictionary()` joined as `"{key}:{value}"` pairs separated by commas, or null — materialises
 the base result with `ToList()` and caches a `List<T>`. Both write with
 `CacheEntryOptions.Absolute(SqlCacheOptions.DefaultExpiration)` (5 minutes by default).
+
+The `scope` SHALL be read lazily from `Connector.Settings.GetId()` rather than captured in the
+constructor: the table name depends only on `T`'s mapping and is resolved before `SetSettings`
+(CR-L177), but the database identity does not exist until `SetSettings` has produced a connector.
 
 #### Scenario: Second identical read is served from cache
 
@@ -959,7 +1016,7 @@ the base result with `ToList()` and caches a `List<T>`. Both write with
 
 - **Given** `ReadCoreAsync(filter)` (single) and `ReadCoreAsync(filter, orderBy: null, limit: 1, offset: null)` (collection) for the same filter
 - **When** both keys are built
-- **Then** they are the identical string `"sql:{table}:{filterHash}:_:1:_"`, so the two paths overwrite one another's entries even though one stores a `T` and the other a `List<T>`
+- **Then** they are the identical string `"sql:{scopeHash}:{table}:{filterHash}:_:1:_"`, so the two paths overwrite one another's entries even though one stores a `T` and the other a `List<T>`
 
 ### Requirement: Cached SQL store caches negative single-result reads
 
@@ -978,9 +1035,36 @@ The system SHALL store the result of the single-result `ReadCoreAsync` even when
 - **When** the single-result read is awaited
 - **Then** the base read returns null, `SetAsync` reaches `CacheSerializer.Serialize(null)`, and an `ArgumentNullException` propagates out of `ReadCoreAsync`
 
+### Requirement: A read-then-write filter update reads past the cache
+
+The system SHALL override `UpdateAsync(Expression<Func<T, bool>>, Action<T>)` in
+`CachedAsyncDataBaseBulkStore<DB, T>` so that the read inside it does not come from the cache. The
+override SHALL delegate to the base implementation — preserving its filter guard and its per-item update
+loop — inside a flow-scoped scope that both `ReadCoreAsync` overloads honour by delegating straight to
+the base store. The scope SHALL be an `AsyncLocal` instance field restored to its previous value on
+dispose, so it is per call flow and per store and cannot be left set by an exception.
+
+SH-H007: `AsyncDataBaseBulkStore`'s implementation is `ReadAsync(filter, …)` followed by a per-item
+`UpdateAsync(item)`, and `UpdateCoreAsync` writes **every mapped column**. With that read served from
+the cache, the loop mutated a snapshot up to `DefaultExpiration` old and wrote it back whole, silently
+reverting any column another writer had changed. Shortening the expiration does not fix it: any non-zero
+window is a lost update.
+
+#### Scenario: A concurrent writer's column survives a filter update
+
+- **Given** a cached store, a row cached by a prior read, and another writer that has since changed a column the update action does not touch
+- **When** `UpdateAsync(filter, action)` is awaited
+- **Then** the other writer's value is still in the database, because the loop read the current row rather than the cached snapshot
+
+#### Scenario: Caching resumes after the update flow
+
+- **Given** a filter update has just completed
+- **When** an ordinary read is issued and then repeated with an out-of-band deletion in between
+- **Then** the second read is served from the cache, because the bypass was scoped to the update flow and restored on exit
+
 ### Requirement: Cached SQL store invalidates the whole table on every write
 
-The system SHALL invalidate by calling `_cache.RemoveByPrefixAsync(SqlCacheKeyBuilder.GetTablePrefix(table))`
+The system SHALL invalidate by calling `_cache.RemoveByPrefixAsync(SqlCacheKeyBuilder.GetTablePrefix(scope, table))`
 after the base call in each of: `CreateCoreAsync(T)`, `UpdateCoreAsync(T)`, `DeleteCoreAsync(T)`,
 `CreateCoreAsync(IEnumerable<T>)`, `UpdateCoreAsync(IEnumerable<T>)`, `DeleteCoreAsync(IEnumerable<T>)`,
 and — because they bypass the `*Core` template and issue SQL straight through the connector — the public
