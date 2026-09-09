@@ -133,7 +133,11 @@ public class ResolvedTenantPublicationTests
 
     private static async Task RunAsync(TenantMiddlewareOptions options, DefaultHttpContext context)
     {
-        var middleware = new TenantMiddleware(_ => Task.CompletedTask, new TenantContext(), options);
-        await middleware.InvokeAsync(context);
+        // SH-H049: InvokeAsync now takes the tenant context per request, because ASP.NET Core injects that
+        // parameter from the REQUEST scope — the only way a singleton middleware can observe a scoped
+        // ITenantContext. Here the constructor-supplied context is left null so this exercises the
+        // injected path the real pipeline uses; passing one to the constructor still works and wins.
+        var middleware = new TenantMiddleware(_ => Task.CompletedTask, options: options);
+        await middleware.InvokeAsync(context, new TenantContext());
     }
 }
