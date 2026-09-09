@@ -199,15 +199,33 @@ namespace Birko.Data.ElasticSearch
             }
         }
 
+        /// <summary>
+        /// Translates <c>&amp;&amp;</c> / <c>||</c> into a <c>bool</c> query.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>SH-H027 / TASK-308 — BOTH operands must translate, or neither does.</b> This used to
+        /// add only the non-null translations and return null only when *both* were null, so a single
+        /// untranslatable operand left a one-clause <c>bool</c> query and the other predicate simply
+        /// vanished. Measured with <c>x.Text.Trim() == "a"</c> (pinned untranslatable by
+        /// <c>FilterQueryGuardTests</c>): <c>untranslatable &amp;&amp; x.Count == 5</c> rendered
+        /// <c>Bool(must=1)</c> and <c>untranslatable || x.Count == 5</c> rendered <c>Bool(should=1)</c>.
+        /// The top-level guard (TASK-268) never fired on either, because the result is non-null.</para>
+        /// <para><b>The two directions are wrong in opposite ways, which is why neither is tolerable.</b>
+        /// Dropping a <b>conjunct widens</b> the match, so <c>_delete_by_query</c> destroys documents the
+        /// caller excluded; dropping a <b>disjunct narrows</b> it, so a read silently misses rows. Returning
+        /// null hands both cases to <see cref="ParseFilterQuery{T}"/>, which throws — the answer TASK-268
+        /// already settled for a filter that cannot be expressed.</para>
+        /// <para>Null here means <i>untranslatable</i> and nothing else: a predicate that legitimately
+        /// matches nothing is a <see cref="MatchNoneQuery"/> (TASK-266), which is non-null and composes
+        /// normally. So refusing on null cannot break an empty-collection filter.</para>
+        /// </remarks>
         private static QueryBase? CombineBool(BinaryExpression binary, bool isOr, Type? exprType, string? fieldPrefix)
         {
             var leftQuery = ParsePredicate(binary.Left, exprType, fieldPrefix);
             var rightQuery = ParsePredicate(binary.Right, exprType, fieldPrefix);
-            var queries = new List<QueryContainer>(2);
-            if (leftQuery != null) queries.Add(new(leftQuery));
-            if (rightQuery != null) queries.Add(new(rightQuery));
-            if (queries.Count == 0)
+            if (leftQuery == null || rightQuery == null)
                 return null;
+            var queries = new List<QueryContainer>(2) { new(leftQuery), new(rightQuery) };
             return isOr ? new BoolQuery { Should = queries } : new BoolQuery { Must = queries };
         }
 
@@ -243,14 +261,20 @@ namespace Birko.Data.ElasticSearch
             if (field == null || value == null)
                 return null;
 
-            double? doubleValue = TryConvertToDouble(value);
+            // SH-H025 / TASK-308: an ordering comparison is routed by the value's TYPE, because a
+            // NumericRangeQuery whose bound could not be produced is an UNBOUNDED range — it matches every
+            // document that has the field. Measured before this: `x.Date > cutoff` rendered
+            // NumericRangeQuery(gt=NULL, gte=NULL, lt=NULL, lte=NULL) and survived both ParseFilterQuery
+            // and ParseRequiredFilterQuery untouched, so DeleteByQuery targeted the whole index on the most
+            // ordinary shape a time-series filter has.
+            if (binary.NodeType is ExpressionType.GreaterThan or ExpressionType.GreaterThanOrEqual
+                or ExpressionType.LessThan or ExpressionType.LessThanOrEqual)
+            {
+                return BuildRangeComparison(binary.NodeType, field, value);
+            }
 
             return binary.NodeType switch
             {
-                ExpressionType.GreaterThan => new NumericRangeQuery { Field = field, GreaterThan = doubleValue },
-                ExpressionType.GreaterThanOrEqual => new NumericRangeQuery { Field = field, GreaterThanOrEqualTo = doubleValue },
-                ExpressionType.LessThan => new NumericRangeQuery { Field = field, LessThan = doubleValue },
-                ExpressionType.LessThanOrEqual => new NumericRangeQuery { Field = field, LessThanOrEqualTo = doubleValue },
                 ExpressionType.Equal => new TermQuery { Field = field, Value = value },
                 ExpressionType.NotEqual => new BoolQuery
                 {
@@ -258,6 +282,74 @@ namespace Birko.Data.ElasticSearch
                 },
                 _ => null
             };
+        }
+
+        /// <summary>
+        /// Builds the range query for <c>&gt;</c> / <c>&gt;=</c> / <c>&lt;</c> / <c>&lt;=</c>, choosing the
+        /// query type from the value rather than forcing everything through <c>double</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Refusing outright was the wrong fix, and § TASK-281 is why.</b> The minimal reading of
+        /// SH-H025 is "never emit a null bound", which would make every <c>DateTime</c> comparison
+        /// untranslatable — and a date range is the single most common filter this store serves. NEST offers
+        /// the mechanisms (<see cref="DateRangeQuery"/>, <see cref="TermRangeQuery"/>), so the defect is
+        /// removed *and* the capability is gained instead of lost.</para>
+        /// <para>A type this cannot express returns <c>null</c>, which
+        /// <see cref="ParseFilterQuery{T}"/> turns into a throw. That is the honest answer for a
+        /// <c>Guid</c> or a serialised object: an ordering over it has no meaning ElasticSearch could
+        /// implement, and the previous behaviour — an unconstrained range — was a wrong answer rather than
+        /// a limitation.</para>
+        /// <para><b>A numeric string keeps working, deliberately.</b> <c>Convert.ToDouble("42")</c>
+        /// succeeds, so a string field holding numbers still gets a numeric range as it always did; only a
+        /// value that <i>cannot</i> convert now takes the term-range path. Both are asserted, because the
+        /// two branches differ in the query type they emit and a later "simplification" collapsing them
+        /// would change one of them silently.</para>
+        /// </remarks>
+        private static QueryBase? BuildRangeComparison(ExpressionType op, Field field, object value)
+        {
+            // A DateTimeOffset is the same kind of value as a DateTime — an instant — and the framework
+            // already normalises one to UTC when it stores it (TASK-263's [UtcField] contract). Included
+            // rather than refused because it has an obvious correct answer, and refusing it would have
+            // turned a shape that "worked" (wrongly, as an unbounded range) into a hard error for no gain.
+            if (value is DateTimeOffset dto)
+            {
+                value = dto.UtcDateTime;
+            }
+
+            if (value is DateTime dt)
+            {
+                return op switch
+                {
+                    ExpressionType.GreaterThan => new DateRangeQuery { Field = field, GreaterThan = dt },
+                    ExpressionType.GreaterThanOrEqual => new DateRangeQuery { Field = field, GreaterThanOrEqualTo = dt },
+                    ExpressionType.LessThan => new DateRangeQuery { Field = field, LessThan = dt },
+                    _ => new DateRangeQuery { Field = field, LessThanOrEqualTo = dt },
+                };
+            }
+
+            var doubleValue = TryConvertToDouble(value);
+            if (doubleValue.HasValue)
+            {
+                return op switch
+                {
+                    ExpressionType.GreaterThan => new NumericRangeQuery { Field = field, GreaterThan = doubleValue },
+                    ExpressionType.GreaterThanOrEqual => new NumericRangeQuery { Field = field, GreaterThanOrEqualTo = doubleValue },
+                    ExpressionType.LessThan => new NumericRangeQuery { Field = field, LessThan = doubleValue },
+                    _ => new NumericRangeQuery { Field = field, LessThanOrEqualTo = doubleValue },
+                };
+            }
+
+            // Not expressible as any range ElasticSearch offers — refuse rather than emit an unbounded one.
+            // Reached by TimeSpan and by a custom IComparable: `Convert.ToDouble` throws for both and there
+            // is no range query whose bound they could fill. Previously each produced an unconstrained
+            // NumericRangeQuery, i.e. a wrong answer where this is a reported limitation.
+            //
+            // ⚠ No TermRangeQuery arm, deliberately: a *string* value cannot reach an ordering comparison
+            // from C# at all — `string` has no `>` operator, so `ParseComparison` never sees one. An arm for
+            // it would be unreachable code advertising a capability nobody can call (§ TASK-263: record a
+            // gap that is a decision, so it does not read as an oversight). If a caller ever needs a
+            // lexical range it has to arrive through a new API, not through this switch.
+            return null;
         }
 
         private static double? TryConvertToDouble(object value)
@@ -518,6 +610,23 @@ namespace Birko.Data.ElasticSearch
             };
         }
 
+        /// <summary>
+        /// Escapes the three characters a NEST <see cref="WildcardQuery"/> value treats as syntax.
+        /// </summary>
+        /// <remarks>
+        /// <b>TASK-308.</b> One producer for the two sinks that build a wildcard pattern from caller text
+        /// (<c>Contains</c>, <c>EndsWith</c>). The list is complete rather than defensive: a wildcard value
+        /// is not parsed as a query expression, so <c>*</c>, <c>?</c> and the escape character itself are
+        /// the whole grammar — which is exactly why SH-H028's fix moves <c>Contains</c> onto this query type
+        /// instead of escaping <c>query_string</c>'s far larger metacharacter set. <c>StartsWith</c> needs
+        /// nothing: <see cref="PrefixQuery"/> takes a literal prefix and has no pattern syntax at all.
+        /// </remarks>
+        internal static string EscapeWildcardValue(string value)
+            => value
+                .Replace("\\", "\\\\")
+                .Replace("*", "\\*")
+                .Replace("?", "\\?");
+
         private static QueryBase? ParseStartsWith(MethodCallExpression call, Type? exprType, string? fieldPrefix)
         {
             var swField = ParseExpression(call.Object, exprType, fieldPrefix) as ITermQuery;
@@ -538,7 +647,11 @@ namespace Birko.Data.ElasticSearch
                 return null;
 
             // "ends with x" has no dedicated ES query; a leading-wildcard match is the equivalent of SQL LIKE '%x'.
-            return new WildcardQuery { Field = ewField.Field, Value = "*" + ewVal.Value };
+            // TASK-308: escaped on the same terms as Contains — § Conventions' "guard the whole verb family
+            // or none of it". A `*` inside the caller's value is a metacharacter here, so an unescaped
+            // `EndsWith("a*b")` matched more than it was asked for; narrower than SH-H028 (wildcards only,
+            // not field access) and the same one-line containment.
+            return new WildcardQuery { Field = ewField.Field, Value = "*" + EscapeWildcardValue((string)ewVal.Value) };
         }
 
         private static QueryBase? ParseContains(MethodCallExpression call, Type? exprType, string? fieldPrefix)
@@ -552,7 +665,22 @@ namespace Birko.Data.ElasticSearch
                 if (cField?.Field == null || cVal?.Value == null)
                     return null;
 
-                return new QueryStringQuery { DefaultField = cField.Field, Query = (string)cVal.Value };
+                // SH-H028 / TASK-308: this used to be
+                // `new QueryStringQuery { DefaultField = ..., Query = (string)cVal.Value }`, i.e. the
+                // caller's search term interpolated into Lucene's QUERY GRAMMAR. Measured, with the field
+                // resolving to `text.keyword`: `secretField:*` rendered `query=<<secretField:*>>` and
+                // `* OR Count:5` rendered verbatim too, so a search box could read fields the predicate
+                // never mentioned; `unbalanced(` became a parse failure rather than a no-match.
+                //
+                // A WildcardQuery is the containment, not an escape of the old one: its value has no
+                // grammar beyond `*` and `?`, so escaping those three characters is TOTAL rather than a
+                // blacklist. It is also what Contains was documented to mean — a substring match, mirroring
+                // SQL LIKE '%x%' — which query_string over a keyword field never did.
+                return new WildcardQuery
+                {
+                    Field = cField.Field,
+                    Value = "*" + EscapeWildcardValue((string)cVal.Value) + "*",
+                };
             }
 
             // Collection.Contains(...) — either constCollection.Contains(x.Member) (the IN pattern) or
