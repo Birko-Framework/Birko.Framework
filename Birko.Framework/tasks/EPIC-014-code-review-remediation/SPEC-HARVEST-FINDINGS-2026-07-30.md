@@ -265,11 +265,42 @@ All 12 data-access hooks (16-28) carry no tenant parameter and TagServiceBase ne
 
 `../Birko.Data.SQL/SQL/DataBase.cs:916`
 
+**Verdict: CONFIRMED-NARROWER** (TASK-308, measured 2026-09-09 on on-disk SQLite, 3 rows, amounts 10/20/30).
+The mechanism holds exactly as described — `DataBase.cs:989` (`IsConstantBoolCondition`'s
+`if (condition.Values == null) { value = true; }`) reads the state left by an operand the parser never
+handled. Rendered and counted:
+`x => (x.Payload is string) || x.Amount == 10` → **`<<no WHERE>>`**, READ returns **3 of 3 rows [10,20,30]**;
+the `&&` twin renders `WHERE Probe308Rows.Amount = @p` — the `is string` conjunct **silently gone** — and
+returns 1 row, i.e. rows that were never tested against it.
+**Narrower than filed on the destructive half:** `Delete(filter)` does **not** delete the whole table —
+measured `THREW WholeTableWriteException, remaining=3 of 3`, because SH-H002's `AddRequiredWhere` refuses a
+destructive statement that renders no `WHERE` and TASK-137 made the reduction visible to it. So what
+survives is the **read**-path wrong answer this finding's own siblings (TASK-109) left open.
+⚠ The `Values == null → true` branch is **not** deletable: a nested operand that genuinely reduces to
+all-rows reaches it legitimately — measured, `(x.A == 1 || true) && x.B == 2` leaves exactly that state and
+`true` is the correct answer there. The two cases have to be *distinguished*, not merged, which is why the
+fix is a refusal at the node the parser cannot claim rather than an edit to this predicate.
+Shares one root cause with `SH-H026` and is fixed with it.
+
 IsConstantBoolCondition treats `Values == null` (comment: "returned Array.Empty (constant true)") as constant true, but that is also the state left by an operand the parser cannot handle at all — a TypeBinaryExpression (`x.Payload is string`), an InvocationExpression, or a nested bool member (`x.Sub.Flag`, which sets Type=IsNull and no Name). Fed from lines 430/436, `x => (x.Payload is string) || x.Status == 1` then hits `isOR && leftVal` (448) and returns Array.Empty, so AddWhere emits no WHERE: Delete(filter) deletes the whole table. With `&&` the clause is silently dropped instead.
 
 #### SH-H022 — ReturnSingleSubCondition overwrites the parent's IsNot, so `!(a && trueConst)` renders as `a` — the opposite rows
 
 `../Birko.Data.SQL/SQL/DataBase.cs:948`
+
+**Verdict: CONFIRMED** (TASK-308, measured 2026-09-09). The worst of this area's seven, because it is the
+only one whose destructive path is **not** covered by SH-H002.
+`ReturnSingleSubCondition` (`DataBase.cs:1030`) assigns `parent.IsNot = surviving.IsNot`, and the `Not`
+branch (`:386`) has already toggled `IsNot` on the object it passes down as `parent` — so the negation is
+overwritten rather than combined. Rendered:
+`x => !(x.Amount == 10 && trueFlag)` → **`WHERE Probe308Rows.Amount = @p`** against the control
+`x => !(x.Amount == 10)` → `WHERE NOT (Probe308Rows.Amount = @p)`.
+Counted: the READ returns **1 row [10]** where 2 rows [20,30] were asked for — the exact complement. And
+`DeleteAsync(x => !(x.Amount == 10 && trueFlag))` **threw nothing** and left `[20,30]`, i.e. it destroyed
+the complement of the intended rows. The clause is non-empty, so `AddRequiredWhere` has nothing to refuse.
+⚠ The file already knew this shape for the sibling flag: `DataBase.cs:558-562` explains that
+`ReturnSingleSubCondition` would overwrite a nested `IsOr` and nests the `.Date` range to avoid it. The
+`IsNot` half of the same defect went unnoticed beside that comment.
 
 The Not branch (360) toggles IsNot on the condition it passes down as `parent`. When the AND/OR branch then collapses a constant operand it calls ReturnSingleSubCondition(parent, surviving, …), which assigns `parent.IsNot = surviving.IsNot` — false for a plain comparison — wiping the negation. `x => !(x.A == 1 && flag)` with a closure `flag == true` (TryGetLiteralBool evaluates closure bools) renders `A = @p` instead of `NOT (A = @p)`. Reads return the complement, and Delete(filter)/Update(filter,…) act on the complement of the intended rows.
 
@@ -285,11 +316,39 @@ ConvertLeaf does `new Condition(rule.Field, values, …)` and all five strategie
 
 `../Birko.Data.SQL/SQL/DataBase.cs:239`
 
+**Verdict: CONFIRMED** (TASK-308, measured 2026-09-09). `ParseExpression`'s method-call `else`
+(`DataBase.cs:239`) binds `EvaluateExpression(callExpression)` as `@Const{n}`, and `EvaluateExpression`'s
+`MethodCallExpression` arm (`:1434`) evaluates each argument and calls `Method.Invoke` with **no
+`ContainsParameter` guard** — its guard sits only on the compiled-lambda fallback (`:1462`), which the
+method-call arm returns before reaching. A `ParameterExpression` argument evaluates to `null`.
+Measured end to end against SQLite through the connector's expression-valued SET overload:
+`SET Name = string.Concat(r.Name, "-", r.Name)` on the `Amount == 10` row **stored `"-"`** —
+`Concat(null, "-", null)` — with no exception and no log entry.
+**Reach, measured:** the two `Update<T, P>(…, IDictionary<Expression, Expression>, …)` overloads on
+`AbstractConnector_Update` / `AbstractAsyncConnector_Update` are the only callers of that `ParseExpression`
+overload, and **no store reaches them** — `PropertyUpdate<T>.Set` takes a *value*, not an expression. So
+this is public connector surface a consumer must call directly. Still a P0-class silent wrong write; noted
+so the fix is priced honestly.
+
 ParseExpression's method-call `else` branch does `EvaluateExpression(callExpression)` and binds the result as `@Const{n}`. The normalizer already folded every parameter-FREE call, so only parameter-bound calls arrive here. EvaluateExpression (1232-1239) has no ContainsParameter guard: it evaluates each argument (a parameter yields null) and calls `Method.Invoke`. For a static method with reference parameters — `string.Concat(x.First, " ", x.Last)` — the invoke succeeds and returns " ", which is written to the column. No exception, no warning: the UPDATE silently persists a wrong value.
 
 #### SH-H025 — A value that will not convert to double yields an unbounded range query (ElasticSearch)
 
 `../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs:246`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED** (TASK-308, measured 2026-09-09 by rendering the NEST query offline).
+`x => x.Date > cutoff` (DateTime) →
+**`NumericRangeQuery(field=date, gt=NULL, gte=NULL, lt=NULL, lte=NULL)`** — every bound null, which
+ElasticSearch reads as an unconstrained range over every document that has the field. Control:
+`x => x.Count > 5` → `gt=5`. `Convert.ToDouble(DateTime)` throws `InvalidCastException`, which
+`TryConvertToDouble` (`:263`) answers with `null`, and the `switch` at `:250` emits the range anyway.
+⚠ **TASK-268's boundary does not catch it, measured:** both `ParseFilterQuery` **and**
+`ParseRequiredFilterQuery` returned that query with **no throw**, because the guard fires only on a
+*null query* and this one is non-null. So `DeleteByQuery(x => x.Date < cutoff)` targets every document
+carrying the field — a whole-index destructive write, on the single most ordinary shape a time-series
+filter has.
+Shares one root cause with `SH-H027` — *a sub-translation that fails yields a query that silently means
+something else* — and is fixed with it.
 
 ParseComparison routes >, >=, <, <= through TryConvertToDouble, which returns null on InvalidCastException/FormatException/OverflowException. Both field and value are non-null at that point, so a NumericRangeQuery is still emitted with a null bound — an unconstrained range matching every document that has the field. `x.CreatedAt > cutoff` (DateTime) and any string/Guid comparison hit this. The same translator backs ParseRequiredFilterQuery, so DeleteByQuery(x => x.CreatedAt < cutoff) deletes every document carrying the field.
 
@@ -297,17 +356,55 @@ ParseComparison routes >, >=, <, <= through TryConvertToDouble, which returns nu
 
 `../Birko.Data.SQL/SQL/DataBase.cs:818`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED-NARROWER** (TASK-308, measured 2026-09-09). `ParseConditionExpression`'s final
+`return Array.Empty<Condition>()` (`DataBase.cs:896`) is reached by any node kind none of its branches
+claims — the method dispatches on `LambdaExpression`, `UnaryExpression`, `BinaryExpression`,
+`MethodCallExpression` and `MemberExpression`, in three independent `if` groups, so a
+`TypeBinaryExpression`, `InvocationExpression` or `NewExpression` falls through all of them. Rendered and
+counted at top level: `x => x.Payload is string` → **`<<no WHERE>>`**, READ **3 of 3 rows**; and
+`x => pred(x)` (an `InvocationExpression`) → the same empty condition set.
+**Narrower than filed on the destructive half:** `Delete(filter)` for both shapes measured
+`THREW WholeTableWriteException, remaining=3 of 3`. SH-H002 already covers *"it targets the whole
+table"*; what is left is the read's silent match-all — *indistinguishable from `_ => true`*, exactly as
+the finding says, and that half is real.
+Same root cause as `SH-H021` (the operand-level face of it) and fixed in one place: the parser refuses a
+node kind it cannot claim, which is the answer TASK-268 already gave for ElasticSearch.
+
 ParseConditionExpression ends with `return Array.Empty<Condition>()`. A top-level node matching no branch (TypeBinaryExpression, InvocationExpression, NewExpression) yields zero conditions, and AddWhere (AbstractConnectorBase:382) appends nothing for an empty clause — indistinguishable from `_ => true`. On a read that returns every row; on the filter-based Delete/Update it targets the whole table. ElasticSearch throws NotSupportedException for the same predicate.
 
 #### SH-H027 — CombineBool silently drops an untranslatable AND/OR operand (ElasticSearch)
 
 `../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs:209`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED** (TASK-308, measured 2026-09-09 by rendering the NEST query offline).
+`CombineBool` (`:202`) adds only non-null operand translations and returns null only when **both** are
+null. Measured with the genuinely-untranslatable `x.Text.Trim() == "a"` (pinned as untranslatable by
+`FilterQueryGuardTests`):
+alone → `NULL`; `untranslatable && x.Count == 5` → **`Bool(must=1)`**; `untranslatable || x.Count == 5`
+→ **`Bool(should=1)`**. One clause in each — the other predicate is gone.
+⚠ **And the top-level guard never fires, measured:** `ParseRequiredFilterQuery` returned both of those
+with **no throw**, which is what the finding predicted. Note the two directions differ and both are
+wrong: dropping a **conjunct widens** the result, so `_delete_by_query` destroys more than was asked;
+dropping a **disjunct narrows** it, so a read silently misses rows.
+Shares one root cause with `SH-H025` and is fixed with it.
+
 CombineBool adds only non-null operand translations and returns null only when BOTH are null. If one operand translates to null (ParseUnary falling through, ParseExpression's `_ => null`, ParseComparison's unresolved field/value), the BoolQuery keeps a single clause and the other predicate vanishes. The top-level result is non-null so the ParseFilterQuery guard never fires — the same failure mode the empty-Contains fix (603) removed, one level up. Reachable from ParseRequiredFilterQuery on the two by-query destructive paths.
 
 #### SH-H028 — ElasticSearch String.Contains passes the raw value into a QueryStringQuery — Lucene query-syntax injection
 
 `../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs:555`
+
+**Verdict: CONFIRMED** (TASK-308, measured 2026-09-09). `ParseContains` (`:555`) builds
+`new QueryStringQuery { DefaultField = field, Query = (string)cVal.Value }` with the caller's value
+verbatim. Rendered for `x => x.Text.Contains(payload)`, field resolving to `text.keyword`:
+`plain` → `query=<<plain>>`; `secretField:*` → `query=<<secretField:*>>`; `* OR Count:5` →
+`query=<<* OR Count:5>>`; `a AND b` → `query=<<a AND b>>`; `unbalanced(` → `query=<<unbalanced(>>`.
+Every Lucene metacharacter reaches the parser as syntax, so a search term can name fields the predicate
+never mentioned, and unbalanced syntax is a parse failure rather than a no-match.
+The one finding in this area that belongs to the identifier/containment family in
+`Birko.Framework/CLAUDE.md` § Conventions rather than to the predicate family: this is a value in
+**statement position** for Lucene's grammar, so the containment is escaping or a query type that has no
+grammar at all.
 
 ParseContains builds `new QueryStringQuery { DefaultField = field, Query = (string)cVal.Value }` with no escaping of the query_string metacharacters (`: + - && || ! ( ) [ ] ^ " ~ * ? \ /`). A search term reaching `x.Name.Contains(userInput)` is parsed as a query expression, so `secretField:*` or `* OR tenantGuid:…` lets a caller query fields the predicate never mentioned, and unbalanced syntax turns into a parse failure. Nest exposes MatchPhraseQuery/WildcardQuery, which need no escaping.
 

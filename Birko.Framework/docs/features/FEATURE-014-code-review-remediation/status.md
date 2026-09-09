@@ -1,6 +1,6 @@
 ---
 id: FEATURE-014
-generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329)
+generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329, then TASK-308)
 ---
 
 # Code review — audit remediation — Status
@@ -21,13 +21,13 @@ generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329)
 
 ## Build progress
 
-100 / 187 tasks done (1 awaiting sign-off).
+101 / 188 tasks done (1 awaiting sign-off).
 
 > ⚠ **This file is a PARTIAL refresh, not a full `/feature status` regen.** The counts above were
-> re-measured 2026-09-09 at TASK-329's close and are accurate; the list below is not — it carries 147
-> of the feature's 187 tasks, because 40 were filed after this file was last fully generated
+> re-measured 2026-09-09 at TASK-308's close and are accurate; the list below is not — it carries 147
+> of the feature's 188 tasks, because 41 were filed after this file was last fully generated
 > (2026-08-19). That gap is the same drift `tasks/README.md` reports as **DV9 ×62** (the feature's
-> `decisions.md` `→ Tasks` column does not know about 62 of its own tasks), owned by [[TASK-251]].
+> `decisions.md` `→ Tasks` column does not know about 63 of its own tasks), owned by [[TASK-251]].
 > Run `/feature status FEATURE-014` for the real thing. Refreshing the counts while saying the list is
 > short beats leaving `69 / 140`, which was wrong in both numbers.
 
@@ -180,6 +180,8 @@ generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329)
 - [x] TASK-278 On SQL Server, asking for "just the first row" or a page of results failed outright
 - [x] TASK-329 A bulk update filtered by a condition that matches everything rewrote the whole table
 - [ ] TASK-330 Decide whether an all-rows update needs a second spelling that takes a change function
+- [x] TASK-308 Seven ways a database filter could quietly mean something other than what it said
+- [ ] TASK-331 An update that computes a value from the record itself sometimes did nothing at all
 
 ## What can be tested now
 

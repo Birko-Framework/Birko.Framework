@@ -1,6 +1,6 @@
 ---
 area: filter-expression-translation
-generated-at: 58cd3bf
+generated-at: 90194b9
 generated-on: 2026-09-09
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
@@ -31,10 +31,11 @@ sources:
   - ../Birko.Data.SQL/SQL/DataBase.cs
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/SQL/DataBase_RuleField.cs
-source-commits:   # recorded at this regen, not reconstructed
+source-commits:   # recorded at each regen; Birko.Data.SQL and Birko.Data.ElasticSearch
+                  # re-recorded 2026-09-09 by TASK-308, the two siblings it changed
   ../Birko.Data.Core: fd3103c
-  ../Birko.Data.ElasticSearch: 9b523e2
-  ../Birko.Data.SQL: 7b60044
+  ../Birko.Data.ElasticSearch: ac13bba
+  ../Birko.Data.SQL: 505c31c
   ../Birko.Data.SQL.MSSql: 64a4932
   ../Birko.Data.SQL.MySQL: 72cac6d
   ../Birko.Data.SQL.PostgreSQL: 6f7a12f
@@ -429,6 +430,48 @@ condition.
 - **When** the call reaches the method-call branch, matches no case, and its arguments are parsed
 - **Then** the wrapped array expression is reached and evaluated as the condition's values, so the `In` condition is still populated
 
+### Requirement: An unrecognised call in an UPDATE SET value is refused, never invoked
+
+`DataBase.ParseExpression`'s method-call fallback — the branch that folds a call to a bound constant —
+SHALL refuse a call that references the entity, throwing `NotSupportedException`. Only a
+parameter-**free** call may be folded, and the normalizer has already folded every such call, so a
+parameter-bound one arriving here cannot be expressed as a SET value at all.
+
+`EvaluateExpression`'s `MethodCallExpression` arm SHALL likewise decline a tree containing a parameter,
+falling through to the same `null` its compiled-lambda fallback already returns for one. ⚠ That half is
+**defensive, not witnessed**: removing it reds 0 of 1,638 tests, because the call-site refusal fires
+first. It is kept because without it the method holds two contradictory contracts across 19 call sites —
+one arm refusing a parameter-bound tree while the other fabricates a value from it — and that
+inconsistency is the root cause being closed.
+
+#### Scenario: A parameter-bound Concat is refused rather than storing a fabricated value
+
+- **Given** `SET Name = string.Concat(r.Name, "-", r.Name)` on the row where `Amount == 10`
+- **When** the UPDATE is issued
+- **Then** `NotSupportedException` is thrown and every row keeps its name. Before this,
+  `EvaluateExpression` evaluated each argument — a lambda parameter yields `null` — and
+  `Method.Invoke` succeeded, so `Concat(null, "-", null)` returned `"-"` and the column was **silently
+  set to `"-"`** with no exception and no log entry
+
+#### Scenario: A translated call still works
+
+- **Given** `SET Name = r.Name.Replace("r", "R")`
+- **Then** the statement is issued and the row's name becomes `R1` — `Replace`, `ToLower` and `ToUpper`
+  are translated to SQL and are unaffected
+
+#### Scenario: A parameter-free call is still folded to a constant
+
+- **Given** `SET Name = string.Concat("fixed", suffix)` where `suffix` is a captured local
+- **Then** the value is evaluated and bound as `@Const0`, so the guard is not a blanket refusal of every
+  method call in a SET value — it keys on whether the entity is referenced
+
+#### Scenario: Reach of the affected surface
+
+- **Given** the two `Update<T, P>(…, IDictionary<Expression, Expression>, …)` overloads that are the only
+  callers of this `ParseExpression` overload
+- **Then** no store reaches them — `PropertyUpdate<T>.Set` takes a value, not an expression — so this is
+  public connector surface a consumer must call directly
+
 ### Requirement: A span-bound array Contains is rewritten before a driver sees it
 
 `Birko.Data.Expressions.SpanContains.Rewrite` SHALL rewrite every
@@ -736,6 +779,40 @@ exception and no log entry. An operand `RenderValueFragment` cannot express SHAL
 PARENT's `IsOr` flag (` OR ` when set, otherwise ` AND `), SHALL parenthesise when there is more than
 one child or when the group is negated, and SHALL prefix `NOT ` when the group's `IsNot` is set.
 `ParseConditionExpression` SHALL implement `Not` by toggling `IsNot` on the condition it passes down.
+
+When one operand of an `&&` / `||` is a constant, `ReturnSingleSubCondition` collapses the group to the
+surviving operand and SHALL **combine** the two negations — `parent.IsNot ^ surviving.IsNot` — never
+assign the survivor's over the parent's. The `Not` branch has already toggled `IsNot` on the very object
+it hands down as the parent, so an assignment discards an enclosing negation. XOR rather than OR, because
+two negations cancel: `!(x.A != 1 && true)` is `x.A == 1`.
+
+#### Scenario: A negation around a collapsed group survives the collapse
+
+- **Given** `x => !(x.Amount == 10 && trueFlag)` over rows 10, 20 and 30
+- **When** the AND branch finds the right operand constant-true and collapses to the left
+- **Then** the rendered SQL is `WHERE NOT (Amount = @p)` and the read returns rows 20 and 30. Before this
+  the collapse assigned the survivor's `IsNot` (false) over the toggled parent, the SQL was
+  `WHERE Amount = @p`, and the read returned **row 10** — the exact complement
+
+#### Scenario: The same predicate on a destructive write deletes the rows it names
+
+- **Given** the same predicate passed to `DeleteAsync`
+- **Then** rows 20 and 30 are deleted and row 10 survives. Before this the call **threw nothing** and
+  deleted row 10 instead — the clause is non-empty, so SH-H002's whole-table guard had nothing to refuse.
+  This was the only finding in its area whose destructive path was unguarded
+
+#### Scenario: Two negations cancel rather than stacking
+
+- **Given** `x => !(x.Amount != 10 && trueFlag)`
+- **Then** the read returns row 10 only. `!=` is `ConditionType.Equal` with `IsNot` set on the *comparison
+  leaf*, and the comparison branch nests that leaf under the parent — so the survivor handed to the
+  collapse is the wrapper, whose own `IsNot` is false, and the composed tree is `NOT (Amount <> @p)`
+
+#### Scenario: An un-negated collapse is unchanged
+
+- **Given** `x => x.Amount == 10 && trueFlag`
+- **Then** the collapsed condition's `IsNot` is false — the XOR is the identity where there is no
+  enclosing negation, which is the overwhelmingly common case
 
 #### Scenario: Negated OR group
 
@@ -1378,6 +1455,54 @@ and SHALL unwrap `Convert`, translate any parameter-free `bool` expression to `M
 - **When** `CombineBool(isOr: true)` runs
 - **Then** a `BoolQuery` with both clauses in `Should` is returned
 
+### Requirement: An ElasticSearch ordering comparison never emits a range it could not bound
+
+`ParseComparison` SHALL route `>`, `>=`, `<`, `<=` through `BuildRangeComparison`, which selects the
+query type from the **value** rather than forcing every value through `double`:
+
+- a `DateTime` (and a `DateTimeOffset`, normalised to its `UtcDateTime`) SHALL become a `DateRangeQuery`;
+- a value `Convert.ToDouble` accepts SHALL become a `NumericRangeQuery`, unchanged;
+- anything else SHALL return `null`, which `ParseFilterQuery` turns into a `NotSupportedException`.
+
+It SHALL NOT emit a `NumericRangeQuery` whose bound is `null`. Such a query is an **unconstrained range**:
+it matches every document that has the field.
+
+A refusal alone would have been the wrong fix — it would make every `DateTime` comparison untranslatable,
+and a date range is the most common filter this store serves. NEST offers the mechanism, so the defect is
+removed and the capability gained rather than lost.
+
+#### Scenario: A DateTime comparison is a bounded date range
+
+- **Given** `x => x.Date > cutoff`
+- **Then** the query is a `DateRangeQuery` carrying the bound. Before this it was
+  `NumericRangeQuery(gt=NULL, gte=NULL, lt=NULL, lte=NULL)` — every bound null — and it survived both
+  `ParseFilterQuery` and `ParseRequiredFilterQuery` untouched, so `DeleteByQuery(x => x.Date < cutoff)`
+  targeted the whole index
+
+#### Scenario: All four ordering operators carry their bound
+
+- **Given** each of `>`, `>=`, `<`, `<=` against a `DateTime`
+- **Then** each emits the corresponding bound — the defect was one `switch`, so a fix repairing three arms
+  would leave an unconstrained range reachable through the fourth
+
+#### Scenario: A numeric comparison is unchanged
+
+- **Given** `x => x.Count > 5`
+- **Then** the query is still a `NumericRangeQuery` with `GreaterThan = 5`
+
+#### Scenario: A value with no expressible range is refused
+
+- **Given** a `TimeSpan` member compared with `>`, for which `Convert.ToDouble` throws
+- **Then** the translation returns `null` and the by-query paths throw. Before this it emitted an
+  unconstrained numeric range
+
+#### Scenario: No lexical range arm, deliberately
+
+- **Given** a `string` value
+- **Then** there is no `TermRangeQuery` arm, because `string` declares no ordering operators and such a
+  comparison cannot be written in C# at all — an arm for it would be unreachable code advertising a
+  capability nobody can call
+
 ### Requirement: ElasticSearch comparison translation
 
 `ParseComparison` SHALL derive the field from whichever operand yielded an `ITermQuery` with a
@@ -1455,6 +1580,48 @@ unchanged, SHALL return `null` for a null/empty name, and SHALL prefix the resul
 - **Given** a member accessed as `((ITenanted)x).TenantGuid`, which the compiler emits as `Convert(param)` then member access
 - **When** `IsDirectMemberOfParameter` runs
 - **Then** it returns true and the field resolves normally
+
+### Requirement: ElasticSearch substring matching uses a query type with no grammar
+
+`ParseContains` SHALL translate `String.Contains(v)` to a `WildcardQuery` whose value is
+`"*" + EscapeWildcardValue(v) + "*"`, and SHALL NOT build a `QueryStringQuery` from the caller's value.
+`ParseEndsWith` SHALL escape on the same terms. `EscapeWildcardValue` is the single producer and escapes
+`\`, `*` and `?` — the whole grammar of a wildcard value.
+
+A `QueryStringQuery` parses its value as a Lucene **query expression**, so the caller's search term was
+interpolated into a grammar: `secretField:*` addressed a field the predicate never mentioned, `* OR
+Count:5` was read as a boolean query, and `unbalanced(` became a parse failure rather than a no-match.
+The containment is a query type with no grammar rather than an escape of `query_string`'s much larger
+metacharacter set — which also makes `Contains` mean what it is documented to mean, a substring match
+mirroring SQL `LIKE '%x%'`, which `query_string` over a keyword field never did.
+
+`ParseStartsWith` needs no escaping: a `PrefixQuery` takes a literal prefix and has no pattern syntax.
+
+#### Scenario: A metacharacter payload stays literal
+
+- **Given** `x => x.Text.Contains("secretField:*")`
+- **Then** the query is a `WildcardQuery` with value `*secretField:\**` — the `*` is escaped and the colon
+  is literal, because this query type never parses one. Before this it was
+  `QueryStringQuery { Query = "secretField:*" }`
+
+#### Scenario: Only the wildcard metacharacters are escaped
+
+- **Given** the payloads `* OR Count:5`, `a AND b`, `unbalanced(`, `who?` and `back\slash`
+- **Then** `*`, `?` and `\` are escaped and everything else — the colon, `AND`/`OR`, the parenthesis — is
+  left literal, which is what makes the containment total rather than a blacklist
+
+#### Scenario: EndsWith is escaped on the same terms
+
+- **Given** `x => x.Text.EndsWith("a*b")`
+- **Then** the wildcard value is `*a\*b`. Before this the `*` inside the caller's value was a
+  metacharacter, so the query matched more than it named — narrower than the `Contains` defect (wildcards
+  only, no field access) and the same one-line containment
+
+#### Scenario: StartsWith is unchanged
+
+- **Given** `x => x.Text.StartsWith("a*b")`
+- **Then** the query is a `PrefixQuery` with the literal value `a*b` — adding escaping there would corrupt
+  a legitimate prefix
 
 ### Requirement: ElasticSearch string and collection methods
 
@@ -1694,38 +1861,112 @@ otherwise.
 - **When** `InvokeExpression` runs
 - **Then** only `g1` and `g2` survive, and an all-null collection materialises empty
 
-### Requirement: Silent widening of untranslatable SQL predicates
+### Requirement: An expression node the SQL parser cannot claim is refused, not parsed into nothing
 
-For an expression node the SQL predicate parser does not handle AND with no parent condition,
-`DataBase.ParseConditionExpression` SHALL return an EMPTY condition sequence, which
-`AbstractConnectorBase.AddWhere` SHALL render as no `WHERE` clause at all.
+`DataBase.ParseConditionExpression` SHALL refuse an expression node for which it has no branch, throwing
+`NotSupportedException` before any parsing is attempted, and SHALL NOT return an empty condition sequence
+for it. It dispatches on `LambdaExpression`, `UnaryExpression`, `BinaryExpression`,
+`MethodCallExpression`, `MemberExpression`, `ConstantExpression` and `ParameterExpression`; every other
+node kind — `TypeBinaryExpression`, `InvocationExpression`, `NewExpression` — is refused
+(`RequireTranslatableNode`).
 
-#### Scenario: A type test disappears from the query
+The refusal SHALL be `NotSupportedException`, matching what `ElasticSearch.ParseFilterQuery` throws for
+the same predicate, so one `catch` selects an untranslatable filter on either backend. The message SHALL
+name the node kind and the escape route: a predicate the translator supports, or an explicit all-rows
+request through `Read()` / `DeleteAll()`.
 
-- **Given** the predicate `x => x.Payload is string` (a `TypeBinaryExpression`)
-- **When** `ParseConditionExpression` matches none of its lambda/unary/binary/method-call/member branches and `parent` is `null`
-- **Then** `Array.Empty<Condition>()` is returned, `ConditionDefinition` yields an empty string, and the emitted SQL has no `WHERE` — every row is selected
+Because the guard runs at the **top of the recursion**, it covers a node in any position: at the root of
+the predicate, and as an operand of `&&` / `||`. Those were two separate findings (SH-H026 and SH-H021)
+with one root cause, and one guard closes both.
 
-#### Scenario: ElasticSearch refuses the same predicate
+#### Scenario: A type test at the root is refused rather than selecting every row
 
-- **Given** the same `TypeBinaryExpression` predicate handed to `ElasticSearch.ParseFilterQuery`
-- **When** `ParseExpression` falls through its switch and returns `null`
-- **Then** a `NotSupportedException` is thrown — the two backends diverge, SQL widening where ElasticSearch fails
+- **Given** the predicate `x => x.Payload is string` (a `TypeBinaryExpression`) and a table of 3 rows
+- **When** the read is issued
+- **Then** `NotSupportedException` is thrown and no rows are returned — before this the parser returned
+  `Array.Empty<Condition>()`, `ConditionDefinition` yielded an empty string, the emitted SQL carried no
+  `WHERE`, and the read answered **3 of 3 rows**, indistinguishable from `_ => true`
 
-### Requirement: Dropped ElasticSearch sub-clauses
+#### Scenario: A type test as an OR operand is refused rather than erasing the whole clause
 
-`CombineBool` SHALL include only the non-null translations of its two operands, SHALL return `null`
-only when BOTH operands translated to `null`, and SHALL therefore produce a `BoolQuery` containing a
-single clause when exactly one operand was untranslatable.
+- **Given** `x => (x.Payload is string) || x.Amount == 10`
+- **When** the read is issued
+- **Then** `NotSupportedException` is thrown. Before this, the unhandled operand left a condition with no
+  name, no values and no subconditions, which `IsConstantBoolCondition` reads as constant `true`; `true ||
+  anything` short-circuits to `Array.Empty<Condition>()`, so the **whole** predicate rendered no `WHERE`
+  and the read answered 3 of 3
 
-#### Scenario: One untranslatable operand of an AND is dropped
+#### Scenario: A type test as an AND operand is refused rather than silently dropped
 
-- **Given** `x => (x.Payload is string) && x.Status == active`
-- **When** `ParsePredicate` returns `null` for the left operand and a `TermQuery` for the right
-- **Then** the result is a `BoolQuery { Must = [TermQuery status] }` — the left clause is gone, and because the top-level result is non-null the `ParseFilterQuery` guard does not fire
+- **Given** `x => (x.Payload is string) && x.Amount == 10`
+- **When** the read is issued
+- **Then** `NotSupportedException` is thrown. Before this the clause rendered as `WHERE Amount = @p` alone
+  — the right row *count* for the wrong reason, since the `is string` conjunct was never applied to the
+  rows returned
+
+#### Scenario: An operand that genuinely reduces to every row is NOT refused
+
+- **Given** `x => (x.Amount == 10 || true) && x.Amount >= 20`
+- **When** the read is issued
+- **Then** it succeeds and returns the rows matching `Amount >= 20`. This is why the guard is on the node
+  and not on `IsConstantBoolCondition`: a nested operand that legitimately reduces to all-rows leaves the
+  *same* "nothing was parsed" state an unhandled node leaves, and `true` is the correct reading there. The
+  two cases are told apart at the point the ambiguity is created, not at the point it is read
+
+#### Scenario: The destructive guard's other causes are unchanged
+
+- **Given** a null filter, or a predicate that reduces to every row (an empty `NOT IN`)
+- **When** either reaches a destructive statement
+- **Then** `AddRequiredWhere` still refuses with `WholeTableWriteException`, and SH-H002's decision not to
+  distinguish those causes is unaffected — only the *untranslatable* cause moved upstream, because it had
+  to fire somewhere `AddRequiredWhere` does not run, namely a read
+
+#### Scenario: The two backends now agree
+
+- **Given** the same untranslatable predicate handed to `ElasticSearch.ParseFilterQuery`
+- **Then** it also throws `NotSupportedException` — the backends no longer diverge, where SQL used to
+  widen silently and ElasticSearch failed
+
+### Requirement: An ElasticSearch boolean translates both operands or neither
+
+`CombineBool` SHALL return `null` when **either** operand translates to `null`, so a `BoolQuery` it does
+produce always carries both clauses. It SHALL NOT include only the non-null translations.
+
+Dropping one operand is wrong in **opposite directions** and neither is tolerable: a dropped **conjunct
+widens** the match, so `_delete_by_query` destroys documents the caller excluded; a dropped **disjunct
+narrows** it, so a read silently misses rows. Returning `null` hands both to `ParseFilterQuery`, which
+throws.
+
+`null` from a sub-translation means *untranslatable* and nothing else. A predicate that legitimately
+matches nothing is a `MatchNoneQuery`, which is non-null and composes normally — so refusing on `null`
+cannot break an empty-collection filter.
+
+#### Scenario: One untranslatable operand of an AND refuses instead of widening
+
+- **Given** `x => x.Text.Trim() == "a" && x.Count == 5`, where `Trim()` is untranslatable
+- **When** `CombineBool` sees `null` for the left operand and a `TermQuery` for the right
+- **Then** it returns `null` and `ParseFilterQuery` / `ParseRequiredFilterQuery` throw
+  `NotSupportedException`. Before this the result was `BoolQuery { Must = [TermQuery count] }` — the left
+  clause gone — and because the top-level result was non-null the guard never fired
+
+#### Scenario: One untranslatable operand of an OR refuses instead of narrowing
+
+- **Given** the same predicate spelled with `||`
+- **Then** it is refused too. Before this the result was `BoolQuery { Should = [TermQuery count] }`, which
+  matches *fewer* documents than asked for rather than more
 
 #### Scenario: Both operands untranslatable
 
 - **Given** an AND whose two operands both translate to `null`
-- **When** `CombineBool` finds no queries
-- **Then** `null` is returned and the top-level guard throws
+- **Then** `null` is returned and the top-level guard throws — unchanged
+
+#### Scenario: A fully translatable boolean keeps both clauses
+
+- **Given** `x => x.Count == 5 && x.IsTest`
+- **Then** the `BoolQuery` carries two `Must` clauses
+
+#### Scenario: An operand that legitimately matches nothing still composes
+
+- **Given** `x => empty.Contains(x.Count) && x.IsTest` over an empty collection
+- **Then** the result is a two-clause `BoolQuery` whose first clause is a `MatchNoneQuery` — not a
+  refusal, because that translation succeeded

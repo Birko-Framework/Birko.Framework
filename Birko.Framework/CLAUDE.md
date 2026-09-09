@@ -1634,6 +1634,116 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   radius before turning silence into a throw**: this one was cleared against 19 SQL-touching suites,
   including every `Birko.Models.*.SQL` domain suite, because the change breaks any consumer model carrying
   a property the mapper never covered
+- **A translator that cannot express a node REFUSES it, and "nothing was produced" is never a scope
+  answer — because the same empty state also means "constrains nothing", which is a different thing.**
+  Sixth member of the SH-H037 family, and the one that shows the read path needs its own guard: SH-H002 /
+  TASK-137 / TASK-215 all refuse a *destructive* statement that constrains nothing, and a **read** has no
+  such decision point, so the identical predicate silently returned every row for the life of the
+  framework (TASK-308, `SH-H021` + `SH-H026`). `DataBase.ParseConditionExpression` dispatches on lambda,
+  unary, binary, method-call and member nodes — in three independent `if` groups — and ends in
+  `return Array.Empty<Condition>()`, so a `TypeBinaryExpression` (`x.Payload is string`), an
+  `InvocationExpression` (`x => pred(x)`) or a `NewExpression` produced **no conditions and no
+  complaint**. Measured on SQLite, 3 rows: top level → READ **3 of 3**; as an `||` operand → the **whole**
+  predicate rendered no `WHERE` and READ 3 of 3; as an `&&` operand → the term silently dropped.
+  `RequireTranslatableNode` refuses at the top of the recursion. Six parts generalise:
+  - **The empty state is OVERLOADED, so the fix goes where the ambiguity is created, not where it is
+    read.** `IsConstantBoolCondition`'s `Values == null → true` branch looks like the defect and editing it
+    is the smaller diff — and it is wrong: measured, `(x.A == 1 || true) && x.B == 2` leaves the identical
+    "nothing was parsed" state for its left operand and `true` is the **correct** answer there. Merging the
+    two cases trades a silent match-all for a silent narrowing. Guard the unclaimed *node*; leave the
+    reader alone.
+  - **One guard at the top of a recursion covers every position, which is why two findings had one fix.**
+    They were filed as separate defects — an operand of `||` and a node at the root — and are the same
+    root cause seen twice. Before writing a guard per site, ask whether the recursion's entry point sees
+    all of them.
+  - **Refuse with the type the OTHER backends already throw.** `NotSupportedException`, matching
+    `ElasticSearch.ParseFilterQuery` for the same predicate (TASK-268), so one `catch` selects "this
+    filter cannot be translated" on either backend — the same one-catch-everywhere reasoning
+    `WholeTableWriteException` records, applied to untranslatability. There was already a precedent inside
+    the same file (`RenderValueFragment` refuses an untranslatable *value* operand with that type), and
+    finding it is what settled the choice; **grep the file you are editing for an existing refusal before
+    inventing one.**
+  - **A whitelist of accepted node kinds is PERMISSIVE on purpose, and that asymmetry is written on it.**
+    `ConstantExpression` and `ParameterExpression` are accepted although neither is known to reach the
+    guard, because a false refusal breaks working code and is worse than the hole (`PredicateScope`'s own
+    rule). Adding a kind is safe; removing one is not, and the doc comment says so — otherwise the next
+    reader "tightens" it into a regression.
+  - **⚠ The refusal message carries the node's TYPE, never `expr.ToString()`.** A rendered expression tree
+    interpolates the values a closure captured, and such a message travels into logs and error responses.
+    Caught at the security pass on my own change, and the same discipline the identifier family records:
+    a diagnostic needs the shape, not the data.
+  - **Five existing tests asserted the wide behaviour and were INVERTED rather than restored.** All five
+    used the `InvocationExpression` shape as their example of "nothing rendered" and asserted
+    `WholeTableWriteException`; the rows they assert are unchanged, only the exception type moved upstream.
+    § TASK-211's rule — *a narrowing will break tests that assert the wide behaviour, and those are the
+    interesting ones* — plus the measurement that made it affordable: **0** consumer references to
+    `WholeTableWriteException` anywhere. And SH-H002's decision *not* to distinguish its causes is
+    unaffected and now has its own pin: a null filter and a reduces-to-everything filter still render
+    nothing and are still answered identically, because only the *untranslatable* cause moved.
+- **A collapse that unwraps a group must COMBINE the enclosing flags, not assign over them — and the
+  destructive guard cannot help, because the clause it produces is non-empty and simply wrong.**
+  TASK-308 / `SH-H022`, the most serious of its area's seven and the only one SH-H002 could not cover.
+  `ReturnSingleSubCondition` collapses `A && trueConst` to `A` and assigned `parent.IsNot =
+  surviving.IsNot`, while the `Not` branch has already toggled `IsNot` on the very object it hands down as
+  the parent. Measured: `x => !(x.Amount == 10 && trueFlag)` rendered `WHERE Amount = @p` against the
+  control `x => !(x.Amount == 10)`'s `WHERE NOT (Amount = @p)`, so the read returned **the exact
+  complement** and `DeleteAsync` **threw nothing and destroyed that complement**. Three parts generalise:
+  - **XOR, not OR — two negations cancel.** `!(x.A != 1 && true)` is `x.A == 1`. A fix using `||` or `|=`
+    negates twice and returns the complement in the other direction, which is why that case gets its own
+    test rather than being assumed away.
+  - **The file already knew the shape for the SIBLING flag.** The `.Date` range branch nests rather than
+    merging, with a comment explaining that this very method would overwrite a nested `IsOr`. The `IsNot`
+    half went unnoticed beside it for a year. **When you find a comment describing a hazard in one field
+    of an object, check the object's other fields for the same hazard.**
+  - **⚠ `!=` is `ConditionType.Equal` with `IsNot` on the comparison LEAF — there is no `NotEqual` type —
+    and the comparison branch NESTS that leaf under the parent.** So the survivor handed to a collapse is
+    a wrapper whose own `IsNot` is false. Two of the fix's own tests were written on the opposite
+    assumption and failed; the correction is recorded in the test, because reading `IsNot` as "the leaf is
+    negated" is exactly what makes the XOR look like the wrong operator.
+- **A sub-translation that fails must not leave a query that MEANS something else — and a guard on the
+  top-level result cannot see it, because the result is non-null.** TASK-308 / `SH-H025` + `SH-H027`, the
+  ElasticSearch face of the rule above, and the pair that shows TASK-268's boundary guard was necessary
+  but not sufficient. Measured by rendering the NEST query offline: a range whose bound
+  `Convert.ToDouble` could not produce came out as `NumericRange(gt=NULL, gte=NULL, lt=NULL, lte=NULL)` —
+  an **unconstrained** range over every document with the field — and `CombineBool` returned a one-clause
+  `BoolQuery` when a single operand was untranslatable. **Both survived `ParseFilterQuery` *and*
+  `ParseRequiredFilterQuery` with no throw**, so `DeleteByQuery` targeted the whole index on
+  `x => x.Date < cutoff`, the most ordinary shape a time-series filter has. Four parts generalise:
+  - **A dropped operand is wrong in OPPOSITE directions, which is why neither is tolerable.** A dropped
+    **conjunct widens** the match, so a by-query delete destroys documents the caller excluded; a dropped
+    **disjunct narrows** it, so a read silently misses rows. "Keep whatever translated" looks
+    conservative and is not conservative in either direction.
+  - **Refusing is only safe because `null` means exactly one thing, and that has to be asserted.** A
+    predicate that legitimately matches nothing is a `MatchNoneQuery` (TASK-266) — non-null, composing
+    normally — so `null` means *untranslatable* and refusing on it cannot break an empty-collection
+    filter. Without a test for that the refusal is indistinguishable from one that is too broad.
+  - **The minimal reading of the finding was the wrong fix, and § TASK-281 is the rule that caught it.**
+    "Never emit a null bound" would have made every `DateTime` comparison untranslatable, and a date range
+    is the commonest filter this store serves. NEST offers `DateRangeQuery`, so the defect is removed
+    **and** the capability gained. Route by the value's type; refuse only what has no mechanism.
+  - **⚠ An arm nobody can reach is not a capability, and I wrote one before measuring.** A
+    `TermRangeQuery` branch for a `string` value is unreachable: `string` declares no ordering operators,
+    so such a comparison cannot be written in C# at all. Removed, and the **premise** is pinned rather
+    than the absence — § TASK-263's rule that a gap which is a decision reads as an oversight unless you
+    say so.
+- **A caller's value that reaches a query LANGUAGE is contained by choosing a query type with no grammar,
+  not by escaping the grammar.** TASK-308 / `SH-H028`, and the identifier family's first instance outside
+  SQL. `ParseContains` put the caller's string verbatim into a NEST `QueryStringQuery`, i.e. into Lucene's
+  query grammar: measured, `secretField:*`, `* OR Count:5` and `unbalanced(` all rendered verbatim, so a
+  search term could address fields the predicate never mentioned and unbalanced syntax became a parse
+  failure rather than a no-match. Three parts generalise:
+  - **Prefer removing the grammar to escaping it.** A `WildcardQuery` value means nothing beyond `*`, `?`
+    and the escape character, so escaping those three is **total by construction** — where escaping
+    `query_string` is a blacklist against a set that its own documentation lists at fifteen characters and
+    can grow. Same instinct as parameterising a value instead of quoting it.
+  - **The right containment also fixed what the API claimed to do.** `Contains` is documented as a
+    substring match mirroring SQL `LIKE '%x%'`, which `query_string` over a *keyword* field never was. A
+    containment that restores the documented meaning is the one to pick.
+  - **Guard the whole verb family: `EndsWith` built a wildcard pattern from caller text too**, unescaped,
+    so `EndsWith("a*b")` matched more than it named — narrower than the filed finding (wildcards only, no
+    field access) and the same one-line fix, through one shared escaper. `StartsWith` needs nothing
+    (`PrefixQuery` has no pattern syntax) and is **asserted unchanged**, because escaping there would
+    corrupt a legitimate prefix.
 - **Where a driver has no usable default, the framework picks one — once, at a funnel, with the
   consumer winning.** Sibling of the "one producer" rules above, applied to *global* driver state
   rather than to a name or a scope, and it arrives with its own failure mode: not two answers, but
@@ -2782,6 +2892,64 @@ reader can act on, which is why this was worth doing before picking anything new
 
 
 
+
+### Seven ways a filter could mean something other than what it said (2026-09-09)
+
+TASK-308, the first of [[STORY-051]]'s 15 per-area triage tasks and the biggest single defect cluster this
+epic has drained: all seven high `filter-expression-translation` findings, **7 confirmed (2 narrower), 0
+refuted**, five root causes, two repos. Eleven offline suites green: SQL 695, SqLite 379, ES 162, Core 102,
+Caching 25, SQL.Views 59, ES.Views 19, Migrations.SQL 87, InMemory 69, JSON 23, XML 18 — **1,638 tests,
+0 failed**, 51 new, eight mutations. The standing rules are in § Conventions. Nine things worth carrying:
+
+- **The read path needed its own guard, and that is the thread this closes.** SH-H002, TASK-137 and
+  TASK-215 all refuse a *destructive* statement that constrains nothing; a **read** has no such decision
+  point. So the two findings claiming *"Delete deletes the whole table"* were **already fixed** — measured,
+  both threw `WholeTableWriteException` and left 3 of 3 rows — while the identical predicate on a read
+  returned **3 of 3 rows, silently**, which is what survived and what this fixed.
+- **The empty condition set is OVERLOADED, so the smaller diff was the wrong one.** Editing
+  `IsConstantBoolCondition`'s `Values == null → true` branch is the obvious fix and is measurably wrong:
+  `(x.A == 1 || true) && x.B == 2` leaves the identical state and `true` is the *correct* answer there.
+  Guarding the unclaimed **node** instead tells the two cases apart where the ambiguity is created — and
+  one guard at the top of the recursion closed both findings, which had been filed separately as an
+  operand case and a root case.
+- **`SH-H022` was the one its area's guard could not cover, and it destroyed rows.**
+  `ReturnSingleSubCondition` assigned the enclosing negation away, so
+  `x => !(x.Amount == 10 && trueFlag)` rendered `WHERE Amount = @p` instead of `WHERE NOT (…)`: the read
+  returned the exact complement and `DeleteAsync` **threw nothing and deleted the complement**. The clause
+  is non-empty, so there was nothing for `AddRequiredWhere` to refuse. ⚠ And the file already carried a
+  comment about this method overwriting the sibling `IsOr` flag — the `IsNot` half went unnoticed beside
+  it.
+- **On ElasticSearch, TASK-268's boundary guard was necessary and not sufficient.** It fires on a *null*
+  query; a range with a null bound and a half-translated boolean are both non-null. Measured:
+  `x.Date > cutoff` → `NumericRange(gt=NULL, gte=NULL, lt=NULL, lte=NULL)`, an unconstrained range, and it
+  passed **both** `ParseFilterQuery` and `ParseRequiredFilterQuery` — so `DeleteByQuery` targeted the whole
+  index on the commonest shape a time-series filter has.
+- **The minimal reading of that finding would have crippled the feature.** "Never emit a null bound" makes
+  every `DateTime` comparison untranslatable. NEST offers `DateRangeQuery`, so routing by the value's type
+  removes the defect *and* gains the capability — § TASK-281's rule. ⚠ I also wrote a `TermRangeQuery` arm
+  and then measured it unreachable (`string` declares no ordering operators); removed, with the **premise**
+  pinned rather than the absence.
+- **`SH-H028` is contained by removing the grammar, not escaping it.** `Contains` put the caller's value
+  into Lucene's query grammar, so `secretField:*` addressed a field the predicate never mentioned. A
+  `WildcardQuery` value has no grammar beyond `*` / `?` / `\`, so escaping three characters is total by
+  construction where escaping `query_string` is a blacklist — and it restores what `Contains` was
+  documented to mean, a substring match, which `query_string` over a keyword field never was.
+- **⚠ Five existing tests asserted the wide behaviour and were inverted, not restored.** All five used an
+  `InvocationExpression` as their untranslatable example and asserted `WholeTableWriteException`; the rows
+  they assert are unchanged, only the type moved upstream. Affordable because **0** consumer references to
+  that type exist anywhere. One test's *example* was retargeted rather than its assertion, because the old
+  shape would have tested the new refusal and passed for the wrong reason.
+- **⚠ Nothing pinned the ElasticSearch behaviour at all — the whole suite stayed green through all three
+  of its fixes.** That absence is the finding behind the findings, and it is why the new ES suite asserts
+  the numeric path, `StartsWith`, and the empty-collection operand as *unchanged*: without those, a
+  refusal that was too broad would be indistinguishable from one that is right.
+- **⚠ Three corrections to my own work, each caught by running rather than reading, plus one spawn.** The
+  refusal message interpolated `expr.ToString()`, which renders a closure's captured **values** into a log
+  — narrowed at the security pass. Two tests were written on a wrong assumption about where `!=` carries
+  its negation (`Type=Equal` + `IsNot` on a nested leaf; there is no `NotEqual` type). And the `SH-H024`
+  opt-out test failed on `ToUpper()`, which is how [[TASK-331]] (P1) was found: an expression-valued
+  `UPDATE` that binds **no parameter** issues no statement at all, because `Update` opens with
+  `if (values.Any())` — a silent no-op, now pinned as a defect so it cannot be believed fixed.
 
 ### A base nothing derives from is not a base: the SQL bulk stores had no bounded-filter guard (2026-09-09)
 

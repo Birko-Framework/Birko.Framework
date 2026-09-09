@@ -27,7 +27,7 @@ work.
 
 | Task | Area | Open findings | Priority |
 |---|---|---|---|
-| [[TASK-308]] | `filter-expression-translation` | 7 (`SH-H021`,`022`,`024`–`028`) | **P0** |
+| [[TASK-308]] | `filter-expression-translation` | 7 (`SH-H021`,`022`,`024`–`028`) | **P0** | ✅ **done 2026-09-09** — 7 of 7 confirmed (2 narrower), all fixed |
 | [[TASK-309]] | `data-sync` | 7 (`SH-H008`–`SH-H014`) | **P0** |
 | ~~[[TASK-310]]~~ | `caching` | ~~3 (`SH-H004`,`005`,`007`)~~ | **P0** — **DONE 2026-09-09** |
 | ~~[[TASK-311]]~~ | `tenant-isolation` | ~~2 (`SH-H049`,`053`)~~ | **P0** — **DONE 2026-09-09** |
@@ -131,9 +131,33 @@ So `finding-count: 57` and `finding-ids: SH-H001 … SH-H057` stand unchanged, a
 below still covers this tier completely. Recorded because [[TASK-195]]'s criteria asked for this story's
 count to be updated, and *"no change, for this reason"* is the answer rather than an omission.
 
+## Area closed: `filter-expression-translation` (2026-09-09)
+
+[[TASK-308]] drained the first of the 15 per-area triage tasks. **7 of 7 confirmed** — 5 outright, 2
+**confirmed-narrower** — and **0 refuted**, so the prior this story recorded (13 confirmed, 2 narrower, 0
+refuted out of 15 hand-checked) held almost exactly.
+
+The two narrowings are the same correction and worth carrying to the other 14 areas: `SH-H021` and
+`SH-H026` both claimed *"Delete(filter) deletes the whole table"*, and that half was **already closed** by
+SH-H002 + [[TASK-137]] — measured, both shapes threw `WholeTableWriteException` and left 3 of 3 rows. What
+survived was the **read**-path wrong answer those tasks explicitly left open: the same predicate returned
+every row, silently. So the story's own instruction — *check what TASK-109/116/137 already cover before
+assuming a finding still holds* — was the right one, and it changed the scope rather than the verdict.
+
+Root causes were **5, not 7**: `SH-H021`+`SH-H026` are one (an expression node the parser has no branch
+for), `SH-H025`+`SH-H027` are one (a failed sub-translation becoming a query that means something else),
+and `SH-H022`, `SH-H024`, `SH-H028` are one each. `SH-H022` was the most serious of the seven and the only
+one whose destructive path SH-H002 could **not** cover, because its clause is non-empty and simply wrong:
+`DeleteAsync(x => !(x.Amount == 10 && trueFlag))` threw nothing and destroyed the complement of the rows
+it named.
+
+Spawned: [[TASK-331]] (P1) — an expression-valued `UPDATE` that binds no parameter issues no statement at
+all, found while writing `SH-H024`'s opt-out test. Different layer, different root cause, so it got an id
+rather than an out-of-scope sentence, and TASK-308 pins the defect meanwhile.
+
 ## Progress
 
-**23 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
+**30 / 57 findings closed** (SH-H021/022/024/025/026/027/028 via [[TASK-308]], SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
 SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]],
 SH-H002+SH-M023 via [[TASK-109]], SH-H041+SH-H042+SH-H043+SH-H044 via [[TASK-116]], SH-H036 via [[TASK-125]], SH-H019 via [[TASK-126]],
 SH-H023 via [[TASK-111]]) — and **18 of the 57 findings now have a task**, across 31 files: 29 done, 1 in review ([[TASK-118]]), 1 cancelled. The **other 39 findings were decomposed into 15 per-area triage tasks on 2026-09-08** — see the section above; the counts in the rest of this paragraph predate that and describe the original 23-task set. [[TASK-137]] closed the defect [[TASK-109]] filed against itself while being
