@@ -92,16 +92,49 @@ public class DestructiveFilterGuardTests
             "a null filter is read-everything — a documented API on reads, and the thing that must be "
                 + "refused on the destructive paths");
 
-    // ---- an untranslatable predicate is indistinguishable from the above at this layer ----
+    // ---- an untranslatable predicate is now refused UPSTREAM, before it can look like "everything" ----
 
+    /// <summary>
+    /// ⚠ <b>INVERTED by TASK-308 (SH-H026), and this is the record of where the line moved.</b> This test
+    /// used to assert the opposite — that <c>x =&gt; pred(x)</c> rendered no <c>WHERE</c> and therefore
+    /// "cannot be told apart from meaning everything". That was true, and it was only *safe* on the
+    /// destructive path, where <see cref="AbstractConnectorBase.AddRequiredWhere"/> refuses whatever
+    /// renders nothing. On a <b>read</b> there is no such decision point, so the same predicate silently
+    /// returned every row — measured on SQLite as <b>3 of 3</b>.
+    /// <para>So the untranslatable cause is now classified at the one place it can be: the parser, which
+    /// knows it has no branch for the node. It no longer reaches the rendering stage at all.</para>
+    /// </summary>
     [Fact]
-    public void UntranslatablePredicate_RendersNoWhere_SoItCannotBeToldApartFromMeaningEverything()
+    public void UntranslatablePredicate_IsRefusedByTheParser_NotRenderedAsNothing()
     {
         Func<Widget, bool> pred = w => w.Count > 5;
-        // An InvocationExpression: the parser has no branch for it, so it falls through to the same empty
-        // result as `x => true`. THIS is why the guard is on the rendered WHERE and the causes are not
-        // classified — at the point of decision they are the same observation.
-        Render(x => pred(x)).Should().BeEmpty();
+
+        var act = () => Render(x => pred(x));
+
+        act.Should().Throw<NotSupportedException>()
+            .WithMessage("*cannot be translated to SQL*")
+            .WithMessage("*reads as every row*");
+    }
+
+    /// <summary>
+    /// SH-H002's decision that <b>the causes are deliberately not distinguished</b> is unchanged for every
+    /// cause that still reaches the guard, and this is what pins it. A null filter and a predicate that
+    /// <i>reduces</i> to every row (TASK-137's empty <c>NOT IN</c>) both still render nothing and are both
+    /// still answered identically — only the *untranslatable* cause moved upstream, and it moved because
+    /// it had to fire somewhere <c>AddRequiredWhere</c> does not run.
+    /// </summary>
+    [Fact]
+    public void TheOtherTwoCausesStillRenderNothing_AndAreStillNotClassified()
+    {
+        Render(null).Should().BeEmpty("a null filter renders nothing");
+        Render(x => true).Should().BeEmpty("the explicit all-rows synonym renders nothing");
+
+        // The third cause — a predicate that REDUCES to every row (TASK-137's empty `NOT IN`) — needs a
+        // table-mapped entity to reach the reduction at all, so it is asserted in EmptyNotInReductionTests
+        // rather than duplicated here with a second fixture. Noted because the absence looks like an
+        // oversight otherwise: this fixture's Widget is deliberately unmapped, and an unresolvable column
+        // takes the value-fragment path, which has refused with NotSupportedException since long before
+        // TASK-308 — the precedent for the exception type chosen there.
     }
 
     // ---- the guard itself: AddRequiredWhere ----
@@ -114,12 +147,17 @@ public class DestructiveFilterGuardTests
         return command;
     }
 
+    /// <summary>
+    /// ⚠ <b>Example retargeted by TASK-308.</b> This used to reach the guard through an
+    /// <c>InvocationExpression</c>, which the parser now refuses upstream (SH-H026) — so that shape would
+    /// have tested the new refusal rather than this guard, and the test would have passed for the wrong
+    /// reason. A <b>null filter</b> still renders nothing and still gets here, which is what this test is
+    /// about. Its assertion is unchanged.
+    /// </summary>
     [Fact]
     public void AddRequiredWhere_Throws_WhenNothingWouldBeRendered()
     {
-        Func<Widget, bool> pred = w => w.Count > 5;
-
-        var act = () => Destructive(x => pred(x));
+        var act = () => Destructive(null);
 
         act.Should().Throw<Birko.Data.Exceptions.WholeTableWriteException>()
             .Which.Should().Match<Birko.Data.Exceptions.WholeTableWriteException>(
