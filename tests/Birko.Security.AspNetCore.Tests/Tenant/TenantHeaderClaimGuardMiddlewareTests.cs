@@ -329,7 +329,11 @@ public class TenantHeaderClaimGuardMiddlewareTests
         var context = NewContext();
         configureRequest(context);
 
-        await resolving.InvokeAsync(context);
+        // SH-H049: InvokeAsync now takes the tenant context per request. This test deliberately pins ONE
+        // instance (birkoContext) so the guard and the resolving middleware are correlated, so it is
+        // supplied to both the constructor and the invocation — the constructor-supplied one wins either
+        // way, which is what keeps a hand-built pipeline like this working.
+        await resolving.InvokeAsync(context, birkoContext);
 
         return await ReadAsync(context, nextCalled);
     }
