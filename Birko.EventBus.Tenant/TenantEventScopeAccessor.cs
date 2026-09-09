@@ -26,8 +26,19 @@ namespace Birko.EventBus.Tenant
     /// outbox and the message-queue envelope, so a genuine system event still arrives here as <c>null</c> and
     /// keeps its cross-tenant dispatch; only an explicitly-zero tenant now scopes instead of widening.
     /// Assumes the supplied <see cref="ITenantContext"/> is the AsyncLocal-backed context the handlers'
-    /// repositories also observe (as <c>AddBirkoSecurity</c> / <c>AddTenantContext*</c> register it) — the
-    /// per-flow AsyncLocal state set here is what the dispatched handlers read.
+    /// repositories also observe — the per-flow AsyncLocal state set here is what the dispatched handlers
+    /// read.
+    /// <para>
+    /// ⚠ <b>SH-H053:</b> this used to add "(as <c>AddBirkoSecurity</c> / <c>AddTenantContext*</c> register
+    /// it)", which is false for the second. <c>AddTenantContext*</c> registers
+    /// <c>typeof(TenantContext)</c> and that type holds its state in <b>instance</b> <c>AsyncLocal</c>
+    /// fields, so the container's instance and <c>Tenant.Current</c> share nothing. When the assumption
+    /// fails the enricher leaves <see cref="EventContext.TenantGuid"/> null, which is indistinguishable
+    /// from a genuine system event — so the <c>null</c> branch below widens a tenant-scoped event to
+    /// <b>all tenants</b>. That is the same widening direction as the <c>Guid.Empty</c> defect this class
+    /// already records, reached by a different route: not a value being mis-read, but the bridge reading
+    /// the wrong object. See <c>AddEventTenantScope</c>'s remarks for which registrations are safe.
+    /// </para>
     /// </remarks>
     public sealed class TenantEventScopeAccessor : IEventScopeAccessor
     {
