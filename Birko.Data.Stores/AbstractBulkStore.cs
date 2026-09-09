@@ -182,15 +182,23 @@ namespace Birko.Data.Stores
         /// wall (§ SH-H037). Only a predicate that *happens* to cover everything is refused.</para>
         /// <para>Call it from any override that bypasses this class's own wrappers — the sweep behind SH-M023
         /// found ten such overrides across three backends, so the guard has to be reachable, not implicit.</para>
+        /// <para><b>TASK-329 — the rule now lives in one place, not here.</b> This method and its twin on
+        /// <c>AbstractAsyncBulkStore</c> were two implementations of one rule, and the SQL bulk stores derive
+        /// from neither hierarchy: they implement <c>IBulkStore&lt;T&gt;</c> / <c>IAsyncBulkStore&lt;T&gt;</c>
+        /// directly, so they inherited no guard and rewrote whole tables silently (measured: 3 of 3 rows,
+        /// <c>thrown=NONE</c>). Both now delegate to <see cref="Data.Expressions.BoundedFilterGuard"/> and
+        /// pass only the door name, which is the sole thing that genuinely differs per caller. <b>Do not
+        /// re-inline the checks here</b> — a fourth copy is how the third one came to be missed.</para>
         /// </remarks>
         protected static void RequireBoundedFilter(Expression<Func<T, bool>>? filter, string operation)
         {
-            if (filter == null) return;                   // RequireFilter owns the null case.
-            if (Data.Expressions.PredicateScope.IsExplicitAllRows(filter)) return;
-            if (!Data.Expressions.PredicateScope.ReducesToAllRows(filter)) return;
-
-            throw new Data.Exceptions.WholeTableWriteException(
-                operation, typeof(T).Name, "every stored entity of that type");
+            // TASK-329: the rule itself lives in ONE place now. This used to be an inline copy, and
+            // its twin in the other hierarchy was a second — which is how the SQL bulk stores, which
+            // derive from neither, ended up with none at all and rewrote whole tables silently.
+            // Only the door name differs per caller, so only the door name is passed.
+            Data.Expressions.BoundedFilterGuard.Require(
+                filter, operation, typeof(T).Name,
+                operation == "delete" ? "DeleteAll()" : "UpdateAll(updates)");
         }
 
 

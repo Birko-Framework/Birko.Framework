@@ -204,14 +204,12 @@ namespace Birko.Data.Stores
         /// <inheritdoc cref="AbstractBulkStore{T}.RequireBoundedFilter(Expression{Func{T, bool}}, string)"/>
         protected static void RequireBoundedFilter(Expression<Func<T, bool>>? filter, string operation)
         {
-            if (filter == null) return;                   // RequireFilter owns the null case.
-            if (Data.Expressions.PredicateScope.IsExplicitAllRows(filter)) return;
-            if (!Data.Expressions.PredicateScope.ReducesToAllRows(filter)) return;
-
-            // TASK-215 / § SH-H037: name the door this caller actually HAS. An async store has no
-            // DeleteAll() — pointing at it would be a refusal whose opt-out does not compile.
-            throw new Data.Exceptions.WholeTableWriteException(
-                operation, typeof(T).Name, "every stored entity of that type",
+            // TASK-329: the rule itself lives in ONE place now. This used to be an inline copy, and
+            // its twin in the other hierarchy was a second — which is how the SQL bulk stores, which
+            // derive from neither, ended up with none at all and rewrote whole tables silently.
+            // Only the door name differs per caller, so only the door name is passed.
+            Data.Expressions.BoundedFilterGuard.Require(
+                filter, operation, typeof(T).Name,
                 operation == "delete" ? "DeleteAllAsync()" : "UpdateAllAsync(updates)");
         }
 
