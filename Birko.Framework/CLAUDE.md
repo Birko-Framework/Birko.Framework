@@ -1346,6 +1346,59 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     — the seam `Table.GetSelectFields(…, Func<string,string>? quoteTable)` already demonstrates. And
     `SupportsSchemas` would be genuinely two-sided: true on PostgreSQL and MSSql, false on SQLite and on
     MySQL, where `CREATE SCHEMA` creates a **database** (measured: it produced a sibling of `birkoview`).
+- **Birko's OWN bookkeeping tables are dialect-rendered like anything else — and the bare-column rule two
+  entries up does NOT extend to them.** Twelfth instance of the identifier family (TASK-332), and the first
+  where the broken statement is the framework's, not a consumer's. `SqlMigrationStore` built one hardcoded
+  `CREATE TABLE` for the migrations state table: ANSI-quoted identifiers, `VARCHAR(255)`, `TEXT`, and
+  `TIMESTAMP` twice. Two defects followed, both firing on Birko's own table **before a single model table is
+  reached**, so the SQL migration runner worked on SQLite and PostgreSQL **only** — measured on MySQL 8.4.11
+  (`ERROR 1064 … near '"__Migrations_X" ("Version" BIGINT PRIMAR'`, because `"` is an identifier delimiter
+  there only under `ANSI_QUOTES`) and SQL Server 2022 CU26 (`Msg 2738, A table can only have one timestamp
+  column`, because T-SQL's `TIMESTAMP` is a deprecated synonym for `ROWVERSION`). Seven parts generalise:
+  - **A default that nothing can pass is not a default, it is the only behaviour.** The store took
+    `quoteOpen`/`quoteClose` parameters defaulting to `"`, and **0 call sites anywhere** passed them —
+    framework, tests, all 16 consumer repos — while `SqlMigrationRunner` constructed it **holding the
+    connector**, one line away. § TASK-247's *a fallback nobody can reach is a second implementation that
+    drifts*, arriving as a parameter rather than a branch. The remedy is to delete the guessing surface:
+    the connector is now **required**, so there is nothing left to guess with.
+  - **Quote the bookkeeping table's columns; the entity rule is about a different statement.**
+    `AbstractConnector.CreateTable` emits entity columns **bare** deliberately (§ TASK-245), and the obvious
+    unification — make the migrations table bare too — is silently catastrophic: PostgreSQL folds an
+    unquoted identifier, so a bare `SELECT Version` asks for `version` while **every already-deployed
+    database stores `Version`**, and every read of an existing database raises `42703`. Measured by
+    mutation: emitting bare reds the upgrade test and **leaves the fresh-database test green**, which is
+    exactly why this class of defect needs an *upgrade* test and not a round-trip on a clean server.
+    What changed is only *which* delimiters are used, so PG and SQLite DML is byte-identical and no
+    existing deployment is touched.
+  - **Types come from `ConvertType`, because that is the one producer for the declared side of a column**
+    (§ TASK-269). Restating a type table in the migrations store is how it drifts from the entity path, and
+    routing through it means every past *and future* per-provider typing fix (TASK-257's `NVARCHAR(MAX)`,
+    TASK-264's precision) reaches this table without being restated. Build the field through
+    `SchemaField.For`, never a bare `AbstractField`: a connector reads a width off the **runtime type**, so
+    the hand-rolled version silently loses `Name`'s 255 (§ TASK-264).
+  - **Identity on the settings, rendering on the connector.** `SqlMigrationSettings.FullTableName` quoted
+    each part with an ANSI delimiter hardcoded in a `protected virtual` on that class — a *second* quoting
+    producer, and a settings object holds no connector so it cannot answer a provider capability. It is now
+    `QualifiedTableName`, the bare `Schema.Table` identity, rendered by
+    `AbstractConnectorBase.QualifiedIdentifier`. **Renamed rather than redefined**: an external reader of
+    the old name would silently have received unquoted SQL where it used to get quoted, and a compile error
+    is the loud direction (§ TASK-260). 0 external readers measured before renaming.
+  - **⚠ The two defects do not overlap, and that is why the consumer saw two different errors.**
+    `Microsoft.Data.SqlClient` connects with `QUOTED_IDENTIFIER ON`, under which SQL Server **does** accept
+    `"` as an identifier delimiter — measured directly: the same statement is `Msg 102` under `sqlcmd`'s
+    default `OFF` and reaches `Msg 2738` with `-I`. So defect 1 is MySQL-only in practice and defect 2 is
+    MSSql-only, and **fixing either alone leaves one server broken**. Do not infer one provider's behaviour
+    from another's in this family; measure per provider, through the driver the framework actually uses.
+  - **The statement existed twice — sync and async — and the duplication was load-bearing.** A mutation
+    reverting **only** the async copy reds exactly the two async tests on exactly the two broken dialects
+    while every sync test stays green: half a fix that a sync-only suite would have called done. Both paths
+    now render from one producer, and both are covered per dialect.
+  - **`DEFAULT CURRENT_TIMESTAMP` needs no capability, and that is a measurement rather than an assumption.**
+    Accepted by SQLite, PostgreSQL 16.15, MySQL 8.4.11 (on `DATETIME`) and SQL Server 2022 (on `DATETIME2`).
+    Stated because the obvious reading — "a default expression is surely not portable" — would have bought a
+    provider switch nothing needs. The one behaviour change on a working dialect *is* recorded and pinned:
+    SQLite's `Version` is now `INTEGER PRIMARY KEY`, i.e. a rowid alias, so a full-width version is asserted
+    to round-trip exactly.
 - **A bare-emitted identifier has no enclosure, so its containment is REFUSAL — the third mechanism, and the
   guard that provides it is separated from its sibling by the MESSAGE, not by the check.** Eleventh instance
   of the identifier family (TASK-255), and the one that names the mechanism the previous ten kept implying.
@@ -2550,6 +2603,50 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+
+### The migration runner's own bookkeeping table could not be created on MySQL or SQL Server (2026-09-12)
+
+TASK-332, reported by consumer Symbio after building its 109-table schema on live PostgreSQL 16, MySQL 8.4.11
+and SQL Server 2022 CU26 for the first time — every previous Symbio schema had only ever been built on SQLite.
+PostgreSQL passed completely. **MySQL and MSSql both failed inside Birko's own migration bookkeeping, before a
+single model table was reached**, so the SQL migration runner worked on SQLite and PostgreSQL only. Verified
+with `BIRKO_REQUIRE_LIVE` set against live PostgreSQL 16.15, MySQL 8.4.11, SQL Server 2022 CU26 (16.0.4275.2),
+TimescaleDB 2.30.0 and on-disk SQLite: **210 tests, 0 failed, 0 skipped** across three suites, 24 new, four
+disjoint mutations. The standing rules are in § Conventions. Eight things worth carrying:
+
+- **Both defects were reproduced against live servers before a line was written**, verbatim: MySQL's
+  `ERROR 1064 … near '"__Mig_Probe" ("Version" BIGINT PRIMARY KEY'` and SQL Server's `Msg 2738, A table can
+  only have one timestamp column`. The proposed replacement statement was then run on all three servers
+  **before** being coded, which is what made `DEFAULT CURRENT_TIMESTAMP` a measurement rather than a bet.
+- **⚠ The two defects do not overlap, and measuring that changed the story.** SQL Server accepts `"` as an
+  identifier delimiter under `QUOTED_IDENTIFIER ON` — which is `Microsoft.Data.SqlClient`'s default — so
+  defect 1 never fires there and defect 2 never fires on MySQL. The same statement is `Msg 102` under
+  `sqlcmd`'s default `OFF` and `Msg 2738` with `-I`; I nearly recorded the wrong conclusion from the first
+  run. Fixing either defect alone leaves one server broken.
+- **The fix deletes the guessing surface rather than defaulting it better.** `quoteOpen`/`quoteClose` had
+  **0 call sites anywhere** while the runner constructed the store holding the connector; the connector is
+  now required. Same for types: `ConvertType` is the one producer (§ TASK-269), so this table is typed
+  exactly as an entity table and inherits every past and future per-provider fix.
+- **⚠ The tempting unification is the catastrophic one, and a mutation proved it.** Making the migrations
+  table's columns bare — matching the entity DDL — reds the PostgreSQL upgrade test (`42703` against a table
+  an earlier release created) while **leaving the fresh-database test green**. That asymmetry is the whole
+  reason the suite carries an upgrade test and not only a clean-server round-trip.
+- **The duplication was load-bearing.** Reverting **only** the async `CREATE TABLE` reds exactly the two
+  async tests on exactly the two broken dialects, sync green — a half-fix that a sync-only suite calls done.
+- **The read-back is the assertion, not "the DDL did not throw".** `GetAppliedVersions` answers **empty** for
+  an absent table rather than failing, so an empty set cannot distinguish "created" from "never created";
+  only a recorded version coming back proves the table exists, accepts a write and can be queried.
+- **⚠ Two process mistakes of mine, both worth recording.** I ran `git checkout` on a file carrying
+  uncommitted work to undo a mutation and **destroyed the fix**, rebuilding it from a script — mutations are
+  now reverted from an explicit backup copy. And I set `BIRKO_REQUIRE_LIVE` globally across a suite whose
+  server was not running and read the resulting **35 TimescaleDB failures as signal**; all 35 were
+  `SKIPPED: no live TimescaleDB` promoted to failures, exactly the trap § TASK-259 and § TASK-266 record.
+  Standing a TimescaleDB container up instead gave 88/88 and a fifth dialect verified live.
+- **⚠ Out of scope and deliberately not conflated:** three Symbio columns (`SpaceAttributes.Key`,
+  `ProductAttributes.Key`, `InAppNotifications.Read`) are reserved words in MySQL and T-SQL, so their
+  `CREATE TABLE` fails there. That is a model-naming decision in the consumer (their TASK-690), not a
+  framework defect — the bare-column emission it collides with is deliberate — and "fixing" it by quoting
+  entity columns everywhere would break PostgreSQL, the one server dialect that already worked.
 
 ### A SQL cache key did not identify its query, in two independent ways — and the obvious fix was measurably insufficient (2026-09-09)
 
