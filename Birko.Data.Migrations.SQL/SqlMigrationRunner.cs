@@ -43,7 +43,12 @@ namespace Birko.Data.Migrations.SQL
         /// <param name="connector">SQL connector from the store. Use <c>store.Connector</c> to pass it.</param>
         /// <param name="settings">Migration settings.</param>
         public SqlMigrationRunner(AbstractConnector connector, SqlMigrationSettings? settings = null)
-            : base(new SqlMigrationStore(() => connector.CreateConnection(connector.Settings), settings))
+            // TASK-332: pass the connector, do not let the store fall back to a dialect default. The
+            // runner has always held it, and the store needs it to quote identifiers and choose column
+            // types -- without it the migrations table's own CREATE TABLE was ANSI-quoted on every
+            // dialect (ERROR 1064 on MySQL) and declared TIMESTAMP twice (Msg 2738 on SQL Server), so
+            // the runner worked on SQLite and PostgreSQL only.
+            : base(new SqlMigrationStore(() => connector.CreateConnection(connector.Settings), connector, settings))
         {
             _connector = connector ?? throw new ArgumentNullException(nameof(connector));
             _settings = settings ?? new SqlMigrationSettings();
