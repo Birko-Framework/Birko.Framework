@@ -60,4 +60,28 @@ public class SqlMigrationSettingsTests
         settings.UseTransaction.Should().BeFalse();
         settings.TransactionTimeout.Should().Be(60);
     }
+
+    /// <summary>
+    /// TASK-332 — the settings object carries the migrations table's <b>identity</b> and does no quoting.
+    /// </summary>
+    /// <remarks>
+    /// This replaced <c>FullTableName</c>, which quoted each part with an ANSI double quote hardcoded on
+    /// this class — a second quoting producer beside the connector's, and wrong on MySQL and SQL Server.
+    /// A settings object holds no connector, so it cannot answer a question whose answer is a provider
+    /// capability; rendering moved to <c>SqlMigrationStore</c> via
+    /// <c>AbstractConnectorBase.QualifiedIdentifier</c> (the position TASK-262 records as identity on the
+    /// table, rendering on the connector). Asserting the absence of quoting is the point: it is what stops
+    /// the quoting drifting back here.
+    /// </remarks>
+    [Theory]
+    [InlineData(null, "__Migrations", "__Migrations")]
+    [InlineData("", "__Migrations", "__Migrations")]
+    [InlineData("dbo", "__Migrations", "dbo.__Migrations")]
+    [InlineData("reporting", "__Migrations_Stock", "reporting.__Migrations_Stock")]
+    public void QualifiedTableName_is_the_bare_identity_never_a_quoted_rendering(
+        string? schema, string table, string expected)
+    {
+        new SqlMigrationSettings { Schema = schema, MigrationsTable = table }
+            .QualifiedTableName.Should().Be(expected);
+    }
 }
