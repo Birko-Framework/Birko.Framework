@@ -170,8 +170,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         int? offset,
         CancellationToken ct)
     {
-        var sql = BuildAggregateSql(filter, orderBy, limit, offset);
-        var queryDef = new QueryDefinition(sql);
+        var queryDef = BuildAggregateSql(filter, orderBy, limit, offset);
 
         var results = new List<TView>();
         using var iterator = _container.GetItemQueryIterator<TView>(queryDef);
@@ -188,8 +187,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         Expression<Func<TView, bool>>? filter,
         CancellationToken ct)
     {
-        var sql = BuildCountAggregateSql(filter);
-        var queryDef = new QueryDefinition(sql);
+        var queryDef = BuildCountAggregateSql(filter);
 
         using var iterator = _container.GetItemQueryIterator<CountResult>(queryDef);
         if (iterator.HasMoreResults)
@@ -202,12 +200,13 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         return 0;
     }
 
-    private string BuildAggregateSql(
+    private QueryDefinition BuildAggregateSql(
         Expression<Func<TView, bool>>? filter,
         OrderBy<TView>? orderBy,
         int? limit,
         int? offset)
     {
+        var parameters = new List<KeyValuePair<string, object?>>();
         // Build SELECT ... FROM c and GROUP BY parts separately via shared helper
         var groupByFields = _definition.GroupBy
             .Select(g => (g.PropertyName, FindViewPropertyForGroupBy(g)));
@@ -221,7 +220,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         // names — the query runs against the raw documents (FROM c) (CR-H045).
         if (filter != null)
         {
-            var whereClause = CosmosFilterTranslator.Translate(filter, MapViewPropertyToSource);
+            var whereClause = CosmosFilterTranslator.Translate(filter, parameters, MapViewPropertyToSource);
             if (!string.IsNullOrEmpty(whereClause))
             {
                 sb.Append(" WHERE ").Append(whereClause);
@@ -246,14 +245,17 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         // OFFSET ... LIMIT
         if (offset.HasValue || limit.HasValue)
         {
+            // Not parameterised, deliberately: both are `int?` from this store's own API, so no
+            // caller text reaches the statement and there is nothing to contain.
             sb.Append($" OFFSET {offset ?? 0} LIMIT {limit ?? int.MaxValue}");
         }
 
-        return sb.ToString();
+        return Bind(sb.ToString(), parameters);
     }
 
-    private string BuildCountAggregateSql(Expression<Func<TView, bool>>? filter)
+    private QueryDefinition BuildCountAggregateSql(Expression<Func<TView, bool>>? filter)
     {
+        var parameters = new List<KeyValuePair<string, object?>>();
         var sb = new StringBuilder();
 
         // Wrap the aggregate query in a COUNT: SELECT VALUE COUNT(1) FROM (sub-query)
@@ -263,7 +265,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
 
         if (filter != null)
         {
-            var whereClause = CosmosFilterTranslator.Translate(filter, MapViewPropertyToSource);
+            var whereClause = CosmosFilterTranslator.Translate(filter, parameters, MapViewPropertyToSource);
             if (!string.IsNullOrEmpty(whereClause))
             {
                 sb.Append(" WHERE ").Append(whereClause);
@@ -279,7 +281,25 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
 
         sb.Append(')');
 
-        return sb.ToString();
+        return Bind(sb.ToString(), parameters);
+    }
+
+    /// <summary>
+    /// Builds the <see cref="QueryDefinition"/> and binds every filter value the translator collected.
+    /// </summary>
+    /// <remarks>
+    /// One producer for the binding, so the two builders cannot drift into different parameter
+    /// conventions -- and so a third builder is correct without being told.
+    /// </remarks>
+    private static QueryDefinition Bind(string sql, List<KeyValuePair<string, object?>> parameters)
+    {
+        var queryDef = new QueryDefinition(sql);
+        foreach (var p in parameters)
+        {
+            queryDef = queryDef.WithParameter(p.Key, p.Value);
+        }
+
+        return queryDef;
     }
 
     /// <summary>
@@ -351,6 +371,13 @@ internal static class CosmosFilterTranslator
     /// <c>true</c> -- the one predicate that constrains nothing. An empty return therefore means
     /// exactly that, and never "translation failed".
     /// </returns>
+    /// <param name="parameters">
+    /// Collects every value the filter compares against, as <c>@pN</c> bindings the caller attaches
+    /// to the <c>QueryDefinition</c>. TASK-447: values used to be rendered into the statement as
+    /// quoted literals with only <c>'</c> escaped, so a value containing a backslash broke out of its
+    /// own literal and the remainder was parsed as SQL. A bound parameter has no grammar to break out
+    /// of, which is why this is parameterised rather than escaped more carefully.
+    /// </param>
     /// <exception cref="NotSupportedException">
     /// The predicate cannot be expressed as Cosmos SQL. SH-H055: this used to be swallowed and
     /// returned as an empty string, which both callers read as "no filter" -- so the aggregate ran
@@ -364,7 +391,10 @@ internal static class CosmosFilterTranslator
     /// be translated back to its source name or the predicate targets a non-existent field and
     /// silently matches nothing (CR-H045). Null (LINQ path) leaves names unchanged.
     /// </param>
-    public static string Translate<T>(Expression<Func<T, bool>> filter, Func<string, string>? mapMember = null)
+    public static string Translate<T>(
+        Expression<Func<T, bool>> filter,
+        IList<KeyValuePair<string, object?>> parameters,
+        Func<string, string>? mapMember = null)
     {
         // SH-H055: an explicit `x => true` is the ONE case where an empty clause is the right answer,
         // and it is answered here rather than inside the recursion. Nested, a boolean constant has to
@@ -377,16 +407,19 @@ internal static class CosmosFilterTranslator
             return string.Empty;
         }
 
-        return TranslateExpression(filter.Body, mapMember);
+        return TranslateExpression(filter.Body, parameters, mapMember);
     }
 
-    private static string TranslateExpression(Expression expression, Func<string, string>? mapMember)
+    private static string TranslateExpression(
+        Expression expression,
+        IList<KeyValuePair<string, object?>> parameters,
+        Func<string, string>? mapMember)
     {
         return expression switch
         {
-            BinaryExpression binary => TranslateBinary(binary, mapMember),
-            UnaryExpression { NodeType: ExpressionType.Not } unary => $"NOT ({TranslateExpression(unary.Operand, mapMember)})",
-            MethodCallExpression method => TranslateMethodCall(method, mapMember),
+            BinaryExpression binary => TranslateBinary(binary, parameters, mapMember),
+            UnaryExpression { NodeType: ExpressionType.Not } unary => $"NOT ({TranslateExpression(unary.Operand, parameters, mapMember)})",
+            MethodCallExpression method => TranslateMethodCall(method, parameters, mapMember),
             // SH-H055: `x => false` used to take the unsupported-node throw below, get swallowed, and
             // emit no WHERE -- so it matched EVERY document instead of none. Rendered as a literal it
             // is correct both at the top level and nested inside AND/OR.
@@ -395,16 +428,19 @@ internal static class CosmosFilterTranslator
         };
     }
 
-    private static string TranslateBinary(BinaryExpression binary, Func<string, string>? mapMember)
+    private static string TranslateBinary(
+        BinaryExpression binary,
+        IList<KeyValuePair<string, object?>> parameters,
+        Func<string, string>? mapMember)
     {
         if (binary.NodeType == ExpressionType.AndAlso)
         {
-            return $"({TranslateExpression(binary.Left, mapMember)} AND {TranslateExpression(binary.Right, mapMember)})";
+            return $"({TranslateExpression(binary.Left, parameters, mapMember)} AND {TranslateExpression(binary.Right, parameters, mapMember)})";
         }
 
         if (binary.NodeType == ExpressionType.OrElse)
         {
-            return $"({TranslateExpression(binary.Left, mapMember)} OR {TranslateExpression(binary.Right, mapMember)})";
+            return $"({TranslateExpression(binary.Left, parameters, mapMember)} OR {TranslateExpression(binary.Right, parameters, mapMember)})";
         }
 
         var op = binary.NodeType switch
@@ -419,17 +455,20 @@ internal static class CosmosFilterTranslator
         };
 
         var left = TranslateFieldAccess(binary.Left, mapMember);
-        var right = TranslateValue(binary.Right);
+        var right = BindValue(binary.Right, parameters);
 
         return $"{left} {op} {right}";
     }
 
-    private static string TranslateMethodCall(MethodCallExpression method, Func<string, string>? mapMember)
+    private static string TranslateMethodCall(
+        MethodCallExpression method,
+        IList<KeyValuePair<string, object?>> parameters,
+        Func<string, string>? mapMember)
     {
         if (method.Method.Name == "Contains" && method.Object != null)
         {
             var field = TranslateFieldAccess(method.Object, mapMember);
-            var value = TranslateValue(method.Arguments[0]);
+            var value = BindValue(method.Arguments[0], parameters);
             return $"CONTAINS({field}, {value})";
         }
 
@@ -453,7 +492,13 @@ internal static class CosmosFilterTranslator
 
     private static string Map(string name, Func<string, string>? mapMember) => mapMember?.Invoke(name) ?? name;
 
-    internal static string TranslateValue(Expression expression)
+    /// <summary>
+    /// Evaluates a value operand to its CLR value. TASK-447: this used to *render* the value into the
+    /// statement as a quoted literal; it now only extracts it, and <see cref="BindValue"/> binds it as
+    /// a query parameter.
+    /// </summary>
+    /// <exception cref="NotSupportedException">The operand could not be evaluated to a constant.</exception>
+    internal static object? EvaluateValue(Expression expression)
     {
         object? value;
 
@@ -490,25 +535,43 @@ internal static class CosmosFilterTranslator
             }
         }
 
-        var invariant = System.Globalization.CultureInfo.InvariantCulture;
-        return value switch
-        {
-            null => "null",
-            string s => $"'{s.Replace("'", "\\'")}'",
-            bool b => b ? "true" : "false",
-            // Enums default to numeric serialization (System.Text.Json); emit the numeric value, not
-            // the unquoted member name which would be invalid SQL (CR-M086).
-            Enum e => Convert.ToInt64(e, invariant).ToString(invariant),
-            // Quote temporal values as ISO-8601 (matches System.Text.Json's default DateTime format);
-            // the raw ToString() fallback emitted a culture-dependent, unquoted, invalid literal (CR-M086).
-            DateTime dt => $"'{dt.ToString("o", invariant)}'",
-            DateTimeOffset dto => $"'{dto.ToString("o", invariant)}'",
-            decimal d => d.ToString(invariant),
-            double d => d.ToString(invariant),
-            float f => f.ToString(invariant),
-            Guid g => $"'{g}'",
-            _ => value.ToString()!
-        };
+        return value;
     }
 
+    /// <summary>
+    /// Evaluates a value operand and binds it as a query parameter, returning the placeholder to put
+    /// in the statement.
+    /// </summary>
+    /// <remarks>
+    /// TASK-447. Values used to be rendered as quoted literals, escaping <c>'</c> as <c>\'</c> and
+    /// nothing else. Cosmos NoSQL uses backslash as the escape character inside a literal, so a
+    /// backslash in the *input* consumed the escape the code had just added: measured, an input of
+    /// <c>a\' OR 1=1 --</c> rendered as <c>'a\\' OR 1=1 --'</c>, where the literal ends early and the
+    /// remainder is parsed as SQL. On an aggregate view the predicate is the only thing scoping the
+    /// query, so that widened it to every document with the caller controlling the predicate.
+    ///
+    /// Parameterised rather than escaped more carefully, because escaping is a blacklist against a
+    /// grammar that can grow while a bound parameter has no grammar at all -- CLAUDE.md
+    /// § TASK-308/SH-H028, "prefer removing the grammar to escaping it". It also retires the
+    /// hand-written literal formatting CR-M086 twice had to correct: the SDK serializes a parameter
+    /// with the same serializer that wrote the document, so an enum, a DateTime or a Guid now matches
+    /// the stored form by construction instead of by a guess about System.Text.Json's defaults.
+    /// </remarks>
+    private static string BindValue(Expression expression, IList<KeyValuePair<string, object?>> parameters)
+    {
+        var value = EvaluateValue(expression);
+
+        // Enums are bound as their underlying integral value. This is the one formatting decision
+        // kept from CR-M086, because it is NOT a serialization concern the SDK settles for us: the
+        // driver would serialize the enum through its own converter, and the stored documents are
+        // written by Birko's own store, which uses the numeric form.
+        if (value is Enum e)
+        {
+            value = Convert.ToInt64(e, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        var name = "@p" + parameters.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        parameters.Add(new KeyValuePair<string, object?>(name, value));
+        return name;
+    }
 }
