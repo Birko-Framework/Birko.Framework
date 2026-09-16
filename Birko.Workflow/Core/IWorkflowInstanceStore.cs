@@ -24,14 +24,23 @@ public interface IWorkflowInstanceStore<TData>
     Task DeleteAsync(Guid instanceId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Finds workflow instances by current state.
+    /// Finds instances of <paramref name="workflowName"/> that are in <paramref name="state"/>.
     /// </summary>
-    Task<IEnumerable<WorkflowInstance<TData>>> FindByStateAsync(string state, int limit = 100, CancellationToken cancellationToken = default);
+    /// <remarks>
+    /// SH-H056. <paramref name="workflowName"/> is required and is not a convenience filter. Every
+    /// backend keeps all workflows in one table/collection, so without it this query returned other
+    /// workflows' rows and handed them back as <typeparamref name="TData"/> — which does not throw,
+    /// because a foreign payload deserializes with every member defaulted. The result type can only
+    /// be sound if the rows are restricted to the one workflow whose payload type is
+    /// <typeparamref name="TData"/>, and a workflow name is the only thing that restricts them.
+    /// </remarks>
+    Task<IEnumerable<WorkflowInstance<TData>>> FindByStateAsync(string workflowName, string state, int limit = 100, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Finds workflow instances by status.
+    /// Finds instances of <paramref name="workflowName"/> that are in <paramref name="status"/>.
     /// </summary>
-    Task<IEnumerable<WorkflowInstance<TData>>> FindByStatusAsync(WorkflowStatus status, int limit = 100, CancellationToken cancellationToken = default);
+    /// <remarks>See <see cref="FindByStateAsync"/> — <paramref name="workflowName"/> is required for the same reason (SH-H056).</remarks>
+    Task<IEnumerable<WorkflowInstance<TData>>> FindByStatusAsync(string workflowName, WorkflowStatus status, int limit = 100, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Finds workflow instances by workflow name.

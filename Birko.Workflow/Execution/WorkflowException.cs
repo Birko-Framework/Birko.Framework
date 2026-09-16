@@ -48,3 +48,30 @@ public sealed class WorkflowActionException : WorkflowException
         Trigger = trigger;
     }
 }
+
+/// <summary>
+/// SH-H057: a save was aimed at an instance row that belongs to a different workflow.
+/// </summary>
+/// <remarks>
+/// Raised by <see cref="Birko.Workflow.Core.WorkflowInstanceOwnership.RequireSameWorkflow"/> before
+/// the update branch of any backend's <c>SaveAsync</c> can relabel and overwrite the foreign row.
+/// The message names both doors a caller actually has, because a guard that only says "no" gets
+/// reached around: delete the instance and save it afresh under the new name, or relabel the row
+/// directly through the backend store's own <c>Store</c> property, which every implementation exposes.
+/// </remarks>
+public sealed class WorkflowInstanceOwnershipException : WorkflowException
+{
+    /// <summary>The <c>WorkflowName</c> found on the stored row.</summary>
+    public string? PersistedWorkflowName { get; }
+
+    public WorkflowInstanceOwnershipException(string workflowName, string? persistedWorkflowName, Guid instanceId)
+        : base(workflowName, instanceId,
+            $"Workflow instance '{instanceId}' belongs to workflow '{persistedWorkflowName}', not '{workflowName}', "
+            + "so saving it here would overwrite another workflow's data. All backends share one "
+            + "table/collection across workflows, so an instance id identifies a row, not a workflow. "
+            + "To move an instance deliberately, delete it and save it afresh under the new name, or "
+            + "relabel the stored row through the backend store's own Store property.")
+    {
+        PersistedWorkflowName = persistedWorkflowName;
+    }
+}
