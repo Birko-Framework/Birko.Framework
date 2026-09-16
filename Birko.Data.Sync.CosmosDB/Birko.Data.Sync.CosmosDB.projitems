@@ -16,6 +16,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Models\CosmosSyncKnowledgeItem.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncCosmosSyncKnowledgeStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosSyncKnowledgeQuery.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosSyncKnowledgeStore.cs" />
   </ItemGroup>
   <!-- This project extends Birko.Data.Sync and a consumer must import

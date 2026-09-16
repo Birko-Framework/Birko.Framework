@@ -44,8 +44,11 @@ public class AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowle
 
         // Scope by tenant as well (CR-H100): previously tenantId was ignored, so a query returned —
         // and Delete/SetLastSyncTime affected — every tenant's items in the scope.
-        var queryable = Container.GetItemLinqQueryable<CosmosSyncKnowledgeItem>()
-            .Where(x => x.Scope == scope && x.TenantId == tenantId);
+        // SH-H013: the predicate now comes from one producer, which drops the tenant term entirely when no
+        // tenant was given. Inline, it was an unconditional `x.TenantId == tenantId` that Cosmos renders as
+        // `root["TenantId"] = null` — Undefined in the Cosmos SQL dialect, so it matched nothing at all.
+        var queryable = CosmosSyncKnowledgeQuery.ApplyScope(
+            Container.GetItemLinqQueryable<CosmosSyncKnowledgeItem>(), scope, tenantId);
 
         var results = new List<CosmosSyncKnowledgeItem>();
         using var iterator = queryable.ToFeedIterator();
@@ -71,8 +74,10 @@ public class AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowle
 
         // CR-L210: query directly on Scope + TenantId + EntityGuid and take the first result, instead of
         // materializing every document in the scope into a Dictionary just to pull one item out of it.
-        var queryable = Container.GetItemLinqQueryable<CosmosSyncKnowledgeItem>()
-            .Where(x => x.Scope == scope && x.TenantId == tenantId && x.EntityGuid == entityGuid)
+        // SH-H013: scope/tenant come from the shared producer — see CosmosSyncKnowledgeQuery.
+        var queryable = CosmosSyncKnowledgeQuery.ApplyScope(
+                Container.GetItemLinqQueryable<CosmosSyncKnowledgeItem>(), scope, tenantId)
+            .Where(x => x.EntityGuid == entityGuid)
             .Take(1);
 
         using var iterator = queryable.ToFeedIterator();
