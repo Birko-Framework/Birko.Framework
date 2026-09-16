@@ -33,18 +33,19 @@ _Generated 2026-09-16 (`/tasks triage`). Run `/tasks triage` to refresh. **Do no
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 147   |
+| todo         | —     | —       | 148   |
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 11    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 23      | 143   |
+| done         | 1     | 23      | 144   |
 | cancelled    | 0     | 0       | 2     |
 
-`todo` by priority: 37× P1 · 93× P2 · 17× P3.  
-> ℹ Recounted from the files on 2026-09-16 rather than incremented: the previous line read
-> `1× P0 · 38× P1 · 92× P2 · 16× P3`, which still summed to the right total while carrying a
-> **P0 that no longer exists** (TASK-309 was the last, closed 2026-09-16) and one P3 short.
-> A breakdown that sums correctly is not thereby correct.
+`todo` by priority: 1× P0 · 36× P1 · 93× P2 · 18× P3.  
+> ℹ Recounted from the files on each close rather than incremented. The line read
+> `1× P0 · 38× P1 · 92× P2 · 16× P3` before TASK-315, which still summed to the right total while
+> carrying a P0 that had just been closed and one P3 short — a breakdown that sums correctly is not
+> thereby correct. The P0 here is [[TASK-447]], filed 2026-09-16 (a SQL injection sink in the Cosmos
+> view filter path, found while closing [[TASK-322]]).
 
 ## In progress now
 
@@ -150,7 +151,7 @@ _None_
   - [ ] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export 🔍 review · FEATURE-013
   - [ ] TASK-228 `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk 🔍 review · FEATURE-013
   - [ ] TASK-307 The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (107/195 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (109/197 tasks done)
   - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) · FEATURE-014
   - [x] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire · FEATURE-014
   - [ ] TASK-144 `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model · FEATURE-014
@@ -249,13 +250,15 @@ _None_
   - [ ] TASK-331 An expression-valued UPDATE that binds no parameter issues no statement at all, silently · FEATURE-014
   - [x] TASK-332 The migration runner's own bookkeeping table could not be created on MySQL or SQL Server · FEATURE-014
   - [ ] TASK-446 All seven workflow instance stores have zero store-level tests, and that is where two high findings lived · FEATURE-014
+  - [ ] TASK-447 A Cosmos view filter's string value breaks out of its own quotes · FEATURE-014
+  - [ ] TASK-448 Two records disagree about what a rendered expression tree leaks · FEATURE-014
   - STORY-024 Critical findings — done (0/0 done)
   - STORY-025 High findings — done (0/0 done)
   - STORY-026 Medium findings — in-progress (0/0 done)
   - STORY-027 Low findings — done (0/0 done)
   - STORY-042 Integration-test tier — the Docker-gated remediation findings — planned (0/0 done)
   - STORY-043 Workflow backends — unify the serialization seam (ISerializer everywhere) — done (0/0 done)
-  - STORY-051 Spec-harvest — high findings — in-progress (36/47 done)
+  - STORY-051 Spec-harvest — high findings — in-progress (37/47 done)
     - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash · FEATURE-014
     - [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table · FEATURE-014
     - [x] TASK-110 ORDER BY identifiers reach SQL text unresolved and unquoted · FEATURE-014
@@ -301,7 +304,7 @@ _None_
     - [ ] TASK-319 Triage the 1 remaining high spec-harvest finding in `schema-index-and-ddl` · FEATURE-014
     - [ ] TASK-320 Triage the 1 remaining high spec-harvest finding in `specifications-and-paging` · FEATURE-014
     - [ ] TASK-321 Triage the 1 remaining high spec-harvest finding in `store-crud-contract` · FEATURE-014
-    - [ ] TASK-322 Triage the 1 remaining high spec-harvest finding in `views-and-aggregation` · FEATURE-014
+    - [x] TASK-322 Triage the 1 remaining high spec-harvest finding in `views-and-aggregation` · FEATURE-014
     - [ ] TASK-445 `ConflictResolution.Merge` is a silent no-op, and the enum advertises it as supported · FEATURE-014
   - STORY-053 Spec-harvest — medium findings — planned (0/25 done)
     - [ ] TASK-151 Triage the 36 medium spec-harvest findings in `views-and-aggregation` · FEATURE-014

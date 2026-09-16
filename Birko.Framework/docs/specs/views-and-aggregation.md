@@ -1,7 +1,7 @@
 ---
 area: views-and-aggregation
-generated-at: de598e6
-generated-on: 2026-08-16
+generated-at: 10da48b
+generated-on: 2026-09-16
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
   - ../Birko.Data.CosmosDB.Views/CosmosViewStore.cs
@@ -46,7 +46,7 @@ sources:
   - ../Birko.Data.Views/ViewResult.cs
 source-commits:   # sibling HEADs when this spec was last written (2026-08-16 16:17:32,
                   # commit c78cfca). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.CosmosDB.Views: 1b91192
+  ../Birko.Data.CosmosDB.Views: 3fba6e6
   ../Birko.Data.ElasticSearch: 9b523e2
   ../Birko.Data.ElasticSearch.Views: 3881649
   ../Birko.Data.MongoDB.Views: 1a69f29
@@ -972,28 +972,68 @@ present. Joins are not supported.
 - **When** the SQL is built
 - **Then** it ends with `OFFSET 20 LIMIT 2147483647`
 
-### Requirement: Cosmos DB filter translation is best-effort and fails open
+### Requirement: Cosmos DB filter translation refuses what it cannot express
 
 The system SHALL translate a filter expression into a Cosmos SQL `WHERE` fragment supporting
-`AndAlso`, `OrElse`, `Not`, the six binary comparisons, and `Contains` on a member target,
-and SHALL return the **empty string** — producing a query with no `WHERE` clause at all —
-whenever any part of the expression cannot be translated. Literal values SHALL be inlined:
+`AndAlso`, `OrElse`, `Not`, the six binary comparisons, `Contains` on a member target, and a
+boolean constant, and SHALL throw `NotSupportedException` whenever any part of the expression
+cannot be translated.
+
+An empty return SHALL mean exactly one thing — the predicate is the explicit constant `true`,
+which constrains nothing. It SHALL NOT mean that translation failed: both callers append the
+`WHERE` only when the clause is non-empty, so a swallowed failure ran the aggregate over every
+document and a tenant-scoped query returned other tenants' rows (SH-H055). This is the same
+invariant the ElasticSearch view store holds under CR-H047.
+
+A boolean constant SHALL render as the SQL literal `true` or `false` wherever it appears inside
+the expression, so that a constant nested in a conjunction produces valid SQL rather than an
+empty fragment joined between its neighbours' separators. Literal values SHALL be inlined:
 `null` unquoted, strings single-quoted with `'` escaped as `\'`, booleans as `true`/`false`,
 enums as their numeric value, `DateTime`/`DateTimeOffset` as ISO-8601 (`"o"`) quoted strings,
 `Guid` quoted, `decimal`/`double`/`float` invariant-formatted, and anything else via
 `ToString()`.
 
-#### Scenario: An untranslatable predicate silently drops the filter
+#### Scenario: An untranslatable predicate is refused
 
 - **Given** the filter `v => v.Tags.Any(t => t == "x")` on an aggregate Cosmos view
 - **When** `CosmosFilterTranslator.Translate` runs
-- **Then** the `NotSupportedException` is caught, `string.Empty` is returned, no `WHERE` is appended, and the query returns **every** document's aggregate rather than the filtered subset
+- **Then** the `NotSupportedException` propagates to the caller, and no query is built — rather than a query with no `WHERE` that aggregates every document
 
-#### Scenario: Constant on the left of a comparison is not translated
+#### Scenario: The count path refuses it too
+
+- **Given** the same untranslatable filter
+- **When** `BuildCountAggregateSql` runs
+- **Then** it refuses identically; `BuildAggregateSql` and `BuildCountAggregateSql` each carry their own translate-then-append pair and both are guarded
+
+#### Scenario: An operand that cannot be evaluated is reported as a translation failure
+
+- **Given** a column-vs-column filter such as `v => v.TenantGuid == v.OwnerGuid`
+- **When** `TranslateValue` compiles the right operand and `Compile()` throws because the lambda parameter is not in scope
+- **Then** a `NotSupportedException` naming the operand's node type is thrown with the original exception as its inner — one exception type selects every "this filter cannot be translated" case, and the message carries the node's shape rather than the rendered expression
+
+#### Scenario: Constant on the left of a comparison is refused
 
 - **Given** the filter `v => 100 < v.Total`
 - **When** the binary expression is translated
-- **Then** `TranslateFieldAccess` throws on the constant left operand, the outer catch swallows it, and the whole filter is dropped
+- **Then** `TranslateFieldAccess` throws on the constant left operand and the exception propagates; the filter is not silently dropped
+
+#### Scenario: An explicit always-true predicate constrains nothing
+
+- **Given** the filter `v => true`
+- **When** `Translate` runs
+- **Then** an empty clause is returned and no `WHERE` is appended — the caller asked for every document. The check is on the expression body, and accepts a single `ConstantExpression` node only, never a shape that merely reduces to true
+
+#### Scenario: An explicit always-false predicate matches nothing
+
+- **Given** the filter `v => false`
+- **When** `Translate` runs
+- **Then** `WHERE false` is emitted. Before SH-H055 this took the same swallow as an untranslatable node and therefore matched **every** document — the opposite of what it asks for
+
+#### Scenario: A boolean constant nested in a conjunction renders as a literal
+
+- **Given** the filter `v => v.Total > 0 && true`
+- **When** the conjunction is translated
+- **Then** the emitted clause is `(c.Amount > 0 AND true)` — a constant is rendered wherever it appears, because an empty fragment would be joined between the `AND` separators into invalid SQL
 
 #### Scenario: Enum and DateTime literals are emitted as valid SQL
 

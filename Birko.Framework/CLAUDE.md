@@ -2636,6 +2636,49 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### A Cosmos view filter that could not be translated returned every tenant's rows (2026-09-16)
+
+TASK-322 / `SH-H055`, the last backend still holding the fail-open CR-H047 closed on ElasticSearch and
+TASK-268 generalised. `CosmosFilterTranslator.Translate` wrapped its whole recursion in
+`catch { return string.Empty; }`, and both consumers append the WHERE only when the clause is
+non-empty -- so an untranslatable predicate produced **no WHERE at all** and the aggregate ran over
+every document. **15/15 green**, 9 new, **four disjoint mutations**, plus a measurement taken before
+the fix existed. Seven things worth carrying:
+
+- **The empty string was overloaded THREE ways, and only one of them was the defect.** "No filter
+  supplied", "translation failed", and "always true" all rendered as `""`. That is why *stop
+  swallowing* is the wrong fix on its own, and it is § TASK-308's *the empty state is OVERLOADED*
+  arriving in a second translator -- there the ambiguity was between "constrains nothing" and "nothing
+  was parsed", here it has a third member.
+- **⚠ `x => true` WORKED, by accident, and the test that proves it passed against the unfixed code.**
+  A `ConstantExpression` hit the unsupported-node throw, was swallowed, and the empty clause happened
+  to mean the right thing. A naive throw turns a working call into an exception -- `PredicateScope`'s
+  *a false refusal breaks working code*. **Write the test before the fix and the accident is visible;
+  write it after and it looks like a requirement you invented.**
+- **⚠ And its mirror was a silent wrong answer the finding never mentions.** `x => false` took the
+  identical path and therefore matched **every** document instead of none. Same root cause, opposite
+  direction, found only by asking what else reaches the swallowed branch.
+- **The always-true door is at the ENTRY POINT; a nested constant renders as a literal.** § TASK-137:
+  an empty fragment returned for a nested term is silently joined between its neighbours' separators
+  into `(c.Amount > 0 AND )`. So the recursion always emits `true`/`false`, and only the top-level
+  body short-circuits -- accepting a single `ConstantExpression` node, never a shape that merely
+  reduces to true.
+- **Refuse with the type the sibling already throws.** `TranslateValue` let
+  `InvalidOperationException` escape from `Compile()` for a column-vs-column operand; it now reports
+  `NotSupportedException`, so one catch selects "this filter cannot be translated" on Cosmos and
+  ElasticSearch alike. Cancellation is excluded from that rewrap (§ TASK-291), and the message carries
+  the node's **type** and never the rendered expression (§ TASK-308).
+- **⚠ "This needs a live Cosmos" was false, and a harness for it already existed.** `BuildAggregateSql`
+  is reached by reflection off a store built from an unreachable connection string -- the shape
+  `CosmosViewAggregateSqlTests` had been using since CR-H044. Only *executing* a query needs a server.
+  Third instance of § TASK-309's rule; before accepting that a sink is untestable offline, try
+  rendering it.
+- **⚠ Spawned [[TASK-447]] (P0):** `TranslateValue` escapes `'` and **not** the backslash, so a filter
+  value breaks out of its own literal -- measured, `a\' OR 1=1 --` renders as `'a\\' OR 1=1 --'` and
+  the remainder is parsed as SQL. Different root cause, so it is its own task rather than folded in.
+  The existing `CosmosViewTranslateValueTests` asserts `O'Brien` -- the single input where escaping
+  only the quote is correct, which is how the sink stayed invisible in a tested area.
+
 ### One workflow could relabel and overwrite another's instance, on all seven backends (2026-09-16)
 
 TASK-315 / `SH-H056` + `SH-H057`, the first of [[STORY-051]]'s ten remaining P1 per-area tasks. **Both

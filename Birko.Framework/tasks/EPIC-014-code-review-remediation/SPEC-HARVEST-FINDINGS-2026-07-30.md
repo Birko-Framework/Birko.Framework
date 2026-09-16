@@ -807,6 +807,34 @@ WithTenant/WithTenantAsync save and restore only _currentTenantGuid/_currentTena
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:358`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED** (TASK-322, measured 2026-09-16). `Translate` (`CosmosViewStore.cs:356-365`)
+wrapped its whole recursion in `catch { return string.Empty; }`, and both consumers --
+`BuildAggregateSql:224` and `BuildCountAggregateSql:266` -- append the WHERE only
+`if (!string.IsNullOrEmpty(whereClause))`. Reached by all three public methods (`QueryAsync`,
+`QueryFirstAsync`, `CountAsync`) on the aggregate path; the non-aggregate LINQ path hands the
+predicate to the driver and is unaffected.
+
+**Per-backend audit: CosmosDB Views only.** ElasticSearch already throws (CR-H047 -> TASK-268),
+MongoDB renders through `Builders<TView>.Filter`, RavenDB uses `.Where(filter)`. A framework-wide
+sweep for the same catch-all-returning-empty shape found one other hit, in a different area with a
+different meaning (`TenantSyncProvider:1006`, a version-hash fallback).
+
+**Two things the finding does not name, both in the same method and both fixed here.** The empty
+string was overloaded three ways -- "no filter supplied", "translation failed", "always true" -- and
+only the middle one is the defect. Measured before the fix: `x => true` **worked by accident** (a
+`ConstantExpression` hit the unsupported-node throw, was swallowed, and the empty clause happened to
+mean the right thing), so a naive throw would have regressed a working call; and `x => false` took
+the identical path and therefore matched **every** document instead of none -- a silent wrong answer
+in the opposite direction. A boolean constant is now rendered as a SQL literal in any position, with
+the always-true door at the entry point so a nested constant cannot produce `(c.A = 1 AND )`.
+`TranslateValue` also reports an unevaluatable operand as `NotSupportedException` rather than leaking
+`InvalidOperationException` from `Compile()`, so one catch selects the whole family on either backend.
+
+**Spawned, not folded in ([[TASK-447]], P0):** `TranslateValue` escapes only `'` and not the
+backslash, so a filter value is a SQL injection sink. Measured -- `a\' OR 1=1 --` renders as
+`'a\\' OR 1=1 --'`, where the literal terminates early and the remainder is parsed as SQL.
+Different root cause (escaping, not swallowing), so it gets its own id.
+
 `catch { return string.Empty; }`. Any untranslatable predicate (collection Any, constant-on-the-left, column-vs-column — `Expression.Lambda(expression)` over a parameter-dependent operand throws inside TranslateValue, method calls other than instance Contains) yields no WHERE at all. BuildAggregateSql/BuildCountAggregateSql then aggregate EVERY document, so a filter like `v => v.TenantGuid == x` returns other tenants' rows. Same fail-open CR-H047 closed on the ES side.
 
 ### area: workflow-state-machine
