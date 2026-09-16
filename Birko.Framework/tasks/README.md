@@ -37,7 +37,7 @@ _Generated 2026-09-16 (`/tasks triage`). Run `/tasks triage` to refresh. **Do no
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 11    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 23      | 145   |
+| done         | 1     | 23      | 146   |
 | cancelled    | 0     | 0       | 2     |
 
 `todo` by priority: 37× P1 · 93× P2 · 18× P3.  
@@ -45,10 +45,12 @@ _Generated 2026-09-16 (`/tasks triage`). Run `/tasks triage` to refresh. **Do no
 > is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
 > one P3 short, while still totalling right). The P0 filed on 2026-09-16 as [[TASK-447]] is now closed.
 >
-> ⚠ **One task file on disk is NOT counted here and is not in git:**
-> `tasks/_loose/TASK-449-…-noise-not-reproducible-….md`, which arrived untracked during this pass and
-> is not mine to commit. It is also outside [[fix-next]]'s pool (`_loose`, `findings: []`, no
-> `review-intake` parent), so nothing ranks it — see its own § *Note on placement*.
+> ⚠ **[[TASK-449]] is now committed and `done`** — it arrived untracked, and was worked only because
+> it was picked by explicit instruction. It was outside [[fix-next]]'s pool (`_loose`, `findings: []`,
+> no `review-intake` parent), which is half the contradiction its own § *Note on placement* records:
+> the convention says file single-sub-project work in the sub-repo, 1 of 178 sub-projects has a
+> `tasks/` folder, and every scheduler runs from here. **A defect filed either way is ranked by
+> nothing.** Whoever owns § *Task tracking* should settle it.
 
 ## In progress now
 
@@ -435,6 +437,7 @@ _None_
 - [ ] TASK-130 Scan every shipped theme for colour contrast, and gate it like the drift check (P1, ai)
 - [ ] TASK-140 `resolveModuleFromHash` derives the module positionally and never consults the route table (P1, ai)
 - [ ] TASK-200 Symbio: an outbox replay duplicates a create, and TASK-151 scoped the cause out of itself (P1, ai)
+- [x] TASK-449 `PerlinNoise` and `SimplexNoise` take a seed but are not reproducible across .NET versions (P2, ai)
 - [ ] TASK-127 Decide what `WithAllTenants` means when a tenant is also in scope (P2, human)
 - [ ] TASK-138 `ReadAsync()` with no arguments does not compile — CS0121 between the read-all and filtered overloads (P2, ai)
 - [ ] TASK-139 Decide whether a `pointer: coarse` rule inside a `b-*` component is policy or a knob (P2, human)

@@ -2636,6 +2636,45 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### Seeded noise was not reproducible across .NET versions, and 14 tests could not see it (2026-09-16)
+
+TASK-449, filed by hand rather than harvested and picked by explicit instruction — it sat in
+`tasks/_loose/` with an empty `findings:` and no `review-intake` parent, so nothing ranked it.
+`PerlinNoise` and `SimplexNoise` both take a seed and both shuffled their permutation table with
+`new System.Random(seed)`, whose algorithm changed in .NET 6 and carries no cross-version stability
+guarantee. **130/130 green**, 9 new, **three mutations**. Six things worth carrying:
+
+- **Seedable and reproducible are different properties, and the call site cannot tell them apart.** A
+  constructor taking a seed *looks* like it promises a stable sequence. That is the whole reason this
+  was invisible, and it is why the fix ships a **per-type reproducibility table** in
+  `Birko.Random/CLAUDE.md` rather than only a code change — a consumer picking an RNG for replay or
+  procedural generation should not have to read the source to find out.
+- **⚠ The area had 14 tests and every one of them passes against the defect.** They assert ranges,
+  continuity, zero-at-integer-coordinates, and that two instances agree **within one process** — where
+  `System.Random` is perfectly deterministic. The thing never asserted was a **value**, which is the
+  only assertion that can fail when the runtime changes underneath. Measured: reverting the fix reds
+  8 of 130 and leaves all 14 green. § TASK-284's rule, in its purest form yet.
+- **Extract to one producer when the defect IS the duplication.** The task proposed "roughly two lines
+  per file" and that is correct and smaller. `NoisePermutation.Build` was extracted instead because
+  two files were independently deciding where their randomness came from — which is how they came to
+  make the same wrong choice. A shared producer makes the next such edit impossible to get half-right.
+- **A golden vector must pin the CONSTRUCTION, not just determinism.** Mutation B keeps SplitMix and
+  changes only the seed widening (`(ulong)seed` → `(ulong)(uint)seed`); it reds 2 of 130. Without a
+  mutation at that granularity, "the vectors pass" would only prove *some* deterministic generator is
+  in use.
+- **⚠ A source scan over files that explain the defect must strip comments, or it matches its own
+  explanation.** All three noise sources discuss `System.Random` in their doc comments — deliberately,
+  so the reason stays with the code. Mutation C removes the stripping and the guard fails on itself.
+  § TASK-276's self-matching trap, arriving from the other side: there the fix was to *assemble* the
+  forbidden literal, here it is to scan code rather than prose.
+- **⚠ The tracking convention contradicts itself, and this task is both halves of the evidence.**
+  § *Task tracking* prescribes filing single-sub-project work in the sub-repo; **1 of 178**
+  sub-projects has a `tasks/` folder, and `/tasks pick`, the dashboard and [[fix-next]] all run from
+  the aggregator. So the prescribed location is *filed and scheduled by nothing* — and the
+  aggregator's own `_loose/` is only marginally better, since a task there with no `findings:` and no
+  `review-intake` parent is outside the pool too. Recorded rather than given an id: the decision
+  belongs to whoever owns the convention, not to a defect fix in `Birko.Random`.
+
 ### A Cosmos view filter's string value could break out of its own quotes (2026-09-16)
 
 TASK-447, spawned by [[TASK-322]]'s close gate the same day and worked next because it is the same end
