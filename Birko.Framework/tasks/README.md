@@ -37,7 +37,7 @@ _Generated 2026-09-16 (`/tasks triage`). Run `/tasks triage` to refresh. **Do no
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 11    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 23      | 141   |
+| done         | 1     | 23      | 142   |
 | cancelled    | 0     | 0       | 2     |
 
 `todo` by priority: 1× P0 · 38× P1 · 92× P2 · 16× P3.
@@ -283,7 +283,7 @@ _None_
     - [x] TASK-224 `DateTime.Date` in a CosmosDB filter renders as a JSON sub-property and silently matches nothing · FEATURE-014
     - [x] TASK-225 MongoDB's connection string is composed with no escape hatch — no driver option can be set · FEATURE-014
     - [x] TASK-308 Triage the 7 remaining high spec-harvest findings in `filter-expression-translation` · FEATURE-014
-    - [ ] TASK-309 Triage the 7 remaining high spec-harvest findings in `data-sync` · FEATURE-014
+    - [x] TASK-309 Triage the 7 remaining high spec-harvest findings in `data-sync` · FEATURE-014
     - [x] TASK-310 Triage the 3 remaining high spec-harvest findings in `caching` · FEATURE-014
     - [x] TASK-311 Triage the 2 remaining high spec-harvest findings in `tenant-isolation` · FEATURE-014
     - [x] TASK-312 Triage the 1 remaining high spec-harvest finding in `security-and-authorization` · FEATURE-014
@@ -297,6 +297,7 @@ _None_
     - [ ] TASK-320 Triage the 1 remaining high spec-harvest finding in `specifications-and-paging` · FEATURE-014
     - [ ] TASK-321 Triage the 1 remaining high spec-harvest finding in `store-crud-contract` · FEATURE-014
     - [ ] TASK-322 Triage the 1 remaining high spec-harvest finding in `views-and-aggregation` · FEATURE-014
+    - [ ] TASK-445 `ConflictResolution.Merge` is a silent no-op, and the enum advertises it as supported · FEATURE-014
   - STORY-053 Spec-harvest — medium findings — planned (0/25 done)
     - [ ] TASK-151 Triage the 36 medium spec-harvest findings in `views-and-aggregation` · FEATURE-014
     - [ ] TASK-152 Triage the 33 medium spec-harvest findings in `migrations` · FEATURE-014
