@@ -37,9 +37,16 @@ public class RelationshipBuilder<TParent, TChild>
     /// HasMany(p => p.Categories)
     ///     .Through&lt;ProductCategory&gt;(j => j.ProductGuid, j => j.CategoryGuid);
     /// </example>
+    /// <remarks>
+    /// SH-H014: <typeparamref name="TJunction"/> is constrained to <see cref="Data.Models.AbstractModel"/>
+    /// because <see cref="Mapping.AggregateMapper{T}"/> now materialises junction rows and hands them to
+    /// <see cref="Mapping.SyncOperation"/>, whose <c>Entity</c> is an <c>AbstractModel</c>. Without the
+    /// constraint the mapper would have to refuse at runtime what the builder had already accepted.
+    /// </remarks>
     public RelationshipBuilder<TParent, TChild> Through<TJunction>(
         Expression<Func<TJunction, object?>> parentFk,
         Expression<Func<TJunction, object?>> childFk)
+        where TJunction : Data.Models.AbstractModel
     {
         _descriptor.Type = RelationshipType.ManyToMany;
         _descriptor.JunctionType = typeof(TJunction);
