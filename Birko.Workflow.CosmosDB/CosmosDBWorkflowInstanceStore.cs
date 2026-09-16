@@ -19,7 +19,6 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     where TData : class
 {
     private readonly AsyncCosmosDBStore<CosmosWorkflowInstanceModel> _store;
-    private readonly string _workflowName;
 
     /// <summary>
     /// Gets the underlying store for transaction context access.
@@ -29,9 +28,8 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     /// <summary>
     /// Creates a new Cosmos DB workflow instance store with settings.
     /// </summary>
-    public CosmosDBWorkflowInstanceStore(string workflowName, Birko.Data.CosmosDB.Stores.Settings settings)
+    public CosmosDBWorkflowInstanceStore(Birko.Data.CosmosDB.Stores.Settings settings)
     {
-        _workflowName = workflowName ?? throw new ArgumentNullException(nameof(workflowName));
         _store = new AsyncCosmosDBStore<CosmosWorkflowInstanceModel>();
         _store.SetSettings(settings);
     }
@@ -39,9 +37,8 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     /// <summary>
     /// Creates a new Cosmos DB workflow instance store with an existing store.
     /// </summary>
-    public CosmosDBWorkflowInstanceStore(string workflowName, AsyncCosmosDBStore<CosmosWorkflowInstanceModel> store)
+    public CosmosDBWorkflowInstanceStore(AsyncCosmosDBStore<CosmosWorkflowInstanceModel> store)
     {
-        _workflowName = workflowName ?? throw new ArgumentNullException(nameof(workflowName));
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
@@ -52,10 +49,11 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
 
         if (existing != null)
         {
+            // SH-H057: the row is keyed by InstanceId alone and every workflow shares one
+            // table/collection, so an id identifies a row, not a workflow. Refuse before
+            // UpdateFromInstance relabels and overwrites another workflow's instance.
+            WorkflowInstanceOwnership.RequireSameWorkflow(existing.WorkflowName, workflowName, instance.InstanceId);
             existing.UpdateFromInstance(instance);
-            // UpdateFromInstance does not touch WorkflowName; mirror the RavenDB reference and
-            // refresh it so a re-save under a different workflowName isn't silently kept stale (CR-L404).
-            existing.WorkflowName = workflowName;
             await _store.UpdateAsync(existing, ct: ct).ConfigureAwait(false);
             return existing.Guid ?? instance.InstanceId;
         }
@@ -85,10 +83,10 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStateAsync(string state, int limit = 100, CancellationToken ct = default)
+    public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStateAsync(string workflowName, string state, int limit = 100, CancellationToken ct = default)
     {
         var results = await _store.ReadAsync(
-            filter: m => m.CurrentState == state && m.WorkflowName == _workflowName,
+            filter: m => m.WorkflowName == workflowName && m.CurrentState == state,
             orderBy: OrderBy<CosmosWorkflowInstanceModel>.ByName(nameof(CosmosWorkflowInstanceModel.UpdatedAt), descending: true),
             limit: limit,
             ct: ct
@@ -98,11 +96,11 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStatusAsync(WorkflowStatus status, int limit = 100, CancellationToken ct = default)
+    public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStatusAsync(string workflowName, WorkflowStatus status, int limit = 100, CancellationToken ct = default)
     {
         var statusInt = (int)status;
         var results = await _store.ReadAsync(
-            filter: m => m.Status == statusInt && m.WorkflowName == _workflowName,
+            filter: m => m.WorkflowName == workflowName && m.Status == statusInt,
             orderBy: OrderBy<CosmosWorkflowInstanceModel>.ByName(nameof(CosmosWorkflowInstanceModel.UpdatedAt), descending: true),
             limit: limit,
             ct: ct
