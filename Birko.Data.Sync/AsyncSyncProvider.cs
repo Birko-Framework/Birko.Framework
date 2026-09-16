@@ -201,11 +201,18 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
                     knowledgeCreates.Add(item);
                 }
             }
+            // SH-H012: these three used to carry options.CancellationToken. The batch loop above BREAKS
+            // on cancellation rather than throwing, so on a cancelled run they were reached with an
+            // already-cancelled token and threw immediately - the outer catch then recorded a generic
+            // "Sync failed" and the knowledge for every item ALREADY WRITTEN to the stores by completed
+            // batches was lost, leaving the next run to re-decide them blind. The writes have happened;
+            // recording that they happened is not optional, and the synchronous SyncProvider twin has
+            // always persisted unconditionally. Cancellation is still reported through the result.
             if (knowledgeCreates.Count > 0)
-                await _knowledgeStore.CreateAsync(knowledgeCreates, null, options.CancellationToken);
+                await _knowledgeStore.CreateAsync(knowledgeCreates, null, CancellationToken.None);
             if (knowledgeUpdatesToApply.Count > 0)
-                await _knowledgeStore.UpdateAsync(knowledgeUpdatesToApply, null, options.CancellationToken);
-            await _knowledgeStore.SetLastSyncTimeAsync(options.Scope, DateTime.UtcNow, options.CancellationToken);
+                await _knowledgeStore.UpdateAsync(knowledgeUpdatesToApply, null, CancellationToken.None);
+            await _knowledgeStore.SetLastSyncTimeAsync(options.Scope, DateTime.UtcNow, CancellationToken.None);
 
             // Fill result
             result.TotalProcessed = progress.ProcessedItems;
@@ -271,14 +278,32 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
 
             try
             {
+                // SH-H011: the knowledge row written below must describe the state AFTER the action
+                // was applied, not the pre-action dictionaries. Each arm updates the effective pair.
+                var effectiveLocal = localItem;
+                var effectiveRemote = remoteItem;
+
                 switch (action.Action)
                 {
                     case SyncAction.Create:
-                        if (options.Direction == SyncDirection.Download && remoteItem != null)
+                        // SH-H008: the destination of a create is decided by which side is MISSING the
+                        // item, never by options.Direction. The arms here used to test
+                        // Direction == Download then == Upload with no else, so under the DEFAULT
+                        // Bidirectional direction (SyncOptions.Direction) neither matched: the Create
+                        // that DetermineSyncAction returns for its two one-sided Bidirectional branches
+                        // was applied to nothing, while the item was still counted Processed and a
+                        // knowledge row still written - not even SkippedItems moved, so the drop was
+                        // invisible in every counter. Direction is already applied upstream
+                        // (DetermineSyncAction only returns Create for remoteExists && !localExists
+                        // under Download, and for the mirror under Upload), so dispatching on presence
+                        // is behaviour-preserving for those two directions and is the only thing that
+                        // works for Bidirectional and for the initial-sync branch.
+                        if (remoteItem != null && localItem == null)
                         {
                             if (CanSaveToLocal(remoteItem, filterOptions, options))
                             {
                                 await _localStore.CreateAsync(remoteItem, null, options.CancellationToken);
+                                effectiveLocal = remoteItem;
                                 progress.CreatedItems++;
                             }
                             else
@@ -286,17 +311,26 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
                                 progress.SkippedItems++;
                             }
                         }
-                        else if (options.Direction == SyncDirection.Upload && localItem != null)
+                        else if (localItem != null && remoteItem == null)
                         {
                             if (CanSaveToRemote(localItem, filterOptions, options))
                             {
                                 await _remoteStore.CreateAsync(localItem, null, options.CancellationToken);
+                                effectiveRemote = localItem;
                                 progress.CreatedItems++;
                             }
                             else
                             {
                                 progress.SkippedItems++;
                             }
+                        }
+                        else
+                        {
+                            // Unreachable today: DetermineSyncAction never returns Create with both
+                            // sides present or both absent. Counted rather than dropped so that a
+                            // future shape reaching here is visible in the result instead of vanishing
+                            // silently, which is the whole of SH-H008.
+                            progress.SkippedItems++;
                         }
                         break;
 
@@ -305,11 +339,13 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
                         if (winner == "remote" && remoteItem != null && CanSaveToLocal(remoteItem, filterOptions, options))
                         {
                             await _localStore.UpdateAsync(remoteItem, null, options.CancellationToken);
+                            effectiveLocal = remoteItem;
                             progress.UpdatedItems++;
                         }
                         else if (winner == "local" && localItem != null && CanSaveToRemote(localItem, filterOptions, options))
                         {
                             await _remoteStore.UpdateAsync(localItem, null, options.CancellationToken);
+                            effectiveRemote = localItem;
                             progress.UpdatedItems++;
                         }
                         break;
@@ -318,11 +354,13 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
                         if (action.DeleteOn == "local" && localItem != null)
                         {
                             await _localStore.DeleteAsync(localItem, options.CancellationToken);
+                            effectiveLocal = null;
                             progress.DeletedItems++;
                         }
                         else if (action.DeleteOn == "remote" && remoteItem != null)
                         {
                             await _remoteStore.DeleteAsync(remoteItem, options.CancellationToken);
+                            effectiveRemote = null;
                             progress.DeletedItems++;
                         }
                         break;
@@ -334,15 +372,20 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
                     case SyncAction.Conflict:
                         progress.Conflicts++;
                         var resolution = ResolveConflict(action.Conflict!, options);
-                        await ApplyConflictResolutionAsync(resolution, guid, localItem, remoteItem, options, filterOptions, progress);
+                        (effectiveLocal, effectiveRemote) = await ApplyConflictResolutionAsync(
+                            resolution, guid, localItem, remoteItem, options, filterOptions, progress);
                         break;
                 }
 
                 result.Processed++;
                 progress.ProcessedItems++;
 
-                // Update knowledge
-                knowledgeUpdates.Add(_knowledgeStore.CreateKnowledgeItem(guid, GetVersionHash(localItem), GetVersionHash(remoteItem), options));
+                // Update knowledge. SH-H011: these were GetVersionHash(localItem)/(remoteItem) - the
+                // PRE-action values - so after a create the destination's hash was still null and every
+                // backend set IsLocal/IsRemoteDeleted = string.IsNullOrEmpty(hash) = true. Those flags
+                // mean "absent when decided", but DetermineSyncAction's two delete branches read them as
+                // "deleted", so the next run deleted a row that had just been created (SH-H009).
+                knowledgeUpdates.Add(_knowledgeStore.CreateKnowledgeItem(guid, GetVersionHash(effectiveLocal), GetVersionHash(effectiveRemote), options));
             }
             catch (Exception ex)
             {
@@ -363,9 +406,24 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
     }
 
     /// <summary>
-    /// Apply conflict resolution asynchronously
+    /// Apply conflict resolution, returning the (local, remote) pair as it stands after the write so the
+    /// caller can record knowledge describing the post-action state (SH-H011).
     /// </summary>
-    private async Task ApplyConflictResolutionAsync(
+    /// <remarks>
+    /// SH-H010: every arm used to require BOTH items to be non-null - an outer
+    /// <c>when localItem != null</c> and then an inner <c>if (remoteItem != null ...)</c>, and the mirror
+    /// for UseRemote. But a conflict is only ever raised by the two one-sided-presence branches of
+    /// <see cref="Internal.SyncProviderBase{T, TKnowledge}.DetermineSyncAction"/>, where the opposite item
+    /// is null by construction, so no resolution could ever write anything: every conflict fell through
+    /// with no store write and no counter change.
+    /// <para>The one-sided arms below do exactly what the LocalWins / RemoteWins shortcuts in that same
+    /// method already do for the identical state - re-create on the side that lost the row, or honour the
+    /// deletion by dropping the surviving side - so a policy and its conflict path cannot disagree about
+    /// what "local wins" means.</para>
+    /// <para><c>ConflictResolution.Merge</c> is deliberately not handled here: nothing in the framework
+    /// can merge two entities, so there is no mechanism to call. It falls through to the unchanged pair.</para>
+    /// </remarks>
+    private async Task<(T? Local, T? Remote)> ApplyConflictResolutionAsync(
         ConflictResolution resolution,
         Guid guid,
         T? localItem,
@@ -378,21 +436,59 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
         {
             switch (resolution)
             {
-                case ConflictResolution.UseLocal when localItem != null:
-                    if (remoteItem != null && CanSaveToRemote(localItem, filterOptions, options))
+                case ConflictResolution.UseLocal when localItem != null && remoteItem != null:
+                    if (CanSaveToRemote(localItem, filterOptions, options))
                     {
                         await _remoteStore.UpdateAsync(localItem, null, options.CancellationToken);
                         progress.UpdatedItems++;
+                        return (localItem, localItem);
+                    }
+                    break;
+
+                case ConflictResolution.UseLocal when localItem != null:
+                    // Modified locally, deleted remotely, local wins: re-create on the remote. Mirrors
+                    // DetermineSyncAction's LocalWins shortcut for this state, which returns Create.
+                    if (CanSaveToRemote(localItem, filterOptions, options))
+                    {
+                        await _remoteStore.CreateAsync(localItem, null, options.CancellationToken);
+                        progress.CreatedItems++;
+                        return (localItem, localItem);
+                    }
+                    break;
+
+                case ConflictResolution.UseLocal when remoteItem != null:
+                    // Deleted locally, modified remotely, local wins: the local deletion wins, so the
+                    // remote row goes. Mirrors the LocalWins shortcut, which returns Delete on "remote".
+                    await _remoteStore.DeleteAsync(remoteItem, options.CancellationToken);
+                    progress.DeletedItems++;
+                    return (null, null);
+
+                case ConflictResolution.UseRemote when remoteItem != null && localItem != null:
+                    if (CanSaveToLocal(remoteItem, filterOptions, options))
+                    {
+                        await _localStore.UpdateAsync(remoteItem, null, options.CancellationToken);
+                        progress.UpdatedItems++;
+                        return (remoteItem, remoteItem);
                     }
                     break;
 
                 case ConflictResolution.UseRemote when remoteItem != null:
-                    if (localItem != null && CanSaveToLocal(remoteItem, filterOptions, options))
+                    // Deleted locally, modified remotely, remote wins: re-create locally. Mirrors
+                    // DetermineSyncAction's RemoteWins shortcut for this state, which returns Create.
+                    if (CanSaveToLocal(remoteItem, filterOptions, options))
                     {
-                        await _localStore.UpdateAsync(remoteItem, null, options.CancellationToken);
-                        progress.UpdatedItems++;
+                        await _localStore.CreateAsync(remoteItem, null, options.CancellationToken);
+                        progress.CreatedItems++;
+                        return (remoteItem, remoteItem);
                     }
                     break;
+
+                case ConflictResolution.UseRemote when localItem != null:
+                    // Modified locally, deleted remotely, remote wins: the remote deletion wins, so the
+                    // local row goes. Mirrors the RemoteWins shortcut, which returns Delete on "local".
+                    await _localStore.DeleteAsync(localItem, options.CancellationToken);
+                    progress.DeletedItems++;
+                    return (null, null);
 
                 case ConflictResolution.Skip:
                     progress.SkippedItems++;
@@ -410,6 +506,9 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
                 Exception = ex
             });
         }
+
+        // Nothing was written (filter blocked, Merge, Skip, or the catch above), so the pair is unchanged.
+        return (localItem, remoteItem);
     }
 
     /// <summary>
