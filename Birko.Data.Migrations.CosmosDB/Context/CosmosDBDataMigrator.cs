@@ -77,12 +77,13 @@ public class CosmosDBDataMigrator : IDataMigrator
 
         var pkProperty = GetPartitionKeyProperty(container, collection);
         var projection = pkProperty == "id" ? "c.id" : $"c.id, c.{pkProperty}";
-        var whereClause = ParseFilterToSql(filterJson);
+        var parameters = new List<KeyValuePair<string, object?>>();
+        var whereClause = ParseFilterToSql(filterJson, parameters);
         var query = string.IsNullOrEmpty(whereClause)
             ? $"SELECT {projection} FROM c"
             : $"SELECT {projection} FROM c WHERE {whereClause}";
 
-        var iterator = container.GetItemQueryIterator<JsonElement>(new QueryDefinition(query));
+        var iterator = container.GetItemQueryIterator<JsonElement>(Bind(query, parameters));
 
         while (iterator.HasMoreResults)
         {
@@ -104,12 +105,13 @@ public class CosmosDBDataMigrator : IDataMigrator
         var container = _database.GetContainer(collection);
         var pkProperty = GetPartitionKeyProperty(container, collection);
         var projection = pkProperty == "id" ? "c.id" : $"c.id, c.{pkProperty}";
-        var whereClause = ParseFilterToSql(filterJson);
+        var parameters = new List<KeyValuePair<string, object?>>();
+        var whereClause = ParseFilterToSql(filterJson, parameters);
         var query = string.IsNullOrEmpty(whereClause)
             ? $"SELECT {projection} FROM c"
             : $"SELECT {projection} FROM c WHERE {whereClause}";
 
-        var iterator = container.GetItemQueryIterator<JsonElement>(new QueryDefinition(query));
+        var iterator = container.GetItemQueryIterator<JsonElement>(Bind(query, parameters));
 
         while (iterator.HasMoreResults)
         {
@@ -129,12 +131,13 @@ public class CosmosDBDataMigrator : IDataMigrator
     public long CountDocuments(string collection, string? filterJson = null)
     {
         var container = _database.GetContainer(collection);
-        var whereClause = ParseFilterToSql(filterJson);
+        var parameters = new List<KeyValuePair<string, object?>>();
+        var whereClause = ParseFilterToSql(filterJson, parameters);
         var query = string.IsNullOrEmpty(whereClause)
             ? "SELECT VALUE COUNT(1) FROM c"
             : $"SELECT VALUE COUNT(1) FROM c WHERE {whereClause}";
 
-        var iterator = container.GetItemQueryIterator<long>(new QueryDefinition(query));
+        var iterator = container.GetItemQueryIterator<long>(Bind(query, parameters));
         var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
         return response.FirstOrDefault();
     }
@@ -198,7 +201,23 @@ public class CosmosDBDataMigrator : IDataMigrator
         }
     }
 
-    internal static string ParseFilterToSql(string? filterJson)
+    /// <summary>
+    /// Translates a Mongo-style filter document into a Cosmos SQL <c>WHERE</c> fragment, collecting
+    /// every compared value into <paramref name="parameters"/> as an <c>@pN</c> binding.
+    /// </summary>
+    /// <remarks>
+    /// TASK-450. Values used to be rendered into the statement by <c>FormatSqlValue</c>, which escaped
+    /// a quote by **doubling** it. That is the SQL-standard rule and Cosmos NoSQL does not use it --
+    /// it escapes with a backslash -- so the doubling produced two adjacent literals (a syntax error)
+    /// while a **backslash in the value was never escaped at all** and closed the literal early.
+    /// Measured: <c>a\' OR 1=1 --</c> rendered as <c>'a\'' OR 1=1 --'</c>, which lexes as the string
+    /// <c>a'</c> followed by <c>OR 1=1</c> and a comment.
+    ///
+    /// Parameterised rather than escaped correctly, matching what TASK-447 did for
+    /// <c>CosmosViewStore</c>: all three call sites already built a <c>QueryDefinition</c> and simply
+    /// never bound anything, and a bound value has no grammar to break out of.
+    /// </remarks>
+    internal static string ParseFilterToSql(string? filterJson, IList<KeyValuePair<string, object?>> parameters)
     {
         if (string.IsNullOrWhiteSpace(filterJson) || filterJson!.Trim() == "{}")
             return string.Empty;
@@ -208,10 +227,9 @@ public class CosmosDBDataMigrator : IDataMigrator
 
         foreach (var property in doc.RootElement.EnumerateObject())
         {
-            // CR-M104: bracket-quote the identifier (values were already escaped, identifiers were not),
-            // so a field name with whitespace/special chars can't produce malformed/injectable SQL.
-            var escaped = property.Name.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            var fieldName = $"c[\"{escaped}\"]";
+            // CR-M104's rule, unchanged -- only moved, so CosmosDBSchemaBuilder can share it
+            // (TASK-450: it interpolated a field name with no escaping at all).
+            var fieldName = QuoteFieldPath(property.Name);
 
             if (property.Value.ValueKind == JsonValueKind.Object)
             {
@@ -226,27 +244,63 @@ public class CosmosDBDataMigrator : IDataMigrator
                         "$ne" => "!=",
                         _ => "="
                     };
-                    var valueLiteral = FormatSqlValue(ExtractValue(op.Value));
-                    conditions.Add($"{fieldName} {sqlOp} {valueLiteral}");
+                    conditions.Add($"{fieldName} {sqlOp} {BindValue(ExtractValue(op.Value), parameters)}");
                 }
             }
             else
             {
-                var valueLiteral = FormatSqlValue(ExtractValue(property.Value));
-                conditions.Add($"{fieldName} = {valueLiteral}");
+                conditions.Add($"{fieldName} = {BindValue(ExtractValue(property.Value), parameters)}");
             }
         }
 
         return string.Join(" AND ", conditions);
     }
 
-    internal static string FormatSqlValue(object? value)
+    /// <summary>
+    /// Binds a compared value as an <c>@pN</c> query parameter and returns the placeholder.
+    /// </summary>
+    /// <remarks>
+    /// Replaces the former <c>FormatSqlValue</c>, which rendered the value as a SQL literal. See
+    /// <see cref="ParseFilterToSql"/> for why that could not be made safe by escaping harder.
+    ///
+    /// A side effect worth naming: the old <c>DateTime</c> branch formatted as
+    /// <c>yyyy-MM-ddTHH:mm:ssZ</c>, which silently dropped sub-second precision and ignored
+    /// <c>Kind</c>. Binding the value hands that to the SDK's serializer -- the same one that wrote
+    /// the documents -- so the comparison matches the stored form by construction.
+    /// </remarks>
+    internal static string BindValue(object? value, IList<KeyValuePair<string, object?>> parameters)
     {
-        if (value == null) return "null";
-        if (value is string s) return $"'{s.Replace("'", "''")}'";
-        if (value is bool b) return b ? "true" : "false";
-        if (value is DateTime dt) return $"'{dt:yyyy-MM-ddTHH:mm:ssZ}'";
-        return value.ToString() ?? "null";
+        var name = "@p" + parameters.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        parameters.Add(new KeyValuePair<string, object?>(name, value));
+        return name;
+    }
+
+    /// <summary>
+    /// Renders a document field name as a bracket-quoted Cosmos path, e.g. <c>c["my field"]</c>.
+    /// </summary>
+    /// <remarks>
+    /// CR-M104's escaping, unchanged in behaviour and moved here so it has one producer. A field name
+    /// is an **identifier**, so unlike a compared value it cannot be parameterised and escaping is the
+    /// only containment available -- which is why the two halves of this file are treated differently.
+    /// Backslash is escaped first, then the double quote, or the escape introduced for the quote would
+    /// itself be escaped.
+    /// </remarks>
+    internal static string QuoteFieldPath(string fieldName)
+    {
+        var escaped = fieldName.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        return $"c[\"{escaped}\"]";
+    }
+
+    /// <summary>Builds the query and binds everything <see cref="ParseFilterToSql"/> collected.</summary>
+    internal static QueryDefinition Bind(string sql, List<KeyValuePair<string, object?>> parameters)
+    {
+        var queryDef = new QueryDefinition(sql);
+        foreach (var p in parameters)
+        {
+            queryDef = queryDef.WithParameter(p.Key, p.Value);
+        }
+
+        return queryDef;
     }
 
     internal static object? ExtractValue(JsonElement element)

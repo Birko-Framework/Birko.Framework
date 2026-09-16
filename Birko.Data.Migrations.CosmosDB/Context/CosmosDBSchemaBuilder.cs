@@ -98,9 +98,14 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
         var pkProperty = pkPath.TrimStart('/').Split('/')[0];
         if (string.IsNullOrEmpty(pkProperty)) pkProperty = "id";
 
-        var projection = new List<string> { "c.id", $"c[\"{oldName}\"] AS oldValue" };
+        // TASK-450: the field name reached the statement with NO escaping, while the sibling
+        // CosmosDBDataMigrator escaped its identifiers (CR-M104) -- one rule, two behaviours. Both now
+        // share CosmosDBDataMigrator.QuoteFieldPath. An identifier cannot be parameterised, so escaping
+        // is the containment here, unlike the compared VALUES in that file.
+        var oldPath = CosmosDBDataMigrator.QuoteFieldPath(oldName);
+        var projection = new List<string> { "c.id", $"{oldPath} AS oldValue" };
         if (pkProperty != "id") projection.Add($"c.{pkProperty}");
-        var query = $"SELECT {string.Join(", ", projection)} FROM c WHERE IS_DEFINED(c[\"{oldName}\"])";
+        var query = $"SELECT {string.Join(", ", projection)} FROM c WHERE IS_DEFINED({oldPath})";
         var iterator = container.GetItemQueryIterator<JsonElement>(new QueryDefinition(query));
 
         while (iterator.HasMoreResults)
