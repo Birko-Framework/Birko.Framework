@@ -13,7 +13,7 @@ blocks: []
 # findings: field-found during TASK-322 rather than harvested, so it carries no SH-* id. It is in
 # fix-next's pool via EPIC-014's `kind: review-intake` stamp, not via this list.
 findings: []
-pr: null
+pr: "Birko.Data.CosmosDB.Views d85ae23 · tests 54cad89"
 github-issue: null
 jira-key: null
 ---
