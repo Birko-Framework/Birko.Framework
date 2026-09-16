@@ -15,27 +15,15 @@ public sealed class PerlinNoise
     {
     }
 
+    /// <param name="seed">
+    /// The same seed produces the same noise on every runtime and platform. TASK-449: that was not
+    /// true before -- the table was shuffled with <c>System.Random</c>, whose algorithm changed in
+    /// .NET 6 and carries no cross-version stability guarantee -- so a stored seed silently produced
+    /// different terrain after a framework upgrade. See <see cref="NoisePermutation"/>.
+    /// </param>
     public PerlinNoise(int seed)
     {
-        _permutation = new int[512];
-        var perm = new int[256];
-
-        for (int i = 0; i < 256; i++)
-        {
-            perm[i] = i;
-        }
-
-        var rng = new System.Random(seed);
-        for (int i = 255; i > 0; i--)
-        {
-            int j = rng.Next(i + 1);
-            (perm[i], perm[j]) = (perm[j], perm[i]);
-        }
-
-        for (int i = 0; i < 512; i++)
-        {
-            _permutation[i] = perm[i & 255];
-        }
+        _permutation = NoisePermutation.Build(seed);
     }
 
     /// <summary>

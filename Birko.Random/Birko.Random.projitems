@@ -26,6 +26,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Sequences\NanoIdGenerator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sequences\SnowflakeGenerator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sequences\TokenGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Noise\NoisePermutation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Noise\PerlinNoise.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Noise\SimplexNoise.cs" />
   </ItemGroup>

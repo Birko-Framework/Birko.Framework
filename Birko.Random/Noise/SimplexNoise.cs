@@ -22,27 +22,15 @@ public sealed class SimplexNoise
     {
     }
 
+    /// <param name="seed">
+    /// The same seed produces the same noise on every runtime and platform. TASK-449: that was not
+    /// true before -- the table was shuffled with <c>System.Random</c>, whose algorithm changed in
+    /// .NET 6 and carries no cross-version stability guarantee -- so a stored seed silently produced
+    /// different output after a framework upgrade. See <see cref="NoisePermutation"/>.
+    /// </param>
     public SimplexNoise(int seed)
     {
-        _perm = new int[512];
-        var source = new int[256];
-
-        for (int i = 0; i < 256; i++)
-        {
-            source[i] = i;
-        }
-
-        var rng = new System.Random(seed);
-        for (int i = 255; i > 0; i--)
-        {
-            int j = rng.Next(i + 1);
-            (source[i], source[j]) = (source[j], source[i]);
-        }
-
-        for (int i = 0; i < 512; i++)
-        {
-            _perm[i] = source[i & 255];
-        }
+        _perm = NoisePermutation.Build(seed);
     }
 
     /// <summary>
