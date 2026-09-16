@@ -53,7 +53,7 @@ public class CosmosViewAggregateSqlTests
 
         var method = typeof(CosmosViewStore<ReviewView>)
             .GetMethod("BuildAggregateSql", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        return (string)method.Invoke(store, new object?[] { filter, orderBy, null, null })!;
+        return ((QueryDefinition)method.Invoke(store, new object?[] { filter, orderBy, null, null })!).QueryText;
     }
 
     [Fact]
