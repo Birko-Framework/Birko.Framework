@@ -43,8 +43,11 @@ namespace Birko.Workflow.ElasticSearch
             var existing = await _store.ReadAsync(m => m.Guid == instance.InstanceId, cancellationToken).ConfigureAwait(false);
             if (existing != null)
             {
+                // SH-H057: the row is keyed by InstanceId alone and every workflow shares one
+                // table/collection, so an id identifies a row, not a workflow. Refuse before
+                // UpdateFromInstance relabels and overwrites another workflow's instance.
+                WorkflowInstanceOwnership.RequireSameWorkflow(existing.WorkflowName, workflowName, instance.InstanceId);
                 existing.UpdateFromInstance(instance);
-                existing.WorkflowName = workflowName;
                 await _store.UpdateAsync(existing, ct: cancellationToken).ConfigureAwait(false);
                 return instance.InstanceId;
             }
@@ -68,10 +71,10 @@ namespace Birko.Workflow.ElasticSearch
             }
         }
 
-        public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStateAsync(string state, int limit = 100, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStateAsync(string workflowName, string state, int limit = 100, CancellationToken cancellationToken = default)
         {
             var models = await _store.ReadAsync(
-                filter: m => m.CurrentState == state,
+                filter: m => m.WorkflowName == workflowName && m.CurrentState == state,
                 orderBy: OrderBy<ElasticWorkflowInstanceModel>.ByDescending(m => m.UpdatedAt),
                 limit: limit,
                 ct: cancellationToken
@@ -80,11 +83,11 @@ namespace Birko.Workflow.ElasticSearch
             return models.Select(m => m.ToInstance<TData>());
         }
 
-        public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStatusAsync(WorkflowStatus status, int limit = 100, CancellationToken cancellationToken = default)
+        public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStatusAsync(string workflowName, WorkflowStatus status, int limit = 100, CancellationToken cancellationToken = default)
         {
             var statusInt = (int)status;
             var models = await _store.ReadAsync(
-                filter: m => m.Status == statusInt,
+                filter: m => m.WorkflowName == workflowName && m.Status == statusInt,
                 orderBy: OrderBy<ElasticWorkflowInstanceModel>.ByDescending(m => m.UpdatedAt),
                 limit: limit,
                 ct: cancellationToken
