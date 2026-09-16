@@ -12,7 +12,7 @@ depends-on: []
 blocks: []
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
 findings: [SH-H055]
-pr: null
+pr: "Birko.Data.CosmosDB.Views 3fba6e6 · tests cd6868c"
 github-issue: null
 jira-key: null
 ---
