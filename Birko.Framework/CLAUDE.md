@@ -294,6 +294,38 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
         the base was. That is luck until it is pinned — an edit inlining the loop to save a call would
         reopen a whole-table rewrite behind a decorator whose own tests all stayed green — so the
         delegation has its own test.
+- **A nullable filter argument means "do not filter" or it means a value — decide once, and check what the
+  backend's query language does with null, because one dialect will silently turn it into MATCH NOTHING.**
+  TASK-309 / SH-H013, and the first member of the one-producer family to arrive at a *value* that is absent
+  rather than at an identifier. `ISyncKnowledgeStore` takes `Guid? tenantId` and documents it as "optional
+  tenant"; RavenDB applied the predicate under `if (tenantId.HasValue)` and CosmosDB applied it
+  unconditionally as `x.TenantId == tenantId`. Five parts generalise:
+  - **The contract is settled by the CALLER, not by the parameter's type.** `Guid?` is equally readable as
+    "no filter" and as "the rows whose tenant is null", and only the caller disambiguates:
+    `TenantSyncProvider.ResolveTenantScope` returns null in exactly two cases — an explicit
+    `ITenantContext.IsAllTenantsScope`, and an entity type with no `TenantGuid` property — and **both mean
+    the whole scope**. So "do not filter" is the contract, and it was Cosmos that was wrong. Read the
+    producer of the null before deciding which of its two readings a backend should implement.
+  - **A dialect's null-equality is a silent match-nothing, and it is invisible in the C#.** Measured offline
+    on Microsoft.Azure.Cosmos 3.63.0: `x.TenantId == tenantId` with a null tenant renders
+    `root["TenantId"] = null`, which in Cosmos SQL is **Undefined**, not true — so it matched no document,
+    **including the documents whose own `TenantId` is null**. LINQ-to-Objects answers the opposite
+    (`null == null` is true), so an in-memory test *understates* the defect rather than reproducing it. Same
+    family as `{ "F": { "$nin": [] } }` under § TASK-137: a one-term predicate that looks ordinary and means
+    something the author did not write.
+  - **Two backends answering one contract differently is the defect, whichever is right.** The finding filed
+    both as wrong "in opposite directions"; measurement refuted the Raven half, and fixing both would have
+    **broken** the all-tenants path on the backend that had it right. A per-backend audit has to establish
+    the contract first, or it converges the two onto the wrong answer.
+  - **One producer per backend for the predicate.** `CosmosSyncKnowledgeQuery.ApplyScope` replaced four
+    inline copies (`GetKnowledge` / `GetKnowledgeItem` × sync and async). Extracting it is also what made
+    the defect testable — see the next bullet.
+  - **⚠ "It needs a live server" is a claim to measure, and here it was false for the half that mattered.**
+    `CosmosSyncTenantScopingTests` states in prose that *"the LINQ filter itself needs a live Cosmos DB"*,
+    which is why that area had **no** filter coverage at all. Measured: the provider renders query SQL with
+    no account and no network — `ToQueryDefinition().QueryText` off a container built from an unreachable
+    connection string. Only *executing* a query needs a server, so the exact artefact the defect lived in
+    was assertable all along. Before accepting that a sink is untestable offline, try rendering it.
 - **A write that opens its own connection cannot be inside anybody's transaction — and a boundary is only
   as wide as its NARROWEST participant.** `AmbientSqlTransaction` (TASK-240) taught the single-command paths
   to join an open boundary; the bulk paths kept opening their own connection and their own transaction, so
@@ -2603,6 +2635,50 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+
+### Bidirectional sync — the DEFAULT direction dropped every new item, then deleted it (2026-09-16)
+
+TASK-309, the last open P0 in [[STORY-051]] and the first of its 15 per-area triage tasks to be drained since
+TASK-308. All seven high `data-sync` findings: **6 confirmed, 1 confirmed-narrower, 0 refuted outright.**
+**220/220 green across 10 suites** (Sync 64, Sync.Tenant 37, Sync.Sql 7, Sync.Json 7, Sync.Xml 7,
+Sync.MongoDb 5, Sync.ElasticSearch 11, Sync.RavenDB 9, Sync.CosmosDB 14, Aggregates 59), 38 new, **seven
+disjoint mutations**. The standing rules are in § Conventions. Nine things worth carrying:
+
+- **Four findings were one chain, and the chain fired on the shipped default.** `SyncOptions.Direction`
+  defaults to `Bidirectional`; `ProcessBatch`'s `Create` arm tested `Direction == Download` then
+  `== Upload` **with no else**. So a brand-new entity was counted `Processed`, given a knowledge row, and
+  written nowhere — and since the knowledge row was built from the **pre-action** items, it recorded the
+  destination as *deleted*. Run two read that as a deletion and, under `RemoteWins`, **deleted the user's
+  original row**. The conflict escape was itself a no-op, because every arm required both copies to exist
+  and a conflict is only ever raised when one of them does not.
+- **The fix dispatches on which side is MISSING, not on `Direction`** — the direction is already applied
+  upstream by `DetermineSyncAction`, so a third arm would be a second place where direction is decided.
+  Behaviour-preserving for Download and Upload: all 43 pre-existing tests stayed green.
+- **The knowledge row now describes the state AFTER the action**, tracked as an `effectiveLocal` /
+  `effectiveRemote` pair. Both sides are asserted — a create must not mark the destination deleted, and a
+  delete must still mark the deleted side — or "never set the flag" passes as a fix and breaks delete
+  propagation.
+- **The one-sided conflict arms copy `DetermineSyncAction`'s own `LocalWins`/`RemoteWins` shortcuts**
+  rather than inventing semantics, so a policy and its conflict path cannot disagree (§ TASK-274).
+- **⚠ `SH-H009` cannot be reproduced from `SH-H011` alone, and the mutation proves it.** With the Create
+  arm fixed but the hashes stale, run 1 really uploads, so run 2 sees both sides and takes the Update path.
+  A consequence-finding needs its cause broken to fire — which is why the flags are asserted directly too.
+- **⚠ The drop moved no counter at all** — not `Created`, not `Skipped`, only `Processed`. The finding did
+  not note that, and it is why nothing ever noticed. Now pinned as
+  `Created + Updated + Deleted + Skipped == TotalProcessed`.
+- **⚠ Half of `SH-H013` was refuted, and fixing it as filed would have caused a regression.** The finding
+  says Raven and Cosmos are both wrong "in opposite directions"; measured against the sole caller, Raven's
+  conditional predicate is *correct* and its scope-wide delete is the sanctioned all-tenants path. Only
+  Cosmos was wrong, and its `root["TenantId"] = null` matched nothing. See § Conventions.
+- **⚠ Two areas had zero coverage of the thing that was broken.** The 50-test aggregates suite stayed green
+  through the whole `SH-H014` fix — nothing asserted the old many-to-many expansion, which emitted
+  `Delete` of the shared **Category** instead of the junction row, so a caller applying it destroyed a row
+  every other product shares. And the Cosmos suite had no filter coverage because it believed the filter
+  needed a live server.
+- **⚠ Spawned [[TASK-445]] (P3):** `ConflictResolution.Merge` has no `case`, no write, no counter and no
+  error, so a resolver asking for a merge is indistinguishable from a dropped item — the same silent-drop
+  family, but implementing a merge is a feature, not a bug fix, so it is documented and specced as inert
+  meanwhile rather than left to be believed fixed.
 
 ### The migration runner's own bookkeeping table could not be created on MySQL or SQL Server (2026-09-12)
 

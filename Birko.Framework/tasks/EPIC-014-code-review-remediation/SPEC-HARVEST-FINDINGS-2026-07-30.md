@@ -181,11 +181,38 @@ store. Rejected: shortening `DefaultExpiration`, since any non-zero window is a 
 
 `case SyncAction.Create:` tests only `options.Direction == Download` then `== Upload`, with no else and no Bidirectional arm. DetermineSyncAction returns Create for both one-sided-presence Bidirectional branches (SyncProviderBase.cs:114, :137), so under the DEFAULT direction (SyncOptions.Direction = Bidirectional) nothing is written, yet `result.Processed++`, `progress.ProcessedItems++` and a knowledge row are still emitted. Identical at AsyncSyncProvider.cs:277.
 
+**Verdict: CONFIRMED (2026-09-16, [[TASK-309]]) — FIXED**
+
+`SyncProvider.cs:275-300` / `AsyncSyncProvider.cs:276-301`: the `Create` arm tested
+`options.Direction == Download` then `== Upload` with no else. `SyncOptions.Direction` defaults to
+**`Bidirectional`** (`Models/SyncOptions.cs:14`), and `DetermineSyncAction` returns `Create` for both
+one-sided Bidirectional branches (`SyncProviderBase.cs:114`, `:137`). Nothing was written, yet
+`result.Processed++` / `progress.ProcessedItems++` (`:340-341`) and a knowledge row (`:344`) were emitted —
+and **`SkippedItems` was not incremented either**, so the drop was invisible in every counter, which the
+finding did not note.
+
+Fixed by dispatching on **which side is missing** rather than on `Direction`. That is behaviour-preserving
+for Download and Upload — `DetermineSyncAction` has already applied the direction, so a `Create` under
+Download always implies `localItem == null` — and it is the only thing that works for Bidirectional and for
+the initial-sync branch. The unreachable `else` counts a skip rather than passing over the item silently.
+
 #### SH-H009 — A never-uploaded bidirectional item is deleted on the next run
 
 `../Birko.Data.Sync/Internal/SyncProviderBase.cs:97`  ·  _restates a first-pass finding_
 
 Because the Bidirectional Create is a no-op, the knowledge row written for a new local-only item has RemoteVersion=null hence IsRemoteDeleted=true. On run two `localExists && !remoteExists && knowledgeItem.IsRemoteDeleted` routes into the deletion branch: RemoteWins deletes the local row (line 101), NewestWins raises a Conflict that resolves to nothing, LocalWins returns Create which is again a no-op. All three outcomes destroy or lose the item.
+
+**Verdict: CONFIRMED (2026-09-16, [[TASK-309]]) — FIXED via SH-H008 + SH-H011**
+
+Exactly as filed. Run 1 on a local-only new item wrote no remote copy (SH-H008) and recorded knowledge with
+`RemoteVersion = null` → `IsRemoteDeleted = true` (`SqlSyncKnowledgeStore.cs:68`, identical in all six
+backends). Run 2 hit `SyncProviderBase.cs:97`: `RemoteWins` → `Delete` on local (`:101`) **destroyed the
+row**, `LocalWins` → `Create` → no-op again, `NewestWins`/`Custom` → `Conflict` → no-op (SH-H010).
+
+⚠ **Measured note for the next reader:** this needs SH-H008 broken to reproduce. With the Create arm fixed
+but the pre-action hashes left stale, run 1 really does upload, so run 2 sees both sides present and takes
+the Update path — the delete branch is never reached. The step-6 mutation of SH-H011 alone leaves the
+two-run test green, which is why the H011 flags are also asserted directly.
 
 #### SH-H010 — Conflict resolution cannot fire for any conflict the provider emits
 
@@ -193,11 +220,37 @@ Because the Bidirectional Create is a no-op, the knowledge row written for a new
 
 `case ConflictResolution.UseLocal when localItem != null:` then inner `if (remoteItem != null && ...)`; UseRemote symmetrically. Conflicts are only produced by the two one-sided-presence branches (SyncProviderBase.cs:105, :128) where the opposite item is null by construction, so every resolution falls through with no store write and no counter change. Same at AsyncSyncProvider.cs:381.
 
+**Verdict: CONFIRMED (2026-09-16, [[TASK-309]]) — FIXED**
+
+`SyncProvider.cs:380-394`. Conflicts are produced only by `SyncProviderBase.cs:105-112` (`RemoteItem = null`)
+and `:128-135` (`LocalItem = null`), so the opposite item is null **by construction**. `UseLocal` was guarded
+`when localItem != null` and then an inner `if (remoteItem != null …)`, `UseRemote` symmetrically — so every
+conflict fell through with no store write and no counter change.
+
+`ApplyConflictResolution` now has three arms per resolution (both-present, surviving-side-only,
+deleted-side-only) and returns the post-write `(local, remote)` pair for SH-H011. The one-sided arms do
+**exactly what `DetermineSyncAction`'s `LocalWins` / `RemoteWins` shortcuts already return for the identical
+state** (`:100-103`, `:123-126`) — re-create on the side that lost the row, or honour the deletion — so a
+policy and its conflict path cannot disagree about what "local wins" means. `Merge` is deliberately still
+inert and now says so: nothing in the framework can merge two entities, so there is no mechanism to call.
+
 #### SH-H011 — Knowledge deletion flags are computed pre-write, so every Create marks the destination deleted
 
 `../Birko.Data.Sync/SyncProvider.cs:344`
 
 The knowledge row is built from the pre-action dictionaries: `CreateKnowledgeItem(guid, GetVersionHash(localItem), GetVersionHash(remoteItem), options)`. After a successful Download create, localItem is still null, so every backend sets `IsLocalDeleted = string.IsNullOrEmpty(localItemHash)` = true. The flags mean "absent when decided", not "deleted", yet the Delete branches (SyncProviderBase.cs:78, :120) read them as deletions: a later Upload run whose local read misses the row deletes the remote row that was just created. Same at AsyncSyncProvider.cs:345.
+
+**Verdict: CONFIRMED (2026-09-16, [[TASK-309]]) — FIXED**
+
+`SyncProvider.cs:344` built the knowledge row from the **pre-action** `localItem`/`remoteItem`. After a
+Download create, `localItem` is still null, so every backend set
+`IsLocalDeleted = string.IsNullOrEmpty(localItemHash)` = true. The flags mean "absent when decided", and the
+two `Delete` branches (`SyncProviderBase.cs:78`, `:120`) read them as "deleted".
+
+Fixed by tracking an `effectiveLocal` / `effectiveRemote` pair through the switch — each arm records what it
+wrote, `ApplyConflictResolution` returns its pair — and passing those to `CreateKnowledgeItem`. Both sides of
+the flag are asserted: a create must **not** mark the destination deleted, and a delete must **still** mark
+the deleted side, or "never set the flag" would pass as a fix and break delete propagation.
 
 #### SH-H012 — SyncAsync persists knowledge with the run's own token, so a cancelled run loses all knowledge
 
@@ -205,17 +258,81 @@ The knowledge row is built from the pre-action dictionaries: `CreateKnowledgeIte
 
 `CreateAsync(..., options.CancellationToken)`, `UpdateAsync(..., options.CancellationToken)` and `SetLastSyncTimeAsync(..., options.CancellationToken)` run after the batch loop breaks on cancellation, so they throw immediately. The outer catch (line 228) records a generic "Sync failed" and the whole round's knowledge — for items already written to the stores — is lost, leaving the next run to re-decide them blind. SyncProvider.cs:203-207 passes no token and does persist, so sync and async diverge on the same contract.
 
+**Verdict: CONFIRMED (2026-09-16, [[TASK-309]]) — FIXED**
+
+`AsyncSyncProvider.cs:205/207/208` passed `options.CancellationToken` to `CreateAsync` / `UpdateAsync` /
+`SetLastSyncTimeAsync`, which run *after* the batch loop **breaks** on cancellation (`:181-182`) — so they
+were reached with an already-cancelled token, threw immediately, and the outer catch (`:228`) recorded a
+generic "Sync failed". Knowledge for items **already written to the stores** by completed batches was lost,
+leaving the next run to re-decide them blind. `SyncProvider.cs:203-207` passes no token and does persist, so
+the two halves of one contract disagreed.
+
+Fixed by passing `CancellationToken.None`, matching the synchronous twin. The writes those rows describe have
+already happened; recording that they happened is not optional, and cancellation is still reported through
+the result's own fields. The sync twin's behaviour is pinned as a **contract pin**, not as evidence.
+
 #### SH-H013 — RavenDB/CosmosDB knowledge stores mishandle a null tenantId in opposite directions
 
 `../Birko.Data.Sync.RavenDB/Stores/AsyncRavenSyncKnowledgeStore.cs:50`  ·  _restates a first-pass finding_
 
 RavenDB applies the tenant predicate only inside `if (tenantId.HasValue)` — GetKnowledgeAsync (50), DeleteKnowledgeAsync (112), SetLastSyncTimeAsync (154), and the same in RavenSyncKnowledgeStore (46, 112, 152). A null tenantId returns, DELETES and rewrites LastSyncedAt across every tenant in the scope. CosmosDB instead uses an unconditional `x.TenantId == tenantId` (AsyncCosmosSyncKnowledgeStore.cs:48), where an equality against null in Cosmos SQL is Undefined, so the same call matches nothing and every run looks like an initial sync.
 
+**Verdict: CONFIRMED-NARROWER (2026-09-16, [[TASK-309]]) — confirmed for CosmosDB and FIXED; REFUTED for RavenDB**
+
+The finding's framing — both stores wrong "in opposite directions" — does not survive measurement against the
+sole caller. `TenantSyncProvider.ResolveTenantScope` (`:118-141`) returns `null` in exactly two legitimate
+cases: an explicit `ITenantContext.IsAllTenantsScope`, and an entity type with no `TenantGuid` property. **Both
+mean "do not filter by tenant."** So:
+
+- **RavenDB: refuted.** `if (tenantId.HasValue)` (`AsyncRavenSyncKnowledgeStore.cs:49`, `:112`, `:154`, and the
+  sync twin) is the *correct* rendering of "optional tenant", and its scope-wide delete under a null tenant is
+  the framework's sanctioned all-tenants path (§ Conventions), not a fail-open. Its `TenantGuid` is a
+  **non-nullable** `Guid` (it implements `ITenant`), so "rows with no tenant" is not even an expressible
+  meaning there.
+- **CosmosDB: confirmed.** The unconditional `x.TenantId == tenantId` (`AsyncCosmosSyncKnowledgeStore.cs:48`,
+  `:75`; `CosmosSyncKnowledgeStore.cs:46`, `:66`) renders as `root["TenantId"] = null` — **measured offline
+  against Microsoft.Azure.Cosmos 3.63.0**: `SELECT VALUE root FROM root WHERE ((root["Scope"] = "s") AND
+  (root["TenantId"] = null))`. In the Cosmos SQL dialect a comparison against null is **Undefined**, so it
+  matched nothing at all, including documents whose `TenantId` genuinely is null (the model declares it
+  `Guid?`). Knowledge was never found, never updated and never deleted, and every run looked like an initial
+  sync.
+
+Fixed by routing all four Cosmos query sites through one producer,
+`CosmosSyncKnowledgeQuery.ApplyScope`, which drops the tenant term entirely when no tenant was given — so the
+two backends now **agree** rather than diverging.
+
+⚠ `CosmosSyncTenantScopingTests` states that "the LINQ filter itself needs a live Cosmos DB". That is not so
+for the filter's *text*: the provider renders query SQL with no account and no network, and the new tests
+assert the emitted SQL directly. Only *executing* a query needs a server.
+
 #### SH-H014 — Many-to-many expansion emits Insert/Delete of the child entity, never junction rows
 
 `../Birko.Data.Aggregates/Mapping/AggregateMapper.cs:213`
 
 ExpandCollection handles ManyToMany with the same code as OneToMany, tagging each operation with `relationship.ChildType` and the child entity; JunctionType, JunctionParentFk and JunctionChildFk are read nowhere in the mapper. Removing one category from a product yields `Delete` of the Category itself — a caller applying the operation deletes the shared child row rather than the association — and adding one yields `Insert` of a Category that already exists. IAggregateMapper.Expand's doc (IAggregateMapper.cs:36) promises junction-table operations that are never produced.
+
+**Verdict: CONFIRMED (2026-09-16, [[TASK-309]]) — FIXED**
+
+`AggregateMapper.cs:192-224`: `ExpandCollection` treated `ManyToMany` with the same code as `OneToMany`,
+tagging every operation with `relationship.ChildType` and the child entity. `JunctionType` /
+`JunctionParentFk` / `JunctionChildFk` are set by `RelationshipBuilder.Through<TJunction>` (`:44-47`) and were
+read **nowhere** in the mapper — the *read* side uses them (`GetRelatedViaJunction`, `:40/:68/:124/:153`) and
+the *write* side did not — while `IAggregateMapper.Expand`'s own doc (`IAggregateMapper.cs:36`) promises
+"insert/delete operations for child **and junction table** entities".
+
+Fixed: for `ManyToMany`, `Insert`/`Delete` now carry a freshly materialised junction instance with
+`JunctionParentFk` = the root Guid, `JunctionChildFk` = the child's Guid, and a null `Guid` — the
+association's identity being that FK pair. `Through<TJunction>` gained a `where TJunction : AbstractModel`
+constraint (0 non-test call sites anywhere) so the junction can always be materialised; that constraint is
+structural and is pinned by reflection rather than claimed as witnessed.
+
+A desired many-to-many child with **no Guid** is **refused** (`InvalidOperationException` naming the
+navigation property and the remedy) rather than emitting a child insert with no association — a junction row
+cannot reference an unkeyed child, and a half-write is the silent failure this finding is about. The
+`OneToMany` path's CR-H041 behaviour (unkeyed child → unconditional insert) is unchanged and pinned.
+
+⚠ The whole aggregates suite (50 tests) stayed green through this fix: **nothing was asserting the old
+many-to-many expansion at all.**
 
 ### area: entity-localization
 

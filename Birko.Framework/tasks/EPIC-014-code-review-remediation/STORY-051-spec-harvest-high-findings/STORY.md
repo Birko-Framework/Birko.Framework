@@ -28,7 +28,7 @@ work.
 | Task | Area | Open findings | Priority |
 |---|---|---|---|
 | [[TASK-308]] | `filter-expression-translation` | 7 (`SH-H021`,`022`,`024`–`028`) | **P0** | ✅ **done 2026-09-09** — 7 of 7 confirmed (2 narrower), all fixed |
-| [[TASK-309]] | `data-sync` | 7 (`SH-H008`–`SH-H014`) | **P0** |
+| [[TASK-309]] | `data-sync` | 7 (`SH-H008`–`SH-H014`) | **P0** | ✅ **done 2026-09-16** — 6 confirmed, 1 confirmed-narrower (`SH-H013` refuted for RavenDB), all fixed
 | ~~[[TASK-310]]~~ | `caching` | ~~3 (`SH-H004`,`005`,`007`)~~ | **P0** — **DONE 2026-09-09** |
 | ~~[[TASK-311]]~~ | `tenant-isolation` | ~~2 (`SH-H049`,`053`)~~ | **P0** — **DONE 2026-09-09** |
 | ~~[[TASK-312]]~~ | `security-and-authorization` | ~~1 (`SH-H040`)~~ | **P0** — **DONE 2026-09-08** |
@@ -157,10 +157,10 @@ rather than an out-of-scope sentence, and TASK-308 pins the defect meanwhile.
 
 ## Progress
 
-**30 / 57 findings closed** (SH-H021/022/024/025/026/027/028 via [[TASK-308]], SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
+**37 / 57 findings closed** (SH-H008/009/010/011/012/013/014 via [[TASK-309]], SH-H021/022/024/025/026/027/028 via [[TASK-308]], SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
 SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]],
 SH-H002+SH-M023 via [[TASK-109]], SH-H041+SH-H042+SH-H043+SH-H044 via [[TASK-116]], SH-H036 via [[TASK-125]], SH-H019 via [[TASK-126]],
-SH-H023 via [[TASK-111]]) — and **18 of the 57 findings now have a task**, across 31 files: 29 done, 1 in review ([[TASK-118]]), 1 cancelled. The **other 39 findings were decomposed into 15 per-area triage tasks on 2026-09-08** — see the section above; the counts in the rest of this paragraph predate that and describe the original 23-task set. [[TASK-137]] closed the defect [[TASK-109]] filed against itself while being
+SH-H023 via [[TASK-111]]) — and **25 of the 57 findings now have a task**, across 31 files: 29 done, 1 in review ([[TASK-118]]), 1 cancelled. The **other 39 findings were decomposed into 15 per-area triage tasks on 2026-09-08** — see the section above; the counts in the rest of this paragraph predate that and describe the original 23-task set. [[TASK-137]] closed the defect [[TASK-109]] filed against itself while being
 planned, and closed it much wider than filed: the empty `NOT IN`'s `1 = 1` was not merely an injection
 lookalike in a log, it was a **non-empty `WHERE` that constrains nothing**, so it satisfied the whole-table
 write guard TASK-109 had installed 18 days earlier and `Delete(x => !empty.Contains(x.Col))` emptied the

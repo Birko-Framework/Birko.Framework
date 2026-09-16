@@ -1,7 +1,7 @@
 ---
 area: data-sync
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 4e06ecdf3d905d2835d5b1ff45c4d1fa4990b14d
+generated-on: 2026-09-16
 sources:
   - ../Birko.Data.Aggregates/Core/AggregateDefinition.cs
   - ../Birko.Data.Aggregates/Core/ExpressionHelper.cs
@@ -18,6 +18,7 @@ sources:
   - ../Birko.Data.Aggregates/Mapping/SyncOperationType.cs
   - ../Birko.Data.Sync.CosmosDB/Models/CosmosSyncKnowledgeItem.cs
   - ../Birko.Data.Sync.CosmosDB/Stores/AsyncCosmosSyncKnowledgeStore.cs
+  - ../Birko.Data.Sync.CosmosDB/Stores/CosmosSyncKnowledgeQuery.cs
   - ../Birko.Data.Sync.CosmosDB/Stores/CosmosSyncKnowledgeStore.cs
   - ../Birko.Data.Sync.ElasticSearch/Models/ElasticSyncKnowledgeItem.cs
   - ../Birko.Data.Sync.ElasticSearch/Stores/AsyncElasticSyncKnowledgeStore.cs
@@ -251,48 +252,81 @@ populated.
 - **When** `Sync` runs
 - **Then** the action is `Delete` with `DeleteOn = "remote"`
 
-### Requirement: Create is applied only under Download or Upload direction
+### Requirement: Create is applied to whichever side is missing the entity
 
-The system SHALL apply a `SyncAction.Create` decision only when `options.Direction` is exactly `Download`
-(creating locally from the remote item) or exactly `Upload` (creating remotely from the local item). When
-`Direction` is `Bidirectional`, the `Create` case matches neither branch and no store write occurs, yet the
-item is still counted as processed and a knowledge row is still emitted for it.
+The system SHALL apply a `SyncAction.Create` decision by writing to the side on which the entity is
+**absent**: creating locally when the entity exists only remotely, and creating remotely when it exists only
+locally. It SHALL NOT branch on `options.Direction` here, because `DetermineSyncAction` has already applied
+the direction — it returns `Create` only for `remoteExists && !localExists` under `Download`, only for the
+mirror under `Upload`, and for either shape under `Bidirectional`. When neither shape holds the system SHALL
+count the item as skipped rather than pass over it silently.
 
 `ProcessBatch`/`ProcessBatchAsync`'s `case SyncAction.Create:` tests
-`options.Direction == SyncDirection.Download` then `options.Direction == SyncDirection.Upload`; there is no
-`else` and no `Bidirectional` handling.
+`remoteItem != null && localItem == null` then `localItem != null && remoteItem == null`, with an `else`
+that increments `progress.SkippedItems`.
 
-#### Scenario: Bidirectional new local entity is never uploaded
+#### Scenario: Bidirectional new local entity is uploaded
 
 - **Given** `Direction = Bidirectional` and a brand-new entity `G` exists only in the local store with no knowledge row
 - **When** `Sync` runs
-- **Then** `DetermineSyncAction` returns `Create`
-- **And** neither `_localStore` nor `_remoteStore` is written to
-- **And** `result.TotalProcessed` counts the item, `result.Created` stays 0, and a knowledge row for `G` is persisted with `LocalVersion` set and `RemoteVersion = null` (hence `IsRemoteDeleted = true`)
+- **Then** `DetermineSyncAction` returns `Create` and `G` is written to `_remoteStore`
+- **And** `result.Created` is 1 and `result.TotalProcessed` is 1
 
-#### Scenario: The second bidirectional run reinterprets that knowledge row as a remote deletion
+#### Scenario: Bidirectional new remote entity is downloaded
 
-- **Given** the state left by the previous scenario (knowledge for `G` has `IsRemoteDeleted = true`, `G` still exists only locally)
-- **When** `Sync` runs again with `Direction = Bidirectional` and `ConflictPolicy = RemoteWins`
-- **Then** the action is `Delete` with `DeleteOn = "local"` and the never-uploaded local entity is deleted
+- **Given** `Direction = Bidirectional` and entity `G` exists only in the remote store
+- **When** `Sync` runs
+- **Then** `G` is written to `_localStore` and `result.Created` is 1
 
-### Requirement: Conflict resolution is applied only when both items are materialised
+#### Scenario: Every processed item lands in exactly one counter
 
-The system SHALL apply `ConflictResolution.UseLocal` only when `localItem` is non-null **and** `remoteItem`
-is non-null, and `ConflictResolution.UseRemote` only when `remoteItem` is non-null **and** `localItem` is
-non-null; SHALL count `ConflictResolution.Skip` as a skipped item; and SHALL take no action at all for
-`ConflictResolution.Merge`.
+- **Given** `Direction = Bidirectional` with one local-only and one remote-only entity
+- **When** `Sync` runs
+- **Then** `result.Created + result.Updated + result.Deleted + result.Skipped` equals `result.TotalProcessed`
 
-`ApplyConflictResolution` guards `UseLocal` with `when localItem != null` and then an inner
-`if (remoteItem != null && CanSaveToRemote(...))`; `UseRemote` guards symmetrically. `Merge` has no `case`.
+#### Scenario: A new bidirectional entity survives the second run
 
-#### Scenario: The only conflicts the provider produces resolve to no store write
+- **Given** the state left by the first scenario, under any `ConflictPolicy`
+- **When** `Sync` runs again with `Direction = Bidirectional`
+- **Then** the entity now exists on both sides, so the action is `Update` rather than `Delete`
+- **And** both copies remain and `result.Deleted` is 0
+
+### Requirement: Conflict resolution writes on the winning side, including one-sided conflicts
+
+The system SHALL apply a conflict resolution to whichever sides are materialised. With **both** items
+present it SHALL `Update` the losing side. With only **one** item present — which is the only shape the
+provider actually produces, since conflicts are raised solely by the two one-sided-presence branches — it
+SHALL either re-create the entity on the side that lost it, when the resolution favours the surviving side,
+or delete the surviving copy, when the resolution favours the side on which the entity was deleted. Those
+outcomes SHALL match what `DetermineSyncAction`'s `LocalWins` / `RemoteWins` shortcuts already return for
+the identical state, so a policy and its conflict path cannot disagree. The system SHALL count
+`ConflictResolution.Skip` as a skipped item, and SHALL take no action at all for `ConflictResolution.Merge`,
+which has no mechanism behind it.
+
+`ApplyConflictResolution` has three `UseLocal` arms and three `UseRemote` arms — both-present, surviving-side
+only, and deleted-side only — and returns the `(local, remote)` pair as it stands after the write. `Merge`
+has no `case`.
+
+#### Scenario: A local-only conflict resolved UseLocal re-creates the remote
 
 - **Given** a `Conflict` raised by the local-only / `IsRemoteDeleted` path, so `remoteItem` is null
 - **And** `ConflictPolicy = NewestWins`, so `GetNewestConflictResolution` sees `RemoteItem == null` and returns `UseLocal`
 - **When** `ApplyConflictResolution` runs
-- **Then** the `UseLocal` arm is entered but its inner `remoteItem != null` guard fails
-- **And** no store write occurs, `progress.UpdatedItems` is unchanged, and only `progress.Conflicts` records the event
+- **Then** the local entity is created on `_remoteStore` and `progress.CreatedItems` is incremented
+- **And** `progress.Conflicts` also records the event
+
+#### Scenario: A remote-only conflict resolved UseRemote re-creates the local
+
+- **Given** a `Conflict` raised by the remote-only / `IsLocalDeleted` path, so `localItem` is null
+- **And** the resolution is `UseRemote`
+- **When** `ApplyConflictResolution` runs
+- **Then** the remote entity is created on `_localStore` and `progress.CreatedItems` is incremented
+
+#### Scenario: A resolution favouring the deleted side propagates the deletion
+
+- **Given** a `Conflict` where the entity exists only locally and a custom resolver returns `UseRemote`
+- **When** `ApplyConflictResolution` runs
+- **Then** the surviving local copy is deleted and `progress.DeletedItems` is incremented
 
 #### Scenario: Merge resolution is inert
 
@@ -369,6 +403,37 @@ format, SHALL return null for a null entity, and SHALL return a **freshly genera
 - **When** a knowledge item is created via `CreateKnowledgeItem(G, localHash, null, options)`
 - **Then** `RemoteVersion` is null and `IsRemoteDeleted` is true, because the flag is `string.IsNullOrEmpty(remoteItemHash)`
 
+### Requirement: The knowledge row describes the state after the action was applied
+
+The system SHALL build each knowledge row from the local and remote entities **as they stand once the item's
+action has been applied**, not from the pre-action dictionaries: after a create the destination's version
+hash SHALL be the source entity's hash, after an update the updated side SHALL carry the winner's hash, and
+after a delete the deleted side's hash SHALL be null. Because `IsLocalDeleted` / `IsRemoteDeleted` are
+derived as `string.IsNullOrEmpty(hash)`, this is what keeps those flags meaning "deleted" rather than merely
+"absent when the decision was taken" — the two `Delete` branches of `DetermineSyncAction` read them as the
+former.
+
+`ProcessBatch`/`ProcessBatchAsync` track an `effectiveLocal` / `effectiveRemote` pair through the switch and
+pass those to `CreateKnowledgeItem`.
+
+#### Scenario: Knowledge after an upload does not mark the remote deleted
+
+- **Given** entity `G` exists only locally and is uploaded by this run
+- **When** the knowledge row is written
+- **Then** `RemoteVersion` is the uploaded entity's hash and `IsRemoteDeleted` is false
+
+#### Scenario: Knowledge after a download does not mark the local deleted
+
+- **Given** entity `G` exists only remotely and is downloaded by this run
+- **When** the knowledge row is written
+- **Then** `LocalVersion` is set and `IsLocalDeleted` is false
+
+#### Scenario: Knowledge after a delete does record the deleted side
+
+- **Given** entity `G` is deleted locally by this run
+- **When** the knowledge row is written
+- **Then** `LocalVersion` is null and `IsLocalDeleted` is true
+
 ### Requirement: Save filters gate every write and their block action is honoured per branch
 
 The system SHALL treat a null `CanSaveToLocal`/`CanSaveToRemote` as "permitted", SHALL consult the predicate
@@ -431,8 +496,15 @@ union to `options.MaxItems` when that value is non-null and `>= 0` and the union
 - **Given** two items have already failed and been recorded, and the token is then cancelled
 - **When** the batch loop observes the cancellation and breaks
 - **Then** in `SyncProvider` the knowledge collected so far is still persisted and `SetLastSyncTime` is still called, because its knowledge writes take no cancellation token
-- **And** in `AsyncSyncProvider` the round's knowledge is discarded instead: `CreateAsync`, `UpdateAsync` and `SetLastSyncTimeAsync` are all passed `options.CancellationToken`, so the first of them throws, the outer catch records a `Sync failed` error and nothing is stamped
+- **And** in `AsyncSyncProvider` the same holds: `CreateAsync`, `UpdateAsync` and `SetLastSyncTimeAsync` are all passed `CancellationToken.None`, because the entity writes those rows describe have already happened and recording them is not optional
 - **And** `result.Success` is false because it is computed as `result.Errors.Count == 0` alone
+
+#### Scenario: A cancelled async run still records what it wrote
+
+- **Given** `BatchSize = 1`, three remote-only entities, and a token cancelled by `OnBatchCompleted`
+- **When** `SyncAsync` runs and the batch loop breaks
+- **Then** the entities written to the local store before the break each have a persisted knowledge row, and the scope's last sync time is stamped
+- **And** no `Sync failed` error is recorded, because no cancelled-token write throws
 
 ### Requirement: Sync knowledge is upserted by splitting inserts from updates
 
@@ -619,15 +691,17 @@ CosmosDB knowledge stores as plain backend stores that implement **neither** int
 - **When** it is passed as the `IAsyncSyncKnowledgeItemStore<RavenSyncKnowledgeItem>` argument of `AsyncSyncProvider`
 - **Then** it does not compile, because the class implements neither that interface nor `GetLastSyncTimeAsync(string, CancellationToken)` / `CreateKnowledgeItem`
 
-### Requirement: Tenant-scoped knowledge stores filter differently in CosmosDB and RavenDB
+### Requirement: Tenant-scoped knowledge stores treat a null tenant as "every tenant in the scope"
 
-The system SHALL scope RavenDB knowledge queries by tenant **only when `tenantId.HasValue`** — a null
-`tenantId` matches every tenant's rows in the scope — and SHALL scope CosmosDB queries with an
-**unconditional equality** `x.TenantId == tenantId`, so a null `tenantId` is compared as a value and never
-widens to the whole scope: no row carrying a tenant id can match, and whether the rows whose own `TenantId`
-is null match is left to Cosmos SQL's null-equality rules, the store making no `IS_NULL` allowance for
-them. This applies to `GetKnowledge`, `DeleteKnowledge`, `GetLastSyncTime` and
-`SetLastSyncTime` in both the sync and async variants of each store.
+The system SHALL scope both RavenDB and CosmosDB knowledge queries by tenant **only when
+`tenantId.HasValue`**; a null `tenantId` SHALL match every row in the scope, and SHALL NOT be emitted as an
+equality against null. A null tenant is not an absence of information — `TenantSyncProvider.ResolveTenantScope`
+returns null only for an explicit `ITenantContext.IsAllTenantsScope` or for an entity type with no
+`TenantGuid` property, and both mean the whole scope. This applies to `GetKnowledge`, `GetKnowledgeItem`,
+`DeleteKnowledge`, `GetLastSyncTime` and `SetLastSyncTime` in both the sync and async variants of each store.
+
+CosmosDB builds the predicate through the single producer `CosmosSyncKnowledgeQuery.ApplyScope`; RavenDB
+guards each query with `if (tenantId.HasValue)`.
 
 #### Scenario: Null tenant reads everything in RavenDB
 
@@ -635,11 +709,18 @@ them. This applies to `GetKnowledge`, `DeleteKnowledge`, `GetLastSyncTime` and
 - **When** `GetKnowledgeAsync("Products", null, ct)` is called on `AsyncRavenSyncKnowledgeStore`
 - **Then** rows from both tenants are returned
 
-#### Scenario: Null tenant does not widen the CosmosDB query
+#### Scenario: Null tenant reads everything in CosmosDB too
 
 - **Given** the same distribution in CosmosDB
 - **When** `GetKnowledgeAsync("Products", null, ct)` is called on `AsyncCosmosSyncKnowledgeStore`
-- **Then** the predicate stays `x.Scope == scope && x.TenantId == tenantId` with `tenantId` null, so neither tenant `A`'s nor tenant `B`'s rows are returned, and the result is at most the rows whose own `TenantId` is null
+- **Then** the rendered query carries no `TenantId` term at all, so rows from both tenants and any untenanted rows are returned
+- **And** in particular no `root["TenantId"] = null` is emitted, which in the Cosmos SQL dialect evaluates to Undefined and would match no document
+
+#### Scenario: A supplied tenant still narrows the CosmosDB query
+
+- **Given** scope `"Products"` holds rows for tenants `A` and `B`
+- **When** `GetKnowledgeAsync("Products", A, ct)` is called
+- **Then** the rendered query carries the `TenantId` term and only tenant `A`'s rows are returned
 
 #### Scenario: Null tenant delete is scope-wide in RavenDB
 
@@ -871,21 +952,53 @@ produces no operation.
 
 ### Requirement: Collection expansion inserts unkeyed children unconditionally
 
-The system SHALL, for collection relationships, emit an `Insert` for every desired child whose `Guid` is
-null before diffing, SHALL diff only the keyed desired children against current state by `Guid`, and SHALL
-emit `Insert` for added keys and `Delete` for removed keys.
+The system SHALL, for `OneToMany` collection relationships, emit an `Insert` for every desired child whose
+`Guid` is null before diffing, SHALL diff only the keyed desired children against current state by `Guid`,
+and SHALL emit `Insert` for added keys and `Delete` for removed keys, each carrying
+`relationship.ChildType` and the child entity itself.
 
 #### Scenario: Newly created children are not lost to key-based diffing
 
-- **Given** a desired collection of three children, two with Guids already present in current state and one with a null Guid
+- **Given** a `OneToMany` desired collection of three children, two with Guids already present in current state and one with a null Guid
 - **When** `ExpandCollection` runs
 - **Then** one `Insert` is emitted for the unkeyed child, and the keyed pair yields no operations
 
 #### Scenario: A child removed from the aggregate is deleted
 
-- **Given** current state holds children `X` and `Y` and the desired collection holds only `X`
+- **Given** a `OneToMany` relationship where current state holds children `X` and `Y` and the desired collection holds only `X`
 - **When** `ExpandCollection` runs
 - **Then** a `Delete` operation for `Y` is emitted
+
+### Requirement: Many-to-many expansion emits junction rows, never the child entity
+
+The system SHALL, for `ManyToMany` relationships, emit `Insert` and `Delete` operations over a freshly
+materialised **junction** entity rather than over the child: each operation SHALL carry
+`relationship.JunctionType` and an instance of it whose `JunctionParentFk` property is set to the
+aggregate's root Guid, whose `JunctionChildFk` property is set to the child's Guid, and whose own `Guid` is
+null — the association's identity being that pair of foreign keys. It SHALL NOT emit an operation over the
+child entity, since a caller applying that would delete or duplicate a row shared with every other
+aggregate. `RelationshipBuilder.Through<TJunction>` constrains `TJunction` to `AbstractModel` so the
+junction can always be materialised.
+
+#### Scenario: Removing an association deletes the junction row
+
+- **Given** a `ManyToMany` relationship whose current state holds child `C` and whose desired collection is empty
+- **When** `Expand` runs
+- **Then** one `Delete` operation is emitted with `EntityType == typeof(ProductCategory)` and a `ProductCategory` whose `ProductGuid` is the root Guid and whose `CategoryGuid` is `C`'s Guid
+- **And** no operation carries the `Category` entity itself
+
+#### Scenario: Adding an association inserts a junction row
+
+- **Given** a `ManyToMany` relationship whose current state is empty and whose desired collection holds an already-keyed child `C`
+- **When** `Expand` runs
+- **Then** one `Insert` operation is emitted over a junction instance carrying both foreign keys, and no `Insert` of `C` itself
+
+#### Scenario: A desired many-to-many child with no Guid is refused
+
+- **Given** a `ManyToMany` desired collection containing a child whose `Guid` is null
+- **When** `Expand` runs
+- **Then** `InvalidOperationException` is thrown naming the navigation property and the missing Guid, because no junction row can reference an unkeyed child
+- **And** no partial operation is emitted — unlike the `OneToMany` path, which inserts such a child unconditionally
 
 #### Scenario: An absent or null navigation collection deletes everything current
 
