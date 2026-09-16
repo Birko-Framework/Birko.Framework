@@ -58,10 +58,18 @@ ViewModels/
 
 ### ⚠ The AbstractItemRepository row was not a one-to-one rename (TASK-444)
 
-Recovered from `FisData.Stock.Core`'s git history — the retired project's own source is gone, but a
-consumer's history still carries the file. `Warehouse.AbstractItemRepository` was an **abstract
-coordinate base**: `ItemGuid`, `ItemVariantGuid`, `RepositoryGuid`, `AgendaGuid`, `Batch` — **no
-quantity and no date at all**. Three concrete descendants supplied the payload:
+Recovered from `FisData.Stock.Core` — **its current committed models, not its git history**. The
+retired project's own source is gone from disk, and it is *not* in that consumer's history either:
+measured at TASK-444's close, `git log --all -S "Birko.Models.Warehouse"` there returns nothing and no
+`*Warehouse*` file was ever deleted. What survives is better than a deleted file — FisData **never
+migrated off** this hierarchy, so `Models/AbstractItemRepository.cs` at its `HEAD` still declares the
+shape, with all its descendants beside it. (The earlier "git history" wording was carried unchecked
+through three retellings; corrected rather than dropped, because *evidence described as needing
+excavation invites less checking than evidence sitting in a working file* is the reusable half.)
+
+`Warehouse.AbstractItemRepository` was an **abstract coordinate base**: `ItemGuid`,
+`ItemVariantGuid`, `RepositoryGuid`, `AgendaGuid`, `Batch` — **no quantity and no date at all**. Three
+concrete descendants supplied the payload:
 
 | Retired type | Added | Was |
 |---|---|---|
@@ -70,9 +78,11 @@ quantity and no date at all**. Three concrete descendants supplied the payload:
 | `ItemRepositoryInventory` (abstract, ×5 periods) | start/add/remove/end amounts, date | period **snapshots** |
 
 Mapping that base onto the concrete `StockMovement` collapsed four types into one and left the
-domain unable to express a balance. Two consumers re-added it independently — FisData bolted
-`StorageLocationGuid` + `Amount` onto `StockMovement`, shadowing its movement-shaped fields, and
-Symbio wrote its own `StockItem` with `QuantityOnHand`. `StockBalance` closes that gap.
+domain unable to express a balance. Both consumers carry the concept the framework lost — FisData
+**never migrated off** the old hierarchy (0 files at its `HEAD` reference `Birko.Models.Inventory`; an
+uncommitted working tree is part-way through, bolting `StorageLocationGuid` + `Amount` onto
+`StockMovement` and shadowing its movement-shaped fields), and Symbio wrote its own `StockItem` with
+`QuantityOnHand`. `StockBalance` closes that gap.
 
 **Not** reinstated: the abstract coordinate base (one implementor does not justify it — `StockMovement`
 has different coordinates, two locations rather than one) and the period snapshots (reporting, not a
@@ -85,6 +95,11 @@ data-access pattern in this framework (`Birko.Data.Repositories`).
 and both gained `ExpiryDate`, so all three batch-bearing models implement `IBatchable` and the
 namespace uses one word for one concept. The old name came from `Warehouse.AbstractItemRepository.Batch`.
 Breaking, and taken deliberately while nothing in the framework or in Symbio read either property.
+Re-checked at TASK-444's close against the one other consumer that looked likely to: **no committed
+consumer reads them either** — `FisData.Stock.Core` references `Birko.Models.Inventory` in 0 files at
+`HEAD`. Its uncommitted migration does inherit `Batch` in three models, and whoever finishes that
+migration meets `BatchNumber`; that is reconciliation against current models, not a break in shipped
+code.
 
 ## Maintenance
 
