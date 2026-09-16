@@ -815,11 +815,42 @@ WithTenant/WithTenantAsync save and restore only _currentTenantGuid/_currentTena
 
 `../Birko.Workflow.SQL/SqlWorkflowInstanceStore.cs:76`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED-WIDER** (TASK-315, 2026-09-16). Held exactly as described on six backends, and
+the *seventh* was wrong the other way. `SqlWorkflowInstanceStore.cs:76` filtered on `CurrentState`
+alone while `WorkflowInstanceModel` is `[Table("__WorkflowInstances")]` for every workflow and every
+`TData`; `.JSON:75`, `.XML:67`, `.MongoDB:63`, `.RavenDB:69`, `.ElasticSearch:71` are byte-identical.
+**Not filed and found in triage:** `CosmosDBWorkflowInstanceStore` scoped these two to a constructor
+`_workflowName` while its own `FindByWorkflowNameAsync:115` filtered on the *parameter* — so Cosmos
+disagreed with its six siblings and with itself (§ TASK-274, *two doors onto one feature must give one
+answer*).
+
+Root cause is the interface, not the implementations: `IWorkflowInstanceStore<TData>` fixes `TData` on
+the store, returns `WorkflowInstance<TData>`, and offered no way to restrict a state/status query to
+the one workflow whose payload type that is — so the return type was unsound however a backend
+implemented it. Fixed by giving both methods a required `string workflowName` first parameter, matching
+`SaveAsync` and `FindByWorkflowNameAsync`; all seven now `AND` it into the filter and Cosmos's
+`_workflowName` field and both constructor parameters are deleted. Break is loud (`CS7036`) and was
+priced first: **0** call sites in the framework, **0** in any test, **0** across all 16 consumer repos.
+
 On SQL/JSON/XML/ES/Mongo/Raven the filter is CurrentState (or Status) alone, while every workflow of every TData shares one table/collection (SQL: __WorkflowInstances). A store typed SqlWorkflowInstanceStore<DB,OrderData> asked for "Submitted" also gets InvoiceApproval rows and calls ToInstance<OrderData>() on them. System.Text.Json ignores unknown members by default, so a foreign DataJson usually does NOT throw — it yields an OrderData with every property defaulted. Same shape in Workflow.JSON:75, .XML:67, .ElasticSearch:71, .MongoDB:63, .RavenDB:69.
 
 #### SH-H057 — SaveAsync overwrites a record's WorkflowName and payload without checking it belongs to this workflow
 
 `../Birko.Workflow.SQL/SqlWorkflowInstanceStore.cs:52`
+
+**Verdict: CONFIRMED** (TASK-315, 2026-09-16). Traced in all seven: the update branch read by
+`m.Guid == instance.InstanceId` only, then ran `existing.UpdateFromInstance(instance)` followed by
+`existing.WorkflowName = workflowName` with no comparison — `.SQL:51-52`, `.ElasticSearch:46-47`,
+`.JSON:50-51`, `.XML:42-43`, `.MongoDB:38-39`, `.RavenDB:44-45`, `.CosmosDB:55-58`. The chain the
+finding describes is exact, and the reason it was silent is that `ToInstance<TData>()` deserializes a
+foreign `DataJson` into a *defaulted* `TData` rather than throwing.
+
+Fixed at one producer — `Birko.Workflow/Core/WorkflowInstanceOwnership.RequireSameWorkflow`, called
+from all seven before `UpdateFromInstance`, throwing `WorkflowInstanceOwnershipException`
+(`: WorkflowException`, so one `catch` still selects the family). The now-dead
+`existing.WorkflowName = workflowName` assignment is removed from all seven; this **supersedes CR-L404**
+rather than reverting it, since with a mismatch refused a stale name is unreachable. A source scan in
+`Birko.Workflow.Tests` covers the six backends no offline test can reach.
 
 The update branch does `existing.UpdateFromInstance(instance); existing.WorkflowName = workflowName;` with no comparison of the persisted WorkflowName. Chained with the unscoped Find*: a consumer enumerates FindByStateAsync("Submitted"), gets an InvoiceApproval row restored as a defaulted OrderData, fires and saves — DataJson/HistoryJson/CurrentState of the foreign row are overwritten with defaults and its WorkflowName reassigned. Silent cross-workflow data loss. Same in all seven backends (ES:47, JSON:51, XML:43, Mongo:39, Raven:45, Cosmos:58).
 

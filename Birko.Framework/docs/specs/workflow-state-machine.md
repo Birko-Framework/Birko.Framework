@@ -1,7 +1,7 @@
 ---
 area: workflow-state-machine
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: b4a7f070002d12b6a6b81544d4414021294f8a58
+generated-on: 2026-09-16
 sources:
   - ../Birko.Workflow.CosmosDB/CosmosDBWorkflowInstanceSchema.cs
   - ../Birko.Workflow.CosmosDB/CosmosDBWorkflowInstanceStore.cs
@@ -29,6 +29,7 @@ sources:
   - ../Birko.Workflow/Core/IWorkflowInstance.cs
   - ../Birko.Workflow/Core/IWorkflowInstanceStore.cs
   - ../Birko.Workflow/Core/StateChangeRecord.cs
+  - ../Birko.Workflow/Core/WorkflowInstanceOwnership.cs
   - ../Birko.Workflow/Core/WorkflowStatus.cs
   - ../Birko.Workflow/Definition/StateBuilder.cs
   - ../Birko.Workflow/Definition/StateDefinition.cs
@@ -77,8 +78,10 @@ Because definitions hold `Func` delegates they are never persisted; only instanc
 `IWorkflowInstanceStore<TData>` is the persistence seam, implemented seven times — SQL, JSON, XML,
 ElasticSearch, MongoDB, RavenDB and CosmosDB — each of which serializes the payload and the history
 to strings and stores them alongside the current state and status. The backends are deliberately
-uniform but not identical: their upsert race characteristics differ, and CosmosDB is the only one
-that scopes its "find" queries to a workflow name. Two diagram generators (Mermaid, Graphviz DOT)
+uniform but not identical: their upsert race characteristics differ, and CosmosDB returns the stored
+id rather than the supplied one on the update path. Because every backend keeps all workflows in one
+table/collection, the workflow name is a required argument on every operation that needs one, and a
+save aimed at another workflow's instance is refused. Two diagram generators (Mermaid, Graphviz DOT)
 render a definition for documentation.
 
 Consumers are application services that need approval chains, order/document lifecycles or any
@@ -623,7 +626,8 @@ double-quote characters in emitted values SHALL be escaped as `\"`.
 
 The system SHALL define persistence solely over instances via
 `IWorkflowInstanceStore<TData>` — `SaveAsync(workflowName, instance)`, `LoadAsync(instanceId)`,
-`DeleteAsync(instanceId)`, `FindByStateAsync(state, limit)`, `FindByStatusAsync(status, limit)` and
+`DeleteAsync(instanceId)`, `FindByStateAsync(workflowName, state, limit)`,
+`FindByStatusAsync(workflowName, status, limit)` and
 `FindByWorkflowNameAsync(workflowName, limit)` — with the workflow name carried per save rather than
 as a stored definition, because definitions hold `Func` delegates.
 
@@ -642,11 +646,13 @@ as a stored definition, because definitions hold `Func` delegates.
 ### Requirement: Save is a non-atomic read-then-write upsert keyed on the instance id
 
 The system SHALL, in every backend's `SaveAsync`, first read the persisted record whose `Guid`
-equals `instance.InstanceId`; when found it SHALL apply `UpdateFromInstance(instance)`, overwrite
-`WorkflowName` with the supplied name, call the underlying store's update and return the instance id;
-when not found it SHALL build a new model via `FromInstance(workflowName, instance)` and return the
-underlying store's create result. The read and the write are separate operations with no transaction
-or optimistic concurrency, so concurrent saves of the same instance are not safe.
+equals `instance.InstanceId`; when found it SHALL call
+`WorkflowInstanceOwnership.RequireSameWorkflow(existing.WorkflowName, workflowName, instanceId)`
+before any mutation, then apply `UpdateFromInstance(instance)`, call the underlying store's update
+and return the instance id; when not found it SHALL build a new model via
+`FromInstance(workflowName, instance)` and return the underlying store's create result. No backend
+reassigns `WorkflowName` on the update path. The read and the write are separate operations with
+no transaction or optimistic concurrency, so concurrent saves of the same instance are not safe.
 
 #### Scenario: First save inserts
 
@@ -654,11 +660,38 @@ or optimistic concurrency, so concurrent saves of the same instance are not safe
 - **When** `SaveAsync("OrderApproval", instance)` is awaited
 - **Then** a new record is created with `Guid == instance.InstanceId`, `CreatedAt` and `UpdatedAt` set to `DateTime.UtcNow`, and the create result is returned
 
-#### Scenario: Second save updates and refreshes the workflow name
+#### Scenario: Second save under the same name updates in place
 
-- **Given** an already-persisted instance and a save under a different `workflowName`
-- **When** `SaveAsync("OrderApprovalV2", instance)` is awaited
-- **Then** `CurrentState`, `Status`, the serialized data/history and `UpdatedAt` are refreshed, `CreatedAt` is left untouched, `WorkflowName` becomes `"OrderApprovalV2"`, and `instance.InstanceId` is returned
+- **Given** an already-persisted instance and a save under the same `workflowName`
+- **When** `SaveAsync("OrderApproval", instance)` is awaited
+- **Then** `CurrentState`, `Status`, the serialized data/history and `UpdatedAt` are refreshed, `CreatedAt` and `WorkflowName` are left untouched, and `instance.InstanceId` is returned
+
+### Requirement: A save aimed at another workflow's instance is refused, not applied
+
+The system SHALL throw `WorkflowInstanceOwnershipException` — a `WorkflowException` carrying
+`WorkflowName`, `PersistedWorkflowName` and `InstanceId` — from every backend's `SaveAsync` when
+the persisted record's `WorkflowName` is not ordinally equal to the supplied one, and SHALL leave
+that record completely unmodified. Because all workflows and all `TData` types share one
+table/collection, an instance id identifies a row rather than a workflow; the rule is stated once in
+`Birko.Workflow.Core.WorkflowInstanceOwnership` and called by all seven backends.
+
+#### Scenario: Saving onto a foreign instance leaves it intact
+
+- **Given** an `InvoiceApproval` instance persisted in state `AwaitingSignature`
+- **When** a store typed for `OrderData` awaits `SaveAsync("OrderApproval", instance)` with that instance's id
+- **Then** a `WorkflowInstanceOwnershipException` is thrown, the record's `WorkflowName`, `CurrentState`, serialized payload, history and `UpdatedAt` are all unchanged, and no second record is created
+
+#### Scenario: The refusal names a way forward
+
+- **Given** any mismatched save
+- **When** the exception is inspected
+- **Then** its message names both workflows and points at deleting the instance and re-saving it, or relabelling the stored row through the backend store's own `Store` property
+
+#### Scenario: An absent or empty persisted name is refused too
+
+- **Given** a persisted record whose `WorkflowName` is null or empty
+- **When** `SaveAsync("OrderApproval", instance)` is awaited
+- **Then** the save is refused rather than silently adopting the record, since no code path writes an empty `WorkflowName`
 
 #### Scenario: Concurrent first save — SQL
 
@@ -724,13 +757,13 @@ and apply the `limit` argument whose default is `100`.
 #### Scenario: Most recently updated first
 
 - **Given** three persisted instances in state `Submitted` saved at different times
-- **When** `FindByStateAsync("Submitted")` is awaited
+- **When** `FindByStateAsync("OrderApproval", "Submitted")` is awaited
 - **Then** at most 100 instances are returned, ordered newest `UpdatedAt` first
 
 #### Scenario: Status is matched as an integer
 
 - **Given** instances with `Status` `Active` (1) and `Completed` (2)
-- **When** `FindByStatusAsync(WorkflowStatus.Completed)` is awaited
+- **When** `FindByStatusAsync("OrderApproval", WorkflowStatus.Completed)` is awaited
 - **Then** the filter compares the persisted `Status` column/field against `2` and returns only the completed instances
 
 #### Scenario: Explicit limit
@@ -745,37 +778,35 @@ and apply the `limit` argument whose default is `100`.
 - **When** any find query runs
 - **Then** the ordering is expressed as `OrderBy<CosmosWorkflowInstanceModel>.ByName(nameof(UpdatedAt), descending: true)`, whereas the other six backends use the expression form `OrderBy<T>.ByDescending(m => m.UpdatedAt)`
 
-### Requirement: State and status queries are not scoped by workflow name except on CosmosDB
+### Requirement: State and status queries are scoped to the workflow the caller names
 
-The system SHALL, on the SQL, JSON, XML, ElasticSearch, MongoDB and RavenDB backends, filter
-`FindByStateAsync` and `FindByStatusAsync` on state/status alone — returning instances of every
-workflow stored in the same table/collection — while the CosmosDB backend SHALL additionally require
-`WorkflowName == ` the name supplied to its constructor. `FindByWorkflowNameAsync` on CosmosDB SHALL
-use only its `workflowName` argument and ignore the constructor's name.
+The system SHALL require a `workflowName` argument on `FindByStateAsync` and `FindByStatusAsync` in
+every backend, and SHALL filter on `WorkflowName == workflowName` in addition to the state or status
+term. No backend SHALL hold a store-level workflow name: the name is a per-call argument on
+`SaveAsync`, `FindByStateAsync`, `FindByStatusAsync` and `FindByWorkflowNameAsync` alike.
 
-#### Scenario: Cross-workflow rows on the shared backends
+The scope is what makes the `WorkflowInstance<TData>` return type sound. All workflows and all
+payload types share one table/collection, `TData` is fixed on the store, and `ToInstance<TData>()`
+deserializes a foreign payload into a fully-defaulted `TData` rather than throwing — so an unscoped
+query returns another workflow's rows as silently-empty instances of this one's type.
 
-- **Given** two workflows `OrderApproval` and `InvoiceApproval` persisting to the same store, both with a state named `Submitted`
-- **When** `FindByStateAsync("Submitted")` is awaited on the SQL backend typed as `SqlWorkflowInstanceStore<DB, OrderData>`
-- **Then** rows belonging to `InvoiceApproval` are also returned, and `ToInstance<OrderData>()` attempts to deserialize their `DataJson` into `OrderData`
+#### Scenario: A foreign workflow's rows are excluded
 
-#### Scenario: Cosmos scopes to its constructor name
+- **Given** two workflows `OrderApproval` and `InvoiceApproval` persisting to the same store, both with instances in state `Submitted`
+- **When** `FindByStateAsync("OrderApproval", "Submitted")` is awaited on a store typed for `OrderData`
+- **Then** only the `OrderApproval` instance is returned, with its payload intact
 
-- **Given** `new CosmosDBWorkflowInstanceStore<OrderData>("OrderApproval", settings)`
-- **When** `FindByStateAsync("Submitted")` is awaited
-- **Then** only documents whose `WorkflowName` is `"OrderApproval"` are returned
+#### Scenario: Status queries are scoped the same way
 
-#### Scenario: Cosmos instance saved under a different name becomes invisible to state queries
+- **Given** instances of two workflows that are all `Active`
+- **When** `FindByStatusAsync("OrderApproval", WorkflowStatus.Active)` is awaited
+- **Then** only `OrderApproval` instances are returned
 
-- **Given** the same store used to call `SaveAsync("OrderApprovalV2", instance)`
-- **When** `FindByStateAsync` or `FindByStatusAsync` is awaited
-- **Then** that instance is excluded, because the document's `WorkflowName` no longer equals the constructor's `_workflowName`
+#### Scenario: Find-by-name takes its name from the caller on every backend
 
-#### Scenario: Cosmos find-by-name is unscoped
-
-- **Given** the same `"OrderApproval"`-constructed Cosmos store
+- **Given** any backend
 - **When** `FindByWorkflowNameAsync("InvoiceApproval")` is awaited
-- **Then** `InvoiceApproval` documents are returned, unlike the state/status queries
+- **Then** `InvoiceApproval` records are returned regardless of which workflow the caller's other queries name, because no store holds a name of its own
 
 ### Requirement: A record missing its identity or payload is rejected on restore
 

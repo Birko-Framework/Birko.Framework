@@ -2636,6 +2636,56 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### One workflow could relabel and overwrite another's instance, on all seven backends (2026-09-16)
+
+TASK-315 / `SH-H056` + `SH-H057`, the first of [[STORY-051]]'s ten remaining P1 per-area tasks. **Both
+confirmed, one wider than filed.** Every `IWorkflowInstanceStore` backend keeps all workflows and all
+`TData` types in one table/collection (SQL: `__WorkflowInstances`), and `SaveAsync` upserted by
+`InstanceId` alone before assigning the caller's `workflowName` over whatever was persisted. **116/116
+green** across eight suites, 12 new, **six disjoint mutations**. The standing rules are in § Conventions.
+Eight things worth carrying:
+
+- **The two findings are one chain and the silent half is the read.** `FindByState`/`FindByStatus`
+  filtered on state alone, so a store typed for `OrderData` got `InvoiceApproval` rows — and
+  `ToInstance<TData>()` deserializes a foreign payload into a **fully-defaulted** `TData` rather than
+  throwing, because System.Text.Json ignores unknown members. A consumer enumerating that result and
+  saving then relabelled the foreign row and overwrote its payload, state and history, with nothing
+  raised anywhere.
+- **⚠ The filed location named SQL; the defect was seven backends, and CosmosDB was wrong the OTHER
+  way.** Cosmos scoped those two queries to a constructor `_workflowName` while its own
+  `FindByWorkflowNameAsync` filtered on the *parameter* — so it disagreed with its six siblings **and
+  with itself** (§ TASK-274). Converging the six onto Cosmos without noticing that would have adopted a
+  shape its own third query contradicts.
+- **The contract could not be settled by the caller, because there is none.** `IWorkflowInstanceStore`
+  has **0** callers in the framework (`WorkflowEngine` never touches it), 0 construction sites in any
+  test, and 0 `.cs` files across all 16 consumer repos; the seven backend test projects cover only their
+  *model*. So § TASK-309's rule had to be applied to the *interface's own shape* instead: `SaveAsync` and
+  `FindByWorkflowNameAsync` both take the name per call, and `TData` is fixed on the store — which makes
+  the unscoped `WorkflowInstance<TData>` return type unsound however a backend implements it.
+- **That made SH-H056 an API decision, not an implementation one, so it was asked rather than guessed.**
+  `FindByStateAsync`/`FindByStatusAsync` now take `string workflowName` first, matching their two
+  siblings; Cosmos's field and both constructor parameters are deleted. Affordable because the break is
+  **loud** (`CS7036`) and was priced first at 0 call sites — § TASK-260's *removing or retyping a
+  parameter is safe in a way that inserting one is not*.
+- **SH-H057 is refused at one producer, not fixed seven times.**
+  `Birko.Workflow.Core.WorkflowInstanceOwnership.RequireSameWorkflow` throws
+  `WorkflowInstanceOwnershipException : WorkflowException`, so one `catch` still selects the family, and
+  the message **names both doors this caller has** — delete and re-save, or relabel through the `Store`
+  property every backend exposes.
+- **This SUPERSEDES CR-L404 rather than reverting it.** That finding made the update branch refresh
+  `WorkflowName` so a re-save under a different name "isn't silently kept stale"; with a mismatch refused,
+  a stale name is unreachable, so the assignment is provably dead and is deleted — and the scan below
+  fails if anyone puts it back.
+- **⚠ Six of seven backends cannot be exercised offline, so a source scan is the only cover they have —
+  and the mutations prove it.** Un-wiring MongoDB's guard reds **1 of 68**, the scan, while **MongoDB's
+  own suite stays green at 8/8**; same for unscoping RavenDB's `FindByStatus`. Reflection cannot see "does
+  this method call that helper", so the scan reads the seven sources and also pins the count at 7, so a
+  new backend cannot arrive unguarded.
+- **⚠ The interface change broke exactly one thing — this task's own pin test — and it was INVERTED, not
+  deleted.** Written hours earlier to assert the unfixed read so a later change could not land silently,
+  it now asserts the scope (§ TASK-211). Worth recording that a test written to pin a deliberate gap is
+  the right artefact even when the gap closes the same session.
+
 ### Bidirectional sync — the DEFAULT direction dropped every new item, then deleted it (2026-09-16)
 
 TASK-309, the last open P0 in [[STORY-051]] and the first of its 15 per-area triage tasks to be drained since
