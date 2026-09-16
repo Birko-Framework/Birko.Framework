@@ -1087,6 +1087,67 @@ the re-baseline **1 of 86**. 166 tests green across 9 job suites. Four things wo
 
 ---
 
+## 2026-08-16 — The inventory domain could not say how much stock was on hand, and `IBatchable` was unimplementable
+
+TASK-444, filed from consumer Symbio and carried out across three model repos. Two findings, one root:
+the retired `Birko.Models.Warehouse` migration recorded `AbstractItemRepository → StockMovement` as a
+one-to-one rename, and it was **one-to-four**. Verified by re-derivation on 2026-09-16 (all six repos
+clean): `Birko.Models.Contracts.Tests` **15 passed**, `Birko.Models.Inventory.Tests` **15 passed**,
+`Birko.Models.Inventory.SQL.Tests` **19 passed** — 49 total, 0 failed, 0 skipped. Seven things worth
+carrying:
+
+- **⚠ BREAKING — `StockMovement.Batch` and `InventoryDocumentLine.Batch` no longer exist.** Both are
+  renamed **`BatchNumber`**, on the models *and* their ViewModels, and both types gained `ExpiryDate`.
+  A consumer that reads or assigns either property will not compile. Taken deliberately while nothing
+  read it — re-checked at close against the one consumer that looked likely to, and **no committed
+  consumer is affected**: `FisData.Stock.Core` references `Birko.Models.Inventory` in **0** files at
+  `HEAD`, and the three files that inherit the renamed property exist only in that repo's uncommitted,
+  in-flight migration.
+- **⚠ BREAKING — `IBatchable.BatchNumber` is now `string?`.** It was non-nullable `string`, which is
+  almost certainly why the interface had **zero implementors** for its whole life: batch tracking is a
+  per-item choice and most stock carries no batch, so the contract was unimplementable by exactly the
+  entities it was written for. Changed while there were still none to break. It now has three
+  framework implementors (`StockBalance`, `StockMovement`, `InventoryDocumentLine`) and, since
+  Symbio's TASK-446, a consumer one.
+- **The source that settled it was one repo over — in a consumer's CURRENT source, not its history.**
+  `AbstractItemRepository` was an **abstract coordinate base** — item, variant, repository, agenda,
+  batch, and **no quantity and no date at all** — with concrete descendants: `ItemRepository`
+  (+`Amount`) the balance, `ItemRepositoryMovement` (+amounts, prices, VAT, document, date) the ledger,
+  and `ItemRepositoryInventory` (start/add/remove/end, × 5 period variants) a period snapshot.
+  ⚠ **Provenance corrected at close:** the task, and `Birko.Models.Inventory/CLAUDE.md`, say this was
+  *"recovered from `FisData.Stock.Core`'s git history"*. It was not — `git log --all -S` finds no such
+  file ever in that repo. The shape is in FisData's **committed, current** models, because FisData
+  never moved off the old hierarchy. Same conclusion, better evidence, wrong stated source.
+- **⚠ The finding survived re-derivation and the explanation offered for it did not.** The task's first
+  reading was a 1:2 balance/movement split, inferred from the rename table's naming system plus two
+  consumers' behaviour and labelled circumstantial. The base was **neither** a balance nor a movement.
+  It was corrected only because the finding was written down as circumstantial and the confirming
+  evidence was then looked for. *Record the confidence level, and say where the confirming evidence
+  would live.*
+- **`StockBalance` is the missing state model** — item × variant × location × batch within a tenant,
+  with a **signed** `Quantity`, because a negative balance is a real state consumers need to detect
+  rather than one the model forbids. That the gap was real rather than a naming quibble is evidenced by
+  both consumers carrying the concept the framework lost: FisData never migrated off the old hierarchy
+  at all, and Symbio wrote its own `StockItem` with `QuantityOnHand`.
+- **No cost on the balance, deliberately.** A balance's value depends on a costing *policy* — FIFO,
+  LIFO and weighted average produce different numbers from the same movements — so it is derived, not
+  stored state, and putting it here forces one policy on every consumer. The retired design agreed:
+  `ItemRepository` carried `Amount` alone while every price lived on `ItemRepositoryMovement`.
+  Reservations and min/max/reorder are the same kind of thing and are likewise absent. A test
+  (`Carries_no_cost_or_valuation_field`) fails if anyone adds one, so the next person has to argue
+  against the reasoning rather than around it.
+- **New tables, and the reason is column compatibility rather than novelty.** `StockBalances` and
+  `StockMovements` do **not** reuse the retired `ItemRepositories` / `ItemRepositoryMovements` names,
+  although both existed, because a mapping's column name defaults to the property name and every
+  coordinate was renamed in the move — `ItemGuid` → `StockItemGuid`, `RepositoryGuid` →
+  `StorageLocationGuid`, `AgendaGuid` → `TenantGuid`, `Batch` → `BatchNumber`, `Amount` → `Quantity`.
+  `StockItem` → `Items` and `StorageLocation` → `Repositories` keep their legacy names precisely
+  because their columns *did* survive. Both new mappings pin `decimal` at **22,6** — an unmapped
+  decimal takes the provider default, 18,2 on several, which silently truncates the fractional
+  quantities this domain exists to track.
+
+---
+
 ## 2026-08-16 — CosmosDB rendered `.Date` as a JSON sub-property and matched nothing
 
 TASK-223 made `CosmosFilterMatrixLiveTests` runnable — it was gated *and* unreachable, because the
