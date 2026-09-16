@@ -1,7 +1,7 @@
 ---
 area: migrations
-generated-at: 5e214e7
-generated-on: 2026-08-18
+generated-at: e1e32c6
+generated-on: 2026-09-16
 sources:
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBMigrationContext.cs
@@ -57,7 +57,7 @@ sources:
 source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:19:33,
                   # commit d40aba2). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.Data.Migrations: 4dd7e1b
-  ../Birko.Data.Migrations.CosmosDB: 9755c1a
+  ../Birko.Data.Migrations.CosmosDB: 5972a73
   ../Birko.Data.Migrations.ElasticSearch: e244e85
   ../Birko.Data.Migrations.InfluxDB: 23b63c3
   ../Birko.Data.Migrations.MongoDB: 8a7acf5
@@ -1046,12 +1046,21 @@ SHALL be extracted as string / `long` (falling back to `double`) / `bool` / `nul
 nested objects degraded to their raw JSON text via `ToString()`. Multiple conditions SHALL be
 combined with AND. A null, whitespace or `"{}"` filter SHALL mean "no restriction".
 
+On CosmosDB, every compared **value** SHALL be bound as an `@pN` query parameter and SHALL NOT be
+rendered into the statement. TASK-450: values were formatted as SQL literals with a quote escaped by
+**doubling** it — the SQL-standard rule, which Cosmos NoSQL does not use — so a quote produced two
+adjacent literals (a syntax error) while a **backslash was never escaped at all** and closed the
+literal early, letting the remainder of the value be parsed as SQL. A field **name** is an identifier
+and cannot be parameterised, so it SHALL remain bracket-quoted with its backslashes escaped first and
+then its double quotes (`c["my field"]`), and every Cosmos emitter — the data migrator and the schema
+builder's `RenameField` — SHALL use the same producer for it.
+
 #### Scenario: Range and equality combined
 
 - **Given** `filterJson = {"status":"active","age":{"$gte":18,"$lt":65}}`
 - **When** it is translated
 - **Then** SQL yields `"status" = @p0 AND "age" >= @p1 AND "age" < @p2`; CosmosDB yields
-  `c["status"] = 'active' AND c["age"] >= 18 AND c["age"] < 65`; RavenDB yields `status = $p0 AND age
+  `c["status"] = @p0 AND c["age"] >= @p1 AND c["age"] < @p2` with the three values bound; RavenDB yields `status = $p0 AND age
   >= $p1 AND age < $p2` with RQL query parameters; ElasticSearch yields a `bool.must` of a `TermQuery`
   and two `NumericRangeQuery` clauses; MongoDB passes the document through to the driver unchanged
 
@@ -1061,6 +1070,18 @@ combined with AND. A null, whitespace or `"{}"` filter SHALL mean "no restrictio
 - **When** it is translated by the SQL, ElasticSearch, RavenDB or CosmosDB migrator
 - **Then** the `$in` falls into the `_ => "="` / default arm and produces an equality comparison
   against the array's JSON text (`["a","b"]`), matching nothing, rather than raising an error
+
+#### Scenario: A Cosmos filter value cannot reach the statement
+
+- **Given** a filter value containing a quote, a backslash, or both — for example `a' OR 1=1 --`
+- **When** the CosmosDB migrator translates it
+- **Then** the clause is `c["name"] = @p0`, the value is attached to the `QueryDefinition` verbatim, and no part of it appears in the query text; nothing is escaped because nothing needs to be
+
+#### Scenario: A Cosmos field name is escaped rather than bound
+
+- **Given** a field name containing a double quote or a backslash
+- **When** either the data migrator or the schema builder's `RenameField` emits it
+- **Then** both produce `c["…"]` through the same producer, with backslashes escaped before quotes — an identifier cannot be a query parameter, so escaping is the only containment available
 
 #### Scenario: Empty filter means every document
 

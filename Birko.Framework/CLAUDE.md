@@ -2636,6 +2636,43 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### The Cosmos migrator escaped with the wrong dialect, and three parts of the fix had no test (2026-09-16)
+
+TASK-450, spawned by [[TASK-447]]'s own criterion and closing that thread. `FormatSqlValue` escaped a
+string by **doubling the quote** — the SQL-standard rule, which Cosmos NoSQL does not use — so the
+framework held two mutually incompatible escapers for one dialect. **23/23 green** (14 → 23), **four
+mutations**. Six things worth carrying:
+
+- **Two escapers for one dialect means at most one is right, and here neither was.** Measured offline:
+  `O'Brien` → `'O''Brien'` is two adjacent literals (a syntax error), and `a\' OR 1=1 --` →
+  `'a\'' OR 1=1 --'` closes the literal early because **a backslash in the value was never escaped at
+  all**. So the doubling is a *correctness* defect and the unescaped backslash is the *injection* —
+  the same class as TASK-447, reached from the opposite direction.
+- **⚠ Three parts of the fix first measured ZERO on their mutation, and that is the session's real
+  finding.** I had fixed `Bind`, its three call sites, and the schema builder — and nothing tested any
+  of them, because all of them sit in methods that touch a live Cosmos container before building a
+  statement. Without the mutations the change would have shipped a statement full of `@pN`
+  placeholders with nothing bound to them. **A fix you cannot mutate into failure is a fix you have
+  not tested**, however obviously correct it reads.
+- **Reach for what the shape actually permits.** `Bind` is `internal static`, so it got a direct test;
+  the call sites and the schema builder got **source scans** — weaker than a behavioural test, and the
+  honest alternative to none. Each scan records in its remarks what its mutation measured, so nobody
+  later mistakes it for belt-and-braces.
+- **Values and identifiers are treated oppositely, deliberately.** A value is parameterised (a bound
+  value has no grammar to break out of); a field **name** cannot be a parameter, so escaping is the
+  only containment — and CR-M104's rule became one shared producer, because
+  `CosmosDBSchemaBuilder.RenameField` had been interpolating a caller's field name with **no escaping
+  whatsoever** while its sibling in the same project escaped. One rule, two behaviours, two files that
+  ship together.
+- **⚠ A test was the defect's alibi.** `ParseFilterToSql_EscapesSingleQuotes` asserted `'O''Brien'`,
+  which made a wrong escaping scheme look like a considered decision. § TASK-284's rule, third sighting
+  this week — and the replacement asserts the payload is **absent** from the clause rather than
+  correctly escaped, a claim that cannot rot as the grammar changes.
+- **⚠ The P1 rating was understated and is left as filed.** It was chosen because the parser's
+  behaviour was unmeasured, and the task's first criterion existed to settle it — which it did, as
+  injection, i.e. TASK-447's P0 class. The frontmatter is not rewritten after the fact: a priority is a
+  record of what was known when it was filed, and the correction belongs in the outcome.
+
 ### Seeded noise was not reproducible across .NET versions, and 14 tests could not see it (2026-09-16)
 
 TASK-449, filed by hand rather than harvested and picked by explicit instruction — it sat in

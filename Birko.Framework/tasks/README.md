@@ -33,14 +33,14 @@ _Generated 2026-09-16 (`/tasks triage`). Run `/tasks triage` to refresh. **Do no
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 148   |
+| todo         | —     | —       | 147   |
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 11    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 23      | 146   |
+| done         | 1     | 23      | 147   |
 | cancelled    | 0     | 0       | 2     |
 
-`todo` by priority: 37× P1 · 93× P2 · 18× P3.  
+`todo` by priority: 36× P1 · 93× P2 · 18× P3.  
 > ℹ Recounted from the files on each close rather than incremented — a breakdown that sums correctly
 > is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
 > one P3 short, while still totalling right). The P0 filed on 2026-09-16 as [[TASK-447]] is now closed.
@@ -257,7 +257,7 @@ _None_
   - [ ] TASK-446 All seven workflow instance stores have zero store-level tests, and that is where two high findings lived · FEATURE-014
   - [x] TASK-447 A Cosmos view filter's string value breaks out of its own quotes · FEATURE-014
   - [ ] TASK-448 Two records disagree about what a rendered expression tree leaks · FEATURE-014
-  - [ ] TASK-450 The Cosmos migrator escapes filter values with the wrong dialect · FEATURE-014
+  - [x] TASK-450 The Cosmos migrator escapes filter values with the wrong dialect · FEATURE-014
   - STORY-024 Critical findings — done (0/0 done)
   - STORY-025 High findings — done (0/0 done)
   - STORY-026 Medium findings — in-progress (0/0 done)
