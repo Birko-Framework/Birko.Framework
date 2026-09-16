@@ -37,15 +37,18 @@ _Generated 2026-09-16 (`/tasks triage`). Run `/tasks triage` to refresh. **Do no
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 11    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 23      | 144   |
+| done         | 1     | 23      | 145   |
 | cancelled    | 0     | 0       | 2     |
 
-`todo` by priority: 1× P0 · 36× P1 · 93× P2 · 18× P3.  
-> ℹ Recounted from the files on each close rather than incremented. The line read
-> `1× P0 · 38× P1 · 92× P2 · 16× P3` before TASK-315, which still summed to the right total while
-> carrying a P0 that had just been closed and one P3 short — a breakdown that sums correctly is not
-> thereby correct. The P0 here is [[TASK-447]], filed 2026-09-16 (a SQL injection sink in the Cosmos
-> view filter path, found while closing [[TASK-322]]).
+`todo` by priority: 37× P1 · 93× P2 · 18× P3.  
+> ℹ Recounted from the files on each close rather than incremented — a breakdown that sums correctly
+> is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
+> one P3 short, while still totalling right). The P0 filed on 2026-09-16 as [[TASK-447]] is now closed.
+>
+> ⚠ **One task file on disk is NOT counted here and is not in git:**
+> `tasks/_loose/TASK-449-…-noise-not-reproducible-….md`, which arrived untracked during this pass and
+> is not mine to commit. It is also outside [[fix-next]]'s pool (`_loose`, `findings: []`, no
+> `review-intake` parent), so nothing ranks it — see its own § *Note on placement*.
 
 ## In progress now
 
@@ -151,7 +154,7 @@ _None_
   - [ ] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export 🔍 review · FEATURE-013
   - [ ] TASK-228 `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk 🔍 review · FEATURE-013
   - [ ] TASK-307 The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (109/197 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (110/198 tasks done)
   - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) · FEATURE-014
   - [x] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire · FEATURE-014
   - [ ] TASK-144 `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model · FEATURE-014
@@ -250,8 +253,9 @@ _None_
   - [ ] TASK-331 An expression-valued UPDATE that binds no parameter issues no statement at all, silently · FEATURE-014
   - [x] TASK-332 The migration runner's own bookkeeping table could not be created on MySQL or SQL Server · FEATURE-014
   - [ ] TASK-446 All seven workflow instance stores have zero store-level tests, and that is where two high findings lived · FEATURE-014
-  - [ ] TASK-447 A Cosmos view filter's string value breaks out of its own quotes · FEATURE-014
+  - [x] TASK-447 A Cosmos view filter's string value breaks out of its own quotes · FEATURE-014
   - [ ] TASK-448 Two records disagree about what a rendered expression tree leaks · FEATURE-014
+  - [ ] TASK-450 The Cosmos migrator escapes filter values with the wrong dialect · FEATURE-014
   - STORY-024 Critical findings — done (0/0 done)
   - STORY-025 High findings — done (0/0 done)
   - STORY-026 Medium findings — in-progress (0/0 done)

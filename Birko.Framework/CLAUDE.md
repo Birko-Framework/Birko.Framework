@@ -2636,6 +2636,47 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### A Cosmos view filter's string value could break out of its own quotes (2026-09-16)
+
+TASK-447, spawned by [[TASK-322]]'s close gate the same day and worked next because it is the same end
+state reached with the caller holding the predicate. `CosmosFilterTranslator` rendered a string
+operand as a quoted literal escaping only `'`; Cosmos NoSQL escapes with **backslash**, so a backslash
+in the input consumed the escape the code had just added. **35/35 green**, 11 new + 6 inverted,
+**three mutations**. Seven things worth carrying:
+
+- **The containment is the API shape, not a better escaper.** Values are now **bound as parameters**.
+  Both execution sites already built a `QueryDefinition` and simply never called `WithParameter`, so
+  the mechanism was present and unused — and § TASK-308/SH-H028's rule is *prefer removing the grammar
+  to escaping it*: escaping is a blacklist against a documented set that can grow, a bound value has
+  no grammar at all. **Check for the unused mechanism before designing an escaper.**
+- **A rendering layer that needed fixing twice is a rendering layer to delete.** CR-M086 corrected the
+  hand-written literal formatter for enums and for `DateTime`; the `_ => value.ToString()` fallback
+  still emitted **unquoted** text for anything unlisted. All of it is gone. The SDK serializes a
+  parameter with the same serializer that wrote the document, so the stored form and the compared form
+  match by construction instead of by a guess about System.Text.Json's defaults.
+- **⚠ Say what the change gives up.** No offline test can see the wire format of a bound `DateTime` or
+  `Guid` any more, and the inverted test file says so in place rather than quietly dropping the
+  coverage. That is the trade, not an oversight.
+- **⚠ A mutation that failed NOTHING was the most useful result of the session.** Deleting the
+  enum-to-numeric conversion left all 35 green. Measured why: C# builds `v.State == Status.Published`
+  as `Convert(v.State, Int32) == Convert(2, Int32)`, so the operand evaluates to a boxed **`Int32`**
+  and never reaches the `is Enum` branch — which is reachable only through an operand whose static
+  type is `object`. The test was aimed at the wrong shape. Retargeted, it reds; the ordinary shape is
+  kept as a second test recording that the **compiler**, not this code, satisfies CR-M086 there.
+- **Assert the absence of caller text, not the correctness of an escape.** The payload theory asserts
+  that the input appears **nowhere** in the query text and **verbatim** in the parameter. That claim
+  cannot rot as the grammar changes, where a list of correctly-escaped payloads can.
+- **⚠ Measured versus documented, kept apart.** The *rendering* is measured. That the old rendering
+  **parses** as an injection is read off Cosmos NoSQL's literal grammar and is **not** executed —
+  that needs a live account. Both the task and the test file say which is which.
+- **⚠ Spawned [[TASK-450]] (P1), and it is wrong a DIFFERENT way.** The task's own criterion sent me to
+  check the Cosmos migration emitters:
+  `Birko.Data.Migrations.CosmosDB`'s `FormatSqlValue` escapes with **SQL-standard `''` doubling**,
+  which Cosmos does not use at all — so the framework held two mutually incompatible escapers for one
+  dialect and at most one could be right (§ TASK-274). Filed P1 rather than P0 **because its effect on
+  the parser is not yet measured**, and calling it a leak would be a claim ahead of its evidence.
+  § TASK-253 had already flagged that file as the one site left out of the `EscapeLiteral` convergence.
+
 ### A Cosmos view filter that could not be translated returned every tenant's rows (2026-09-16)
 
 TASK-322 / `SH-H055`, the last backend still holding the fail-open CR-H047 closed on ElasticSearch and

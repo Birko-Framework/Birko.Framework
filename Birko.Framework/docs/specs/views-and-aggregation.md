@@ -1,6 +1,6 @@
 ---
 area: views-and-aggregation
-generated-at: 10da48b
+generated-at: fe229ec
 generated-on: 2026-09-16
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
@@ -46,7 +46,7 @@ sources:
   - ../Birko.Data.Views/ViewResult.cs
 source-commits:   # sibling HEADs when this spec was last written (2026-08-16 16:17:32,
                   # commit c78cfca). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.CosmosDB.Views: 3fba6e6
+  ../Birko.Data.CosmosDB.Views: d85ae23
   ../Birko.Data.ElasticSearch: 9b523e2
   ../Birko.Data.ElasticSearch.Views: 3881649
   ../Birko.Data.MongoDB.Views: 1a69f29
@@ -987,11 +987,22 @@ invariant the ElasticSearch view store holds under CR-H047.
 
 A boolean constant SHALL render as the SQL literal `true` or `false` wherever it appears inside
 the expression, so that a constant nested in a conjunction produces valid SQL rather than an
-empty fragment joined between its neighbours' separators. Literal values SHALL be inlined:
-`null` unquoted, strings single-quoted with `'` escaped as `\'`, booleans as `true`/`false`,
-enums as their numeric value, `DateTime`/`DateTimeOffset` as ISO-8601 (`"o"`) quoted strings,
-`Guid` quoted, `decimal`/`double`/`float` invariant-formatted, and anything else via
-`ToString()`.
+empty fragment joined between its neighbours' separators.
+
+Every value the filter compares against SHALL be **bound as a query parameter** named `@p0`, `@p1`,
+… in the order encountered, and SHALL NOT be rendered into the statement text. TASK-447: values used
+to be inlined as literals with only the quote escaped, and Cosmos NoSQL uses **backslash** as its
+escape character — so a value containing a backslash consumed that escape, ended its own literal
+early, and the remainder was parsed as SQL. On an aggregate view the predicate is the only thing
+scoping the query, so a caller-supplied value could widen it to every document. Parameters are used
+rather than stricter escaping because a bound value has no grammar to break out of.
+
+A parameter's value SHALL be the operand's CLR value, with one exception: an operand that arrives as
+a boxed `Enum` SHALL be converted to its underlying integral value, because Birko's own Cosmos store
+writes enums in numeric form. An ordinary enum comparison never reaches that conversion — C# builds
+`v.State == Status.Published` as `Convert(…, Int32) == Convert(…, Int32)`, so the operand is already
+an `Int32`. `OFFSET` and `LIMIT` SHALL remain interpolated, being `int?` values from the store's own
+API with no caller text in them.
 
 #### Scenario: An untranslatable predicate is refused
 
@@ -1035,17 +1046,35 @@ enums as their numeric value, `DateTime`/`DateTimeOffset` as ISO-8601 (`"o"`) qu
 - **When** the conjunction is translated
 - **Then** the emitted clause is `(c.Amount > 0 AND true)` — a constant is rendered wherever it appears, because an empty fragment would be joined between the `AND` separators into invalid SQL
 
-#### Scenario: Enum and DateTime literals are emitted as valid SQL
+#### Scenario: Enum and DateTime values reach the parameter, not the statement
 
 - **Given** the filters `v => v.Status == OrderStatus.Active` and `v => v.Created > new DateTime(2026, 1, 1)`
 - **When** the values are translated
-- **Then** the emitted literals are the enum's numeric value (unquoted) and the ISO-8601 round-trip string in single quotes
+- **Then** each clause carries a `@pN` placeholder and the CLR value is bound; the SDK serializes it with the same serializer that wrote the documents, so no hand-written literal format is involved. CR-M086 fixed that format twice while it existed
 
-#### Scenario: Values are inlined, not parameterized
+#### Scenario: Values are parameterized, not inlined
 
-- **Given** a string filter value containing a single quote
+- **Given** a string filter value containing a single quote, a backslash, or both
 - **When** it is translated
-- **Then** the quote is escaped as `\'` and the literal is concatenated directly into the SQL text; no `QueryDefinition` parameter is created
+- **Then** the statement carries `@p0` and the value is attached to the `QueryDefinition` unchanged; no caller-supplied text appears in the query text at all, and nothing is escaped because nothing needs to be
+
+#### Scenario: A payload cannot widen the predicate
+
+- **Given** a filter value crafted to close the literal and append `OR 1=1 --`
+- **When** the aggregate and count statements are built
+- **Then** both emit `WHERE c.Category = @p0`, neither contains `OR` or `--`, and the value reaches the parameter verbatim
+
+#### Scenario: Several values bind in order
+
+- **Given** the filter `v => v.CategoryName == "books" && v.Total > 10`
+- **When** it is translated
+- **Then** the clause references `@p0` and `@p1`, bound to `"books"` and `10` respectively
+
+#### Scenario: A filter that restricts nothing binds nothing
+
+- **Given** a `null` filter, or the explicit constant `v => true`
+- **When** the statement is built
+- **Then** no `WHERE` is appended and the `QueryDefinition` carries no parameters
 
 ### Requirement: Store-agnostic aggregation query specification
 
