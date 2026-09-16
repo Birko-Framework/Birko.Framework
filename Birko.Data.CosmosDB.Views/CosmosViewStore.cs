@@ -345,8 +345,19 @@ internal static class CosmosFilterTranslator
 {
     /// <summary>
     /// Translates a filter expression into a Cosmos SQL WHERE clause string.
-    /// Returns an empty string if the expression cannot be translated.
     /// </summary>
+    /// <returns>
+    /// The WHERE clause, or an empty string when the predicate is the explicit constant
+    /// <c>true</c> -- the one predicate that constrains nothing. An empty return therefore means
+    /// exactly that, and never "translation failed".
+    /// </returns>
+    /// <exception cref="NotSupportedException">
+    /// The predicate cannot be expressed as Cosmos SQL. SH-H055: this used to be swallowed and
+    /// returned as an empty string, which both callers read as "no filter" -- so the aggregate ran
+    /// over every document and a tenant-scoped query returned other tenants' rows. Callers must let
+    /// this propagate rather than widening to match-all; the ElasticSearch view store settled the
+    /// same invariant under CR-H047 / TASK-268.
+    /// </exception>
     /// <param name="mapMember">
     /// Optional map from a TView property name to the raw source-document field name. The aggregate
     /// SQL path runs the WHERE against the source documents (FROM c), so a renamed view field must
@@ -355,14 +366,18 @@ internal static class CosmosFilterTranslator
     /// </param>
     public static string Translate<T>(Expression<Func<T, bool>> filter, Func<string, string>? mapMember = null)
     {
-        try
-        {
-            return TranslateExpression(filter.Body, mapMember);
-        }
-        catch
+        // SH-H055: an explicit `x => true` is the ONE case where an empty clause is the right answer,
+        // and it is answered here rather than inside the recursion. Nested, a boolean constant has to
+        // render as a real SQL literal or `(c.A = 1 AND )` is a syntax error -- CLAUDE.md § TASK-137,
+        // "a strategy asked to render the unrenderable throws; an empty string is silently joined
+        // between its neighbours' separators". Kept deliberately narrow: a single ConstantExpression
+        // node, never a whitelist of shapes that happen to reduce to true.
+        if (filter.Body is ConstantExpression { Value: true })
         {
             return string.Empty;
         }
+
+        return TranslateExpression(filter.Body, mapMember);
     }
 
     private static string TranslateExpression(Expression expression, Func<string, string>? mapMember)
@@ -372,6 +387,10 @@ internal static class CosmosFilterTranslator
             BinaryExpression binary => TranslateBinary(binary, mapMember),
             UnaryExpression { NodeType: ExpressionType.Not } unary => $"NOT ({TranslateExpression(unary.Operand, mapMember)})",
             MethodCallExpression method => TranslateMethodCall(method, mapMember),
+            // SH-H055: `x => false` used to take the unsupported-node throw below, get swallowed, and
+            // emit no WHERE -- so it matched EVERY document instead of none. Rendered as a literal it
+            // is correct both at the top level and nested inside AND/OR.
+            ConstantExpression { Value: bool b } => b ? "true" : "false",
             _ => throw new NotSupportedException($"Expression type {expression.NodeType} is not supported for SQL translation.")
         };
     }
@@ -444,10 +463,31 @@ internal static class CosmosFilterTranslator
         }
         else
         {
-            // Evaluate the expression to get the value
-            var lambda = Expression.Lambda(expression);
-            var compiled = lambda.Compile();
-            value = compiled.DynamicInvoke();
+            try
+            {
+                // Evaluate the expression to get the value
+                var lambda = Expression.Lambda(expression);
+                var compiled = lambda.Compile();
+                value = compiled.DynamicInvoke();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // SH-H055: a parameter-dependent operand (column-vs-column) cannot be evaluated here
+                // -- Compile() throws because the parameter is not in scope -- and DynamicInvoke can
+                // surface anything the closure does. Both are "this filter cannot be translated", so
+                // report them as the type the rest of this translator and the ElasticSearch sibling
+                // already use, and let one catch select the whole family.
+                //
+                // The message carries the node's SHAPE and never the rendered expression: a compiled
+                // tree interpolates the values a closure captured, and this message travels into logs
+                // and error responses (CLAUDE.md § TASK-308).
+                //
+                // A cancellation is deliberately NOT rewrapped -- it is the caller's own decision and
+                // rewrapping it is the defect § TASK-291 records.
+                throw new NotSupportedException(
+                    $"A {expression.NodeType} operand could not be evaluated to a constant and cannot "
+                    + "be translated to a Cosmos SQL filter.", ex);
+            }
         }
 
         var invariant = System.Globalization.CultureInfo.InvariantCulture;
