@@ -27,8 +27,34 @@ namespace Birko.Data.Stores
         void Init();
 
         /// <summary>
-        /// Destroys the store and releases all resources.
+        /// <b>PERMANENTLY DELETES every row this store can see.</b> This is not disposal.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// SH-H046. This used to read <i>"Destroys the store and releases all resources"</i>, which
+        /// describes disposal -- and worse, describes what <see cref="System.IDisposable.Dispose"/>
+        /// already does on the stores that hold resources (<c>RavenDBStore</c>, <c>InfluxDBStore</c>,
+        /// <c>DataBaseStore</c> and their async twins all implement it). A consumer reaching for
+        /// cleanup therefore had no reason to look past this method, and a teardown-style call
+        /// destroys production data.
+        /// </para>
+        /// <para>
+        /// <b>The blast radius is per backend and is wider than this entity on two of them:</b>
+        /// RavenDB sends <c>DeleteDatabasesOperation(hardDelete: true)</c> and drops the
+        /// <b>entire database</b>; CosmosDB deletes the container; MongoDB drops the collection;
+        /// SQL drops the table; JSON and XML delete the file; InMemory clears its dictionary.
+        /// Nothing is recoverable and nothing is scoped to a filter.
+        /// </para>
+        /// <para>
+        /// <b>To release resources, use <see cref="System.IDisposable"/> where the store implements
+        /// it</b> -- not this method. To delete rows selectively use
+        /// <c>IBulkDeleteStore&lt;T&gt;.Delete(filter)</c>; to empty a store while keeping it usable
+        /// use <c>DeleteAll()</c> on <c>AbstractBulkStore&lt;T&gt;</c> (a base-class member, not on
+        /// this interface). This method exists for dropping a store outright (schema teardown,
+        /// test fixtures, the <c>BackgroundJobs.*JobQueueSchema.DropAsync</c> helpers) and is named
+        /// for what it destroys rather than for the caller's intent, per CLAUDE.md § Conventions.
+        /// </para>
+        /// </remarks>
         void Destroy();
     }
 

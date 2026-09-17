@@ -19,8 +19,18 @@ namespace Birko.Data.Stores
         Task InitAsync(CancellationToken ct = default);
 
         /// <summary>
-        /// Asynchronously destroys the store and releases all resources.
+        /// <b>PERMANENTLY DELETES every row this store can see.</b> This is not disposal.
         /// </summary>
+        /// <remarks>
+        /// SH-H046. See <see cref="IBaseStore.Destroy"/> for the full warning and the per-backend
+        /// blast radius -- on RavenDB this drops the <b>entire database</b>. This used to read
+        /// <i>"asynchronously destroys the store and releases all resources"</i>, which describes
+        /// disposal and duplicates what <see cref="System.IDisposable"/> already provides on the
+        /// stores that hold resources. To release resources use that; to delete rows selectively use
+        /// <c>IAsyncBulkStore&lt;T&gt;.DeleteAsync(filter)</c>; to empty a store while keeping it
+        /// usable use <c>DeleteAllAsync()</c> on <c>AbstractAsyncBulkStore&lt;T&gt;</c> (a base-class
+        /// member, not on this interface).
+        /// </remarks>
         /// <param name="ct">A cancellation token to cancel the operation.</param>
         Task DestroyAsync(CancellationToken ct = default);
     }
