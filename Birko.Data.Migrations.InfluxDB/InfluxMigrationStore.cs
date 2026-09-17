@@ -43,8 +43,20 @@ namespace Birko.Data.Migrations.InfluxDB
 
             if (_migrationsBucket == null)
             {
-                // Create migrations bucket with 1 year retention
-                var retentionRule = new BucketRetentionRules(BucketRetentionRules.TypeEnum.Expire, 365L * 86400L);
+                // SH-H033: migration bookkeeping must NEVER expire. This used to create the bucket with a
+                // 365-day Expire rule, and RecordMigration timestamps each point with `migration.CreatedAt`
+                // -- the migration's *authored* date, not when it was applied. So the defect is not only
+                // "applied versions vanish after a year": a migration authored more than a year ago falls
+                // outside the retention window the moment it is written and is never durably recorded at
+                // all. Either way GetAppliedVersions() comes back short, GetCurrentVersion() under-reports,
+                // and the next Migrate() replays migrations (including destructive Up bodies) against an
+                // already-migrated database.
+                //
+                // `0` is InfluxDB's spelling for infinite retention. Note this only governs a bucket this
+                // method CREATES -- an existing `_migrations` bucket is adopted as found, so a database
+                // provisioned before this fix keeps its 365-day rule and needs a manual
+                // `influx bucket update --name _migrations --retention 0`.
+                var retentionRule = new BucketRetentionRules(BucketRetentionRules.TypeEnum.Expire, 0L);
                 _migrationsBucket = bucketsApi.CreateBucketAsync(MigrationsBucketName, retentionRule, _organization).GetAwaiter().GetResult();
             }
         }
@@ -110,12 +122,25 @@ namespace Birko.Data.Migrations.InfluxDB
                     }
                 }
             }
-            catch (global::InfluxDB.Client.Core.Exceptions.InfluxException)
+            catch (global::InfluxDB.Client.Core.Exceptions.InfluxException ex)
             {
-                // CR-L146: only swallow InfluxDB-reported failures ("bucket may not have data yet"); a
-                // non-Influx exception (programming error, etc.) now propagates instead of being silently
-                // eaten. Precisely distinguishing an empty bucket from an auth/connectivity InfluxException
-                // needs a live server to classify (deferred to the integration tier).
+                // SH-H032's sibling, SH-H029/SH-H030: "could not read" is never "nothing is applied".
+                //
+                // CR-L146 narrowed this catch to InfluxException and recorded that it still could not
+                // separate an empty bucket from an auth / wrong-organization / connectivity failure. That
+                // remains true -- and swallowing is the wrong side of the ambiguity, because the empty set
+                // flows into GetCurrentVersion() == 0 and Migrate() then REPLAYS every registered migration
+                // (including any destructive Up) against a live, fully-migrated database. A spurious throw
+                // costs one failed run that says why; a spurious empty set costs the database.
+                //
+                // A genuinely empty bucket does not raise: Influx answers an empty result set, which the
+                // loop above handles by yielding no records. So the only reachable causes here are real
+                // failures. The status code is carried through so a caller can still classify it.
+                throw new InvalidOperationException(
+                    $"Cannot read applied migration versions from bucket '{MigrationsBucketName}'. "
+                    + "Refusing to report an empty set, which would replay every registered migration "
+                    + $"against an already-migrated database. {ex.Message}",
+                    ex);
             }
 
             return result;
