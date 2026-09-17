@@ -634,11 +634,53 @@ Initialize creates `_migrations` with `BucketRetentionRules(Expire, 365*86400)`.
 
 Update calls LoadModelInstance (143), which builds a NEW TModel from CreateModelInstance() and applies only MapToModel; the row is never read first. AbstractConnector_Update.cs:34 renders the UPDATE from table.GetSelectFields()/DataBase.Write(table.Fields...) i.e. ALL columns, so any column the ViewModel omits (CreatedAt, TenantGuid, non-presentation fields) is overwritten with the default. For TModel : ITenant the TenantGuid is blanked or TenantStoreWrapper.Update:65 throws. Line 228 then pushes those defaults into the caller's VM. Same at AbstractAsyncViewModelRepository.cs:224.
 
+**Verdict: CONFIRMED-WIDER (2026-09-17, [[TASK-316]]) — FIXED**
+
+`LoadModelInstance` (`AbstractViewModelRepository.cs:143-148`) is `CreateModelInstance()` + `MapToModel`,
+i.e. a **fresh** model; the stored row is never read. Both write paths then persist it whole —
+`DataBaseStore.UpdateCore:219` calls `Connector.Update(data, conditions)`, which renders every column of
+`table.GetSelectFields()`, and `AbstractInMemoryStore.UpdateCore:93` is `_items[guid] = data`. So every
+column the ViewModel does not map was silently reset to its default on every update.
+
+**Wider than filed:** the finding names the two single-item repositories. The two **bulk** repositories
+use the same helper (`AbstractBulkViewModelRepository.cs:86`,
+`AbstractAsyncBulkViewModelRepository.cs:111`), so **4** update paths carried the defect, not 2 — and
+fixing only the filed pair would have shipped a merging single-item update beside a blanking bulk one
+(§ TASK-215, *guard the whole verb family or none of it*).
+
+Fixed by `LoadModelInstanceForUpdate` / `LoadModelInstanceForUpdateAsync`: the ViewModel is mapped onto
+the **stored** row, so an update is a merge. A ViewModel is a partial projection by construction — it
+cannot map `CreatedAt`/`UpdatedAt` or the `TenantGuid` a wrapper injects — so a fresh instance was
+structurally unable to be correct here. `Create` is deliberately unchanged, and that is pinned.
+
+**Reach, re-measured 2026-09-17 (the inherited number was wrong):** the task recorded 0 consumer
+references to `AbstractViewModelRepository` — true, and irrelevant, since consumers derive from
+`ElasticSearchRepository<TVm,TModel>` / `AsyncDataBaseRepository<TConnector,TVm,TModel>` rather than
+naming the base. There are **9 `override void MapToModel` implementations across 2 consumer repos**,
+all of which reach the defective `Update`. `Affiliate.Shared/Repositories/ProductRepository.cs:25`
+carries the comment *"Base properties (Guid, CreatedAt, UpdatedAt are handled by base)"* — nothing
+handled them. **Live, not latent.**
+
 #### SH-H035 — Hash-based "skip the write" is inert — no store reads StoreDataDelegate's return value
 
 `../Birko.Data.ViewModel/Repositories/AbstractViewModelRepository.cs:226`
 
 StoreDataDelegate<T> is `delegate T ...(T data)` (Stores/IStore.cs:13) but every backend calls storeDelegate?.Invoke(data) and DISCARDS the result, writing data regardless: DataBaseStore.UpdateCore:133, InMemory:92, JSON:87, ES:170, Mongo:151. So returning null! for an unchanged model suppresses nothing on any backend, and a ProcessDataDelegate returning a REPLACEMENT instance is dropped on single-item Create (196) and Update while the sync bulk path honours it (AbstractBulkViewModelRepository.cs:71) — the store persists the pre-transform model.
+
+**Verdict: CONFIRMED-WIDER (2026-09-17, [[TASK-316]]) — FIXED in the repository; the framework-wide half
+is [[TASK-451]]**
+
+Measured across the framework: **96** `storeDelegate?.Invoke(...)` sites and **0** that consume the
+result. So the finding is right and understates itself — it names 5 backends, and it is every backend,
+plus the event-sourcing wrappers. Returning `null!` to mean "skip this write" suppressed nothing on any
+of them, and the SHA-256 `StoreHash` computes on every read bought nothing at all.
+
+Fixed where the information lives: the repository now applies `processDelegate` **before** the store sees
+the item (the transform's result is therefore honoured, matching the bulk path's CR-H110 fix) and takes
+the skip decision itself, rather than asking the store for something no store can do.
+
+The remaining half — `StoreDataDelegate<T>` declaring a return value that 96 call sites discard — is a
+framework-wide contract defect at a different layer and is **[[TASK-451]]**, not silently left here.
 
 #### SH-H036 — ReadOne extension queries the connector directly, bypassing the tenant wrapper — cross-tenant read
 

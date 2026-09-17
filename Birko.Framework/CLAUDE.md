@@ -2674,6 +2674,65 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### A ViewModel update blanked every column the ViewModel could not express (2026-09-17)
+
+TASK-316 / `SH-H034` + `SH-H035`, ranked to the top of [[STORY-051]] as silent corruption of a stored row
+on an **ordinary** write path. **Both confirmed WIDER than filed.** 37/37 in
+`Birko.Data.ViewModel.Tests` (17 pre-existing + 20 new), 263 across seven suites, **eleven disjoint
+mutations, every one red**. Ten things worth carrying:
+
+- **A ViewModel is a PARTIAL projection, so an update built from a fresh model is structurally unable to
+  be correct.** `Update` called `LoadModelInstance` — `CreateModelInstance()` + `MapToModel` — and never
+  read the row; every backend then persisted it whole. So `CreatedAt`/`UpdatedAt` and the `TenantGuid` a
+  wrapper injects — columns a ViewModel *cannot* map — were reset to their defaults on every update. The
+  fix maps onto a **detached copy of the stored row**.
+- **⚠ Both findings were WIDER, in different directions, and both widenings changed the work.** `SH-H034`
+  was filed against the two single-item repositories; the two **bulk** ones use the same helper, so it was
+  **4** update paths. `SH-H035` named 5 backends; measured, it is **96** `storeDelegate?.Invoke(...)` sites
+  with **0** consuming the result.
+- **⚠ And all nine live consumer repositories derive from a BULK base** — seven via
+  `ElasticSearchRepository`, two via `AsyncDataBaseRepository` — i.e. the half the finding did **not**
+  name. Fixing only the filed pair would have left **100% of the live consumers broken** while closing the
+  ticket. § TASK-215 is usually argued from consistency; here it was the difference between fixing the
+  defect and fixing nothing. **Widen on the root cause, then measure which half the consumers use.**
+- **⚠ The inherited reach number was wrong, and re-measuring at the close gate inverted it.** The task
+  recorded *"0 consumer `.cs` references to `AbstractViewModelRepository`"* — true, and irrelevant, because
+  consumers never name the base. Re-measured: **9 `override void MapToModel`** across **2** repos, so
+  **live, not latent**. § TASK-283's *grep for the subscription, not the identifier*, as *grep for the
+  override, not the base name*. One of them, `ProductRepository.cs:25`, even documents the false
+  assumption: *"Guid, CreatedAt, UpdatedAt are handled by base"*. Nothing handled them.
+- **⚠ THE REVIEW GATE REWROTE THIS FIX, and that is the session's main lesson.** The version that was
+  36/36 green and read cleanly had three real defects that `/code-review` and a security pass found
+  between them. None was visible from the tests.
+- **⚠ The worst of the three was a rule already in this file, six days old.** The merge mutated the object
+  the store handed back — SH-H016's mechanism, which [[TASK-313]] wrote up as *hand the inner store a
+  detached copy*. So the update reached store state **before** and **independently of** the write: a failed
+  write left it applied, and on JSON/XML the next unrelated write would flush it to disk. **And my own
+  probe store detached, which is exactly what hid it** — the test double was kinder than every real
+  backend, so the suite could not see it. Proving the fix needed a *live-reference* store.
+- **⚠ Enabling a dormant optimisation is a behaviour change, and it was backed out.** Making the inert hash
+  skip real looked like the point of `SH-H035`. `AuditStoreWrapper`, `TimestampStoreWrapper` and
+  `EventSourcingStoreWrapper` all sit **inside** `Store.Update` in `StoreWrapperBuilder`'s **recommended**
+  chain, so a suppressed write silently drops the audit stamp, the `UpdatedAt` bump and the domain event —
+  and `VersionedStoreWrapper`'s optimistic check stops running. § TASK-287: a fix must not smuggle in a
+  behaviour change. The write stays unconditional; the decision is [[TASK-453]].
+- **The skip's two silent-loss paths survive as GUARD TESTS rather than as behaviour.** While it existed it
+  had a stale hash oracle (a caller restoring a value someone else changed matched the old hash and their
+  write was dropped) and a hash refreshed before the write (so a retry after a failure was a no-op). Both
+  are now tests that red on the naive re-enable, written onto TASK-453. **Building a thing and taking it
+  out can still leave the measurement behind.**
+- **Hoisting a delegate changes WHEN it sees things.** `CreateCore` assigns `data.Guid ??= …` *before*
+  invoking the store delegate, so a transform that ran there could stamp child rows with the new key.
+  Moving it out would have taken that away silently — so the key is pre-assigned first, which every store
+  honours because every one uses `??=` (checked, not assumed).
+- **Cost recorded rather than hidden, and the cheap alternative refused for a measured reason.** The merge
+  is **one extra read per updated entity, including on the bulk path**. A single bulk read keyed on a Guid
+  `Contains` would be one round trip and is the translation landmine § TASK-218/137 record across these
+  eight backends, so `Read(Guid)` — no translator involved — was chosen deliberately. **Contract change
+  stated where a consumer meets it:** `MapToModel` may now receive a **populated** target, so it must
+  assign rather than accumulate; checked against all nine consumer implementations, 0 of 9 accumulate.
+  ⚠ Spawned [[TASK-451]], [[TASK-452]], [[TASK-453]], [[TASK-454]].
+
 ### Localized writes destroyed the default-culture text, and localized deletes hit the wrong rows (2026-09-17)
 
 TASK-313, the first of [[STORY-051]]'s seven remaining high triage tasks and the top of its blast-radius

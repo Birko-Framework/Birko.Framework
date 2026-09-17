@@ -66,7 +66,7 @@ one store and forwards `Read`/`Create`/`Update`/`Delete`/`Count`/`Save` to it, a
 tolerance and a `CreateInstance` fallback. The **ViewModel repository** family
 (`Birko.Data.ViewModel`, plus the SQL specialisation in `Birko.Data.SQL.ViewModel`) sits over the same
 stores but presents a *presentation* type (`TViewModel`) instead of the persisted `TModel`. It owns the
-ViewModel↔Model mapping, a SHA-256 hash-based change tracker that suppresses no-op updates, a
+ViewModel↔Model mapping, a SHA-256 hash-based change tracker (which does not gate writes), a
 `ReadMode` switch that turns the repository read-only, and a filter contract expressed as
 `IFilter<TModel>` rather than a raw LINQ expression.
 
@@ -467,10 +467,14 @@ be declared on the async interface only.
 ### Requirement: ViewModel↔Model mapping is repository-owned
 
 The system SHALL require each concrete ViewModel repository to implement
-`protected abstract void MapToModel(TViewModel source, TModel target)`, SHALL build a Model from a
-ViewModel through `LoadModelInstance` (create a fresh model, then `MapToModel`), and SHALL build a
-ViewModel from a Model through `LoadInstance` (create a fresh ViewModel, `result.LoadFrom(model)`, then
-`StoreHash(model)`), returning `default` when the supplied model is `null`.
+`protected abstract void MapToModel(TViewModel source, TModel target)`, SHALL build a Model for a
+**create** through `LoadModelInstance` (create a fresh model, then `MapToModel`), SHALL build a Model for
+an **update** through `LoadModelInstanceForUpdate` / `LoadModelInstanceForUpdateAsync` (read the stored
+row by `Guid`, then `MapToModel` onto it, falling back to the fresh model when no such row exists), and
+SHALL build a ViewModel from a Model through `LoadInstance` (create a fresh ViewModel,
+`result.LoadFrom(model)`, then `StoreHash(model)`), returning `default` when the supplied model is
+`null`. Because an update maps onto a populated target, `MapToModel` SHALL assign the fields it owns
+rather than accumulate into them.
 
 #### Scenario: Reading maps model to viewmodel and seeds change tracking
 
@@ -485,12 +489,36 @@ ViewModel from a Model through `LoadInstance` (create a fresh ViewModel, `result
 - **When** `LoadInstance(null)` runs
 - **Then** `default` is returned and no hash is stored
 
-#### Scenario: Writing maps viewmodel to a fresh model
+#### Scenario: Creating maps viewmodel to a fresh model
 
-- **Given** a `TViewModel` carrying edited values
-- **When** `Update(data)` runs
+- **Given** a `TViewModel` carrying new values
+- **When** `Create(data)` runs
 - **Then** `LoadModelInstance(data)` creates a new `TModel` via `CreateModelInstance()` and populates it
   through `MapToModel`, so the model handed to the store is never the caller's instance
+
+#### Scenario: Updating maps viewmodel onto the stored row, preserving unmapped columns
+
+- **Given** a stored row carrying columns the ViewModel does not map (audit timestamps, a
+  wrapper-injected tenant key) and a `TViewModel` carrying edited values
+- **When** `Update(data)` runs on any of the four update paths — single or bulk, sync or async
+- **Then** the stored row is read by `Guid`, a **detached copy** of it is taken, and `MapToModel` is
+  applied to that copy, so the persisted model carries the edited values **and** the columns the
+  ViewModel never mapped
+
+#### Scenario: The merge never mutates the store's own instance
+
+- **Given** a backend whose read returns the instance it holds (the in-memory, JSON and XML stores, and
+  any caching decorator)
+- **When** `Update(data)` runs and the subsequent store write fails
+- **Then** the stored row is unchanged, because the ViewModel was mapped onto a detached copy rather than
+  onto the instance the store handed back
+
+#### Scenario: Updating a viewmodel whose row does not exist falls back to the fresh model
+
+- **Given** a `TViewModel` whose `Guid` matches no stored row
+- **When** `Update(data)` runs
+- **Then** the freshly mapped model is handed to the store unchanged, so the store reports the missing
+  row exactly as it did before, rather than the repository raising a different failure
 
 #### Scenario: The viewmodel is refreshed from the persisted model
 
@@ -506,30 +534,32 @@ ViewModel from a Model through `LoadInstance` (create a fresh ViewModel, `result
 - **Then** control reaches `LoadModelInstance(null)` → `MapToModel(null, target)`, unlike `Create` and
   `Update` which return early on `data == null`
 
-### Requirement: ViewModel repositories compute a SHA-256 model hash whose no-op verdict never reaches the store
+### Requirement: ViewModel repositories track a SHA-256 model hash that does not gate the write
 
 The system SHALL maintain `IDictionary<Guid, byte[]> _modelHash` keyed by the model's `Guid`, SHALL
 populate it from `StoreHash` (only when `ReadMode` is false and `data.Guid.HasValue`) using
-`StringHelper.CalculateSHA256Hash(Serializer.Serialize(data))`, and SHALL, on `Update`, return `null!`
-from the store delegate when `CheckHashChange` finds the freshly computed hash equal to the stored one,
-while still refreshing the stored hash. That `null!` is intended as a skip signal, but
-`StoreDataDelegate<T>`'s return value is read by no backend — every store calls
-`storeDelegate?.Invoke(data)` and discards the result, then writes `data` regardless — so the write is
-not suppressed.
+`StringHelper.CalculateSHA256Hash(Serializer.Serialize(data))`, and SHALL refresh the stored hash on a
+successful `Update`. The hash SHALL NOT decide whether the write happens: a single-item `Update` always
+reaches the store.
+
+No store can take that decision — `StoreDataDelegate<T>`'s return value is read by no backend, so the
+`null!` that once expressed "skip this write" suppressed nothing. Taking the decision in the repository
+instead is a behavioural change rather than a repair, because `AuditStoreWrapper`,
+`TimestampStoreWrapper` and `EventSourcingStoreWrapper` all sit inside `Store.Update` in the recommended
+decorator chain, so a suppressed write would also drop the audit stamp, the `UpdatedAt` bump and the
+domain event. Whether to make that change is deferred.
 
 #### Scenario: An unchanged entity is written anyway
 
 - **Given** an entity read through the repository (hash recorded) and re-submitted unmodified
 - **When** `Update(data)` runs
-- **Then** `CheckHashChange` returns `false` and the delegate handed to `Store.Update` returns `null!`,
-  but the store discarded that return value and persists the model regardless
+- **Then** the store write is issued regardless, and the decorators inside it run as they always have
 
 #### Scenario: A changed entity is written
 
 - **Given** an entity read through the repository and then mutated
 - **When** `Update(data)` runs
-- **Then** the recomputed hash differs, `CheckHashChange` returns `true`, and the model instance is
-  returned from the delegate for the store to persist
+- **Then** the model is handed to the store to persist and the recorded hash is refreshed afterwards
 
 #### Scenario: An untracked entity is always considered changed
 
@@ -599,14 +629,13 @@ filter-based ones — checking the flag *before* any store or null-argument chec
 - **Then** no `ReadMode` property or read-mode guard exists, so the non-ViewModel repositories can
   always write
 
-### Requirement: ProcessDataDelegate is a transform whose result is honoured only on the sync bulk path
+### Requirement: ProcessDataDelegate is a transform whose result is honoured on every path
 
 The system SHALL define `ProcessDataDelegate<TModel>` as `TModel (TModel data)` and SHALL apply it as
-`item = processDelegate?.Invoke(item) ?? item`. On the bulk paths of the sync ViewModel repositories that
-expression sits in the `data.Select(...)` projection handed to the store, so a returned replacement
-instance is adopted; on the single-item paths it runs *inside* the `StoreDataDelegate<TModel>` given to
-`Store.Create`/`Store.Update`, whose return value no backend reads, so a replacement instance is
-discarded and the pre-transform model is persisted.
+`item = processDelegate?.Invoke(item) ?? item` **before** the model is handed to the store, on both the
+bulk and the single-item paths. It SHALL NOT be applied inside the `StoreDataDelegate<TModel>` given to
+`Store.Create`/`Store.Update`, because no backend reads that delegate's return value, so a replacement
+instance produced there would be discarded and the pre-transform model persisted.
 
 #### Scenario: A wrapping delegate result is adopted on the bulk path
 
@@ -621,20 +650,28 @@ discarded and the pre-transform model is persisted.
 - **When** `item = processDelegate?.Invoke(item) ?? item` executes
 - **Then** the pre-delegate `item` is used
 
-#### Scenario: The single-item create path also stores the hash inside the delegate
+#### Scenario: The single-item create path stores the hash inside the store delegate
 
 - **Given** a single-item `Create(vm, processDelegate)`
 - **When** the store invokes the repository's `StoreDataDelegate`
-- **Then** the process delegate runs first and `StoreHash(x)` is called on its result before the model
-  is returned to the store
+- **Then** `StoreHash(x)` is called on the model the store is persisting — the delegate is retained for
+  this alone, because `CreateCore` assigns `data.Guid` before invoking it and the hash is keyed by `Guid`
 
-#### Scenario: A single-item replacement instance never reaches storage
+#### Scenario: A single-item replacement instance reaches storage
 
 - **Given** a `ProcessDataDelegate<TModel>` returning a different model instance, passed to the
-  single-item `Create(vm, processDelegate)`
-- **When** the store invokes the repository's `StoreDataDelegate`
-- **Then** the replacement is hashed and returned from the delegate, but the store discards that return
-  value and persists the `item` produced by `LoadModelInstance`, so the transform is lost
+  single-item `Create(vm, processDelegate)` or `Update(vm, processDelegate)`
+- **When** the call runs
+- **Then** the replacement instance is what the store persists, because the transform is applied before
+  the store is called rather than inside a delegate whose return value is discarded
+
+#### Scenario: A create transform can still read the key
+
+- **Given** a `ProcessDataDelegate<TModel>` passed to a single-item `Create`
+- **When** it runs
+- **Then** the model already carries its `Guid`, because the repository assigns it before invoking the
+  transform — preserving what the delegate had when it ran inside the store's own callback, where
+  `CreateCore` assigns the key first
 
 #### Scenario: The async bulk path takes a store delegate instead
 
