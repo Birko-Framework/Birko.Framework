@@ -55,6 +55,10 @@ public class CreateUsersTable : AbstractMigration
 
 ## Dependencies
 - Birko.Data.Patterns (FieldType, FieldDescriptor, ISchemaBuilder, IIndexBuilder)
+- Birko.Data.Core — for `Birko.Data.Exceptions.WholeTableWriteException` only. `Context/MigrationFilter.cs`
+  refuses a degraded filter with the framework's single whole-table refusal type rather than inventing a
+  per-backend one (TASK-314, SH-H032), so one `catch` selects it on every backend. Priced before it was
+  taken: all four consumer aggregators that import this project already import Birko.Data.Core.
 
 ## Provider Projects
 - [Birko.Data.Migrations.SQL](../Birko.Data.Migrations.SQL/CLAUDE.md)
