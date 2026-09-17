@@ -212,3 +212,10 @@ already specced as-is, and outside this task's findings.
   bulk delete (title + body), Filter-based bulk update with an action, Native PropertyUpdate fallback.
   Diff +94/-39; no unintended change in it. source-commits stamped PENDING-TASK-313 until the production
   commit lands.
+- step 8 — closed done; production e4e208b, tests f382893, aggregator 025c8d1. Gate: verify-conventions
+  (generic + verify-birko-conventions, ran — 0 nullable warnings, checks 2/3/4/10 clean; checks 6/7/7b/8
+  N/A, no new project) · verify-intent (all 7 criteria met; criterion 7 was genuinely unmet until the
+  STORY-051 rollup was written) · code-review inline · security-review inline (the diff touches data
+  access — filter resolution on destructive paths; it narrows rather than widens, and the empty-match-set
+  case is pinned). Register-on-introduce and check #9 both fired and were satisfied in the same change.
+  Out-of-scope sweep: 5 bullets, all boundaries naming an owner; 0 spawned.
