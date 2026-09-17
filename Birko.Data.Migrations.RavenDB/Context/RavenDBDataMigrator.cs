@@ -36,6 +36,11 @@ namespace Birko.Data.Migrations.RavenDB.Context
 
             var query = $"FROM '{collection}'";
             var (whereClause, whereParams) = ParseFilterToRql(filterJson);
+            // SH-H032: an empty clause means either "no filter" or "every term was dropped" (e.g.
+            // {"status":{}} takes the object branch and the operator loop adds nothing). Only the first is
+            // a deliberate match-all; the second used to patch the whole collection.
+            Data.Migrations.Context.MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0,
+                "update", collection, "every document in the collection");
             if (!string.IsNullOrEmpty(whereClause))
             {
                 query += $" WHERE {whereClause}";
@@ -55,6 +60,9 @@ namespace Birko.Data.Migrations.RavenDB.Context
         {
             var query = $"FROM '{collection}'";
             var (whereClause, whereParams) = ParseFilterToRql(filterJson);
+            // SH-H032 — see UpdateDocuments. This path used to send an unfiltered DeleteByQueryOperation.
+            Data.Migrations.Context.MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0,
+                "delete", collection, "every document in the collection");
             var indexQuery = new Raven.Client.Documents.Queries.IndexQuery { Query = query, QueryParameters = new() };
             if (!string.IsNullOrEmpty(whereClause))
             {
@@ -72,9 +80,13 @@ namespace Birko.Data.Migrations.RavenDB.Context
             using var session = _store.OpenSession();
             var query = session.Advanced.DocumentQuery<dynamic>(collection);
 
-            if (!string.IsNullOrWhiteSpace(filterJson) && filterJson.Trim() != "{}")
+            if (!Data.Migrations.Context.MigrationFilter.IsExplicitMatchAll(filterJson))
             {
-                ApplyFilterToQuery(query, filterJson);
+                // SH-H032: guard the read too, so a count cannot silently answer for the whole collection
+                // while a delete built from the same filter is refused (§ TASK-215, § TASK-313).
+                var applied = ApplyFilterToQuery(query, filterJson!);
+                Data.Migrations.Context.MigrationFilter.RequireBounded(filterJson, applied, "count",
+                    collection, "every document in the collection");
             }
 
             // Execute the query that was actually built so the collection scope and filter are honored.
@@ -171,9 +183,15 @@ namespace Birko.Data.Migrations.RavenDB.Context
             return (string.Join(" AND ", conditions), parameters);
         }
 
-        private static void ApplyFilterToQuery(IDocumentQuery<dynamic> query, string filterJson)
+        /// <summary>
+        /// Applies the filter to <paramref name="query"/> and reports whether it added any term at all
+        /// (SH-H032). The count is what the guard reads, rather than a second parse of the JSON, so the
+        /// refusal cannot disagree with the query that was actually built.
+        /// </summary>
+        private static bool ApplyFilterToQuery(IDocumentQuery<dynamic> query, string filterJson)
         {
             using var doc = JsonDocument.Parse(filterJson);
+            var applied = 0;
 
             foreach (var property in doc.RootElement.EnumerateObject())
             {
@@ -188,21 +206,27 @@ namespace Birko.Data.Migrations.RavenDB.Context
                         {
                             case "$gt":
                                 query.WhereGreaterThan(fieldName, value);
+                                applied++;
                                 break;
                             case "$gte":
                                 query.WhereGreaterThanOrEqual(fieldName, value);
+                                applied++;
                                 break;
                             case "$lt":
                                 query.WhereLessThan(fieldName, value);
+                                applied++;
                                 break;
                             case "$lte":
                                 query.WhereLessThanOrEqual(fieldName, value);
+                                applied++;
                                 break;
                             case "$ne":
                                 query.WhereNotEquals(fieldName, value);
+                                applied++;
                                 break;
                             default:
                                 query.WhereEquals(fieldName, value);
+                                applied++;
                                 break;
                         }
                     }
@@ -210,8 +234,11 @@ namespace Birko.Data.Migrations.RavenDB.Context
                 else
                 {
                     query.WhereEquals(fieldName, ExtractValue(property.Value));
+                    applied++;
                 }
             }
+
+            return applied > 0;
         }
 
         internal static object? ExtractValue(JsonElement element)
