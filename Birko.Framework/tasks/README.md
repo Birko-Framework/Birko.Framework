@@ -264,7 +264,7 @@ _None_
   - STORY-027 Low findings — done (0/0 done)
   - STORY-042 Integration-test tier — the Docker-gated remediation findings — planned (0/0 done)
   - STORY-043 Workflow backends — unify the serialization seam (ISerializer everywhere) — done (0/0 done)
-  - STORY-051 Spec-harvest — high findings — in-progress (37/47 done)
+  - STORY-051 Spec-harvest — high findings — in-progress (41/47 done)
     - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash · FEATURE-014
     - [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table · FEATURE-014
     - [x] TASK-110 ORDER BY identifiers reach SQL text unresolved and unquoted · FEATURE-014
@@ -302,9 +302,9 @@ _None_
     - [x] TASK-311 Triage the 2 remaining high spec-harvest findings in `tenant-isolation` · FEATURE-014
     - [x] TASK-312 Triage the 1 remaining high spec-harvest finding in `security-and-authorization` · FEATURE-014
     - [x] TASK-313 Triage the 4 remaining high spec-harvest findings in `entity-localization` · FEATURE-014
-    - [ ] TASK-314 Triage the 5 remaining high spec-harvest findings in `migrations` · FEATURE-014
+    - [x] TASK-314 Triage the 5 remaining high spec-harvest findings in `migrations` · FEATURE-014
     - [x] TASK-315 Triage the 2 remaining high spec-harvest findings in `workflow-state-machine` · FEATURE-014
-    - [ ] TASK-316 Triage the 2 remaining high spec-harvest findings in `repository-contract` · FEATURE-014
+    - [x] TASK-316 Triage the 2 remaining high spec-harvest findings in `repository-contract` · FEATURE-014
     - [ ] TASK-317 Triage the 1 remaining high spec-harvest finding in `background-jobs` · FEATURE-014
     - [ ] TASK-318 Triage the 1 remaining high spec-harvest finding in `event-bus-and-messaging` · FEATURE-014
     - [ ] TASK-319 Triage the 1 remaining high spec-harvest finding in `schema-index-and-ddl` · FEATURE-014
