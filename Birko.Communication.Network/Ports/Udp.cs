@@ -14,9 +14,35 @@ namespace Birko.Communication.Network.Ports
         public int Port { get; set; }
         public int LocalPort { get; set; } // For receiving
 
+        /// <summary>
+        /// Multicast group to join on <see cref="Udp.Open"/>, e.g. "239.255.255.250". Null or empty
+        /// joins nothing. Sending to a group needs no membership — only receiving does (TASK-455).
+        /// </summary>
+        public string? MulticastGroup { get; set; }
+
+        /// <summary>
+        /// Allow other sockets to bind <see cref="LocalPort"/> as well. Required for the shared
+        /// discovery ports (mDNS 5353, SSDP 1900), where the OS resolver is already bound.
+        /// Default false preserves the exclusive bind this port has always used.
+        /// </summary>
+        public bool ReuseAddress { get; set; }
+
+        /// <summary>
+        /// Multicast TTL / hop limit. Null uses the OS default of 1 (link-local), which is what LAN
+        /// discovery wants; raise it only for routed multicast.
+        /// </summary>
+        public int? MulticastTtl { get; set; }
+
         public override string GetID()
         {
-            return string.Format("Udp|{0}|{1}|{2}|{3}", Name, Address, Port, LocalPort);
+            // Appended, not reformatted: an id for settings that use none of the multicast fields is
+            // byte-identical to what it was before they existed, while two configurations differing
+            // only in a socket-affecting field still get different ids (TASK-455).
+            var id = string.Format("Udp|{0}|{1}|{2}|{3}", Name, Address, Port, LocalPort);
+            if (!string.IsNullOrWhiteSpace(MulticastGroup)) id += "|mc=" + MulticastGroup;
+            if (ReuseAddress) id += "|reuse";
+            if (MulticastTtl.HasValue) id += "|ttl=" + MulticastTtl.Value;
+            return id;
         }
     }
 
@@ -24,6 +50,7 @@ namespace Birko.Communication.Network.Ports
     {
         private UdpClient? _client;
         private IPEndPoint? _remoteEndPoint;
+        private IPAddress? _joinedGroup;
         private Thread? _readThread;
         private bool _stopThread;
 
@@ -72,8 +99,37 @@ namespace Birko.Communication.Network.Ports
 
                 try
                 {
+                    // Bind explicitly rather than via new UdpClient(localPort): the address-reuse
+                    // options have to be set on the socket BEFORE it binds, and that constructor
+                    // binds inside itself, so there is no window in which to set them (TASK-455).
+                    _client = new UdpClient(AddressFamily.InterNetwork);
+                    if (settings.ReuseAddress)
+                    {
+                        // Windows needs BOTH of these; setting only SO_REUSEADDR still fails to bind
+                        // a port another socket holds exclusively.
+                        _client.ExclusiveAddressUse = false;
+                        _client.Client.SetSocketOption(
+                            SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                    }
                     // Bind to local port if specified, otherwise 0 (any available)
-                    _client = new UdpClient(settings.LocalPort);
+                    _client.Client.Bind(new IPEndPoint(IPAddress.Any, settings.LocalPort));
+
+                    if (!string.IsNullOrWhiteSpace(settings.MulticastGroup))
+                    {
+                        // Join AFTER Bind - membership belongs to the bound socket. Measured: without
+                        // this, a datagram sent to the group is simply never received (TASK-455).
+                        var group = IPAddress.Parse(settings.MulticastGroup);
+                        if (settings.MulticastTtl.HasValue)
+                        {
+                            _client.JoinMulticastGroup(group, settings.MulticastTtl.Value);
+                        }
+                        else
+                        {
+                            _client.JoinMulticastGroup(group);
+                        }
+                        _joinedGroup = group;
+                    }
+
                     _remoteEndPoint = new IPEndPoint(IPAddress.Parse(settings.Address), settings.Port);
 
                     _isOpen = true;
@@ -101,6 +157,14 @@ namespace Birko.Communication.Network.Ports
                 _stopThread = true;
                 if (_client != null)
                 {
+                    if (_joinedGroup != null)
+                    {
+                        // Drop membership before the client goes away. Swallowed because the socket
+                        // may already be unusable (interface down, adapter removed) and failing to
+                        // leave a group must not prevent the port from closing (TASK-455).
+                        try { _client.DropMulticastGroup(_joinedGroup); } catch { }
+                        _joinedGroup = null;
+                    }
                     _client.Close();
                     _client = null;
                 }
