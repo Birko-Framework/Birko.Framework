@@ -81,5 +81,40 @@ namespace Birko.Data.Exceptions
             Operation = operation;
             TableName = tableName;
         }
+
+        /// <summary>
+        /// The refusal for a backend whose filter is <b>data</b> rather than a C# predicate (TASK-314) — a
+        /// migration's Mongo-style JSON filter, say. Same type and the same
+        /// <see cref="Operation"/> / <see cref="TableName"/> contract, so one
+        /// <c>catch (WholeTableWriteException)</c> still selects the refusal everywhere.
+        /// <para>
+        /// It exists because the other two constructors end by offering an <c>x =&gt; true</c> predicate, and
+        /// a caller holding a JSON string has no expression tree to write one in. Naming it would be this
+        /// class's own documented defect — a message pointing at a door the reader cannot take — so this
+        /// overload names only the door that caller actually has.
+        /// </para>
+        /// </summary>
+        /// <param name="operation">The refused verb, e.g. <c>"delete"</c>.</param>
+        /// <param name="tableName">The table / collection / container the statement would have targeted.</param>
+        /// <param name="scope">What the unconstrained operation would cover, in the backend's own words.</param>
+        /// <param name="explicitDoor">The deliberate match-everything door, in the caller's own terms, e.g.
+        /// <c>an empty filter — null or {}</c>.</param>
+        public static WholeTableWriteException ForDataFilter(string operation, string tableName, string scope, string explicitDoor)
+            => new WholeTableWriteException(
+                $"Refusing to {operation} in \"{tableName}\": the filter was supplied but constrains nothing, "
+                + $"so the operation would affect {scope}. This is not the same as supplying no filter — it "
+                + "means every term in the filter was dropped, which is how a typo becomes a "
+                + "match-everything. To target everything deliberately pass "
+                + $"{explicitDoor}.",
+                operation,
+                tableName);
+
+        /// <summary>Shared by <see cref="ForDataFilter"/>; the public constructors compose their own wording.</summary>
+        private WholeTableWriteException(string message, string operation, string tableName)
+            : base(message)
+        {
+            Operation = operation;
+            TableName = tableName;
+        }
     }
 }
