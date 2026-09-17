@@ -47,6 +47,11 @@ namespace Birko.Data.Migrations.SQL.Context
             }
 
             var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, QuoteIdentifier);
+            // SH-H032: an empty clause means either "no filter" or "every term was dropped" (e.g.
+            // {"status":{}} takes the object branch and the operator loop adds nothing). Only the first is
+            // a deliberate match-all; the second used to rewrite every row.
+            MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0, "update", collection,
+                "every row in the table");
             var sql = $"UPDATE {QuoteIdentifier(collection)} SET {string.Join(", ", setClauses)}";
             if (!string.IsNullOrEmpty(whereClause))
                 sql += $" WHERE {whereClause}";
@@ -59,6 +64,9 @@ namespace Birko.Data.Migrations.SQL.Context
             var paramIndex = 0;
             var parameters = new List<(string Name, object? Value)>();
             var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, QuoteIdentifier);
+            // SH-H032 — see UpdateDocuments. This path used to emit a bare DELETE FROM {table}.
+            MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0, "delete", collection,
+                "every row in the table");
 
             var sql = $"DELETE FROM {QuoteIdentifier(collection)}";
             if (!string.IsNullOrEmpty(whereClause))
@@ -76,6 +84,10 @@ namespace Birko.Data.Migrations.SQL.Context
             if (!string.IsNullOrEmpty(filterJson))
             {
                 var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, QuoteIdentifier);
+                // SH-H032: the read is guarded too, so a count cannot silently answer for the whole table
+                // while the delete built from the same filter is refused (§ TASK-215, § TASK-313).
+                MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0, "count", collection,
+                    "every row in the table");
                 if (!string.IsNullOrEmpty(whereClause))
                     sql += $" WHERE {whereClause}";
             }
