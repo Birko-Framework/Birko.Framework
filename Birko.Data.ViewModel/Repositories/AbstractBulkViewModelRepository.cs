@@ -1,4 +1,4 @@
-using Birko.Data.Filters;
+﻿using Birko.Data.Filters;
 using Birko.Data.Stores;
 using Birko.Configuration;
 using System;
@@ -81,12 +81,18 @@ namespace Birko.Data.Repositories
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
             }
-            (Store as IBulkStore<TModel>)?.Update(data.Select(x =>
+            // SH-H034: map onto the STORED row. Materialized deliberately, so every read happens
+            // before any write rather than interleaving with the batch under lazy evaluation -- and so
+            // the N-reads cost this carries is visible here rather than hidden in a Select.
+            var items = data.Select(x =>
             {
-                TModel item = LoadModelInstance(x);
+                // The stored row itself is not needed here: the bulk path has never run the no-op hash
+                // check, and adding one would change bulk semantics beyond this fix.
+                TModel item = LoadModelInstanceForUpdate(x, out _);
                 item = processDelegate?.Invoke(item) ?? item;  // honor the transform result (CR-H110)
                 return item;
-            }));
+            }).ToList();
+            (Store as IBulkStore<TModel>)?.Update(items);
         }
 
         /// <inheritdoc />

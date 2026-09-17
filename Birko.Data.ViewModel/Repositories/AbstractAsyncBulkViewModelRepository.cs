@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -107,8 +107,17 @@ namespace Birko.Data.Repositories
                 return;
             }
 
-            // CR-M179 mapping; CR-L237 drops the dead .Where(m => m != null).ToList()! (lazy projection).
-            await BulkStore.UpdateAsync(data.Select(LoadModelInstance), storeDelegate, ct).ConfigureAwait(false);
+            // CR-M179 mapping. SH-H034: map onto the STORED row, not onto a fresh instance, or every
+            // column this ViewModel does not map is blanked. Materialized deliberately (reversing
+            // CR-L237's lazy projection here) so every read happens before any write, and so the
+            // N-reads cost is visible rather than hidden in a Select.
+            var items = new List<TModel>();
+            foreach (var viewModel in data)
+            {
+                // Only the merged model is needed: the bulk path has never run the no-op hash check.
+                items.Add((await LoadModelInstanceForUpdateAsync(viewModel, ct).ConfigureAwait(false)).Item);
+            }
+            await BulkStore.UpdateAsync(items, storeDelegate, ct).ConfigureAwait(false);
         }
 
         /// <summary>
