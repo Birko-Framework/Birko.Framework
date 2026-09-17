@@ -1,7 +1,7 @@
 ---
 area: entity-localization
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 0c63a0bc1ba5ed2a9e66045b5fd0c9c7167844ca
+generated-on: 2026-09-17
 sources:
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedStoreWrapper.cs
@@ -15,9 +15,9 @@ sources:
   - ../Birko.Data.Localization/Models/EntityTranslationModel.cs
   - ../Birko.Data.Localization/Models/IEntityLocalizationContext.cs
   - ../Birko.Data.Localization/Models/ILocalizable.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:07:38,
-                  # commit acbbe9d). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Localization: e2e01bb
+source-commits:   # sibling HEAD when this spec was written. TASK-313's production fix was
+                  # uncommitted at harvest time, so this names the commit that carries it.
+  ../Birko.Data.Localization: e4e208b
 shaped-by: []
 shaped-by-derived: true
 shaped-by-unresolved: 80
@@ -33,16 +33,19 @@ wrapping an existing store in a decorator (`LocalizedStoreWrapper`, `LocalizedBu
 their async twins). The wrapper keeps every non-default culture in a side table of
 `EntityTranslationModel` rows keyed by `(EntityGuid, EntityType, FieldName, Culture)` and reads the
 entity's own columns as the **default-culture** copy of the data whenever a row is missing. Those
-columns are *not* preserved as a default-culture copy on write: every write path hands the entity to the
-inner store exactly as the caller holds it, so on a non-default culture the localized value is persisted
-into the entity's own columns as well as into a translation row, and nothing restores the previous
-default-culture value.
+columns are preserved as the default-culture copy on update: on a non-default culture the wrapper reads
+the stored values back and hands the inner store a detached copy carrying them, so the caller's
+translated text reaches the translation row and the default-culture value survives. A `Create` has no
+stored row to preserve, so there the caller's values populate both the entity's own columns and the
+translation row.
 
-On read, the wrapper overwrites the entity's localizable properties in place with the current culture's
-translation. On write, it persists the incoming values as translation rows. Filters that mention a
-localizable property are rewritten: the predicate is evaluated against the translation table in memory,
-and the localized part of the filter is replaced with a GUID-membership test that the inner store can
-execute. Ordering on a localizable property forces the whole matching set to be loaded, translated,
+On read, the wrapper returns a **detached** copy whose localizable properties carry the current culture's
+translation, leaving the instance the inner store returned untouched. On write, it persists the incoming
+values as translation rows. Filters that mention a localizable property are rewritten on every path that
+takes one — reads, filter-based updates and filter-based deletes alike — so a destructive statement
+selects the same rows as the equivalent read: the predicate is evaluated against the translation table in
+memory, and the localized part of the filter is replaced with a GUID-membership test that the inner store
+can execute. Ordering on a localizable property forces the whole matching set to be loaded, translated,
 sorted and paged in memory.
 
 The consumer supplies two things: an entity type implementing `ILocalizable.GetLocalizableFields()`,
@@ -114,10 +117,16 @@ filter rewriting while the current culture is the default one.
 
 ### Requirement: Applying translations on read
 
-The system SHALL, on a non-default culture, load every translation row for the read entity's GUID and the
-current culture — via `EntityTranslationFilter.ByEntityAndCulture`, which leaves `EntityType`
-unconstrained — build a `FieldName → Value` dictionary, and overwrite the entity's localizable properties
-in place with the matching values.
+The system SHALL, on a non-default culture, return a **detached copy** of the entity whose localizable
+properties carry the current culture's values: it loads every translation row for the read entity's GUID
+and the current culture — via `EntityTranslationFilter.ByEntityAndCulture`, which leaves `EntityType`
+unconstrained — builds a `FieldName → Value` dictionary, and assigns the matching values onto the copy.
+The instance the inner store returned SHALL NOT be written to. On the default culture the wrapper SHALL
+return that instance unchanged.
+
+The copy is taken whenever the culture is non-default and the entity has a GUID, not only when a
+translation row is found, so the rule a caller can rely on is *a non-default-culture read returns a
+detached entity*.
 
 #### Scenario: Read by GUID returns the translated entity
 
@@ -129,13 +138,19 @@ in place with the matching values.
 
 - **Given** entity `G` has no translation rows for the current culture
 - **When** the entity is read
-- **Then** the translation dictionary is empty, the method returns early, and every base property is left untouched
+- **Then** the translation dictionary is empty and a detached copy carrying every base property unchanged is returned
+
+#### Scenario: A localized read does not write through to the store
+
+- **Given** a store that returns the instance it holds rather than a copy (`Birko.Data.InMemory`, or a caching decorator), entity `G` with base `Name = "Chair"` and a `"sk"` translation `"Stolička"`, with `CurrentCulture = "sk"`
+- **When** `Read(G)` is called and then the culture is switched back to `"en"` and `Read(G)` is called again
+- **Then** the first read returns `"Stolička"`, the instance held by the inner store still reads `"Chair"`, and the second read returns `"Chair"`
 
 #### Scenario: Entity with a null GUID is skipped
 
 - **Given** an entity whose `Guid` is `null`
-- **When** `ApplyTranslations` runs
-- **Then** it returns without querying the translation store
+- **When** `Localize` runs
+- **Then** it returns that same instance without copying it or querying the translation store
 
 #### Scenario: Only writable string properties are assigned
 
@@ -153,12 +168,12 @@ in place with the matching values.
 
 - **Given** the inner store returns `null` for a read
 - **When** `Read(guid)` / `ReadAsync(guid)` / `Read(filter)` returns
-- **Then** `ApplyTranslations` is not called and `null` is propagated
+- **Then** `Localize` is not called and `null` is propagated
 
 #### Scenario: The read lookup ignores entity type while filter resolution does not
 
 - **Given** translation rows written with `EntityType = entity.GetType().Name`, read through a wrapper whose `T` is a base type of the stored instance
-- **When** `ApplyTranslations` loads them and, separately, `ResolveMatchingGuids` resolves a localized filter condition
+- **When** `Localize` loads them and, separately, `ResolveMatchingGuids` resolves a localized filter condition
 - **Then** the read lookup matches on `(EntityGuid, Culture)` only and applies the rows regardless of their `EntityType`, while the filter resolution constrains `EntityType = typeof(T).Name` and therefore matches no row — the two paths read the same rows through different entity-type criteria
 
 ### Requirement: Bulk reads translate every returned entity
@@ -170,13 +185,13 @@ sequence to a list first.
 
 - **Given** `CurrentCulture` is non-default and the inner store returns three entities from `Read()` / `ReadAsync(ct)`
 - **When** the parameterless bulk read completes
-- **Then** all three entities are materialized to a list and each is passed through `ApplyTranslations`
+- **Then** all three entities are materialized to a list and each is replaced in it by its localized copy
 
 #### Scenario: Default-culture bulk read short-circuits
 
 - **Given** `CurrentCulture.Name == DefaultCulture.Name`
 - **When** `LocalizedBulkStoreWrapper.Read(filter, orderBy, limit, offset)` is called
-- **Then** the inner store's result is materialized and returned with no per-entity translation loop, while `AsyncLocalizedBulkStoreWrapper.ReadAsync(filter, orderBy, limit, offset)` still runs the loop — whose body returns immediately, so the observable result is identical
+- **Then** the inner store's result is materialized and returned with no per-entity translation loop; `AsyncLocalizedBulkStoreWrapper.ReadAsync(filter, orderBy, limit, offset)` short-circuits identically
 
 #### Scenario: Single-result bulk read reaches the hidden overload by cast
 
@@ -537,11 +552,35 @@ otherwise a new row is created with the same fields plus `EntityType` from the r
 - **When** `UpdatedAt` is assigned
 - **Then** the value is `DateTime.UtcNow` read directly, not obtained from an injected `IDateTimeProvider`
 
-#### Scenario: The localized value is also written to the entity's own column
+#### Scenario: Update preserves the default-culture value in the entity's own column
 
 - **Given** `CurrentCulture = "sk"`, `DefaultCulture = "en"`, entity `G` whose stored `Name` is `"Chair"`, and the caller setting `entity.Name = "Stolička"`
-- **When** `Create(entity)` / `Update(entity)` runs
-- **Then** the entity is handed to the inner store exactly as the caller holds it, so `"Stolička"` is persisted into the entity's own `Name` column, and the `"sk"` translation row is written afterwards with the same value — the default-culture `"Chair"` is neither preserved nor restored
+- **When** `Update(entity)` runs
+- **Then** the stored `Name` is read back, a detached copy carrying `"Chair"` is handed to the inner store, and the `"sk"` translation row is written with `"Stolička"` — so the entity's own column still reads `"Chair"`
+
+#### Scenario: The caller's entity is returned unchanged
+
+- **Given** the caller holds `entity.Name = "Stolička"` across an `Update`
+- **When** the update completes, whether it succeeded or threw
+- **Then** the caller's instance still reads `"Stolička"` — the base value is put onto a copy, never onto the object the caller owns
+
+#### Scenario: Create has no default-culture value to preserve
+
+- **Given** `CurrentCulture = "sk"` and an entity with no stored row
+- **When** `Create(entity)` runs
+- **Then** the caller's entity is handed to the inner store unchanged, so `"Stolička"` populates both the entity's own `Name` column and the `"sk"` translation row; a later default-culture `Update` replaces the column
+
+#### Scenario: Update of an entity the inner store does not hold
+
+- **Given** an entity whose GUID has no stored row, or a null/empty GUID
+- **When** `Update(entity)` runs on a non-default culture
+- **Then** the base-value read yields nothing, the caller's entity is passed through unchanged, and no copy is made
+
+#### Scenario: The collection overload reads base values in one query
+
+- **Given** a non-default culture and an `Update(IEnumerable<T>)` carrying several entities
+- **When** the update runs
+- **Then** the base values for the whole batch are fetched with a single GUID-membership read rather than one read per entity, and each entity with a stored row is replaced by a copy carrying its own base values
 
 ### Requirement: Bulk create and update persist translations per item
 
@@ -584,11 +623,12 @@ the deletion when the entity's GUID is null.
 - **When** `DeleteTranslations` runs
 - **Then** it returns without querying or deleting anything
 
-### Requirement: Filter-based bulk delete reads before deleting and does not localize the filter
+### Requirement: Filter-based bulk delete reads before deleting and localizes the filter
 
 The system SHALL implement `Delete(filter)` by reading the matching entities from the inner store with the
-**original, un-rewritten** filter, deleting that materialized set through the inner store, and then deleting
-each entity's translations — never using the inner store's native filter-delete.
+**rewritten** filter on a non-default culture (and the original filter on the default culture), deleting
+that materialized set through the inner store, and then deleting each entity's translations — never using
+the inner store's native filter-delete.
 
 #### Scenario: Delete by filter cascades to translations
 
@@ -596,35 +636,50 @@ each entity's translations — never using the inner store's native filter-delet
 - **When** `Delete(filter)` / `DeleteAsync(filter)` runs
 - **Then** both entities are read, deleted as a collection, and each one's translation rows are removed
 
-#### Scenario: Delete by a filter on a localizable field targets the base column
+#### Scenario: Delete by a filter on a localizable field targets the translated rows
 
-- **Given** `CurrentCulture = "sk"`, `Name` is localizable, and the filter is `x => x.Name == "Stolička"`
+- **Given** `CurrentCulture = "sk"`, `Name` is localizable, one entity whose `"sk"` translation is `"Stolička"`, a second entity carrying `"Stolička"` in its own default-culture column, and the filter `x => x.Name == "Stolička"`
 - **When** `Delete(filter)` runs
-- **Then** `RewriteFilter` is **not** invoked and the inner store matches against the entity's own default-culture `Name` column, so the set deleted differs from what the equivalent `Read(filter)` would have returned
+- **Then** `RewriteFilter` is invoked, the first entity is deleted and the second is not — the set deleted is the set the equivalent `Read(filter)` returns
 
 ### Requirement: Filter-based bulk update with an action
 
 The system SHALL implement `Update(filter, Action<T>)` by applying the caller's action and then persisting
-translations for each affected entity, using the **original, un-rewritten** filter; the sync and async
-wrappers SHALL do so by different mechanisms.
+translations for each affected entity, using the **rewritten** filter on a non-default culture (and the
+original filter on the default culture); the sync and async wrappers SHALL do so by different mechanisms.
+On a non-default culture it SHALL additionally capture each entity's localizable values before the action
+runs and restore them after the translation row is written, so the action's translated text reaches the
+translation row and the entity's own column keeps the default-culture value.
 
 #### Scenario: Sync wrapper delegates to the inner store's native filter update
 
 - **Given** `LocalizedBulkStoreWrapper.Update(filter, updateAction)`
 - **When** it runs
-- **Then** it calls `_innerStore.Update(filter, item => { updateAction(item); SaveTranslations(item); })` exactly once, so the entity selection, iteration and persistence are owned by the inner store and translations are written from inside its mutation callback
+- **Then** it calls `_innerStore.Update(<filter>, item => { …; updateAction(item); SaveTranslations(item); … })` exactly once, so the entity selection, iteration and persistence are owned by the inner store and translations are written from inside its mutation callback; on a non-default culture the filter passed is the rewritten one and the callback brackets the action with a capture and a restore of the localizable values
 
 #### Scenario: Async wrapper does read-modify-write per entity
 
 - **Given** `AsyncLocalizedBulkStoreWrapper.UpdateAsync(filter, updateAction)`
 - **When** it runs
-- **Then** it reads all matching entities via `_innerStore.ReadAsync(filter, null, null, null, ct)`, then for each entity applies the action, calls `_innerStore.UpdateAsync(item)` and `SaveTranslationsAsync(item)` — one inner update per entity
+- **Then** it reads all matching entities via `_innerStore.ReadAsync(<filter>, null, null, null, ct)` — the rewritten filter on a non-default culture — then for each entity applies the action and issues one inner update per entity. On the default culture it updates and then saves translations; on a non-default culture it saves the translation first, restores the captured base values, and updates last, so the base column is not overwritten
 
-#### Scenario: Filter-based update on a non-default culture also rewrites the base column
+#### Scenario: Filter-based update on a non-default culture preserves the base column
 
-- **Given** `CurrentCulture = "sk"`, `Name` is localizable, and `Update(filter, e => e.Name = "Stolička")`
+- **Given** `CurrentCulture = "sk"`, `Name` is localizable, the stored `Name` is `"Chair"`, and `Update(filter, e => e.Name = "Stolička")`
 - **When** the update completes
-- **Then** the inner store persists `Name = "Stolička"` into the entity's own (default-culture) column **and** a `"sk"` translation row is written with the same value, so the default-culture value is overwritten with the Slovak text
+- **Then** a `"sk"` translation row is written with `"Stolička"` and the entity's own column still reads `"Chair"`
+
+#### Scenario: A non-localizable change made by the same action still persists
+
+- **Given** the action sets both a localizable `Name` and a non-localizable `Code`
+- **When** the update completes on a non-default culture
+- **Then** the new `Code` is persisted — the capture and restore cover the localizable fields only
+
+#### Scenario: A failed inner update can leave a translation row behind
+
+- **Given** a non-default culture, where the translation is written before the inner store persists the entity
+- **When** the inner update throws
+- **Then** the translation row for that entity has already been written and is not rolled back — the sync and async wrappers behave alike here, because the sync wrapper's callback also runs ahead of the inner store's own write
 
 #### Scenario: Entities read for the update are not translated first
 
@@ -643,13 +698,13 @@ native `PropertyUpdate` straight to the inner store.
 
 - **Given** the update assigns only `x => x.Active`
 - **When** `Update(filter, updates)` runs on a non-default culture
-- **Then** `TouchesLocalizableField` returns false and `_innerStore.Update(filter, updates)` is called, preserving the backend's native SET
+- **Then** `TouchesLocalizableField` returns false and the native `PropertyUpdate` is delegated, preserving the backend's SET — with the **rewritten** filter on a non-default culture, because the predicate may name a localizable field even when no assignment does
 
 #### Scenario: PropertyUpdate on a localizable field falls back
 
 - **Given** `Name` is localizable and the update assigns `x => x.Name`
 - **When** `Update(filter, updates)` runs on a non-default culture
-- **Then** it is rewritten to `Update(filter, LocalizedPropertyUpdateHelper.ToAction(updates))`, so the translation row is written rather than only the base column
+- **Then** it is rewritten to `Update(filter, LocalizedPropertyUpdateHelper.ToAction(updates))` — with the **original** filter, because that overload resolves it itself — so the translation row is written and the base column is preserved
 
 #### Scenario: Default culture always uses the native path
 

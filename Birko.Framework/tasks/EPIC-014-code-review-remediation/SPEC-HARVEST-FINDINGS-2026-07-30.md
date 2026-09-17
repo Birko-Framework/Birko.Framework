@@ -342,11 +342,54 @@ many-to-many expansion at all.**
 
 Update(data) passes the entity to _innerStore.Update as the caller holds it, then SaveTranslations. On CurrentCulture="sk" Name still holds Slovak text, so the base default-culture column is overwritten AND a "sk" row written. The read path closes the loop: Read applies the "sk" translation in place, so a read-modify-write cycle destroys the English value; no wrapper restores the base value first. Also at :76, LocalizedBulkStoreWrapper.cs:133/152/159, AsyncLocalizedStoreWrapper.cs:78/85, AsyncLocalizedBulkStoreWrapper.cs:140/159.
 
+**Verdict: CONFIRMED-NARROWER (2026-09-17, [[TASK-313]]) — FIXED**
+
+Confirmed for **Update**, on all four wrappers and on both the single-entity and collection overloads:
+the caller's entity was handed to the inner store as it stood, so on a non-default culture the
+translated text landed in the base column and the stored default-culture value was destroyed, with a
+translation row written beside it so nothing looked wrong. Measured on the sync bulk wrapper: base
+column `Chair` -> `Stolicka`, silently.
+
+Narrower than filed on **Create**: there the entity has no stored row, so there is no default-culture
+value to destroy. Base column and translation row both take the caller's text, which is a fallback
+rather than corruption, and any later default-culture update replaces it. Create is deliberately
+unchanged, and `WithBaseValues` returns the caller's entity untouched whenever nothing is stored.
+
+Fixed by reading the stored base values back and handing the inner store a **detached copy** carrying
+them, so the base column keeps the default culture and the caller's text reaches the translation row.
+
+⚠ The first version of the fix swapped the values on the caller's own entity and restored them in a
+`finally`. That is measurably wrong: a store may keep the reference it is given (the test double and
+`Birko.Data.InMemory` both do), so the restore wrote the translated text straight back into the store.
+It failed 4 of these tests — which is why the fix hands over a copy instead.
+
 #### SH-H016 — ApplyTranslations mutates the entity in place, corrupting stores that return live instances
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:218`
 
 prop.SetValue(entity, value) overwrites properties of the instance the inner store returned. Birko.Data.InMemory's AbstractInMemoryStore.Read(Guid)/ReadCore return the object stored in _items directly (no CopyTo), so one read under CurrentCulture="sk" permanently replaces the store's default-culture values; a later default-culture read returns Slovak, and any Update(entity) persists it. Same for any caching decorator handing back a cached reference. No defensive copy on any read path (LocalizedBulkStoreWrapper.cs:334, AsyncLocalizedStoreWrapper.cs:212, AsyncLocalizedBulkStoreWrapper.cs:344).
+
+**Verdict: CONFIRMED (2026-09-17, [[TASK-313]]) — FIXED**
+
+Confirmed exactly as filed, including the premise: `AbstractInMemoryStore.ReadCore` returns
+`_items.Values.FirstOrDefault(...)`, i.e. the stored instance with no copy. Measured: one read under
+`sk` left the store itself holding `Stolicka`, and the next default-culture read returned it.
+
+Fixed at the decorator, not at the store, because the decorator is the layer writing to an object it
+did not create and because nothing in `IStore<T>` promises a detached read — a caching decorator has
+the same shape. `ApplyTranslations` is now `Localize`, returning the same instance on the default
+culture and a detached translated copy otherwise.
+
+The copy is `Object.MemberwiseClone` reached by reflection, not a reflection copy of public writable
+properties: the latter silently drops anything with no public setter, which would hand a caller a
+partially-populated entity — a quieter defect than the one being removed. The framework offers no
+alternative, since `AbstractModel.CopyTo(null)` returns `this` and an un-overridden `CopyTo(new T())`
+copies only `Guid`.
+
+⚠ **Coupling worth carrying:** this defect *defeats* SH-H015's fix on a live-instance store. Preserving
+the base column works by reading the stored value back, and once a localized read has overwritten it
+there is nothing correct left to read. Mutation B reds
+`SH_H015_A_read_modify_write_cycle_does_not_destroy_the_default_culture_value` for that reason.
 
 #### SH-H017 — Filter-based Update on a non-default culture overwrites the default-culture base column
 
@@ -354,11 +397,37 @@ prop.SetValue(entity, value) overwrites properties of the instance the inner sto
 
 Update(filter, Action<T>) lets the action mutate the entity, then the inner store persists the mutated entity (base column) while SaveTranslations also writes a "sk" row. Update(f, e => e.Name = "Stolicka") under CurrentCulture="sk" destroys the English base value. Same shape at AsyncLocalizedBulkStoreWrapper.cs:179-187, and reachable from the PropertyUpdate overload via LocalizedPropertyUpdateHelper.ToAction (LocalizedBulkStoreWrapper.cs:190).
 
+**Verdict: CONFIRMED (2026-09-17, [[TASK-313]]) — FIXED**
+
+Confirmed as filed, including the `PropertyUpdate` reach: `TouchesLocalizableField` routes a localizable
+native update through `ToAction`, so it lands on the same defective path. Same root cause as SH-H015 at
+a different entry point.
+
+Fixed by capturing the base values before the action runs and putting them back after the translation
+row is written. Restoring in place is correct *here* — unlike SH-H015 — because the entity is the inner
+store's own item, not the caller's, so writing the base values into it is exactly the intent.
+
+A change the same action makes to a **non**-localizable field still persists: capture/restore covers
+the localizable fields only, and that has its own test.
+
 #### SH-H018 — Filter-based Update/Delete/PropertyUpdate never rewrite the filter, so a localized predicate hits the base column
 
 `../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs:181`  ·  _restates a first-pass finding_
 
 UpdateAsync(filter, action) (181), the native PropertyUpdate path (201), DeleteAsync(filter) (216), sync Update(filter, action) (LocalizedBulkStoreWrapper.cs:174), sync native PropertyUpdate (193) and sync Delete(filter) (208) pass the caller's filter straight through, while every read path calls RewriteFilter. Under CurrentCulture="sk", Delete(x => x.Name == "Stolicka") matches the untranslated column and deletes a different set than the equivalent Read(filter) returns - a destructive op disagreeing with its own read.
+
+**Verdict: CONFIRMED (2026-09-17, [[TASK-313]]) — FIXED**
+
+Confirmed at all six named sites: every read path called `RewriteFilter` and no write path did.
+
+Fixed by resolving the filter on the filter-based `Update(filter, Action<T>)`, `Update(filter,
+PropertyUpdate<T>)` and `Delete(filter)` of both bulk wrappers, under a non-default culture only, so
+default-culture behaviour is byte-identical. The native `PropertyUpdate` branch needed it in its own
+right: a predicate may name a localizable field even when the *update* touches none.
+
+Pinned with two deliberately crossed rows — one whose Slovak **translation** is `Stolicka`, one with
+`Stolicka` in its **base** column — so a predicate naming `Stolicka` under `sk` has a right answer and a
+wrong one, and the destructive statement is asserted to agree with the equivalent `Read`.
 
 ### area: entity-tagging
 

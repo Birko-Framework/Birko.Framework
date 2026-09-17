@@ -1175,6 +1175,44 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     Two suites failed on exactly the removed catch-all. The fix was not to restore it but to ask what signal
     the message actually carries: `relation "x" does not exist` names a *relation*, so requiring that word
     keeps the fallback and excludes column/function/type. **Narrow on the signal, don't delete the seam.**
+- **A decorator never writes to an object the inner store returned, and it never persists the caller's
+  object with a value that belongs somewhere else — the two halves are one rule, and CAPTURE-AND-RESTORE
+  satisfies neither.** TASK-313 / SH-H015-H018, the one-producer family arriving at an *entity* rather
+  than at an identifier, a scope or a tenant. `Birko.Data.Localization`'s four decorators treat a
+  localizable field's base column and its translation as the same slot: a read applied the translation
+  with `prop.SetValue` to the instance the inner store handed back, and a write handed the caller's
+  entity — holding *translated* text under a non-default culture — straight to the inner store. Measured
+  on a store that returns live instances: one read under `sk` left the store itself holding `Stolicka`,
+  and a later default-culture read returned it. Five parts generalise:
+  - **Nothing in `IStore<T>` promises a detached read, so the decorator cannot assume one.**
+    `AbstractInMemoryStore.ReadCore` returns `_items.Values.FirstOrDefault(...)` — the stored instance,
+    no copy — and a caching decorator returns the cached reference, which is why the finding named both.
+    Fixing the *store* instead is a framework-wide contract change that still would not cover the
+    decorator, so the fix belongs where the write happens: the layer that did not create the object.
+  - **⚠ Capture-and-restore is the obvious fix and it is measurably wrong — it writes THROUGH.** The
+    first version preserved the base column by swapping the values on the caller's entity and restoring
+    them in a `finally`. A store may keep the reference it is given, so the restore put the translated
+    text straight back into the store, reinstating the defect being fixed. It failed 4 of its own tests.
+    **Hand the inner store a detached copy.** The one place restore-in-place *is* correct is the
+    filter-based update, where the entity is the inner store's own item and writing the base value into
+    it is the intent — so the rule is about ownership, not about the technique.
+  - **The copy is `Object.MemberwiseClone` (by reflection, since it is `protected`), never a reflection
+    copy of public writable properties.** The latter silently drops anything with no public setter and
+    hands the caller a partially-populated entity — a quieter defect than the one it replaces
+    (§ SH-H037). The framework offers no alternative: `AbstractModel.CopyTo(null)` returns `this`, and
+    an un-overridden `CopyTo(new T())` copies only `Guid`. A memberwise clone copies every field, so it
+    cannot lose data; it is shallow, but that is exactly what the caller already had.
+  - **Copy unconditionally on the path that is entitled to mutate, not only when there is something to
+    apply.** Copying only when a translation row exists would vary per entity inside one result set —
+    the kind of difference a test passes by luck. The statable rule is *a non-default-culture read
+    returns a detached entity*.
+  - **A filter is resolved on every path that takes one, or a destructive statement disagrees with its
+    own read.** Every read path called `RewriteFilter` and no write path did, so under `sk`
+    `Delete(x => x.Name == "Stolicka")` matched the untranslated base column and removed a different set
+    of rows than the identical `Read(filter)` returned. Same shape as § TASK-215's *guard the whole verb
+    family or none of it*, and the test that catches it needs **two deliberately crossed rows** — one
+    whose translation carries the value, one whose base column does — so the predicate has a right
+    answer and a wrong one.
 - **A value that a driver INFERS a type for and a value the framework types EXPLICITLY are two producers, and
   the inferring one fails quietly.** Same one-producer family as the identifier rules above, at the layer where
   a *value* is bound rather than a name emitted. A Birko `DateTime` maps to `TIMESTAMP` — timezone-less — on
@@ -2635,6 +2673,42 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+
+### Localized writes destroyed the default-culture text, and localized deletes hit the wrong rows (2026-09-17)
+
+TASK-313, the first of [[STORY-051]]'s seven remaining high triage tasks and the top of its blast-radius
+ranking: `SH-H015`/`SH-H017` claim silent corruption of stored text and `SH-H018` a destructive statement
+selecting a different set of rows than its own read. **3 CONFIRMED, 1 CONFIRMED-NARROWER, 0 refuted.**
+**112/112 green** (79 pre-existing + 33 new), **four disjoint mutations** — A 7, B 9, C 5, D 6 of 112. The
+standing rule is in § Conventions. Eight things worth carrying:
+
+- **All four are one root cause seen from four sides:** the decorators treat an entity's own column and
+  its translation as the same slot, and they resolve a filter for reads but not for writes. Fixing the
+  file a finding happened to name would have left three copies live, which is why the rule now lives once
+  in `Decorators/LocalizedEntityFields.cs` and all four wrappers call it.
+- **⚠ The obvious fix wrote through, and only a test caught it.** Preserving the base column by swapping
+  the caller's values and restoring them in a `finally` fails on exactly the stores `SH-H016` is about —
+  they keep the reference, so the restore lands in the store. 4 tests red. The fix hands over a detached
+  copy instead.
+- **⚠ All 79 pre-existing tests passed against the unfixed code and still pass now.** Nothing in a
+  harvest-grade suite could see any of the four defects — the reason they survived. A green suite said
+  nothing.
+- **`SH-H015` narrowed on measurement:** the corruption holds for `Update`, where a stored default-culture
+  value is destroyed; `Create` has no stored row, so both the column and the translation take the caller's
+  text, which is a fallback and not a defect. Deliberately unchanged, and said so rather than fixed from
+  symmetry.
+- **Mutation B reds an `SH-H015` test, and that is the finding not the leak.** `SH-H016` *defeats*
+  `SH-H015`'s fix on a live-instance store: preserving the base column works by reading the stored value
+  back, and a corrupting read leaves nothing correct to read. The coupling is recorded on the finding.
+- **The crossed-row fixture is what makes `SH-H018` provable** — one row whose Slovak *translation* is
+  `Stolicka`, one with `Stolicka` in its *base* column — so a predicate naming it under `sk` has a right
+  answer and a wrong one, and the delete is asserted to agree with the equivalent read.
+- **Both twins are covered, because they are different code.** The async bulk wrapper implements
+  `UpdateAsync(filter, action)` and `DeleteAsync(filter)` by reading and looping where the sync one hands
+  a callback to the inner store (§ TASK-245: the twin you patched may not be the one anything calls).
+- **⚠ Consumer reach re-measured: 0 `.cs` files across all 16 consumer repos**, so nothing observable
+  changes for a consumer today — a reason not to overstate urgency, and per § TASK-219/256 not a reason to
+  discount the fix.
 
 ### `Destroy()` read as disposal on the framework's central store interface (2026-09-17)
 

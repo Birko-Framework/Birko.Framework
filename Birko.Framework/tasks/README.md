@@ -26,21 +26,21 @@
 > it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays `in-progress`
 > with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-16 (`/tasks triage`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-17 (`/tasks close TASK-313`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 146   |
+| todo         | —     | —       | 145   |
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 11    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 23      | 148   |
+| done         | 1     | 23      | 149   |
 | cancelled    | 0     | 0       | 2     |
 
-`todo` by priority: 35× P1 · 93× P2 · 18× P3.  
+`todo` by priority: 34× P1 · 93× P2 · 18× P3.  
 > ℹ Recounted from the files on each close rather than incremented — a breakdown that sums correctly
 > is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
 > one P3 short, while still totalling right). The P0 filed on 2026-09-16 as [[TASK-447]] is now closed.
@@ -301,7 +301,7 @@ _None_
     - [x] TASK-310 Triage the 3 remaining high spec-harvest findings in `caching` · FEATURE-014
     - [x] TASK-311 Triage the 2 remaining high spec-harvest findings in `tenant-isolation` · FEATURE-014
     - [x] TASK-312 Triage the 1 remaining high spec-harvest finding in `security-and-authorization` · FEATURE-014
-    - [ ] TASK-313 Triage the 4 remaining high spec-harvest findings in `entity-localization` · FEATURE-014
+    - [x] TASK-313 Triage the 4 remaining high spec-harvest findings in `entity-localization` · FEATURE-014
     - [ ] TASK-314 Triage the 5 remaining high spec-harvest findings in `migrations` · FEATURE-014
     - [x] TASK-315 Triage the 2 remaining high spec-harvest findings in `workflow-state-machine` · FEATURE-014
     - [ ] TASK-316 Triage the 2 remaining high spec-harvest findings in `repository-contract` · FEATURE-014
