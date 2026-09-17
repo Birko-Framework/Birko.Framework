@@ -1,7 +1,7 @@
 ---
 area: migrations
-generated-at: e1e32c6
-generated-on: 2026-09-16
+generated-at: 283dbff
+generated-on: 2026-09-17
 sources:
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBMigrationContext.cs
@@ -41,6 +41,7 @@ sources:
   - ../Birko.Data.Migrations.SQL/SqlMigrationRunner.cs
   - ../Birko.Data.Migrations.SQL/SqlMigrationStore.cs
   - ../Birko.Data.Migrations.SQL/SqlScriptMigration.cs
+  - ../Birko.Data.Migrations.TimescaleDB/ContinuousAggregateParts.cs
   - ../Birko.Data.Migrations.TimescaleDB/Context/TimescaleDBMigrationContext.cs
   - ../Birko.Data.Migrations.TimescaleDB/TimescaleDBMigration.cs
   - ../Birko.Data.Migrations.TimescaleDB/TimescaleDBMigrationRunner.cs
@@ -48,25 +49,26 @@ sources:
   - ../Birko.Data.Migrations/AbstractMigrationRunner.cs
   - ../Birko.Data.Migrations/Context/IDataMigrator.cs
   - ../Birko.Data.Migrations/Context/IMigrationContext.cs
+  - ../Birko.Data.Migrations/Context/MigrationFilter.cs
   - ../Birko.Data.Migrations/Exceptions/MigrationException.cs
   - ../Birko.Data.Migrations/IMigration.cs
   - ../Birko.Data.Migrations/IMigrationRunner.cs
   - ../Birko.Data.Migrations/IMigrationStore.cs
   - ../Birko.Data.Migrations/MigrationDirection.cs
   - ../Birko.Data.Migrations/MigrationResult.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:19:33,
-                  # commit d40aba2). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Migrations: 4dd7e1b
-  ../Birko.Data.Migrations.CosmosDB: 5972a73
-  ../Birko.Data.Migrations.ElasticSearch: e244e85
-  ../Birko.Data.Migrations.InfluxDB: 23b63c3
-  ../Birko.Data.Migrations.MongoDB: 8a7acf5
-  ../Birko.Data.Migrations.RavenDB: 99d8d33
-  ../Birko.Data.Migrations.SQL: 14896a0ef3b2b0c8bbd0b809846338bd3c59bd09
-  ../Birko.Data.Migrations.TimescaleDB: 531d816
+source-commits:   # sibling HEADs carrying TASK-314's fixes, read after they were committed
+                  # and before this aggregator commit, so the staleness baseline is exact.
+  ../Birko.Data.Migrations: 8b18f2f
+  ../Birko.Data.Migrations.CosmosDB: 955ca0e
+  ../Birko.Data.Migrations.ElasticSearch: 4add7c8
+  ../Birko.Data.Migrations.InfluxDB: d875843
+  ../Birko.Data.Migrations.MongoDB: 9bfa718
+  ../Birko.Data.Migrations.RavenDB: e0725e2
+  ../Birko.Data.Migrations.SQL: f278fdb
+  ../Birko.Data.Migrations.TimescaleDB: c16509f
 shaped-by: [FEATURE-014]
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 151
 ---
 
 # Schema/data migration runner and backend contexts
@@ -611,7 +613,9 @@ The system SHALL start a client session and a transaction only when
 session. It SHALL construct a fresh `MongoMigrationContext(database, session)` per migration so the
 session flows into the schema builder and data migrator, SHALL commit the session after the loop,
 SHALL `AbortTransaction()` inside a swallowing `try/catch` on failure, and SHALL dispose the session
-in a `finally` block.
+in a `finally` block. It SHALL also enter `MongoMigrationStore.EnterSession(session)` for the duration
+of the batch, so the store's own version bookkeeping joins that transaction; the scope SHALL restore
+the store's previous session on dispose rather than clearing it.
 
 #### Scenario: Standalone MongoDB gets no transaction
 
@@ -628,12 +632,26 @@ in a `finally` block.
 - **Then** each driver call is issued with the session overload, so it participates in the
   transaction
 
-#### Scenario: Version bookkeeping does not join the session
+#### Scenario: Version bookkeeping joins the session
 
 - **Given** an active session transaction
 - **When** the runner calls `store.RecordMigration(migration)` after each migration
-- **Then** the store's `ReplaceOne` is issued **without** the session, so the version row commits
-  immediately and survives a later `AbortTransaction()`
+- **Then** the store's `ReplaceOne` is issued **with** the session, so the version row is part of the
+  transaction and is discarded by a later `AbortTransaction()` along with the data it describes
+
+#### Scenario: An aborted batch leaves no version row behind
+
+- **Given** a batch whose second migration throws, on a replica set with `UseSession = true`
+- **When** `AbortTransaction()` runs
+- **Then** the first migration's data **and** its version row are both rolled back, so the migration is
+  not left permanently marked applied with its changes gone
+
+#### Scenario: Downgrade bookkeeping also joins the session
+
+- **Given** an active session transaction and `MigrationDirection.Down`
+- **When** the runner calls `store.RemoveMigration(migration)`
+- **Then** the `DeleteOne` is issued with the session, so an aborted downgrade does not leave the
+  version row deleted while the data it described is restored
 
 ### Requirement: The MongoDB migration store keeps one document per version, keyed by version
 
@@ -657,7 +675,7 @@ when the collection handle is still null.
 - **Then** `EnsureCollectionExists()` calls `Initialize()` first, creating the collection and index if
   needed
 
-### Requirement: The ElasticSearch migration store refreshes on write and treats a failed search as "nothing applied"
+### Requirement: The ElasticSearch migration store refreshes on write and refuses to read a failure as "nothing applied"
 
 The system SHALL create the migrations index when `Indices.Exists` reports it absent, using
 `ElasticSearchMigrationSettings.NumberOfShards ?? 1` and `NumberOfReplicas ?? 0` (both settings
@@ -667,9 +685,11 @@ mapped as a keyword and `Name`/`Description` as text and `CreatedAt`/`AppliedAt`
 SHALL be `MigrationsIndex` (default `"__migrations"`), prefixed with `"{Settings.Name}_"` when
 `Name` is non-empty, lower-cased. `RecordMigration` SHALL index the document with `Refresh.True` and
 throw `InvalidOperationException` when the response is invalid. `RemoveMigration` SHALL delete by id
-with `Refresh.True`, tolerating a 404. `GetAppliedVersions` SHALL return an **empty set** both when
-the index does not exist and when the search response is invalid, and SHALL read at most 10 000
-documents sorted **descending** by version.
+with `Refresh.True`, tolerating a 404. `GetAppliedVersions` SHALL return an **empty set** when the
+index genuinely does not exist, and SHALL otherwise throw `InvalidOperationException` when **either**
+the existence check or the search fails — an existence response that is invalid for any reason other
+than a 404, or a search response that is invalid. It SHALL read at most 10 000 documents sorted
+**descending** by version.
 
 #### Scenario: Applied version immediately visible
 
@@ -678,13 +698,22 @@ documents sorted **descending** by version.
 - **Then** the `Refresh.True` on the index call has already made the document searchable, so the new
   version is reported
 
-#### Scenario: A failed search reports zero applied versions
+#### Scenario: A failed search is reported rather than read as an empty set
 
 - **Given** an ElasticSearch cluster that returns an invalid search response (e.g. auth failure or
   cluster red)
 - **When** `GetAppliedVersions()` is called
-- **Then** an empty `HashSet<long>` is returned, `GetCurrentVersion()` yields `0`, and a subsequent
-  `Migrate()` would re-run every registered migration
+- **Then** an `InvalidOperationException` is thrown naming the index and stating that an empty set
+  would have replayed every registered migration — the read path therefore agrees with
+  `RecordMigration`, which has always thrown on an invalid response
+
+#### Scenario: An unreachable cluster is not read as an absent index
+
+- **Given** a cluster that cannot be reached, so `Indices.Exists` reports `Exists == false` because its
+  response carries no `200` status rather than because the index is missing
+- **When** `GetAppliedVersions()` is called
+- **Then** an `InvalidOperationException` is thrown, because an existence response that is invalid for
+  any reason other than a genuine 404 is a failure to read and not an answer
 
 #### Scenario: Delete of an already-absent record is tolerated
 
@@ -768,21 +797,32 @@ path hard-coded to `"/partitionKey"`, then read the state item with id
 The system SHALL use the hard-coded bucket `"_migrations"` and measurement `"migrations"` — there is
 no settings class for the InfluxDB migration backend, and the organization is supplied to the runner
 constructor. `Initialize()` SHALL find the bucket by case-insensitive name or create it with a
-365-day expiry retention rule. `GetAppliedVersions()` SHALL run a Flux query over `range(start:
+**infinite** retention rule (`Expire` with a `0` second period) — migration bookkeeping must never
+expire. `GetAppliedVersions()` SHALL run a Flux query over `range(start:
 -10y)` filtered to `_field == "version"` with `distinct`, parse each `_value` with
-`long.TryParse`, and SHALL swallow any `InfluxException`, returning whatever versions were collected.
+`long.TryParse`, and SHALL throw `InvalidOperationException` on an `InfluxException` rather than
+returning whatever versions were collected.
 `RecordMigration` SHALL write a point via the non-batching `GetWriteApiAsync()` with the migration
 name as a tag, `version` and `description` as fields, and `CreatedAt` as the millisecond timestamp.
 `RemoveMigration` SHALL delete over `[CreatedAt - 1 minute, UtcNow]` with the predicate
 `_measurement="migrations" AND name="{escaped name}"`, swallowing `InfluxException`.
 
-#### Scenario: A query failure is indistinguishable from an empty bucket
+#### Scenario: A query failure is reported rather than read as an empty bucket
 
 - **Given** an InfluxDB server that rejects the version query with an `InfluxException` (e.g. bad
-  token)
+  token, wrong organization)
 - **When** `GetAppliedVersions()` is called
-- **Then** the exception is swallowed and an empty set is returned, so `GetCurrentVersion()` yields
-  `0` and every migration is considered pending
+- **Then** an `InvalidOperationException` is thrown naming the bucket and stating that an empty set
+  would have replayed every registered migration against an already-migrated database
+
+#### Scenario: Bookkeeping written before today survives indefinitely
+
+- **Given** a migration whose `CreatedAt` is more than a year in the past, and a `_migrations` bucket
+  this store created
+- **When** `RecordMigration` writes its point, timestamped with that `CreatedAt`
+- **Then** the point is retained, because the bucket carries no expiry — under the previous 365-day
+  rule such a point fell outside the retention window at the moment it was written, so the migration
+  was never durably recorded at all
 
 #### Scenario: Flux string values are escaped
 
@@ -1044,7 +1084,19 @@ value SHALL mean equality. An object value SHALL be read operator-by-operator, h
 `$gte`, `$lt`, `$lte` and `$ne`, and SHALL translate **any other operator name to equality**. Values
 SHALL be extracted as string / `long` (falling back to `double`) / `bool` / `null`, with arrays and
 nested objects degraded to their raw JSON text via `ToString()`. Multiple conditions SHALL be
-combined with AND. A null, whitespace or `"{}"` filter SHALL mean "no restriction".
+combined with AND. A null, whitespace or `"{}"` filter SHALL mean "no restriction" — that is the
+**only** way to mean it.
+
+A filter that was supplied yet yields **no terms** — `{"status":{}}`, where the object branch is taken
+and the operator loop adds nothing — SHALL be refused with
+`Birko.Data.Exceptions.WholeTableWriteException` rather than degrading to "no restriction". The guard
+SHALL apply on **every** verb that takes a filter — `UpdateDocuments`, `DeleteDocuments` and
+`CountDocuments` — so a count cannot answer for the whole collection while a delete built from the
+identical filter is refused. It SHALL read the outcome of the backend's own translator rather than
+re-parsing the JSON, and SHALL be stated once in `Birko.Data.Migrations.Context.MigrationFilter` and
+consulted by the SQL, ElasticSearch, RavenDB and CosmosDB migrators. MongoDB and InfluxDB SHALL be
+unaffected: MongoDB hands the parsed document to the driver, where `{"status":{}}` is an exact match
+on an empty subdocument rather than a match-all, and InfluxDB refuses a JSON filter outright (CR-M111).
 
 On CosmosDB, every compared **value** SHALL be bound as an `@pN` query parameter and SHALL NOT be
 rendered into the statement. TASK-450: values were formatted as SQL literals with a quote escaped by
@@ -1090,6 +1142,22 @@ builder's `RenameField` — SHALL use the same producer for it.
 - **Then** SQL emits `DELETE FROM {table}` with no `WHERE`; MongoDB uses `Filter.Empty`;
   ElasticSearch uses `MatchAll`; CosmosDB emits no `WHERE`; RavenDB emits `FROM '{collection}'` with
   no `WHERE` — every backend deletes the whole collection
+
+#### Scenario: A filter whose every term is dropped is refused, not widened
+
+- **Given** `filterJson = {"status":{}}` on the SQL, ElasticSearch, RavenDB or CosmosDB migrator
+- **When** `DeleteDocuments`, `UpdateDocuments` or `CountDocuments` is called
+- **Then** `WholeTableWriteException` is thrown before any statement is issued, naming the collection
+  and pointing at the empty filter as the deliberate match-everything door; no row is deleted, no row
+  is rewritten, and no count is returned
+
+#### Scenario: ElasticSearch's empty bool.must is caught by term count, not by null-ness
+
+- **Given** the same `{"status":{}}` on ElasticSearch
+- **When** it is translated
+- **Then** the refusal is driven by the translator reporting **zero** must-clauses, because the query
+  object itself is non-null and well-formed — an empty `bool.must` is match-all in Elasticsearch, so a
+  null check would not have seen it
 
 #### Scenario: ElasticSearch rejects a non-numeric range bound
 

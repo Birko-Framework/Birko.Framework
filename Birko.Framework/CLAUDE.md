@@ -86,7 +86,10 @@ Birko.Data.Core
   -> Birko.Data.Tagging (ITaggable, Tag, EntityTag, ITagService, TagServiceBase)
 
 Birko.Data.Patterns (FieldType, FieldDescriptor, ISchemaBuilder, ICollectionBuilder, IIndexBuilder, IIndexManager, IndexDefinition, ISoftDeletable, IAuditable, ISpecification, IUnitOfWork, PagedResult)
-  -> Birko.Data.Migrations (IMigrationContext, IDataMigrator, IContextualMigration, IMigration, IMigrationRunner, IMigrationStore)
+  + Birko.Data.Core (for Exceptions.WholeTableWriteException only — TASK-314's MigrationFilter refuses
+    with the framework's one whole-table refusal type rather than inventing a per-backend one; measured
+    first: all 4 consumer aggregators importing Migrations already import Birko.Data.Core)
+  -> Birko.Data.Migrations (IMigrationContext, IDataMigrator, IContextualMigration, IMigration, IMigrationRunner, IMigrationStore, MigrationFilter)
     -> Birko.Data.Migrations.SQL (SqlMigrationContext — reuses AbstractConnector), .MongoDB, .ElasticSearch, .RavenDB, .CosmosDB, .InfluxDB, .TimescaleDB
 
 Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentOptions, LlmProviderFactory)
@@ -294,6 +297,34 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
         the base was. That is luck until it is pinned — an edit inlining the loop to save a call would
         reopen a whole-table rewrite behind a decorator whose own tests all stayed green — so the
         delegation has its own test.
+- **Fifth instance of the scope-guard family, and the first where the filter is DATA rather than a
+  predicate: a migration's JSON filter.** SH-H002 (SQL `WHERE`), SH-H006 (Redis key prefix), TASK-137
+  (an always-true term), TASK-215/329 (`PredicateScope` on the C# expression) all guard a *predicate*;
+  `IDataMigrator` takes a Mongo-style JSON **string**, so there is no expression to analyse and the
+  backend's own translator is the only thing that knows what the filter resolved to. `{"status":{}}`
+  takes the object branch in every translator and its operator loop adds nothing, so the translation
+  came back empty and each caller appended its constraint *only when non-empty* — `DELETE FROM {table}`
+  with no `WHERE`, on SQL, RavenDB, CosmosDB and ElasticSearch alike (TASK-314). Four parts generalise:
+  - **Guard on the translator's OUTCOME, never on a second parse of the input.** `MigrationFilter.RequireBounded`
+    takes "did your translation produce a term?" from each backend, so the guard and the emitted statement
+    cannot disagree about what "constrains nothing" means — § TASK-137's one-producer rule, applied where
+    the producers are four different query languages. A shared term-counter over the JSON would be a second
+    implementation that drifts the day one dialect stops emitting a term for some shape.
+  - **"Non-empty" is not "constrains something", and ElasticSearch is the proof.** Its translator returns
+    `BoolQuery { Must = [] }` — a well-formed, **non-null** query object that means *match-all*. So the
+    obvious guard ("refuse a null query") never fires, exactly as *"refuse when nothing was rendered"*
+    never fired on `1 = 1` and *"refuse an empty filter document"* never fired on `{ "$nin": [] }`. The
+    discriminator has to be the term count.
+  - **A refusal names the door THIS caller has, and a JSON caller has no lambda.**
+    `WholeTableWriteException.ForDataFilter` exists solely because the other two constructors end by
+    offering an `x => true` predicate, which a caller holding a JSON string cannot write — the exact defect
+    that class's own remarks warn about. The type is unchanged, so one `catch` still selects the refusal
+    everywhere; only the wording differs. Asserted by a test that the message does **not** say `x => true`.
+  - **Immunity by a different mechanism is measured and pinned, not assumed from symmetry.** MongoDB hands
+    the parsed document to the driver, where `{"status":{}}` is an exact match on an *empty subdocument*
+    rather than a match-all; InfluxDB refuses a JSON filter outright (CR-M111). Neither needed the guard,
+    and "fix all six backends" would have been change without a defect — but the reason is now written
+    down, because an unexplained gap reads as an oversight.
 - **A nullable filter argument means "do not filter" or it means a value — decide once, and check what the
   backend's query language does with null, because one dialect will silently turn it into MATCH NOTHING.**
   TASK-309 / SH-H013, and the first member of the one-producer family to arrive at a *value* that is absent
@@ -2673,6 +2704,55 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+
+### A migration filter that named a field but matched nothing deleted the whole collection (2026-09-17)
+
+TASK-314, the last high-tier `migrations` task and the fifth member of the scope-guard family — the first
+where the filter is **data** rather than a predicate, so `PredicateScope` has nothing to analyse. All five
+findings **CONFIRMED, 2 wider than filed, 0 refuted.** 263/263 green across 7 suites (205 before, 58 new),
+plus 894 in four `Birko.Data.Core`-consuming suites to show the exception change did not ripple. **Eight
+disjoint mutations.** The standing rules are in § Conventions. Nine things worth carrying:
+
+- **`{"status":{}}` is a typo that meant "everything".** It takes the object branch in every translator and
+  the operator loop adds nothing, so the clause came back empty and each caller appended its constraint
+  *only when non-empty*: SQL emitted `DELETE FROM {table}` with no `WHERE`, RavenDB sent
+  `FROM '{collection}'` unfiltered, Cosmos selected every document and deleted them one at a time.
+  Confirmed on all four named backends.
+- **ElasticSearch reached the same end state with a NON-NULL query.** `BoolQuery { Must = [] }` is
+  well-formed and means match-all, so the obvious guard — refuse a null query — never fires. Third time
+  this family has arrived as *a one-term thing that looks ordinary and means everything*, after `1 = 1`
+  and `{ "$nin": [] }`. The discriminator has to be the **term count**.
+- **One producer in `Birko.Data.Migrations`, not four copies**, guarding on each backend's own
+  translation rather than re-parsing the JSON — so the guard and the emitted statement cannot disagree.
+  Reusing `WholeTableWriteException` was priced first: all 4 consumer aggregators importing Migrations
+  already import `Birko.Data.Core`.
+- **Guard the whole verb family — including `CountDocuments`, which the finding did not name.** A count
+  answering for the whole collection beside a delete refused on the identical filter is § TASK-313's
+  defect. Safe to widen because the only way to mean "everything" here is the explicit `{}` door, which is
+  untouched and pinned on every backend.
+- **⚠ MongoDB and InfluxDB are immune by a DIFFERENT mechanism, measured and pinned rather than "fixed
+  from symmetry".** Mongo hands the parsed document to the driver, where `{"status":{}}` is an exact match
+  on an empty subdocument; Influx refuses a JSON filter outright (CR-M111).
+- **`SH-H029` was wider: the gate one line ABOVE the filed one has the identical defect and fires first.**
+  NEST's `ExistsResponse.Exists` is `HttpStatusCode == 200`, so an unreachable cluster answers "the index
+  is not there". Measured — reverting only the unfiled half reds all 3 tests, i.e. fixing what the finding
+  named would have changed nothing observable.
+- **`SH-H033` was wider in the other direction: points are stamped with the migration's AUTHORED date.**
+  So the 365-day expiry did not merely age records out — a migration authored over a year ago fell outside
+  the retention window the moment it was written and was never durably recorded at all.
+- **⚠ Two mutations failed ZERO, and both were my tests rather than the fix.** `SH-H030`'s suite never
+  reached the swallow: `GetAppliedVersions` opens with `EnsureInitialized()` → `FindBucketsAsync()`,
+  **outside** the try (§ TASK-291's exact trap) — and the second attempt, which did reach `QueryAsync`
+  inside the try, met a raw `HttpRequestException` that is not an `InfluxException` and was never
+  swallowed either. So that swallow only ever fired for failures Influx itself *reports*, which needs a
+  live server; the offline cover is now an honest source scan and both dead ends are written into the test
+  file. The Raven mutation exposed the same shape: a scan asserting the guard's call site but not the
+  helper's counting.
+- **⚠ And `SH-H031`'s fix had to go where the state is, not where the defect is.** `IMigrationStore` cannot
+  carry a session in its signature without changing every backend, so it is ambient on the concrete store
+  — entered through a **self-restoring scope**, because per-caller state assigned onto a longer-lived
+  object is the trap § Conventions keeps recording. Its behavioural assertion needs a replica set, not
+  merely a mongod, and skips loudly rather than passing when it finds one.
 
 ### A ViewModel update blanked every column the ViewModel could not express (2026-09-17)
 

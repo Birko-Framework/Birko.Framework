@@ -602,11 +602,38 @@ ParseContains builds `new QueryStringQuery { DefaultField = field, Query = (stri
 
 `if (!searchResponse.IsValid) return new HashSet<long>();` cannot distinguish "nothing applied" from "the search failed" (auth, cluster red, timeout). GetCurrentVersion() then reports 0 and Migrate() re-executes every registered migration against an already-migrated cluster. RecordMigration (line 126) throws on an invalid response, so the read path contradicts its own write path.
 
+**Verdict: CONFIRMED-WIDER (2026-09-17, [[TASK-314]]) — FIXED**
+
+`ElasticSearchMigrationStore.cs`. The filed gate held: `if (!searchResponse.IsValid) return new
+HashSet<long>();`, while `RecordMigration` throws on an invalid response — so the read path contradicted
+its own write path. **Wider: the `Indices.Exists` gate on the line above has the identical defect and
+fires first.** NEST's `ExistsResponse.Exists` is `HttpStatusCode == 200`, so an unreachable or
+unauthorized cluster answers "the index is not there" and returns the same empty set; fixing only the
+filed gate would have changed nothing observable. Measured by mutation: reverting **only** the unfiled
+half reds all 3 regression tests.
+
+Both now throw `InvalidOperationException` naming the index and stating that an empty set would have
+replayed every registered migration. A genuine 404 still returns an empty set.
+
 #### SH-H030 — InfluxDB GetAppliedVersions swallows every InfluxException, re-running everything
 
 `../Birko.Data.Migrations.InfluxDB/InfluxMigrationStore.cs:113`  ·  _restates a first-pass finding_
 
 The catch is justified as "bucket may not have data yet", but an invalid token, wrong organization or connectivity failure surface as the same exception type. Result: empty applied set, CurrentVersion == 0, and Migrate() replays every migration on a live database.
+
+**Verdict: CONFIRMED (2026-09-17, [[TASK-314]]) — FIXED**
+
+`InfluxMigrationStore.cs`. The `catch (InfluxException) { }` held; the pre-existing CR-L146 comment
+already conceded it could not separate an empty bucket from an auth/connectivity failure, and swallowing
+is the wrong side of that ambiguity — a spurious throw costs one failed run that says why, a spurious
+empty set replays every migration against a live database. Now rethrows as `InvalidOperationException`.
+
+⚠ **Reachability is narrower than it looks, and this cost two wrong test suites.** `GetAppliedVersions`
+opens with `EnsureInitialized()` → `FindBucketsAsync()`, **outside** the try, so an unreachable host never
+reaches the catch; and a connection refusal on the `QueryAsync` inside the try surfaces as a raw
+`HttpRequestException`, which is not an `InfluxException`. The swallow only ever fired for failures Influx
+itself *reports* — a rejected token, a wrong organization — which needs a live server. Offline cover is a
+source scan; the behavioural test is gated on `BIRKO_INFLUX_HOST`.
 
 #### SH-H031 — MongoDB version rows are written without the session, surviving AbortTransaction
 
@@ -614,11 +641,44 @@ The catch is justified as "bucket may not have data yet", but an invalid token, 
 
 The runner threads the session into the context so migration bodies join the transaction, then calls store.RecordMigration(migration) — a sessionless ReplaceOne (MongoMigrationStore.cs:113). Sessionless driver calls commit immediately, so when a later migration fails and AbortTransaction() rolls the data back, the version rows remain: those migrations are permanently considered applied while their changes are gone.
 
+**Verdict: CONFIRMED (2026-09-17, [[TASK-314]]) — FIXED**
+
+`MongoMigrationRunner.cs:78` → `MongoMigrationStore.cs:111`. The runner threads its session into the
+migration context, then recorded the version row through a **sessionless** `ReplaceOne`, which commits
+immediately — so an `AbortTransaction()` rolled the data back and left the version rows, marking those
+migrations permanently applied with their changes gone. `RemoveMigration`'s `DeleteOne` had the same
+defect on the Down path (not in the finding; same root cause, fixed together).
+
+The store now joins the session via `EnterSession`, a **self-restoring** scope rather than an assignment —
+`IMigrationStore` cannot carry the session in its signature without changing every backend, and per-caller
+state left on a longer-lived object is the trap § Conventions repeatedly records. The behavioural
+assertion needs a replica set (not merely a mongod) and is gated on `BIRKO_MONGO_HOST`.
+
 #### SH-H032 — An empty operator object degrades the filter to match-all on delete/update
 
 `../Birko.Data.Migrations.SQL/Context/SqlDataMigrator.cs:152`
 
 With filterJson = {"status":{}} the object branch is taken but the inner EnumerateObject loop adds no condition, so ParseFilterToWhere returns "" and DeleteDocuments emits `DELETE FROM {table}` with no WHERE — the whole table is deleted, and UpdateDocuments rewrites every row. Same shape in ElasticSearchDataMigrator:167 (empty Must → match-all DeleteByQuery), RavenDBDataMigrator:145 and CosmosDBDataMigrator:216. Only null/"{}" are intentional match-alls.
+
+**Verdict: CONFIRMED (2026-09-17, [[TASK-314]]) — FIXED**
+
+Confirmed on all four named backends. `{"status":{}}` takes the object branch and the inner operator loop
+adds nothing, so the translation comes back empty and every caller appends its constraint only when
+non-empty: SQL emits `DELETE FROM {table}` with no `WHERE`, RavenDB sends `FROM '{collection}'` unfiltered,
+CosmosDB selects every document and deletes them one by one, and ElasticSearch produces
+`BoolQuery { Must = [] }` — **an empty `bool.must` is match-all**, so the query object is non-null and
+well-formed and a null check never sees it.
+
+**MongoDB and InfluxDB are immune by a different mechanism** and were deliberately left alone: Mongo hands
+the parsed document to the driver, where `{"status":{}}` is an exact match on an empty subdocument; Influx
+refuses a JSON filter outright (CR-M111).
+
+Fixed at **one producer** — `Birko.Data.Migrations.Context.MigrationFilter` — consulted by all four
+translators on **all three** filter-taking verbs, update, delete *and* count, so a count cannot answer for
+the whole collection while a delete built from the identical filter is refused. It guards on the outcome of
+each backend's own translator rather than re-parsing the JSON, so guard and statement cannot disagree.
+Refusal is `WholeTableWriteException.ForDataFilter`, which names the empty-filter door a JSON caller
+actually has instead of an `x => true` predicate it cannot write.
 
 #### SH-H033 — InfluxDB migration bucket has a 365-day expiry, so applied versions expire
 
@@ -627,6 +687,19 @@ With filterJson = {"status":{}} the object branch is taken but the inner Enumera
 Initialize creates `_migrations` with `BucketRetentionRules(Expire, 365*86400)`. The version points are timestamped with migration.CreatedAt, so after one year InfluxDB deletes them: GetAppliedVersions() returns empty, GetCurrentVersion() yields 0, and the next Migrate() replays every registered migration (including any destructive Up) against a fully-migrated database. Migration bookkeeping must never expire.
 
 ### area: repository-contract
+
+**Verdict: CONFIRMED-WIDER (2026-09-17, [[TASK-314]]) — FIXED**
+
+`InfluxMigrationStore.cs:47`. The 365-day `Expire` rule held. **Wider: `RecordMigration` timestamps each
+point with `migration.CreatedAt`** (`:148`) — the migration's *authored* date, not when it ran. So this is
+not merely "applied versions expire after a year": a migration authored more than a year ago falls outside
+the retention window the moment it is written and is never durably recorded at all, from day one.
+
+Retention is now `0` (InfluxDB's spelling for infinite). The `CreatedAt` timestamping is deliberately
+unchanged — durable under infinite retention, and it makes re-applying a migration overwrite its own point
+— and is pinned so a later change reinstating an expiry has to confront the pairing. ⚠ Only governs a
+bucket this method **creates**: an existing `_migrations` bucket is adopted as found, so a database
+provisioned before this fix needs `influx bucket update --name _migrations --retention 0`.
 
 #### SH-H034 — ViewModel Update writes a fresh partially-mapped model over the whole row
 
