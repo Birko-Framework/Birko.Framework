@@ -12,7 +12,7 @@ depends-on: []
 blocks: []
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
 findings: [SH-H046]
-pr: null
+pr: "Stores 8058810 · Repositories 005f140 · tests 94f677a + 6b518be"
 github-issue: null
 jira-key: null
 ---
