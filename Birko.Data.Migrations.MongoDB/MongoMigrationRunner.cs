@@ -63,6 +63,13 @@ namespace Birko.Data.Migrations.MongoDB
                     session.StartTransaction();
                 }
 
+                // SH-H031: the store's bookkeeping writes have to join the same transaction as the
+                // migration bodies. Without this they were sessionless and committed immediately, so an
+                // AbortTransaction below rolled back the DATA and left the version rows behind -- marking
+                // migrations permanently applied with their changes gone. Scoped so the store cannot be
+                // left holding a committed session.
+                using var storeSession = store.EnterSession(session);
+
                 foreach (var migration in migrations)
                 {
                     // Thread the session so the migration's operations join the transaction (CR-C09).

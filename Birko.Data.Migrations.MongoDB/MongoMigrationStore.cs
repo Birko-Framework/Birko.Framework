@@ -18,6 +18,55 @@ namespace Birko.Data.Migrations.MongoDB
         private readonly Settings.MongoMigrationSettings _settings;
 
         private IMongoCollection<MigrationDocument>? _collection;
+        private IClientSessionHandle? _session;
+
+        /// <summary>
+        /// Joins this store's bookkeeping writes to <paramref name="session"/> until the returned scope is
+        /// disposed (SH-H031).
+        ///
+        /// <para>
+        /// <b>Why.</b> <see cref="MongoMigrationRunner"/> threads the session into the migration context so
+        /// each migration's own operations join the transaction, then recorded the version row through this
+        /// store -- which issued a <b>sessionless</b> <c>ReplaceOne</c>. A sessionless driver call commits
+        /// immediately, so when a later migration failed and <c>AbortTransaction()</c> rolled the data back,
+        /// the version rows survived: those migrations were permanently considered applied while their
+        /// changes were gone, and no re-run could repair it. The version row has to live or die with the
+        /// data it describes.
+        /// </para>
+        /// <para>
+        /// <b>Scoped, not assigned.</b> It restores the previous value on dispose rather than clearing to
+        /// null, so a nested or repeated run cannot strand the store pointing at a session that has already
+        /// been committed -- the trap § Conventions records for per-caller state left on a longer-lived
+        /// object. <see cref="IMigrationStore"/> cannot carry the session in its signature without changing
+        /// every backend, so it is ambient on the concrete store and nowhere else.
+        /// </para>
+        /// </summary>
+        public IDisposable EnterSession(IClientSessionHandle? session)
+        {
+            var previous = _session;
+            _session = session;
+            return new SessionScope(this, previous);
+        }
+
+        private sealed class SessionScope : IDisposable
+        {
+            private readonly MongoMigrationStore _store;
+            private readonly IClientSessionHandle? _previous;
+            private bool _disposed;
+
+            internal SessionScope(MongoMigrationStore store, IClientSessionHandle? previous)
+            {
+                _store = store;
+                _previous = previous;
+            }
+
+            public void Dispose()
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _store._session = _previous;
+            }
+        }
 
         /// <summary>
         /// Initializes a new instance of the MongoMigrationStore class.
@@ -110,7 +159,12 @@ namespace Birko.Data.Migrations.MongoDB
 
             var filter = Builders<MigrationDocument>.Filter.Eq(d => d.Id, document.Id);
             var options = new ReplaceOptions { IsUpsert = true };
-            _collection!.ReplaceOne(filter, document, options);
+            // SH-H031: inside a runner transaction this must be the session overload, or the version row
+            // commits immediately and survives the AbortTransaction that discards the data.
+            if (_session != null)
+                _collection!.ReplaceOne(_session, filter, document, options);
+            else
+                _collection!.ReplaceOne(filter, document, options);
         }
 
         /// <summary>
@@ -131,7 +185,12 @@ namespace Birko.Data.Migrations.MongoDB
             EnsureCollectionExists();
 
             var filter = Builders<MigrationDocument>.Filter.Eq(d => d.Id, migration.Version.ToString());
-            _collection!.DeleteOne(filter);
+            // SH-H031 on the Down path -- same defect, not named in the finding: an aborted downgrade used
+            // to leave the version row deleted while the data it described was restored.
+            if (_session != null)
+                _collection!.DeleteOne(_session, filter);
+            else
+                _collection!.DeleteOne(filter);
         }
 
         /// <summary>
