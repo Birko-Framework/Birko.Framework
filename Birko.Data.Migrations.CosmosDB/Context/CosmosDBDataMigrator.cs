@@ -70,6 +70,18 @@ public class CosmosDBDataMigrator : IDataMigrator
     {
         if (updates == null || updates.Count == 0) return;
 
+        // SH-H032: an empty clause means either "no filter" or "every term was dropped" (e.g.
+        // {"status":{}} takes the object branch and the operator loop adds nothing). Only the first is a
+        // deliberate match-all; the second used to select -- and then patch -- every document.
+        //
+        // Parsed and guarded BEFORE GetPartitionKeyProperty, which issues a ReadContainerAsync round trip:
+        // refusing should not first cost a network call, and it keeps the refusal reachable without a live
+        // account so it can be asserted offline (§ TASK-309).
+        var parameters = new List<KeyValuePair<string, object?>>();
+        var whereClause = ParseFilterToSql(filterJson, parameters);
+        Birko.Data.Migrations.Context.MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0,
+            "update", collection, "every document in the container");
+
         var container = _database.GetContainer(collection);
         var patchOperations = updates.Select(kvp =>
             PatchOperation.Set($"/{kvp.Key}", kvp.Value)
@@ -77,8 +89,6 @@ public class CosmosDBDataMigrator : IDataMigrator
 
         var pkProperty = GetPartitionKeyProperty(container, collection);
         var projection = pkProperty == "id" ? "c.id" : $"c.id, c.{pkProperty}";
-        var parameters = new List<KeyValuePair<string, object?>>();
-        var whereClause = ParseFilterToSql(filterJson, parameters);
         var query = string.IsNullOrEmpty(whereClause)
             ? $"SELECT {projection} FROM c"
             : $"SELECT {projection} FROM c WHERE {whereClause}";
@@ -102,11 +112,15 @@ public class CosmosDBDataMigrator : IDataMigrator
 
     public void DeleteDocuments(string collection, string filterJson)
     {
+        // SH-H032 -- see UpdateDocuments. This path used to select every document and delete each one.
+        var parameters = new List<KeyValuePair<string, object?>>();
+        var whereClause = ParseFilterToSql(filterJson, parameters);
+        Birko.Data.Migrations.Context.MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0,
+            "delete", collection, "every document in the container");
+
         var container = _database.GetContainer(collection);
         var pkProperty = GetPartitionKeyProperty(container, collection);
         var projection = pkProperty == "id" ? "c.id" : $"c.id, c.{pkProperty}";
-        var parameters = new List<KeyValuePair<string, object?>>();
-        var whereClause = ParseFilterToSql(filterJson, parameters);
         var query = string.IsNullOrEmpty(whereClause)
             ? $"SELECT {projection} FROM c"
             : $"SELECT {projection} FROM c WHERE {whereClause}";
@@ -130,9 +144,13 @@ public class CosmosDBDataMigrator : IDataMigrator
 
     public long CountDocuments(string collection, string? filterJson = null)
     {
-        var container = _database.GetContainer(collection);
         var parameters = new List<KeyValuePair<string, object?>>();
         var whereClause = ParseFilterToSql(filterJson, parameters);
+        var container = _database.GetContainer(collection);
+        // SH-H032: guard the read too, so a count cannot silently answer for the whole container while a
+        // delete built from the same filter is refused (§ TASK-215, § TASK-313).
+        Birko.Data.Migrations.Context.MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0,
+            "count", collection, "every document in the container");
         var query = string.IsNullOrEmpty(whereClause)
             ? "SELECT VALUE COUNT(1) FROM c"
             : $"SELECT VALUE COUNT(1) FROM c WHERE {whereClause}";
