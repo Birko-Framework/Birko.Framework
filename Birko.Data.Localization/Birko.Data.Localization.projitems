@@ -21,6 +21,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\LocalizedOrderByHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\LocalizedPropertyUpdateHelper.cs" />
     <!-- Decorators -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedEntityFields.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncLocalizedStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedBulkStoreWrapper.cs" />

@@ -39,11 +39,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
     public async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
     {
         var entity = await _innerStore.ReadAsync(guid, ct);
-        if (entity != null)
-        {
-            await ApplyTranslationsAsync(entity, ct);
-        }
-        return entity;
+        return entity == null ? null : await LocalizeAsync(entity, ct);
     }
 
     public async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
@@ -55,11 +51,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
 
         var rewritten = await RewriteFilterAsync(filter, ct);
         var entity = await _innerStore.ReadAsync(rewritten, ct);
-        if (entity != null)
-        {
-            await ApplyTranslationsAsync(entity, ct);
-        }
-        return entity;
+        return entity == null ? null : await LocalizeAsync(entity, ct);
     }
 
     public async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
@@ -80,10 +72,51 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
         return guid;
     }
 
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Update(T, StoreDataDelegate{T}?)" />
     public async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
-        await _innerStore.UpdateAsync(data, processDelegate, ct);
+        if (!IsNonDefaultCulture())
+        {
+            await _innerStore.UpdateAsync(data, processDelegate, ct);
+            await SaveTranslationsAsync(data, ct);
+            return;
+        }
+
+        var fields = data.GetLocalizableFields();
+        var baseValues = await ReadBaseValuesAsync(data.Guid, fields, ct);
+
+        // The entity handed to the inner store is a DETACHED copy carrying the base values, not the
+        // caller's object with its values swapped and swapped back. A store may keep the reference it
+        // is given, so restoring the caller's text afterwards would write it straight through into the
+        // store, reinstating the very defect this is fixing.
+        await _innerStore.UpdateAsync(WithBaseValues(data, baseValues), processDelegate, ct);
         await SaveTranslationsAsync(data, ct);
+    }
+
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.ReadBaseValues(Guid?, IReadOnlyList{string})" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.WithBaseValues(T, IReadOnlyDictionary{string, string?}?)" />
+    protected T WithBaseValues(T data, IReadOnlyDictionary<string, string?>? baseValues)
+    {
+        if (baseValues == null)
+        {
+            return data;
+        }
+
+        var toStore = LocalizedEntityFields.Detach(data);
+        LocalizedEntityFields.Restore(toStore, baseValues);
+        return toStore;
+    }
+
+    protected async Task<IReadOnlyDictionary<string, string?>?> ReadBaseValuesAsync(
+        Guid? guid, IReadOnlyList<string> fields, CancellationToken ct)
+    {
+        if (guid == null || guid == Guid.Empty)
+        {
+            return null;
+        }
+
+        var stored = await _innerStore.ReadAsync(guid.Value, ct);
+        return stored == null ? null : LocalizedEntityFields.Capture(stored, fields);
     }
 
     public async Task DeleteAsync(T data, CancellationToken ct = default)
@@ -175,17 +208,21 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
 
     #region Translation Application
 
-    protected async Task ApplyTranslationsAsync(T entity, CancellationToken ct)
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Localize(T)" />
+    protected async Task<T> LocalizeAsync(T entity, CancellationToken ct)
     {
         if (!IsNonDefaultCulture())
         {
-            return;
+            return entity;
         }
 
         if (entity.Guid == null)
         {
-            return;
+            return entity;
         }
+
+        // SH-H016: never write to the instance the inner store returned.
+        var localized = LocalizedEntityFields.Detach(entity);
 
         var filter = EntityTranslationFilter.ByEntityAndCulture(entity.Guid.Value, _context.CurrentCulture.Name);
         var translations = await _translationStore.ReadAsync(filter.ToExpression(), ct: ct);
@@ -197,11 +234,11 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
 
         if (translationDict.Count == 0)
         {
-            return;
+            return localized;
         }
 
-        var fields = entity.GetLocalizableFields();
-        var type = entity.GetType();
+        var fields = localized.GetLocalizableFields();
+        var type = localized.GetType();
         foreach (var fieldName in fields)
         {
             if (translationDict.TryGetValue(fieldName, out var value))
@@ -209,10 +246,12 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
                 var prop = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
                 if (prop != null && prop.PropertyType == typeof(string) && prop.CanWrite)
                 {
-                    prop.SetValue(entity, value);
+                    prop.SetValue(localized, value);
                 }
             }
         }
+
+        return localized;
     }
 
     #endregion
