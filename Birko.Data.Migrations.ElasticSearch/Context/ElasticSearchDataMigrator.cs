@@ -21,19 +21,13 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
             if (updates == null || updates.Count == 0) return;
 
             var painlessSet = BuildPainlessSource(updates, out var scriptParams);
+            var query = ResolveQuery(filterJson, "update", collection);
 
             var response = _client.UpdateByQuery<dynamic>(descriptor =>
             {
                 descriptor.Index(collection);
 
-                if (!string.IsNullOrWhiteSpace(filterJson) && filterJson.Trim() != "{}")
-                {
-                    descriptor.Query(q => ParseFilter(q, filterJson));
-                }
-                else
-                {
-                    descriptor.Query(q => q.MatchAll());
-                }
+                descriptor.Query(_ => query);
 
                 descriptor.Script(s => s
                     .Source(painlessSet)
@@ -49,19 +43,12 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 
         public void DeleteDocuments(string collection, string filterJson)
         {
+            var query = ResolveQuery(filterJson, "delete", collection);
+
             var response = _client.DeleteByQuery<dynamic>(descriptor =>
             {
                 descriptor.Index(collection);
-
-                if (!string.IsNullOrWhiteSpace(filterJson) && filterJson.Trim() != "{}")
-                {
-                    descriptor.Query(q => ParseFilter(q, filterJson));
-                }
-                else
-                {
-                    descriptor.Query(q => q.MatchAll());
-                }
-
+                descriptor.Query(_ => query);
                 return descriptor;
             });
 
@@ -70,15 +57,14 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 
         public long CountDocuments(string collection, string? filterJson = null)
         {
+            // SH-H032: guard the read too, so a count cannot silently answer for the whole index while a
+            // delete built from the same filter is refused (§ TASK-215, § TASK-313).
+            var query = ResolveQuery(filterJson, "count", collection);
+
             var response = _client.Count<dynamic>(descriptor =>
             {
                 descriptor.Index(collection);
-
-                if (!string.IsNullOrWhiteSpace(filterJson) && filterJson.Trim() != "{}")
-                {
-                    descriptor.Query(q => ParseFilter(q, filterJson));
-                }
-
+                descriptor.Query(_ => query);
                 return descriptor;
             });
 
@@ -155,7 +141,32 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
             }
         }
 
-        private static QueryContainer ParseFilter(QueryContainerDescriptor<dynamic> q, string filterJson)
+        /// <summary>
+        /// The one place an index-wide query is allowed to be produced (SH-H032). All three filtered
+        /// operations route through it, so "no filter supplied" stays a deliberate <c>match_all</c> while a
+        /// filter that was supplied and yielded nothing is refused -- previously both reached the same
+        /// index-wide query, and only one of them meant to.
+        /// </summary>
+        private static QueryContainer ResolveQuery(string? filterJson, string operation, string collection)
+        {
+            if (MigrationFilter.IsExplicitMatchAll(filterJson))
+                return new QueryContainer(new MatchAllQuery());
+
+            var query = ParseFilter(filterJson!, out var termCount);
+            MigrationFilter.RequireBounded(filterJson, termCount > 0, operation, collection,
+                "every document in the index");
+            return query;
+        }
+
+        /// <summary>
+        /// Translates the Mongo-style JSON filter into a <c>bool.must</c> query, reporting how many terms it
+        /// actually produced (SH-H032). An empty <c>must</c> is <b>match-all</b> in Elasticsearch, so a
+        /// filter whose every term was dropped -- <c>{"status":{}}</c> takes the object branch and the
+        /// operator loop adds nothing -- used to widen a DeleteByQuery to the whole index. The count is what
+        /// the guard reads, rather than a second parse, so the refusal cannot disagree with the query built.
+        /// <para>The former <c>QueryContainerDescriptor</c> parameter was never used and is gone.</para>
+        /// </summary>
+        private static QueryContainer ParseFilter(string filterJson, out int termCount)
         {
             using var doc = JsonDocument.Parse(filterJson);
             var mustClauses = new List<QueryContainer>();
@@ -225,6 +236,7 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
                 }
             }
 
+            termCount = mustClauses.Count;
             return new QueryContainer(new BoolQuery { Must = mustClauses });
         }
 

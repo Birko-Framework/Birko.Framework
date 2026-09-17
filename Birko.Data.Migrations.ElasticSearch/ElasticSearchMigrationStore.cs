@@ -70,7 +70,22 @@ namespace Birko.Data.Migrations.ElasticSearch
         {
             var indexName = GetMigrationsIndex();
 
-            if (!_client.Indices.Exists(indexName).Exists)
+            // SH-H029: BOTH gates in this method used to report "nothing has been applied" for a request
+            // that never got an answer, and GetCurrentVersion() then returns 0 and Migrate() replays every
+            // registered migration against an already-migrated cluster. NEST's ExistsResponse.Exists is
+            // `HttpStatusCode == 200`, so an unreachable or unauthorized cluster answers "the index is not
+            // there" -- this gate fires first and was not in the filed finding.
+            var existsResponse = _client.Indices.Exists(indexName);
+            if (!existsResponse.IsValid && existsResponse.ApiCall?.HttpStatusCode != 404)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot read applied migration versions: the check for index '{indexName}' failed. "
+                    + "Refusing to report an empty set, which would be indistinguishable from a cluster "
+                    + $"where nothing has been applied and would replay every migration. {existsResponse.DebugInformation}",
+                    existsResponse.OriginalException);
+            }
+
+            if (!existsResponse.Exists)
             {
                 return new HashSet<long>();
             }
@@ -87,7 +102,14 @@ namespace Birko.Data.Migrations.ElasticSearch
 
             if (!searchResponse.IsValid)
             {
-                return new HashSet<long>();
+                // SH-H029: an invalid search (auth, cluster red, timeout) is not "nothing applied".
+                // RecordMigration already throws on an invalid response, so this read path used to
+                // contradict its own write path.
+                throw new InvalidOperationException(
+                    $"Cannot read applied migration versions from index '{indexName}': the search failed. "
+                    + "Refusing to report an empty set, which would replay every registered migration "
+                    + $"against an already-migrated cluster. {searchResponse.DebugInformation}",
+                    searchResponse.OriginalException);
             }
 
             return new HashSet<long>(searchResponse.Documents.Select(d => d.Version));
