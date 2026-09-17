@@ -2636,6 +2636,51 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### `Destroy()` read as disposal on the framework's central store interface (2026-09-17)
+
+TASK-321 / `SH-H046`, picked because it was the **only non-latent** item left in the high tier — every
+other one measures 0 consumer references, while `IStore` is the interface every consumer reads.
+`Destroy()` / `DestroyAsync()` were documented as *"destroys the store and releases all resources"*,
+while all 17 implementations permanently delete data and `RavenDBStore` drops the **entire database**
+(`hardDelete: true`). **133/133 green** across four suites, 7 new, **four mutations**. Documentation
+only — no implementation changed. Seven things worth carrying:
+
+- **⚠ The finding's supporting claim was FALSE, and correcting it made the defect worse, not smaller.**
+  It said *"no store implements IDisposable, so a consumer looking for cleanup finds only Destroy()"*.
+  Measured: `RavenDBStore` and `InfluxDBStore` declare it and the SQL stores reference it, releasing
+  exactly the resources the doc claimed. So the doc did not merely mislead — it **described what an
+  existing, correct member already does**, giving a reader no reason to look for `Dispose()`. Disposal
+  is genuinely absent from the *contract*, which is why the fix belongs there and on no implementation.
+  **Re-verify a finding's supporting claims, not only its headline**; this one changed the framing.
+- **⚠ Widened by the SPEC REGEN, not by reading code.** Grepping the spec tree for the old phrase found
+  a second area documenting the same disagreement, which traced to `IBaseRepository.Destroy()` carrying
+  the **identical sentence** — and every repository family forwards to the store, so a SQL repository's
+  `Destroy()` drops the entity's table. Fixed together per § TASK-215: a warning on one contract beside
+  a reassurance on the other, for one operation, is the half-fix that rule names. **Step 7 is a place
+  findings are discovered, not just a place specs are updated.**
+- **A doc fix with no test is a doc fix somebody reverts while tidying.** The tests pin the contract
+  shape (no disposal member, so the redirect stays honest) and the doc text itself. Restoring the old
+  summary reds 2; deleting the paragraph that names the alternatives reds 1 — § SH-H037's *a guard that
+  only says no gets reached around*, as an assertion.
+- **⚠ The doors were verified before being named** (§ TASK-263). `Delete(filter)` is on
+  `IBulkDeleteStore<T>`, but `DeleteAll()` is a **base-class** member and on no interface — so the doc
+  says that rather than implying otherwise, and a test asserts both against the types.
+- **⚠ A mutation showed two of my own tests were duplicates.** Making InMemory's `Destroy` a no-op red
+  2 tests and **neither was mine** — the pre-existing behaviour tests carry that weight. My versions
+  were deleted and the class remarks point at them. *A mutation tells you who owns a guarantee, not
+  only whether one exists.*
+- **⚠ Third scan this session to match its own explanation, and the fix had to be right twice.** The
+  new remarks quote the old wording to record it, so a flat `NotContain` fails; a line-based filter
+  then passed on the store interfaces **by luck** (each quotation on one line) and failed on the
+  repository contract, whose async remark wraps across two. Both files now share one
+  `WithoutQuotations` helper — two tests checking one thing two different ways is the shape this file
+  keeps recording, and it does not stop being that because they are tests.
+- **Rejected, with reasons recorded rather than left implicit:** renaming to `DestroyAll` (§ Conventions'
+  naming rule is about a short name one keystroke from a safe one; `Destroy` is already alarming and it
+  was the sentence underneath that disarmed it — and a rename breaks 17 implementations, 7
+  `JobQueueSchema.DropAsync` helpers and every wrapper), and adding `IDisposable` to `IStore` (a design
+  decision about a central interface, not something to slip into a documentation fix).
+
 ### The Cosmos migrator escaped with the wrong dialect, and three parts of the fix had no test (2026-09-16)
 
 TASK-450, spawned by [[TASK-447]]'s own criterion and closing that thread. `FormatSqlValue` escaped a

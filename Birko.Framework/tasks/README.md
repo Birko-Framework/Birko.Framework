@@ -33,14 +33,14 @@ _Generated 2026-09-16 (`/tasks triage`). Run `/tasks triage` to refresh. **Do no
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 147   |
+| todo         | —     | —       | 146   |
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 11    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 23      | 147   |
+| done         | 1     | 23      | 148   |
 | cancelled    | 0     | 0       | 2     |
 
-`todo` by priority: 36× P1 · 93× P2 · 18× P3.  
+`todo` by priority: 35× P1 · 93× P2 · 18× P3.  
 > ℹ Recounted from the files on each close rather than incremented — a breakdown that sums correctly
 > is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
 > one P3 short, while still totalling right). The P0 filed on 2026-09-16 as [[TASK-447]] is now closed.
@@ -309,7 +309,7 @@ _None_
     - [ ] TASK-318 Triage the 1 remaining high spec-harvest finding in `event-bus-and-messaging` · FEATURE-014
     - [ ] TASK-319 Triage the 1 remaining high spec-harvest finding in `schema-index-and-ddl` · FEATURE-014
     - [ ] TASK-320 Triage the 1 remaining high spec-harvest finding in `specifications-and-paging` · FEATURE-014
-    - [ ] TASK-321 Triage the 1 remaining high spec-harvest finding in `store-crud-contract` · FEATURE-014
+    - [x] TASK-321 Triage the 1 remaining high spec-harvest finding in `store-crud-contract` · FEATURE-014
     - [x] TASK-322 Triage the 1 remaining high spec-harvest finding in `views-and-aggregation` · FEATURE-014
     - [ ] TASK-445 `ConflictResolution.Merge` is a silent no-op, and the enum advertises it as supported · FEATURE-014
   - STORY-053 Spec-harvest — medium findings — planned (0/25 done)

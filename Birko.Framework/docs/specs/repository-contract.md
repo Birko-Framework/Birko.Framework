@@ -1,7 +1,7 @@
 ---
 area: repository-contract
-generated-at: 804f0b7619d3e502e6a0a9d33119a3e62097c562
-generated-on: 2026-08-07
+generated-at: 7ba8942
+generated-on: 2026-09-17
 sources:
   - ../Birko.Data.Core/ViewModels/AbstractLogViewModel.cs
   - ../Birko.Data.Core/ViewModels/LogViewModel.cs
@@ -33,7 +33,7 @@ sources:
 source-commits:   # sibling HEADs when this spec was last written (2026-08-07 14:22:58,
                   # commit 04d6575). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.Data.Core: 11da2ac
-  ../Birko.Data.Repositories: 8a2c6c7
+  ../Birko.Data.Repositories: 005f140
   ../Birko.Data.SQL.ViewModel: 6017a4d
   ../Birko.Data.ViewModel: 093c15b
   # Baselines below added 2026-08-18 without a re-harvest, and that is a measurement rather
@@ -247,9 +247,20 @@ The system SHALL implement repository `Destroy()`/`DestroyAsync(ct)` as a forwar
 `Destroy()` / `DestroyAsync(ct)` in every family (`AbstractRepository`, `AbstractAsyncRepository`,
 `AbstractViewModelRepository`, `AbstractAsyncViewModelRepository`); for a SQL-backed store that call is
 `DataBaseStore.Destroy()` → `Connector?.DropTable(new[] { typeof(T) })`, so the call deletes the entity's
-table and every row in it. `IBaseRepository.Destroy` documents the member only as "Destroys the
-repository and releases all resources"; the resource-release wording and the implemented table drop
-disagree, and no repository-layer documentation records that data is destroyed.
+table and every row in it.
+
+`IBaseRepository.Destroy` and `IAsyncBaseRepository.DestroyAsync(ct)` SHALL document that the member
+**permanently deletes every row the underlying store can see and is not disposal**, SHALL give the
+per-backend blast radius, and SHALL name the alternatives. SH-H046 (widened from the store contract):
+both previously read *"destroys the repository and releases all resources"* — the same sentence as
+`IBaseStore.Destroy()` — so the resource-release wording and the implemented table drop disagreed, and
+no repository-layer documentation recorded that data is destroyed. Because every family forwards to the
+store, this is not a milder operation one layer up but the same destruction one call away; documenting
+a warning on the store contract while leaving a reassurance here would be a half-fix.
+
+No type in this contract declares `IDisposable`, so `Destroy` was the only cleanup-looking member a
+caller could find at the repository layer; the documentation redirects resource release to the
+underlying store, where `RavenDBStore`, `InfluxDBStore` and the SQL stores do implement it.
 
 #### Scenario: Destroying a SQL repository drops its table
 

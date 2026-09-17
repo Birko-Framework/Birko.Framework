@@ -1,7 +1,7 @@
 ---
 area: store-crud-contract
-generated-at: 96738ef
-generated-on: 2026-08-16
+generated-at: 7ba8942
+generated-on: 2026-09-17
 sources:
   - ../Birko.Data.Core/Exceptions/StoreException.cs
   - ../Birko.Data.InMemory/Stores/AbstractAsyncInMemoryStore.cs
@@ -18,7 +18,7 @@ sources:
 source-commits:   # recorded at this regen, not reconstructed
   ../Birko.Data.Core: 0308617
   ../Birko.Data.InMemory: 89e3ed5
-  ../Birko.Data.Stores: c828ef1
+  ../Birko.Data.Stores: 8058810
 shaped-by: []
 # false, and NOT because nobody tried — see the identical note in bulk-filter-operations.md: every
 # source glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` in this
@@ -218,25 +218,48 @@ catching `MissingMethodException` and then attempting
   zero-argument `Activator.CreateInstance` call, and that call fails the same way — so
   `MissingMethodException` propagates to the caller and the fallback changes nothing
 
-### Requirement: Destroy tears down stored data without resetting the initialization latch
+### Requirement: Destroy permanently deletes stored data and is documented as such
 
 The system SHALL declare `Destroy()` / `DestroyAsync(ct)` abstract in the bases, without opening the
 initialization gate, and SHALL NOT reset the private `_initialized` flag when they run.
 
-The declared and the implemented meaning of the operation disagree, and the spec records both: the XML
-documentation on `IBaseStore.Destroy()` and `IAsyncBaseStore.DestroyAsync(ct)` reads "Destroys the store and
-releases all resources", which is disposal wording, while every implementation deletes stored data — the
-in-memory stores clear `_items`, and backend stores drop the underlying database, container, collection or
-file. No type in this contract implements `IDisposable` or `IAsyncDisposable`, so `Destroy` is also the only
-teardown member a caller can find.
+The XML documentation on `IBaseStore.Destroy()` and `IAsyncBaseStore.DestroyAsync(ct)` SHALL state
+that the operation **permanently deletes every row the store can see and is not disposal**, SHALL
+give the per-backend blast radius, and SHALL name the alternatives a caller has. SH-H046: it
+previously read *"Destroys the store and releases all resources"*, which is disposal wording, so the
+declared and the implemented meaning disagreed and a teardown-style call destroyed production data.
 
-#### Scenario: Caller reads Destroy as resource cleanup
+The blast radius is per backend and is wider than the entity on two of them: RavenDB sends
+`DeleteDatabasesOperation(hardDelete: true)` and drops the **entire database**; CosmosDB deletes the
+container; MongoDB drops the collection; SQL drops the table; JSON and XML delete the file; the
+in-memory stores clear `_items`. Nothing is recoverable and no overload accepts a filter.
 
-- **Given** the `IBaseStore.Destroy()` documentation "Destroys the store and releases all resources" and no
-  `IDisposable` / `IAsyncDisposable` implementation anywhere in the contract
-- **When** a caller invokes it to release connections or handles at the end of a scope
-- **Then** stored data is destroyed instead — the implemented meaning is the one that runs, and the
-  documentation gives no warning of it
+⚠ The documentation SHALL redirect resource release to `IDisposable`, which **the contract itself
+does not declare** — `IBaseStore`, `IStore<T>`, `IAsyncBaseStore`, `IAsyncStore<T>` and the four
+abstract bases carry no disposal member, so `Destroy` was the only cleanup-looking member a caller
+could find on the contract. Disposal is a per-implementation concern and **does exist** where
+resources do: `RavenDBStore` and `InfluxDBStore` declare `IDisposable`, and `DataBaseStore`,
+`AsyncDataBaseStore`, `AsyncRavenDBStore`, `AsyncInfluxDBStore` and `CachedAsyncDataBaseBulkStore`
+reference it. That is what made the old wording actively harmful rather than merely vague: it
+described what an existing, correct member already did.
+
+#### Scenario: The documentation states what the operation destroys
+
+- **Given** `IBaseStore.Destroy()` or `IAsyncBaseStore.DestroyAsync(ct)`
+- **When** a caller reads the summary
+- **Then** it says the operation permanently deletes every row and is not disposal, before anything else — a warning placed below a reassuring summary is the shape that caused SH-H046
+
+#### Scenario: The documentation names the alternatives
+
+- **Given** a caller who wanted resource cleanup, selective deletion, or an emptied but usable store
+- **When** they read the remarks
+- **Then** they are pointed at `IDisposable` where the store implements it, `IBulkDeleteStore<T>.Delete(filter)` / `IAsyncBulkStore<T>.DeleteAsync(filter)`, and `DeleteAll()` / `DeleteAllAsync()` — the last stated as base-class members on `AbstractBulkStore<T>` / `AbstractAsyncBulkStore<T>` rather than interface members, because they are not on any interface
+
+#### Scenario: No implementation changed
+
+- **Given** the 17 `Destroy` / `DestroyAsync` overrides across the backends
+- **When** SH-H046 is fixed
+- **Then** none of them changes — they were behaving correctly and were described wrongly, so the fix is entirely on the contract's documentation
 
 #### Scenario: Destroying an in-memory store
 
