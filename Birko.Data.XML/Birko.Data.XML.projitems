@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.XML</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\XmlModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncXmlModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractAsyncXmlStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractXmlStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlBatchBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlBatchStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlSeparateBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlSeparateStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\BatchSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\XmlBatchBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\XmlBatchStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\XmlSeparateBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\XmlSeparateStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\XmlStore.cs" />
+  </ItemGroup>
+</Project>
