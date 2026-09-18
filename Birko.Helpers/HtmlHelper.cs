@@ -1,0 +1,43 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Text.RegularExpressions;
+
+namespace Birko.Helpers
+{
+    //From Miro
+    public static class HtmlHelper
+    {
+        /// <summary>
+        /// Compiled regular expression for performance.
+        /// </summary>
+        private static readonly Regex _htmlRegex = new Regex("<.*?>", RegexOptions.Compiled);
+        private static readonly Regex _htmlARegex = new Regex(@"<\/*a.*?>", RegexOptions.Compiled);
+        private static readonly Regex _htmlImgRegex = new Regex(@"<img[^>]*>", RegexOptions.Compiled);
+
+
+        /// <summary>
+        /// Remove HTML from string with compiled Regex.
+        /// </summary>
+        public static string StripTagsRegexCompiled(string source)
+        {
+            return (!string.IsNullOrEmpty(source)) 
+                ? _htmlRegex.Replace(source, string.Empty) 
+                : string.Empty;
+        }
+
+        public static string StripATagsRegexCompiled(string source)
+        {
+            return (!string.IsNullOrEmpty(source)) 
+                ? _htmlARegex.Replace(source, string.Empty) 
+                : string.Empty;
+        }
+
+        public static string StripImgTagsRegexCompiled(string source)
+        {
+            return (!string.IsNullOrEmpty(source)) 
+                ? _htmlImgRegex.Replace(source, string.Empty) 
+                : string.Empty;
+        }
+    }
+}
