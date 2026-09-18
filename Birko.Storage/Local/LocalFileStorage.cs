@@ -1,0 +1,596 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using Birko.Helpers;
+using Birko.Time;
+
+namespace Birko.Storage.Local;
+
+/// <summary>
+/// Local filesystem implementation of IFileStorage.
+/// Uses Settings.Location as the base directory.
+/// Stores custom metadata in companion .meta.json files.
+/// </summary>
+public sealed class LocalFileStorage : IFileStorage
+{
+    private const string MetaSuffix = ".meta.json";
+
+    private readonly StorageSettings _settings;
+    private readonly IDateTimeProvider _clock;
+    private readonly string _basePath;
+
+    public LocalFileStorage(StorageSettings settings, IDateTimeProvider clock)
+    {
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+
+        if (string.IsNullOrWhiteSpace(settings.Location))
+        {
+            throw new ArgumentException("StorageSettings.Location (base directory) must be set.", nameof(settings));
+        }
+
+        _basePath = Path.GetFullPath(settings.Location);
+    }
+
+    public async Task<FileReference> UploadAsync(
+        string path,
+        Stream content,
+        string contentType,
+        StorageOptions? options = null,
+        CancellationToken ct = default)
+    {
+        var resolvedPath = ResolvePath(path);
+        var effectiveOptions = MergeOptions(options);
+
+        ValidateContentType(path, contentType, effectiveOptions);
+
+        if (!effectiveOptions.OverwriteExisting && File.Exists(resolvedPath))
+        {
+            throw new FileAlreadyExistsException(path);
+        }
+
+        var directory = Path.GetDirectoryName(resolvedPath);
+        if (directory != null)
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        if (effectiveOptions.MaxFileSize.HasValue && content.CanSeek)
+        {
+            if (content.Length > effectiveOptions.MaxFileSize.Value)
+            {
+                throw new FileTooLargeException(path, content.Length, effectiveOptions.MaxFileSize.Value);
+            }
+        }
+
+        long size;
+        string etag;
+
+        // Write to a sibling temp file and atomically move it into place only after a complete
+        // write. If the body throws mid-stream (size-limit, cancellation, IO error) the partial
+        // temp file is deleted and any existing good file at resolvedPath is left untouched —
+        // rather than truncating it up front (FileMode.Create) and leaving an orphaned remnant.
+        var tempPath = resolvedPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
+            {
+                if (effectiveOptions.MaxFileSize.HasValue && !content.CanSeek)
+                {
+                    size = await CopyWithLimitAsync(content, fileStream, effectiveOptions.MaxFileSize.Value, path, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    await content.CopyToAsync(fileStream, ct).ConfigureAwait(false);
+                    size = fileStream.Length;
+                    // CR-L367: the up-front content.Length check trusts a seekable stream's self-reported
+                    // length. Re-check the bytes actually written so a stream that under-reports Length
+                    // (or grows between the check and the copy) cannot bypass MaxFileSize — matching the
+                    // guarantee CopyWithLimitAsync gives on the non-seekable path.
+                    if (effectiveOptions.MaxFileSize.HasValue && size > effectiveOptions.MaxFileSize.Value)
+                    {
+                        throw new FileTooLargeException(path, size, effectiveOptions.MaxFileSize.Value);
+                    }
+                }
+            }
+
+            File.Move(tempPath, resolvedPath, overwrite: effectiveOptions.OverwriteExisting);
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup of the partial temp file; don't mask the original failure.
+            }
+            throw;
+        }
+
+        etag = await ComputeETagAsync(resolvedPath, ct).ConfigureAwait(false);
+
+        var now = _clock.OffsetUtcNow;
+        var metadata = effectiveOptions.Metadata ?? new Dictionary<string, string>();
+
+        var reference = new FileReference
+        {
+            Path = PathValidator.NormalizePath(path),
+            FileName = Path.GetFileName(path),
+            ContentType = contentType,
+            Size = size,
+            CreatedAt = now,
+            LastModifiedAt = now,
+            ETag = etag,
+            Metadata = new Dictionary<string, string>(metadata)
+        };
+
+        await SaveMetadataAsync(resolvedPath, reference, ct).ConfigureAwait(false);
+
+        return reference;
+    }
+
+    public Task<StorageResult<Stream>> DownloadAsync(
+        string path,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested(); // CR-M246
+        var resolvedPath = ResolvePath(path);
+
+        if (!File.Exists(resolvedPath))
+        {
+            return Task.FromResult(StorageResult<Stream>.NotFound());
+        }
+
+        Stream stream = new FileStream(resolvedPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
+        return Task.FromResult(StorageResult<Stream>.Success(stream));
+    }
+
+    public Task<bool> DeleteAsync(
+        string path,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested(); // CR-M246
+        var resolvedPath = ResolvePath(path);
+
+        if (!File.Exists(resolvedPath))
+        {
+            return Task.FromResult(false);
+        }
+
+        File.Delete(resolvedPath);
+
+        var metaPath = resolvedPath + MetaSuffix;
+        if (File.Exists(metaPath))
+        {
+            File.Delete(metaPath);
+        }
+
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> ExistsAsync(
+        string path,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested(); // CR-M246
+        var resolvedPath = ResolvePath(path);
+        return Task.FromResult(File.Exists(resolvedPath));
+    }
+
+    public async Task<StorageResult<FileReference>> GetReferenceAsync(
+        string path,
+        CancellationToken ct = default)
+    {
+        var resolvedPath = ResolvePath(path);
+
+        if (!File.Exists(resolvedPath))
+        {
+            return StorageResult<FileReference>.NotFound();
+        }
+
+        var reference = await LoadReferenceAsync(resolvedPath, path, ct).ConfigureAwait(false);
+        return StorageResult<FileReference>.Success(reference);
+    }
+
+    public Task<IReadOnlyList<FileReference>> ListAsync(
+        string? prefix = null,
+        int? maxResults = null,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested(); // CR-M246
+        if (!Directory.Exists(_basePath))
+        {
+            return Task.FromResult<IReadOnlyList<FileReference>>(Array.Empty<FileReference>());
+        }
+
+        var searchPath = _basePath;
+        var effectivePrefix = CombinePrefix(prefix);
+
+        if (!string.IsNullOrEmpty(effectivePrefix))
+        {
+            var prefixDir = Path.Combine(_basePath, effectivePrefix.Replace('/', Path.DirectorySeparatorChar));
+            var dirPart = Path.GetDirectoryName(prefixDir);
+            if (dirPart != null && Directory.Exists(dirPart))
+            {
+                searchPath = dirPart;
+            }
+        }
+
+        if (!Directory.Exists(searchPath))
+        {
+            return Task.FromResult<IReadOnlyList<FileReference>>(Array.Empty<FileReference>());
+        }
+
+        // CR-L368: carry the enumerated full path alongside its storage path so the projection can stat it
+        // directly instead of rebuilding the system path with a second Path.Combine.
+        var files = Directory.EnumerateFiles(searchPath, "*", SearchOption.AllDirectories)
+            .Where(f => !f.EndsWith(MetaSuffix, StringComparison.OrdinalIgnoreCase))
+            .Select(f => (Full: f, Storage: ToStoragePath(f)))
+            .Where(p => string.IsNullOrEmpty(effectivePrefix) || p.Storage.StartsWith(effectivePrefix, StringComparison.OrdinalIgnoreCase));
+
+        if (maxResults.HasValue)
+        {
+            files = files.Take(maxResults.Value);
+        }
+
+        // ListAsync returns lightweight references by design: ContentType/ETag/Metadata are omitted (the
+        // companion .meta.json is not read per entry). Call GetReferenceAsync for the full metadata.
+        // info.Exists guards the race where a file is deleted between enumeration and stat.
+        var results = files.Select(p =>
+        {
+            ct.ThrowIfCancellationRequested(); // CR-M246: honor cancellation while walking the tree
+            var info = new FileInfo(p.Full);
+            return new FileReference
+            {
+                Path = p.Storage,
+                FileName = info.Name,
+                ContentType = string.Empty,
+                Size = info.Exists ? info.Length : 0,
+                CreatedAt = info.Exists ? new DateTimeOffset(info.CreationTimeUtc, TimeSpan.Zero) : DateTimeOffset.MinValue,
+                LastModifiedAt = info.Exists ? new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero) : null
+            };
+        }).ToList();
+
+        return Task.FromResult<IReadOnlyList<FileReference>>(results);
+    }
+
+    public async Task<FileReference> CopyAsync(
+        string sourcePath,
+        string destinationPath,
+        StorageOptions? options = null,
+        CancellationToken ct = default)
+    {
+        var resolvedSource = ResolvePath(sourcePath);
+        var resolvedDest = ResolvePath(destinationPath);
+        var effectiveOptions = MergeOptions(options);
+
+        if (!File.Exists(resolvedSource))
+        {
+            throw new StorageException($"Source file not found: {sourcePath}", sourcePath);
+        }
+
+        if (!effectiveOptions.OverwriteExisting && File.Exists(resolvedDest))
+        {
+            throw new FileAlreadyExistsException(destinationPath);
+        }
+
+        var directory = Path.GetDirectoryName(resolvedDest);
+        if (directory != null)
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.Copy(resolvedSource, resolvedDest, effectiveOptions.OverwriteExisting);
+
+        var etag = await ComputeETagAsync(resolvedDest, ct).ConfigureAwait(false);
+        var info = new FileInfo(resolvedDest);
+
+        var sourceRef = await LoadMetadataAsync(resolvedSource, ct).ConfigureAwait(false);
+
+        var reference = new FileReference
+        {
+            Path = PathValidator.NormalizePath(destinationPath),
+            FileName = Path.GetFileName(destinationPath),
+            ContentType = sourceRef?.ContentType ?? string.Empty,
+            Size = info.Length,
+            CreatedAt = _clock.OffsetUtcNow,
+            LastModifiedAt = _clock.OffsetUtcNow,
+            ETag = etag,
+            Metadata = effectiveOptions.Metadata != null
+                ? new Dictionary<string, string>(effectiveOptions.Metadata)
+                : sourceRef?.Metadata != null
+                    ? new Dictionary<string, string>(sourceRef.Metadata)
+                    : new Dictionary<string, string>()
+        };
+
+        await SaveMetadataAsync(resolvedDest, reference, ct).ConfigureAwait(false);
+
+        return reference;
+    }
+
+    public async Task<FileReference> MoveAsync(
+        string sourcePath,
+        string destinationPath,
+        StorageOptions? options = null,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested(); // CR-M246
+        var resolvedSource = ResolvePath(sourcePath);
+        var resolvedDest = ResolvePath(destinationPath);
+        var effectiveOptions = MergeOptions(options);
+
+        if (!File.Exists(resolvedSource))
+        {
+            throw new StorageException($"Source file not found: {sourcePath}", sourcePath);
+        }
+
+        // Moving a file onto itself is a no-op — short-circuit before File.Move, which under overwrite
+        // semantics (MOVEFILE_REPLACE_EXISTING) can delete the shared target and lose the file.
+        if (string.Equals(resolvedSource, resolvedDest, StringComparison.OrdinalIgnoreCase))
+        {
+            return await LoadReferenceAsync(resolvedSource, destinationPath, ct).ConfigureAwait(false);
+        }
+
+        if (!effectiveOptions.OverwriteExisting && File.Exists(resolvedDest))
+        {
+            throw new FileAlreadyExistsException(destinationPath);
+        }
+
+        var directory = Path.GetDirectoryName(resolvedDest);
+        if (directory != null)
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        // Read the source metadata before moving anything (File.Move only relocates the data file, not the
+        // companion .meta.json, so this read is unaffected by the move either way).
+        var sourceRef = await LoadMetadataAsync(resolvedSource, ct).ConfigureAwait(false);
+
+        // CR-L369: File.Move is an atomic rename on the same volume — no window where the file exists at
+        // both paths (the old CopyAsync-then-DeleteAsync left the source behind if the delete failed).
+        // Across volumes File.Move degrades to an internal copy+delete, matching the previous behavior.
+        File.Move(resolvedSource, resolvedDest, overwrite: effectiveOptions.OverwriteExisting);
+
+        // The data file moved; drop the source's now-orphaned companion metadata and write fresh metadata
+        // for the destination (path, name and timestamps change on a move).
+        var sourceMeta = resolvedSource + MetaSuffix;
+        if (File.Exists(sourceMeta))
+        {
+            File.Delete(sourceMeta);
+        }
+
+        var etag = await ComputeETagAsync(resolvedDest, ct).ConfigureAwait(false);
+        var info = new FileInfo(resolvedDest);
+
+        var reference = new FileReference
+        {
+            Path = PathValidator.NormalizePath(destinationPath),
+            FileName = Path.GetFileName(destinationPath),
+            ContentType = sourceRef?.ContentType ?? string.Empty,
+            Size = info.Length,
+            CreatedAt = _clock.OffsetUtcNow,
+            LastModifiedAt = _clock.OffsetUtcNow,
+            ETag = etag,
+            Metadata = effectiveOptions.Metadata != null
+                ? new Dictionary<string, string>(effectiveOptions.Metadata)
+                : sourceRef?.Metadata != null
+                    ? new Dictionary<string, string>(sourceRef.Metadata)
+                    : new Dictionary<string, string>()
+        };
+
+        await SaveMetadataAsync(resolvedDest, reference, ct).ConfigureAwait(false);
+
+        return reference;
+    }
+
+    public void Dispose()
+    {
+        // No resources to release for local filesystem
+    }
+
+    #region Path Resolution
+
+    private string ResolvePath(string path)
+    {
+        try
+        {
+            PathValidator.ValidateUserPath(path, nameof(path));
+        }
+        catch (ArgumentException)
+        {
+            throw new InvalidPathException(path ?? string.Empty);
+        }
+
+        var normalized = PathValidator.NormalizePath(path);
+        var withPrefix = CombinePrefix(normalized) ?? normalized;
+        var systemPath = withPrefix.Replace('/', Path.DirectorySeparatorChar);
+        var resolved = Path.GetFullPath(Path.Combine(_basePath, systemPath));
+
+        // CR-M247: a bare StartsWith(_basePath) lets a sibling whose name extends the base pass the
+        // containment check (base "C:\data\store" vs "C:\data\store-secrets\x"). Require exact equality
+        // OR a match up to a trailing directory separator.
+        var baseWithSep = _basePath.EndsWith(Path.DirectorySeparatorChar)
+            ? _basePath
+            : _basePath + Path.DirectorySeparatorChar;
+        if (!string.Equals(resolved, _basePath, StringComparison.OrdinalIgnoreCase)
+            && !resolved.StartsWith(baseWithSep, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidPathException(path);
+        }
+
+        return resolved;
+    }
+
+    private string? CombinePrefix(string? path)
+    {
+        if (string.IsNullOrEmpty(_settings.PathPrefix))
+        {
+            return path;
+        }
+
+        var prefix = PathValidator.NormalizePath(_settings.PathPrefix!);
+        if (!prefix.EndsWith('/'))
+        {
+            prefix += "/";
+        }
+
+        return string.IsNullOrEmpty(path) ? prefix : prefix + path;
+    }
+
+    private string ToStoragePath(string fullPath)
+    {
+        var relative = fullPath.Substring(_basePath.Length).TrimStart(Path.DirectorySeparatorChar, '/');
+        return relative.Replace(Path.DirectorySeparatorChar, '/');
+    }
+
+    #endregion
+
+    #region Validation
+
+    private static void ValidateContentType(string path, string contentType, StorageOptions options)
+    {
+        if (options.AllowedContentTypes != null && options.AllowedContentTypes.Count > 0)
+        {
+            if (!options.AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new ContentTypeNotAllowedException(path, contentType);
+            }
+        }
+    }
+
+    private StorageOptions MergeOptions(StorageOptions? options)
+    {
+        if (options != null)
+        {
+            return options;
+        }
+
+        return _settings.DefaultOptions ?? StorageOptions.Default;
+    }
+
+    #endregion
+
+    #region Metadata
+
+    private static async Task SaveMetadataAsync(string filePath, FileReference reference, CancellationToken ct)
+    {
+        var metaPath = filePath + MetaSuffix;
+        var json = JsonSerializer.Serialize(new FileMetadata
+        {
+            ContentType = reference.ContentType,
+            CreatedAt = reference.CreatedAt,
+            LastModifiedAt = reference.LastModifiedAt,
+            ETag = reference.ETag,
+            Metadata = reference.Metadata
+        }, FileMetadataContext.Default.FileMetadata);
+
+        await File.WriteAllTextAsync(metaPath, json, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<FileReference?> LoadMetadataAsync(string filePath, CancellationToken ct)
+    {
+        var metaPath = filePath + MetaSuffix;
+        if (!File.Exists(metaPath))
+        {
+            return null;
+        }
+
+        var json = await File.ReadAllTextAsync(metaPath, ct).ConfigureAwait(false);
+        var meta = JsonSerializer.Deserialize(json, FileMetadataContext.Default.FileMetadata);
+        if (meta == null)
+        {
+            return null;
+        }
+
+        return new FileReference
+        {
+            ContentType = meta.ContentType ?? string.Empty,
+            CreatedAt = meta.CreatedAt,
+            LastModifiedAt = meta.LastModifiedAt,
+            ETag = meta.ETag,
+            Metadata = meta.Metadata ?? new Dictionary<string, string>()
+        };
+    }
+
+    private async Task<FileReference> LoadReferenceAsync(string resolvedPath, string storagePath, CancellationToken ct)
+    {
+        var info = new FileInfo(resolvedPath);
+        var stored = await LoadMetadataAsync(resolvedPath, ct).ConfigureAwait(false);
+
+        return new FileReference
+        {
+            Path = PathValidator.NormalizePath(storagePath),
+            FileName = info.Name,
+            ContentType = stored?.ContentType ?? string.Empty,
+            Size = info.Length,
+            CreatedAt = stored?.CreatedAt ?? new DateTimeOffset(info.CreationTimeUtc, TimeSpan.Zero),
+            LastModifiedAt = stored?.LastModifiedAt ?? new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
+            ETag = stored?.ETag,
+            Metadata = stored?.Metadata ?? new Dictionary<string, string>()
+        };
+    }
+
+    #endregion
+
+    #region Helpers
+
+    private static async Task<string> ComputeETagAsync(string filePath, CancellationToken ct)
+    {
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
+        var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static async Task<long> CopyWithLimitAsync(Stream source, Stream destination, long maxSize, string path, CancellationToken ct)
+    {
+        var buffer = new byte[81920];
+        long totalBytes = 0;
+        int bytesRead;
+
+        while ((bytesRead = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+        {
+            totalBytes += bytesRead;
+            if (totalBytes > maxSize)
+            {
+                throw new FileTooLargeException(path, totalBytes, maxSize);
+            }
+
+            await destination.WriteAsync(buffer.AsMemory(0, bytesRead), ct).ConfigureAwait(false);
+        }
+
+        return totalBytes;
+    }
+
+    #endregion
+
+    #region Metadata Model
+
+    internal sealed class FileMetadata
+    {
+        public string? ContentType { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset? LastModifiedAt { get; set; }
+        public string? ETag { get; set; }
+        public Dictionary<string, string>? Metadata { get; set; }
+    }
+
+    #endregion
+}
+
+/// <summary>
+/// Source-generated JSON context for metadata serialization.
+/// </summary>
+[System.Text.Json.Serialization.JsonSerializable(typeof(LocalFileStorage.FileMetadata))]
+internal partial class FileMetadataContext : System.Text.Json.Serialization.JsonSerializerContext
+{
+}
