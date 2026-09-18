@@ -1,0 +1,580 @@
+﻿using Birko.Data.Filters;
+using Birko.Data.MongoDB.Aggregation;
+using Birko.Data.MongoDB.ChangeStreams;
+using Birko.Data.Stores;
+using MongoDB.Bson;
+using MongoDB.Driver;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Birko.Data.MongoDB.Stores
+{
+    /// <summary>
+    /// Async MongoDB data store for CRUD and bulk operations.
+    /// </summary>
+    /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
+    public class AsyncMongoDBStore<T>
+        : Data.Stores.AbstractAsyncBulkStore<T>
+        , Data.Stores.ISettingsStore<Settings>
+        , Data.Stores.IAsyncTransactionalStore<T, IClientSessionHandle>
+        , Data.Stores.IAsyncAggregatableStore<T>
+        where T : Data.Models.AbstractModel
+    {
+        /// <summary>
+        /// Gets the MongoDB client.
+        /// </summary>
+        public MongoDB.MongoDBClient? Client { get; private set; }
+
+        /// <inheritdoc />
+        public IClientSessionHandle? TransactionContext { get; private set; }
+
+        /// <inheritdoc />
+        public void SetTransactionContext(IClientSessionHandle? context)
+        {
+            TransactionContext = context;
+        }
+
+        /// <summary>
+        /// Gets the collection for this store.
+        /// </summary>
+        protected IMongoCollection<T>? Collection
+        {
+            get
+            {
+                if (Client != null)
+                {
+                    return Client.GetCollection<T>();
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the AsyncMongoDBStore class.
+        /// </summary>
+        public AsyncMongoDBStore()
+        {
+        }
+
+        /// <summary>
+        /// Sets the connection settings.
+        /// </summary>
+        /// <param name="settings">The MongoDB settings to use.</param>
+        public virtual void SetSettings(MongoDB.Stores.Settings settings)
+        {
+            if (settings != null)
+            {
+                Client = new MongoDB.MongoDBClient(settings);
+            }
+        }
+
+        /// <summary>
+        /// Sets the connection settings via the ISettings interface.
+        /// </summary>
+        /// <param name="settings">The settings to use.</param>
+        public virtual void SetSettings(Birko.Configuration.ISettings settings)
+        {
+            if (settings is MongoDB.Stores.Settings mongoSettings)
+            {
+                SetSettings(mongoSettings);
+            }
+        }
+
+        // CR-M118: no public ReadAsync(Guid) override. It bypassed EnsureInitializedAsync (which also
+        // observes the CancellationToken) and was redundant — the base ReadAsync(Guid) routes through
+        // ReadAsync(filter) → ReadCoreAsync with correct init/cancellation behavior.
+
+        /// <inheritdoc />
+
+        /// <summary>
+        /// Starts a find that participates in <see cref="TransactionContext"/> when one is set.
+        /// </summary>
+        /// <remarks>
+        /// TASK-240. Every read used to go straight to <c>Collection.Find(...)</c> with no session, so
+        /// inside a transaction a caller could not see its own uncommitted writes — read-then-write logic
+        /// got the pre-transaction snapshot. That is a wrong answer rather than a missing feature, and it
+        /// was invisible because the write paths did pass the session, so the store looked transactional.
+        /// </remarks>
+        private IFindFluent<T, T> FindIn(FilterDefinition<T> filter)
+            => TransactionContext != null
+                ? Collection.Find(TransactionContext, filter)
+                : Collection.Find(filter);
+
+        /// <summary>
+        /// Counts within <see cref="TransactionContext"/> when one is set. See <see cref="FindIn"/>.
+        /// </summary>
+        private Task<long> CountIn(FilterDefinition<T> filter, CancellationToken ct)
+            => TransactionContext != null
+                ? Collection.CountDocumentsAsync(TransactionContext, filter, null, ct)
+                : Collection.CountDocumentsAsync(filter, null, ct);
+
+        protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+        {
+            // TASK-218: on .NET 9+ an array's `set.Contains(x.Col)` binds to
+            // MemoryExtensions.Contains, which the driver's LINQ translator does not know —
+            // NotSupportedException("Specified method is not supported"), naming no method. Rewrite it
+            // to Enumerable.Contains here, where the caller's expression arrives, so every driver
+            // hand-off below sees one shape. Measured: only MongoDB needs this; SQL and
+            // ElasticSearch evaluate the operand themselves and were already correct.
+            filter = Data.Expressions.SpanContains.Rewrite(filter);
+            if (Collection == null)
+            {
+                return null;
+            }
+
+            if (filter == null)
+            {
+                return await FindIn(FilterDefinition<T>.Empty).FirstOrDefaultAsync(ct);
+            }
+
+            return await FindIn(filter).FirstOrDefaultAsync(ct);
+        }
+
+        /// <summary>
+        /// Reads all entities from MongoDB.
+        /// </summary>
+        public async Task<IEnumerable<T>> ReadAllAsync(CancellationToken ct = default)
+        {
+            if (Collection == null)
+            {
+                return await Task.FromResult(Enumerable.Empty<T>());
+            }
+
+            return await FindIn(Builders<T>.Filter.Empty).ToListAsync(ct);
+        }
+
+        /// <inheritdoc />
+        protected override async Task<long> CountCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+        {
+            filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-218 — see above
+            if (Collection == null)
+            {
+                return 0;
+            }
+
+            if (filter == null)
+            {
+                return await CountIn(FilterDefinition<T>.Empty, ct);
+            }
+
+            return await CountIn(filter, ct);
+        }
+
+        /// <inheritdoc />
+        protected override async Task<Guid> CreateCoreAsync(T data, Data.Stores.StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+        {
+            if (Collection == null || data == null)
+            {
+                return Guid.Empty;
+            }
+
+            data.Guid ??= Guid.NewGuid();
+            processDelegate?.Invoke(data);
+
+            if (TransactionContext != null)
+                await Collection.InsertOneAsync(TransactionContext, data, null, ct);
+            else
+                await Collection.InsertOneAsync(data, null, ct);
+
+            return data.Guid.Value;
+        }
+
+        /// <inheritdoc />
+        protected override async Task UpdateCoreAsync(T data, Data.Stores.StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+        {
+            if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
+            {
+                return;
+            }
+
+            processDelegate?.Invoke(data);
+
+            var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
+            if (TransactionContext != null)
+                await Collection.ReplaceOneAsync(TransactionContext, filter, data, new ReplaceOptions { IsUpsert = false }, ct);
+            else
+                await Collection.ReplaceOneAsync(filter, data, new ReplaceOptions { IsUpsert = false }, ct);
+        }
+
+        /// <inheritdoc />
+        protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
+        {
+            if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
+            {
+                return;
+            }
+
+            var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
+            if (TransactionContext != null)
+                await Collection.DeleteOneAsync(TransactionContext, filter, null, ct);
+            else
+                await Collection.DeleteOneAsync(filter, ct);
+        }
+
+        /// <inheritdoc />
+        public override async Task<Guid> SaveAsync(T data, Data.Stores.StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+        {
+            if (Collection == null || data == null)
+            {
+                return await Task.FromResult(Guid.Empty);
+            }
+
+            if (data.Guid == null || data.Guid == Guid.Empty)
+            {
+                await CreateAsync(data, processDelegate, ct);
+                return data.Guid ?? Guid.Empty;
+            }
+            else
+            {
+                // CR-M119: the native-upsert fast path must still honor the init/cancellation contract
+                // (the create branch gets it via CreateAsync; this branch previously did not).
+                await EnsureInitializedAsync(ct);
+
+                var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
+                if (TransactionContext != null)
+                    await Collection.ReplaceOneAsync(TransactionContext, filter, data, new ReplaceOptions { IsUpsert = true }, ct);
+                else
+                    await Collection.ReplaceOneAsync(filter, data, new ReplaceOptions { IsUpsert = true }, ct);
+                return data.Guid.Value;
+            }
+        }
+
+        /// <inheritdoc />
+        protected override async Task InitCoreAsync(CancellationToken ct = default)
+        {
+            // MongoDB is schema-less, so no initialization needed
+            // Collections are created automatically on first write
+            await Task.CompletedTask;
+        }
+
+        /// <inheritdoc />
+        public override async Task DestroyAsync(CancellationToken ct = default)
+        {
+            if (Client != null)
+            {
+                var collectionName = typeof(T).Name;
+                await Task.Run(() => Client.DropCollection<T>(collectionName), ct);
+            }
+        }
+
+
+        #region Bulk Operations (IAsyncBulkStore<T>)
+
+        /// <inheritdoc />
+        protected override async Task<IEnumerable<T>> ReadCoreAsync(
+            Expression<Func<T, bool>>? filter = null,
+            Data.Stores.OrderBy<T>? orderBy = null,
+            int? limit = null,
+            int? offset = null,
+            CancellationToken ct = default)
+        {
+            if (Collection == null)
+            {
+                return await Task.FromResult(Enumerable.Empty<T>());
+            }
+            filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-218 — see above
+
+            var query = FindIn(filter ?? FilterDefinition<T>.Empty);
+
+            if (orderBy?.Fields.Count > 0)
+            {
+                var sortBuilder = Builders<T>.Sort;
+                var sorts = orderBy.Fields.Select(f => f.Descending
+                    ? sortBuilder.Descending(f.PropertyName)
+                    : sortBuilder.Ascending(f.PropertyName));
+                query = query.Sort(sortBuilder.Combine(sorts));
+            }
+
+            if (offset.HasValue)
+            {
+                query = query.Skip(offset.Value);
+            }
+
+            if (limit.HasValue)
+            {
+                query = query.Limit(limit.Value);
+            }
+
+            var cursor = await query.ToCursorAsync(ct);
+            var results = new List<T>();
+            while (await cursor.MoveNextAsync(ct))
+            {
+                results.AddRange(cursor.Current);
+            }
+            return results;
+        }
+
+        /// <inheritdoc />
+        protected override async Task CreateCoreAsync(
+            IEnumerable<T> data,
+            Data.Stores.StoreDataDelegate<T>? storeDelegate = null,
+            CancellationToken ct = default)
+        {
+            if (Collection == null || data == null)
+            {
+                return;
+            }
+
+            var itemsToCreate = data.Where(x => x != null).ToList();
+            if (itemsToCreate.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var item in itemsToCreate)
+            {
+                item.Guid = item.Guid ?? Guid.NewGuid();
+                storeDelegate?.Invoke(item);
+            }
+
+            if (TransactionContext != null)
+                await Collection.InsertManyAsync(TransactionContext, itemsToCreate, null, ct);
+            else
+                await Collection.InsertManyAsync(itemsToCreate, null, ct);
+        }
+
+        /// <inheritdoc />
+        protected override async Task UpdateCoreAsync(
+            IEnumerable<T> data,
+            Data.Stores.StoreDataDelegate<T>? storeDelegate = null,
+            CancellationToken ct = default)
+        {
+            if (Collection == null || data == null)
+            {
+                return;
+            }
+
+            var itemsToUpdate = data.Where(x => x != null).ToList();
+            if (itemsToUpdate.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var item in itemsToUpdate)
+            {
+                if (item.Guid == null || item.Guid == Guid.Empty)
+                {
+                    continue;
+                }
+
+                storeDelegate?.Invoke(item);
+
+                var filter = new ModelByGuid<T>(item.Guid.Value).Filter();
+                if (TransactionContext != null)
+                    await Collection.ReplaceOneAsync(TransactionContext, filter, item, new ReplaceOptions { IsUpsert = false }, ct);
+                else
+                    await Collection.ReplaceOneAsync(filter, item, new ReplaceOptions { IsUpsert = false }, ct);
+            }
+        }
+
+        /// <inheritdoc />
+        protected override async Task DeleteCoreAsync(IEnumerable<T> data, CancellationToken ct = default)
+        {
+            if (Collection == null || data == null)
+            {
+                return;
+            }
+
+            var guids = data
+                .Where(x => x != null && x.Guid != null && x.Guid != Guid.Empty)
+                .Select(x => x.Guid!.Value)
+                .ToList();
+
+            if (guids.Count == 0)
+            {
+                return;
+            }
+
+            var filter = new ModelsByGuid<T>(guids).Filter();
+            if (TransactionContext != null)
+                await Collection.DeleteManyAsync(TransactionContext, filter, null, ct);
+            else
+                await Collection.DeleteManyAsync(filter, ct);
+        }
+
+        /// <inheritdoc />
+        public override async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+        {
+            filter = Data.Expressions.SpanContains.Rewrite(filter)!;   // TASK-218 — see ReadCore
+            // SH-M023 — see MongoDBStore.Delete; this override bypasses the base guard, so it repeats it.
+            RequireFilter(filter, "delete");
+            // TASK-212: the filter is present but may still cover everything. The driver renders
+            // `!empty.Contains(x.F)` as `{ "F": { "$nin": [] } }` — a one-element document that
+            // matches every document while looking like an ordinary predicate, so no guard on the
+            // emitted query can see it. Checked here, on the expression, where the intent is plain.
+            RequireBoundedFilter(filter, "delete");
+            if (Collection == null) return;
+
+            if (TransactionContext != null)
+                await Collection.DeleteManyAsync(TransactionContext, filter, null, ct);
+            else
+                await Collection.DeleteManyAsync(filter, ct);
+        }
+
+        /// <inheritdoc />
+        public override async Task UpdateAsync(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates, CancellationToken ct = default)
+        {
+            filter = Data.Expressions.SpanContains.Rewrite(filter)!;   // TASK-218 — see ReadCore
+            // SH-M023 — see MongoDBStore.Delete.
+            RequireFilter(filter, "update");
+            // TASK-212: the filter is present but may still cover everything. The driver renders
+            // `!empty.Contains(x.F)` as `{ "F": { "$nin": [] } }` — a one-element document that
+            // matches every document while looking like an ordinary predicate, so no guard on the
+            // emitted query can see it. Checked here, on the expression, where the intent is plain.
+            RequireBoundedFilter(filter, "update");
+            if (Collection == null || updates.Assignments.Count == 0) return;
+
+            var updateDefs = new List<UpdateDefinition<T>>();
+            foreach (var (property, value) in updates.Assignments)
+            {
+                var memberExpr = property.Body is UnaryExpression unary
+                    ? (MemberExpression)unary.Operand
+                    : (MemberExpression)property.Body;
+
+                updateDefs.Add(Builders<T>.Update.Set(memberExpr.Member.Name, BsonValue.Create(value)));
+            }
+
+            var combined = Builders<T>.Update.Combine(updateDefs);
+            if (TransactionContext != null)
+                await Collection.UpdateManyAsync(TransactionContext, filter, combined, cancellationToken: ct);
+            else
+                await Collection.UpdateManyAsync(filter, combined, cancellationToken: ct);
+        }
+
+        #endregion
+
+        #region Change Streams
+
+        /// <summary>
+        /// Watches the collection for changes and yields change events as they arrive.
+        /// Requires a MongoDB replica set or sharded cluster.
+        /// </summary>
+        /// <param name="options">Optional change stream configuration.</param>
+        /// <param name="ct">Cancellation token to stop watching.</param>
+        /// <returns>An async enumerable of change stream events.</returns>
+        public async IAsyncEnumerable<ChangeStreamEvent<T>> WatchAsync(
+            ChangeStreams.ChangeStreamOptions? options = null,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            if (Collection == null)
+            {
+                yield break;
+            }
+
+            var driverOptions = new global::MongoDB.Driver.ChangeStreamOptions();
+            if (options != null)
+            {
+                driverOptions.FullDocument = options.FullDocument;
+
+                if (options.BatchSize.HasValue)
+                {
+                    driverOptions.BatchSize = options.BatchSize.Value;
+                }
+
+                if (options.MaxAwaitTime.HasValue)
+                {
+                    driverOptions.MaxAwaitTime = options.MaxAwaitTime.Value;
+                }
+
+                if (options.ResumeAfter != null)
+                {
+                    driverOptions.ResumeAfter = options.ResumeAfter;
+                }
+
+                if (options.StartAfter != null)
+                {
+                    driverOptions.StartAfter = options.StartAfter;
+                }
+            }
+
+            using var cursor = await Collection.WatchAsync(driverOptions, ct).ConfigureAwait(false);
+
+            while (await cursor.MoveNextAsync(ct).ConfigureAwait(false))
+            {
+                foreach (var change in cursor.Current)
+                {
+                    yield return MapChangeStreamDocument(change);
+                }
+            }
+        }
+
+        private static ChangeStreamEvent<T> MapChangeStreamDocument(ChangeStreamDocument<T> change)
+        {
+            var evt = new ChangeStreamEvent<T>
+            {
+                FullDocument = change.FullDocument,
+                ClusterTime = change.ClusterTime,
+                ResumeToken = change.ResumeToken
+            };
+
+            evt.OperationType = change.OperationType switch
+            {
+                global::MongoDB.Driver.ChangeStreamOperationType.Insert => ChangeStreams.ChangeStreamOperationType.Insert,
+                global::MongoDB.Driver.ChangeStreamOperationType.Update => ChangeStreams.ChangeStreamOperationType.Update,
+                global::MongoDB.Driver.ChangeStreamOperationType.Replace => ChangeStreams.ChangeStreamOperationType.Replace,
+                global::MongoDB.Driver.ChangeStreamOperationType.Delete => ChangeStreams.ChangeStreamOperationType.Delete,
+                global::MongoDB.Driver.ChangeStreamOperationType.Invalidate => ChangeStreams.ChangeStreamOperationType.Invalidate,
+                global::MongoDB.Driver.ChangeStreamOperationType.Drop => ChangeStreams.ChangeStreamOperationType.Drop,
+                _ => ChangeStreams.ChangeStreamOperationType.Invalidate
+            };
+
+            evt.DocumentKey = ChangeStreams.ChangeStreamDocumentKeyResolver.Resolve(change.DocumentKey, change.FullDocument);
+
+            return evt;
+        }
+
+        #endregion
+
+        #region Aggregation
+
+        /// <summary>
+        /// Creates a new aggregation pipeline builder bound to this store's collection.
+        /// </summary>
+        /// <returns>A new <see cref="AggregationPipelineBuilder{T}"/> instance.</returns>
+        public AggregationPipelineBuilder<T> Aggregate()
+        {
+            if (Collection == null)
+            {
+                throw new InvalidOperationException("Cannot create aggregation pipeline: store is not configured. Call SetSettings first.");
+            }
+
+            return new AggregationPipelineBuilder<T>(Collection);
+        }
+
+        #endregion
+
+        #region Store-Level Aggregation
+
+        /// <summary>
+        /// Executes an aggregation query using MongoDB aggregation pipeline.
+        /// Translates <see cref="AggregateQuery{T}"/> into $match + $group + $project stages.
+        /// </summary>
+        public async Task<IReadOnlyList<AggregateResult>> AggregateAsync(
+            AggregateQuery<T> query,
+            CancellationToken ct = default)
+        {
+            if (Collection == null) return Array.Empty<AggregateResult>();
+
+            var pipeline = Aggregate();
+
+            // $match from filter
+            if (query.Filter != null)
+                pipeline.Match(query.Filter);
+
+            var (groupDoc, projection) = StoreAggregationHelper.BuildGroupStage(query);
+            pipeline.Group(groupDoc);
+            pipeline.Project(projection);
+
+            // Execute and map to AggregateResult
+            var bsonResults = await pipeline.ToListAsync(ct);
+            return StoreAggregationHelper.MapBsonResults(bsonResults);
+        }
+
+        #endregion
+    }
+}
