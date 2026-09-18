@@ -1,0 +1,47 @@
+using System;
+using Birko.Data.Models;
+
+namespace Birko.Models.Pricing
+{
+    /// <summary>Mixin interface for entities that reference a PriceGroup.</summary>
+    public interface IRelatedToPriceGroup : Data.Models.ILoadable<ViewModels.PriceGroup>
+    {
+        Guid? PriceGroupGuid { get; set; }
+    }
+
+    /// <summary>
+    /// Customer price group with percentage modifier.
+    /// </summary>
+    public class PriceGroup
+        : AbstractLogModel
+        , ILoadable<ViewModels.PriceGroup>
+        , ICopyable<PriceGroup>
+        , IDefault
+    {
+        public string Name { get; set; } = null!;
+        public decimal Percentage { get; set; }
+        public bool IsDefault { get; set; }
+
+        public virtual PriceGroup CopyTo(PriceGroup clone)
+        {
+            if (clone == null)
+            {
+                clone = new PriceGroup();
+            }
+            base.CopyTo(clone);
+            clone.Name = Name;
+            clone.Percentage = Percentage;
+            clone.IsDefault = IsDefault;
+            return clone;
+        }
+
+        public virtual void LoadFrom(ViewModels.PriceGroup data)
+        {
+            base.LoadFrom(data);
+            if (data == null) return;
+            Name = data.Name;
+            Percentage = data.Percentage;
+            IsDefault = data.IsDefault;
+        }
+    }
+}
