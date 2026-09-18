@@ -1,0 +1,189 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+
+namespace Birko.Models.Product.ViewModels
+{
+    public class Product
+        : Data.ViewModels.LogViewModel
+        , Data.Models.ILoadable<Birko.Models.Product.Product>
+        , Birko.Data.Models.ILoadable<Product>
+    {
+        public const string SKUCodeProperty = "SKUCode";
+        public const string BarCodeProperty = "BarCode";
+        public const string NameProperty = "Name";
+        public const string SlugProperty = "Slug";
+        public const string DescriptionProperty = "Description";
+        public const string CategoryProperty = "Category";
+        public const string ProductObjectProperty = "ProductObject";
+
+        public Product()
+        {
+            PropertyChanged += Product_PropertyChanged;
+        }
+
+        private string _SKUCode = null!;
+        public string SKUCode
+        {
+            get { return _SKUCode; }
+            set
+            {
+                if (_SKUCode != value)
+                {
+                    _SKUCode = value;
+                    RaisePropertyChanged(SKUCodeProperty);
+                }
+            }
+        }
+
+        private string _barCode = null!;
+        public string BarCode
+        {
+            get { return _barCode; }
+            set
+            {
+                if (_barCode != value)
+                {
+                    _barCode = value;
+                    RaisePropertyChanged(BarCodeProperty);
+                }
+            }
+        }
+
+        private string _name = null!;
+        public string Name
+        {
+            get { return _name; }
+            set
+            {
+                if (_name != value)
+                {
+                    _name = value;
+                    RaisePropertyChanged(NameProperty);
+                }
+            }
+        }
+
+        private string _slug = null!;
+        public string Slug
+        {
+            get { return _slug; }
+            set
+            {
+                if (_slug != value)
+                {
+                    _slug = value;
+                    RaisePropertyChanged(SlugProperty);
+                }
+            }
+        }
+
+        private string _description = null!;
+        public string Description
+        {
+            get { return _description; }
+            set
+            {
+                if (_description != value)
+                {
+                    _description = value;
+                    RaisePropertyChanged(DescriptionProperty);
+                }
+            }
+        }
+
+        private string _category = null!;
+        public string Category
+        {
+            get { return _category; }
+            set
+            {
+                if (_category != value)
+                {
+                    _category = value;
+                    RaisePropertyChanged(CategoryProperty);
+                }
+            }
+        }
+
+        private void Product_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (new[] {
+                    SKUCodeProperty,
+                    BarCodeProperty,
+                    NameProperty,
+                    DescriptionProperty,
+                    CategoryProperty,
+                    SlugProperty,
+                }.Contains(e.PropertyName)
+            )
+            {
+                RaisePropertyChanged(ProductObjectProperty);
+            }
+        }
+
+        public void LoadFrom(Birko.Models.Product.Product data)
+        {
+            base.LoadFrom(data);
+            if (data == null) return;
+
+            SKUCode = data.SKUCode;
+            BarCode = data.BarCode;
+            Name = data.Name;
+            Slug = data.Slug ?? string.Empty;
+            Description = data.Description;
+            Category = data.Category;
+            if (this is IProductManufacturer pm && data is Birko.Models.Product.IProductManufacturer dm)
+            {
+                pm.LoadManufacturers(dm.Manufacturer);
+            }
+
+            if (this is IProductProperties pp && data is Birko.Models.Product.IProductProperties dp)
+            {
+                pp.LoadProperties(dp.Properties);
+            }
+
+            if (this is IProductTags pt && data is Birko.Models.Product.IProductTags dt)
+            {
+                pt.LoadTags(dt.Tags);
+            }
+        }
+
+        public void LoadFrom(Product data)
+        {
+            base.LoadFrom(data);
+            if (data == null) return;
+
+            SKUCode = data.SKUCode;
+            BarCode = data.BarCode;
+            Name = data.Name;
+            Slug = data.Slug;
+            // CR-L315: straight-copy Description like every other field (and like the model→VM LoadFrom
+            // overload above). The previous "keep the longer Description" merge was an undocumented,
+            // surprising heuristic for a method named LoadFrom that left stale data when the source
+            // description was shorter.
+            Description = data.Description;
+            Category = data.Category;
+            if (this is IProductManufacturer pm && data is IProductManufacturer dpm)
+            {
+                pm.LoadManufacturers(dpm.Manufacturer);
+            }
+
+            if (this is IProductProperties pp && data is IProductProperties dpp)
+            {
+                pp.LoadProperties(dpp.Properties);
+            }
+
+            if (this is IProductTags pt && data is IProductTags dpt)
+            {
+                pt.LoadTags(dpt.Tags);
+            }
+        }
+
+        public override string ToString()
+        {
+            return string.Format("Name: {0}; BarCode: {1}; SKUCode: {2};", Name, BarCode, SKUCode);
+        }
+    }
+}
