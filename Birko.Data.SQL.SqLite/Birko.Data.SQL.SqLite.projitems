@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a00e9b88-4e24-40e4-aee1-f3833453aaa5</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.DataBase.Connector.SqLite</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\SqLiteConnector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\SqLiteRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncSqLiteRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\SqLiteModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncSqLiteModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncSQLiteStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\SQLiteStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\SqLiteIndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\SqLiteSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\SqLiteStoreFactoryOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\ISqLiteStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\SqLiteStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\SqLiteServiceCollectionExtensions.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="$(MSBuildThisFileDirectory)Database\Connectors\" />
+  </ItemGroup>
+</Project>
