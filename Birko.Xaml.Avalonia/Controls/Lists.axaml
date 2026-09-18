@@ -1,0 +1,33 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ── ListBoxItem — token hover/selected (used by lists, command palette, split page) ── -->
+  <ControlTheme x:Key="{x:Type ListBoxItem}" TargetType="ListBoxItem">
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadiusSm}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="root" Background="{TemplateBinding Background}"
+                CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#root">
+      <Setter Property="Background" Value="{DynamicResource BRowHoverBgBrush}" />
+    </Style>
+    <Style Selector="^:selected /template/ Border#root">
+      <Setter Property="Background" Value="{DynamicResource BColorPrimaryLightBrush}" />
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="Foreground" Value="{DynamicResource BColorPrimaryBrush}" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

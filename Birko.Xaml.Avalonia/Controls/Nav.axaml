@@ -1,0 +1,39 @@
+<!--
+  Navigation ControlThemes. Token-driven ({DynamicResource B*}), merged by Controls.axaml.
+
+  BBreadcrumbLink — a non-last, clickable crumb rendered as a text link (not a filled button): a
+  chrome-free Button whose content is drawn as secondary-colored text that turns primary + underlined
+  on hover, matching the web b-breadcrumb's `a` / `a:hover`. Applied in code by Breadcrumb.cs.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <ControlTheme x:Key="BBreadcrumbLink" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextSecondaryBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="FontSize" Value="{DynamicResource BTextSm}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <TextBlock x:Name="PART_Text"
+                   Text="{TemplateBinding Content}"
+                   Foreground="{TemplateBinding Foreground}"
+                   FontFamily="{TemplateBinding FontFamily}"
+                   FontSize="{TemplateBinding FontSize}"
+                   VerticalAlignment="Center" />
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ TextBlock#PART_Text">
+      <Setter Property="Foreground" Value="{DynamicResource BColorPrimaryBrush}" />
+      <Setter Property="TextDecorations" Value="Underline" />
+    </Style>
+    <Style Selector="^:disabled /template/ TextBlock#PART_Text">
+      <Setter Property="Opacity" Value="{DynamicResource BDisabledOpacity}" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

@@ -1,0 +1,41 @@
+<!--
+  Birko token restyle for Avalonia DataGrid (the `b-data-table` equivalent). DataGrid ships its theme
+  as Styles (not a ResourceDictionary), so this is a Styles file, not part of BirkoTheme.axaml. Add it
+  to Application.Styles AFTER FluentTheme:
+
+    <Application.Styles>
+      <FluentTheme />
+      <StyleInclude Source="avares://Birko.Xaml.Avalonia/Controls/DataGridStyles.axaml" />
+    </Application.Styles>
+
+  It pulls in DataGrid's own Fluent theme, then layers Birko design tokens over the high-value
+  surfaces (the header band, cells, grid lines) so a DataGrid reads as a Birko table.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+
+  <Style Selector="DataGrid">
+    <Setter Property="Background" Value="{DynamicResource BBgBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="GridLinesVisibility" Value="Horizontal" />
+    <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+  </Style>
+
+  <!-- Signature Birko header band -->
+  <Style Selector="DataGridColumnHeader">
+    <Setter Property="Background" Value="{DynamicResource BTableHeaderBgBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTableHeaderTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
+    <Setter Property="Padding" Value="12,0" />
+  </Style>
+
+  <Style Selector="DataGridCell">
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
+  </Style>
+</Styles>

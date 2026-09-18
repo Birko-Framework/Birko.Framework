@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Real Avalonia class-library assembly (EPIC-015 convention break): compiled AXAML through
+       .shproj/.projitems is fragile, so Birko.Xaml.* ship as actual assemblies. See CLAUDE.md. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Birko.Xaml.Avalonia</RootNamespace>
+    <AssemblyName>Birko.Xaml.Avalonia</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.3" />
+    <!-- Charts: LiveCharts2 (SkiaSharp) — modern/animated, MVVM-first, targets Avalonia + WPF. -->
+    <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Birko.Xaml.Core\Birko.Xaml.Core.csproj" />
+  </ItemGroup>
+
+</Project>

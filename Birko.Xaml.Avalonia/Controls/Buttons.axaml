@@ -1,0 +1,44 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ── Button — primary, token-driven ────────────────────────────────── -->
+  <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
+    <Setter Property="Background" Value="{DynamicResource BColorPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextInverseBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Padding" Value="16,8" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadius}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ContentPresenter x:Name="PART_ContentPresenter"
+                          Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          Foreground="{TemplateBinding Foreground}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          Padding="{TemplateBinding Padding}"
+                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                          Content="{TemplateBinding Content}"
+                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+      </ControlTemplate>
+    </Setter>
+    <!-- Hover/pressed change the Button's own Background property (not the template part
+         directly), so the ContentPresenter re-resolves it via the TemplateBinding above and a
+         consumer's property-level style (e.g. a class + :pointerover setter) can override it
+         normally. Styling PART_ContentPresenter directly used to outrank every consumer style. -->
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{DynamicResource BColorPrimaryHoverBrush}" />
+    </Style>
+    <Style Selector="^:pressed">
+      <Setter Property="Background" Value="{DynamicResource BColorPrimaryHoverBrush}" />
+    </Style>
+    <Style Selector="^:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Opacity" Value="{DynamicResource BDisabledOpacity}" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

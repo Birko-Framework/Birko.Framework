@@ -1,0 +1,69 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ── TreeView (b-tree-menu) ─────────────────────────────────────────── -->
+  <ControlTheme x:Key="{x:Type TreeView}" TargetType="TreeView">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+          <ItemsPresenter x:Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- ── TreeViewItem — chevron + token hover/selected + indented children ── -->
+  <ControlTheme x:Key="{x:Type TreeViewItem}" TargetType="TreeViewItem">
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Padding" Value="6,5" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel>
+          <Border x:Name="header" Background="Transparent"
+                  CornerRadius="{DynamicResource BRadiusSm}" Padding="{TemplateBinding Padding}">
+            <Grid ColumnDefinitions="16,*">
+              <ToggleButton x:Name="PART_ExpandCollapseChevron" Grid.Column="0"
+                            Focusable="False" Background="Transparent"
+                            RenderTransformOrigin="50%,50%">
+                <ToggleButton.Template>
+                  <ControlTemplate>
+                    <Border Background="Transparent" Width="16" Height="16">
+                      <Path Data="M0,0 L4,4 L0,8" Stroke="{DynamicResource BTextSecondaryBrush}"
+                            StrokeThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                  </ControlTemplate>
+                </ToggleButton.Template>
+              </ToggleButton>
+              <ContentPresenter Grid.Column="1" Content="{TemplateBinding Header}"
+                                ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                Foreground="{TemplateBinding Foreground}"
+                                VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+          <ItemsPresenter x:Name="PART_ItemsPresenter" IsVisible="{TemplateBinding IsExpanded}"
+                          Margin="16,0,0,0" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:empty /template/ ToggleButton#PART_ExpandCollapseChevron">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="^ /template/ ToggleButton#PART_ExpandCollapseChevron:checked">
+      <Setter Property="RenderTransform" Value="rotate(90deg)" />
+    </Style>
+    <Style Selector="^:pointerover /template/ Border#header">
+      <Setter Property="Background" Value="{DynamicResource BRowHoverBgBrush}" />
+    </Style>
+    <Style Selector="^:selected /template/ Border#header">
+      <Setter Property="Background" Value="{DynamicResource BColorPrimaryLightBrush}" />
+    </Style>
+    <Style Selector="^:selected /template/ ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="{DynamicResource BColorPrimaryBrush}" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>
