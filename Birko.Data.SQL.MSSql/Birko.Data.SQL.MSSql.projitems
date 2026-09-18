@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a376c990-b006-499b-b526-43025b988aaa</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.SQL</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Database\Connector\MSSqlConnector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\MSSqlRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMSSqlRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\MSSqlModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMSSqlModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncMSSqlStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MSSqlStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\MSSqlIndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MSSqlSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MSSqlStoreFactoryOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IMSSqlStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MSSqlStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\MSSqlServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
