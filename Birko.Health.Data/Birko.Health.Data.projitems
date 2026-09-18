@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>e4f5a6b7-c8d9-4e0f-b1a2-3c4d5e6f7a8b</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Health.Data</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)SqlHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MongoDbHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)RavenDbHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InfluxDbHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)VaultHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MqttHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SmtpHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)WebSocketHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SseHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)TcpHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CosmosDbHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)TimescaleDbHealthCheck.cs" />
+  </ItemGroup>
+</Project>
