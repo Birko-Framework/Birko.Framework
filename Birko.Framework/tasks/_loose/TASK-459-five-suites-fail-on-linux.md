@@ -3,7 +3,7 @@ id: TASK-459
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-18
@@ -89,32 +89,49 @@ every original case. A companion test pins the other side of the switch (on Unix
 string is not rooted and is accepted) so that reads as a decision rather than a gap; traversal is
 still refused by the `..` check on both platforms, which is what carries the security property.
 
-## 4. Intermittent, NOT reproduced — INSTRUMENTED, still open
+## 4. A test-isolation defect the attribute was meant to prevent — FIXED
 
 `Birko.Communication.REST.Tests` · `RestClientCacheTests.GetClient_ConcurrentAccess_DoesNotCorruptCache`
 
-Failed **once** in CI and has not reproduced: 5 clean runs in a Linux container, including
-CPU-limited, plus green on Windows. **No assertion message was captured**, because the workflow ran
-`dotnet test -v q`, which suppresses the detail.
+Failed **2 of 4 CI runs** and never once locally — 5 clean Linux runs including CPU-limited, plus
+green on Windows. The first two failures carried **no assertion message**, because the workflow ran
+`-v q`. The `.trx` artifact added for exactly this purpose answered it on the next occurrence:
 
-Ruled out by reading, not by guessing: `ConcurrentDictionary.GetOrAdd(key, factory)` may invoke the
-factory more than once under contention, but `TryAddInternal` returns the value **actually in the
-dictionary**, so every caller still receives the same instance and the test's
-`seen.Distinct().Should().HaveCount(40)` assertion is sound. What that does leave is discarded
-`RestClient` instances, each owning an undisposed `HttpClientHandler` + `HttpClient` — a plausible
-resource-pressure story on a 2-core runner, but **unverified and not to be treated as the cause
-without evidence**.
+> `Expected seen.Distinct() to contain 40 item(s), but found 80`
 
-**What was done instead of a speculative fix:** `build-and-test.yml` now writes a `.trx` per suite and
-uploads them as an artifact on failure, so the next occurrence carries its assertion text and stack.
+**Exactly double**, which is not contention noise — it is the cache being cleared **once**, mid-run,
+so the same 40 URIs resolved to fresh instances on the far side of the eviction.
 
-## Remaining acceptance
+`RestClient._clients` is `static`. `RestClientCacheTests` already carried
+`[Collection("RestClientCache")]` with the comment *"avoid interleaving with other tests that touch
+the static cache"* — but **xUnit serialises classes WITHIN a collection and runs different
+collections in PARALLEL**, so naming it on one of the two classes serialised nothing.
+`RestClientTests.ClearCache_EvictsAllEntries` was free to run concurrently and wipe the cache. The
+author's intent was right and its implementation reached one of the two places that needed it — the
+shape this file records repeatedly as *a rule enforced in one of two places*.
 
-1. When it recurs, read the `.trx` from the run artifact before changing anything.
-2. Then decide which it is: a real race, resource exhaustion from `GetOrAdd`'s discarded instances, or
-   a test that assumes more parallelism than a runner provides. **The remedies are opposite** — this
-   file's § Conventions records repeatedly that picking the wrong one ships a narrower bug.
-3. If it turns out to be the discarded instances, the fix is `ConcurrentDictionary<string,
-   Lazy<RestClient>>` with `LazyThreadSafetyMode.ExecutionAndPublication`, which constructs exactly
-   once per key. Do not apply that pre-emptively — it is a guess until the `.trx` says so.
-4. Do not weaken the assertion to get green.
+Fixed by putting `RestClientTests` in the same collection. **The product was never at fault**, and the
+earlier reading holds: `GetOrAdd`'s factory may run twice, but every caller still receives the stored
+instance, so the assertion was always sound. The `Lazy<T>` remedy was **not** applied — it would have
+been a plausible-looking fix for a cause that was not the cause.
+
+**A behavioural test cannot guard this** (the interleaving has to genuinely occur), so the guard is a
+source scan: every class touching the static cache must name the collection. Mutation-verified —
+removing the attribute reds exactly that test.
+
+> ⚠ The first version of that scan **failed its own mutation, 0 tests red**. These files explain the
+> defect at length, so their prose contains both the forbidden calls and the required attribute, and
+> scanning raw text let a comment satisfy the requirement. It now strips comment lines first. This
+> repo already records the same trap for `SqlitePoolIsolationTests` ("a guard that must NAME the
+> thing it forbids has to assemble the name, or it reports itself") — here it arrived from the other
+> side, through the string the guard *requires* rather than the one it forbids.
+
+## Outcome
+
+**All five fixed. One product defect, four test defects.** Worth stating because the instinct on
+seeing "5 tests fail on Linux" is to assume the code is wrong; it was wrong once, and that once was
+the one that ships to production.
+
+Kept from this: `build-and-test.yml` writes a `.trx` per suite and uploads it on failure. Two of the
+four findings here were diagnosed only from that artifact, having been invisible — one entirely
+nameless — in the console log.

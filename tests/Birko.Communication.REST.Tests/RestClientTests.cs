@@ -6,6 +6,17 @@ using Xunit;
 
 namespace Birko.Communication.REST.Tests;
 
+// TASK-459: this class calls RestClient.ClearCache() and RestClient.GetClient(), which operate on a
+// STATIC cache. RestClientCacheTests was already marked [Collection("RestClientCache")] with the
+// comment "avoid interleaving with other tests that touch the static cache" — but xUnit serialises
+// classes WITHIN a collection and runs different collections in PARALLEL, so naming the collection
+// on one of the two classes protected nothing. ClearCache_EvictsAllEntries below wiped the cache in
+// the middle of GetClient_ConcurrentAccess_DoesNotCorruptCache, which then saw exactly 80 distinct
+// instances where it expected 40 — the same 40 URIs resolved twice, once either side of the
+// eviction. It failed 2 of 4 CI runs and never once locally, because the interleaving needs the two
+// classes to genuinely overlap.
+// Both classes must name the collection, or neither is serialised against the other.
+[Collection("RestClientCache")]
 public class RestClientTests
 {
     #region Constructor
