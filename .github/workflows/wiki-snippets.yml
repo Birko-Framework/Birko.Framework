@@ -1,0 +1,92 @@
+# Compile the code in the wiki.
+#
+# WHY: the wiki is hand-written and nothing regenerates it, so it drifts - which is exactly what
+# happened to PREZENTACIA.md, the document it replaced (TASK-458). Building the snippets is the
+# cheap guard: it cannot tell you the prose is wrong, but it does tell you the code stopped
+# matching the framework.
+#
+# It earned its place on the first run. Compiling the pages found six errors that reading had not:
+# a migration example written against an ISchemaBuilder.AlterCollection that does not exist, an
+# IMigration implementation missing four of its six members, [IndexedField] without its required
+# name, a set-membership filter using an array (which on .NET 9+ binds to
+# MemoryExtensions.Contains(ReadOnlySpan<T>, T) and cannot appear in an expression tree),
+# AbstractModel.Guid being nullable, and one page using a single name for two different providers.
+#
+# HOW THE WIKI STEERS IT - both markers are HTML comments, so neither renders on GitHub:
+#
+#   <!-- verify:context ... -->   page-level setup prepended to every snippet on that page.
+#                                 Most blocks are fragments by design; they use `store` because
+#                                 the prose just introduced it. A guide should not have to be
+#                                 written for the compiler.
+#   <!-- verify:skip reason -->   before a block that genuinely cannot compile, e.g. one that
+#                                 references a type the READER writes. The reason is required.
+#
+# The wiki is a SEPARATE repository (Birko.Framework.wiki.git), so it is checked out here.
+
+name: wiki-snippets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ci/wiki-snippets/**'
+      - '.github/workflows/wiki-snippets.yml'
+      - 'Birko.*/**'          # an API change can invalidate the guide
+  schedule:
+    - cron: '30 2 * * *'      # nightly: the wiki can change without touching this repo
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the framework
+        uses: actions/checkout@v4
+        with:
+          path: birko/Framework
+
+      # Sandbox is registered in the .slnx and its aggregator is the import list the wiki
+      # tells readers to copy, so it is the right thing to verify against.
+      - name: Check out the Sandbox consumer
+        uses: actions/checkout@v4
+        with:
+          repository: Birko-Framework/Birko.Sandbox
+          path: birko/Consumers/Birko.Sandbox
+          token: ${{ secrets.BIRKO_CI_TOKEN || github.token }}
+
+      - name: Check out the wiki
+        uses: actions/checkout@v4
+        with:
+          repository: Birko-Framework/Birko.Framework.wiki
+          path: wiki
+          token: ${{ secrets.BIRKO_CI_TOKEN || github.token }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Extract the snippets
+        run: python birko/Framework/ci/wiki-snippets/extract.py wiki birko/Framework/ci/wiki-snippets
+
+      # Reuse the Sandbox aggregator's import list rather than keeping a second copy that drifts.
+      - name: Build the import list from the Sandbox aggregator
+        run: |
+          python - <<'PY'
+          import re, pathlib
+          src = pathlib.Path("birko/Consumers/Birko.Sandbox/Birko.Framework/Birko.Framework.csproj").read_text(encoding="utf-8")
+          imports = re.findall(r'<Import Project="\$\(BirkoSrc\)\\[^"]+"[^/]*/>', src)
+          packages = re.findall(r'<PackageReference [^/]*/>', src)
+          body = "\n".join("  " + i for i in imports)
+          pkgs = "\n".join("    " + p for p in packages)
+          pathlib.Path("birko/Framework/ci/wiki-snippets/Imports.props").write_text(
+              "<Project>\n  <ItemGroup>\n" + pkgs + "\n  </ItemGroup>\n" + body + "\n</Project>\n",
+              encoding="utf-8")
+          print("import list: %d projects, %d packages" % (len(imports), len(packages)))
+          PY
+
+      - name: Compile
+        env:
+          BirkoSrc: ${{ github.workspace }}/birko/Framework
+        run: |
+          dotnet build birko/Framework/ci/wiki-snippets/snippets.csproj --nologo \
+            || { echo "::error::the wiki's code no longer compiles - see the errors above."; exit 1; }

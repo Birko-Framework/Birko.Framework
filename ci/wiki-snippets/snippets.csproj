@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Compiles the C# extracted from the wiki by extract.py.
+
+       It imports the SAME set the Birko.Sandbox aggregator uses, generated into
+       Imports.props by the workflow, because the wiki tells readers to start from that list -
+       so the guide is verified against exactly what it recommends. -->
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);CS0219;CS0168;CS8321;NU1504</NoWarn>
+  </PropertyGroup>
+
+  <Import Project="Imports.props" Condition="Exists('Imports.props')" />
+
+</Project>
