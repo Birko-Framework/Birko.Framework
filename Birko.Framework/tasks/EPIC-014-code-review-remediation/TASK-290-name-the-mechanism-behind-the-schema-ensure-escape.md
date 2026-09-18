@@ -1,0 +1,410 @@
+---
+id: TASK-290
+parent: EPIC-014
+feature: FEATURE-014
+# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: done
+priority: P1
+assignee: unassigned
+created: 2026-09-02
+depends-on: []
+blocks: []
+related: [TASK-270, TASK-276, TASK-285, TASK-286, TASK-287, TASK-288, TASK-289, TASK-292, TASK-296]
+findings: []
+pr: (investigation; the reproduction and probes are test-only. The remedy is TASK-296)
+github-issue: null
+jira-key: null
+affects: [Birko.Data.SQL, Birko.Data.SQL.SqLite]
+---
+
+# Name the mechanism behind the schema-ensure escape
+
+## The question, and why five landed changes have not answered it
+
+> **Why does a statement report a table missing that this connector demonstrably created and committed,
+> while the store's init gate had passed?**
+
+This is the open half of consumer **Symbio TASK-602** (its criterion 4). Five framework changes have
+landed on this thread and all of them work — [[TASK-285]] (a count of a missing table answers `0`),
+[[TASK-286]] (the two-timestamp annotation), [[TASK-287]] (`AbstractConnector.SchemaEscapes` +
+`OnSchemaEscapeDetected`), [[TASK-288]] (a vanished table heals on the next attempt), [[TASK-289]]
+(`SubscriberFailures`). Symbio subscribes and the channel fires. Every one of them makes the *consequence*
+correct or observable. None of them says what happens.
+
+⚠ **Thirteen hypotheses have already died by code reading** (Symbio TASK-602, rounds 1-7). This task does
+not add a fourteenth. It reproduces the condition **inside this repo** and then measures the three facts
+that discriminate between the survivors.
+
+## What is already MEASURED — do not re-derive it
+
+Reproduced on the consumer side 2026-09-02, 4 fresh-database cycles out of 4, 12 annotated escapes,
+8 tables, 5 modules (harness: Symbio `tools/reproduce-schema-escape.mjs`, commit 26686a52):
+
+- **All twelve are `SELECT count(*)`.** WARNING: see the corrections below — this is an instrument
+  artefact.
+- **The trigger is LOAD, not timing.** ~190 *different* cold tables touched concurrently against one
+  connector and one file. Same-table concurrency reproduces nothing (it serialises on that store's
+  `_initLock`, `AbstractAsyncStore.cs:39`). An idle API reproduces nothing: cold-table schema-ensure costs
+  1-5 ms there, so there is no window to aim at — the 219 ms window seen in the field was a property of
+  the load, not of schema-ensure.
+- **Escapes arrive in sub-microsecond pairs on DIFFERENT tables**, twice in one cycle:
+
+      BreedingRecords  created ...00.8261120   missing ...00.8652698
+      FeedingLogs      created ...00.8305398   missing ...00.8652691   <- 0.7 us apart
+      Movements        created ...00.8394097   missing ...00.8698605
+      HealthRecords    created ...00.8346542   missing ...00.8698618   <- 1.3 us apart
+
+  Windows 28-66 ms (792 ms under heavier load).
+- `PRAGMA journal_mode` is **`delete`**, not `wal`. `read_uncommitted` is `0`.
+- **`SQLite Error 5` = 0 in all five cycles.** WARNING: see the corrections below — this does not mean
+  what it was read to mean.
+- Every escape came from a **GET list route whose service opens no `ITransactionBoundary`**, so no
+  rollback was involved.
+- The escapes served **zero 500s** — 200 with a silently wrong count, because TASK-285 answers a missing
+  table with `0`. Watching for errors will not find this.
+
+## Two corrections found by reading this repo, before any measurement
+
+Both change how the existing evidence should be read. Neither is a new hypothesis about the cause.
+
+### 1. "All twelve are counts" is a property of the INSTRUMENT, not of the anomaly
+
+A read can never produce an escape record. `AbstractConnector.RunReaderCommand` and `RunReaderCommandOn`
+catch the condition at the reader itself — `catch (Exception ex) when (IsMissingTableException(ex))` then
+`yield break` — so a `SELECT` never reaches `InitException` and therefore never reaches `OnException`,
+`EnsureSchemaAndReport`, TASK-286's annotation, TASK-287's record or TASK-288's generation bump. Only
+**counts** (`DoCommand` then `RunCommand` then `InitException`) and **writes** can be seen at all.
+
+So the escape population is (counts union writes), and a GET list route emits exactly one of those two:
+the count. **The statement shape therefore carries no information about the mechanism** — a `SELECT` on
+the same table in the same instant would have returned an empty list and left no trace. Any reasoning of
+the form "it is specific to the scalar path" is unfounded, and TASK-602's own round-5 framing leans that
+way.
+
+### 2. `Error 5 = 0` is not evidence of an absence of lock contention
+
+`SqLiteSettings.GetConnectionString()` emits `Default Timeout={CommandTimeout}` with `CommandTimeout = 30`,
+and `RetryPolicy` defaults to `RetryPolicy.None` so `ExecuteWithRetry` does not retry. If
+Microsoft.Data.Sqlite absorbs `SQLITE_BUSY` / `SQLITE_LOCKED` inside that timeout — **to be measured, not
+assumed** — then contention is invisible by construction and a zero count is what a blind instrument
+reports. That matters because `Error 5 = 0` is currently used *in support of* the stale-image hypothesis
+("a lock-contention explanation would not fit"). If the driver swallows BUSY, the support is void and
+lock contention returns to the candidate list.
+
+### And one hazard that must be excluded before the pairs are read as one mechanism
+
+`CreatedTablesNamedIn` matches a recorded table name against the statement by **substring**:
+`commandText.Contains(kvp.Key, StringComparison.OrdinalIgnoreCase)`. Its own comment justifies that with
+*"a false positive costs one extra line in an exception nobody sees unless something already went wrong"*
+— and **that justification stopped being true at TASK-288**, which made the same answer drive
+`SchemaGeneration` and hence every store's `CanTrustRememberedInitialization`.
+
+Measured against Symbio's 244 `[Table("...")]` declarations, three of the eight escaped tables are proper
+substrings of another table:
+
+| recorded name | is a substring of |
+|---|---|
+| `Movements` | `StockMovements` |
+| `Reservations` | `StockReservations`, `TableReservations` |
+| `Events` | `AlarmEvents` |
+
+So a count on cold `StockMovements` annotates as anomalous on the strength of `Movements` having been
+created. The consumer's records quote only the created-name half for the storm cycles, so this is
+**unexcluded for up to 5 of the 12 escapes**. The micro-second pair that matters survives it —
+`BreedingRecords`, `FeedingLogs` and `HealthRecords` are substrings of nothing — so the multiplicity
+finding stands. But two things follow:
+
+- the escape **counts** are contaminated, and
+- a *false* anomaly bumps `SchemaGeneration`, which invalidates the remembered init of **every** store on
+  that connector, so ~190 stores re-run `CREATE TABLE IF NOT EXISTS` under `lock(_lock)` while their
+  counts wait. That is a **positive feedback loop keyed on load**, which is exactly the profile the
+  trigger has. Whether it is cause, amplifier or noise is what a controlled reproduction can separate —
+  which is why the reproduction below uses fixed-width table names with no substring relations.
+
+## The surviving hypotheses
+
+| # | Hypothesis | What would distinguish it |
+|---|---|---|
+| A | One statement answered against a **schema image older than those `CREATE TABLE`s** — a reader holding SHARED across a writer's RESERVED reads the pre-commit page 1, so *every* table created since is absent, which makes several tables failing together natural | the failing connection's `PRAGMA schema_version` is **behind** the current value |
+| B | Lock contention absorbed by the driver's busy handling, surfacing as something other than `Error 5` | reproduce with `Default Timeout` at 0/1 and see whether BUSY appears where the escape was |
+| C | A connection carrying an **already-open transaction** (pooled handle, or an ambient entry) so the statement runs in a snapshot older than its own store's DDL | a transaction is open on the failing connection, and it started before the create |
+| D | The substring matcher fabricating the anomaly, with TASK-288's invalidation amplifying it into a storm | fires with substring-colliding names and not with fixed-width ones |
+| E | **Correct SQLite behaviour under concurrent DDL, and the consumer must not do that** | A survives measurement and no framework change can remove it |
+
+WARNING: **E is a legitimate outcome and must be stated plainly if it is the answer**, not left implied —
+it changes what Symbio should do rather than what this framework should ship.
+
+## What to measure, in order
+
+### Step 0 — reproduce it in this repo, before touching production code
+
+`Birko.Data.SQL.SqLite.Tests`: N (~200) distinct entity types over **one** SQLite file and **one** shared
+connector, every store first-touched concurrently, then `CountAsync` on each. Score on the **record**
+(`connector.SchemaEscapes`), never on a log line or a thrown exception, and count the benign control
+(unannotated `no such table`) in the same run — a zero-escape result means nothing without it.
+
+Constraints already known to matter:
+
+- **~190 *distinct* cold tables, not one table hit 190 times.** Same-table concurrency serialises on
+  `_initLock` and reproduces nothing.
+- **Fixed-width table names** (`Probe000` ... `Probe199`), so no name is a substring of another and
+  hypothesis D cannot contaminate the result. A second run with deliberately colliding names is how D
+  gets measured rather than assumed.
+- Its own database file and its own connector-cache entry, per `ConnectorCacheTests` /
+  `VanishedTableHealingTests` — a shared connector lets one test's escape change what the next measures.
+- 200 model types are needed. Either a checked-in generated `.cs` or `TypeBuilder`; decide when writing it
+  and record which and why.
+
+**If Step 0 does not fire, stop and report that.** Everything below is speculative instrumentation until
+it does, and shipping public surface to chase a condition this repo cannot produce is the wrong trade.
+
+### Step 1 — the three probes, once there is something to point them at
+
+Extend the escape record with the three facts that settle A / B / C:
+
+1. **connection identity** — `RuntimeHelpers.GetHashCode` on the `DbConnection`, plus whether it came from
+   the pool. Do the paired escapes share one connection?
+2. **whether a transaction was already open on that connection**, and since when.
+3. **`PRAGMA schema_version` on the failing connection at failure time vs. the current value.** The
+   decisive one, and cheap: a cookie that is *behind* proves A outright instead of inferring it.
+
+Two plumbing constraints, both already visible in the code:
+
+- `EnsureSchemaAndReport` is reached through `InitException(ex, commandText)` and **has no access to the
+  connection**. `InitException` is `public virtual` and `OnException` is a public delegate type a consumer
+  subscribes to, so widening either signature is a breaking change — and per [[TASK-278]] adding a
+  parameter to a `public virtual` silently orphans existing overrides. The capture therefore has to happen
+  at the failure site (`RunCommand`'s catch, inside the `using`, where the connection is still alive) and
+  travel to the handler by some other route. Shape decided in Step 1, not now.
+- `PRAGMA schema_version` is SQLite-only, so it is a provider override returning null on the base — the
+  `SupportsTransactionalDdl` / `FoldsUnquotedIdentifiers` family. And it must run **only in the anomalous
+  branch**: the benign path is ~245x more common per bring-up and has to stay free.
+
+### Step 2 — name it, then decide whether anything should change
+
+## Acceptance
+
+- [x] The mechanism is **named**, with a measurement that distinguishes it from the alternatives above —
+      a statement on a pooled `sqlite3` handle answered from a schema image older than a committed
+      `CREATE TABLE`. Distinguished by a single-variable control (`Pooling=False`: 0 of 4 runs against
+      7 of 7) and by a synchronous observation that the table **is** in the file at failure time.
+- [x] A framework-level reproduction exists in the tree and fires reliably — 7 of 7 runs, 2-9 escapes
+      each, with the unpooled variant as its control. ⚠ Its escape **count** is deliberately not asserted
+      (it is a race); what is asserted is the classification of whatever fires, plus 0 on the control.
+- [x] The two corrections were confirmed by measurement in Round 1, in writing.
+- [x] Hypothesis D measured and fixed — [[TASK-293]]. The reproduction uses fixed-width names so that
+      channel cannot account for any of Round 2's escapes.
+- [x] No fix landed here, so neither contract was touched: the count path still answers `0` (TASK-285) and
+      writes still report (TASK-277). The remedy is [[TASK-296]], filed with the measurement.
+- [x] The answer is **not** "correct SQLite behaviour the consumer must avoid", and that is said plainly:
+      it is a driver-level staleness that the framework's connection-per-statement pattern exposes, with a
+      measured remedy. ⚠ The internal reason inside SQLite/Microsoft.Data.Sqlite is **not** measured and is
+      not guessed at.
+
+## Out of scope
+
+- **`EnsureSchemaAndReport` rewraps a `TaskCanceledException` as an unhandled 500.** [[TASK-291]] owns it.
+- Whether the connector cache should hold per-caller state at all — [[TASK-270]].
+- The unidentified `Birko.Data.SQL.Tests` flake — [[TASK-276]], which also hypothesised about
+  `DataBase.GetConnector` sharing.
+
+---
+
+## Round 1 — 2026-09-02: one mechanism NAMED and fixed, four hypotheses killed, the consumer's path still open
+
+Worked in this repo with a framework-level harness, plus live PostgreSQL 16 / MySQL 8.4 / SQL Server 2022
+and on-disk SQLite. **Criterion 4 is not satisfied.** What follows is what is now settled, so a later
+round does not re-derive it.
+
+### A mechanism that produces the exact signature — found, reproduced, fixed ([[TASK-292]])
+
+The **per-store transaction door** (`SetTransactionContext`) remembered a schema-ensure that had been
+rolled back, because `AbstractAsyncStore` evaluates `CanRememberInitialization` *after* `InitCoreAsync`
+returns while `InitCoreAsync` holds that door's scope only for its own duration. So
+`DdlSurvivesRollback` answered `true` about a create sitting in a caller's still-open transaction.
+Measured on SQLite with **no concurrency and no `DROP`**: the next count answered `0` with **one
+anomalous escape recorded** and `SchemaGeneration` 0 → 1; the next write threw carrying TASK-286's
+annotation. Red on SQLite, PostgreSQL and SQL Server; green on MySQL, whose DDL commits itself.
+
+⚠ **It is NOT the consumer's mechanism, and that is the honest result.** Symbio reaches transactions
+through `SqlTransactionBoundary` → Birko's `SqlUnitOfWork` — the ambient door, never affected — and its
+own `TransactionBoundaryTests` explicitly rejects `SetTransactionContext` for a singleton store. Its 12
+escapes came from GET routes with no boundary at all. So this closes a real hole that manufactures the
+signature, and leaves the filed question open.
+
+### The framework-level reproduction exists and does NOT reproduce the anomaly
+
+`ColdTableStormTests` (opt-in via `BIRKO_STORM`; the positive control is not gated): 200 distinct cold
+entity types, one shared connector, one SQLite file, all released simultaneously, then `COUNT` +
+`SELECT`, plus a write-mixed variant. Both shapes reach the condition — `created=200` — and record
+**0 escapes**. What they produce instead is **6-7 `SQLite Error 5` failures per run**, all on the count
+path:
+
+    [read-storm] escapes=0 generation=0 created=200 failures=6 indexFailures=0
+      FAIL x1 Exception: SELECT count(*) as count FROM "Probe100" AS Probe100
+              <- SqliteException[sqlite 5]: SQLite Error 5: 'database is locked'.
+
+Two things follow, and the second is a finding in its own right:
+
+- the harness is **more** contended than the consumer's (whose Error 5 was 0), so its shape is right and
+  its *ratio* is not — a later round should reduce per-operation contention rather than add more of it;
+- **a count that hits lock contention is a 500 on every provider.** `EnsureSchemaAndReport` rewraps any
+  exception, `IsMissingTableException` is false for Error 5, and `RetryPolicy` defaults to `None`. So
+  TASK-285 made a *missing* table answer `0` while a *busy* database still faults. Sibling of
+  [[TASK-291]]; not filed separately pending a decision on whether a retry or a wait is wanted there.
+
+### Hypotheses killed by measurement (`SqliteSchemaVisibilityProbes`, in the tree)
+
+| # | Hypothesis | Verdict |
+|---|---|---|
+| 14 | A pooled connection keeps a stale schema cache, so a committed create is invisible | ✗ **killed.** An already-open connection that had read and cached the schema sees a committed `CREATE TABLE` immediately; `PRAGMA schema_version` moves 0 → 1 and the read succeeds. SQLite re-validates the cookie at the start of every statement |
+| 15 | A rollback journal that cannot be deleted is replayed as HOT, undoing a committed create — the only candidate that explains several tables vanishing together, since `sqlite_master` rows share pages | ✗ **killed.** Holding the `-journal` open across the commit does undo it (the table is absent after reopening) — but the **commit fails loudly with `SQLite Error 10: 'disk I/O error'`**, so the writer is never told it committed and `RecordTableCreated` is never reached. It cannot produce "recorded created but absent" |
+| 16 | The consumer's leading hypothesis: a reader holding SHARED across a writer's commit reads a pre-commit image of a **committed** create | ✗ **substantially weakened.** In rollback-journal mode there is no snapshot to hold: a reader inside an open read transaction **blocks the writer's commit** — measured, the writer failed with `SQLITE_BUSY(5)`, so the create never committed at all. A committed create cannot be invisible to anyone |
+| 17 | The escape is a race between the failure and its *classification* — the create lands in the microseconds between `ExecuteScalar` throwing and `DescribeSchemaEscape` reading `_tablesCreated`, making the anomaly false | ✗ **killed by the consumer's own numbers.** Its windows are **28-66 ms**, i.e. the create was recorded tens of milliseconds *before* the statement was described. The failure→description path is microseconds |
+
+**And the baseline that makes the µs-pairs legitimate rather than paradoxical is now measured:** an
+**uncommitted** create in another connection's open transaction reads as `SQLITE_ERROR 1: no such table`
+— **not** `SQLITE_BUSY`. That is the one shape that yields "a missing table with no lock error", and it
+is what the consumer's `Error 5 = 0` is consistent with.
+
+### The two corrections, resolved
+
+1. **"All twelve are counts" is an instrument artefact — CONFIRMED.** Both reader paths catch
+   `IsMissingTableException` at the reader and `yield break`, so a `SELECT` cannot reach
+   `EnsureSchemaAndReport`. Only counts and writes are visible to the channel, and a GET list route emits
+   exactly one of the two.
+2. **`Error 5 = 0` is not evidence of an absence of contention — CONFIRMED, with the mechanism named.**
+   `Default Timeout=30` is honoured: the storm's Error 5 failures arrive after roughly 30 s of waiting,
+   so BUSY is absorbed up to that ceiling and invisible below it. A zero count means contention never
+   exceeded 30 s, not that there was none.
+
+### Where the remaining candidates now stand
+
+The probes leave a sharp constraint: **a committed create cannot be invisible, and a create whose commit
+failed is never recorded.** So an anomalous escape on the ambient door requires either
+
+- **`_initialized == true` while the table is absent** — the TASK-292 residue (fixed, and not Symbio's
+  door), a `DROP` or rollback (excluded by the consumer for its GET routes), or an `InitCore` that
+  completes without issuing the DDL; or
+- **the recorded create was never committed** — which on the ambient door means the boundary was still
+  open 28-66 ms later, i.e. a *concurrent* boundary-holding flow, which the consumer's GET-only storm did
+  not have.
+
+The option nothing has excluded is the third of the first group: **`CreateTable` completing without
+issuing any DDL and without raising.** `CreateTable(Type[])` → `LoadTables` skips a type whose table has
+no fields, and `CreateTable(IDictionary<…>)` skips an empty field set — silently. Note the shape of the
+prediction, because it is falsifiable: on that path `RecordTableCreated` is **not** reached either, so
+such an escape must annotate as *"NO recorded CREATE TABLE"*, which is the benign wording. Measure it
+before believing it either way.
+
+### Deliberately not done
+
+- **The three probe fields** (connection identity, open-transaction state, `PRAGMA schema_version` vs
+  current). Step 0 says not to ship public surface for a condition this repo cannot yet produce, and it
+  cannot. Probe 14 also removes most of what the `schema_version` comparison would have bought: there is
+  now no known way for it to be behind.
+- **A storm shape tuned to lower contention**, several concurrent callers per table, and repeated cycles.
+  That is the obvious next experiment and the honest place for the next round to start.
+- **Hypothesis D (the substring matcher).** Not measured. It remains a live false-positive channel and it
+  now also moves `SchemaGeneration`, which invalidates every store on the connector — under load a
+  positive feedback loop. Three of the consumer's eight escaped tables sit on such a relation.
+
+---
+
+## Round 2 — 2026-09-02: the mechanism is NAMED, with a controlled variable
+
+> **A statement on a POOLED `sqlite3` handle is answered from a schema image older than a `CREATE TABLE`
+> that another connection has already committed.** Disabling Microsoft.Data.Sqlite's connection pooling
+> eliminates it entirely.
+
+Criterion 4 is satisfied. The evidence is a reproduction in this repo, a synchronous observation of the
+file at failure time, and a single-variable control.
+
+### The reproduction, and the ingredient Round 1 was missing
+
+`ColdTableStormTests.TheTunedStorm_SmallerWavesWithSeveralCallersPerTable` — 200 distinct cold entity
+types, one shared connector, one SQLite file, driven in **waves of 24 tables × 3 concurrent callers per
+table** rather than 200 at once.
+
+⚠ **The ingredient was NOT more contention — it was several callers per table.** Round 1's 200-at-once
+storm produced 6-7 `SQLite Error 5` per run and **0** escapes; it was *more* contended than the condition,
+saturating the 30 s command timeout. Three callers per table is the consumer's actual profile (its
+clearest cycle had three concurrent `GET /movement-codes`), and it matters because a caller that waits on
+another's `_initLock` proceeds to its statement the **instant** that init returns — so it counts a table
+whose create is milliseconds old.
+
+| variant | runs | escapes | `created` | other failures | duration |
+|---|---|---|---|---|---|
+| pooled (the framework's default connection string) | **7** | **2, 8, 8, 6, 9, 8, 5** | 200/200 | **0** | 34-41 s |
+| `Pooling=False`, nothing else changed | **4** | **0, 0, 0, 0** | 200/200 | **0** | **15-16 s** |
+
+It matches the consumer's signature on every axis that was recorded: all `SELECT count(*)`; created→missing
+windows of **19-30 ms** against its 28-66 ms; **zero** thrown failures, so each escape served a silently
+wrong `0`; and **no `SQLite Error 5`**, which is what its `Error 5 = 0` was consistent with.
+
+⚠ **Fixed-width probe names (`Probe000`…`Probe199`) mean no name is a substring of another**, so
+[[TASK-293]]'s false-positive channel cannot account for any of these. That was designed in before the
+fix existed and is why these numbers are usable.
+
+### The observation that settles what kind of failure it is
+
+`OnSchemaEscapeDetected` is raised **synchronously** from inside `EnsureSchemaAndReport`, so a handler
+runs while the failing flow is still on the stack. The handler opens its **own** connection and asks
+`sqlite_master`:
+
+```
+OBSERVED [Probe026] presentNow=True schemaVersionNow=48 tablesInFileNow=48
+OBSERVED [Probe048] presentNow=True schemaVersionNow=72 tablesInFileNow=72
+OBSERVED [Probe054] presentNow=True schemaVersionNow=72 tablesInFileNow=72
+```
+
+**`presentNow=True` on every escape.** The table is in the file at the moment the count says it is not. So
+nothing removed it, nothing rolled it back, and the create was durable — this is a **stale read**, not a
+missing table. That kills the whole "something removed it" family, which is where hypotheses 1-13 and
+TASK-292 all lived.
+
+Note it needed **no framework change at all**: Round 1's plan called for three probe fields, and the one
+that mattered turned out to be reachable from the existing event.
+
+### Two more hypotheses killed on the way
+
+| # | Hypothesis | Verdict |
+|---|---|---|
+| 18 | `InitCore` completes without issuing any DDL — `LoadTables` skips a type with no metadata, so a store could record itself initialised over a table that was never created | ✗ **killed, and the prediction held.** `SilentNoOpSchemaEnsureTests`: an unmapped entity's `InitAsync` does return silently with 0 tables in the file — but `TablesCreated` stays empty, so the failure is the **benign** branch and cannot be the anomaly. Worth knowing separately: the next operation throws `NullReferenceException`, so it is loud rather than silent — a poor error, not a quiet wrong answer |
+| 19 | A boundary holding an **uncommitted** create, which Round 1 measured reads as `no such table` with no lock error — the one interleaving that could produce the anomaly with nothing removed | ✗ **killed by measurement rather than by the code reading Round 1 offered.** A concurrent reader gets `SQLITE_BUSY(5)`: its own schema-ensure must take the write lock first and blocks on the boundary holder. It never reaches the uncommitted image |
+
+### What is NOT established, said plainly
+
+⚠ **The internal reason inside SQLite or Microsoft.Data.Sqlite is not measured, and this section does not
+guess at it.** What is measured is that pooling is the difference. A raw-driver probe
+(`SqliteSchemaVisibilityProbes.APooledConnectionCanAnswerFromAStaleSchemaImage`) with the framework's
+shape — a connection per `CREATE TABLE`, a connection per count, pooling on, readers targeting the newest
+committed table — **did not reproduce it** in 200 creates. So it needs something about the framework's
+pattern beyond "pooled connection-per-statement": most likely the number of *concurrent* DDL transactions
+from distinct connections (24 flows serialised by the connector's DDL lock, plus each table's index DDL),
+against many short-lived pooled handles. That probe is kept, with its negative result, so the next attempt
+does not repeat it.
+
+The datum that would close this completely is the **failing** connection's own `PRAGMA schema_version`,
+and it is the one thing still out of reach without framework plumbing — the raw probe was written to get
+it and found no failure to read it from.
+
+### What follows, and what deliberately did not happen here
+
+`Pooling=False` is a one-line change to `SqLiteSettings.GetConnectionString()`, it eliminates the defect in
+this measurement, and it is **2.4× faster** in this workload — which is worth stating because pooling is
+normally assumed to be the performance choice. It is nevertheless a change to the shipped default
+connection behaviour of every SQLite consumer, so it is **filed as [[TASK-296]] rather than made here**:
+the blast radius (steady-state throughput, file-handle churn, `ClearAllPools` interactions, whether WAL
+would be the better answer) needs its own measurement, and this task's job was to name the mechanism.
+
+Not done, deliberately:
+
+- **WAL as an alternative control.** WAL has a genuinely different snapshot mechanism, so it is the other
+  candidate remedy — but `journal_mode` is not a connection-string keyword, so it needs a PRAGMA on open,
+  which is framework plumbing. TASK-296's business.
+- **Re-running the consumer's harness.** Its 12 escapes predate [[TASK-293]], so up to 5 may have been
+  fabricated by the substring matcher. That re-measurement is consumer-side and belongs to Symbio
+  TASK-602; nothing here depends on it, since this reproduction has clean names by construction.
+- **Any change to the count path.** [[TASK-294]] still owns the fact that a count under lock contention
+  faults, which this round observed again in the boundary probe.

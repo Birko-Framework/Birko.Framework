@@ -1,0 +1,747 @@
+---
+id: STORY-026
+parent: EPIC-014
+status: in-progress
+created: 2026-06-18
+source: CODE-REVIEW-AUDIT-2026-06-17.md
+severity: medium
+finding-count: 275
+finding-ids: CR-M001 …
+---
+
+# Medium findings
+
+## Progress
+
+**267 / 275 triaged** (as of 2026-07-14). **CR-M166** was reclassified out of the Docker pile and
+**closed offline** after [TASK-058](../../_loose/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md)
+fixed the underlying `SqLiteConnector` AUTOINCREMENT DDL bug — the SQL sync-store CRUD now round-trips
+on SQLite. Remaining 8 open are all Docker/live-server (STORY-042). Verify-first paid off repeatedly: several test-gap findings
+were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+**Batch 58 (2026-07-13):** closed the last three offline-runnable findings — the view-SELECT-builder
+refactor (**M140 + M151**) and the Sync core test-gap (**M157**). M140/M151: extracted the ~140-line
+duplicated view-SELECT builder into a shared `ViewSelectSqlBuilder` in Birko.Data.SQL.View, parameterized
+by a quote func + optional table-qualifier; the base connector, the MSSql SCHEMABINDING builder, and the
+migration `ViewSqlGenerator` now share one implementation (3 copies → 1). M157: verify-first (bidirectional/
+NewestWins-nullable/cancellation already covered), added delete-propagation (sync, 4) + full AsyncSyncProvider
+coverage (8, incl. a new async in-memory store double since Birko.Data.InMemory is sync-only). **Every finding
+runnable without Docker is now closed;** the remaining 31 open all need a live DB/broker (see the deferred pile).
+
+**Batch 59 (2026-07-13) — re-triage correction + offline sweep round 2:** the "all 31 need Docker"
+claim was wrong; many open findings had a real offline-doable component. Closed **13** across 5 clusters:
+Health (**M191** Azure OCE-swallow, **M192** Health.Data HttpClient dispose ×6, **M194** new
+Birko.Health.Redis.Tests), Messaging.Razor (**M211** CancellationToken, **M212** verify-first),
+SQL.View (**M146** SqLite.View ViewExistsAsync, **M149** Auto-mode cache only-cache-positive),
+MSSql (**M136** RemoteSettings conn-string unification, **M141** indexed-view API tests),
+TimescaleDB (**M176** RemoteSettings-ctor routing, **M177** hypertable-SQL/settings tests, **M178** new
+Birko.Data.TimescaleDB.ViewModel.Tests), and Sync (**M158** Cosmos ConvertToCosmosItem null-Guid NRE).
+New test projects: Birko.Health.Redis.Tests + Birko.Data.TimescaleDB.ViewModel.Tests (registered +
+git-initialized). **Reclassified M159/M164** (Cosmos/Raven sync-store *interface* refactors) into the
+Docker Sync-backend cluster — they touch live-only stores and changing the interface shape can't be
+verified without running the sync provider, so they belong with M160/M165, not the offline sweep.
+Remaining 18 open: the Docker/live-server pile (ES/Cosmos/Raven/InfluxDB CRUD, live MSSql/Postgres,
+InfluxDB genuine-async) + the bucket-B items whose fix is offline but full verification needs infra.
+
+**Batch 60 (2026-07-13) — bucket B (offline fix / infra-gated verification):** closed **9** more.
+Test-gaps: **M143** (new Birko.Data.SQL.PostgreSQL.View.Tests — extracted materialized-view DDL into
+internal Build* helpers, assert SQL + guards), **M161** (ES sync GenerateId/CreateKnowledgeItem pure
+logic). Code fixes with offline regressions via mock/seam/loopback: **M207** (Redis poll-loop faults
+surface via a new PollError event + keep polling / deactivate on terminate), **M208** (Redis per-subscription
+consumer name), **M209** (Redis AutoAck round-trip + poll-fault coverage over the mock-IDatabase seam),
+**M210** (Messaging SmtpClient send-serialization via SemaphoreSlim + send-delegate seam), **M193**
+(Health SMTP bounded read timeout, verified with a loopback half-open server), **M139** (MSSql.View
+indexed-view methods → genuine async), **M204** (MQTT resubscribe-on-reconnect via ResubscribeAllAsync).
+**Deferred M138** (MSSql transactionless bulk-write atomicity) to the live-MSSql tier — it mutates write
+hot-paths and a mid-bulk failure can't be triggered offline. Remaining 9 open are all Docker/live-server.
+
+**Correction (Batch 56):** the earlier "everything left needs Docker" was overstated — the
+view-SELECT cluster (M140/M151/M153) and most of the Sync cluster (M157/M162/M163/M166/M167/M168/
+M169/M170/M171) are offline/SQLite-verifiable. Batch 56 closed **M153 + the three Tenant sync bugs
+M167/M168/M169 + M170**. Only Cosmos/ES/Raven store-CRUD (M160/M161/M165) + live MSSql/Postgres paths
+genuinely need Docker.
+
+**The async-interface refactor CR-M101 is CLOSED** (Batch 55): `CancellationToken` now threads through
+`IMigrationRunner` / `IMigrationStore` / `AbstractMigrationRunner` + all 6 backend stores. This is the
+structural prerequisite for CR-M108 (genuine-async InfluxDB) / CR-M109 (Flux count) — but those still
+need a live InfluxDB to validate, so they remain in the Docker-gated pile.
+
+**The entire TypeScript Birko.Web.* track (M256–M266) is CLOSED** (Batch 52). **The SQLite
+integration tier is CLOSED** (Batches 53–54): CR-M135/M144/M145/M150/M152/M154 — every SQLite-tier
+finding done via a real on-disk SQLite `DbConnection`. Remaining open (43): only the pile that needs
+**Docker/Testcontainers** (live MSSql/Postgres/ES paths — CR-M089/M136/M138/M139/M146/M149 and the
+MSSql.View/PostgreSQL.View test-gaps) or the **async-interface refactor** (CR-M101 → M108/M109), plus
+the view-SELECT-builder refactor cluster (M140/M151/M153) and the Sync backends (M157–M171) — none
+verifiable in this environment.
+
+> **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
+> lowest risk), THEN tackle the deferred pile below as a dedicated integration-test effort. Deferring
+> is a conscious sequencing choice, not abandonment — these are logged so they aren't lost.
+
+### ⏳ Deferred pile — handle after the offline sweep
+
+All deferrals share one root cause: the framework's tests are pure-logic/offline (fake `DbCommand`,
+`InMemory`, lazy clients), and these findings need more than that. Grouped by what would unblock them:
+
+- **Needs a real `DbConnection` (SQLite — runs in-process, no Docker; verifiable locally):**
+  CR-M135 (SQL store CRUD / RunCommand / SqlUnitOfWork / isLock / cancellation), CR-M144 (SqLite bulk
+  retry), CR-M145 (SqLite test-gap), CR-M150 (SQL.View.Migrations round-trip), CR-M152 (SQL.ViewModel
+  test-gap), CR-M154 (SQL.Views store/manager round-trip). A SQLite-backed harness closes these and
+  end-to-end-validates the already-committed SQL fixes (M134/M137/M142/M147/M148).
+- **Needs the async-interface change (self-contained refactor):** CR-M101 (thread `CancellationToken`/
+  async through `IMigrationRunner`/`IMigrationStore`/`IDataMigrator` + the ~7 backend implementers),
+  which then unblocks CR-M108 (Migrations.InfluxDB sync-over-async) and CR-M109 (Flux count semantics).
+- **Needs Docker / Testcontainers (genuinely CI-tier, NOT verifiable in this environment):** CR-M089
+  (ES store CRUD/scroll/bulk/aggregation), and the live-DB paths of CR-M136/M138/M139/M146/M149
+  (MSSql/PostgreSQL/SqLite connector + Auto-mode view cache).
+- **Refactor / larger design change:** CR-M140 & CR-M151 (extract the duplicated view-SELECT builder
+  into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
+  connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
+  projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 53 — SQLite integration tier CR-M135/M144/M145/M150 (4 closed)
+
+Stood up / extended the in-process SQLite tier (Microsoft.Data.Sqlite, real on-disk `.db` files) — the
+one integration tier verifiable in this environment (no Docker). Verify-first surfaced that
+`Birko.Data.SQL.SqLite.Tests`, `.ViewModel.Tests`, and `.Views.Tests` already existed (created since
+the audit), so M135/M145 became "extend" not "create".
+- **M144 (bug)** — the six `SqLiteConnector` native bulk methods (BulkInsert/Update/Delete + async)
+  opened a connection + transaction and executed directly, bypassing `ExecuteWithRetry`, so
+  SQLITE_BUSY/SQLITE_LOCKED (which the connector's own `IsTransientException` override flags) failed
+  immediately instead of retrying. Wrapped each body in `ExecuteWithRetry`/`ExecuteWithRetryAsync`
+  (matching the base `RunCommandTransaction`; each attempt opens a fresh connection/transaction;
+  cancellation still propagates — OCE isn't transient).
+- **M135** — added `SqLiteStoreCrudTests`: `AsyncSQLiteStore` single + bulk CRUD round-trips (exercises
+  the retry-wrapped bulk paths) and `SqlUnitOfWork` commit-persists / rollback-discards + the
+  state-machine guards (double-begin, commit/rollback-without-active, post-dispose). The isLock
+  serialization + cancelled-token read were already covered by `AsyncConnectorLockAndCancellationTests`.
+- **M145** — same file adds `SqLiteSettingsTests` (GetConnectionString / Path / LoadFrom incl. foreign +
+  null) and `SqLiteTransientDetectionTests` (BUSY=5/LOCKED=6 → transient; ERROR/CONSTRAINT → not;
+  Timeout → transient). Guid→string conversion is proven by the CRUD round-trip; the index-manager
+  PRAGMA path was already covered. `Birko.Data.SQL.SqLite.Tests`: 9 → 24.
+- **M150** — new **`Birko.Data.SQL.View.Migrations.Tests`** (`ViewMigrationExtensionsTests`, 11):
+  CreateView/CreateViewAsync/DropView/DropViewAsync (by-type + by-name) assert the generated DDL
+  (`CREATE OR REPLACE VIEW` / `DROP VIEW IF EXISTS`), custom quote-char, and transaction propagation via
+  a **recording fake `DbConnection`** (SQLite rejects `CREATE OR REPLACE VIEW`, so the fake asserts DDL +
+  transaction wiring independent of provider dialect — the finding's "at minimum" approach), plus the
+  non-`SqlMigrationContext` guard and null/empty-arg guards. git-initialized + registered in `.slnx` +
+  `.code-workspace`.
+
+### Batch 57 — Sync file-backend test-gaps + cleanup CR-M162/M163/M171 (3 closed; M166 partial)
+
+The offline half of the Sync cluster:
+- **M162 (cleanup bug)** — `AsyncJsonSyncKnowledgeStore.SetLastSyncTimeAsync` re-serialized the whole JSON
+  file once per item; now mutates all matching items then does one bulk `UpdateAsync(items)`. The
+  identical pattern in the sibling `AsyncXmlSyncKnowledgeStore` got the same fix.
+- **M163** — new **`Birko.Data.Sync.Json.Tests`** (5, real temp-file store): SetLastSyncTime updates
+  every matching item in one write + GetLastSyncTime max, scope isolation, null/empty, CreateKnowledgeItem.
+- **M171** — new **`Birko.Data.Sync.Xml.Tests`** (5, mirrors the JSON suite against a temp-file XML store).
+- **M166 (partial, stays open)** — new **`Birko.Data.Sync.Sql.Tests`** covers `CreateKnowledgeItem`, but
+  the GetLastSyncTime/SetLastSyncTime CRUD paths can't run on SQLite: the model's non-primary
+  `[IncrementField] Id` (with a `[PrimaryField] Guid`) makes `SqLiteConnector.CreateTable` emit invalid
+  `INTEGER NOT NULL AUTOINCREMENT` DDL. That CRUD coverage moves to the Docker pile (real MSSql/Postgres),
+  and it surfaced a genuine SqLiteConnector DDL limitation for dual-key models.
+
+All three new `.Tests` git-initialized + registered in `.slnx`/`.code-workspace`. Remaining runnable:
+**M157** (Sync core — mostly covered already: bidirectional / cancellation / the NewestWins-nullable
+test the finding names all exist; delete-propagation + AsyncSyncProvider residual) and **M140/M151**
+(view-SELECT builder refactor — best for a fresh-context pass).
+
+### Batch 56 — view GroupBy bug + Tenant sync bugs CR-M153/M167/M168/M169/M170 (5 closed)
+
+Re-triaged the "un-runnable" pile and found most of it IS offline-verifiable. Closed:
+- **M153 (bug)** — `SqlViewTranslator` read `definition.GroupBy` only to load source tables, never
+  emitting GROUP BY metadata; the connector re-derives GROUP BY from the SELECTed non-aggregate fields,
+  so grouping by a non-selected field was silently dropped → wrong aggregates. `Translate` now rejects a
+  GroupBy field that isn't also selected (the reverse is already caught by `ViewDefinitionBuilder.Build`).
+  `Birko.Data.SQL.Views.Tests` 10 → 12.
+- **M167 (bug)** — `TenantSyncProvider.ExecutePreviewAsync`'s broad catch swallowed every failure as a
+  spurious `Conflicts++` on a partial preview; now rethrows so real errors/cancellation propagate.
+- **M168 (bug)** — initial sync mutated the caller's `SyncOptions.Direction` (leaked because
+  `ApplyTenantContext` returns the same `TenantSyncOptions` instance) and reported the pre-override
+  direction. Now a local `effectiveDirection` drives the Create routing and `result.Direction`.
+- **M169 (bug)** — `BelongsToTenant` returned `true` for an entity that HAS a `TenantGuid` property but
+  an unset/mismatched value → cross-tenant leak. Now returns `false`; allow-all is reserved for types
+  with no `TenantGuid` property.
+- **M170** — `Birko.Data.Sync.Tenant.Tests` already existed (verify-first); augmented with
+  `TenantSyncBugsTests` (M167/M168/M169 regressions). Suite → 12.
+
+Remaining runnable set: M140/M151 (view-SELECT builder refactor) + offline test-gaps
+M157/M162/M163/M166/M171. Docker-only: M160/M161/M165 + live MSSql/Postgres paths.
+
+### Batch 55 — async-interface refactor CR-M101 (1 closed)
+
+Threaded `CancellationToken cancellationToken = default` through the migration async surface:
+- **Interfaces** — `IMigrationRunner` (InitializeAsync/MigrateAsync/RollbackAsync) and `IMigrationStore`
+  (InitializeAsync/GetAppliedVersionsAsync/RecordMigrationAsync/RemoveMigrationAsync/GetCurrentVersionAsync).
+- **`AbstractMigrationRunner`** — threads the token into the `Store.*Async(ct)` calls and the
+  `ExecuteMigrationsAsync(…, ct)` hook (which now `ThrowIfCancellationRequested()`s).
+- **6 backend stores** — `SqlMigrationStore` threads it into the real ADO.NET async calls
+  (`OpenAsync`/`BeginTransactionAsync`/`CommitAsync`/`RollbackAsync`/`ExecuteReaderAsync`/`ReadAsync`/
+  `ExecuteNonQueryAsync`) and its private async helpers; the 5 SDK sync-wrapper stores (Cosmos/ES/
+  Influx/Mongo/Raven) add the param and observe it via `ThrowIfCancellationRequested()` at entry
+  (genuine SDK-async is CR-M108's job — InfluxDB-gated).
+- Adding a defaulted parameter is source-compatible, so all callers still compile; all 6 backend
+  `.Tests` projects build clean.
+- **Regression** — `AsyncMigrationRunnerTests` (14 → 17): the tracking fake now observes the token, and
+  Initialize/Migrate/Rollback with a pre-cancelled token throw `OperationCanceledException` (proving the
+  runner *threads* the token, not just accepts it). `SqliteMigrationRunnerTests` (+2): the runner over a
+  real SQLite DB aborts InitializeAsync/MigrateAsync on a pre-cancelled token via `OpenAsync(ct)`.
+
+This is the structural prerequisite the audit flagged for **CR-M108** (make `IDataMigrator` async +
+rewrite the InfluxDB store/schema/data-migrator to await the SDK) and **CR-M109** (Flux count
+semantics) — both still need a live InfluxDB, so they stay in the Docker/Testcontainers pile.
+
+### Batch 54 — SQLite tier finish CR-M152/M154 (2 closed; tier complete)
+
+Closed the two SQLite-tier stragglers, both by augmenting existing green projects.
+- **M152** — `Birko.Data.SQL.ViewModel.Tests` (3 → 10): new `SyncDataBaseRepositoryTests` for the sync
+  `DataBaseRepository` — ctor guards (accepts a concrete `SQLiteStore`, rejects an unrelated `InMemoryStore`,
+  default ctor), the unwrapping `Connector` accessor (resolves a `SqLiteConnector` after `SetSettings`),
+  `AddOnInit`/`RemoveOnInit` wiring (verified via `DoInit()` firing/not-firing the registered
+  `InitConnector`), and the `ReadOne` extension (null-connector → default; a real SQLite round-trip →
+  mapped view model). Added the `Birko.Models.SQL` projitems import for the mapping registry.
+- **M154** — `Birko.Data.SQL.Views.Tests` (3 → 10): new `SqlViewTranslatorTests` for the pure-logic
+  surface — `Translate` null guard, name derivation (explicit `HasName` vs concatenated table names),
+  query-mode translation (OnTheFly/Persistent/Auto), and the COUNT(*) base-field path. The
+  field/join/aggregate *mapping* is already validated end-to-end by `SqlViewStoreAsyncTests`.
+
+**The SQLite integration tier (CR-M135/M144/M145/M150/M152/M154) is complete.** Everything still open
+needs Docker/Testcontainers or the async-interface refactor — not verifiable here.
+
+### Batch 52 — TypeScript Birko.Web.* track CR-M256…M266 (11 closed; whole TS track)
+
+The web-frontend track: 8 real bugs + 3 test-gaps across `Birko.Web.Components` / `.Core` / `.Shell`
+(all in the separate `Birko\Web` bucket, not `Birko\Framework` — the audit paths are stale). No
+in-framework unit runner by design, so verification is via the **Birko.Web.Playground** headless
+build + `backport-smoke` harness (per the project's documented Web-verify convention): **45/45**
+smoke assertions pass (was 18 — 27 added), all 66 gallery components render, zero page errors.
+Framework edits typecheck clean via Symbio.UI (`tsc --noEmit`, exit 0).
+
+**8 bugs fixed:**
+- **M256** `b-data-table` row-action: the `select` handler called `menu.remove()` without unregistering
+  the document `click` listener → a dangling listener (retaining the removed menu) leaked on every
+  select. Hoisted a single `cleanup()` used by both the select and outside-click paths.
+- **M257** `b-command-palette` async search: `_runSearch` committed results unconditionally, so a slow
+  older query could overwrite a newer one. Added a `_searchSeq` token; stale responses are discarded.
+- **M258** `b-tree-menu` lazy load: a rejecting `onExpand` escaped `_loadChildren`'s try/finally as an
+  unhandled rejection and skipped the re-render. Added `catch` → emit `load-error` + `update()` in `finally`.
+- **M260** `SyncManager.dispose()` leaked the `window 'online'` listener (inline arrow, unremovable).
+  Retained `_onlineHandler`; `dispose()` now `removeEventListener`s it.
+- **M261** `I18n` persisted the locale but never restored it — write-only, so every reload reverted to
+  `defaultLocale`. The constructor now reads `storageKey` back (guarded for SSR).
+- **M262** `signal.ts` hardcoded the consumer-specific `'symbio_'` persistence prefix. Changed to a
+  framework-neutral `'birko_'` default + exported `setPersistPrefix()`. (No Symbio source uses `persist:`
+  signals, so no consumer breakage.)
+- **M264** `base-detail-page._save` left the Save button spinning on an API rejection → wrapped in
+  try/finally, matching `base-crud-page`.
+- **M265** `base-form-modal._save` + `open()` had the same loading-leak on rejection → try/finally around
+  both awaits (open() also toasts + closes on catch).
+
+**3 test-gaps (M259 Components / M263 Core / M266 Shell)** — the findings ask for a vitest unit runner,
+which conflicts with the repo's deliberate "no in-framework unit runner" decision. **User chose (2026-07-13)
+to extend the Playground backport-smoke harness** instead. Added assertions for the highest-risk pure
+functions each finding names: `unwrapList` / `apiErrorMessage` / `I18n` plural+fallback (Core);
+`BMarkdownEditor.renderMarkdown` (heading/HTML-escape/empty) + `b-pagination` page-number collapse
+(Components); `getVisibleOptions` / `hasPermission` wildcard + `resolveModuleFromHash` (Shell). Closed
+with that coverage; a full per-package unit runner remains a deliberate non-goal.
+
+Each of M258/M260/M261/M262 also got a dedicated regression assertion locking in the bug fix.
+
+### Batch 51 — Workflow backend test-gaps CR-M268/269/270/271/272 (5 closed; 5 new projects)
+
+Created 5 new `.Tests` projects for the Workflow backends, each covering the backend-independent model round-trip (FromInstance/ToInstance/UpdateFromInstance — Data+History survive, CreatedAt-preserved-on-update + UpdatedAt bumped, Status enum casting) without a live server. The store CRUD stays integration-tier. SDK packages are carried by the `Birko.Data.X` projitems (transitive).
+- **M270** Birko.Workflow.JSON.Tests (5). **M271** Birko.Workflow.MongoDB.Tests (3). **M272** Birko.Workflow.RavenDB.Tests (3). **M268** Birko.Workflow.CosmosDB.Tests (3). **M269** Birko.Workflow.ElasticSearch.Tests (3).
+- All git-initialized + registered in .slnx + .code-workspace. All suites green.
+
+**This closes the entire offline .NET medium backlog.** Remaining open findings are the TypeScript Birko.Web.* track (M256–M266) — verified via the Playground build, not xUnit.
+
+### Batch 50 — Security test-gaps CR-M236/M237 (2 closed)
+
+- **M236** (verify-first) AspNetCore permission-resolution path already covered by `PermissionResolutionMiddlewareTests` (5) + `ResolvedPermissionsCurrentUserTests` (8) + TokenServiceAdapterTests (added since audit); residual `?token=` query-string + DI-registration are minor integration-tier, noted.
+- **M237** added `AzureKeyVaultWriteAndTokenTests` (recording handler): SetSecretAsync success + non-404 error, DeleteSecretAsync success + NotFound-tolerated, and access-token cache/reuse (2 GetSecret → 1 token call). AzureKeyVault.Tests 25.
+
+### Batch 49 — Vault.Configuration CR-M242 (1 closed; augment existing, verify-first)
+
+- **M242** the Vault.Configuration projitems compiles into Birko.Security.Vault.Tests; `SecretConfigurationProviderTests` (since the audit) already covers the `--`→KeyDelimiter rewrite / recursion / prefix / multi-path. Added `LocalVaultConfigurationTests` (reflection) for the remaining LocalVault pure logic: `BuildPaths` override-ordering + `ResolveOptions` lowercasing/fallback. No separate project needed. Vault.Tests 44.
+
+### Batch 48 — Structures CompressedTrie.Remove CR-M251 (1 closed; augment existing)
+
+- **M251** CompressedTrieTests already covered GetWordsWithPrefix/GetAllWords (since the audit); added the remaining `Remove` coverage: existing-word (siblings survive), missing/prefix-only (false), down-to-empty, and merge-on-remove (single-child branch merge keeps the remaining word findable). No bug in the merge path. Structures trie tests 14.
+
+### Batch 47 — Workflow correctness CR-M267/M273/M274/M275 (4 closed; offline bugs)
+
+- **M267** WorkflowEngine advanced CurrentState before OnEntry actions ran; a faulting OnEntry left the instance at ToState with no history record → catch now restores CurrentState=fromState. Regression in Workflow.Tests.
+- **M273** RavenDB store's 3 single-result reads used `ReadAsync(filter, ct)` (bulk-overload shadowing footgun) → `ReadFirstAsync`. Code-review (no .Tests sibling).
+- **M274** SQL SaveAsync check-then-act upsert race (concurrent double-create → PK violation) → documented the per-instance serialization contract (native MERGE is provider-specific); also switched to ReadFirstAsync. Workflow.SQL.Tests 7 (compile-verified).
+- **M275** XML `HistoryXml` default was `"<ArrayOfTypeName />"` (matches no type → ToInstance throws) → `"<ArrayOfStateChangeRecord />"` + `IsNullOrWhiteSpace` guard in ToInstance. Code-review.
+- **Deferred (test-gaps, 5 new projects):** M268–M272 (Workflow.CosmosDB/ElasticSearch/JSON/MongoDB/RavenDB `.Tests` — model round-trip + upsert; the model logic is backend-independent but each needs a new project).
+- Suite green: Birko.Workflow.Tests 32.
+
+### Batch 46 — Security test-gaps CR-M239/M241 (2 closed; augment existing projects)
+
+- **M239** NFC token-issuance branch untested → `NfcAuthProviderTokenTests` with a fake ITokenProvider: token issued + sub/nfc_uid/auth_method claims, conditional email/name, no-token when IssueTokens=false / provider null. NFC.Tests 46.
+- **M241** Vault Set/Delete/GetSecretPairs success paths untested → `VaultSecretProviderWriteTests` with a request-capturing handler: SetSecretAsync KV2/KV1 payload+path, DeleteSecretAsync KV2 metadata path + NotFound-tolerated, GetSecretPairsAsync KV2 inner-data. Vault.Tests 40.
+
+### Batch 45 — Storage.AzureBlob CR-M248/M249 (2 closed; offline) — **200/275 milestone**
+
+- **M248** SAS URL (and GetBlobUri REST) appended raw blobPath → percent-encode each '/'-segment via `EncodeBlobPath` (slashes preserved); canonicalResource keeps the decoded form so the signature matches. Regression tests the encoder (spaces/#/?/% encoded).
+- **M249** the two credential-guard tests were non-async `[Fact]`s that discarded `ThrowAsync` (asserted nothing) → made `async Task` + `await`.
+- Suite green: Birko.Storage.AzureBlob.Tests 54.
+
+### Batch 44 — Structures/Storage/Telemetry/Time CR-M246/247/250/252/253/254/255 (7 closed; offline)
+
+- **M246** LocalFileStorage Download/Delete/Exists/ListAsync ignored the ct → `ThrowIfCancellationRequested()` on entry + inside the ListAsync tree-walk. Tests in Storage.Tests.
+- **M247** ResolvePath sibling-prefix collision → containment check requires exact base OR trailing-separator boundary (defensive; ValidateUserPath already blocks traversal).
+- **M250** `Graph<T>.EdgeCount` non-virtual + DirectedGraph `new` → made virtual+override so a base reference returns the directed count. Test in Structures.Tests.
+- **M252/M253** Telemetry bulk wrappers didn't override ReadFirst/ReadFirstAsync (bypassed inner native single-row) → added overrides delegating to the inner store; new InstrumentedBulkStoreWrapperTests.
+- **M254** OpenTelemetry `EnableAspNetCoreInstrumentation` defaulted true (required the optional AspNetCore package / meaningless for console) → flipped to false (opt-in); existing Defaults test updated.
+- **M255** deleted 3 orphaned duplicate Time provider/interface files (not in the Compile set, byte-identical to Birko.Time.Abstractions).
+- Suites green: Structures 10 (graph), Storage 46, Telemetry 54, OpenTelemetry 11.
+
+### Batch 43 — Redis + Security hardening CR-M231/232/233/234/235/238/240 (7 closed; offline)
+
+- **M231** `RedisConnectionManager` Lazy used ExecutionAndPublication (caches connect failure forever) → both ctors switched to `LazyThreadSafetyMode.PublicationOnly`.
+- **M232** new **Birko.Redis.Tests** (10): GetConnectionString branch matrix, GetId, LoadFrom dispatch, manager guards. Registered in .slnx + .code-workspace.
+- **M233** `Pbkdf2PasswordHasher.Verify` threw FormatException on non-base64 salt/hash → try/catch → false (now total over arbitrary stored strings).
+- **M234** `Birko.Security.Tests` exists (dispose test) → augmented with Pbkdf2 (round-trip/wrong-pw/malformed matrix) + AES (round-trip/GenerateKey/wrong-key/tamper).
+- **M235** HeaderTenantResolver missing `using System.Linq` → added (projitems can be imported without ImplicitUsings).
+- **M238** `JwtTokenProvider.GenerateToken` NRE'd on null claims → `ArgumentNullException.ThrowIfNull`. Test in Jwt.Tests.
+- **M240** Vault `GetSecretPairsAsync` + `ParseKv2Response` threw KeyNotFoundException on malformed body → `TryGetProperty` → null / empty. Tests in Vault.Tests.
+- Suites green: Redis 10, Security 15, Jwt 10, Vault 35.
+
+### Batch 42 — Serialization ct-gates + Random rollover CR-M230/M243/M244/M245 (4 closed; offline)
+
+- **M230** (verified) Random.Tests already has the Snowflake sequence-rollover test (20 000 IDs, monotonicity + ExtractTimestamp window) + WaitNextMillisecond — no work.
+- **M243** SystemXmlSerializer's 4 async methods ignored the CancellationToken → added `ThrowIfCancellationRequested()` to each.
+- **M245** ProtobufBinarySerializer's 2 SerializeAsync overloads ignored the token (DeserializeAsync already honored it) → added the gate.
+- **M244** added stream round-trip coverage (sync+async) for JSON/XML/Protobuf + the async cancelled-token tests that lock in M243/M245.
+- Suite green: Birko.Serialization.Tests 81, Birko.Random.Tests (Snowflake) 8.
+
+### Batch 41 — MessageQueue.MQTT CR-M203/M205 (2 closed; race fix + test augment)
+
+- **M203** `MqttConsumer.EnsureEventAttached` did an unsynchronized check-then-set on `_eventAttached`, so concurrent SubscribeAsync callers could both `+= OnMessageReceivedAsync` (double-dispatch). Now double-checked under a dedicated `_eventAttachLock`. Code-review verified (concurrent TOCTOU — not deterministically unit-testable).
+- **M205** `Birko.MessageQueue.MQTT.Tests` already exists (MqttMetadataRoundTripTests) → augmented with `MqttTopicAndSettingsTests`: MqttTopic validate/match wildcard semantics, ToMqttQos mapping, MqttSettings GetId/LoadFrom. Suite 23.
+- **Deferred (live broker):** M204 (resubscribe-on-reconnect with CleanSession=true) needs a live MQTT broker.
+
+### Batch 40 — Models test-gaps CR-M214/218/222/223/224/225 (6 closed; verify + augment + 1 new project)
+
+Verify-first: five of these test projects already exist and cover each finding's flagged bug; augmented the clearest named gaps and created the one genuinely-missing project.
+- **M214** Category.Tests exists (LoadFrom round-trips) → added GetSlugSource test.
+- **M218** Customers.Tests exists (CopyTo + CustomerAddress.LoadFrom) → matches the ask exactly; closed as verified.
+- **M222** Inventory.Tests exists (StorageLocation Depth) → added InventoryDocument scalar round-trip (Lines stays empty per M221).
+- **M223** Product.Tests exists (Filter multi-clause) → added ProductPropertiesLoadTests (LoadProperties flatten/null-drop/null-dict).
+- **M224** created **Birko.Models.SEO.Tests** (7: LoadFrom round-trips, PropertyChanged aggregate, SEO<T> guid filter, SEOByPath exact/prefix/empty). Registered in .slnx + .code-workspace.
+- **M225** Models.SQL.Tests exists (ModelMapRegistryApplyTests: ApplyToDatabase + metadata + GetTableNames) → closed as verified.
+- Suites green: Category.Tests 9, Product.Tests 9, Inventory.Tests 3, SEO.Tests 7.
+
+### Batch 39 — Models SQL mappings CR-M219/M220/M229 (3 closed; 2 new test projects)
+
+- **M219** CustomerMapping bounded all string columns via HasPrecision (Name/Code/Email/Phone/Website/TaxId/VatId), matching ContactPersonMapping. IsUnique left off (nullable natural keys; DB decision).
+- **M220** AddressMapping + InvoiceAddressMapping bounded every address string column; InvoiceAddress re-maps the inherited address columns + BIN/TIN/VATIN/BankAccount.
+- **M229** UserLoginMapping records (Provider, ProviderKey) as a shared composite index (natural key). Documented that mapping index/unique metadata is advisory (not DDL-emitted) and composite-UNIQUE isn't a mapping primitive → the UNIQUE constraint is a migration concern.
+- New test projects (user-approved): **Birko.Models.Customers.SQL.Tests** (22) + **Birko.Models.Users.SQL.Tests** (3), asserting the precision/index metadata via `ModelMapRegistry.GetPropertyMaps`. Registered in .slnx + .code-workspace.
+
+### Batch 38 — Models cluster CR-M213/215/216/217/221/226/227/228 (8 closed; offline)
+
+Most Models `.Tests` siblings already exist (Category/Contracts/Customers/Inventory/Pricing/Product/SQL/base). User approved creating new projects as needed.
+- **M213** `ValueData.LoadFrom(ViewModels.Value)` skipped `base.LoadFrom` → dropped CreatedAt/UpdatedAt/identity. Added `base.LoadFrom(data)`. Test in Birko.Models.Tests.
+- **M215** `HierarchyHelper.RewriteDescendantPaths` NRE'd on a null `desc.Path` mid-batch → null-guard oldPath/newPath at entry + skip null/non-matching Path (and null NamePath). Tests in Birko.Models.Contracts.Tests.
+- **M216** Contracts test-gap — project exists (HierarchyHelperTests); augmented with the M215 cases. Closed.
+- **M217** Customer VM→model is a partial projection (only Name/Code/PriceGroup) → **documented** as intentional (other fields preserved from the entity).
+- **M221** InventoryDocument VM carries no Lines → **documented** that lines load separately (empty by design).
+- **M226** all seven relational Users FK overloads did `data.Guid!.Value` → crash on a transient VM. Now `if (data?.Guid is Guid g) X = g;`. Tests in new Birko.Models.Users.Tests.
+- **M227** relational Users VMs drop FKs → **documented** that FK assignment is via the relation-specific LoadFrom overloads only.
+- **M228** created **Birko.Models.Users.Tests** (GetDisplayName + M226 guard); registered in .slnx + .code-workspace.
+- Suites green: Models.Tests 35, Contracts.Tests 7, Users.Tests 7.
+- **Still open in the Models cluster:** M214 (Category), M218 (Customers), M222 (Inventory), M223 (Product), M225 (Models.SQL) test-gaps (projects exist — verify/augment next); M219/M220 (Customers.SQL mappings), M224 (SEO), M229 (Users.SQL) need new .Tests projects.
+
+### Batch 37 — MessageQueue.Redis CR-M206 (1 closed; offline CancellationToken gate)
+
+- **M206** `RedisProducer.SendAsync` / `RedisConsumer.AcknowledgeAsync` / `RejectAsync` accepted a `CancellationToken` but never observed it → added `ThrowIfCancellationRequested()` on entry (StackExchange.Redis has no per-call token). Offline regression (lazy connection): a pre-cancelled token throws before any Redis call.
+- Suite green: Birko.MessageQueue.Redis.Tests 41.
+- **Still deferred (live broker / new project):** MQTT M203/M205 (new `.MQTT.Tests` project — ask first), M204 (resubscribe-on-reconnect), M207/M208/M209 (Redis poll-loop / consumer-name / integration test-gap — live Redis).
+
+### Batch 36 — MessageQueue core + InMemory CR-M199/M200/M201/M202 (4 closed; offline)
+
+- **M199** (test-gap + bug) `RetryPolicy` had no tests; added `RetryPolicyTests`, and the large-attempt boundary test surfaced the CR-M078-style overflow (`(long)Math.Pow(...)` wraps negative) → fixed to compute in double + saturate at MaxDelay.
+- **M200** (already resolved, verify-first) `InMemoryChannel.RemoveSubscriber` already captures+cancels+**disposes** the CTS (CR-H119) and `StartDispatching` is guarded on `DispatchCts == null`; existing `InMemoryChannelDisposalTests` covers it. No change.
+- **M201** delayed `InMemoryProducer.SendAsync` was fire-and-forget swallowing faults → observe the detached task's fault (OnlyOnFaulted continuation) + document delayed delivery as best-effort. Offline tests (delivers; cancelled delayed send doesn't throw or deliver).
+- **M202** `InMemoryConsumer.RejectAsync(requeue:true)` silently discarded (destination unknown) → `_pendingAck` now stores `(destination, message)` so requeue writes back to the channel. Offline tests (requeue redelivers; no-requeue doesn't).
+- Suites green: Birko.MessageQueue.Tests 71, Birko.MessageQueue.InMemory.Tests 11.
+- **Deferred (live broker):** MQTT M204 (resubscribe-on-reconnect) / M207 Redis poll-loop / M208 Redis consumer-name / M209 Redis test-gap need a live broker; MQTT M203/M205 need a new `.MQTT.Tests` project; M206 (Redis CancellationToken gate) is offline and can go in a follow-up with the existing Redis.Tests.
+
+### Batch 35 — Helpers + Localization CR-M195/M196/M197/M198 (4 closed; offline)
+
+- **M195** `PathValidator.SanitizePath` stripped `../` tokens in a single pass, so nested/overlapping sequences (e.g. `....//` → `../`) survived → loop the replacements to a fixpoint. Regression asserts no traversal token survives.
+- **M196** (test-gap) added the two highest-risk untested Helpers to Birko.Helpers.Tests: `CsvParser` (quoting/escaping/CRLF/trailing-row/custom-delimiter) + `PathHelper.IsUnderDirectory` (containment + sibling-prefix). Remaining helper types left for a later coverage sweep.
+- **M197** `InMemoryTranslationProvider.GetSupportedCultures` threw `CultureNotFoundException` on a bogus culture name → guard+filter like the Json/Resx providers. Regression asserts no throw + bad entry filtered.
+- **M198** (design/doc) Localization.Data `DatabaseTranslationProvider` sync members block on async store I/O → documented the deadlock risk on UI/single-threaded-sync-context threads + steer to the async API (GetSupportedCultures has no async counterpart → cache it).
+- Suites green: Birko.Helpers.Tests 88, Birko.Localization.Tests 140.
+
+### Batch 34 — Birko.EventBus cluster CR-M184…M190 (7 closed; whole EventBus cluster done)
+
+All EventBus test coverage lives in one `Birko.EventBus.Tests` project (compiles every EventBus projitems), so no new projects.
+- **M184** parallel-dispatch Stop mode didn't halt other handlers (all tasks eagerly launched) → linked CTS cancelled on first failure; original exception rethrown via ExceptionDispatchInfo (not a follow-on OCE).
+- **M185** Continue/Stop catch blocks were empty, no logger → added `Action<IEvent,Exception>? OnHandlerError` on the options, invoked in both modes, sequential + parallel.
+- **M186** `DomainEventPublished` dropped the source event's OccurredAt/EventId (EventBase stamped now/new-Guid) → ctor now propagates both, restoring time-ordered + dedup-by-EventId replay.
+- **M187** (design) DistributedEventBus RetryPolicy/DeadLetterOptions never consumed → documented they're transport-delegated (CR-H114 fault-driven re-delivery) rather than wiring bus-level retry (conflicts with the model) or removing (breaking).
+- **M188** Dispose blocked on `UnsubscribeAsync().GetAwaiter().GetResult()` → implement IAsyncDisposable (await), sync Dispose uses `sub.Dispose()`.
+- **M189** OutboxProcessor reflection-publish surfaced the opaque TargetInvocationException message → unwrap at the Invoke site (`Task.FromException(inner)`) + `Unwrap` in the ProcessBatch catch, so LastError carries the real cause.
+- **M190** Outbox test-gap already covered by the existing Outbox/ tests; also fixed a **pre-existing compile break** — `InMemoryOutboxStoreTests` still called the old 2-arg `MarkFailedAsync` after the CR-H115 `maxAttempts` param landed (the whole EventBus.Tests project didn't build); updated to `maxAttempts: 5`.
+- Suite green: Birko.EventBus.Tests 84.
+
+### Batch 33 — Birko.Data.XML CR-M182/M183 (2 closed; offline file-based bugs)
+
+- **M182** async `EnsureDataLoadedAsync` gated on `_items.Count == 0`, so a legitimately-empty store re-read the disk on every read/count/aggregate → added a `_loaded` flag on `AbstractAsyncXmlStore` (set after LoadDataAsync, reset in DestroyAsync). Offline regression: empty store loads once across N reads; destroy forces reload. (Sync path loads in ctor — async-only.)
+- **M183** `XmlStore.SaveData` + `AsyncXmlStore.SaveDataAsync` did File.Delete-then-write, so a mid-write failure destroyed the existing file → write to `.tmp` then `File.Move(overwrite:true)`, cleanup temp + rethrow on failure. Offline regression: a serializer throwing on the 2nd write leaves the 1st file byte-identical, no temp left behind.
+- Suite green: Birko.Data.XML.Tests 16.
+
+### Batch 32 — Birko.Data.Tagging CR-M172 + Birko.Data.Tenant CR-M175 (2 closed; cleanup + design doc)
+
+- **M172** `TagService.SetEntityTagsAsync`'s add loop called `AttachTagAsync`, which re-queried `GetEntityTagLinksAsync` on each iteration (N+1) even though the diff already proved the link absent → call `CreateEntityTagAsync` directly with the same payload. Offline regression: adding 3 tags issues exactly 1 link query (call-counter on the in-memory service).
+- **M175** (design/"other") the static `Tenant.Current` singleton coexists with DI-scoped `ITenantContext` as a second source of truth — a store/repo accidentally built with the static fallback in a DI app silently degrades to unfiltered cross-tenant access. Documented the footgun on `Tenant`/`Tenant.Current` (non-DI use only; resolve a scoped context in DI apps). Chose docs over throwing (which would break legitimate console/tool construction).
+- Suite green: Birko.Data.Tagging.Tests 11. (Tenant M175 is comment-only.)
+
+### Batch 31 — Birko.Data.ViewModel CR-M179/M180/M181 (3 closed; offline bugs + test-gap)
+
+- **M179** the async bulk repo inlined `CreateModelInstance()+MapToModel` / `CreateInstance()+LoadFrom` instead of the base helpers → bulk `ReadAsync` never called StoreHash, so change-tracking stayed empty and a later single-item UpdateAsync always saw a "changed" model (no-op skip defeated). Routed ReadAsync through `LoadInstance` and CreateAsync/UpdateAsync/DeleteAsync(IEnumerable) through `LoadModelInstance`. (Sync bulk repo already used these correctly.)
+- **M180** none of the bulk mutators (sync + async: Create / Update×3 / Delete×2) had the `if (ReadMode) throw` guard the single-item paths enforce → a ReadMode repo could still mutate via the bulk API. Added `AccessViolationException("Repository is in Read Mode")` to all twelve.
+- **M181** `Birko.Data.ViewModel.Tests` exists (created since the audit — CR-H110 delegate tests); augmented with `BulkViewModelRepositoryReadModeTests` (M179 hash-priming + M180 ReadMode enforcement). Also dropped two redundant projitems imports (Contracts/Configuration come transitively) to clear the MSB4011 warnings.
+- Suite green: Birko.Data.ViewModel.Tests 9.
+
+### Batch 30 — Birko.Data.Tenant CR-M173/M174 (2 closed; offline bugs)
+
+- **M173** the tenant bulk wrappers (sync + async Delete/Update) validated `All(BelongsToCurrentTenant)` then passed the same lazy source to the inner store → double-enumeration (authorized set could differ from persisted set) → materialize once.
+- **M174** `AsyncTenantStoreWrapper.SaveAsync` create branch ignored the CreateAsync return and relied on the inner store writing back `data.Guid` → `return await CreateAsync(...)` (mirrors the sync wrapper).
+- Suite green: Birko.Data.Tenant.Tests 16.
+- **Skipped this pass:** the Sync-backend cluster CR-M157–M171 (Sync test-gap needs an async-provider test double; Sync.CosmosDB/ElasticSearch/RavenDB/Sql need live stores; Sync.Json/Xml + M163 need new file-based test projects) — folded into the deferred/infra pass. Swept the core offline projects (Tenant here; Tagging/ViewModel next).
+
+### Batch 29 — Birko.Data.Sync CR-M155/M156 (2 closed; offline bugs)
+
+- **M155** Preview/PreviewAsync's bare catch masked OperationCanceledException as a fake conflict → added `catch (OperationCanceledException) { throw; }` before the broad catch in both. Offline test (store read throws OCE → Preview rethrows).
+- **M156** the bidirectional both-exist branch had a dead `if (winner == "conflict")` (GetWinner never returns "conflict") → removed the unreachable block (behavior-preserving; real conflict detection noted as a tracked feature). Offline test (both-exist → Update, 0 conflicts).
+- Suite green: Birko.Data.Sync.Tests 29.
+- **Note:** the remaining SQL-cluster findings (M136, M138–M146, M149–M154) are deferred as infra-heavy — new test projects (M141/M143/M152/M154), live-DB fixes (M136/M138/M139/M144/M146/M149), refactors (M140/M151), and M153 (SQL.Views GroupBy needs real GROUP BY metadata on the View model + connector changes — not a contained fix). The clean offline SQL bugs (M137/M142/M147/M148) are done.
+
+### Batch 28 — Birko.Data.SQL.View CR-M147/M148 (2 closed; offline logic bugs)
+
+- **M147** View ctor overwrote an explicit `name` with the concatenated table names (inverted guard) → derive from tables only when `name` is null/empty.
+- **M148** `GetViewField` cast the lambda body to `UnaryExpression` unconditionally (InvalidCastException for a plain MemberExpression) and returned `null!` (NRE at callers) → handle both body shapes + throw descriptively.
+- Both fixed in Birko.Data.SQL.View and tested in the existing Birko.Data.SQL.Tests (which compiles the SQL.View projitems — no new project). Suite green: SQL.Tests 284.
+
+### Batch 27 — SQL providers CR-M137/M142 (2 closed; offline type-mapping bugs)
+
+- **M137** MSSqlConnector mapped DbType.Object/Binary to bare `BINARY` (→ BINARY(1), truncating blobs to 1 byte) → `VARBINARY(MAX)`. Test in existing MSSql.Tests.
+- **M142** PostgreSQLConnector.FieldDefinition post-processed the composed definition with `String.Replace` to inject SERIAL → emit the SERIAL pseudo-type directly at type-emit time. Test in existing PostgreSQL.Tests.
+- Suites green: SQL.MSSql.Tests 17, SQL.PostgreSQL.Tests 14. Remaining SQL-cluster findings (M136, M138–M141, M143–M155: live-DB bugs, base-builder refactor, SQL.View ctor/nullable bugs, and new SQL.View/.MSSql.View/.PostgreSQL.View test projects) continue next.
+
+### Batch 26 — Birko.Data.SQL CR-M134 (1 closed; M135 deferred)
+
+- **M134** the three connector reader paths (RunReaderCommand, external-transaction reader, async RunReaderCommandAsync) fell through to ExecuteReader after InitException handled a createCommand failure (which returns, not rethrows, when an OnException handler is set) → track a `faulted` flag + `yield break` before ExecuteReader. Code-review verified (SQL.Tests fakes only DbCommand, not a DbConnection).
+- **M135 deferred** — store CRUD / RunCommand / SqlUnitOfWork / isLock / CancellationToken need a real DbConnection (SQLite integration) or a substantial fake-ADO connection harness that isn't set up; out of scope for the pure-logic pass, left open.
+
+### Batch 25 — RavenDB.ViewModel + Repositories CR-M132/M133 (2 closed)
+
+- **M132** RavenDB.ViewModel repos had no test project → new **Birko.Data.RavenDB.ViewModel.Tests** (ctor store-type validation + unwrapping RavenDBStore getter via a fake wrapper). Registered in .slnx + .code-workspace.
+- **M133** Repositories test-gap → Repositories.Tests (already existed) augmented with AbstractRepositoryFallbackTests (null-store fallbacks + AbstractBulkRepository type-mismatch guard).
+- Suites green: RavenDB.ViewModel.Tests 4, Repositories.Tests 10.
+
+### Batch 24 — Birko.Data.RavenDB CR-M130/M131 (2 closed)
+
+- **M130** async bulk insert ignored the CancellationToken → `_documentStore.BulkInsert(token: ct)` + a per-item `ThrowIfCancellationRequested`.
+- **M131** thin test coverage → RavenDB.Tests (IndexManager + LazyInit since the audit) augmented with Settings (GetId/LoadFrom/CreateDocumentStore) + RavenDbUnitOfWork state-machine tests. Store CRUD / facet aggregation / Commit stay integration-tier.
+- Suite green: Birko.Data.RavenDB.Tests 30. (RavenDB.ViewModel M132 + Repositories M133 — both need new test projects — are the next batch.)
+
+### Batch 23 — Birko.Data.Processors CR-M127/M128/M129 (3 closed)
+
+- **M127** ZIP nested-folder entry → already resolved by the CR-H076 Zip Slip flatten (`Path.GetFileName`), so a `folder/data.csv` entry extracts into `_extractPath` (existing) not a missing subdir. Added a regression test.
+- **M128** CSV `ProcessStreamAsync` is fake-async (runs the sync parser) → documented via `<remarks>` (the finding's accepted minimum) rather than a full IAsyncEnumerable rewrite.
+- **M129** XmlProcessor async path read Text/CDATA via the synchronous `reader.Value` (can throw under `Async=true`) → new `ProcessNodeAsync` uses `await reader.GetValueAsync()`; Element/EndElement delegate to the sync `ProcessNode`.
+- Suite green: Birko.Data.Processors.Tests 36.
+
+### Batch 22 — Birko.Data.Patterns CR-M124/M125/M126 (3 closed)
+
+- **M124** Sluggable bulk wrappers' foreach-then-pass double-enumerated `data` → materialize once (async CreateAsync + sync Create/Update; UpdateAsync-async was already fixed under CR-H075; SoftDelete/Audit/Timestamp use the safe lazy-Select pattern).
+- **M125** versioned wrapper skipped the version check on a null read (silent lost-update) → treat a missing row as a conflict (ConcurrentUpdateException) + doc the best-effort read-check-write contract. Sync + async.
+- **M126** Patterns test-gap → Patterns.Tests (already existed) augmented with the M124 enumeration regression, VersionedStoreWrapperTests (M125), and PagedResult boundary math.
+- Suite green: Birko.Data.Patterns.Tests 22.
+
+### Batch 21 — MongoDB.ViewModel + MongoDB.Views CR-M121/M122/M123 (3 closed)
+
+- **M121** MongoDB.ViewModel repos had no test project → new **Birko.Data.MongoDB.ViewModel.Tests** (ctor store-type validation + unwrapping MongoDBStore getter via a fake wrapper). Registered in .slnx + .code-workspace.
+- **M122** MongoDB.Views Auto-mode fallback was dead (`catch (MongoCommandException)` never fires — a missing view returns an empty cursor) → explicit `ViewExistsAsync` check (ListCollectionNamesAsync name filter); Auto falls through to on-the-fly when the view is absent, Persistent still queries it. Code-review verified.
+- **M123** MongoDB.Views `.projitems`/`.shproj` had a non-hex SharedGUID (`…mgoview0001`) → replaced with a real GUID in both.
+- Suites green: MongoDB.Views.Tests 6, MongoDB.ViewModel.Tests 4.
+
+### Batch 20 — Birko.Data.MongoDB store CR-M117 … M120 (4 closed)
+
+- **M117** `MongoDBStore` public `Read(Guid)`/`Read()` overrides bypassed lazy-init (straight `Collection.Find`) and were redundant → deleted; base routes through `ReadCore` with EnsureInitialized.
+- **M118** `AsyncMongoDBStore.ReadAsync(Guid)` override bypassed init + the cancellation gate → deleted; base routes through `ReadCoreAsync`.
+- **M119** `SaveAsync` upsert branch skipped `EnsureInitializedAsync` → added it before the native `ReplaceOneAsync`.
+- **M120** store test-gap → augmented with Settings.GetConnectionString variants + GetId + IndexManager.ValidateScope (made internal); change-stream mapping already covered.
+- Suite green: Birko.Data.MongoDB.Tests 42.
+
+### Batch 19 — Migrations RavenDB + TimescaleDB CR-M114/M116 (2 closed; Migrations cluster done bar the async findings)
+
+- **M114** RavenDB `ParseFilterToRql`/`UpdateDocuments` interpolated values as `'{s}'` (injection/escaping) → parameterized via `$pN`/`$uN` `IndexQuery.QueryParameters`; `ParseFilterToRql` now returns `(rql, parameters)`. Offline tests updated for the parameterized output + a quote-value case.
+- **M116** TimescaleDB test-gap → already covered by since-the-audit TimescaleDBMigrationSqlTests (BuildCompressionPolicySql/BuildContinuousAggregateSql DDL, CR-H070/H071).
+- Suites green: Migrations.RavenDB.Tests 11, Migrations.TimescaleDB.Tests 4.
+
+**Migrations cluster (CR-M101 … M116) status:** M102–M107, M110–M116 done; **M101 / M108 / M109 remain deferred** as the InfluxDB/interface async batch (CancellationToken + async through IMigrationRunner/IMigrationStore/IDataMigrator + the InfluxDB sync-over-async & Flux-count).
+
+### Batch 18 — Migrations MongoDB + SQL CR-M112/M113/M115 (3 closed)
+
+- **M112** Mongo `CopyData` ignored `transformJson` → extracted `BuildCopyPipeline` that prepends the transform stage(s) (single or array) before `$merge`. Offline-tested.
+- **M113** Mongo migrations test-gap → augmented with `BuildCopyPipeline` + `ParseFilter` pure tests (store/live up-down stay integration-tier).
+- **M115** SQL migrations test-gap → store/runner/schema already covered by SQLite tests (since the audit); added `ParseFilterToWhere` coverage ($gt/$gte/$lt/$lte/$ne mapping, quoted identifiers + @pN parameterization, injection-safety).
+- Suites green: Migrations.MongoDB.Tests 7, Migrations.SQL.Tests 24. M114 (RavenDB RQL) + M116 (TimescaleDB test-gap) are the next batch.
+
+### Batch 17 — Migrations.InfluxDB CR-M110/M111 (2 closed; M108/M109 deferred)
+
+- **M110** CopyData/BulkInsert coerced every non-string field via `Convert.ToDouble` (corrupting bool/int/long, throwing on DateTime/byte[]) and dropped `_time` → new `ApplyValue` helper branches on runtime type (string→tag, bool/int/double→matching Field, else string field, no throw); `_time` preserved. Offline tests via ToLineProtocol.
+- **M111** `ConvertFilterToFluxPredicate` returned JSON verbatim as a Flux delete predicate → rejects JSON with NotSupportedException (Flux predicate still passes through); `RemoveMigration` escapes `migration.Name` (new `EscapeFluxString`). Offline tests.
+- **M108 deferred** — the sync `IDataMigrator` interface + async-only SDK means the sync-over-async can't be removed without adding async members to the shared migration interfaces (the CR-M101 async/CancellationToken work); do it there.
+- **M109 deferred** — the Flux `count()` semantics fix needs a live InfluxDB to validate against multi-field measurements; do it with the M108 async rework.
+- Suite green: Migrations.InfluxDB.Tests 17.
+
+### Batch 16 — Migrations cluster CR-M102 … CR-M107 (6 closed; M101 deferred)
+
+Birko.Data.Migrations (core) + .Migrations.CosmosDB + .Migrations.ElasticSearch. All test projects already existed.
+
+- **M102** core runner test-gap → Migrations.Tests augmented (RegisterMigrations dedup/sort, Migrate/Rollback guards, GetPending/Applied, EnsureInitialized, GetMigrationsToExecute Up/Down range incl. the Down boundary).
+- **M103** CosmosDB `RenameField` bare `catch {}` → catches only CosmosException BadRequest/NotFound; rethrows throttling/auth/service errors.
+- **M104** CosmosDB `ParseFilterToSql` interpolated raw `c.{name}` → bracket-quoted `c["{name}"]` (escaped); tests updated + injection case.
+- **M105** ES `GetAppliedVersions` `Size(1000)` + Ascending truncated the newest → Descending + Size(10000) (GetCurrentVersion/Max no longer under-reports).
+- **M106** ES Record/Remove didn't refresh → `.Refresh(Refresh.True)` so applied-version reads are immediately consistent.
+- **M107** ES test-gap → already covered by PainlessSourceTests (pure Painless builder); store round-trip is integration-tier.
+- **M101 deferred** — adding CancellationToken to InitializeAsync/MigrateAsync/RollbackAsync + IMigrationStore ripples across ~7 backend implementers; its own batch.
+- Suites green: Migrations.Tests 14, Migrations.CosmosDB.Tests 11, Migrations.ElasticSearch.Tests 2.
+
+### Batch 15 — InfluxDB cluster CR-M094 … CR-M097 (4 closed)
+
+Birko.Data.InfluxDB + .InfluxDB.ViewModel.
+
+- **M094** `AsyncInfluxDBStore.SaveAsync` update branch wrote the point directly (no `EnsureInitializedAsync`, no `ExecuteWithRetryAsync`) unlike every other CRUD path → route it through `UpdateAsync`.
+- **M095** thin store tests → InfluxDB.Tests 9 → 25 (IsTransientException, FormatFluxInterval [made internal], ModelToPoint via subclass, InfluxDbUnitOfWork state machine). MapRecordToModel/live CRUD left to an integration tier.
+- **M096** the `Destroy`/`DestroyAsync` overrides on both InfluxDB repos called base (destroys the store) AND `Drop`/`DropAsync` (same store) → dropped the bucket twice. Removed the overrides; kept `Drop`/`DropAsync` as distinct API.
+- **M097** (test-gap) new **Birko.Data.InfluxDB.ViewModel.Tests** (5): ctor type-guard, IsHealthy-without-client, + the M096 structural regression. Registered in .slnx + .code-workspace.
+- Suites green: InfluxDB.Tests 25, InfluxDB.ViewModel.Tests 5.
+
+### Batch 14 — EventSourcing docs + JSON + Localization CR-M093/M098/M099/M100 (4 closed)
+
+Low-friction scattered fixes, all offline-verified (existing test projects).
+
+- **M093** EventSourcing README documented a fictional API (`EventStore<T>`, `EventSourcedRepository<T>`, `CreatedEvent<T>`, `EventStream`/`EventSnapshot`, `GetAtTime`) → rewritten to the real wrapper/extension surface (matches CLAUDE.md).
+- **M098** JSON sync bulk `CreateCore` overwrote caller Guids (`item.Guid = Guid.NewGuid()`) and used `_items.Add` (throws on dup) → `??=` + upsert indexer, matching the single-item / async-bulk paths.
+- **M099** Localization `LocalizedOrderByHelper.GetNonLocalizedOrderBy` was dead code (comment-only loop, always returned null; no callers) → deleted.
+- **M100** Localization sync+async bulk `Create/Update/Delete(IEnumerable<T>)` enumerated the source twice → materialize once at entry.
+- Suites green: JSON.Tests 14, Localization.Tests 70.
+
+### Batch 13 — ElasticSearch cluster CR-M088 … CR-M092 (4 closed, 1 deferred)
+
+Birko.Data.ElasticSearch (+ .ViewModel, .Views).
+
+- **M088** `EnumerableExtensions.MultiMatch/MoreLikeThis` were broken (Compile()-a-parameter-expression) but are query-DSL markers parsed by name → kept as markers with throw-only bodies + doc.
+- **M090** ES.ViewModel `ElasticSearchRepository.Count/ClearCache` used `(Store as ElasticSearchStore<T>)` (null for a wrapped store → Count 0 / ClearCache no-op) → route through the unwrapping `ElasticSearchStore` property; fixed in the reference (non-ViewModel) repo too. New Birko.Data.ElasticSearch.ViewModel.Tests proves the unwrap mechanism.
+- **M091** ES.Views store vs manager resolved the index name by different rules → shared `ElasticSearchViewIndexResolver` (Persistent+Name → name, else PrimarySource.Name); both delegate to it.
+- **M092** (test-gap) ES.Views.Tests already existed; augmented with resolver tests.
+- **M089** (ES store CRUD/scroll/bulk/aggregation test-gap) — **deferred, left open**: needs a mocked/Testcontainers ElasticClient tier, out of scope for pure-logic batches.
+- New test project registered in .slnx + .code-workspace. Suites green: ES.Tests 78, ES.Views.Tests 7, ES.ViewModel.Tests 3.
+
+### Batch 12 — CosmosDB cluster CR-M084 … CR-M087 (4 closed)
+
+Birko.Data.CosmosDB + Birko.Data.CosmosDB.Views. All bugs verified via pure-logic unit tests (no live emulator).
+
+- **M084** `CosmosAggregationHelper` emitted dotted `c.Field` identifiers by raw interpolation → bracket-quoted via a `FieldRef` helper (`c["Field"]`, embedded quotes/backslashes escaped) in SELECT/aggregate/GROUP BY.
+- **M085** `CosmosDBIndexManager` stored single-field indexes as `/name/?` but Exists/Drop/GetInfo compared against the raw name (never matched) and Drop pushed the raw name into ExcludedPaths unconditionally → extracted `NormalizeIncludedPath`/`NormalizeFieldPath`/`IncludedPathMatches`/`FieldPathMatches`/`PolicyContainsIndex`/`RemoveIncludedIndex`; Create/Exists/Drop/GetInfo now agree, and Drop only excludes the path it actually removed.
+- **M086** `CosmosFilterTranslator.TranslateValue` fell back to raw `ToString()` for DateTime (culture-dependent, unquoted, invalid) and enums (unquoted member name) → DateTime/DateTimeOffset now ISO-8601 quoted, enums emit numeric value.
+- **M087** (test-gap) Birko.Data.CosmosDB.Views.Tests already existed; augmented with TranslateValue coverage (doubles as M086's tests).
+- Suites green: CosmosDB.Tests 43 (+11), CosmosDB.Views.Tests 7 (+5). Remaining Data.* backend medium findings (CR-M088 …) still to triage.
+
+**The entire Communication cluster (CR-M036 … CR-M075, 40 findings across Bluetooth, Camera, GraphQL,
+gRPC, Hardware, IR, Modbus, Network, NFC, OAuth, REST, REST.Server, SOAP, SSE, WebSocket) is closed.**
+
+### Batch 11 — Core foundation CR-M076 … CR-M083 (8 closed)
+
+Configuration, Contracts, CQRS, Data.Composition, Data.Core.
+
+- **3 confirmed bugs fixed:** **M076** `Settings.LoadFrom(ISettings)` hard-cast → type-guard (foreign
+  ISettings no longer throws InvalidCastException); **M078** `RetryPolicy.GetDelay` `(long)Math.Pow`
+  overflow to a negative TimeSpan at high attempts → compute in double + saturate at MaxDelay before
+  cast; **M082** `AbstractModel.CopyTo()` / `AbstractLogModel.CopyTo()` returned `clone!` (null) with no
+  arg → guard-clause `return this` (honors non-null ICopyable<T>).
+- **Already resolved (verify-first):** **M077** Birko.Configuration.Tests and **M080** Birko.CQRS.Tests
+  existed (created since the audit); M080's covariant-dispatch regression was already present. Configuration.Tests
+  augmented with GetId + LoadFrom(ISettings) tests.
+- **New test projects (3):** **Birko.Contracts.Tests** (10 — M079: RetryPolicy incl. the M078 overflow
+  boundary + jitter window), **Birko.Data.Core.Tests** (17 — M083: ExpressionParameterReplacer, filters,
+  CopyTo null-handling, ViewModel PropertyChanged), **Birko.Data.Composition.Tests** (8 — M081:
+  StoreWrapperBuilder.Build<T> branch/gating/ordering + EventSourcing ctor arity, over the InMemory store).
+  Registered in .slnx + .code-workspace.
+- Suites green: Contracts 10, Configuration 11, Data.Core 17, Composition 8 (CQRS unchanged). The Data.*
+  storage-backend medium findings (CR-M084 …) remain.
+
+### Batch 10 — WebSocket CR-M073 … CR-M075 (3 closed; completes Communication)
+
+- **M073** `WebSocketPort` Write/Open/Close/ReadWorker used `.Wait()`/`.Result` → now
+  `ConfigureAwait(false).GetAwaiter().GetResult()` (original exception propagates, no context deadlock).
+- **M074** `WebSocketAuthenticationService` had a `Dispose()` but not `: IDisposable` (DI never disposed
+  it → leaked `ReaderWriterLockSlim`) → implements the interface.
+- **M075** WebSocket.Tests → 33: server start/stop/**restart** lifecycle (real loopback HttpListener on
+  a free port) + auth reject/allow + the IDisposable regression.
+
+### Batch 9 — SSE cluster CR-M067 … CR-M072 (6 closed; all bugs)
+
+- **M067** rate-limit `_connectionHistory` grew unbounded → prune + evict fully-aged-out keys each request.
+- **M068** `SseResponse.Denied` dropped its reason → added `Reason` property, assigned in `Denied`.
+- **M069** query-token parsing broke on leading `?` and `=` in value → `TrimStart('?')` + `Split('=', 2)`.
+- **M070** `SseClient.ConnectAsync` leaked prior CTS/task → tears down the prior session first.
+- **M071** `SseClient` was a no-I/O stub → implemented real HTTP SSE streaming (injectable HttpClient,
+  ResponseHeadersRead, line read → `ProcessEventLine`, reconnect via Last-Event-ID).
+- **M072** `CreateComment` emitted `data: : text` → distinct `Comment` property → real `: text` line.
+- SSE.Tests → 19 (mock-handler streaming test proves the client now actually receives events).
+
+### Batch 8 — REST / REST.Server / SOAP CR-M059 … CR-M066 (8 closed)
+
+- **REST (M059/M060/M061)** — `Credentials` now backed by the client's `HttpClientHandler` (was a
+  dead auto-property); sync overloads documented as convenience shims (prefer `*Async`); CLAUDE.md
+  rewritten to the real thin `RestClient` API (the fictional `AsyncRestClient`/`RestRequest`/
+  `GetData<T>`/`RestException`/retry/cache surface removed).
+- **REST.Server (M062/M063)** — `RestAuthenticationService : IDisposable` (had a `Dispose()` but
+  didn't implement the interface → lock leak). REST.Server.Tests exists + IDisposable regression.
+- **SOAP (M064/M065/M066)** — client cache → `ConcurrentDictionary`+`GetOrAdd` (was Dictionary
+  check-then-act); `SoapServer` gained a synchronous `Stop()` core so `Dispose` no longer blocks on
+  `StopAsync().GetAwaiter().GetResult()`. SOAP.Tests exists + cache/server regressions.
+- Suites green: REST 19, REST.Server 7, SOAP 7.
+
+### Batch 7 — Communication test-gaps + NFC polling CR-M051/M056/M057/M058 (4 closed)
+
+- **NFC polling (M056)** — added an `INfcTransport.PollingError` event; all three transports
+  (Serial/Http/Hid) now wrap the poll loop in try/catch (surface non-cancellation faults + stop),
+  track the poll Task, and `StopPollingAsync` awaits it. Regression tests fire `PollingError` on a
+  faulting transport.
+- **NFC tests (M057)** — NfcReaderPort pipeline/lifecycle, SerialNfcTransport ParseResponse/DetectTagType
+  (via reflection), HttpNfcTransport endpoints (mocked handler). NFC.Tests → 121.
+- **IR tests (M051)** — SamsungAcProfile, InfraredPort (Write %4, HandleReceivedTiming fallback),
+  Http/SerialIrTransport; RC5/RawProtocol already covered. IR.Tests → 102.
+- **OAuth tests (M058)** — PollDeviceTokenAsync (pending/slow_down/expired/timeout), real refresh-token
+  grant + fallback, ExchangeCodeAsync confidential branch, real 401-resend. OAuth.Tests → 54.
+
+### Batch 6 — Communication ports/protocols CR-M047 … CR-M055 (8 closed; M051/IR deferred)
+
+- **gRPC M047** — `WithAuth` copies inbound headers into a new `Metadata` instead of mutating the
+  caller's, so reused `CallOptions` no longer accumulate duplicate auth headers.
+- **Hardware Serial M048/M049** — ctor guard-throws on null settings (was a latent NRE); all
+  `ReadData` access serialized on a dedicated `_readLock` (atomic RemoveReadData also fixes a `-1`
+  crash). New **Hardware.Tests** (M050, 23) covers GetID + buffer logic.
+- **Modbus M052** — MBAP transaction id validated against the response; mismatch throws instead of
+  accepting a stale frame. Regression test added.
+- **Network M054** — `Udp.Write` guards `_remoteEndPoint` (CS8604 + latent NRE). New **Network.Tests**
+  (M055, 25). M053 (RemoveReadData TOCTOU) was already atomic (CR-H026/H027) — not reproducible.
+- Suites green: gRPC 25, Modbus 71, Hardware 23, Network 25.
+- **Deferred:** CR-M051 (IR test gaps) — next batch with NFC/OAuth test-gaps.
+
+### Batch 5 — Communication.Camera + .GraphQL CR-M043 … CR-M046 (4 findings, all closed)
+
+- **Camera M043** — `CaptureFrameAsync` kills the ffmpeg process tree in a `finally` on cancel/fail
+  (Process.Dispose doesn't terminate the child), so no orphaned ffmpeg holds the camera.
+- **Camera M044** — arguments now go through `ProcessStartInfo.ArgumentList` (extracted `BuildArguments`),
+  unquoted defaults; tests assert a space-containing device is one token and injection is impossible.
+- **GraphQL M045** — removed the `_requestLock` SemaphoreSlim that serialized every request on a shared
+  client; regression test proves two concurrent requests are in flight at once.
+- **GraphQL M046** — extracted `HandleMessageAsync` from the receive loop and unit-tested the
+  next/complete/error/wrong-id/payload-errors dispatch (frame reassembly was already covered).
+- Suites green: Camera 15, GraphQL 58.
+
+### Batch 4 — Communication.Bluetooth cluster CR-M036 … CR-M042 (7 findings, all closed)
+
+- **M036** — `Read()` now checks availability + `GetRange` under one `lock(ReadData)` (was a TOCTOU);
+  platform-agnostic, tested.
+- **M037** — Linux discovery wraps the timeout CTS, linked CTS, and bluetoothctl `Process` in `using`
+  (compile-verified with `DefineConstants=LINUX`).
+- **M038** — a `_reconnecting` guard stops `Open()` resetting `_reconnectAttempts` mid-reconnect, so
+  `MaxReconnectAttempts` now actually bounds the retry chain (was effectively infinite). Residual
+  thread-supervision documented inline.
+- **M039** — `OpenWindows` checks `connectTask.Wait(timeout)` and throws on timeout (WINDOWS-gated;
+  code-review verified — WinRT branch isn't compiled off a Windows TFM).
+- **M040** — CLAUDE.md rewritten to the real API; README examples corrected (the fictional
+  `BLEServer`/`BLEScanner`/etc. types are gone).
+- **M041** — dead RSSI branch removed; Linux service-filtered discovery throws `NotSupportedException`
+  instead of silently returning all devices (Windows placeholders left documented).
+- **M042** — `Birko.Communication.Bluetooth.Tests` already existed; augmented with `Read()` + `GetID`
+  tests (12, hardware-free).
+- **Note:** the Windows WinRT branches (M038/M039 Windows parts) are code-review-only — they don't
+  compile off a Windows TFM here; the Linux branch was compile-checked (a pre-existing `sizeof`/`unsafe`
+  issue there is unrelated to these findings and left untouched).
+
+### Batch 3 — Caching cluster CR-M030 … CR-M035 (6 findings, all closed)
+
+- **MemoryCache** (CR-M030): per-key stampede locks are now reference-counted and retired by their
+  last releaser — the timer no longer evicts locks, closing the GetOrAdd↔WaitAsync eviction race.
+- **HybridCache** (CR-M031): write-through `SetAsync` always awaits the L1 write in a `finally`, so
+  the L1 write is never an orphaned fire-and-forget when L2 faults with fallback disabled. Tests
+  expanded (CR-M032): L1 TTL capping, WriteThrough=false, L2-failure fallback for
+  Remove/Exists/RemoveByPrefix/Clear.
+- **RedisCache** (CR-M034): every method observes the `CancellationToken` (+ the RemoveByPrefix loop);
+  offline regression tests exploit the lazy connection. CR-M033 (dead `KeyTimeToLiveAsync`) was already
+  gone (fixed with CR-H014); CR-M035's test project already existed — expanded with the cancellation tests.
+- Caching suites green: Caching 25, Hybrid 34, Redis 12.
+
+### Batch 2 — BackgroundJobs cluster CR-M015 … CR-M029 (15 findings, all closed)
+
+Across all 8 job-queue backends. Bugs fixed + regression-tested; audit `Status` flipped to `done`.
+- **Atomic dequeue claim** ported from the SQL backend's proven `ClaimToken` conditional-update +
+  re-read-verify pattern to the doc stores: **MongoDB** (CR-M020, per-document `$set` atomic),
+  **RavenDB** (CR-M021, single-winner even under last-write-wins), **ElasticSearch** (CR-M016,
+  refresh-window residual documented — handlers must be idempotent). `ClaimToken` added to each model.
+- **File backends** JSON (CR-M018) / XML (CR-M029): `DequeueAsync` read-claim-update serialized with
+  a `SemaphoreSlim` (mirrors `InMemoryJobQueue`); cross-process still unsupported by design (documented).
+- **Redis:** `GetByStatusAsync` orders before truncating (CR-M023); every method + `RedisJobLockProvider`
+  observe the `CancellationToken` (CR-M024); the dequeue claim (ZREM + hash flip) is now fully inside
+  the Lua script, closing the orphan window (CR-M025).
+- **SQL lock provider:** connection no longer leaks on `OpenAsync` failure (CR-M026); non-Postgres
+  backends get real locks (MSSql `sp_getapplock`, MySQL `GET_LOCK`) or return `false` instead of a
+  false success (CR-M027, SQLite).
+- **Test projects:** created `Birko.BackgroundJobs.{JSON,ElasticSearch,RavenDB,MongoDB}.Tests`
+  (CR-M017/M019/M022 + M020 coverage); CosmosDB/SQL already existed (CR-M015/M028) — SQL expanded with
+  lock-provider + FailAsync-boundary tests. All 8 BackgroundJobs suites green (JSON 6, XML 7, Redis 7,
+  SQL 17, CosmosDB 3, Mongo 6, ES 6, Raven 6).
+
+### Batch 1 — Birko.AI cluster CR-M001 … CR-M014 (14 findings, all closed)
+
+Across Birko.AI, .Agents, .Contracts, .Orchestration, .Providers, .Resilience.
+
+- **Bugs fixed + regression-tested:** CR-M001 (async `HandleResponse`), CR-M002/CR-M008
+  (`CancellationToken` threaded through `ILlmProvider` + all 16 providers + `LlmProviderBase` retry
+  loops/SSE + `TrackedLlmProvider` + the agent run loop + `Tool.ExecuteAsync`), CR-M003
+  (`LlmStreamingResponse` made disposable, disposed via `await using`), CR-M007 (symmetric
+  `ToDictionary`/`FromDictionary`), CR-M010 (`SendWithRetryAsync` disposes the buffered response),
+  CR-M011 (rate-limit re-check loop), CR-M012 (`GetRetryAfter` covers token/daily windows), CR-M013
+  (serialized circuit-breaker persistence + `FlushPersistenceAsync`).
+- **Not reproducible:** CR-M006 (`Merge` already copies `OnLlmResponseReceived`).
+- **Test-gap:** CR-M005 → new `Birko.AI.Agents.Tests` (18 tests). CR-M004 / CR-M009 / CR-M014 →
+  their `.Tests` projects already existed (created since the audit) and were expanded with regression
+  tests for the fixes above.
+- New AI-cluster test count: **59** (AI.Tests 11, Agents.Tests 18, Providers.Tests 17,
+  Orchestration.Tests 3, Resilience.Tests 10). Remaining medium findings CR-M076 … CR-M275 are still
+  to triage (verify-first, one project cluster at a time).
+
+## User story
+
+As a maintainer, I want the **medium**-severity code-review findings triaged and the worthwhile
+ones fixed, so quality issues below the high bar don't accumulate.
+
+## Scope
+
+The 275 medium findings `CR-M001 …` from
+[`CODE-REVIEW-AUDIT-2026-06-17.md`](../../../CODE-REVIEW-AUDIT-2026-06-17.md). **Unverified** —
+these are reviewer claims that were not individually adversarially re-checked, so confirm each is
+real before fixing.
+
+## Tasks
+
+**Not pre-created.** Extract tasks from `CODE-REVIEW-AUDIT-2026-06-17.md` on demand — one task per
+`CR-Mxxx` entry (verify-first), copying its ID/Title → title, Path → file:line, Detail → context,
+Fix → approach, Acceptance → derive + add a regression test. Flip each finding's `Status` in the
+audit (`done` / `wontfix`) as it's triaged.

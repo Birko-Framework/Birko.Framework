@@ -1,0 +1,409 @@
+﻿<Solution>
+  <Folder Name="/BackgroundJobs/">
+    <Project Path="../Birko.BackgroundJobs/Birko.BackgroundJobs.shproj" />
+    <Project Path="../Birko.BackgroundJobs.SQL/Birko.BackgroundJobs.SQL.shproj" />
+    <Project Path="../Birko.BackgroundJobs.ElasticSearch/Birko.BackgroundJobs.ElasticSearch.shproj" />
+    <Project Path="../Birko.BackgroundJobs.MongoDB/Birko.BackgroundJobs.MongoDB.shproj" />
+    <Project Path="../Birko.BackgroundJobs.RavenDB/Birko.BackgroundJobs.RavenDB.shproj" />
+    <Project Path="../Birko.BackgroundJobs.JSON/Birko.BackgroundJobs.JSON.shproj" />
+    <Project Path="../Birko.BackgroundJobs.XML/Birko.BackgroundJobs.XML.shproj" />
+    <Project Path="../Birko.BackgroundJobs.Redis/Birko.BackgroundJobs.Redis.shproj" />
+    <Project Path="../Birko.BackgroundJobs.CosmosDB/Birko.BackgroundJobs.CosmosDB.shproj" />
+  </Folder>
+  <Folder Name="/MessageQueue/">
+    <Project Path="../Birko.MessageQueue/Birko.MessageQueue.shproj" />
+    <Project Path="../Birko.MessageQueue.InMemory/Birko.MessageQueue.InMemory.shproj" />
+    <Project Path="../Birko.MessageQueue.MQTT/Birko.MessageQueue.MQTT.shproj" />
+    <Project Path="../Birko.MessageQueue.Redis/Birko.MessageQueue.Redis.shproj" />
+  </Folder>
+  <Folder Name="/EventBus/">
+    <Project Path="../Birko.EventBus/Birko.EventBus.shproj" />
+    <Project Path="../Birko.EventBus.MessageQueue/Birko.EventBus.MessageQueue.shproj" />
+    <Project Path="../Birko.EventBus.Outbox/Birko.EventBus.Outbox.shproj" />
+    <Project Path="../Birko.EventBus.Outbox.SQL/Birko.EventBus.Outbox.SQL.shproj" />
+    <Project Path="../Birko.EventBus.Tenant/Birko.EventBus.Tenant.shproj" />
+    <Project Path="../Birko.EventBus.EventSourcing/Birko.EventBus.EventSourcing.shproj" />
+  </Folder>
+  <Folder Name="/Caching/">
+    <Project Path="../Birko.Caching/Birko.Caching.shproj" />
+    <Project Path="../Birko.Caching.Redis/Birko.Caching.Redis.shproj" />
+    <Project Path="../Birko.Caching.Hybrid/Birko.Caching.Hybrid.shproj" />
+  </Folder>
+  <Folder Name="/Communication/">
+    <Project Path="../Birko.Communication/Birko.Communication.shproj" />
+    <Project Path="../Birko.Communication.Bluetooth/Birko.Communication.Bluetooth.shproj" Id="c3d4e5f6-a7b8-4c6d-9e2f-3a4b5c6d7e8f" />
+    <Project Path="../Birko.Communication.Hardware/Birko.Communication.Hardware.shproj" Id="b2c3d4e5-f6a7-4b5c-9d1e-2f3a4b5c6d7e" />
+    <Project Path="../Birko.Communication.Network/Birko.Communication.Network.shproj" Id="a1b2c3d4-e5f6-4a5b-8c9d-1e2f3a4b5c6d" />
+    <Project Path="../Birko.Communication.REST/Birko.Communication.REST.shproj" Id="a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d" />
+    <Project Path="../Birko.Communication.SOAP/Birko.Communication.SOAP.shproj" Id="f72acf66-683d-498d-a503-d6fb3f8978cc" />
+    <Project Path="../Birko.Communication.SSE/Birko.Communication.SSE.shproj" Id="7f8e9d0a-1b2c-4d3e-8f9a-2b3c4d5e6f7a" />
+    <Project Path="../Birko.Communication.WebSocket/Birko.Communication.WebSocket.shproj" Id="d4e5f6a7-b8c9-4d7e-9f3a-4b5c6d7e8f9a" />
+    <Project Path="../Birko.Communication.Modbus/Birko.Communication.Modbus.shproj" />
+    <Project Path="../Birko.Communication.Camera/Birko.Communication.Camera.shproj" />
+    <Project Path="../Birko.Communication.OAuth/Birko.Communication.OAuth.shproj" />
+    <Project Path="../Birko.Communication.IR/Birko.Communication.IR.shproj" />
+    <Project Path="../Birko.Communication.NFC/Birko.Communication.NFC.shproj" />
+    <Project Path="../Birko.Communication.REST.Server/Birko.Communication.REST.Server.shproj" />
+    <Project Path="../Birko.Communication.AspNetCore/Birko.Communication.AspNetCore.shproj" />
+    <Project Path="../Birko.Communication.OAuth.Providers/Birko.Communication.OAuth.Providers.shproj" />
+    <Project Path="../Birko.Communication.GraphQL/Birko.Communication.GraphQL.shproj" />
+    <Project Path="../Birko.Communication.gRPC/Birko.Communication.gRPC.shproj" />
+    <Project Path="../Birko.Communication.gRPC.Server/Birko.Communication.gRPC.Server.shproj" />
+  </Folder>
+  <Folder Name="/Data/">
+    <Project Path="../Birko.Contracts/Birko.Contracts.shproj" />
+    <Project Path="../Birko.Data.Core/Birko.Data.Core.shproj" />
+    <Project Path="../Birko.Configuration/Birko.Configuration.shproj" />
+    <Project Path="../Birko.Data.Stores/Birko.Data.Stores.shproj" />
+    <Project Path="../Birko.Data.Repositories/Birko.Data.Repositories.shproj" />
+  </Folder>
+  <Folder Name="/Data.Migrations/">
+    <Project Path="../Birko.Data.Migrations/Birko.Data.Migrations.shproj" />
+    <Project Path="../Birko.Data.Migrations.ElasticSearch/Birko.Data.Migrations.ElasticSearch.shproj" />
+    <Project Path="../Birko.Data.Migrations.InfluxDB/Birko.Data.Migrations.InfluxDB.shproj" />
+    <Project Path="../Birko.Data.Migrations.MongoDB/Birko.Data.Migrations.MongoDB.shproj" />
+    <Project Path="../Birko.Data.Migrations.RavenDB/Birko.Data.Migrations.RavenDB.shproj" />
+    <Project Path="../Birko.Data.Migrations.SQL/Birko.Data.Migrations.SQL.shproj" />
+    <Project Path="../Birko.Data.Migrations.TimescaleDB/Birko.Data.Migrations.TimescaleDB.shproj" />
+    <Project Path="../Birko.Data.Migrations.CosmosDB/Birko.Data.Migrations.CosmosDB.shproj" />
+  </Folder>
+  <Folder Name="/Data.NoSQL/">
+    <Project Path="../Birko.Data.ElasticSearch/Birko.Data.ElasticSearch.shproj" />
+    <Project Path="../Birko.Data.InfluxDB/Birko.Data.InfluxDB.shproj" Id="a1b2c3d4-e5f6-7890-abcd-ef1234567890" />
+    <Project Path="../Birko.Data.JSON/Birko.Data.JSON.shproj" />
+    <Project Path="../Birko.Data.XML/Birko.Data.XML.shproj" />
+    <Project Path="../Birko.Data.InMemory/Birko.Data.InMemory.shproj" />
+    <Project Path="../Birko.Data.MongoDB/Birko.Data.MongoDB.shproj" Id="9d0b1c33-e449-5c0f-d758-76348e110ddd" />
+    <Project Path="../Birko.Data.RavenDB/Birko.Data.RavenDB.shproj" />
+    <Project Path="../Birko.Data.TimescaleDB/Birko.Data.TimescaleDB.shproj" Id="b2c3d4e5-f6a7-8901-bcde-f12345678901" />
+    <Project Path="../Birko.Data.CosmosDB/Birko.Data.CosmosDB.shproj" />
+    <Project Path="../Birko.Data.MongoDB.Views/Birko.Data.MongoDB.Views.shproj" />
+    <Project Path="../Birko.Data.ElasticSearch.Views/Birko.Data.ElasticSearch.Views.shproj" />
+    <Project Path="../Birko.Data.RavenDB.Views/Birko.Data.RavenDB.Views.shproj" />
+    <Project Path="../Birko.Data.CosmosDB.Views/Birko.Data.CosmosDB.Views.shproj" />
+  </Folder>
+  <Folder Name="/Data.Patterns/">
+    <Project Path="../Birko.Data.EventSourcing/Birko.Data.EventSourcing.shproj" />
+    <Project Path="../Birko.Data.Patterns/Birko.Data.Patterns.shproj" />
+    <Project Path="../Birko.Data.Processors/Birko.Data.Processors.shproj" />
+    <Project Path="../Birko.Data.Tenant/Birko.Data.Tenant.shproj" />
+    <Project Path="../Birko.Data.Composition/Birko.Data.Composition.shproj" />
+    <Project Path="../Birko.Data.Tagging/Birko.Data.Tagging.shproj" />
+    <Project Path="../Birko.Data.Views/Birko.Data.Views.shproj" />
+  </Folder>
+  <Folder Name="/Data.SQL/">
+    <Project Path="../Birko.Data.SQL/Birko.Data.SQL.shproj" />
+    <Project Path="../Birko.Data.SQL.MSSql/Birko.Data.SQL.MSSql.shproj" />
+    <Project Path="../Birko.Data.SQL.MySQL/Birko.Data.SQL.MySQL.shproj" Id="8c9a0b22-d338-4b9e-c647-65237d009ccc" />
+    <Project Path="../Birko.Data.SQL.PostgreSQL/Birko.Data.SQL.PostgreSQL.shproj" Id="7b8f9a11-c227-4a8d-b536-54126c998bbb" />
+    <Project Path="../Birko.Data.SQL.SqLite/Birko.Data.SQL.SqLite.shproj" />
+    <Project Path="../Birko.Data.SQL.View/Birko.Data.SQL.View.shproj" />
+    <Project Path="../Birko.Data.SQL.MSSql.View/Birko.Data.SQL.MSSql.View.shproj" />
+    <Project Path="../Birko.Data.SQL.PostgreSQL.View/Birko.Data.SQL.PostgreSQL.View.shproj" />
+    <Project Path="../Birko.Data.SQL.MySQL.View/Birko.Data.SQL.MySQL.View.shproj" />
+    <Project Path="../Birko.Data.SQL.SqLite.View/Birko.Data.SQL.SqLite.View.shproj" />
+    <Project Path="../Birko.Data.SQL.View.Migrations/Birko.Data.SQL.View.Migrations.shproj" />
+    <Project Path="../Birko.Data.SQL.Caching/Birko.Data.SQL.Caching.shproj" />
+    <Project Path="../Birko.Data.SQL.Views/Birko.Data.SQL.Views.shproj" />
+  </Folder>
+  <Folder Name="/Data.Sync/">
+    <Project Path="../Birko.Data.Sync/Birko.Data.Sync.shproj" />
+    <Project Path="../Birko.Data.Sync.ElasticSearch/Birko.Data.Sync.ElasticSearch.shproj" />
+    <Project Path="../Birko.Data.Sync.Json/Birko.Data.Sync.Json.shproj" />
+    <Project Path="../Birko.Data.Sync.Xml/Birko.Data.Sync.Xml.shproj" />
+    <Project Path="../Birko.Data.Sync.MongoDb/Birko.Data.Sync.MongoDb.shproj" />
+    <Project Path="../Birko.Data.Sync.RavenDB/Birko.Data.Sync.RavenDB.shproj" />
+    <Project Path="../Birko.Data.Sync.Sql/Birko.Data.Sync.Sql.shproj" />
+    <Project Path="../Birko.Data.Sync.CosmosDB/Birko.Data.Sync.CosmosDB.shproj" />
+    <Project Path="../Birko.Data.Sync.Tenant/Birko.Data.Sync.Tenant.shproj" />
+    <Project Path="../Birko.Data.Aggregates/Birko.Data.Aggregates.shproj" />
+  </Folder>
+  <Folder Name="/Data.ViewModels/">
+    <Project Path="../Birko.Data.ViewModel/Birko.Data.ViewModel.shproj" Id="8b4cd1ef-a9b2-4d5c-9e3f-1a2b3c4d5e6f" />
+    <Project Path="../Birko.Data.ElasticSearch.ViewModel/Birko.Data.ElasticSearch.ViewModel.shproj" Id="2b3c4d5e-6f7a-8901-2bcd-ef3456789012" />
+    <Project Path="../Birko.Data.InfluxDB.ViewModel/Birko.Data.InfluxDB.ViewModel.shproj" Id="6f7a8b9c-0d1e-2345-6f78-901234567890" />
+    <Project Path="../Birko.Data.JSON.ViewModel/Birko.Data.JSON.ViewModel.shproj" Id="3c4d5e6f-7a8b-9012-3cde-f45678901234" />
+    <Project Path="../Birko.Data.XML.ViewModel/Birko.Data.XML.ViewModel.shproj" />
+    <Project Path="../Birko.Data.MongoDB.ViewModel/Birko.Data.MongoDB.ViewModel.shproj" Id="1a2b3c4d-5e6f-7890-1abc-def234567890" />
+    <Project Path="../Birko.Data.RavenDB.ViewModel/Birko.Data.RavenDB.ViewModel.shproj" Id="4d5e6f7a-8b9c-0123-4def-567890123456" />
+    <Project Path="../Birko.Data.SQL.ViewModel/Birko.Data.SQL.ViewModel.shproj" Id="9c5de2f0-ba3c-4e6d-af40-2b3c4d5e6f70" />
+    <Project Path="../Birko.Data.TimescaleDB.ViewModel/Birko.Data.TimescaleDB.ViewModel.shproj" Id="5e6f7a8b-9c0d-1234-5ef6-789012345678" />
+    <Project Path="../Birko.Data.CosmosDB.ViewModel/Birko.Data.CosmosDB.ViewModel.shproj" />
+  </Folder>
+  <Folder Name="/Helpers/">
+    <Project Path="../Birko.Helpers/Birko.Helpers.shproj" />
+    <Project Path="../Birko.Structures/Birko.Structures.shproj" />
+    <Project Path="../Birko.Random/Birko.Random.shproj" />
+  </Folder>
+  <Folder Name="/Models/">
+    <Project Path="../Birko.Models.Contracts/Birko.Models.Contracts.shproj" />
+    <Project Path="../Birko.Models/Birko.Models.shproj" />
+    <Project Path="../Birko.Models.Category/Birko.Models.Category.shproj" />
+    <Project Path="../Birko.Models.Customers/Birko.Models.Customers.shproj" />
+    <Project Path="../Birko.Models.Inventory/Birko.Models.Inventory.shproj" />
+    <Project Path="../Birko.Models.Pricing/Birko.Models.Pricing.shproj" />
+    <Project Path="../Birko.Models.Product/Birko.Models.Product.shproj" />
+    <Project Path="../Birko.Models.SEO/Birko.Models.SEO.shproj" />
+    <Project Path="../Birko.Models.SQL/Birko.Models.SQL.shproj" />
+    <Project Path="../Birko.Models.Customers.SQL/Birko.Models.Customers.SQL.shproj" />
+    <Project Path="../Birko.Models.Inventory.SQL/Birko.Models.Inventory.SQL.shproj" />
+    <Project Path="../Birko.Models.Pricing.SQL/Birko.Models.Pricing.SQL.shproj" />
+    <Project Path="../Birko.Models.Product.SQL/Birko.Models.Product.SQL.shproj" />
+    <Project Path="../Birko.Models.Users/Birko.Models.Users.shproj" />
+    <Project Path="../Birko.Models.Users.SQL/Birko.Models.Users.SQL.shproj" />
+  </Folder>
+  <Folder Name="/Redis/">
+    <Project Path="../Birko.Redis/Birko.Redis.shproj" />
+  </Folder>
+  <Folder Name="/Messaging/">
+    <Project Path="../Birko.Messaging/Birko.Messaging.shproj" />
+    <Project Path="../Birko.Messaging.Razor/Birko.Messaging.Razor.shproj" />
+  </Folder>
+  <Folder Name="/Health/">
+    <Project Path="../Birko.Health/Birko.Health.shproj" />
+    <Project Path="../Birko.Health.Data/Birko.Health.Data.shproj" />
+    <Project Path="../Birko.Health.Data.SQL/Birko.Health.Data.SQL.shproj" />
+    <Project Path="../Birko.Health.Redis/Birko.Health.Redis.shproj" />
+    <Project Path="../Birko.Health.Azure/Birko.Health.Azure.shproj" />
+  </Folder>
+  <Folder Name="/Storage/">
+    <Project Path="../Birko.Storage/Birko.Storage.shproj" />
+    <Project Path="../Birko.Storage.AzureBlob/Birko.Storage.AzureBlob.shproj" />
+  </Folder>
+  <Folder Name="/Telemetry/">
+    <Project Path="../Birko.Telemetry/Birko.Telemetry.shproj" />
+    <Project Path="../Birko.Telemetry.OpenTelemetry/Birko.Telemetry.OpenTelemetry.shproj" />
+  </Folder>
+  <Folder Name="/Security/">
+    <Project Path="../Birko.Security/Birko.Security.shproj" />
+    <Project Path="../Birko.Security.Jwt/Birko.Security.Jwt.shproj" />
+    <Project Path="../Birko.Security.AspNetCore/Birko.Security.AspNetCore.shproj" />
+    <Project Path="../Birko.Security.BCrypt/Birko.Security.BCrypt.shproj" />
+    <Project Path="../Birko.Security.Vault/Birko.Security.Vault.shproj" />
+    <Project Path="../Birko.Security.Vault.Configuration/Birko.Security.Vault.Configuration.shproj" />
+    <Project Path="../Birko.Security.AzureKeyVault/Birko.Security.AzureKeyVault.shproj" />
+    <Project Path="../Birko.Security.NFC/Birko.Security.NFC.shproj" />
+    <Project Path="../Birko.Security.OAuth.Server/Birko.Security.OAuth.Server.shproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="../../Framework.Tests/Birko.Data.ElasticSearch.Tests/Birko.Data.ElasticSearch.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.Tests/Birko.Data.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.SqLite.Tests/Birko.Data.SQL.SqLite.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.SqLite.View.Tests/Birko.Data.SQL.SqLite.View.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.Providers.Tests/Birko.Data.SQL.Providers.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.MSSql.Tests/Birko.Data.SQL.MSSql.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.MSSql.View.Tests/Birko.Data.SQL.MSSql.View.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.MySQL.Tests/Birko.Data.SQL.MySQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.MySQL.View.Tests/Birko.Data.SQL.MySQL.View.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.PostgreSQL.Tests/Birko.Data.SQL.PostgreSQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.PostgreSQL.View.Tests/Birko.Data.SQL.PostgreSQL.View.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.Views.Tests/Birko.Data.SQL.Views.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.View.Migrations.Tests/Birko.Data.SQL.View.Migrations.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.AspNetCore.Tests/Birko.Communication.AspNetCore.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Tests/Birko.Data.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Helpers.Tests/Birko.Helpers.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Structures.Tests/Birko.Structures.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.Tests/Birko.BackgroundJobs.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.MessageQueue.Tests/Birko.MessageQueue.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.MessageQueue.InMemory.Tests/Birko.MessageQueue.InMemory.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.MessageQueue.MQTT.Tests/Birko.MessageQueue.MQTT.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.MessageQueue.Redis.Tests/Birko.MessageQueue.Redis.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.EventBus.Tests/Birko.EventBus.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.EventBus.MessageQueue.Tests/Birko.EventBus.MessageQueue.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.EventBus.Outbox.Tests/Birko.EventBus.Outbox.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.EventBus.Outbox.SQL.Tests/Birko.EventBus.Outbox.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.EventBus.Tenant.Tests/Birko.EventBus.Tenant.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Messaging.Tests/Birko.Messaging.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Messaging.Razor.Tests/Birko.Messaging.Razor.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Category.Tests/Birko.Models.Category.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Contracts.Tests/Birko.Models.Contracts.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Customers.Tests/Birko.Models.Customers.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Customers.SQL.Tests/Birko.Models.Customers.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Inventory.Tests/Birko.Models.Inventory.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Inventory.SQL.Tests/Birko.Models.Inventory.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Pricing.Tests/Birko.Models.Pricing.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Pricing.SQL.Tests/Birko.Models.Pricing.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Product.SQL.Tests/Birko.Models.Product.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Product.Tests/Birko.Models.Product.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.SEO.Tests/Birko.Models.SEO.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.SQL.Tests/Birko.Models.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Tests/Birko.Models.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Users.Tests/Birko.Models.Users.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Users.SQL.Tests/Birko.Models.Users.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Security.Tests/Birko.Security.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Security.AspNetCore.Tests/Birko.Security.AspNetCore.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Storage.Tests/Birko.Storage.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Storage.AzureBlob.Tests/Birko.Storage.AzureBlob.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Telemetry.Tests/Birko.Telemetry.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Security.BCrypt.Tests/Birko.Security.BCrypt.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Security.Jwt.Tests/Birko.Security.Jwt.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Security.Vault.Tests/Birko.Security.Vault.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Security.AzureKeyVault.Tests/Birko.Security.AzureKeyVault.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Security.OAuth.Server.Tests/Birko.Security.OAuth.Server.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Rules.Tests/Birko.Rules.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Patterns.Tests/Birko.Data.Patterns.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Processors.Tests/Birko.Data.Processors.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Repositories.Tests/Birko.Data.Repositories.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Tagging.Tests/Birko.Data.Tagging.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Tenant.Tests/Birko.Data.Tenant.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.ViewModel.Tests/Birko.Data.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Health.Tests/Birko.Health.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Health.Azure.Tests/Birko.Health.Azure.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Health.Redis.Tests/Birko.Health.Redis.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Health.Data.SQL.Tests/Birko.Health.Data.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Telemetry.OpenTelemetry.Tests/Birko.Telemetry.OpenTelemetry.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Caching.Hybrid.Tests/Birko.Caching.Hybrid.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Aggregates.Tests/Birko.Data.Aggregates.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.Tests/Birko.Workflow.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.CQRS.Tests/Birko.CQRS.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Serialization.Tests/Birko.Serialization.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Time.Tests/Birko.Time.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Localization.Tests/Birko.Localization.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Localization.Data.Tests/Birko.Localization.Data.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Localization.Tests/Birko.Data.Localization.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.Modbus.Tests/Birko.Communication.Modbus.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.OAuth.Tests/Birko.Communication.OAuth.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.IR.Tests/Birko.Communication.IR.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.NFC.Tests/Birko.Communication.NFC.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Security.NFC.Tests/Birko.Security.NFC.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.MongoDB.Tests/Birko.Data.MongoDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.MongoDB.Views.Tests/Birko.Data.MongoDB.Views.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Random.Tests/Birko.Random.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Redis.Tests/Birko.Redis.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.RavenDB.Tests/Birko.Data.RavenDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.RavenDB.Views.Tests/Birko.Data.RavenDB.Views.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.CosmosDB.Tests/Birko.Data.CosmosDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.CosmosDB.ViewModel.Tests/Birko.Data.CosmosDB.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.TimescaleDB.Tests/Birko.Data.TimescaleDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.TimescaleDB.ViewModel.Tests/Birko.Data.TimescaleDB.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.InfluxDB.Tests/Birko.Data.InfluxDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.JSON.Tests/Birko.Data.JSON.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.EventSourcing.Tests/Birko.Data.EventSourcing.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Migrations.RavenDB.Tests/Birko.Data.Migrations.RavenDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.RavenDB.Tests/Birko.Data.Sync.RavenDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.AI.Providers.Tests/Birko.AI.Providers.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.AI.Tests/Birko.AI.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.AI.Agents.Tests/Birko.AI.Agents.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.AI.Orchestration.Tests/Birko.AI.Orchestration.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.AI.Resilience.Tests/Birko.AI.Resilience.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.CosmosDB.Tests/Birko.BackgroundJobs.CosmosDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.XML.Tests/Birko.BackgroundJobs.XML.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.JSON.Tests/Birko.BackgroundJobs.JSON.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.MongoDB.Tests/Birko.BackgroundJobs.MongoDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.ElasticSearch.Tests/Birko.BackgroundJobs.ElasticSearch.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.RavenDB.Tests/Birko.BackgroundJobs.RavenDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Caching.Redis.Tests/Birko.Caching.Redis.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.Tests/Birko.Communication.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.OAuth.Providers.Tests/Birko.Communication.OAuth.Providers.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.Bluetooth.Tests/Birko.Communication.Bluetooth.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.Network.Tests/Birko.Communication.Network.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.REST.Server.Tests/Birko.Communication.REST.Server.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.SOAP.Tests/Birko.Communication.SOAP.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.SSE.Tests/Birko.Communication.SSE.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Configuration.Tests/Birko.Configuration.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.CosmosDB.Views.Tests/Birko.Data.CosmosDB.Views.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.ElasticSearch.Views.Tests/Birko.Data.ElasticSearch.Views.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Migrations.Tests/Birko.Data.Migrations.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Migrations.CosmosDB.Tests/Birko.Data.Migrations.CosmosDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Migrations.ElasticSearch.Tests/Birko.Data.Migrations.ElasticSearch.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Migrations.InfluxDB.Tests/Birko.Data.Migrations.InfluxDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Migrations.TimescaleDB.Tests/Birko.Data.Migrations.TimescaleDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.Hardware.Tests/Birko.Communication.Hardware.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.ViewModel.Tests/Birko.Data.SQL.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.Caching.Tests/Birko.Data.SQL.Caching.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Migrations.MongoDB.Tests/Birko.Data.Migrations.MongoDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.Redis.Tests/Birko.BackgroundJobs.Redis.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.XML.Tests/Birko.Data.XML.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.XML.ViewModel.Tests/Birko.Data.XML.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.InMemory.Tests/Birko.Data.InMemory.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Views.Tests/Birko.Data.Views.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Validation.Tests/Birko.Validation.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.Tests/Birko.Data.Sync.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.Json.Tests/Birko.Data.Sync.Json.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.Xml.Tests/Birko.Data.Sync.Xml.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.Sql.Tests/Birko.Data.Sync.Sql.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.CosmosDB.Tests/Birko.Data.Sync.CosmosDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.ElasticSearch.Tests/Birko.Data.Sync.ElasticSearch.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.MongoDb.Tests/Birko.Data.Sync.MongoDb.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.Tenant.Tests/Birko.Data.Sync.Tenant.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.SQL.Tests/Birko.BackgroundJobs.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.SQL.Tests/Birko.Workflow.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.JSON.Tests/Birko.Workflow.JSON.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.MongoDB.Tests/Birko.Workflow.MongoDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.RavenDB.Tests/Birko.Workflow.RavenDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.CosmosDB.Tests/Birko.Workflow.CosmosDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.ElasticSearch.Tests/Birko.Workflow.ElasticSearch.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.XML.Tests/Birko.Workflow.XML.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.Camera.Tests/Birko.Communication.Camera.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Migrations.SQL.Tests/Birko.Data.Migrations.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Caching.Tests/Birko.Caching.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.REST.Tests/Birko.Communication.REST.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.WebSocket.Tests/Birko.Communication.WebSocket.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.GraphQL.Tests/Birko.Communication.GraphQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.gRPC.Tests/Birko.Communication.gRPC.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.gRPC.Server.Tests/Birko.Communication.gRPC.Server.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.DesignTokens.Tests/Birko.DesignTokens.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Xaml.Avalonia.Tests/Birko.Xaml.Avalonia.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Xaml.Core.Tests/Birko.Xaml.Core.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Contracts.Tests/Birko.Contracts.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Core.Tests/Birko.Data.Core.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Composition.Tests/Birko.Data.Composition.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.ElasticSearch.ViewModel.Tests/Birko.Data.ElasticSearch.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.InfluxDB.ViewModel.Tests/Birko.Data.InfluxDB.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.JSON.ViewModel.Tests/Birko.Data.JSON.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.MongoDB.ViewModel.Tests/Birko.Data.MongoDB.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.RavenDB.ViewModel.Tests/Birko.Data.RavenDB.ViewModel.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Xaml/">
+    <Project Path="../Birko.DesignTokens/Birko.DesignTokens.csproj" />
+    <Project Path="../Birko.Xaml.Core/Birko.Xaml.Core.csproj" />
+    <Project Path="../Birko.Xaml.Avalonia/Birko.Xaml.Avalonia.csproj" />
+    <Project Path="../Birko.Xaml.Shell/Birko.Xaml.Shell.csproj" />
+  </Folder>
+  <Folder Name="/Time/">
+    <Project Path="../Birko.Time.Abstractions/Birko.Time.Abstractions.shproj" />
+    <Project Path="../Birko.Time/Birko.Time.shproj" />
+  </Folder>
+  <Folder Name="/Validation/">
+    <Project Path="../Birko.Validation/Birko.Validation.shproj" />
+  </Folder>
+  <Folder Name="/CQRS/">
+    <Project Path="../Birko.CQRS/Birko.CQRS.shproj" />
+  </Folder>
+  <Folder Name="/Rules/">
+    <Project Path="../Birko.Rules/Birko.Rules.shproj" />
+  </Folder>
+  <Folder Name="/Localization/">
+    <Project Path="../Birko.Localization/Birko.Localization.shproj" />
+    <Project Path="../Birko.Localization.Data/Birko.Localization.Data.shproj" />
+    <Project Path="../Birko.Data.Localization/Birko.Data.Localization.shproj" />
+  </Folder>
+  <Folder Name="/Serialization/">
+    <Project Path="../Birko.Serialization/Birko.Serialization.shproj" />
+    <Project Path="../Birko.Serialization.Newtonsoft/Birko.Serialization.Newtonsoft.shproj" />
+    <Project Path="../Birko.Serialization.MessagePack/Birko.Serialization.MessagePack.shproj" />
+    <Project Path="../Birko.Serialization.Protobuf/Birko.Serialization.Protobuf.shproj" />
+    <Project Path="../Birko.Serialization.Yaml/Birko.Serialization.Yaml.shproj" />
+  </Folder>
+  <Folder Name="/Workflow/">
+    <Project Path="../Birko.Workflow/Birko.Workflow.shproj" />
+    <Project Path="../Birko.Workflow.SQL/Birko.Workflow.SQL.shproj" />
+    <Project Path="../Birko.Workflow.ElasticSearch/Birko.Workflow.ElasticSearch.shproj" />
+    <Project Path="../Birko.Workflow.MongoDB/Birko.Workflow.MongoDB.shproj" />
+    <Project Path="../Birko.Workflow.RavenDB/Birko.Workflow.RavenDB.shproj" />
+    <Project Path="../Birko.Workflow.JSON/Birko.Workflow.JSON.shproj" />
+    <Project Path="../Birko.Workflow.CosmosDB/Birko.Workflow.CosmosDB.shproj" />
+    <Project Path="../Birko.Workflow.XML/Birko.Workflow.XML.shproj" />
+  </Folder>
+  <Folder Name="/AI/">
+    <Project Path="../Birko.AI.Contracts/Birko.AI.Contracts.shproj" />
+    <Project Path="../Birko.AI/Birko.AI.shproj" />
+    <Project Path="../Birko.AI.Providers/Birko.AI.Providers.shproj" />
+    <Project Path="../Birko.AI.Agents/Birko.AI.Agents.shproj" />
+    <Project Path="../Birko.AI.Resilience/Birko.AI.Resilience.shproj" />
+    <Project Path="../Birko.AI.Orchestration/Birko.AI.Orchestration.shproj" />
+  </Folder>
+  <!-- The compile-gate aggregator now lives in the Birko.Sandbox consumer (TASK-037);
+       this framework repo is docs/meta only. Referenced cross-bucket for the IDE. -->
+  <Project Path="../../Consumers/Birko.Sandbox/Birko.Framework/Birko.Framework.csproj" />
+</Solution>
