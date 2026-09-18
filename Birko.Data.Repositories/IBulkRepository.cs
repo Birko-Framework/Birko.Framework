@@ -1,0 +1,137 @@
+using System;
+using System.Collections.Generic;
+using System.Linq.Expressions;
+using Birko.Data.Stores;
+
+namespace Birko.Data.Repositories
+{
+    #region Bulk Read Operations
+
+    /// <summary>
+    /// Defines bulk read operations for model repositories.
+    /// </summary>
+    /// <typeparam name="T">The type of data model.</typeparam>
+    public interface IBulkReadRepository<T> : IReadRepository<T>
+        where T : Models.AbstractModel
+    {
+        /// <summary>
+        /// Reads all entities.
+        /// </summary>
+        /// <returns>A collection of all entities.</returns>
+        IEnumerable<T> Read();
+
+        /// <summary>
+        /// Reads entities matching the specified filter with optional sorting and pagination.
+        /// </summary>
+        /// <param name="filter">Optional filter expression.</param>
+        /// <param name="orderBy">Optional sort specification.</param>
+        /// <param name="limit">Maximum number of entities to return.</param>
+        /// <param name="offset">Number of entities to skip.</param>
+        /// <returns>A collection of matching entities.</returns>
+        IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null);
+
+        /// <summary>
+        /// Reads the first entity matching the filter. Provided for parity with the store contract's
+        /// <see cref="Stores.IBulkReadStore{T}.ReadFirst"/> — on a bulk repository the inherited
+        /// <c>Read(filter)</c> returns the collection, so this is the single-result accessor.
+        /// </summary>
+        /// <param name="filter">Optional filter expression.</param>
+        /// <returns>The first matching entity, or null.</returns>
+        T? ReadFirst(Expression<Func<T, bool>>? filter = null);
+    }
+
+    #endregion
+
+    #region Bulk Create Operations
+
+    /// <summary>
+    /// Defines bulk create operations for model repositories.
+    /// </summary>
+    /// <typeparam name="T">The type of data model.</typeparam>
+    public interface IBulkCreateRepository<T> : ICreateRepository<T>
+        where T : Models.AbstractModel
+    {
+        /// <summary>
+        /// Creates multiple entities.
+        /// </summary>
+        /// <param name="data">The entities to create.</param>
+        void Create(IEnumerable<T> data);
+    }
+
+    #endregion
+
+    #region Bulk Update Operations
+
+    /// <summary>
+    /// Defines bulk update operations for model repositories.
+    /// </summary>
+    /// <typeparam name="T">The type of data model.</typeparam>
+    public interface IBulkUpdateRepository<T> : IUpdateRepository<T>
+        where T : Models.AbstractModel
+    {
+        /// <summary>
+        /// Updates multiple entities.
+        /// </summary>
+        /// <param name="data">The entities with updated values.</param>
+        void Update(IEnumerable<T> data);
+
+        /// <summary>
+        /// Updates all entities matching the filter by applying the specified action.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updateAction">Action to apply to each matching entity.</param>
+        void Update(Expression<Func<T, bool>> filter, Action<T> updateAction);
+
+        /// <summary>
+        /// Updates specific properties on all entities matching the filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updates">Property assignments to apply.</param>
+        void Update(Expression<Func<T, bool>> filter, Stores.PropertyUpdate<T> updates);
+    }
+
+    #endregion
+
+    #region Bulk Delete Operations
+
+    /// <summary>
+    /// Defines bulk delete operations for model repositories.
+    /// </summary>
+    /// <typeparam name="T">The type of data model.</typeparam>
+    public interface IBulkDeleteRepository<T> : IDeleteRepository<T>
+        where T : Models.AbstractModel
+    {
+        /// <summary>
+        /// Deletes multiple entities.
+        /// </summary>
+        /// <param name="data">The entities to delete.</param>
+        void Delete(IEnumerable<T> data);
+
+        /// <summary>
+        /// Deletes all entities matching the specified filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to delete.</param>
+        void Delete(Expression<Func<T, bool>> filter);
+    }
+
+    #endregion
+
+    #region Complete Bulk Repository Interface
+
+    /// <summary>
+    /// Defines bulk operations for a model repository.
+    /// Combines all repository interfaces with bulk operation capabilities.
+    /// </summary>
+    /// <typeparam name="T">The type of data model, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
+    public interface IBulkRepository<T>
+        : IRepository<T>
+        , IBulkReadRepository<T>
+        , IBulkCreateRepository<T>
+        , IBulkUpdateRepository<T>
+        , IBulkDeleteRepository<T>
+        where T : Models.AbstractModel
+    {
+    }
+
+    #endregion
+}

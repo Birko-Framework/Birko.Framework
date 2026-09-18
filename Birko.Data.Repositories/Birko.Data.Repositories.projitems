@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>c3e4f5a6-b7c8-4d9e-0f1a-2b3c4d5e6f7a</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- TASK-229: ServiceCollectionExtensions uses IServiceCollection and ServiceLifetime.
+         Abstractions is the right package for a library: the contracts, not the container. -->
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)IBaseRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IAsyncRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IAsyncBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractAsyncRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractAsyncBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)RepositoryLocator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
