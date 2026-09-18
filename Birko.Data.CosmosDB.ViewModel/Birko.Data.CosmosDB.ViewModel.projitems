@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d0e1f2a3-b4c5-4d6e-9f7a-8b9c0d1e2f3a</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.CosmosDB.ViewModel</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- External dependency: Microsoft.Azure.Cosmos, declared by Birko.Data.CosmosDB.projitems and deliberately NOT
+       repeated here. A consumer imports this projitems alongside that one — this project builds on the CosmosDB store and cannot work without it — so a
+       second declaration lands in the same project file and restore reports NU1504, which the
+       -warnaserror that verify-conventions runs turns into an error. Import Birko.Data.CosmosDB.projitems to
+       get the driver (TASK-234). -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\CosmosDBRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncCosmosDBRepository.cs" />
+  </ItemGroup>
+</Project>
