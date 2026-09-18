@@ -43,6 +43,15 @@ jobs:
       - name: Build the solution
         run: dotnet build birko/Framework/Birko.Framework/Birko.Framework.slnx --nologo
 
+      # The harness is a CONSUMER-side check and is not in the .slnx, so the build step above does
+      # not reach it. It is the only thing in CI that proves the framework still composes through
+      # $(BirkoSrc) + .projitems from outside - which is a different failure from any unit suite,
+      # and the one that breaks real applications. It exits with the number of failed checks.
+      # Checks needing a server report CFG (wiring verified, nothing contacted) and never fail here.
+      - name: Run the Sandbox smoke harness
+        working-directory: birko/Consumers/Birko.Sandbox
+        run: dotnet run --nologo
+
       # BIRKO_REQUIRE_LIVE is deliberately NOT set: suites needing a server skip themselves here and
       # are covered by live-tests.yml. Setting it would turn every one of those skips into a failure.
       # Birko.DesignTokens.Tests is skipped HERE and covered by token-parity.yml, which is the only
