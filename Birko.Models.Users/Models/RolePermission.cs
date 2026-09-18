@@ -1,0 +1,45 @@
+using System;
+using Birko.Data.Models;
+
+namespace Birko.Models.Users
+{
+    /// <summary>
+    /// Links a Role to a permission code string.
+    /// Permission codes are defined as constants in each module (e.g. "iot:device:register").
+    /// No Permission entity needed — codes are just strings.
+    /// </summary>
+    public class RolePermission : Birko.Data.Models.AbstractLogModel
+        , Birko.Data.Models.ILoadable<ViewModels.RolePermission>
+        , IRelatedToRole
+    {
+        public Guid RoleGuid { get; set; }
+
+        /// <summary>
+        /// Permission code string (e.g. "iot:device:register", "building:space:create").
+        /// Convention: {module}:{entity}:{action}
+        /// </summary>
+        public string PermissionCode { get; set; } = null!;
+
+        public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+
+        public virtual void LoadFrom(ViewModels.Role data)
+        {
+            if (data?.Guid is Guid guid) // CR-M226
+            {
+                RoleGuid = guid;
+            }
+        }
+
+        /// <summary>
+        /// CR-M227: the RolePermission view model carries no RoleGuid — assign it via
+        /// <c>LoadFrom(ViewModels.Role)</c>, not this overload.
+        /// </summary>
+        public virtual void LoadFrom(ViewModels.RolePermission data)
+        {
+            base.LoadFrom(data);
+            if (data == null) return;
+            PermissionCode = data.PermissionCode;
+            GrantedAt = data.GrantedAt;
+        }
+    }
+}
