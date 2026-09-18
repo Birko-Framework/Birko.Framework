@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>870e829c-7bb9-43ca-9e53-1a3c51b9b09e</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.SQL.View</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\AggregateField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\AvgField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\CountField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\MaxField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\MinField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\SumField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\View.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ViewField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewQueryMode.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_CreateSelectCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectViewCount.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_View.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_ViewOrderBy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\BooleanFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\DateTimeFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\FunctionField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\DecimalFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\IntegerFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\CharFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\GuidFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\StringFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Tables\View.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnectorBase_View.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\ViewSelectSqlBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_CreateView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector_CreateView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector_SelectView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector_SelectViewCount.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MaterializedViewType.cs" />
+  </ItemGroup>
+</Project>
