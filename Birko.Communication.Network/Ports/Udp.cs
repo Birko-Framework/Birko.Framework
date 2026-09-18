@@ -1,0 +1,235 @@
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using Birko.Communication.Ports;
+
+namespace Birko.Communication.Network.Ports
+{
+    public class UdpSettings : PortSettings
+    {
+        public string Address { get; set; } = string.Empty;
+        public int Port { get; set; }
+        public int LocalPort { get; set; } // For receiving
+
+        /// <summary>
+        /// Multicast group to join on <see cref="Udp.Open"/>, e.g. "239.255.255.250". Null or empty
+        /// joins nothing. Sending to a group needs no membership — only receiving does (TASK-455).
+        /// </summary>
+        public string? MulticastGroup { get; set; }
+
+        /// <summary>
+        /// Allow other sockets to bind <see cref="LocalPort"/> as well. Required for the shared
+        /// discovery ports (mDNS 5353, SSDP 1900), where the OS resolver is already bound.
+        /// Default false preserves the exclusive bind this port has always used.
+        /// </summary>
+        public bool ReuseAddress { get; set; }
+
+        /// <summary>
+        /// Multicast TTL / hop limit. Null uses the OS default of 1 (link-local), which is what LAN
+        /// discovery wants; raise it only for routed multicast.
+        /// </summary>
+        public int? MulticastTtl { get; set; }
+
+        public override string GetID()
+        {
+            // Appended, not reformatted: an id for settings that use none of the multicast fields is
+            // byte-identical to what it was before they existed, while two configurations differing
+            // only in a socket-affecting field still get different ids (TASK-455).
+            var id = string.Format("Udp|{0}|{1}|{2}|{3}", Name, Address, Port, LocalPort);
+            if (!string.IsNullOrWhiteSpace(MulticastGroup)) id += "|mc=" + MulticastGroup;
+            if (ReuseAddress) id += "|reuse";
+            if (MulticastTtl.HasValue) id += "|ttl=" + MulticastTtl.Value;
+            return id;
+        }
+    }
+
+    public class Udp : AbstractPort
+    {
+        private UdpClient? _client;
+        private IPEndPoint? _remoteEndPoint;
+        private IPAddress? _joinedGroup;
+        private Thread? _readThread;
+        private bool _stopThread;
+
+        public Udp(UdpSettings settings) : base(settings)
+        {
+        }
+
+        public override void Write(byte[] data)
+        {
+            if (_client == null)
+                Open();
+
+            // Guard _remoteEndPoint too: UdpClient.Send's endpoint parameter is non-nullable, so the
+            // previous _client-only guard was a CS8604 nullable warning and a latent NRE if the port
+            // was somehow open without a resolved endpoint (CR-M054).
+            if (_client != null && _remoteEndPoint != null)
+            {
+                _client.Send(data, data.Length, _remoteEndPoint);
+            }
+        }
+
+        public override byte[] Read(int size)
+        {
+            // Lock ReadData: the background ReadWorker mutates it under the same lock, and List<byte>
+            // is not thread-safe (concurrent AddRange during GetRange can tear/throw) — CR-H026.
+            lock (ReadData)
+            {
+                if (size < 0)
+                {
+                    return ReadData.ToArray();
+                }
+                if (ReadData.Count >= size)
+                {
+                    return ReadData.GetRange(0, size).ToArray();
+                }
+            }
+            return new byte[0];
+        }
+
+        public override void Open()
+        {
+            if (!IsOpen())
+            {
+                var settings = Settings as UdpSettings;
+                if (settings == null) throw new InvalidOperationException("Invalid Settings for Udp port");
+
+                try
+                {
+                    // Bind explicitly rather than via new UdpClient(localPort): the address-reuse
+                    // options have to be set on the socket BEFORE it binds, and that constructor
+                    // binds inside itself, so there is no window in which to set them (TASK-455).
+                    _client = new UdpClient(AddressFamily.InterNetwork);
+                    if (settings.ReuseAddress)
+                    {
+                        // Windows needs BOTH of these; setting only SO_REUSEADDR still fails to bind
+                        // a port another socket holds exclusively.
+                        _client.ExclusiveAddressUse = false;
+                        _client.Client.SetSocketOption(
+                            SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                    }
+                    // Bind to local port if specified, otherwise 0 (any available)
+                    _client.Client.Bind(new IPEndPoint(IPAddress.Any, settings.LocalPort));
+
+                    if (!string.IsNullOrWhiteSpace(settings.MulticastGroup))
+                    {
+                        // Join AFTER Bind - membership belongs to the bound socket. Measured: without
+                        // this, a datagram sent to the group is simply never received (TASK-455).
+                        var group = IPAddress.Parse(settings.MulticastGroup);
+                        if (settings.MulticastTtl.HasValue)
+                        {
+                            _client.JoinMulticastGroup(group, settings.MulticastTtl.Value);
+                        }
+                        else
+                        {
+                            _client.JoinMulticastGroup(group);
+                        }
+                        _joinedGroup = group;
+                    }
+
+                    _remoteEndPoint = new IPEndPoint(IPAddress.Parse(settings.Address), settings.Port);
+
+                    _isOpen = true;
+
+                    _stopThread = false;
+                    _readThread = new Thread(ReadWorker);
+                    _readThread.IsBackground = true;
+                    _readThread.Start();
+                }
+                catch (Exception)
+                {
+                    _isOpen = false;
+                    throw;
+                }
+            }
+        }
+
+        public override void Close()
+        {
+            if (IsOpen())
+            {
+                // Close/dispose the client FIRST to unblock the worker's blocking Receive, THEN join it,
+                // so shutdown is deterministic (a join before closing would just wait out the timeout
+                // because Receive is still blocked) — CR-L069.
+                _stopThread = true;
+                if (_client != null)
+                {
+                    if (_joinedGroup != null)
+                    {
+                        // Drop membership before the client goes away. Swallowed because the socket
+                        // may already be unusable (interface down, adapter removed) and failing to
+                        // leave a group must not prevent the port from closing (TASK-455).
+                        try { _client.DropMulticastGroup(_joinedGroup); } catch { }
+                        _joinedGroup = null;
+                    }
+                    _client.Close();
+                    _client = null;
+                }
+                _readThread?.Join(TimeSpan.FromMilliseconds(500));
+                _readThread = null;
+                _isOpen = false;
+            }
+        }
+
+        private void ReadWorker()
+        {
+            while (!_stopThread)
+            {
+                // Capture a local reference so a concurrent Close() nulling _client can't NRE between
+                // the null check and Receive (CR-L069).
+                var client = _client;
+                if (client == null)
+                    break;
+                try
+                {
+                    // UdpClient.Receive blocks, so this thread will wait.
+                    // To shutdown cleanly, Close() disposes client which causes Receive to throw.
+                    IPEndPoint remote = new IPEndPoint(IPAddress.Any, 0);
+                    byte[] received = client.Receive(ref remote);
+
+                    if (received != null && received.Length > 0)
+                    {
+                        lock (ReadData)
+                        {
+                            ReadData.AddRange(received);
+                        }
+                        InvokeProcessData();
+                    }
+                }
+                catch
+                {
+                     // Expected during close
+                    break;
+                }
+            }
+        }
+
+        public override bool HasReadData(int size)
+        {
+            lock (ReadData)
+            {
+                if (size < 0)
+                    return ReadData.Count > 0; // "all available" — true only when there is data (CR-H027)
+                return ReadData.Count >= size;
+            }
+        }
+
+        public override byte[] RemoveReadData(int size)
+        {
+            // Read + RemoveRange atomically under the lock, removing exactly what was read (whole
+            // buffer for size < 0) so RemoveRange(0, -1) can't throw (CR-H026 / CR-H027).
+            lock (ReadData)
+            {
+                byte[] result = Read(size);
+                if (result.Length > 0)
+                {
+                    ReadData.RemoveRange(0, result.Length);
+                }
+                return result;
+            }
+        }
+    }
+}
