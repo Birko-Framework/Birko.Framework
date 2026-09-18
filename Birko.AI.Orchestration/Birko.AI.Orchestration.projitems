@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>10c2ce6a-39a9-4311-969b-ca80d59dc29a</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.AI.Orchestration</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\AgentTaskStatus.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\AgentTaskRecord.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ImplementationPlan.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\TaskAssignment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\EscalationAlert.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dispatch\ITaskDispatcher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dispatch\DirectTaskDispatcher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\StepDependencyAnalyzer.cs" />
+  </ItemGroup>
+</Project>
