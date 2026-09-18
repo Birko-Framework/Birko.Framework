@@ -1,0 +1,10 @@
+{
+  "greeting": "Ahoj",
+  "farewell": "Dovidenia",
+  "welcome": "Vitaj, {userName}!",
+  "items_count": "Máte {0} položiek",
+  "errors": {
+    "notFound": "Nenájdené",
+    "forbidden": "Prístup zamietnutý"
+  }
+}
