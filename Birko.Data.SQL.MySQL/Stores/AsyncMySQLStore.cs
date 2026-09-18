@@ -1,0 +1,145 @@
+using Birko.Data.SQL.Connectors;
+using Birko.Data.SQL.Stores;
+using Birko.Data.Stores;
+using Birko.Configuration;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Birko.Data.SQL.MySQL.Stores
+{
+    /// <summary>
+    /// Native async MySQL store with bulk operation support.
+    /// Combines single-item and bulk async CRUD operations in one store.
+    /// </summary>
+    /// <typeparam name="T">The type of entity.</typeparam>
+    public class AsyncMySQLStore<T> : AsyncDataBaseBulkStore<MySQLConnector, T>
+        where T : Models.AbstractModel
+    {
+        /// <summary>
+        /// Initializes a new instance of the AsyncMySQLStore class.
+        /// </summary>
+        public AsyncMySQLStore()
+        {
+        }
+
+        /// <summary>
+        /// Sets the connection settings.
+        /// </summary>
+        /// <param name="settings">The remote settings to use.</param>
+        public void SetSettings(RemoteSettings settings)
+        {
+            if (settings != null)
+            {
+                base.SetSettings((ISettings)settings);
+            }
+        }
+
+        /// <summary>
+        /// Sets the connection settings.
+        /// </summary>
+        /// <param name="settings">The password settings to use.</param>
+        public override void SetSettings(PasswordSettings settings)
+        {
+            if (settings is RemoteSettings remote)
+            {
+                SetSettings(remote);
+            }
+            else
+            {
+                base.SetSettings(settings);
+            }
+        }
+
+        /// <summary>
+        /// Creates the database schema.
+        /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        public async Task CreateSchemaAsync(CancellationToken ct = default)
+        {
+            if (Connector == null)
+            {
+                throw new InvalidOperationException("Connector not initialized. Call SetSettings() first.");
+            }
+
+            await Task.Run(() => Connector.CreateTable(new[] { typeof(T) }), ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Drops the database schema.
+        /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        public async Task DropAsync(CancellationToken ct = default)
+        {
+            if (Connector == null)
+            {
+                throw new InvalidOperationException("Connector not initialized.");
+            }
+
+            await Task.Run(() => Connector.DropTable(new[] { typeof(T) }), ct).ConfigureAwait(false);
+        }
+
+        #region Native Bulk Operations
+
+        /// <inheritdoc />
+        protected override async Task CreateCoreAsync(
+            IEnumerable<T> data,
+            StoreDataDelegate<T>? storeDelegate = null,
+            CancellationToken ct = default)
+        {
+            if (Connector == null || data == null || !data.Any())
+                return;
+
+            var items = data.ToList();
+            foreach (var item in items)
+            {
+                item.Guid = Guid.NewGuid();
+                storeDelegate?.Invoke(item);
+            }
+
+            // The store-level door has to publish the boundary too, or the connector fix is
+            // unreachable through it: these Core overrides bypass the base's per-item write, and the
+            // base is the only place that entered the scope. Costs nothing when no context is set.
+            using var _tx = EnterTransactionScope();
+            await Connector.BulkInsertAsync(typeof(T), items.Cast<object>(), ct).ConfigureAwait(false);
+        }
+
+        /// <inheritdoc />
+        protected override async Task UpdateCoreAsync(
+            IEnumerable<T> data,
+            StoreDataDelegate<T>? storeDelegate = null,
+            CancellationToken ct = default)
+        {
+            if (Connector == null || data == null || !data.Any())
+                return;
+
+            var items = data.ToList();
+            if (storeDelegate != null)
+            {
+                foreach (var item in items)
+                {
+                    storeDelegate.Invoke(item);
+                }
+            }
+
+            using var _tx = EnterTransactionScope();
+            await Connector.BulkUpdateAsync(typeof(T), items.Cast<object>(), ct).ConfigureAwait(false);
+        }
+
+        /// <inheritdoc />
+        protected override async Task DeleteCoreAsync(
+            IEnumerable<T> data,
+            CancellationToken ct = default)
+        {
+            if (Connector == null || data == null || !data.Any())
+                return;
+
+            using var _tx = EnterTransactionScope();
+            await Connector.BulkDeleteAsync(typeof(T), data.Cast<object>(), ct).ConfigureAwait(false);
+        }
+
+        #endregion
+    }
+}

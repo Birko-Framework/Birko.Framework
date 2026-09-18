@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>8c9a0b22-d338-4b9e-c647-65237d009ccc</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.SQL.MySQL</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both. -->
+    <PackageReference Include="MySqlConnector" Version="2.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="MySqlConnector" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\MySQLConnector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\MySQLRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncMySQLStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMySQLRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\MySQLModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMySQLModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\MySqlIndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MySqlSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLStoreFactoryOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IMySQLStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\MySQLServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
