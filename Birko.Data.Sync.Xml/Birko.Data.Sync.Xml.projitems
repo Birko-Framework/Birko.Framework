@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a1b2c3d4-e5f6-4a7b-8c9d-1e2f3a4b5c6e</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Sync.Xml</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\XmlSyncKnowledgeItem.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlSyncKnowledgeStore.cs" />
+  </ItemGroup>
+  <!-- This project extends Birko.Data.Sync and a consumer must import
+       Birko.Data.Sync.projitems alongside it.
+
+       That used to be written as a <ProjectReference> to that .projitems, which MSBuild cannot honour:
+       a .projitems is an include file, not a build target, and the path resolves against the CONSUMING
+       project's directory rather than this one — so it emitted `warning MSB9008: The referenced
+       project ..\Birko.Data.Sync\Birko.Data.Sync.projitems does not exist` in every importer, and an
+       error under the -warnaserror the build sweep runs. It was inert: every consumer already imports
+       Birko.Data.Sync explicitly.
+
+       MSBuild has no way to express a shared project depending on another shared project, which is why
+       this is a comment. Do not re-add the ProjectReference (TASK-238). -->
+</Project>
