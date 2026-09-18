@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -20,6 +20,6 @@
 
   <!-- Imports ONLY the contracts projitems: if this compiles + runs, the zero-dependency
        contract (CR-H126) holds — no Birko.Data.Core / Birko.Configuration needed. -->
-  <Import Project="..\..\Framework\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
 
 </Project>

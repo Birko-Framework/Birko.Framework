@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -19,9 +19,9 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\..\Framework\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Security\Birko.Security.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Communication.SSE\Birko.Communication.SSE.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Security\Birko.Security.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Communication.SSE\Birko.Communication.SSE.projitems" Label="Shared" />
 
 </Project>

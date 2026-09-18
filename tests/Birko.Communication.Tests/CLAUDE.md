@@ -4,7 +4,7 @@
 Unit tests for the Birko.Communication base port surface (`PortSettings`, `AbstractPort`, `IPort`).
 
 ## Project Location
-`C:\Source\Birko\Framework.Tests\Birko.Communication.Tests\`
+`C:\Source\Birko\Framework	ests\Birko.Communication.Tests\`
 
 ## Test Framework
 xUnit + FluentAssertions

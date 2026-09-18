@@ -141,9 +141,14 @@ Note: this is a heuristic. False positives are possible (e.g. method tested thro
 
 ### 6. New project directory missing required files
 
-Per CLAUDE-maintenance.md § "New Project Checklist": every project dir must have `License.md`, `README.md`, `CLAUDE.md`, `.gitignore`.
+Per CLAUDE-maintenance.md § "New Project Checklist": every project dir must have `README.md` and `CLAUDE.md`.
 
-For every new directory under `C:\Source\Birko\Framework\Birko.*\` introduced in the diff, verify all four files exist. Report missing files.
+For every new directory under `C:\Source\Birko\Framework\Birko.*\` introduced in the diff, verify both files exist. Report missing files.
+
+**Report a per-project `License.md` or `.gitignore` as a violation**, not as a requirement: the repo
+has one root `LICENSE` and one root `.gitignore`, and re-adding per-project copies reintroduces the
+duplication the monorepo migration removed. (Seven `.gitignore` files with genuinely
+project-specific rules are the documented exception.)
 
 Also check GUID requirements: if a new `.shproj` or `.projitems` was added, verify:
 - `ProjectGuid` / `SharedGUID` is a valid hex-only GUID (`0-9a-f`, format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).

@@ -5,7 +5,7 @@ Unit tests for Birko.Data.Migrations.RavenDB — the RavenDB platform provider f
 platform-agnostic migration framework.
 
 ## Project Location
-`C:\Source\Birko\Framework.Tests\Birko.Data.Migrations.RavenDB.Tests\`
+`C:\Source\Birko\Framework	ests\Birko.Data.Migrations.RavenDB.Tests\`
 
 ## Test Framework
 xUnit + FluentAssertions

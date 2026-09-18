@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -18,14 +18,14 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>
 
-  <Import Project="..\..\Framework\Birko.Time\Birko.Time.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Data.Tenant\Birko.Data.Tenant.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Security\Birko.Security.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Security.Jwt\Birko.Security.Jwt.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Security.AspNetCore\Birko.Security.AspNetCore.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Time\Birko.Time.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Tenant\Birko.Data.Tenant.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Security\Birko.Security.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Security.Jwt\Birko.Security.Jwt.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Security.AspNetCore\Birko.Security.AspNetCore.projitems" Label="Shared" />
 
 </Project>

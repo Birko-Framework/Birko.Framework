@@ -1,6 +1,6 @@
 ---
 name: new-birko-subproject
-description: Scaffold a new sibling `Birko.X` shared project inside the Birko.Framework workspace (e.g. a new store, model domain, serializer, communication adapter, AI provider, etc.). Use when the user says "novy birko projekt", "novy sub projekt", "add a new Birko project", "create Birko.Foo", "new persistence backend", "new model domain", "new Birko sibling", or similar requests to extend the framework itself (not to consume it — that's the [[birko-new-project]] skill). Creates `.shproj` + `.projitems` with proper hex GUIDs, the required `CLAUDE.md` / `README.md` / `License.md` / `.gitignore`, an optional `.Tests` companion project, and registers everything in `Birko.Framework.slnx`, `Birko.Framework.code-workspace`, and the `Birko.Framework.csproj` aggregator. Companion: [[new-store-backend]] (specializes this for persistence backends), [[verify-birko-conventions]] (post-scaffold lint).
+description: Scaffold a new sibling `Birko.X` shared project inside the Birko.Framework workspace (e.g. a new store, model domain, serializer, communication adapter, AI provider, etc.). Use when the user says "novy birko projekt", "novy sub projekt", "add a new Birko project", "create Birko.Foo", "new persistence backend", "new model domain", "new Birko sibling", or similar requests to extend the framework itself (not to consume it — that's the [[birko-new-project]] skill). Creates `.shproj` + `.projitems` with proper hex GUIDs, the required `CLAUDE.md` / `README.md`, an optional `.Tests` companion project, and registers everything in `Birko.Framework.slnx`, `Birko.Framework.code-workspace`, and the `Birko.Framework.csproj` aggregator. Companion: [[new-store-backend]] (specializes this for persistence backends), [[verify-birko-conventions]] (post-scaffold lint).
 ---
 
 # Birko Framework — New Sibling Project Scaffolder
@@ -59,14 +59,9 @@ Everything below comes from `CLAUDE-maintenance.md` § "New Project Checklist". 
 
 - Public-facing. Sections: project name + one-line purpose, **Features**, **Usage** (code snippet), **Test framework** (only for test projects), **Running tests**, **License**.
 
-### 5. `License.md`
-
-- MIT, copyright **2026 František Bereň**.
-- Copy verbatim from any existing project's `License.md`. Do **not** regenerate from a template — copy the exact text.
-
-### 6. `.gitignore`
-
-- Standard Visual Studio `.gitignore`. Copy verbatim from any existing project.
+> **Do NOT create a per-project `License.md` or `.gitignore`.** The repo has one root `LICENSE`
+> and one root `.gitignore` covering every project. Adding per-project copies re-creates the
+> duplication the monorepo migration removed (266 licences, 334 identical ignores).
 
 ### 7. (Optional) `azure-pipelines.yml`
 
@@ -74,7 +69,7 @@ Everything below comes from `CLAUDE-maintenance.md` § "New Project Checklist". 
 
 ### 8. `docs/specs/.map.yml`
 
-- Seed the [[specs]] skill's area map (from its `templates/map.yml`) with one starting area covering the project's public surface — specs live **per-repo** in the polyrepo, so each `Birko.X` carries its own `docs/specs/`. Once real types exist, `/specs regen` harvests the capability specs; `/tasks close` on a story then offers the scoped regen automatically.
+- Seed the [[specs]] skill's area map (from its `templates/map.yml`) with one starting area covering the project's public surface — specs live in the aggregator's `docs/specs/` — one tree for the whole monorepo. Once real types exist, `/specs regen` harvests the capability specs; `/tasks close` on a story then offers the scoped regen automatically.
 - Skip for projects with no behavioral surface (pure contracts/marker interfaces) — don't invent areas for nothing.
 
 ## Registrations to update
@@ -115,12 +110,12 @@ Per the user's [[feedback_update_docs]] preference, **always update `README.md` 
 
 ## Companion test project (if selected)
 
-Create `C:\Source\Birko\Framework.Tests\Birko.X.Tests\` as a regular `.csproj` (NOT shared):
+Create `C:\Source\Birko\Framework	ests\Birko.X.Tests\` as a regular `.csproj` (NOT shared):
 
 - `Microsoft.NET.Sdk` target framework matching the rest of the framework (`net10.0` currently).
 - `<PackageReference>` for **xUnit**, **xUnit.runner.visualstudio**, **Microsoft.NET.Test.Sdk**, **FluentAssertions**.
-- `<Import Project="..\Birko.X\Birko.X.projitems" Label="Shared" />` so tests have direct access to the project's source.
-- Same `CLAUDE.md` / `README.md` / `License.md` / `.gitignore` requirements.
+- `<Import Project="..\..\Birko.X\Birko.X.projitems" Label="Shared" />` so tests have direct access to the project's source.
+- Same `CLAUDE.md` / `README.md` requirements (no per-project licence or ignore file).
 - Register in `.slnx` under `Tests/`, in `.code-workspace` under `Tests / Birko.X.Tests`.
 
 ## After scaffolding

@@ -18,10 +18,14 @@ When making major changes to a project, update its CLAUDE.md to reflect:
 ## New Project Checklist
 Every project directory must contain:
 
-1. **`License.md`** — MIT license (Copyright 2026 František Bereň). Copy from any existing project.
-2. **`README.md`** — Project name, overview, features, test framework (if test project), running instructions, and License section.
-3. **`CLAUDE.md`** — Overview, project location, components, dependencies, and maintenance instructions.
-4. **`.gitignore`** — Standard Visual Studio .gitignore. Copy from any existing project.
+1. **`README.md`** — Project name, overview, features, test framework (if test project), running instructions, and License section.
+2. **`CLAUDE.md`** — Overview, project location, components, dependencies, and maintenance instructions.
+
+> **No per-project `License.md` or `.gitignore`.** The repo has one root `LICENSE` (MIT, 2026
+> František Bereň) and one root `.gitignore`; both cover every project below them. The 266
+> per-project licence copies and 334 identical `.gitignore` copies were artefacts of the
+> one-repo-per-project era and were removed with the monorepo migration. Seven `.gitignore`
+> files with genuinely project-specific rules survive and are the only ones that should exist.
 
 **GUID requirements for `.shproj` and `.projitems` files:**
 - `ProjectGuid` in `.shproj` and `SharedGUID` in `.projitems` must be valid GUIDs containing **only hex characters** (`0-9`, `a-f`).
@@ -102,7 +106,7 @@ time-based gap, not a build-configuration one, so it is covered by a **periodic 
 Run it on a schedule, before a release, and after any dependency bump. Two rules it enforces by construction
 and that are easy to get wrong by hand:
 
-- **Sweep consumers, not just `Framework.Tests`.** A test-only sweep once reported `SQLitePCLRaw` 2.1.10 and
+- **Sweep consumers, not just `tests/`.** A test-only sweep once reported `SQLitePCLRaw` 2.1.10 and
   implied anything newer was fine, while `Birko.Sandbox` — on a *newer* `Microsoft.Data.Sqlite` — was still
   affected at **2.1.11**. Scoping to one tree produced a remedy that looked complete and was not.
 - **Check the resolved transitive, not the top-level version number.** `Microsoft.Data.Sqlite` 10.0.0 is
@@ -119,13 +123,13 @@ When adding a new project, register in **all four**:
 
 2. **`Birko.Framework.code-workspace`** — Add folder entry with `"Group / Birko.ProjectName"` name convention. Keep entries sorted alphabetically. **A test project needs its own entry too**, under the `Tests /` group — the `.slnx` and the workspace are separate lists and it is easy to add to one and not the other.
 
-3. **A sibling `Birko.{ProjectName}.Tests` project** in `Framework.Tests/`, importing the new `.projitems`. This is not only about coverage: a shared project is `.shproj`/`.projitems` and **cannot build on its own**, so until something imports it, *nothing in the family compiles it*. The test project is the cheapest thing that does, and it is tracked in its own repo.
+3. **A sibling `Birko.{ProjectName}.Tests` project** in `tests/`, importing the new `.projitems`. This is not only about coverage: a shared project is `.shproj`/`.projitems` and **cannot build on its own**, so until something imports it, *nothing in the family compiles it*. The test project is the cheapest thing that does.
 
 4. **The build-validation aggregator** (`Consumers/Birko.Sandbox/Birko.Framework/Birko.Framework.csproj`) — add the `<Import>` beside its siblings, so the project is compiled by the smoke harness as well as by its tests.
 
 > **Why steps 3 and 4 are listed.** `Birko.EventBus.Outbox.SQL` was added with steps 1 and 2 missed and steps 3 and 4 absent, so a finished project — own repo, `IOutboxStore` implemented — was **compiled by nothing and tested by nothing** for as long as it existed. It happened to still build when this was found, which is luck, not a guarantee: a change to its interface or to `Birko.Data.SQL` would have broken it silently. See [[TASK-231]].
 >
-> Verify with a sweep rather than by eye — every project directory under `Framework/` and `Framework.Tests/` holding a `.shproj` or `.csproj` should appear in both the `.slnx` and the `.code-workspace`. As of 2026-08-17 that is **342 of 342**.
+> Verify with a sweep rather than by eye — every project directory at the repo root and under `tests/` holding a `.shproj` or `.csproj` should appear in both the `.slnx` and the `.code-workspace`. As of 2026-08-17 that is **342 of 342**.
 
 Existing folder groups:
 - **BackgroundJobs/** — Birko.BackgroundJobs.*

@@ -2620,20 +2620,25 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     this edge for Redis, and the distinguishing measurement is that a Redis check is useful *without*
     Birko.Redis while a schema-drift check is meaningless without Birko.Data.SQL.
 
-## Task tracking — this repo is the polyrepo family's aggregator
+## Task tracking — this directory is the monorepo's aggregator
 
-The Birko family is a **polyrepo** (every `Birko.*` sub-project is its own git repo); this
-repo is its **aggregator** (the `.slnx`, the shared CLAUDE docs — and the cross-cutting plan).
-This is the aggregator override the generic `tasks` skill's shape detection defers to:
+The framework lives in **one git repo** (`Birko-Framework/Birko.Framework`): every `Birko.*`
+shared project is a top-level directory, every `Birko.*.Tests` project sits under `tests/`, and
+this directory (`Birko.Framework/`) is its **aggregator** — the `.slnx`, the shared CLAUDE docs,
+and the plan. This is the aggregator override the generic `tasks` skill's shape detection defers to:
 
-- **Cross-cutting epics** (work spanning several `Birko.*` sub-projects) live in **this repo's
-  `tasks/`**, with the affected sub-projects listed in the EPIC's `affects:` frontmatter
-  (e.g. `affects: [Birko.AI, Birko.Data.Core]`).
-- **Single-sub-project work** stays in that sub-repo's own `tasks/` (the default
-  walk-up-to-`.git` rule already lands there) — don't track it here.
-- Cross-cutting `docs/features/` and `docs/specs/` follow the same split: family-wide at this
-  aggregator, per-project in each sub-repo (a cross-cutting story regens specs per affected
-  project, driven by `affects:`).
+- **All tasks live in this directory's `tasks/`.** There is one repo, so the walk-up-to-`.git`
+  rule lands every task here by construction. An EPIC still lists the projects it touches in
+  `affects:` (e.g. `affects: [Birko.AI, Birko.Data.Core]`) — that is now a *scope* annotation for
+  spec regeneration, not a routing instruction.
+- `docs/features/` and `docs/specs/` likewise live here, family-wide.
+
+> **This closes a contradiction the old model carried.** § Task tracking used to prescribe filing
+> single-sub-project work "in that sub-repo's own `tasks/`" while **1 of 178** sub-projects
+> actually had a `tasks/` folder, and `/tasks pick`, the dashboard and [[fix-next]] all ran from
+> the aggregator — so the prescribed location was filed and scheduled by nothing (recorded at
+> TASK-449, deliberately left as a convention decision). The monorepo removes the split rather
+> than resolving it.
 
 ### Integration model — commit to `main`, one commit per repo
 
@@ -2641,16 +2646,25 @@ This is the aggregator override the generic `tasks` skill's shape detection defe
 `/tasks pick` offers no `task/TASK-NNN` branch and `/tasks close` skips its merge step. `done` still
 means *landed on the default branch* — only the mechanism differs from the generic PR-per-task default.
 
-Because this is a polyrepo, **one fix normally spans three independent repos and needs three commits**:
+**One fix is now ONE commit.** The production change, its regression suite and the task file are
+paths in the same repo, so they land together:
 
-| Repo | Contents | Message shape |
-|---|---|---|
-| `Framework/Birko.{Project}` | the production change | `fix(<FINDING-ID>): <what now holds>` |
-| `Framework.Tests/Birko.{Project}.Tests` | the regression suite | `test(<FINDING-ID>): <what it pins>` |
-| `Framework/Birko.Framework` (here) | task file + spec + dashboard | `tasks(TASK-NNN): <outcome>` |
+| Path | Contents |
+|---|---|
+| `Birko.{Project}/` | the production change |
+| `tests/Birko.{Project}.Tests/` | the regression suite |
+| `Birko.Framework/` (here) | task file + spec + dashboard |
 
-**Order matters:** commit the production fix first, so its SHA can go into the task's `pr:` field
-before the aggregator commit — otherwise the tracking file lands referencing nothing.
+Message shape: `fix(<FINDING-ID>): <what now holds>`, with the task id in the body.
+
+**Why this matters beyond convenience.** Under the old three-repo model a fix and its test could
+not be atomic, and three things silently followed: `git bisect` on the framework ran tests from the
+*test repo's* HEAD — a tree from a different day, so you were not testing the commit you thought;
+CI had no way to know which test-repo commit corresponded to a framework commit; and `git revert`
+of a fix left its test behind, asserting the fixed behaviour and going red for the wrong reason.
+Given how much of this file rests on mutation testing — *"a revert that fails nothing is a missing
+test"* — the code and the tests that measure it have to be one versioned unit. **Do not split a fix
+from its test across commits.**
 
 - **An `## Out of scope` bullet that describes WORK gets an id before the task closes.** The generic
   `/tasks close` step 5d sweeps for this, and it exists because of this repo: the index-DDL thread
@@ -2691,10 +2705,10 @@ edit here, live immediately).
 
 ## Testing
 - All test projects use **xUnit + FluentAssertions**
-- **Tests live in a parallel tree, not in the project repo:** `Birko.{Project}`'s tests are at
-  `C:\Source\Birko\Framework.Tests\Birko.{Project}.Tests` (its own git repo — see the integration
-  model above; a fix and its regression suite are two commits in two repos). Run with
-  `dotnet test --nologo` from the test project.
+- **Tests live under `tests/` in the same repo:** `Birko.{Project}`'s tests are at
+  `C:\Source\Birko\Framework	ests\Birko.{Project}.Tests`, and import the project under test as
+  `..\..\Birko.{Project}\Birko.{Project}.projitems`. A fix and its regression suite are **one
+  commit** — see the integration model above. Run with `dotnet test --nologo` from the test project.
 - Every new public functionality must have corresponding tests in `Birko.{ProjectName}.Tests`
 - Test both success and failure cases; include edge cases and boundary conditions
 - Each test project has its own `CLAUDE.md` describing scope and conventions
@@ -2704,6 +2718,54 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+
+### The framework is one repo: 349 repos consolidated, with every commit preserved (2026-09-18)
+
+[[TASK-457]], closing the open question `docs/adr/ADR-001` (the former untracked
+`WORKSPACE-STRUCTURE.md`) left in June. The family was **365 git repos** on a personal account; the
+framework is now `Birko-Framework/Birko.Framework` — 178 projects at the root, 167 test projects under
+`tests/` — beside `Birko-Framework/Birko.Web` and `Birko-Framework/Birko.Sandbox`. Consumers untouched.
+**349/349 absorbed, 0 failures.** Eight things worth carrying:
+
+- **Commit reconciliation was exact: 4,096 = 2,676 + 1,074 + 1 root + 345 merges**, and history
+  survives as history — oldest commit **2019-03-15**, with `git log --follow` and `git blame`
+  resolving back *through renames* (`Birko.Data.SQL/Attribute/` → `Attributes/`). `filter-repo
+  --to-subdirectory-filter` then merge, 349 times.
+- **⚠ The strongest argument for the migration was a defect already on file.** [[TASK-131]] measured
+  that every spec area globbed *out* of the aggregator's repo while `generated-at` stamped only that
+  repo's HEAD, so `/specs verify`'s staleness primitive **could never observe a source change** — not
+  weak, *decorative*, with `roadmap` DV7/DV8 inheriting it. One repo fixes it outright. **A polyrepo
+  had been the root cause of a filed defect for six weeks and nobody had connected the two.**
+- **A fix and its test could not be atomic, and three things silently followed:** `git bisect` ran
+  tests from the test repo's **HEAD** — a tree from a different day, so you were not testing the
+  commit you thought; CI could not know which test-repo commit matched a framework commit; and
+  `git revert` of a fix left its test behind, asserting the fixed behaviour and going red for the
+  wrong reason. For a codebase whose method is mutation testing, that is the real cost.
+- **The size argument was measured away, and inverted.** 178 repos ≈ 47 MB of history; the
+  consolidated repo packs to **14 MB** — the 200 MB aggregator was **6,566 never-gc'd loose objects**,
+  not content. So **no history rewrite was needed**: `mermaid.min.js` (3.2 MB) and the 1.5 MB audit
+  file stayed, and the audit file turned out to be referenced by 8 task/story files anyway.
+- **⚠ `.github/workflows/` is read only from the REPOSITORY ROOT.** The four `token-parity.yml` copies
+  existed per-repo *deliberately* — *"a gate that only fires on the source cannot catch an edit made to
+  the output"*, the failure that had already happened twice — and three of them became **inert files**
+  the moment their repos became directories. Replaced with one root workflow per repo, four checkouts
+  down to two. **When a repo becomes a subdirectory, everything that only works at a repo root dies
+  silently.**
+- **⚠ Deleting duplicated boilerplate ripples into the rules that mandate it.** 334 identical
+  `.gitignore` and 266 `License.md` went to one root each — and that invalidated the New Project
+  Checklist, two scaffolding skills, and a `verify-birko-conventions` check that asserts *every project
+  dir must have `License.md` and `.gitignore`*, which would have failed **345 times**. The root
+  `.gitignore` also had to keep the aggregator's `!.claude/skills/` un-ignore and an exception for the
+  tracked `.code-workspace`, or it would have started ignoring files the repo deliberately keeps.
+- **⚠ Windows MAX_PATH bit twice and `safe.directory` is protected-config only.**
+  `--to-subdirectory-filter` doubles the name depth, so `Birko.Communication.OAuth.Providers.Tests`
+  blew 260 chars under a long scratch path — git needs `core.longpaths=true` and Python's `io.open`
+  fails outright. And `-c safe.directory=*` is **ignored by design**; a temp `GIT_CONFIG_GLOBAL` that
+  `[include]`s the real one works and leaves the machine's config untouched.
+- **⚠ 46 repos had unpushed commits, so the local disk was the source of truth, not GitHub.** The
+  migration cloned from local paths. Worth stating because the instinct is to clone from the remote.
+  Still outstanding by explicit decision: **433 commits in WorkoutTracker (298), Presenter (72),
+  BardStudio (50) and Latent (13) are local-only with no remote.**
 
 ### A migration filter that named a field but matched nothing deleted the whole collection (2026-09-17)
 

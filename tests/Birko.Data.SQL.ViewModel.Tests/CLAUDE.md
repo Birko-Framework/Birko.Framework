@@ -4,7 +4,7 @@
 Unit tests for Birko.Data.SQL.ViewModel — the SQL-backed view-model repositories.
 
 ## Project Location
-`C:\Source\Birko\Framework.Tests\Birko.Data.SQL.ViewModel.Tests\`
+`C:\Source\Birko\Framework	ests\Birko.Data.SQL.ViewModel.Tests\`
 
 ## Test Framework
 xUnit + FluentAssertions

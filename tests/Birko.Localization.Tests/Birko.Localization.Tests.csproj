@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -23,6 +23,6 @@
     <EmbeddedResource Remove="TestResources\**\*.resx" />
   </ItemGroup>
 
-  <Import Project="..\..\Framework\Birko.Localization\Birko.Localization.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Localization\Birko.Localization.projitems" Label="Shared" />
 
 </Project>

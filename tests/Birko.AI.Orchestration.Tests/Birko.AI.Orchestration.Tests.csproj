@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -19,6 +19,6 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\..\Framework\Birko.AI.Orchestration\Birko.AI.Orchestration.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.AI.Orchestration\Birko.AI.Orchestration.projitems" Label="Shared" />
 
 </Project>

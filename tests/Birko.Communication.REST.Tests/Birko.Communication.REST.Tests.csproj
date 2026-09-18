@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -18,7 +18,7 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\..\Framework\Birko.Communication\Birko.Communication.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Communication.REST\Birko.Communication.REST.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Communication\Birko.Communication.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Communication.REST\Birko.Communication.REST.projitems" Label="Shared" />
 
 </Project>

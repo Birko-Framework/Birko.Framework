@@ -650,627 +650,627 @@
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.BackgroundJobs.SQL.Tests"
+			"path": "../tests/Birko.BackgroundJobs.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.Tests",
-			"path": "../../Framework.Tests/Birko.BackgroundJobs.Tests"
+			"path": "../tests/Birko.BackgroundJobs.Tests"
 		},
 		{
 			"name": "Tests / Birko.Caching.Hybrid.Tests",
-			"path": "../../Framework.Tests/Birko.Caching.Hybrid.Tests"
+			"path": "../tests/Birko.Caching.Hybrid.Tests"
 		},
 		{
 			"name": "Tests / Birko.Caching.Tests",
-			"path": "../../Framework.Tests/Birko.Caching.Tests"
+			"path": "../tests/Birko.Caching.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.AspNetCore.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.AspNetCore.Tests"
+			"path": "../tests/Birko.Communication.AspNetCore.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.Camera.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.Camera.Tests"
+			"path": "../tests/Birko.Communication.Camera.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.GraphQL.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.GraphQL.Tests"
+			"path": "../tests/Birko.Communication.GraphQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.gRPC.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.gRPC.Tests"
+			"path": "../tests/Birko.Communication.gRPC.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.gRPC.Server.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.gRPC.Server.Tests"
+			"path": "../tests/Birko.Communication.gRPC.Server.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.IR.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.IR.Tests"
+			"path": "../tests/Birko.Communication.IR.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.Modbus.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.Modbus.Tests"
+			"path": "../tests/Birko.Communication.Modbus.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.NFC.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.NFC.Tests"
+			"path": "../tests/Birko.Communication.NFC.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.OAuth.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.OAuth.Tests"
+			"path": "../tests/Birko.Communication.OAuth.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.REST.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.REST.Tests"
+			"path": "../tests/Birko.Communication.REST.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.WebSocket.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.WebSocket.Tests"
+			"path": "../tests/Birko.Communication.WebSocket.Tests"
 		},
 		{
 			"name": "Tests / Birko.CQRS.Tests",
-			"path": "../../Framework.Tests/Birko.CQRS.Tests"
+			"path": "../tests/Birko.CQRS.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Aggregates.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Aggregates.Tests"
+			"path": "../tests/Birko.Data.Aggregates.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.CosmosDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.CosmosDB.Tests"
+			"path": "../tests/Birko.Data.CosmosDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.CosmosDB.ViewModel.Tests",
-			"path": "../../Framework.Tests/Birko.Data.CosmosDB.ViewModel.Tests"
+			"path": "../tests/Birko.Data.CosmosDB.ViewModel.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.ElasticSearch.Tests",
-			"path": "../../Framework.Tests/Birko.Data.ElasticSearch.Tests"
+			"path": "../tests/Birko.Data.ElasticSearch.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.InfluxDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.InfluxDB.Tests"
+			"path": "../tests/Birko.Data.InfluxDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.JSON.Tests",
-			"path": "../../Framework.Tests/Birko.Data.JSON.Tests"
+			"path": "../tests/Birko.Data.JSON.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.EventSourcing.Tests",
-			"path": "../../Framework.Tests/Birko.Data.EventSourcing.Tests"
+			"path": "../tests/Birko.Data.EventSourcing.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Migrations.RavenDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Migrations.RavenDB.Tests"
+			"path": "../tests/Birko.Data.Migrations.RavenDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Sync.RavenDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Sync.RavenDB.Tests"
+			"path": "../tests/Birko.Data.Sync.RavenDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.AI.Providers.Tests",
-			"path": "../../Framework.Tests/Birko.AI.Providers.Tests"
+			"path": "../tests/Birko.AI.Providers.Tests"
 		},
 		{
 			"name": "Tests / Birko.AI.Tests",
-			"path": "../../Framework.Tests/Birko.AI.Tests"
+			"path": "../tests/Birko.AI.Tests"
 		},
 		{
 			"name": "Tests / Birko.AI.Agents.Tests",
-			"path": "../../Framework.Tests/Birko.AI.Agents.Tests"
+			"path": "../tests/Birko.AI.Agents.Tests"
 		},
 		{
 			"name": "Tests / Birko.AI.Orchestration.Tests",
-			"path": "../../Framework.Tests/Birko.AI.Orchestration.Tests"
+			"path": "../tests/Birko.AI.Orchestration.Tests"
 		},
 		{
 			"name": "Tests / Birko.AI.Resilience.Tests",
-			"path": "../../Framework.Tests/Birko.AI.Resilience.Tests"
+			"path": "../tests/Birko.AI.Resilience.Tests"
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.CosmosDB.Tests",
-			"path": "../../Framework.Tests/Birko.BackgroundJobs.CosmosDB.Tests"
+			"path": "../tests/Birko.BackgroundJobs.CosmosDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.XML.Tests",
-			"path": "../../Framework.Tests/Birko.BackgroundJobs.XML.Tests"
+			"path": "../tests/Birko.BackgroundJobs.XML.Tests"
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.JSON.Tests",
-			"path": "../../Framework.Tests/Birko.BackgroundJobs.JSON.Tests"
+			"path": "../tests/Birko.BackgroundJobs.JSON.Tests"
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.MongoDB.Tests",
-			"path": "../../Framework.Tests/Birko.BackgroundJobs.MongoDB.Tests"
+			"path": "../tests/Birko.BackgroundJobs.MongoDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.ElasticSearch.Tests",
-			"path": "../../Framework.Tests/Birko.BackgroundJobs.ElasticSearch.Tests"
+			"path": "../tests/Birko.BackgroundJobs.ElasticSearch.Tests"
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.RavenDB.Tests",
-			"path": "../../Framework.Tests/Birko.BackgroundJobs.RavenDB.Tests"
+			"path": "../tests/Birko.BackgroundJobs.RavenDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Caching.Redis.Tests",
-			"path": "../../Framework.Tests/Birko.Caching.Redis.Tests"
+			"path": "../tests/Birko.Caching.Redis.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.Bluetooth.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.Bluetooth.Tests"
+			"path": "../tests/Birko.Communication.Bluetooth.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.Network.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.Network.Tests"
+			"path": "../tests/Birko.Communication.Network.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.REST.Server.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.REST.Server.Tests"
+			"path": "../tests/Birko.Communication.REST.Server.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.SOAP.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.SOAP.Tests"
+			"path": "../tests/Birko.Communication.SOAP.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.SSE.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.SSE.Tests"
+			"path": "../tests/Birko.Communication.SSE.Tests"
 		},
 		{
 			"name": "Tests / Birko.Configuration.Tests",
-			"path": "../../Framework.Tests/Birko.Configuration.Tests"
+			"path": "../tests/Birko.Configuration.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.CosmosDB.Views.Tests",
-			"path": "../../Framework.Tests/Birko.Data.CosmosDB.Views.Tests"
+			"path": "../tests/Birko.Data.CosmosDB.Views.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.ElasticSearch.Views.Tests",
-			"path": "../../Framework.Tests/Birko.Data.ElasticSearch.Views.Tests"
+			"path": "../tests/Birko.Data.ElasticSearch.Views.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Migrations.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Migrations.Tests"
+			"path": "../tests/Birko.Data.Migrations.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Migrations.CosmosDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Migrations.CosmosDB.Tests"
+			"path": "../tests/Birko.Data.Migrations.CosmosDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Migrations.ElasticSearch.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Migrations.ElasticSearch.Tests"
+			"path": "../tests/Birko.Data.Migrations.ElasticSearch.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Migrations.InfluxDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Migrations.InfluxDB.Tests"
+			"path": "../tests/Birko.Data.Migrations.InfluxDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Migrations.TimescaleDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Migrations.TimescaleDB.Tests"
+			"path": "../tests/Birko.Data.Migrations.TimescaleDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.Hardware.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
+			"path": "../tests/Birko.Communication.Hardware.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.Tests"
+			"path": "../tests/Birko.Communication.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.OAuth.Providers.Tests",
-			"path": "../../Framework.Tests/Birko.Communication.OAuth.Providers.Tests"
+			"path": "../tests/Birko.Communication.OAuth.Providers.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.ViewModel.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.ViewModel.Tests"
+			"path": "../tests/Birko.Data.SQL.ViewModel.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.Caching.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.Caching.Tests"
+			"path": "../tests/Birko.Data.SQL.Caching.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Migrations.MongoDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Migrations.MongoDB.Tests"
+			"path": "../tests/Birko.Data.Migrations.MongoDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.Redis.Tests",
-			"path": "../../Framework.Tests/Birko.BackgroundJobs.Redis.Tests"
+			"path": "../tests/Birko.BackgroundJobs.Redis.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.InMemory.Tests",
-			"path": "../../Framework.Tests/Birko.Data.InMemory.Tests"
+			"path": "../tests/Birko.Data.InMemory.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Localization.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Localization.Tests"
+			"path": "../tests/Birko.Data.Localization.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Migrations.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Migrations.SQL.Tests"
+			"path": "../tests/Birko.Data.Migrations.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.MongoDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.MongoDB.Tests"
+			"path": "../tests/Birko.Data.MongoDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.MongoDB.Views.Tests",
-			"path": "../../Framework.Tests/Birko.Data.MongoDB.Views.Tests"
+			"path": "../tests/Birko.Data.MongoDB.Views.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Patterns.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Patterns.Tests"
+			"path": "../tests/Birko.Data.Patterns.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Processors.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Processors.Tests"
+			"path": "../tests/Birko.Data.Processors.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Repositories.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Repositories.Tests"
+			"path": "../tests/Birko.Data.Repositories.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Tagging.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Tagging.Tests"
+			"path": "../tests/Birko.Data.Tagging.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Tenant.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Tenant.Tests"
+			"path": "../tests/Birko.Data.Tenant.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.ViewModel.Tests",
-			"path": "../../Framework.Tests/Birko.Data.ViewModel.Tests"
+			"path": "../tests/Birko.Data.ViewModel.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.RavenDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.RavenDB.Tests"
+			"path": "../tests/Birko.Data.RavenDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.RavenDB.Views.Tests",
-			"path": "../../Framework.Tests/Birko.Data.RavenDB.Views.Tests"
+			"path": "../tests/Birko.Data.RavenDB.Views.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.Tests"
+			"path": "../tests/Birko.Data.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.Providers.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.Providers.Tests"
+			"path": "../tests/Birko.Data.SQL.Providers.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.MSSql.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.MSSql.Tests"
+			"path": "../tests/Birko.Data.SQL.MSSql.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.MSSql.View.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.MSSql.View.Tests"
+			"path": "../tests/Birko.Data.SQL.MSSql.View.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.MySQL.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.MySQL.Tests"
+			"path": "../tests/Birko.Data.SQL.MySQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.MySQL.View.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.MySQL.View.Tests"
+			"path": "../tests/Birko.Data.SQL.MySQL.View.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.PostgreSQL.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.PostgreSQL.Tests"
+			"path": "../tests/Birko.Data.SQL.PostgreSQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.PostgreSQL.View.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.PostgreSQL.View.Tests"
+			"path": "../tests/Birko.Data.SQL.PostgreSQL.View.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.Views.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.Views.Tests"
+			"path": "../tests/Birko.Data.SQL.Views.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.SqLite.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.SqLite.Tests"
+			"path": "../tests/Birko.Data.SQL.SqLite.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.SqLite.View.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.SqLite.View.Tests"
+			"path": "../tests/Birko.Data.SQL.SqLite.View.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.SQL.View.Migrations.Tests",
-			"path": "../../Framework.Tests/Birko.Data.SQL.View.Migrations.Tests"
+			"path": "../tests/Birko.Data.SQL.View.Migrations.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Sync.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Sync.Tests"
+			"path": "../tests/Birko.Data.Sync.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Sync.CosmosDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Sync.CosmosDB.Tests"
+			"path": "../tests/Birko.Data.Sync.CosmosDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Sync.ElasticSearch.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Sync.ElasticSearch.Tests"
+			"path": "../tests/Birko.Data.Sync.ElasticSearch.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Sync.MongoDb.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Sync.MongoDb.Tests"
+			"path": "../tests/Birko.Data.Sync.MongoDb.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Sync.Json.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Sync.Json.Tests"
+			"path": "../tests/Birko.Data.Sync.Json.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Sync.Xml.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Sync.Xml.Tests"
+			"path": "../tests/Birko.Data.Sync.Xml.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Sync.Sql.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Sync.Sql.Tests"
+			"path": "../tests/Birko.Data.Sync.Sql.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Sync.Tenant.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Sync.Tenant.Tests"
+			"path": "../tests/Birko.Data.Sync.Tenant.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Tests"
+			"path": "../tests/Birko.Data.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.TimescaleDB.Tests",
-			"path": "../../Framework.Tests/Birko.Data.TimescaleDB.Tests"
+			"path": "../tests/Birko.Data.TimescaleDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.TimescaleDB.ViewModel.Tests",
-			"path": "../../Framework.Tests/Birko.Data.TimescaleDB.ViewModel.Tests"
+			"path": "../tests/Birko.Data.TimescaleDB.ViewModel.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Views.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Views.Tests"
+			"path": "../tests/Birko.Data.Views.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.XML.Tests",
-			"path": "../../Framework.Tests/Birko.Data.XML.Tests"
+			"path": "../tests/Birko.Data.XML.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.XML.ViewModel.Tests",
-			"path": "../../Framework.Tests/Birko.Data.XML.ViewModel.Tests"
+			"path": "../tests/Birko.Data.XML.ViewModel.Tests"
 		},
 		{
 			"name": "Tests / Birko.EventBus.Tests",
-			"path": "../../Framework.Tests/Birko.EventBus.Tests"
+			"path": "../tests/Birko.EventBus.Tests"
 		},
 		{
 			"name": "Tests / Birko.EventBus.MessageQueue.Tests",
-			"path": "../../Framework.Tests/Birko.EventBus.MessageQueue.Tests"
+			"path": "../tests/Birko.EventBus.MessageQueue.Tests"
 		},
 		{
 			"name": "Tests / Birko.EventBus.Outbox.Tests",
-			"path": "../../Framework.Tests/Birko.EventBus.Outbox.Tests"
+			"path": "../tests/Birko.EventBus.Outbox.Tests"
 		},
 		{
 			"name": "Tests / Birko.EventBus.Outbox.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.EventBus.Outbox.SQL.Tests"
+			"path": "../tests/Birko.EventBus.Outbox.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.EventBus.Tenant.Tests",
-			"path": "../../Framework.Tests/Birko.EventBus.Tenant.Tests"
+			"path": "../tests/Birko.EventBus.Tenant.Tests"
 		},
 		{
 			"name": "Tests / Birko.Health.Azure.Tests",
-			"path": "../../Framework.Tests/Birko.Health.Azure.Tests"
+			"path": "../tests/Birko.Health.Azure.Tests"
 		},
 		{
 			"name": "Tests / Birko.Health.Data.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.Health.Data.SQL.Tests"
+			"path": "../tests/Birko.Health.Data.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Health.Redis.Tests",
-			"path": "../../Framework.Tests/Birko.Health.Redis.Tests"
+			"path": "../tests/Birko.Health.Redis.Tests"
 		},
 		{
 			"name": "Tests / Birko.Health.Tests",
-			"path": "../../Framework.Tests/Birko.Health.Tests"
+			"path": "../tests/Birko.Health.Tests"
 		},
 		{
 			"name": "Tests / Birko.Helpers.Tests",
-			"path": "../../Framework.Tests/Birko.Helpers.Tests"
+			"path": "../tests/Birko.Helpers.Tests"
 		},
 		{
 			"name": "Tests / Birko.Localization.Data.Tests",
-			"path": "../../Framework.Tests/Birko.Localization.Data.Tests"
+			"path": "../tests/Birko.Localization.Data.Tests"
 		},
 		{
 			"name": "Tests / Birko.Localization.Tests",
-			"path": "../../Framework.Tests/Birko.Localization.Tests"
+			"path": "../tests/Birko.Localization.Tests"
 		},
 		{
 			"name": "Tests / Birko.MessageQueue.InMemory.Tests",
-			"path": "../../Framework.Tests/Birko.MessageQueue.InMemory.Tests"
+			"path": "../tests/Birko.MessageQueue.InMemory.Tests"
 		},
 		{
 			"name": "Tests / Birko.MessageQueue.MQTT.Tests",
-			"path": "../../Framework.Tests/Birko.MessageQueue.MQTT.Tests"
+			"path": "../tests/Birko.MessageQueue.MQTT.Tests"
 		},
 		{
 			"name": "Tests / Birko.MessageQueue.Redis.Tests",
-			"path": "../../Framework.Tests/Birko.MessageQueue.Redis.Tests"
+			"path": "../tests/Birko.MessageQueue.Redis.Tests"
 		},
 		{
 			"name": "Tests / Birko.MessageQueue.Tests",
-			"path": "../../Framework.Tests/Birko.MessageQueue.Tests"
+			"path": "../tests/Birko.MessageQueue.Tests"
 		},
 		{
 			"name": "Tests / Birko.Messaging.Razor.Tests",
-			"path": "../../Framework.Tests/Birko.Messaging.Razor.Tests"
+			"path": "../tests/Birko.Messaging.Razor.Tests"
 		},
 		{
 			"name": "Tests / Birko.Messaging.Tests",
-			"path": "../../Framework.Tests/Birko.Messaging.Tests"
+			"path": "../tests/Birko.Messaging.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Category.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Category.Tests"
+			"path": "../tests/Birko.Models.Category.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Contracts.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Contracts.Tests"
+			"path": "../tests/Birko.Models.Contracts.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Customers.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Customers.Tests"
+			"path": "../tests/Birko.Models.Customers.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Customers.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Customers.SQL.Tests"
+			"path": "../tests/Birko.Models.Customers.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Inventory.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Inventory.Tests"
+			"path": "../tests/Birko.Models.Inventory.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Inventory.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Inventory.SQL.Tests"
+			"path": "../tests/Birko.Models.Inventory.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Pricing.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Pricing.Tests"
+			"path": "../tests/Birko.Models.Pricing.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Pricing.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Pricing.SQL.Tests"
+			"path": "../tests/Birko.Models.Pricing.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Product.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Product.SQL.Tests"
+			"path": "../tests/Birko.Models.Product.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Product.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Product.Tests"
+			"path": "../tests/Birko.Models.Product.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.SEO.Tests",
-			"path": "../../Framework.Tests/Birko.Models.SEO.Tests"
+			"path": "../tests/Birko.Models.SEO.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.Models.SQL.Tests"
+			"path": "../tests/Birko.Models.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Tests"
+			"path": "../tests/Birko.Models.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Users.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Users.Tests"
+			"path": "../tests/Birko.Models.Users.Tests"
 		},
 		{
 			"name": "Tests / Birko.Models.Users.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.Models.Users.SQL.Tests"
+			"path": "../tests/Birko.Models.Users.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Random.Tests",
-			"path": "../../Framework.Tests/Birko.Random.Tests"
+			"path": "../tests/Birko.Random.Tests"
 		},
 		{
 			"name": "Tests / Birko.Redis.Tests",
-			"path": "../../Framework.Tests/Birko.Redis.Tests"
+			"path": "../tests/Birko.Redis.Tests"
 		},
 		{
 			"name": "Tests / Birko.Rules.Tests",
-			"path": "../../Framework.Tests/Birko.Rules.Tests"
+			"path": "../tests/Birko.Rules.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.Tests",
-			"path": "../../Framework.Tests/Birko.Security.Tests"
+			"path": "../tests/Birko.Security.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.AspNetCore.Tests",
-			"path": "../../Framework.Tests/Birko.Security.AspNetCore.Tests"
+			"path": "../tests/Birko.Security.AspNetCore.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.AzureKeyVault.Tests",
-			"path": "../../Framework.Tests/Birko.Security.AzureKeyVault.Tests"
+			"path": "../tests/Birko.Security.AzureKeyVault.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.BCrypt.Tests",
-			"path": "../../Framework.Tests/Birko.Security.BCrypt.Tests"
+			"path": "../tests/Birko.Security.BCrypt.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.Jwt.Tests",
-			"path": "../../Framework.Tests/Birko.Security.Jwt.Tests"
+			"path": "../tests/Birko.Security.Jwt.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.NFC.Tests",
-			"path": "../../Framework.Tests/Birko.Security.NFC.Tests"
+			"path": "../tests/Birko.Security.NFC.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.OAuth.Server.Tests",
-			"path": "../../Framework.Tests/Birko.Security.OAuth.Server.Tests"
+			"path": "../tests/Birko.Security.OAuth.Server.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.Vault.Tests",
-			"path": "../../Framework.Tests/Birko.Security.Vault.Tests"
+			"path": "../tests/Birko.Security.Vault.Tests"
 		},
 		{
 			"name": "Tests / Birko.Serialization.Tests",
-			"path": "../../Framework.Tests/Birko.Serialization.Tests"
+			"path": "../tests/Birko.Serialization.Tests"
 		},
 		{
 			"name": "Tests / Birko.Storage.AzureBlob.Tests",
-			"path": "../../Framework.Tests/Birko.Storage.AzureBlob.Tests"
+			"path": "../tests/Birko.Storage.AzureBlob.Tests"
 		},
 		{
 			"name": "Tests / Birko.Storage.Tests",
-			"path": "../../Framework.Tests/Birko.Storage.Tests"
+			"path": "../tests/Birko.Storage.Tests"
 		},
 		{
 			"name": "Tests / Birko.Structures.Tests",
-			"path": "../../Framework.Tests/Birko.Structures.Tests"
+			"path": "../tests/Birko.Structures.Tests"
 		},
 		{
 			"name": "Tests / Birko.Telemetry.OpenTelemetry.Tests",
-			"path": "../../Framework.Tests/Birko.Telemetry.OpenTelemetry.Tests"
+			"path": "../tests/Birko.Telemetry.OpenTelemetry.Tests"
 		},
 		{
 			"name": "Tests / Birko.Telemetry.Tests",
-			"path": "../../Framework.Tests/Birko.Telemetry.Tests"
+			"path": "../tests/Birko.Telemetry.Tests"
 		},
 		{
 			"name": "Tests / Birko.Time.Tests",
-			"path": "../../Framework.Tests/Birko.Time.Tests"
+			"path": "../tests/Birko.Time.Tests"
 		},
 		{
 			"name": "Tests / Birko.Validation.Tests",
-			"path": "../../Framework.Tests/Birko.Validation.Tests"
+			"path": "../tests/Birko.Validation.Tests"
 		},
 		{
 			"name": "Tests / Birko.Workflow.SQL.Tests",
-			"path": "../../Framework.Tests/Birko.Workflow.SQL.Tests"
+			"path": "../tests/Birko.Workflow.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Workflow.JSON.Tests",
-			"path": "../../Framework.Tests/Birko.Workflow.JSON.Tests"
+			"path": "../tests/Birko.Workflow.JSON.Tests"
 		},
 		{
 			"name": "Tests / Birko.Workflow.MongoDB.Tests",
-			"path": "../../Framework.Tests/Birko.Workflow.MongoDB.Tests"
+			"path": "../tests/Birko.Workflow.MongoDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Workflow.RavenDB.Tests",
-			"path": "../../Framework.Tests/Birko.Workflow.RavenDB.Tests"
+			"path": "../tests/Birko.Workflow.RavenDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Workflow.CosmosDB.Tests",
-			"path": "../../Framework.Tests/Birko.Workflow.CosmosDB.Tests"
+			"path": "../tests/Birko.Workflow.CosmosDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Workflow.ElasticSearch.Tests",
-			"path": "../../Framework.Tests/Birko.Workflow.ElasticSearch.Tests"
+			"path": "../tests/Birko.Workflow.ElasticSearch.Tests"
 		},
 		{
 			"name": "Tests / Birko.Workflow.XML.Tests",
-			"path": "../../Framework.Tests/Birko.Workflow.XML.Tests"
+			"path": "../tests/Birko.Workflow.XML.Tests"
 		},
 		{
 			"name": "Tests / Birko.Workflow.Tests",
-			"path": "../../Framework.Tests/Birko.Workflow.Tests"
+			"path": "../tests/Birko.Workflow.Tests"
 		},
 		{
 			"name": "Time / Birko.Time",
@@ -1350,47 +1350,47 @@
 		},
 		{
 			"name": "Tests / Birko.DesignTokens.Tests",
-			"path": "../../Framework.Tests/Birko.DesignTokens.Tests"
+			"path": "../tests/Birko.DesignTokens.Tests"
 		},
 		{
 			"name": "Tests / Birko.Xaml.Avalonia.Tests",
-			"path": "../../Framework.Tests/Birko.Xaml.Avalonia.Tests"
+			"path": "../tests/Birko.Xaml.Avalonia.Tests"
 		},
 		{
 			"name": "Tests / Birko.Xaml.Core.Tests",
-			"path": "../../Framework.Tests/Birko.Xaml.Core.Tests"
+			"path": "../tests/Birko.Xaml.Core.Tests"
 		},
 		{
 			"name": "Tests / Birko.Contracts.Tests",
-			"path": "../../Framework.Tests/Birko.Contracts.Tests"
+			"path": "../tests/Birko.Contracts.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Core.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Core.Tests"
+			"path": "../tests/Birko.Data.Core.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Composition.Tests",
-			"path": "../../Framework.Tests/Birko.Data.Composition.Tests"
+			"path": "../tests/Birko.Data.Composition.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.ElasticSearch.ViewModel.Tests",
-			"path": "../../Framework.Tests/Birko.Data.ElasticSearch.ViewModel.Tests"
+			"path": "../tests/Birko.Data.ElasticSearch.ViewModel.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.InfluxDB.ViewModel.Tests",
-			"path": "../../Framework.Tests/Birko.Data.InfluxDB.ViewModel.Tests"
+			"path": "../tests/Birko.Data.InfluxDB.ViewModel.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.JSON.ViewModel.Tests",
-			"path": "../../Framework.Tests/Birko.Data.JSON.ViewModel.Tests"
+			"path": "../tests/Birko.Data.JSON.ViewModel.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.MongoDB.ViewModel.Tests",
-			"path": "../../Framework.Tests/Birko.Data.MongoDB.ViewModel.Tests"
+			"path": "../tests/Birko.Data.MongoDB.ViewModel.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.RavenDB.ViewModel.Tests",
-			"path": "../../Framework.Tests/Birko.Data.RavenDB.ViewModel.Tests"
+			"path": "../tests/Birko.Data.RavenDB.ViewModel.Tests"
 		},
 		{
 			"path": "."

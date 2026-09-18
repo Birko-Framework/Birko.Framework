@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -19,8 +19,8 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\..\Framework\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.AI.Contracts\Birko.AI.Contracts.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.AI.Resilience\Birko.AI.Resilience.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.AI.Contracts\Birko.AI.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.AI.Resilience\Birko.AI.Resilience.projitems" Label="Shared" />
 
 </Project>

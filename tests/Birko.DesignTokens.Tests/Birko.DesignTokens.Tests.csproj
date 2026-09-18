@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -20,7 +20,7 @@
 
   <!-- Reference the generator tool directly (it exposes public model + emitters). -->
   <ItemGroup>
-    <ProjectReference Include="..\..\Framework\Birko.DesignTokens\Birko.DesignTokens.csproj" />
+    <ProjectReference Include="..\..\Birko.DesignTokens\Birko.DesignTokens.csproj" />
   </ItemGroup>
 
 </Project>

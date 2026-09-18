@@ -3,7 +3,7 @@ id: TASK-228
 parent: EPIC-013
 feature: FEATURE-013
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: review
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-17
@@ -155,3 +155,17 @@ this machine** — this is the machine that already had the untracked copy. It n
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-228` — leave empty until then._
+
+
+## Closed 2026-09-18 (during [[TASK-457]])
+
+The remaining gap was that Sandbox was a git repo with **no remote** — 10 commits existing only on
+one disk, which is why this sat at `review` rather than `done`. It is now
+**`Birko-Framework/Birko.Sandbox`** (public, 10 commits pushed, local and remote at the same SHA).
+
+It stays at `Consumers/Birko.Sandbox` on disk deliberately: the framework `.slnx` references it as
+`../../Consumers/Birko.Sandbox/...`, and that reference is unchanged by the monorepo migration.
+Its whole value is exercising the **consumption mechanism** (`$(BirkoSrc)` + `Directory.Build.props`),
+which only works from outside the framework tree.
+
+Its history was scanned before publishing (11 files ever committed, no secrets or connection strings).

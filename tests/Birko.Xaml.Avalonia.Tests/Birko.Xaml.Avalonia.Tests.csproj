@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -20,10 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Framework\Birko.Xaml.Core\Birko.Xaml.Core.csproj" />
-    <ProjectReference Include="..\..\Framework\Birko.Xaml.Avalonia\Birko.Xaml.Avalonia.csproj" />
+    <ProjectReference Include="..\..\Birko.Xaml.Core\Birko.Xaml.Core.csproj" />
+    <ProjectReference Include="..\..\Birko.Xaml.Avalonia\Birko.Xaml.Avalonia.csproj" />
     <!-- Referenced so the parity-screenshot test can render the real GalleryView. -->
-    <ProjectReference Include="..\..\Framework\Birko.Xaml.Shell\Birko.Xaml.Shell.csproj" />
+    <ProjectReference Include="..\..\Birko.Xaml.Shell\Birko.Xaml.Shell.csproj" />
     <PackageReference Include="Avalonia.Skia" Version="11.2.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
   </ItemGroup>

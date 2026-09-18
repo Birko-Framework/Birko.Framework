@@ -22,7 +22,8 @@
     a fix that looked complete and was not.
 
 .PARAMETER Root
-    The Birko checkout root that holds the Framework / Framework.Tests / Consumers buckets.
+    The Birko checkout root that holds the Framework / Consumers buckets. Test projects live
+    inside the framework repo at Framework	ests, so that is swept as part of Framework.
     Defaults to two levels above this script (…\Birko\Framework\Birko.Framework -> …\Birko).
 
 .PARAMETER FailOnFinding
@@ -43,11 +44,11 @@ $ErrorActionPreference = 'Stop'
 if (-not $Root) { $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path }
 if (-not (Test-Path $Root)) { throw "Root not found: $Root" }
 
-$buckets = @('Framework.Tests', 'Consumers') |
+$buckets = @('Framework	ests', 'Consumers') |
     ForEach-Object { Join-Path $Root $_ } |
     Where-Object { Test-Path $_ }
 
-if (-not $buckets) { throw "No Framework.Tests or Consumers bucket under $Root" }
+if (-not $buckets) { throw "No Framework	ests or Consumers bucket under $Root" }
 
 # Shared projects (.shproj/.projitems) cannot restore on their own — they are audited through the
 # projects that import them, which is why only real .csproj files are swept.

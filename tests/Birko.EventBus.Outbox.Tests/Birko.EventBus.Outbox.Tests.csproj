@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -20,12 +20,12 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\..\Framework\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Time.Abstractions\Birko.Time.Abstractions.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.EventBus\Birko.EventBus.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.EventBus.Outbox\Birko.EventBus.Outbox.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Time.Abstractions\Birko.Time.Abstractions.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.EventBus\Birko.EventBus.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.EventBus.Outbox\Birko.EventBus.Outbox.projitems" Label="Shared" />
 
 </Project>

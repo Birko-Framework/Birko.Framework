@@ -4,7 +4,7 @@
 Unit tests for Birko.Data.Sync.RavenDB — the RavenDB-backed sync-knowledge store.
 
 ## Project Location
-`C:\Source\Birko\Framework.Tests\Birko.Data.Sync.RavenDB.Tests\`
+`C:\Source\Birko\Framework	ests\Birko.Data.Sync.RavenDB.Tests\`
 
 ## Test Framework
 xUnit + FluentAssertions

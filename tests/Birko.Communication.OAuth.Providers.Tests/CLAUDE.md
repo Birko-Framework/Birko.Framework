@@ -4,7 +4,7 @@
 Unit tests for Birko.Communication.OAuth.Providers — the pre-configured OAuth provider factories.
 
 ## Project Location
-`C:\Source\Birko\Framework.Tests\Birko.Communication.OAuth.Providers.Tests\`
+`C:\Source\Birko\Framework	ests\Birko.Communication.OAuth.Providers.Tests\`
 
 ## Test Framework
 xUnit + FluentAssertions

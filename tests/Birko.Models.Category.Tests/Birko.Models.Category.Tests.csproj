@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -19,16 +19,16 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\..\Framework\Birko.Time\Birko.Time.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Validation\Birko.Validation.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Models.Category\Birko.Models.Category.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Time\Birko.Time.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Validation\Birko.Validation.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Models.Category\Birko.Models.Category.projitems" Label="Shared" />
 
 </Project>

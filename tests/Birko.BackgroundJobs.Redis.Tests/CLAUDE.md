@@ -4,7 +4,7 @@
 Unit tests for Birko.BackgroundJobs.Redis — the Redis-backed job queue.
 
 ## Project Location
-`C:\Source\Birko\Framework.Tests\Birko.BackgroundJobs.Redis.Tests\`
+`C:\Source\Birko\Framework	ests\Birko.BackgroundJobs.Redis.Tests\`
 
 ## Test Framework
 xUnit + FluentAssertions

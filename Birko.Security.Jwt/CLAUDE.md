@@ -74,7 +74,7 @@ if (!result.IsVerified)
 var (canonicalProvider, subject, email, emailVerified, displayName) = result.Identity!;
 ```
 
-Guarded by `Framework.Tests/Birko.Security.Jwt.Tests/OidcIdTokenVerifierTests.cs` (36 tests incl. the
+Guarded by `tests/Birko.Security.Jwt.Tests/OidcIdTokenVerifierTests.cs` (36 tests incl. the
 algorithm-confusion, wrong-audience, half-configured-provider and bare-subject cases).
 
 **Note on `TokenValidationResult`:** `Birko.Security` defines one too, and it wins inside the

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -18,9 +18,9 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Data.Aggregates\Birko.Data.Aggregates.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Aggregates\Birko.Data.Aggregates.projitems" Label="Shared" />
 
 </Project>

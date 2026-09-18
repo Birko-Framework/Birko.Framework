@@ -79,3 +79,20 @@ an automated run observes directly.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-226` — leave empty until then._
+
+
+## ⚠ Premise partly dissolved by the monorepo migration ([[TASK-457]], 2026-09-18)
+
+This task inherited its framing from [[TASK-131]], which set out to build per-sub-repo spec trees as
+*the* fix for the staleness guard and measured that they are not. **The monorepo has now removed the
+staleness problem by a different route**: all 25 areas' source globs are paths inside this repo, so
+`git diff <generated-at>..HEAD -- <sources>` observes changes for the first time.
+
+So the *staleness* justification is gone entirely — and it was already not this task's justification.
+What survives is the original organisational question: should the 4 single-repo areas, and the 64
+unspecced projects, carry their own `docs/specs/` trees? In one repo that is now a question about
+**directory layout inside `docs/specs/`**, not about repo boundaries, and "per-sub-repo" is the wrong
+name for it.
+
+**Re-scope or cancel before working this.** Do not start from the description above — it describes a
+repo topology that no longer exists.

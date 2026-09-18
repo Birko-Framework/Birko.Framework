@@ -30,7 +30,7 @@ zero handler changes.
 
 ## Running tests
 ```
-dotnet test ../../Framework.Tests/Birko.EventBus.Tenant.Tests/Birko.EventBus.Tenant.Tests.csproj
+dotnet test ../../tests/Birko.EventBus.Tenant.Tests/Birko.EventBus.Tenant.Tests.csproj
 ```
 
 ## License

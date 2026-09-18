@@ -5,7 +5,7 @@ Unit tests for Birko.Data.TimescaleDB — stores, repositories, connector guards
 configuration. Offline only; live-TimescaleDB paths are integration-tier.
 
 ## Project Location
-`C:\Source\Birko\Framework.Tests\Birko.Data.TimescaleDB.Tests\`
+`C:\Source\Birko\Framework	ests\Birko.Data.TimescaleDB.Tests\`
 
 ## Scope
 - `TimescaleDBStoreTests` — store construction + `TimescaleDBSettings` defaults

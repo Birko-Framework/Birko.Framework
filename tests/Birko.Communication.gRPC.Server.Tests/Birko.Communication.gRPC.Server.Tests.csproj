@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -22,8 +22,8 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\..\Framework\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
-  <Import Project="..\..\Framework\Birko.Communication.gRPC.Server\Birko.Communication.gRPC.Server.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Communication.gRPC.Server\Birko.Communication.gRPC.Server.projitems" Label="Shared" />
 
 </Project>
