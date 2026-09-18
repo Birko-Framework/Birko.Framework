@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:Birko.Xaml.Avalonia.Controls;assembly=Birko.Xaml.Avalonia"
+             x:Class="Birko.Xaml.Shell.Views.ListPageView"
+             x:CompileBindings="False"
+             FontFamily="{DynamicResource BFont}">
+  <DockPanel>
+    <!-- Toolbar: permission-gated CRUD + search -->
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+      <Button Content="New" Command="{Binding CreateCommand}" />
+      <Button Content="Edit" Command="{Binding EditCommand}" />
+      <Button Content="Delete" Command="{Binding DeleteCommand}" />
+      <TextBox Width="220" Watermark="Search…" Text="{Binding SearchText}" />
+    </StackPanel>
+
+    <!-- Inline create/edit form, shown while editing -->
+    <Border DockPanel.Dock="Bottom" Margin="0,12,0,0" Padding="16"
+            Background="{DynamicResource BBgElevatedBrush}"
+            BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="1"
+            CornerRadius="{DynamicResource BRadiusLg}"
+            IsVisible="{Binding EditingItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <StackPanel Spacing="12">
+        <c:Form Fields="{Binding Fields}" Model="{Binding EditingItem}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Save" Command="{Binding SaveEditingCommand}" />
+          <Button Content="Cancel" Command="{Binding CancelEditCommand}" Background="{DynamicResource BColorSecondaryBrush}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <ListBox ItemsSource="{Binding Filtered}" SelectedItem="{Binding SelectedItem}" />
+  </DockPanel>
+</UserControl>

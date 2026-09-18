@@ -1,0 +1,133 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:Birko.Xaml.Shell"
+             xmlns:c="clr-namespace:Birko.Xaml.Avalonia.Controls;assembly=Birko.Xaml.Avalonia"
+             x:Class="Birko.Xaml.Shell.Views.ShellView"
+             x:CompileBindings="False"
+             FontFamily="{DynamicResource BFont}"
+             Background="{DynamicResource BBgSecondaryBrush}">
+
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Ctrl+K" Command="{Binding OpenPaletteCommand}" />
+  </UserControl.KeyBindings>
+
+  <UserControl.Resources>
+    <shell:ViewLocator x:Key="ViewLocator" />
+  </UserControl.Resources>
+
+  <Panel>
+    <Grid ColumnDefinitions="Auto,*">
+
+      <!-- Sidebar: app title + module navigation -->
+      <Border Grid.Column="0" Width="{DynamicResource BSidebarWidth}"
+              Background="{DynamicResource BBgBrush}"
+              BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,0,1,0">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Text="{Binding Title}"
+                     FontWeight="Bold" FontSize="18" Margin="16"
+                     Foreground="{DynamicResource BTextBrush}" />
+          <ItemsControl ItemsSource="{Binding Nav.Modules}" Margin="8">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Margin="0,2" Background="Transparent"
+                        Foreground="{DynamicResource BTextBrush}"
+                        Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        CommandParameter="{Binding Id}">
+                  <TextBlock Text="{Binding Label}" />
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </DockPanel>
+      </Border>
+
+      <!-- Main: header (title + theme switcher + user area) / status bar / content region -->
+      <DockPanel Grid.Column="1">
+        <Border DockPanel.Dock="Top" Height="{DynamicResource BHeaderHeight}"
+                Background="{DynamicResource BBgBrush}"
+                BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Text="{Binding Nav.CurrentModule.Label}"
+                       VerticalAlignment="Center" Margin="16,0" FontWeight="SemiBold"
+                       Foreground="{DynamicResource BTextBrush}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
+                        VerticalAlignment="Center" Margin="0,0,12,0">
+              <!-- Tenant switcher (hidden unless >1 tenant) -->
+              <ComboBox Width="160" VerticalAlignment="Center"
+                        IsVisible="{Binding HasMultipleTenants}"
+                        ItemsSource="{Binding Tenants}"
+                        SelectedItem="{Binding CurrentTenant, Mode=TwoWay}" />
+
+              <!-- Theme switcher -->
+              <ItemsControl ItemsSource="{Binding Themes.Available}" VerticalAlignment="Center">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Button Padding="10,4" ToolTip.Tip="{Binding Label}"
+                            Command="{Binding DataContext.SetThemeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            CommandParameter="{Binding Id}">
+                      <TextBlock Text="{Binding Icon}" />
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <!-- User area (hidden when no user) -->
+              <Button Background="Transparent" Padding="4"
+                      IsVisible="{Binding UserName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Border Width="28" Height="28" CornerRadius="14"
+                          Background="{DynamicResource BColorPrimaryLightBrush}">
+                    <TextBlock Text="&#128100;" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Text="{Binding UserName}" VerticalAlignment="Center"
+                             Foreground="{DynamicResource BTextBrush}" />
+                </StackPanel>
+                <Button.Flyout>
+                  <Flyout>
+                    <ItemsControl ItemsSource="{Binding UserCommands}" MinWidth="160">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                  Background="Transparent" Foreground="{DynamicResource BTextBrush}"
+                                  Command="{Binding DataContext.RunUserCommandCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}">
+                            <TextBlock Text="{Binding Label}" />
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Flyout>
+                </Button.Flyout>
+              </Button>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Height="{DynamicResource BStatusBarHeight}"
+                Background="{DynamicResource BBgBrush}"
+                BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,1,0,0">
+          <TextBlock Text="Birko.Xaml.Shell" VerticalAlignment="Center" Margin="12,0"
+                     Foreground="{DynamicResource BTextMutedBrush}" />
+        </Border>
+
+        <ScrollViewer>
+          <TransitioningContentControl Content="{Binding Nav.Current}"
+                                       ContentTemplate="{StaticResource ViewLocator}" Margin="16">
+            <TransitioningContentControl.PageTransition>
+              <CrossFade Duration="0:0:0.18" />
+            </TransitioningContentControl.PageTransition>
+          </TransitioningContentControl>
+        </ScrollViewer>
+      </DockPanel>
+
+    </Grid>
+
+    <!-- Ctrl+K command palette, overlaying the whole shell -->
+    <c:CommandPalette Commands="{Binding PaletteCommands}"
+                      IsOpen="{Binding IsPaletteOpen, Mode=TwoWay}" />
+  </Panel>
+</UserControl>
