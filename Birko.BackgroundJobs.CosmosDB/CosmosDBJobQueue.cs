@@ -1,0 +1,171 @@
+using Birko.BackgroundJobs.CosmosDB.Models;
+using Birko.Data.CosmosDB.Stores;
+using Birko.Data.Stores;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Birko.BackgroundJobs.CosmosDB;
+
+/// <summary>
+/// Cosmos DB implementation of IJobQueue using AsyncCosmosDBStore.
+/// </summary>
+public class CosmosDBJobQueue : IJobQueue
+{
+    private readonly AsyncCosmosDBStore<CosmosJobDescriptorModel> _store;
+    private readonly RetryPolicy _retryPolicy;
+
+    /// <summary>
+    /// Gets the underlying store for transaction context access.
+    /// </summary>
+    public AsyncCosmosDBStore<CosmosJobDescriptorModel> Store => _store;
+
+    /// <summary>
+    /// Creates a new Cosmos DB job queue with settings.
+    /// </summary>
+    public CosmosDBJobQueue(Birko.Data.CosmosDB.Stores.Settings settings, RetryPolicy? retryPolicy = null)
+    {
+        _store = new AsyncCosmosDBStore<CosmosJobDescriptorModel>();
+        _store.SetSettings(settings);
+        _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+    }
+
+    /// <summary>
+    /// Creates a new Cosmos DB job queue with an existing store.
+    /// </summary>
+    public CosmosDBJobQueue(AsyncCosmosDBStore<CosmosJobDescriptorModel> store, RetryPolicy? retryPolicy = null)
+    {
+        _store = store ?? throw new ArgumentNullException(nameof(store));
+        _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+    }
+
+    /// <inheritdoc />
+    public async Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken ct = default)
+    {
+        var model = CosmosJobDescriptorModel.FromDescriptor(descriptor);
+        var id = await _store.CreateAsync(model, ct: ct).ConfigureAwait(false);
+        return id;
+    }
+
+    /// <inheritdoc />
+    public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var pendingStatus = (int)JobStatus.Pending;
+        var scheduledStatus = (int)JobStatus.Scheduled;
+
+        var results = await _store.ReadAsync(
+            // Guard ScheduledAt != null (a Scheduled row with a null ScheduledAt is malformed and the
+            // null-comparison semantics under the Cosmos SQL translation aren't guaranteed to match
+            // in-memory nullable-DateTime comparison), and add a FIFO tiebreaker so equal-priority jobs
+            // dequeue in enqueue order — matching the MongoDB backend (CR-L020/L021).
+            filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
+                && (queueName == null || j.QueueName == queueName),
+            orderBy: OrderBy<CosmosJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+            limit: 1,
+            ct: ct
+        ).ConfigureAwait(false);
+
+        var model = results.FirstOrDefault();
+        if (model == null) return null;
+
+        model.Status = (int)JobStatus.Processing;
+        model.LastAttemptAt = DateTime.UtcNow;
+        model.AttemptCount++;
+        await _store.UpdateAsync(model, ct: ct).ConfigureAwait(false);
+
+        return model.ToDescriptor();
+    }
+
+    /// <inheritdoc />
+    public async Task CompleteAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var model = await _store.ReadAsync(jobId, ct).ConfigureAwait(false);
+        if (model == null) return;
+
+        model.Status = (int)JobStatus.Completed;
+        model.CompletedAt = DateTime.UtcNow;
+        await _store.UpdateAsync(model, ct: ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task FailAsync(Guid jobId, string error, CancellationToken ct = default)
+    {
+        var model = await _store.ReadAsync(jobId, ct).ConfigureAwait(false);
+        if (model == null) return;
+
+        model.LastError = error;
+        if (model.AttemptCount < model.MaxRetries)
+        {
+            // Retries remain — re-enqueue with backoff (mirrors MongoDBJobQueue).
+            model.Status = (int)JobStatus.Scheduled;
+            model.ScheduledAt = DateTime.UtcNow.Add(_retryPolicy.GetDelay(model.AttemptCount));
+        }
+        else
+        {
+            // Retries exhausted — terminal Dead status (CR-H008), not the retryable Failed.
+            model.Status = (int)JobStatus.Dead;
+            model.CompletedAt = DateTime.UtcNow;
+        }
+
+        await _store.UpdateAsync(model, ct: ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> CancelAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var model = await _store.ReadAsync(jobId, ct).ConfigureAwait(false);
+        if (model == null) return false;
+
+        model.Status = (int)JobStatus.Cancelled;
+        model.CompletedAt = DateTime.UtcNow;
+        await _store.UpdateAsync(model, ct: ct).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public async Task<JobDescriptor?> GetAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var model = await _store.ReadAsync(jobId, ct).ConfigureAwait(false);
+        return model?.ToDescriptor();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<JobDescriptor>> GetByStatusAsync(JobStatus status, int limit = 100, CancellationToken ct = default)
+    {
+        var statusInt = (int)status;
+        var results = await _store.ReadAsync(
+            filter: j => j.Status == statusInt,
+            orderBy: OrderBy<CosmosJobDescriptorModel>.ByName(nameof(CosmosJobDescriptorModel.EnqueuedAt), descending: true),
+            limit: limit,
+            ct: ct
+        ).ConfigureAwait(false);
+
+        return results.Select(m => m.ToDescriptor()).ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<int> PurgeAsync(TimeSpan olderThan, CancellationToken ct = default)
+    {
+        var cutoff = DateTime.UtcNow - olderThan;
+        var completedStatus = (int)JobStatus.Completed;
+        var deadStatus = (int)JobStatus.Dead;
+        var cancelledStatus = (int)JobStatus.Cancelled;
+
+        // Purge terminal jobs only: Completed | Dead | Cancelled (CR-H009). Failed is retryable.
+        var results = await _store.ReadAsync(
+            filter: j => (j.Status == completedStatus || j.Status == deadStatus || j.Status == cancelledStatus)
+                && j.CompletedAt != null && j.CompletedAt < cutoff,
+            ct: ct
+        ).ConfigureAwait(false);
+
+        var count = results.Count();
+        if (count > 0)
+        {
+            await _store.DeleteAsync(results, ct).ConfigureAwait(false);
+        }
+        return count;
+    }
+}
