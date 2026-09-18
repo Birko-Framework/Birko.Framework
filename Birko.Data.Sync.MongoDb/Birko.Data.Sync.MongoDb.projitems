@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>b3f59962-1d99-4085-8437-fb00128db400</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Sync.MongoDb</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- External dependency: MongoDB.Driver, declared by Birko.Data.MongoDB.projitems and deliberately
+       NOT repeated here. A consumer imports this projitems alongside that one — this project builds on
+       the MongoDB store and cannot work without it — so a second declaration lands in the same project
+       file and restore reports NU1504, which the -warnaserror that verify-conventions runs turns into
+       an error. Import Birko.Data.MongoDB.projitems to get the driver (TASK-234). -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\MongoSyncKnowledgeItem.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncMongoSyncKnowledgeStore.cs" />
+  </ItemGroup>
+  <!-- This project extends Birko.Data.Sync and a consumer must import
+       Birko.Data.Sync.projitems alongside it.
+
+       That used to be written as a <ProjectReference> to that .projitems, which MSBuild cannot honour:
+       a .projitems is an include file, not a build target, and the path resolves against the CONSUMING
+       project's directory rather than this one — so it emitted `warning MSB9008: The referenced
+       project ..\Birko.Data.Sync\Birko.Data.Sync.projitems does not exist` in every importer, and an
+       error under the -warnaserror the build sweep runs. It was inert: every consumer already imports
+       Birko.Data.Sync explicitly.
+
+       MSBuild has no way to express a shared project depending on another shared project, which is why
+       this is a comment. Do not re-add the ProjectReference (TASK-238). -->
+</Project>
