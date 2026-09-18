@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>58639b14-fcdd-4241-84cf-e550e1f6b22f</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.gRPC.Server</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Conditioning on
+         the well-known $(ManagePackageVersionsCentrally) serves both.
+
+         This project wraps Grpc.AspNetCore and owns it. Birko.Communication.gRPC declares
+         Grpc.Net.Client for the client half — a different package, so the two never collide even where
+         both are imported (TASK-234). -->
+    <PackageReference Include="Grpc.AspNetCore" Version="2.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="Grpc.AspNetCore" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)GrpcServerSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrpcServiceExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrpcServerAuthenticationInterceptor.cs" />
+  </ItemGroup>
+</Project>
