@@ -2,6 +2,15 @@
 
 A modular .NET framework providing data access, communication, AI, and model infrastructure. General-purpose — applicable to enterprise back-office, e-commerce, presentation/CMS, desktop, IoT, real-time, and AI-driven applications. Built on .NET 10.0 with shared projects via .projitems.
 
+> ## 📖 [**Read the Wiki →**](https://github.com/Birko-Framework/Birko.Framework/wiki)
+>
+> The wiki is the **guide**: what Birko is, how to wire it into a project, and how to use each area,
+> with examples that were compiled and run before being written down. Start with
+> [Getting Started](https://github.com/Birko-Framework/Birko.Framework/wiki/Getting-Started) — working
+> CRUD against a real database in about ten minutes.
+>
+> This README is the **reference index**: what exists, project by project.
+
 ## Features
 
 - Multi-database support (SQL Server, PostgreSQL, MySQL, SQLite, MongoDB, RavenDB, Elasticsearch, InfluxDB, TimescaleDB, JSON, XML, Azure Cosmos DB)
@@ -395,174 +404,22 @@ AbstractAsyncRepository -> AbstractAsyncBulkRepository (async)
 
 ## Usage in Consumer Solutions
 
-### Aggregator project pattern (recommended)
+**Full walkthrough: [Getting Started](https://github.com/Birko-Framework/Birko.Framework/wiki/Getting-Started).**
 
-When using Birko.Framework projects in your own solution, create **one or more aggregator library projects** that bundle the `Birko.*` shared projects you need — and reference those aggregators from the rest of your code instead of importing `.projitems` directly into every consumer csproj. Each `.projitems` is then compiled exactly once into a single assembly, eliminating `CS0433`/`CS0436` type-clash errors that arise when multiple projects import overlapping sets of shared projects independently.
+The short version:
 
-**How many aggregators?** Pick what fits your shape:
+1. **`Directory.Build.props`** at your repo root sets `$(BirkoSrc)` — CLI parameter, then `BIRKO_SRC`,
+   then a relative default — so CI and Docker can point elsewhere without editing files.
+2. **One aggregator project** imports the `Birko.*` `.projitems`; your other projects reference *it*.
+   Importing overlapping `.projitems` into several projects compiles the same types twice and produces
+   `CS0433` / `CS0436`.
+3. **Start from the full import list**, not a minimal one. The dependency graph is dense — asking for
+   SQLite stores pulls in models, view-models, serialization and rules, and you discover it one
+   compiler error at a time. [Birko.Sandbox's aggregator](https://github.com/Birko-Framework/Birko.Sandbox/blob/main/Birko.Framework/Birko.Framework.csproj)
+   is a known-good 163-import list; remove entries from it rather than building one up.
 
-- **Single aggregator** — `{YourSolution}.Birko` containing everything. Simplest, smallest project count. Works well when most of your code needs most of Birko, or when you don't care about pulling in unused dependencies. Symbio uses this shape (`Symbio.Birko` with ~90 imports).
-- **Multiple aggregators by layer / purpose** — split when different parts of your solution need disjoint Birko subsets, especially when a subset pulls in heavy dependencies (e.g. ML / camera / hardware libs) that you don't want leaking into every project. Examples:
-  - `{YourSolution}.Birko.Core` — Data, Models, Helpers, Security, Time
-  - `{YourSolution}.Birko.Edge` — Communication.Hardware, Communication.Bluetooth, Communication.Modbus, Communication.Camera
-  - `{YourSolution}.Birko.Ai` — AI.Contracts, AI, AI.Providers, AI.Agents
-  - `{YourSolution}.Birko.Web` — Web.Core, Web.Components, Web.Shell (for solutions that ship a UI alongside non-UI services)
-
-Splitting keeps each downstream project's binary footprint tight: an Edge collector doesn't need to pull in AI providers; a backend API doesn't need camera frame-capture libs.
-
-```
-# Single-aggregator shape
-YourSolution/
-  YourSolution.Birko/          # One .csproj importing all needed Birko.* .projitems
-  YourSolution.Core/           # References YourSolution.Birko
-  YourSolution.Web/            # References YourSolution.Birko
-
-# Multi-aggregator shape
-YourSolution/
-  YourSolution.Birko.Core/     # Imports Birko.Data.*, Birko.Models.*, Birko.Helpers, Birko.Security
-  YourSolution.Birko.Edge/     # Imports Birko.Communication.*
-  YourSolution.Birko.Ai/       # Imports Birko.AI.*
-  YourSolution.Api/            # References YourSolution.Birko.Core + .Ai
-  YourSolution.Edge.Service/   # References YourSolution.Birko.Core + .Edge
-```
-
-A minimal aggregator `csproj` looks like:
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>Birko</RootNamespace>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-
-    <!-- Packages YOUR code needs. You do NOT declare the storage drivers:
-         each Birko.* shared project declares its own (Npgsql, MongoDB.Driver,
-         Microsoft.Data.Sqlite, RavenDB.Client, Microsoft.Azure.Cosmos,
-         Microsoft.Data.SqlClient, MySqlConnector, InfluxDB.Client), floating
-         within its major so a published advisory heals on the next restore.
-         Declaring one again here produces NU1504 — an ERROR under -warnaserror. -->
-    <PackageReference Include="Serilog" Version="4.*" />
-  </ItemGroup>
-
-  <!-- Need a different driver version? Use Update, not Include — Update retunes the
-       item the projitems already contributed, so there is no duplicate and no NU1504. -->
-  <ItemGroup>
-    <PackageReference Update="Npgsql" Version="10.0.5" />
-  </ItemGroup>
-
-  <!-- Birko.* shared projects — pick what this aggregator needs -->
-  <Import Project="$(BirkoSrc)\Birko.Helpers\Birko.Helpers.projitems"         Label="Shared" />
-  <Import Project="$(BirkoSrc)\Birko.Data.Core\Birko.Data.Core.projitems"     Label="Shared" />
-  <Import Project="$(BirkoSrc)\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <!-- … one Import per Birko.* projitems you need -->
-</Project>
-```
-
-> **Rule of thumb for choosing aggregator boundaries:** when in doubt, start with **one** aggregator. Split it only when you hit a concrete pain point — bloated binaries, leaky transitive references, or projects that build slowly because they pull in `.projitems` they don't use. Splitting too early is overhead with no payoff.
-
-> **`Birko.Models.*.SQL` are opt-in per persisted domain.** Import `Birko.Models.SQL` (the fluent mapping framework) once, then add a domain sibling — `Birko.Models.Users.SQL`, `.Customers.SQL`, `.Inventory.SQL`, `.Pricing.SQL`, `.Product.SQL` — only if you actually persist that domain's models via SQL. The repo's own `Birko.Framework.csproj` imports all five as a build-validation kitchen sink; **don't mirror that in your aggregator** — NoSQL-only consumers or apps that touch a subset of domains should skip the unused siblings to keep their footprint tight. See [docs/models.md — Layer 4](docs/models.md#layer-4-sql-mapping-birkomodelssql--domain-siblings) for the full table.
-
-**Live examples** of these patterns:
-- `Symbio.Birko.csproj` — single aggregator, ~90 Birko shared projects consolidated into one DLL (large enterprise platform)
-- `WebFinstatApiTester.csproj` — no aggregator at all; the app `csproj` directly imports a lean subset (~10 projitems) because the project is small and overlapping-import risk is nil
-- `Birko.Sandbox` (`Birko\Consumers\Birko.Sandbox`) — the runnable integration **smoke harness** and the "first test place" for framework changes: `dotnet run` does a tiny round-trip per layer and exits non-zero on failure. It uses a **single aggregator importing all ~165 `.projitems`** — not a lean slice — because bundling the whole framework into one assembly is the pattern this README recommends by default, and the harness is what proves it still works.
-  > **It lives in `Consumers\`, not in the framework repo's `tests/`, on purpose.** It is a test *surface* but not a test *project*, and the difference is the import mechanism: `tests/` projects import `.projitems` by hard relative path (`..\..\Birko.X\…`), whereas Sandbox resolves `$(BirkoSrc)` through its own `Directory.Build.props` — CLI parameter, then `BIRKO_SRC`, then a relative default. That is exactly what a real consumer does, so Sandbox is the only thing in the family that exercises the **consumption mechanism itself**. A test project cannot cover it, because a test project does not use it.
-
-### Locating Birko.Framework sources — `$(BirkoSrc)` / `BIRKO_SRC`
-
-The `Import Project` paths in your aggregator `csproj` need to resolve to wherever you have the `Birko.*` source folders checked out. **Don't hard-code** absolute paths like `C:\Source\Birko\Framework\Birko.Helpers\…` — instead use the `$(BirkoSrc)` MSBuild property, resolved from a `Directory.Build.props` at your repo root:
-
-```xml
-<!-- {YourSolution}/Directory.Build.props -->
-<Project>
-  <PropertyGroup>
-    <!-- Resolution order:
-           1. /p:BirkoSrc=...      MSBuild CLI parameter (highest priority)
-           2. BIRKO_SRC env var    Shell environment
-           3. Default              Path to the Birko\Framework checkout, relative
-                                   to this Directory.Build.props
-         The recommended layout nests the framework under a Birko\Framework bucket
-         and consumers under a sibling Birko\Consumers bucket, e.g.
-           C:\Source\Birko\Framework\Birko.Helpers
-           C:\Source\Birko\Consumers\YourSolution
-         so a consumer one bucket over reaches the framework via ..\..\Framework.
-         (If you instead keep Birko.* as flat siblings of your repo, the default
-         is just "..".) -->
-    <BirkoSrc Condition="'$(BirkoSrc)' == '' and '$(BIRKO_SRC)' != ''">$(BIRKO_SRC)</BirkoSrc>
-    <BirkoSrc Condition="'$(BirkoSrc)' == ''">$(MSBuildThisFileDirectory)..\..\Framework</BirkoSrc>
-  </PropertyGroup>
-</Project>
-```
-
-Then any consumer csproj imports become portable:
-
-```xml
-<Import Project="$(BirkoSrc)\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
-```
-
-**Why both `/p:BirkoSrc` and `BIRKO_SRC`?**
-
-| Channel | Use case |
-|---|---|
-| **Default** (relative to repo) | Local dev with the bucket layout — framework at `C:\Source\Birko\Framework\Birko.X`, your repo at `C:\Source\Birko\Consumers\YourSolution`. Zero configuration. |
-| **`BIRKO_SRC` env var** | CI runners, Docker builds, custom workstation layouts (e.g. `D:\src` or `/home/foo/code`). Set once per shell session. |
-| **`/p:BirkoSrc=…` CLI** | One-off override for a single build, e.g. comparing two checkouts side by side. |
-
-#### Frontend (TypeScript) consumers
-
-`Birko.Web.Core`, `Birko.Web.Components`, and `Birko.Web.Shell` ship as TypeScript sources, consumed by esbuild via an alias map. They live in their **own `Birko\Web` bucket**, separate from the .NET `Birko\Framework` bucket the MSBuild side resolves — so `BIRKO_SRC` (frontend) points at `Birko\Web`, while MSBuild's `$(BirkoSrc)` points at `Birko\Framework`. **Don't bake a machine-specific absolute path into the committed fallback** — prefer the env var, then walk up to find the `Birko\Web` checkout (depth-independent, safe to commit):
-
-```js
-// build.js — esbuild config
-import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function resolveBirkoSrc() {
-  if (process.env.BIRKO_SRC) return process.env.BIRKO_SRC.replace(/[\\/]+$/, '').replaceAll('\\', '/');
-  for (let d = __dirname; d !== dirname(d); d = dirname(d)) {
-    const c = resolve(d, 'Birko/Web');
-    if (existsSync(resolve(c, 'Birko.Web.Core'))) return c.replaceAll('\\', '/');
-  }
-  throw new Error('Set BIRKO_SRC to your Birko\\Web path.');
-}
-const BIRKO_SRC = resolveBirkoSrc();
-
-const aliases = {
-  'birko-web-core':       `${BIRKO_SRC}/Birko.Web.Core/src/index.ts`,
-  'birko-web-components': `${BIRKO_SRC}/Birko.Web.Components/src/index.ts`,
-  'birko-web-shell':      `${BIRKO_SRC}/Birko.Web.Shell/src/index.ts`,
-  // …
-};
-```
-
-Mirroring the MSBuild property gives a single override (`BIRKO_SRC`) that controls **both** the backend `dotnet build` and the frontend bundle build — important for Docker images where everything lives under `/src/`.
-
-#### Docker example
-
-```dockerfile
-# Build context = parent of your repo (so Birko.* + YourSolution are siblings)
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-
-# Copy Birko.* shared projects you need
-COPY Birko.Helpers/    Birko.Helpers/
-COPY Birko.Data.Core/  Birko.Data.Core/
-# … etc.
-
-# Copy your solution
-COPY YourSolution/ YourSolution/
-
-# Tell both MSBuild and esbuild where to look
-ENV BIRKO_SRC=/src
-
-WORKDIR /src/YourSolution
-RUN dotnet publish src/Host/YourSolution.Api.csproj -c Release -o /app/publish
-```
+Split into several aggregators (`{Solution}.Birko.Core`, `.Edge`, `.Ai`) only when a real problem shows
+up — a heavy dependency such as camera or hardware libraries leaking into projects that do not need it.
 
 ## Getting Started
 
