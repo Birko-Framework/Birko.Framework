@@ -156,11 +156,19 @@ public class MigrationBookkeepingDurabilityTests
 
     private static string ReadStoreSource()
     {
-        // Framework.Tests/<proj>/bin/Debug/net10.0 -> repo root -> Framework/<proj>
-        var dir = AppContext.BaseDirectory;
-        for (var i = 0; i < 6; i++) dir = Path.GetDirectoryName(dir)!;
-        var path = Path.Combine(dir, "Framework", "Birko.Data.Migrations.InfluxDB", "InfluxMigrationStore.cs");
-        File.Exists(path).Should().BeTrue($"the source scan must actually find the file (looked at {path})");
-        return File.ReadAllText(path);
+        // Walk up looking for the project directory, trying both the level itself and a
+        // "Framework" child at that level. A FIXED depth breaks whenever the layout changes: the
+        // monorepo migration added a "tests/" segment, so the old `for i<6` landed one level too
+        // deep and produced .../Framework/Framework/... (AppContext.BaseDirectory has a trailing
+        // separator, so the first GetDirectoryName only strips it). This shape survives both.
+        for (var probe = new DirectoryInfo(AppContext.BaseDirectory); probe != null; probe = probe.Parent)
+        {
+            foreach (var root in new[] { probe.FullName, Path.Combine(probe.FullName, "Framework") })
+            {
+                var candidate = Path.Combine(root, "Birko.Data.Migrations.InfluxDB", "InfluxMigrationStore.cs");
+                if (File.Exists(candidate)) return File.ReadAllText(candidate);
+            }
+        }
+        throw new FileNotFoundException("the source scan must actually find InfluxMigrationStore.cs");
     }
 }
