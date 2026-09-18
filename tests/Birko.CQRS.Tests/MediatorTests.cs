@@ -23,6 +23,28 @@ public record UnhandledCommand : ICommand;
 
 public class CreateItemHandler : ICommandHandler<CreateItemCommand>
 {
+    /// <summary>
+    /// Process-wide, and it has to be: the mediator resolves this handler from DI, so a test cannot
+    /// hold the instance and observe an instance field.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="MediatorTests"/> and <see cref="PipelineTests"/> both write this, and xUnit runs
+    /// different test classes in parallel — so one class setting it true failed the other's assertion
+    /// that it was false. Seen in CI on 2026-09-18
+    /// (<c>Pipeline_ShortCircuit_DoesNotCallHandler</c>: "Expected ... to be False, but found True")
+    /// and green on three consecutive local runs, which is the signature of shared process state
+    /// rather than a defect in either test. Both classes now sit in the
+    /// <see cref="CreateItemHandlerStateCollection"/> so they are serialised against each other.
+    /// </para>
+    /// <para>
+    /// ⚠ An <see cref="System.Threading.AsyncLocal{T}"/> looks like the better fix — it would keep the
+    /// two classes parallel — and it is measurably wrong here: it was tried and red 3 of 30. An
+    /// AsyncLocal write propagates *down* a flow, not back up, and the handler runs inside the
+    /// mediator's <c>await</c>, so its write lands in a nested ExecutionContext copy and the test
+    /// that awaited it reads the old value. Do not "improve" this back into an AsyncLocal.
+    /// </para>
+    /// </remarks>
     public static bool WasHandled { get; set; }
 
     public Task<Unit> HandleAsync(CreateItemCommand request, CancellationToken cancellationToken = default)
@@ -31,6 +53,7 @@ public class CreateItemHandler : ICommandHandler<CreateItemCommand>
         return Unit.Task;
     }
 }
+
 
 public class CreateItemWithIdHandler : ICommandHandler<CreateItemWithIdCommand, Guid>
 {
@@ -54,6 +77,7 @@ public class GetItemHandler : IQueryHandler<GetItemQuery, string?>
 
 #endregion
 
+[Collection(CreateItemHandlerStateCollection.Name)]
 public class MediatorTests
 {
     private ServiceProvider BuildProvider(Action<IServiceCollection>? configure = null)

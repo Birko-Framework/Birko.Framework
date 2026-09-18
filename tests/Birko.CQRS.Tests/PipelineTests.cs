@@ -72,6 +72,7 @@ public class TokenObservingBehavior : IPipelineBehavior<CreateItemCommand, Unit>
 
 #endregion
 
+[Collection(CreateItemHandlerStateCollection.Name)]
 public class PipelineTests
 {
     private ServiceProvider BuildProvider(Action<IServiceCollection>? configure = null)
