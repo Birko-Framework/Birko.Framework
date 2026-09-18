@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Models.Inventory</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\StockItem.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\StockItemVariant.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\StorageLocation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\StockMovement.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\StockBalance.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\InventoryDocument.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\InventoryDocumentLine.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\StockItem.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\StockItemVariant.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\StorageLocation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\StockMovement.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\StockBalance.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\InventoryDocument.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\InventoryDocumentLine.cs" />
+  </ItemGroup>
+</Project>
