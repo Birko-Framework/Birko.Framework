@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>f9a0b1c2-d3e4-4f5a-9b6c-7d8e9f0a1b2c</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Serialization.Yaml</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both.
+
+         This project wraps YamlDotNet and is its only user in the framework, so it owns the dependency
+         outright: a consumer imports this projitems and never learns the package name. Floats within
+         the major so a published advisory heals on the next restore (TASK-234). -->
+    <PackageReference Include="YamlDotNet" Version="16.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="YamlDotNet" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)YamlDotNetSerializer.cs" />
+  </ItemGroup>
+</Project>
