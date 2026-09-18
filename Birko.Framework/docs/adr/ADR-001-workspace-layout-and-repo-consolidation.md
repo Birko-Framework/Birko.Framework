@@ -31,10 +31,19 @@ is now `git clone` × 2. The bucket layout it prescribed (`Birko\{Framework, Con
 `WhMan`/`EventSourcing` flat at the root, `aicode\` for scratch) **stands unchanged** — the buckets
 became repositories rather than being reorganised.
 
-**Still open from the original:** the data-loss gap. Of the folders it flagged as untracked,
-`Birko.Sandbox` is now a repo in the `Birko-Framework` org; **WorkoutTracker (298 commits), Presenter
-(72), BardStudio (50) and Latent (13) remain local-only with no remote** — 433 commits that exist on
-one disk. Deliberately left that way on 2026-09-18.
+**Closed from the original:** the data-loss gap. Every folder it flagged as untracked now has a
+remote. `Birko.Sandbox` is a public repo in the `Birko-Framework` org (it is framework family — a
+reference consumer). **WorkoutTracker (298 commits), Presenter (72), BardStudio (50) and Latent (13)
+are private repos on the personal account** — they are personal products, not framework family, so
+they sit beside the other non-Birko repos rather than in the org.
+
+That removed the last single-disk exposure in the workspace: 433 commits, three of the four touched
+within six weeks of the migration. Each history was scanned for credentials before its first publish;
+all four were clean. (`Presenter` holds a live GitHub PAT in
+`src/Presenter.Host/appsettings.Development.json`, which is untracked and gitignored and was never
+committed — a content search of every commit for the token prefix returns zero. The `ghp_` strings
+that *are* in its history are placeholders: `ghp_xxx…x` in the README, `ghp_xxx` in a doc comment and
+`ghp_test` in a fixture.)
 
 ---
 
