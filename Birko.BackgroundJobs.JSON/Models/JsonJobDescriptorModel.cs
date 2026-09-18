@@ -1,0 +1,129 @@
+using System;
+using Birko.Data.Models;
+using Birko.Serialization;
+using Birko.Serialization.Json;
+using System.Text.Json.Serialization;
+
+namespace Birko.BackgroundJobs.JSON.Models;
+
+/// <summary>
+/// JSON file-persisted model for a background job descriptor.
+/// Uses System.Text.Json attributes for serialization.
+/// </summary>
+public class JsonJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
+{
+    [JsonPropertyName("jobType")]
+    public string JobType { get; set; } = string.Empty;
+
+    [JsonPropertyName("inputType")]
+    public string? InputType { get; set; }
+
+    [JsonPropertyName("serializedInput")]
+    public string? SerializedInput { get; set; }
+
+    [JsonPropertyName("queueName")]
+    public string? QueueName { get; set; }
+
+    [JsonPropertyName("priority")]
+    public int Priority { get; set; }
+
+    [JsonPropertyName("maxRetries")]
+    public int MaxRetries { get; set; } = 3;
+
+    [JsonPropertyName("status")]
+    public int Status { get; set; }
+
+    [JsonPropertyName("attemptCount")]
+    public int AttemptCount { get; set; }
+
+    [JsonPropertyName("enqueuedAt")]
+    public DateTime EnqueuedAt { get; set; } = DateTime.UtcNow;
+
+    [JsonPropertyName("scheduledAt")]
+    public DateTime? ScheduledAt { get; set; }
+
+    [JsonPropertyName("lastAttemptAt")]
+    public DateTime? LastAttemptAt { get; set; }
+
+    [JsonPropertyName("completedAt")]
+    public DateTime? CompletedAt { get; set; }
+
+    [JsonPropertyName("lastError")]
+    public string? LastError { get; set; }
+
+    [JsonPropertyName("metadataJson")]
+    public string? MetadataJson { get; set; }
+
+    // CR-L026: the ILoadable path passes null, so metadata is (de)serialized with these default options
+    // rather than the store's camelCase/indented serializer. This is intentional and safe for the current
+    // Dictionary<string,string> metadata (System.Text.Json does not rename string dictionary keys); thread
+    // the store's ISerializer through the overloads below if Metadata ever becomes a richer type.
+    private static readonly ISerializer DefaultSerializer = new SystemJsonSerializer();
+
+    public JobDescriptor ToDescriptor(ISerializer? serializer = null)
+    {
+        var s = serializer ?? DefaultSerializer;
+        var descriptor = new JobDescriptor
+        {
+            Id = Guid ?? System.Guid.NewGuid(),
+            JobType = JobType,
+            InputType = InputType,
+            SerializedInput = SerializedInput,
+            QueueName = QueueName,
+            Priority = Priority,
+            MaxRetries = MaxRetries,
+            Status = (JobStatus)Status,
+            AttemptCount = AttemptCount,
+            EnqueuedAt = EnqueuedAt,
+            ScheduledAt = ScheduledAt,
+            LastAttemptAt = LastAttemptAt,
+            CompletedAt = CompletedAt,
+            LastError = LastError
+        };
+
+        if (!string.IsNullOrEmpty(MetadataJson))
+        {
+            var metadata = s.Deserialize<System.Collections.Generic.Dictionary<string, string>>(MetadataJson);
+            if (metadata != null)
+            {
+                descriptor.Metadata = metadata;
+            }
+        }
+
+        return descriptor;
+    }
+
+    public static JsonJobDescriptorModel FromDescriptor(JobDescriptor descriptor)
+    {
+        var model = new JsonJobDescriptorModel();
+        model.LoadFrom(descriptor);
+        return model;
+    }
+
+    public void LoadFrom(JobDescriptor data)
+    {
+        LoadFrom(data, null);
+    }
+
+    public void LoadFrom(JobDescriptor data, ISerializer? serializer)
+    {
+        var s = serializer ?? DefaultSerializer;
+        Guid = data.Id;
+        JobType = data.JobType;
+        InputType = data.InputType;
+        SerializedInput = data.SerializedInput;
+        QueueName = data.QueueName;
+        Priority = data.Priority;
+        MaxRetries = data.MaxRetries;
+        Status = (int)data.Status;
+        AttemptCount = data.AttemptCount;
+        EnqueuedAt = data.EnqueuedAt;
+        ScheduledAt = data.ScheduledAt;
+        LastAttemptAt = data.LastAttemptAt;
+        CompletedAt = data.CompletedAt;
+        LastError = data.LastError;
+        MetadataJson = data.Metadata.Count > 0
+            ? s.Serialize(data.Metadata)
+            : null;
+    }
+}
