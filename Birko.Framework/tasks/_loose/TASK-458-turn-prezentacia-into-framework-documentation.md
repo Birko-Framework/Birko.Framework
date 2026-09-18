@@ -83,8 +83,28 @@ all-or-nothing", which is more useful to a newcomer than the README's previous f
 pointer, since it now duplicated and partly contradicted the wiki. Its 326-line project index was
 **kept**: that is reference material the wiki deliberately does not carry.
 
-## Follow-up worth knowing
+## The drift guard shipped too
 
-The wiki will drift, exactly as `PREZENTACIA.md` did. Nothing regenerates or verifies it. If that
-matters later, the cheap guard is a CI job that compiles the guide's code snippets — the verification
-harness used here is the shape of it.
+`wiki-snippets.yml` compiles the wiki's C# on every push touching `Birko.*`, nightly, and on demand.
+**Green on its first run: 24 snippets compiled, 4 skipped, 163 projects resolved.**
+
+It earned its place immediately, finding **six API errors that writing-then-reading had not** —
+including a migration example written against an `ISchemaBuilder.AlterCollection` that does not
+exist, and a set-membership filter using an array, which on .NET 9+ binds to
+`MemoryExtensions.Contains(ReadOnlySpan<T>, T)` and therefore cannot appear in an expression tree at
+all. Both would have failed for the first reader who tried them.
+
+**Two design points worth carrying.** *Compile every block standalone* fails on 24 of 28, because most
+blocks are fragments by design — they use `store` because the prose just introduced it. Forcing them to
+be self-contained would mean writing the guide for the compiler rather than for people, so pages carry
+`<!-- verify:context -->` and genuinely unverifiable blocks carry `<!-- verify:skip reason -->`; both
+are HTML comments and neither renders. And the import list is **generated** from the Sandbox
+aggregator, so the guide is checked against the very list it tells readers to copy, with no second
+list to drift.
+
+⚠️ **An early measurement of mine was wrong and is worth recording:** "18 of 28 compile" was an
+artefact of the build aborting on syntax errors before semantic analysis. The real number was 4. A
+compiler that stops early reports a subset, not a result.
+
+**What it does not catch**, stated in `ci/wiki-snippets/README.md` so nobody over-trusts it: whether
+the prose is true, whether the code does what the text claims, or anything stale that still compiles.
