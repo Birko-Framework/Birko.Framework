@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>7a8b9c0d-1e2f-4a5b-8c9d-0e1f2a3b4c5d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Tenant</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- TASK-229: Middleware/ uses Microsoft.AspNetCore.Http, .Builder and .Routing.
+         A FrameworkReference, not a PackageReference: these ship in the shared framework.
+         Until now this was borrowed transitively from RavenDB.Client, which stopped
+         providing it at 7.2.5 — so the dependency was real and simply undeclared. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\ModelByTenant.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ITenant.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ITenantContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\TenantContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\TenantIsolationMode.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\TenantMismatchException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\TenantScopeRequiredException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\TenantStoreExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\TenantBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncTenantBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\TenantStoreWrapper.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\RepositoryServiceCollectionExtensions.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncTenantStoreWrapper.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\ResolvedTenant.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\TenantMiddleware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\ServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
