@@ -53,6 +53,26 @@ bucket layout in June; `docs/adr/ADR-001` (the former untracked `WORKSPACE-STRUC
 - **Tests match the original tree exactly** (control-run): Core 102=102, InMemory 74=74; JSON 23,
   XML 18, Random 130 all green.
 
+## ⚠ Correction: tags were NOT migrated
+
+The verification above is exact for **commits** and overstated for **refs**. The import used
+`git fetch <path> main`, which fetches that branch and **not tags**, so the monorepo has **0 tags**
+while `Birko.Data.ElasticSearch` carries two that are real markers:
+
+| tag | what it is |
+|---|---|
+| `1.7.10` | an annotated tag, 2021-01-04, message *"ES 7.10.x"* — an ElasticSearch compatibility marker |
+| `1.0` | a GitHub Release, *"First version"*, 2019-09-07, no assets |
+
+Found while pricing deletion of the old repos, not by the migration's own checks — the pre-flight
+measured "2 tags total" and then nothing verified they arrived. **A reconciliation that counts only
+commits will report success while losing every tag, branch and note.**
+
+Not currently a loss: the old repos are **kept archived** (decided 2026-09-18), so both tags remain
+readable at their original URLs. It becomes a loss the moment those repos are deleted, so
+**migrate the tags first if that ever happens** — namespaced (`Birko.Data.ElasticSearch/1.7.10`),
+since a bare `1.0` means nothing across 178 projects.
+
 ## Gotchas worth carrying
 
 - **Windows MAX_PATH bit twice.** `--to-subdirectory-filter` nests the project name, so
