@@ -40,6 +40,22 @@ public class AzureKeyVaultSettings : RemoteSettings
     /// <summary>HTTP request timeout in seconds (default: 30).</summary>
     public int TimeoutSeconds { get; set; } = 30;
 
+    /// <summary>
+    /// Accept <c>http://</c> secret ids as well as <c>https://</c>. Default <see langword="false"/>.
+    /// </summary>
+    /// <remarks>
+    /// A real Key Vault is always TLS, so this exists only for local emulators and test doubles.
+    /// Turning it on is recorded on
+    /// <see cref="AzureKeyVaultSecretProvider.InsecureSecretIdsAllowed"/> and traced as a warning at
+    /// construction, because an insecure setting that nothing announces is one nobody notices.
+    /// <para>
+    /// It does NOT relax transport security — the vault is still reached over whatever the URI and
+    /// <see cref="RemoteSettings.UseSecure"/> say. It only widens which secret ids are recognised
+    /// when parsing a vault response.
+    /// </para>
+    /// </remarks>
+    public bool AllowInsecureSecretIds { get; set; }
+
     public AzureKeyVaultSettings() { }
 
     public AzureKeyVaultSettings(string vaultUri, string tenantId, string clientId, string clientSecret)

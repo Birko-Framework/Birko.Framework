@@ -57,7 +57,27 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
             _httpClient.Timeout = TimeSpan.FromSeconds(_settings.TimeoutSeconds);
         }
         _serializer = serializer ?? new SystemJsonSerializer();
+
+        if (_settings.AllowInsecureSecretIds)
+        {
+            // Recorded AND traced. A setting that weakens a security check and announces itself
+            // nowhere is one nobody notices; this project has no logger dependency, so the trace is
+            // the zero-dependency half and the property is the half a health check can read.
+            System.Diagnostics.Trace.TraceWarning(
+                "AzureKeyVaultSecretProvider: AllowInsecureSecretIds is enabled, so http:// secret " +
+                "ids are accepted alongside https://. A real Key Vault is always TLS - this should " +
+                "be set only for a local emulator or a test double.");
+        }
     }
+
+    /// <summary>
+    /// Whether this provider was configured to accept <c>http://</c> secret ids.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so a health check or a start-up banner can report an insecure configuration rather
+    /// than it being visible only in trace output.
+    /// </remarks>
+    public bool InsecureSecretIdsAllowed => _settings.AllowInsecureSecretIds;
 
     /// <inheritdoc />
     public async Task<string?> GetSecretAsync(string key, CancellationToken ct = default)
@@ -237,7 +257,8 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
         }
     }
 
-    private static SecretResult ParseSecretResponse(string key, string json)
+    // instance, not static: the version extractor now consults settings
+    private SecretResult ParseSecretResponse(string key, string json)
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -293,21 +314,26 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
     /// Windows and <c>true</c> with <c>Scheme == "file"</c> on Linux — and this framework deploys
     /// in Linux containers, so the wrong answer was the one that shipped.
     /// <para>
-    /// The scheme is therefore part of the identity: a Key Vault secret id is an https URL. http is
-    /// accepted only because test doubles and local emulators use it. Anything else is not a secret
-    /// id, however well it parses.
+    /// The scheme is therefore part of the identity: a Key Vault secret id is an <b>https</b> URL.
+    /// Anything else is not a secret id, however well it parses. <c>http</c> is accepted only when
+    /// <see cref="AzureKeyVaultSettings.AllowInsecureSecretIds"/> is set, which exists for local
+    /// emulators and test doubles and announces itself at construction.
     /// </para>
     /// </remarks>
-    private static bool TryParseSecretId(string? secretId, out Uri? uri)
+    private bool TryParseSecretId(string? secretId, out Uri? uri)
     {
         uri = null;
         if (!Uri.TryCreate(secretId, UriKind.Absolute, out var parsed)) return false;
-        if (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp) return false;
+
+        var acceptable = parsed.Scheme == Uri.UriSchemeHttps
+            || (_settings.AllowInsecureSecretIds && parsed.Scheme == Uri.UriSchemeHttp);
+        if (!acceptable) return false;
+
         uri = parsed;
         return true;
     }
 
-    private static string? ExtractSecretName(string? secretId)
+    private string? ExtractSecretName(string? secretId)
     {
         // CR-L340: tolerate a relative/malformed id (return null) instead of letting new Uri(...) throw
         // UriFormatException up through ListSecretsAsync/GetSecretWithMetadataAsync.
@@ -317,7 +343,7 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
         return segments.Length >= 3 ? segments[2].TrimEnd('/') : null;
     }
 
-    private static string? ExtractVersion(string? secretId)
+    private string? ExtractVersion(string? secretId)
     {
         // CR-L340: tolerate a relative/malformed id (return null) instead of throwing UriFormatException.
         if (!TryParseSecretId(secretId, out var uri)) return null;

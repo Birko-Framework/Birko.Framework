@@ -226,6 +226,67 @@ public class AzureKeyVaultSecretProviderTests
     }
 
     [Fact]
+    public async Task ListSecretsAsync_HttpSecretId_IsRejectedByDefault()
+    {
+        // A real Key Vault is always TLS, so http is NOT accepted unless explicitly allowed.
+        var listResponse = JsonSerializer.Serialize(new
+        {
+            value = new[]
+            {
+                new { id = "http://test.vault.azure.net/secrets/insecure-key" },
+                new { id = "https://test.vault.azure.net/secrets/good-key" }
+            }
+        });
+
+        var handler = new SequentialHttpHandler(
+            (HttpStatusCode.OK, JsonSerializer.Serialize(new { access_token = "token", expires_in = 3600 })),
+            (HttpStatusCode.OK, listResponse)
+        );
+        var settings = new AzureKeyVaultSettings("https://test.vault.azure.net/", "t", "c", "s");
+        using var provider = new AzureKeyVaultSecretProvider(settings, new HttpClient(handler));
+
+        settings.AllowInsecureSecretIds.Should().BeFalse("https-only is the default");
+        provider.InsecureSecretIdsAllowed.Should().BeFalse();
+
+        var result = await provider.ListSecretsAsync();
+
+        result.Should().ContainSingle().Which.Should().Be("good-key");
+    }
+
+    [Fact]
+    public async Task ListSecretsAsync_HttpSecretId_IsAcceptedWhenExplicitlyAllowed()
+    {
+        // The opt-out has to actually open, or the guard is a wall wearing a door's label. This is
+        // the emulator / test-double case, and turning it on is recorded on the provider so a health
+        // check can report an insecure configuration instead of it living only in trace output.
+        var listResponse = JsonSerializer.Serialize(new
+        {
+            value = new[]
+            {
+                new { id = "http://localhost:8443/secrets/emulator-key" },
+                new { id = "https://test.vault.azure.net/secrets/good-key" }
+            }
+        });
+
+        var handler = new SequentialHttpHandler(
+            (HttpStatusCode.OK, JsonSerializer.Serialize(new { access_token = "token", expires_in = 3600 })),
+            (HttpStatusCode.OK, listResponse)
+        );
+        var settings = new AzureKeyVaultSettings("https://test.vault.azure.net/", "t", "c", "s")
+        {
+            AllowInsecureSecretIds = true
+        };
+        using var provider = new AzureKeyVaultSecretProvider(settings, new HttpClient(handler));
+
+        provider.InsecureSecretIdsAllowed.Should().BeTrue(
+            "an insecure configuration must be readable, not only traced");
+
+        var result = await provider.ListSecretsAsync();
+
+        result.Should().BeEquivalentTo(new[] { "emulator-key", "good-key" });
+    }
+
+    [Fact]
     public async Task GetSecretPairsAsync_ReturnsSingleValueEntry()
     {
         // CR-L338: the concrete override surfaces the single-valued default behavior — one "value" entry.
