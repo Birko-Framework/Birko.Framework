@@ -1,0 +1,663 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Birko.Communication.Ports;
+
+namespace Birko.Communication.Bluetooth.Ports
+{
+    /// <summary>
+    /// Bluetooth LE port implementation with platform-specific support for Windows and Linux
+    /// </summary>
+    public class BluetoothLE : AbstractPort, IDisposable
+    {
+        private bool _disposed;
+
+#if WINDOWS
+        private Windows.Devices.Bluetooth.BluetoothLEDevice _device;
+        private Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic _characteristic;
+        private Windows.Devices.Enumeration.DeviceInformation _deviceInfo;
+#elif LINUX
+        private int _socket = -1;
+        private BluetoothAddress _address;
+#endif
+        private Thread? _readThread = null;
+        private bool _stopThread;
+        private int _reconnectAttempts = 0;
+        // True while HandleReconnect is driving an Open() so the success path does not reset
+        // _reconnectAttempts and fight the increment — otherwise MaxReconnectAttempts never binds
+        // and reconnect loops forever (CR-M038).
+        private volatile bool _reconnecting = false;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="BluetoothLE"/> class
+        /// </summary>
+        /// <param name="settings">Bluetooth LE settings</param>
+        public BluetoothLE(BluetoothLESettings settings) : base(settings)
+        {
+        }
+
+        /// <summary>
+        /// Opens the Bluetooth LE connection
+        /// </summary>
+        public override void Open()
+        {
+            if (IsOpen()) return;
+
+            var settings = Settings as BluetoothLESettings;
+            if (settings == null)
+                throw new InvalidOperationException("Invalid Settings for BluetoothLE port");
+
+            if (string.IsNullOrEmpty(settings.DeviceAddress))
+                throw new InvalidOperationException("DeviceAddress is required in BluetoothLESettings");
+
+#if WINDOWS
+            OpenWindows(settings);
+#elif LINUX
+            OpenLinux(settings);
+#else
+            throw new PlatformNotSupportedException("Bluetooth LE is not supported on this platform");
+#endif
+        }
+
+#if WINDOWS
+        #region Windows Implementation
+
+        private void OpenWindows(BluetoothLESettings settings)
+        {
+            try
+            {
+                // Connect to the device. Honor the Wait(timeout) return: false means the connect task
+                // did not complete in time — treat it as a timeout failure instead of proceeding on a
+                // stale _isOpen and dropping the still-running task's eventual exception (CR-M039).
+                var connectTask = ConnectWindowsAsync(settings);
+                if (!connectTask.Wait(settings.ConnectionTimeout))
+                {
+                    throw new TimeoutException($"Timed out connecting to Bluetooth LE device {settings.DeviceAddress} after {settings.ConnectionTimeout}ms");
+                }
+
+                if (!_isOpen)
+                {
+                    throw new InvalidOperationException($"Failed to connect to Bluetooth LE device {settings.DeviceAddress}");
+                }
+
+                // Start background read thread
+                _stopThread = false;
+                _readThread = new Thread(ReadWorker);
+                _readThread.IsBackground = true;
+                _readThread.Start();
+
+                if (!_reconnecting)
+                    _reconnectAttempts = 0;
+            }
+            catch (Exception ex)
+            {
+                _isOpen = false;
+                throw new InvalidOperationException($"Failed to open Bluetooth LE connection: {ex.Message}", ex);
+            }
+        }
+
+        private async Task ConnectWindowsAsync(BluetoothLESettings settings)
+        {
+            try
+            {
+                // Find the device by address
+                string aqsFilter = $"System.Devices.Aep.DeviceAddress:=\"{settings.DeviceAddress}\"";
+                string[] requestedProperties = new string[]
+                {
+                    "System.Devices.Aep.DeviceAddress",
+                    "System.Devices.Aep.Alias"
+                };
+
+                var deviceSelector = Windows.Devices.Enumeration.DeviceInformation.CreateWatcher(
+                    aqsFilter,
+                    requestedProperties,
+                    Windows.Devices.Enumeration.DeviceInformationKind.AssociationEndpoint);
+
+                var completionSource = new TaskCompletionSource<Windows.Devices.Enumeration.DeviceInformation>();
+
+                Windows.Devices.Enumeration.DeviceInformation foundDevice = null;
+
+                deviceSelector.Added += (sender, args) =>
+                {
+                    foundDevice = args;
+                    completionSource.TrySetResult(args);
+                };
+
+                deviceSelector.EnumerationCompleted += (sender, args) =>
+                {
+                    deviceSelector.Stop();
+                    if (foundDevice == null)
+                    {
+                        completionSource.TrySetException(new InvalidOperationException($"Device {settings.DeviceAddress} not found"));
+                    }
+                };
+
+                deviceSelector.Stopped += (sender, args) =>
+                {
+                    if (foundDevice == null)
+                    {
+                        completionSource.TrySetException(new InvalidOperationException($"Device {settings.DeviceAddress} not found"));
+                    }
+                };
+
+                deviceSelector.Start();
+
+                var deviceInfo = await completionSource.Task;
+                _deviceInfo = deviceInfo;
+
+                // Connect to the BLE device
+                _device = await Windows.Devices.Bluetooth.BluetoothLEDevice.FromIdAsync(deviceInfo.Id);
+
+                if (_device == null)
+                {
+                    throw new InvalidOperationException($"Failed to connect to device {settings.DeviceAddress}");
+                }
+
+                // Get the GATT service
+                if (settings.ServiceUuid.HasValue)
+                {
+                    var gattResult = await _device.GetGattServicesForUuidAsync(settings.ServiceUuid.Value);
+
+                    if (gattResult.Status != Windows.Devices.Bluetooth.GenericAttributeProfile.GattCommunicationStatus.Success)
+                    {
+                        throw new InvalidOperationException($"Failed to get GATT service {settings.ServiceUuid}");
+                    }
+
+                    var services = gattResult.Services;
+                    if (services.Count > 0)
+                    {
+                        var service = services[0];
+
+                        // Get the characteristic
+                        if (settings.CharacteristicUuid.HasValue)
+                        {
+                            var charResult = await service.GetCharacteristicsForUuidAsync(settings.CharacteristicUuid.Value);
+
+                            if (charResult.Status != Windows.Devices.Bluetooth.GenericAttributeProfile.GattCommunicationStatus.Success)
+                            {
+                                throw new InvalidOperationException($"Failed to get characteristic {settings.CharacteristicUuid}");
+                            }
+
+                            var characteristics = charResult.Characteristics;
+                            if (characteristics.Count > 0)
+                            {
+                                _characteristic = characteristics[0];
+
+                                // Subscribe to notifications if the characteristic supports it
+                                if (_characteristic.CharacteristicProperties.HasFlag(
+                                    Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristicProperties.Notify))
+                                {
+                                    await _characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
+                                        Windows.Devices.Bluetooth.GenericAttributeProfile.GattClientCharacteristicConfigurationDescriptorValue.Notify);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                _isOpen = true;
+            }
+            catch (Exception)
+            {
+                _isOpen = false;
+                CleanupWindows();
+                throw;
+            }
+        }
+
+        private void CleanupWindows()
+        {
+            if (_characteristic != null)
+            {
+                _characteristic = null;
+            }
+
+            if (_device != null)
+            {
+                _device.Dispose();
+                _device = null;
+            }
+
+            _deviceInfo = null;
+        }
+
+        #endregion
+#endif
+
+#if LINUX
+        #region Linux Implementation
+
+        private void OpenLinux(BluetoothLESettings settings)
+        {
+            try
+            {
+                // Parse the MAC address
+                _address = ParseBluetoothAddress(settings.DeviceAddress);
+
+                // Create L2CAP socket for BLE
+                _socket = socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
+
+                if (_socket < 0)
+                {
+                    throw new InvalidOperationException("Failed to create Bluetooth socket");
+                }
+
+                // Connect to the device
+                var sockaddr = new SockaddrL2
+                {
+                   _family = AF_BLUETOOTH,
+                    _address = _address
+                };
+
+                // Set the connection timeout
+                // Marshal.SizeOf (sizeof on a user-defined struct requires an unsafe context) (CR-L047).
+                int result = connect(_socket, ref sockaddr, (uint)System.Runtime.InteropServices.Marshal.SizeOf<SockaddrL2>());
+
+                if (result < 0)
+                {
+                    CloseLinux();
+                    throw new InvalidOperationException($"Failed to connect to device {settings.DeviceAddress}");
+                }
+
+                _isOpen = true;
+
+                // Start background read thread
+                _stopThread = false;
+                _readThread = new Thread(ReadWorker);
+                _readThread.IsBackground = true;
+                _readThread.Start();
+
+                if (!_reconnecting)
+                    _reconnectAttempts = 0;
+            }
+            catch (Exception ex)
+            {
+                _isOpen = false;
+                CloseLinux();
+                throw new InvalidOperationException($"Failed to open Bluetooth LE connection: {ex.Message}", ex);
+            }
+        }
+
+        private void CloseLinux()
+        {
+            if (_socket >= 0)
+            {
+                try
+                {
+                    close(_socket);
+                }
+                catch { }
+                _socket = -1;
+            }
+        }
+
+        #endregion
+
+        #region Linux Native Methods
+
+        private const int AF_BLUETOOTH = 31;
+        private const int BTPROTO_L2CAP = 0;
+        private const int SOCK_SEQPACKET = 5;
+
+        [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
+        private static extern int socket(int domain, int type, int protocol);
+
+        [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
+        private static extern int connect(int sockfd, ref SockaddrL2 addr, uint addrlen);
+
+        [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
+        private static extern int close(int fd);
+
+        [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
+        private static extern int recv(int sockfd, byte[] buf, int len, int flags);
+
+        [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
+        private static extern int send(int sockfd, byte[] buf, int len, int flags);
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)]
+        private struct BluetoothAddress
+        {
+            public byte b0, b1, b2, b3, b4, b5;
+        }
+
+        // Sequential layout so the field order/packing matches the C sockaddr_l2 the P/Invoke expects (CR-L047).
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct SockaddrL2
+        {
+            public ushort _family;
+            public ushort _pdevtype;
+            public BluetoothAddress _address;
+            public ushort _psm;
+            public ushort _cid;
+        }
+
+        private static BluetoothAddress ParseBluetoothAddress(string address)
+        {
+            var parts = address.Split(':');
+            if (parts.Length != 6)
+                throw new FormatException("Invalid Bluetooth address format");
+
+            return new BluetoothAddress
+            {
+                b5 = byte.Parse(parts[0], System.Globalization.NumberStyles.AllowHexSpecifier),
+                b4 = byte.Parse(parts[1], System.Globalization.NumberStyles.AllowHexSpecifier),
+                b3 = byte.Parse(parts[2], System.Globalization.NumberStyles.AllowHexSpecifier),
+                b2 = byte.Parse(parts[3], System.Globalization.NumberStyles.AllowHexSpecifier),
+                b1 = byte.Parse(parts[4], System.Globalization.NumberStyles.AllowHexSpecifier),
+                b0 = byte.Parse(parts[5], System.Globalization.NumberStyles.AllowHexSpecifier)
+            };
+        }
+
+        #endregion
+#endif
+
+        /// <summary>
+        /// Writes data to the Bluetooth LE characteristic
+        /// </summary>
+        /// <param name="data">Data to write</param>
+        public override void Write(byte[] data)
+        {
+            if (!IsOpen())
+                Open();
+
+#if WINDOWS
+            WriteWindows(data);
+#elif LINUX
+            WriteLinux(data);
+#endif
+        }
+
+#if WINDOWS
+        private void WriteWindows(byte[] data)
+        {
+            if (_characteristic != null)
+            {
+                var buffer = Windows.Storage.Streams.CryptographicBuffer.CreateFromByteArray(data);
+                var writeTask = _characteristic.WriteValueAsync(buffer).AsTask();
+
+                try
+                {
+                    writeTask.Wait(5000); // 5 second timeout
+                }
+                catch (AggregateException ex) when (ex.InnerException != null)
+                {
+                    throw new InvalidOperationException($"Failed to write data: {ex.InnerException.Message}", ex.InnerException);
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException("Characteristic not available for writing");
+            }
+        }
+#endif
+
+#if LINUX
+        private void WriteLinux(byte[] data)
+        {
+            if (_socket >= 0)
+            {
+                int sent = send(_socket, data, data.Length, 0);
+                if (sent < 0)
+                {
+                    throw new InvalidOperationException("Failed to write data to Bluetooth socket");
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException("Bluetooth socket not connected");
+            }
+        }
+#endif
+
+        /// <summary>
+        /// Reads data from the buffer
+        /// </summary>
+        /// <param name="size">Number of bytes to read (-1 for all available)</param>
+        /// <returns>Byte array containing the data</returns>
+        public override byte[] Read(int size)
+        {
+            // Check availability and copy under the same lock so the count cannot change between the
+            // check and GetRange (CR-M036) — the background ReadWorker appends under this lock.
+            lock (ReadData)
+            {
+                if (size < 0)
+                {
+                    return ReadData.Count > 0
+                        ? ReadData.GetRange(0, ReadData.Count).ToArray()
+                        : new byte[0];
+                }
+
+                return ReadData.Count >= size
+                    ? ReadData.GetRange(0, size).ToArray()
+                    : new byte[0];
+            }
+        }
+
+        /// <summary>
+        /// Closes the Bluetooth LE connection
+        /// </summary>
+        public override void Close()
+        {
+            if (!IsOpen()) return;
+
+            _stopThread = true;
+
+            // Wait for read thread to finish
+            if (_readThread != null && _readThread.IsAlive)
+            {
+                if (!_readThread.Join(1000))
+                {
+                    // Thread didn't finish in time, it will exit on its own
+                }
+            }
+
+#if WINDOWS
+            CleanupWindows();
+#elif LINUX
+            CloseLinux();
+#endif
+
+            _isOpen = false;
+            Clear();
+        }
+
+        /// <summary>
+        /// Checks if there is enough data in the read buffer
+        /// </summary>
+        /// <param name="size">Number of bytes required</param>
+        /// <returns>True if enough data is available</returns>
+        public override bool HasReadData(int size)
+        {
+            // size < 0 means "all available" — true only when the buffer actually has data
+            // (CR-H016: ReadData.Count >= -1 was always true, even on an empty buffer).
+            if (size < 0)
+                return ReadData.Count > 0;
+            return (ReadData.Count >= size);
+        }
+
+        /// <summary>
+        /// Removes data from the read buffer
+        /// </summary>
+        /// <param name="size">Number of bytes to remove (-1 for all available)</param>
+        /// <returns>The removed data</returns>
+        public override byte[] RemoveReadData(int size)
+        {
+            // Remove exactly what Read returned — for size < 0 that is the whole buffer, avoiding
+            // the ArgumentOutOfRangeException that RemoveRange(0, -1) used to throw (CR-H016).
+            byte[] result = Read(size);
+            if (result.Length > 0)
+            {
+                lock (ReadData)
+                {
+                    int toRemove = Math.Min(result.Length, ReadData.Count);
+                    ReadData.RemoveRange(0, toRemove);
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Raised when the background read loop terminates on an unhandled exception, so a silent
+        /// read-loop death is observable rather than swallowed by a bare catch (CR-L046).
+        /// </summary>
+        public event EventHandler<Exception>? ReadError;
+
+        /// <summary>
+        /// Background thread worker for reading incoming data
+        /// </summary>
+        private void ReadWorker()
+        {
+            byte[] buffer = new byte[1024];
+
+            while (!_stopThread && IsOpen())
+            {
+                try
+                {
+#if WINDOWS
+                    ReadWindowsWorker();
+#elif LINUX
+                    ReadLinuxWorker(buffer);
+#endif
+                }
+                catch (Exception ex)
+                {
+                    // Surface the fault instead of silently terminating the read loop (CR-L046).
+                    ReadError?.Invoke(this, ex);
+                    break;
+                }
+
+                Thread.Sleep(50);
+            }
+
+            // Handle auto-reconnect if connection dropped unexpectedly
+            if (!_stopThread && (Settings as BluetoothLESettings)?.AutoReconnect == true)
+            {
+                HandleReconnect();
+            }
+        }
+
+#if WINDOWS
+        private void ReadWindowsWorker()
+        {
+            // Windows Bluetooth LE uses notifications for data
+            // The characteristic_ValueChanged event would be handled here
+            // For now, we poll since the event model requires more setup
+
+            if (_characteristic != null)
+            {
+                // In a full implementation, you would subscribe to ValueChanged events
+                // For this basic version, we just sleep and wait for notifications
+            }
+        }
+#endif
+
+#if LINUX
+        private void ReadLinuxWorker(byte[] buffer)
+        {
+            if (_socket >= 0)
+            {
+                int received = recv(_socket, buffer, buffer.Length, 0);
+
+                if (received > 0)
+                {
+                    byte[] data = new byte[received];
+                    Array.Copy(buffer, data, received);
+
+                    lock (ReadData)
+                    {
+                        ReadData.AddRange(data);
+                    }
+                    InvokeProcessData();
+                }
+                else if (received < 0)
+                {
+                    // Connection error
+                    _stopThread = true;
+                }
+            }
+        }
+#endif
+
+        private void HandleReconnect()
+        {
+            var settings = Settings as BluetoothLESettings;
+
+            if (settings != null && settings.AutoReconnect && _reconnectAttempts < settings.MaxReconnectAttempts)
+            {
+                _reconnectAttempts++;
+                _stopThread = false;
+
+                try
+                {
+                    Thread.Sleep(1000 * _reconnectAttempts); // Exponential backoff
+                    // Mark the reconnect in progress so Open() does not reset _reconnectAttempts — the
+                    // counter must keep climbing so MaxReconnectAttempts actually bounds the retries
+                    // (CR-M038). NOTE: reconnect currently runs on the dying read thread and Open()
+                    // spawns a fresh read thread; a dedicated supervisor would be cleaner, but the
+                    // bounded-attempts guard keeps the chain finite.
+                    _reconnecting = true;
+                    try
+                    {
+                        Open();
+                    }
+                    finally
+                    {
+                        _reconnecting = false;
+                    }
+                }
+                catch
+                {
+                    // Reconnect failed, will retry if attempts remain
+                    _isOpen = false;
+                    _reconnecting = false;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Deterministically closes the port and releases the platform device (CR-H017).
+        /// Prefer this (or a <c>using</c>) over relying on the finalizer.
+        /// </summary>
+        public override void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <param name="disposing">
+        /// True on the deterministic <see cref="Dispose()"/> path (safe to join the read thread,
+        /// take locks, and dispose the managed WinRT device); false on the finalizer thread, where
+        /// only unmanaged handles may be released — never <see cref="Thread.Join(int)"/> or managed
+        /// object disposal (they may already be finalized and could deadlock).
+        /// </param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            if (disposing)
+            {
+                if (IsOpen())
+                {
+                    Close();
+                }
+            }
+            else
+            {
+#if LINUX
+                // Finalizer backstop: release only the raw socket fd (unmanaged).
+                CloseLinux();
+#endif
+            }
+        }
+
+        /// <summary>
+        /// Finalizer backstop — releases unmanaged handles only. Deterministic cleanup should go
+        /// through <see cref="Dispose()"/> / <see cref="Close"/> (CR-H017).
+        /// </summary>
+        ~BluetoothLE()
+        {
+            Dispose(false);
+        }
+    }
+}
