@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a7b8c9d0-e1f2-4a3b-8c5d-6e7f8a9b0c1d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.CosmosDB</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both. -->
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncCosmosDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosTransactionScopeException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\CosmosDBModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncCosmosDBModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\CosmosDbUnitOfWork.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\CosmosDBIndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Aggregation\CosmosAggregationHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\CosmosGuidIdSerializer.cs" />
+  </ItemGroup>
+</Project>
