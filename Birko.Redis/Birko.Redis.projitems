@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a1b2c3d4-e5f6-4a7b-8c9d-bed2c0000001</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Redis</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both.
+
+         This project wraps StackExchange.Redis, so it owns the dependency: a consumer that imports
+         this projitems gets the driver without ever learning its package name. That is the point of
+         the framework, and it costs a consumer importing only a subset nothing — measured (TASK-234):
+         a PackageReference inside a .projitems materialises ONLY in a project that imports that
+         .projitems, so an ElasticSearch consumer resolves NEST and no Redis, and this one resolves
+         StackExchange.Redis and no NEST.
+
+         Three siblings — BackgroundJobs.Redis, Caching.Redis, MessageQueue.Redis — build on this
+         project and therefore do NOT declare the driver: a consumer imports them alongside this one,
+         and two PackageReference items in one project file is NU1504, an error under the
+         -warnaserror the build sweep runs.
+
+         Birko.Health.Redis is the deliberate exception and is documented in its own projitems. It
+         uses the driver directly and needs nothing from here, so it neither declares (it would
+         collide wherever both are imported — Birko.Sandbox imports both) nor takes a dependency on
+         this project (that would drag Configuration, Data.Core, Data.Stores, Contracts and Time into
+         a consumer that wanted one health check). It documents the package instead.
+
+         Floats within the major rather than pinning, and TASK-234 measured why: the float moved this
+         family 2.8 -> 2.13 and immediately surfaced two latent breaks a pin had been hiding — an
+         overload of StringSetAsync that no longer bound, and seven tests whose Moq setups named
+         superseded StreamAdd / StreamReadGroup signatures. -->
+    <PackageReference Include="StackExchange.Redis" Version="2.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="StackExchange.Redis" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)RedisSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)RedisConnectionManager.cs" />
+  </ItemGroup>
+</Project>
