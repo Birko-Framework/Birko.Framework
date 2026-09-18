@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>2b3c4d5e-6f7a-8901-2bcd-ef3456789012</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.ElasticSearch</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both.
+
+         Declared HERE and nowhere else in the ElasticSearch family: six sibling projitems
+         (.ViewModel, .Views, BackgroundJobs, Migrations, Sync, Workflow) use Nest too, but a
+         consumer imports them alongside this one, so a second declaration lands in the same project
+         file and restore reports NU1504 — a warning normally, an error under the -warnaserror that
+         verify-conventions runs (TASK-234). -->
+    <PackageReference Include="NEST" Version="7.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="NEST" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\EnumerableExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncElasticSearchStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ElasticSearch\ElasticSearch.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\ElasticSearchModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncElasticSearchModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\ElasticSearchStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\ElasticSearchStoreHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\ElasticSearchUnitOfWork.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexInfo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\ReindexHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\ElasticSearchIndexManagerAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Highlighting\HighlightOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Highlighting\SearchResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Aggregation\StoreAggregationHelper.cs" />
+  </ItemGroup>
+</Project>
