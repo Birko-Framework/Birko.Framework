@@ -3,8 +3,8 @@ id: TASK-463
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
-priority: P2
+status: cancelled
+priority: P2  # rating stands as filed; the premise, not the rating, was wrong
 assignee: ai
 created: 2026-09-18
 depends-on: []
@@ -16,9 +16,9 @@ github-issue: null
 jira-key: null
 ---
 
-# `TagServiceBase` is documented in three places and exists in none
+# ~~`TagServiceBase` is documented in three places and exists in none~~ — CANCELLED, the premise was false
 
-## Context
+## Context (as filed — every factual claim below is WRONG; see the cancellation at the end)
 
 Found while scoping [[TASK-461]]'s tagging coverage. `Birko.Data.Tagging` ships four files —
 `ITaggable`, `Tag`, `EntityTag`, `ITagService`, plus `CrossTenantTagAccessException` and a DI
@@ -61,3 +61,45 @@ Measure the blast radius before choosing: **0** `.cs` references anywhere, so ei
    with each other.
 4. If the class is written: `Birko.Sandbox` gains a tagging check, which is the coverage
    [[TASK-461]] deliberately left out rather than faking with an invented implementation.
+
+
+---
+
+## Cancelled (2026-09-18) — the premise is false, and the error was mine
+
+`TagServiceBase` **exists**: `Birko.Data.Tagging/Services/TagService.cs`, an `abstract class
+TagServiceBase : ITagService` declaring **exactly the twelve hooks the README names**, stamping
+`TenantGuid = GetCurrentTenantId()` on every insert, with `TagServiceBaseTests.cs`,
+`TagServiceTenantGuardTests.cs` and a 139-line `InMemoryTagService` reference implementation — 20
+tests, all green. Symbio's `SymbioTagService : TagServiceBase, ITagUsageQuery` derives from it in
+production.
+
+So there is nothing to write and nothing to delete. Every document that describes it is accurate,
+including the tenant-scoping contract this task claimed was unbacked.
+
+### How I got it wrong — two compounding errors, both mine
+
+1. **A truncated listing read as a complete one.** `ls -R Birko.Data.Tagging | head -20` cut off
+   inside the `Services:` block after `CrossTenantTagAccessException.cs` and `ITagService.cs`.
+   `TagService.cs` was the next line. I read the truncation as the directory's contents.
+2. **I misread my own count.** `grep -rl TagServiceBase --include=*.cs . | wc -l` printed **6** and I
+   wrote *"exists in zero `.cs` files"* into the task, because the lines displayed under it were the
+   `.md` hits from a second command with `head -5`. The number that mattered was on screen and said
+   the opposite of what I filed.
+
+**The rule worth keeping:** a count and a listing are two measurements, and when they disagree the
+one that was truncated is the one to re-run. Neither `head` nor `wc -l` says it has hidden something.
+The *filename* helped hide it too — the class is `TagServiceBase` and the file is `TagService.cs`, so
+a listing does not name it.
+
+This is the inverse of § TASK-283: that rule exists because a **stale** measurement kept a defect
+open; here a **misread** one opened a defect that never existed. Both fail the same way — a claim
+about the tree that nobody re-ran.
+
+### What it changes elsewhere
+
+- [[TASK-461]]'s out-of-scope bullet said tagging *"has no runnable implementation to check"* and used
+  that to justify leaving it out of the Sandbox. Corrected there, and the check added, since the
+  premise that excluded it was this one.
+- § Dependency Flow in `CLAUDE.md` lists `TagServiceBase` and is **correct as written** — this task
+  proposed changing it, which would have introduced the very drift it was filed to remove.

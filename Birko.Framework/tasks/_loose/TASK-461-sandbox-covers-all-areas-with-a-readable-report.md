@@ -78,10 +78,11 @@ is the cheapest signal in the job.
   Pre-existing framework code, surfaced only because the Sandbox now imports XML, and § Code Style
   forbids nullable warnings. Not fixed here — it is a framework change, not a harness one.
   → [[TASK-462]]
-- **Tagging has no runnable implementation to check.** `Birko.Data.Tagging` ships `ITagService`,
-  `Tag`, `EntityTag` and a DI extension; the `TagServiceBase` § Dependency Flow names does not exist
-  in the tree. A check would have had to invent an implementation, which measures the check rather
-  than the framework, so the project is deliberately **not** imported. → [[TASK-463]]
+- **~~Tagging has no runnable implementation to check.~~** ⚠ **Wrong, and the error was mine.**
+  `TagServiceBase` exists (`Birko.Data.Tagging/Services/TagService.cs`), with all twelve hooks the
+  README names, 20 passing tests and a live Symbio consumer. I had excluded tagging on the strength
+  of a truncated `ls` and a misread `wc -l` — see [[TASK-463]], cancelled, for how both slipped past.
+  The check was added afterwards, so the Sandbox does cover tagging.
 - **Transports needing a server** (gRPC, SSE, WebSocket, SOAP) are covered by the framework's own
   live suites; REST and GraphQL are here because they are `HttpClient`-only and their wiring is
   checkable with nothing running.
