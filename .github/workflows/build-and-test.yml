@@ -45,12 +45,17 @@ jobs:
 
       # BIRKO_REQUIRE_LIVE is deliberately NOT set: suites needing a server skip themselves here and
       # are covered by live-tests.yml. Setting it would turn every one of those skips into a failure.
+      # Birko.DesignTokens.Tests is skipped HERE and covered by token-parity.yml, which is the only
+      # workflow that assembles what it needs: BIRKO_SRC plus a checkout of Birko.Web, because
+      # CssParityTests compares against Birko.Web.Components/css/ in the other repo. Running it in
+      # this job is not extra safety, it is a guaranteed 19 failures in the wrong environment.
       - name: Run offline suites
         working-directory: birko/Framework
         run: |
           fail=0
           for p in tests/*/; do
             name=$(basename "$p")
+            case "$name" in Birko.DesignTokens.Tests) echo "skipping $name (owned by token-parity.yml)"; continue;; esac
             dotnet test "$p" --nologo -v q --no-build || { echo "::error::$name failed"; fail=1; }
           done
           exit $fail
