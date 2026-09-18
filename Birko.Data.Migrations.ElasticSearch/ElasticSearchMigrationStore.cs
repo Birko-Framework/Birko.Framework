@@ -1,0 +1,230 @@
+using Nest;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Birko.Data.Migrations.ElasticSearch
+{
+    /// <summary>
+    /// Stores migration state in an ElasticSearch index.
+    /// </summary>
+    public class ElasticSearchMigrationStore : Data.Migrations.IMigrationStore
+    {
+        private readonly ElasticClient _client;
+        private readonly Settings.ElasticSearchMigrationSettings _settings;
+        private const string MigrationDocType = "_doc";
+
+        /// <summary>
+        /// Initializes a new instance of the ElasticSearchMigrationStore class.
+        /// </summary>
+        public ElasticSearchMigrationStore(ElasticClient client, Settings.ElasticSearchMigrationSettings? settings = null)
+        {
+            _client = client ?? throw new ArgumentNullException(nameof(client));
+            _settings = settings ?? new Settings.ElasticSearchMigrationSettings();
+        }
+
+        /// <summary>
+        /// Initializes the migration store (creates migrations index if needed).
+        /// </summary>
+        public void Initialize()
+        {
+            var indexName = GetMigrationsIndex();
+
+            if (!_client.Indices.Exists(indexName).Exists)
+            {
+                _client.Indices.Create(indexName, c => c
+                    .Settings(s => s
+                        // CR-L142: honor the configured shard/replica counts (were hardcoded 1/0).
+                        .NumberOfShards(_settings.NumberOfShards ?? 1)
+                        .NumberOfReplicas(_settings.NumberOfReplicas ?? 0)
+                    )
+                    .Map<MigrationDocument>(m => m
+                        .Properties(p => p
+                            .Keyword(k => k.Name(n => n.Version))
+                            .Text(t => t.Name(n => n.Name))
+                            .Text(t => t.Name(n => n.Description))
+                            .Date(d => d.Name(n => n.CreatedAt))
+                            .Date(d => d.Name(n => n.AppliedAt))
+                        )
+                    )
+                );
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously initializes the migration store.
+        /// </summary>
+        public Task InitializeAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Initialize();
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Gets all applied migration versions.
+        /// </summary>
+        public ISet<long> GetAppliedVersions()
+        {
+            var indexName = GetMigrationsIndex();
+
+            // SH-H029: BOTH gates in this method used to report "nothing has been applied" for a request
+            // that never got an answer, and GetCurrentVersion() then returns 0 and Migrate() replays every
+            // registered migration against an already-migrated cluster. NEST's ExistsResponse.Exists is
+            // `HttpStatusCode == 200`, so an unreachable or unauthorized cluster answers "the index is not
+            // there" -- this gate fires first and was not in the filed finding.
+            var existsResponse = _client.Indices.Exists(indexName);
+            if (!existsResponse.IsValid && existsResponse.ApiCall?.HttpStatusCode != 404)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot read applied migration versions: the check for index '{indexName}' failed. "
+                    + "Refusing to report an empty set, which would be indistinguishable from a cluster "
+                    + $"where nothing has been applied and would replay every migration. {existsResponse.DebugInformation}",
+                    existsResponse.OriginalException);
+            }
+
+            if (!existsResponse.Exists)
+            {
+                return new HashSet<long>();
+            }
+
+            // CR-M105: sort Descending and raise the window so a truncated result keeps the NEWEST
+            // versions — GetCurrentVersion() derives from Max(), so the old Ascending+Size(1000) dropped
+            // exactly the highest versions past 1000 and under-reported the current version. 10000 is the
+            // default index.max_result_window; a deployment with more applied migrations needs scroll.
+            var searchResponse = _client.Search<MigrationDocument>(s => s
+                .Index(indexName)
+                .Size(10000)
+                .Sort(sort => sort.Descending(f => f.Version))
+            );
+
+            if (!searchResponse.IsValid)
+            {
+                // SH-H029: an invalid search (auth, cluster red, timeout) is not "nothing applied".
+                // RecordMigration already throws on an invalid response, so this read path used to
+                // contradict its own write path.
+                throw new InvalidOperationException(
+                    $"Cannot read applied migration versions from index '{indexName}': the search failed. "
+                    + "Refusing to report an empty set, which would replay every registered migration "
+                    + $"against an already-migrated cluster. {searchResponse.DebugInformation}",
+                    searchResponse.OriginalException);
+            }
+
+            return new HashSet<long>(searchResponse.Documents.Select(d => d.Version));
+        }
+
+        /// <summary>
+        /// Asynchronously gets all applied migration versions.
+        /// </summary>
+        public Task<ISet<long>> GetAppliedVersionsAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(GetAppliedVersions());
+        }
+
+        /// <summary>
+        /// Records that a migration has been applied.
+        /// </summary>
+        public void RecordMigration(Data.Migrations.IMigration migration)
+        {
+            var indexName = GetMigrationsIndex();
+            var docId = migration.Version.ToString();
+
+            var document = new MigrationDocument
+            {
+                Version = migration.Version,
+                Name = migration.Name,
+                Description = migration.Description,
+                CreatedAt = migration.CreatedAt,
+                AppliedAt = DateTime.UtcNow
+            };
+
+            // CR-M106: refresh so the just-recorded version is immediately visible to a following
+            // GetAppliedVersions()/GetCurrentVersion() search (ES is near-real-time, ~1s by default) —
+            // otherwise a second Migrate()/GetPendingMigrations() in the same process could re-run it.
+            var response = _client.Index(document, i => i.Index(indexName).Id(docId).Refresh(Elasticsearch.Net.Refresh.True));
+            if (!response.IsValid)
+            {
+                throw new InvalidOperationException($"Failed to record migration {migration.Version}: {response.DebugInformation}", response.OriginalException);
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously records that a migration has been applied.
+        /// </summary>
+        public Task RecordMigrationAsync(Data.Migrations.IMigration migration, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RecordMigration(migration);
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Removes a migration record (when downgrading).
+        /// </summary>
+        public void RemoveMigration(Data.Migrations.IMigration migration)
+        {
+            var indexName = GetMigrationsIndex();
+            var docId = migration.Version.ToString();
+
+            var response = _client.Delete<MigrationDocument>(docId, d => d.Index(indexName).Refresh(Elasticsearch.Net.Refresh.True));
+            // Ignore 404 errors (migration already removed)
+            if (!response.IsValid && response.ServerError?.Status != 404)
+            {
+                throw new InvalidOperationException($"Failed to remove migration {migration.Version}: {response.DebugInformation}", response.OriginalException);
+            }
+        }
+
+        /// <summary>
+        /// Asynchronously removes a migration record.
+        /// </summary>
+        public Task RemoveMigrationAsync(Data.Migrations.IMigration migration, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RemoveMigration(migration);
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Gets the current version of the database.
+        /// </summary>
+        public long GetCurrentVersion()
+        {
+            var versions = GetAppliedVersions();
+            return versions.Any() ? versions.Max() : 0;
+        }
+
+        /// <summary>
+        /// Asynchronously gets the current version.
+        /// </summary>
+        public Task<long> GetCurrentVersionAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(GetCurrentVersion());
+        }
+
+        private string GetMigrationsIndex()
+        {
+            var indexName = _settings.MigrationsIndex;
+            if (!string.IsNullOrEmpty(_settings.Name))
+            {
+                indexName = $"{_settings.Name}_{_settings.MigrationsIndex}";
+            }
+            return indexName.ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Internal document class for storing migration records.
+        /// </summary>
+        internal class MigrationDocument
+        {
+            public long Version { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public string Description { get; set; } = string.Empty;
+            public DateTime CreatedAt { get; set; }
+            public DateTime AppliedAt { get; set; }
+        }
+    }
+}
