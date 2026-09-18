@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a8b9c0d1-e2f3-4a5b-9c6d-7e8f9a0b1c2d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Security.OAuth.Server</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)OAuthServerSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OAuthErrorCodes.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OAuthGrantTypes.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OAuthServerException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OAuthServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\OAuthClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\AuthorizationCode.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\RefreshTokenRecord.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\DeviceCodeRecord.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ConsentRecord.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IOAuthClientStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IAuthorizationCodeStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IRefreshTokenStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IDeviceCodeStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IConsentStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\TokenRequest.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\TokenResponse.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\TokenErrorResponse.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\TokenEndpointHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Authorize\AuthorizeRequest.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Authorize\AuthorizeResponse.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Authorize\AuthorizationEndpointHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\DeviceAuthorization\DeviceAuthorizationRequest.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\DeviceAuthorization\DeviceAuthorizationResponse.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\DeviceAuthorization\DeviceAuthorizationHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\ClientRegistration\ClientRegistrationRequest.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\ClientRegistration\ClientRegistrationResponse.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\ClientRegistration\ClientRegistrationHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Internal\PkceValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Internal\ScopeUtil.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Internal\RandomStringGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Internal\ClientSecretHasher.cs" />
+  </ItemGroup>
+</Project>
