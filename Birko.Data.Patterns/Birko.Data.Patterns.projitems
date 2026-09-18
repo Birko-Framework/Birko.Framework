@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d1a2b3c4-5e6f-7a8b-9c0d-1e2f3a4b5c6d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Patterns</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Models / Interfaces -->
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ISoftDeletable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IAuditable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IAuditContext.cs" />
+    <!-- UnitOfWork -->
+    <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\ITransactionCapabilities.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\IUnitOfWork.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\UnitOfWorkException.cs" />
+    <!-- Paging -->
+    <Compile Include="$(MSBuildThisFileDirectory)Paging\PagedResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Paging\IPagedRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Paging\PagedRepositoryWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Paging\AsyncPagedRepositoryWrapper.cs" />
+    <!-- Specification -->
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\ISpecification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\Specification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\AndSpecification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\OrSpecification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\NotSpecification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\RuleSpecification.cs" />
+    <!-- Concurrency -->
+    <Compile Include="$(MSBuildThisFileDirectory)Concurrency\IVersioned.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Concurrency\ConcurrentUpdateException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Concurrency\VersionedStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Concurrency\AsyncVersionedStoreWrapper.cs" />
+    <!-- Models: Sluggable -->
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ISluggable.cs" />
+    <!-- Decorators: Sluggable -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SlugGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SluggableStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SluggableBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncSluggableStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncSluggableBulkStoreWrapper.cs" />
+    <!-- Decorators: SoftDelete -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncSoftDeleteStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncSoftDeleteBulkStoreWrapper.cs" />
+    <!-- Decorators: Audit -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AuditStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AuditBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncAuditStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncAuditBulkStoreWrapper.cs" />
+    <!-- Decorators: Timestamp -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\TimestampStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\TimestampBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncTimestampStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncTimestampBulkStoreWrapper.cs" />
+    <!-- Decorators: Default -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\DefaultStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncDefaultStoreWrapper.cs" />
+    <!-- IndexManagement -->
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IIndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexInfo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexManagementException.cs" />
+    <!-- Schema -->
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\FieldType.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\FieldDescriptor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\ISchemaBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\ICollectionBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\IIndexBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\IndexBuilderSupport.cs" />
+  </ItemGroup>
+</Project>
