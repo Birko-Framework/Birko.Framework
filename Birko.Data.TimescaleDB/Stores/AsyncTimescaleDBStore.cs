@@ -1,0 +1,176 @@
+using Birko.Data.SQL.Connectors;
+using Birko.Data.SQL.Stores;
+using Birko.Data.Stores;
+using Birko.Configuration;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Birko.Data.SQL.TimescaleDB.Stores
+{
+    /// <summary>
+    /// Native async TimescaleDB store with bulk operation support.
+    /// Combines single-item and bulk async CRUD operations in one store.
+    /// </summary>
+    /// <typeparam name="T">The type of entity.</typeparam>
+    public class AsyncTimescaleDBStore<T> : AsyncDataBaseBulkStore<TimescaleDBConnector, T>
+        where T : Models.AbstractModel
+    {
+        /// <summary>
+        /// Initializes a new instance of the AsyncTimescaleDBStore class.
+        /// </summary>
+        public AsyncTimescaleDBStore()
+        {
+        }
+
+        /// <summary>
+        /// Sets the connection settings.
+        /// </summary>
+        /// <param name="settings">The TimescaleDB settings to use.</param>
+        public void SetSettings(TimescaleDBSettings settings)
+        {
+            if (settings != null)
+            {
+                base.SetSettings((ISettings)settings);
+            }
+        }
+
+        /// <summary>
+        /// Sets the connection settings.
+        /// </summary>
+        /// <param name="settings">The remote settings to use.</param>
+        public void SetSettings(RemoteSettings settings)
+        {
+            if (settings is TimescaleDBSettings timescaleSettings)
+            {
+                SetSettings(timescaleSettings);
+            }
+            else if (settings != null)
+            {
+                base.SetSettings((ISettings)settings);
+            }
+        }
+
+        /// <summary>
+        /// Sets the connection settings.
+        /// </summary>
+        /// <param name="settings">The password settings to use.</param>
+        public override void SetSettings(PasswordSettings settings)
+        {
+            if (settings is RemoteSettings remote)
+            {
+                SetSettings(remote);
+            }
+            else
+            {
+                base.SetSettings(settings);
+            }
+        }
+
+        /// <summary>
+        /// Returns the connector or throws a clear error when settings were never applied.
+        /// CR-L233: one guard instead of the copy-pasted null-check in every schema method.
+        /// </summary>
+        private TimescaleDBConnector RequireConnector()
+            => Connector ?? throw new InvalidOperationException("Connector not initialized. Call SetSettings() first.");
+
+        /// <summary>
+        /// Creates the database schema.
+        /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        public async Task CreateSchemaAsync(CancellationToken ct = default)
+        {
+            var connector = RequireConnector();
+            await Task.Run(() => connector.CreateTable(new[] { typeof(T) }), ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Creates a hypertable for the entity type.
+        /// This should be called after CreateSchemaAsync to convert the table to a TimescaleDB hypertable.
+        /// </summary>
+        /// <param name="timeColumn">The time column to partition by.</param>
+        /// <param name="chunkTimeInterval">The chunk time interval (e.g. "7 days").</param>
+        /// <param name="ct">Cancellation token.</param>
+        public async Task CreateHypertableAsync(string timeColumn, string chunkTimeInterval = "7 days", CancellationToken ct = default)
+        {
+            await RequireConnector().CreateHypertableAsync(typeof(T), timeColumn, chunkTimeInterval, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Drops the database schema.
+        /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        public async Task DropAsync(CancellationToken ct = default)
+        {
+            var connector = RequireConnector();
+            await Task.Run(() => connector.DropTable(new[] { typeof(T) }), ct).ConfigureAwait(false);
+        }
+
+        #region Native Bulk Operations
+
+        /// <inheritdoc />
+        protected override async Task CreateCoreAsync(
+            IEnumerable<T> data,
+            StoreDataDelegate<T>? storeDelegate = null,
+            CancellationToken ct = default)
+        {
+            if (Connector == null || data == null || !data.Any())
+                return;
+
+            var items = data.ToList();
+            foreach (var item in items)
+            {
+                item.Guid = Guid.NewGuid();
+                storeDelegate?.Invoke(item);
+            }
+
+            // The store-level door has to publish the boundary too, or the connector fix is
+            // unreachable through it: these Core overrides bypass the base's per-item write, and the
+            // base is the only place that entered the scope. TASK-242 wired this into the eight
+            // provider stores and missed TimescaleDB entirely, which is exactly the "it inherits the
+            // PostgreSQL fix, so it is covered" claim TASK-472 existed to disprove: the connector half
+            // IS inherited (TimescaleDBConnector overrides no bulk method) and was unreachable from
+            // here. Costs nothing when no context is set.
+            using var _tx = EnterTransactionScope();
+            await Connector.BulkInsertAsync(typeof(T), items.Cast<object>(), ct).ConfigureAwait(false);
+        }
+
+        /// <inheritdoc />
+        protected override async Task UpdateCoreAsync(
+            IEnumerable<T> data,
+            StoreDataDelegate<T>? storeDelegate = null,
+            CancellationToken ct = default)
+        {
+            if (Connector == null || data == null || !data.Any())
+                return;
+
+            var items = data.ToList();
+            if (storeDelegate != null)
+            {
+                foreach (var item in items)
+                {
+                    storeDelegate.Invoke(item);
+                }
+            }
+
+            using var _tx = EnterTransactionScope();
+            await Connector.BulkUpdateAsync(typeof(T), items.Cast<object>(), ct).ConfigureAwait(false);
+        }
+
+        /// <inheritdoc />
+        protected override async Task DeleteCoreAsync(
+            IEnumerable<T> data,
+            CancellationToken ct = default)
+        {
+            if (Connector == null || data == null || !data.Any())
+                return;
+
+            using var _tx = EnterTransactionScope();
+            await Connector.BulkDeleteAsync(typeof(T), data.Cast<object>(), ct).ConfigureAwait(false);
+        }
+
+        #endregion
+    }
+}
