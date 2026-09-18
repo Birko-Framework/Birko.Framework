@@ -1,0 +1,1604 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Birko.Data.SQL.Connectors.Strategies;
+using PasswordSettings = Birko.Configuration.PasswordSettings;
+
+namespace Birko.Data.SQL.Connectors
+{
+    /// <summary>
+    /// Base class for SQL database connectors containing shared functionality.
+    /// </summary>
+    public abstract partial class AbstractConnectorBase
+    {
+        protected readonly PasswordSettings _settings = null!;
+        protected readonly object _lock = new();
+        /// <summary>
+        /// Whether <c>DoInit</c> is running <b>on this call flow</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-270. This was <c>{ get; protected set; }</c> — a plain mutable flag on an object
+        /// <see cref="DataBase.GetConnector"/> caches <b>process-wide</b> per (type, settings id), which
+        /// made it the fourth instance of the pattern that task exists to close, and the worst-behaved:
+        /// re-entrancy is a property of <i>one call flow</i>, and this published it to every concurrent
+        /// caller of the same database.
+        /// </para>
+        /// <para>
+        /// ⚠ <b>The failure was a silent skip, not a race on a bit.</b> <c>DoInit</c> reads the flag and
+        /// returns when it is set, so while thread A was inside its <c>OnInit</c> handlers, thread B
+        /// calling <c>DoInit()</c> had its initialisation <b>discarded</b> — not deferred, not retried —
+        /// and carried on believing it had run. The unsynchronised check-then-set is the smaller half.
+        /// </para>
+        /// <para>
+        /// An <see cref="AsyncLocal{T}"/> per instance is flow-scoped <i>and</i> instance-scoped, so a
+        /// handler that re-enters this connector still short-circuits (which is what the guard is for)
+        /// while a different flow, or a different connector in the same flow, is unaffected. Same
+        /// reasoning and same mechanism as <c>AmbientSqlTransaction</c>, which TASK-240 introduced to move
+        /// the *transaction* off this same shared object.
+        /// </para>
+        /// <para>
+        /// The setter is gone rather than narrowed: measured at TASK-270, nothing outside
+        /// <c>AbstractConnector.DoInit</c> ever wrote it, and no consumer reads it.
+        /// </para>
+        /// </remarks>
+        public bool IsInitializing => _isInitializing.Value;
+
+        private readonly System.Threading.AsyncLocal<bool> _isInitializing = new();
+
+        /// <summary>
+        /// Marks the current call flow as initialising for the duration of the returned scope.
+        /// </summary>
+        protected IDisposable EnterInitializingScope()
+        {
+            _isInitializing.Value = true;
+            return new InitializingScope(this);
+        }
+
+        private sealed class InitializingScope : IDisposable
+        {
+            private readonly AbstractConnectorBase _owner;
+            public InitializingScope(AbstractConnectorBase owner) => _owner = owner;
+            public void Dispose() => _owner._isInitializing.Value = false;
+        }
+
+        /// <summary>
+        /// Gets the connection settings for this connector.
+        /// </summary>
+        public PasswordSettings Settings => _settings;
+
+        /// <summary>
+        /// Retry policy for transient failures (deadlocks, timeouts, connection drops).
+        /// Set to <see cref="RetryPolicy.None"/> to disable retries. Default is no retries.
+        /// </summary>
+        public RetryPolicy RetryPolicy { get; set; } = RetryPolicy.None;
+
+        /// <summary>
+        /// Whether this provider's DDL can run inside a transaction without ending it. True for every
+        /// provider that has transactional DDL; <b>false for MySQL and MariaDB</b>, which implicitly
+        /// commit an open transaction on any DDL statement.
+        /// </summary>
+        /// <remarks>
+        /// A provider capability in the same family as <see cref="IsTransientException"/> and
+        /// <see cref="IsMissingTableException"/>: stated once, consulted by the one place that needs it
+        /// (<c>AbstractConnector.DoDdlCommand</c>), never re-derived per call site.
+        /// <para>
+        /// <b>Why it exists.</b> Stores initialise lazily, so a store's first data access issues
+        /// <c>CREATE TABLE IF NOT EXISTS</c> — and after TASK-240 that DDL runs on the ambient boundary's
+        /// connection. On MySQL that silently committed the caller's transaction before their own write
+        /// even ran, so the later rollback undid nothing (TASK-243). Where this is false, DDL is
+        /// deliberately issued <i>off</i> the boundary instead.
+        /// </para>
+        /// <para>
+        /// The two halves of the trade land on opposite providers, which is what makes the switch safe:
+        /// SQLite <b>needs</b> DDL on the boundary's connection (a second connection cannot take the write
+        /// lock the boundary holds and blocks for the whole busy timeout), and MySQL needs it off. Measured
+        /// on MySQL 8.4: an open transaction holding a row lock on a table does <b>not</b> block a
+        /// concurrent <c>CREATE TABLE IF NOT EXISTS</c> on that same table (17 ms), so the second
+        /// connection this implies is not a metadata-lock hazard.
+        /// </para>
+        /// </remarks>
+        public virtual bool SupportsTransactionalDdl => true;
+
+        /// <summary>
+        /// Whether this provider case-folds an identifier that was emitted <b>unquoted</b>. True for
+        /// PostgreSQL (and therefore TimescaleDB), which folds to lower case; false for SQLite, MySQL and
+        /// MSSql, which preserve the spelling they were given.
+        /// </summary>
+        /// <remarks>
+        /// A provider capability in the same family as <see cref="SupportsTransactionalDdl"/> and
+        /// <see cref="IsMissingTableException"/>: stated once, consulted by the one producer that needs it
+        /// (<see cref="CatalogueNameLiteral"/>), never re-derived per call site.
+        /// <para>
+        /// <b>Why the framework has to know.</b> <c>AbstractConnector.CreateTable</c> quotes the table name
+        /// and emits column definitions <b>bare</b> (§ Conventions, TASK-209), so on a folding provider the
+        /// stored column name is folded while the table keeps its spelling. Everywhere an identifier is
+        /// emitted <i>as an identifier</i> that asymmetry takes care of itself — the parser folds the
+        /// reference the same way it folded the definition. It only becomes visible where a name travels as
+        /// a string <b>value</b> instead, because the parser never sees an identifier there and never folds
+        /// it: the name has to arrive already folded or it will not match <c>pg_attribute.attname</c>.
+        /// </para>
+        /// <para>
+        /// Consequence worth stating: a table whose column was created <i>quoted</i> and mixed-case is not
+        /// addressable through <see cref="CatalogueNameLiteral"/>. That is deliberate — this framework never
+        /// quotes a column definition, so it cannot produce such a table.
+        /// </para>
+        /// </remarks>
+        public virtual bool FoldsUnquotedIdentifiers => false;
+
+        /// <summary>
+        /// Determines whether an exception is transient and the operation should be retried.
+        /// Override in provider-specific connectors to detect provider-specific transient errors
+        /// (e.g., SQL Server error 1205 for deadlocks, PostgreSQL 40P01, MySQL 1213).
+        /// </summary>
+        public virtual bool IsTransientException(Exception ex)
+        {
+            if (ex is TimeoutException) return true;
+            if (ex is DbException dbEx && dbEx.IsTransient) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Determines whether an exception indicates the queried table/relation does not exist, so a
+        /// reader can yield an empty result instead of faulting. The base match is SQLite's wording
+        /// ("no such table"); provider-specific connectors override this to add their own phrasing
+        /// (PostgreSQL: 'relation "x" does not exist', MySQL: "doesn't exist", MSSQL: "Invalid object name").
+        /// Mirrors the <see cref="IsTransientException"/> override pattern.
+        /// </summary>
+        public virtual bool IsMissingTableException(Exception ex)
+        {
+            return ex.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// <see cref="IsMissingTableException"/> applied to an exception <b>and every inner exception</b>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-285. The direct predicate tests <c>ex.Message</c> only, which is right where it is used —
+        /// the reader catches the provider's own exception, unwrapped. Anything downstream of
+        /// <c>InitException</c> does not get that: <c>AbstractConnector.EnsureSchemaAndReport</c> rethrows
+        /// as <c>new Exception(commandText, ex)</c>, so the outer message is the <b>SQL text</b> and the
+        /// provider's "no such table" is one level down.
+        /// </para>
+        /// <para>
+        /// ⚠ <b>A caller that used the direct predicate there would compile, run, and silently never
+        /// match</b> — the fix would look applied while changing nothing. That is the whole reason this
+        /// exists as its own named member rather than as an inline <c>ex.InnerException</c> check at one
+        /// call site.
+        /// </para>
+        /// <para>
+        /// It calls the <b>virtual</b> predicate at every level, so each provider's phrasing keeps working
+        /// through its override — PostgreSQL's <c>relation "x" does not exist</c>, MySQL's
+        /// <c>doesn't exist</c>, MSSQL's <c>Invalid object name</c>.
+        /// </para>
+        /// </remarks>
+        public bool IsMissingTableExceptionChain(Exception? ex)
+        {
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                if (IsMissingTableException(current))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// The name of the table <paramref name="ex"/> says is missing, or null when this provider's
+        /// wording cannot be parsed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-293. <c>AbstractConnector</c> decides whether an escape is <b>the anomaly</b> — a table
+        /// this connector created being reported missing — and before this it asked the question of the
+        /// <i>statement</i>: does any recorded table name occur as a substring of the SQL? That is the
+        /// wrong question twice over, and both were measured:
+        /// </para>
+        /// <list type="bullet">
+        /// <item>a recorded <c>Movement</c> makes a first touch of <c>StockMovements</c> read as the
+        /// anomaly, because the shorter name sits inside the longer one;</item>
+        /// <item>with no name collision at all, a statement naming two tables — one created, one not —
+        /// reads as the anomaly on the strength of the created one, which is simply the shape a view or a
+        /// multi-type count produces.</item>
+        /// </list>
+        /// <para>
+        /// The provider's own error names the table that is actually missing, and names only that one, so
+        /// the discriminator can be exact. Measured on SQLite:
+        /// <c>SELECT count(*) FROM "Ledger", "StockMovements"</c> raises
+        /// <c>no such table: StockMovements</c> — the missing one, and <b>not</b> <c>Ledger</c>.
+        /// </para>
+        /// <para>
+        /// ⚠ <b>Extract around the QUOTES, not around the English.</b> PostgreSQL and MySQL localise the
+        /// prose in these messages but never the identifier, so a phrase-anchored parse would silently
+        /// stop matching on a server whose <c>lc_messages</c> is not English — and a silent non-match here
+        /// disables TASK-288's healing rather than announcing anything. Same reasoning
+        /// <see cref="IsMissingTableException"/> records for keying PostgreSQL on the SQLSTATE.
+        /// </para>
+        /// <para>
+        /// The base implementation is SQLite's wording, matching <see cref="IsMissingTableException"/>.
+        /// </para>
+        /// </remarks>
+        public virtual string? MissingTableName(Exception ex)
+        {
+            // SQLite: "SQLite Error 1: 'no such table: Widgets'." and, for an explicit database prefix,
+            // "no such table: main.Widgets".
+            const string marker = "no such table:";
+            var at = ex.Message?.IndexOf(marker, StringComparison.OrdinalIgnoreCase) ?? -1;
+            return at < 0 ? null : TrimTableName(ex.Message!.Substring(at + marker.Length));
+        }
+
+        /// <summary>
+        /// <see cref="MissingTableName"/> applied to an exception <b>and every inner exception</b> — the
+        /// shape <see cref="IsMissingTableExceptionChain"/> already has, and for the same reason:
+        /// <c>InitException</c> rewraps, so the provider's own message is not the outermost one.
+        /// </summary>
+        public string? MissingTableNameChain(Exception? ex)
+        {
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                var name = MissingTableName(current);
+                if (!string.IsNullOrEmpty(name))
+                {
+                    return name;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Cleans one extracted identifier: strips the trailing punctuation each provider's wording adds,
+        /// any quoting, and a schema or database qualifier.
+        /// </summary>
+        /// <remarks>
+        /// The qualifier goes because <c>AbstractConnector.TablesCreated</c> is keyed by the bare
+        /// <c>Table.Name</c> the framework created, never by a qualified one — so keeping
+        /// <c>mydb.Widgets</c> would fail to match the very entry it is looking for.
+        /// </remarks>
+        protected static string? TrimTableName(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+            var name = raw.Trim().TrimEnd('.', '\'', '"', ')', ';', ',');
+            name = name.Trim().Trim('\'', '"', '`', '[', ']');
+            var dot = name.LastIndexOf('.');
+            if (dot >= 0 && dot < name.Length - 1)
+            {
+                name = name.Substring(dot + 1);
+            }
+            name = name.Trim().Trim('\'', '"', '`', '[', ']');
+            return string.IsNullOrWhiteSpace(name) ? null : name;
+        }
+
+        /// <summary>
+        /// The first single- or double-quoted token in <paramref name="message"/>, cleaned — the shape
+        /// PostgreSQL (<c>relation "x" does not exist</c>), MySQL (<c>Table 'db.x' doesn't exist</c>) and
+        /// SQL Server (<c>Invalid object name 'dbo.X'.</c>) all use.
+        /// </summary>
+        protected static string? FirstQuotedToken(string? message)
+        {
+            if (string.IsNullOrEmpty(message))
+            {
+                return null;
+            }
+            foreach (var quote in new[] { '"', '\'' })
+            {
+                var open = message!.IndexOf(quote);
+                if (open < 0) continue;
+                var close = message.IndexOf(quote, open + 1);
+                if (close > open + 1)
+                {
+                    return TrimTableName(message.Substring(open + 1, close - open - 1));
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Executes an action with retry logic for transient failures.
+        /// </summary>
+        protected void ExecuteWithRetry(Action action, string? commandText = null)
+        {
+            var policy = RetryPolicy;
+            if (policy.MaxRetries <= 0)
+            {
+                action();
+                return;
+            }
+
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    action();
+                    return;
+                }
+                catch (Exception ex) when (attempt < policy.MaxRetries && IsTransientException(ex))
+                {
+                    var delay = policy.GetDelay(attempt + 1);
+                    Thread.Sleep(delay);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Executes an async action with retry logic for transient failures.
+        /// </summary>
+        protected async Task ExecuteWithRetryAsync(Func<Task> action, CancellationToken ct = default, string? commandText = null)
+        {
+            var policy = RetryPolicy;
+            if (policy.MaxRetries <= 0)
+            {
+                await action().ConfigureAwait(false);
+                return;
+            }
+
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    await action().ConfigureAwait(false);
+                    return;
+                }
+                catch (Exception ex) when (attempt < policy.MaxRetries && IsTransientException(ex))
+                {
+                    var delay = policy.GetDelay(attempt + 1);
+                    await Task.Delay(delay, ct).ConfigureAwait(false);
+                }
+            }
+        }
+
+        // Strategy pattern for condition building — keyed by ConditionType for O(1) dispatch
+        private readonly Dictionary<Conditions.ConditionType, IConditionStrategy> _conditionStrategyMap = new();
+
+        protected AbstractConnectorBase(PasswordSettings settings)
+        {
+            _settings = settings;
+            InitializeConditionStrategies();
+        }
+
+        /// <summary>
+        /// Initializes the condition strategy builders
+        /// </summary>
+        private void InitializeConditionStrategies()
+        {
+            IConditionStrategy[] strategies =
+            [
+                new Strategies.EqualConditionStrategy(),
+                new Strategies.ComparisonConditionStrategy(),
+                new Strategies.LikeConditionStrategy(),
+                new Strategies.InConditionStrategy(),
+                new Strategies.NullConditionStrategy(),
+            ];
+            foreach (var strategy in strategies)
+                foreach (Conditions.ConditionType ct in Enum.GetValues<Conditions.ConditionType>())
+                    if (strategy.CanHandle(ct))
+                        _conditionStrategyMap[ct] = strategy;
+        }
+
+        /// <summary>
+        /// Creates a database connection.
+        /// </summary>
+        public abstract DbConnection CreateConnection(PasswordSettings settings);
+
+        /// <summary>
+        /// Converts a DbType to database-specific type string.
+        /// </summary>
+        public abstract string ConvertType(DbType type, Fields.AbstractField field);
+
+        /// <summary>
+        /// Gets the field definition string for a specific field.
+        /// </summary>
+        public abstract string FieldDefinition(Fields.AbstractField field);
+
+        /// <summary>
+        /// Converts a DbType to its corresponding CLR type.
+        /// Used for DataTable construction in bulk operations.
+        /// Override in provider-specific connectors if the platform requires different mappings.
+        /// </summary>
+        public virtual Type DbTypeToClrType(DbType dbType)
+        {
+            return dbType switch
+            {
+                DbType.Boolean => typeof(bool),
+                DbType.Byte or DbType.SByte => typeof(byte),
+                DbType.Single => typeof(float),
+                DbType.Int16 or DbType.UInt16 => typeof(short),
+                DbType.Int32 or DbType.UInt32 => typeof(int),
+                DbType.Int64 or DbType.UInt64 => typeof(long),
+                DbType.Decimal or DbType.VarNumeric or DbType.Currency => typeof(decimal),
+                DbType.Double => typeof(double),
+                DbType.Guid => typeof(Guid),
+                DbType.Date or DbType.DateTime or DbType.DateTime2 or DbType.Time => typeof(DateTime),
+                DbType.DateTimeOffset => typeof(DateTimeOffset),
+                DbType.Binary or DbType.Object => typeof(byte[]),
+                _ => typeof(string),
+            };
+        }
+
+        /// <summary>
+        /// Quotes a SQL identifier (table or column name) to prevent reserved word conflicts and injection.
+        /// Default uses ANSI SQL double quotes. Override for provider-specific quoting.
+        /// </summary>
+        public virtual string QuoteIdentifier(string identifier)
+        {
+            return "\"" + identifier.Replace("\"", "\"\"") + "\"";
+        }
+
+        /// <summary>
+        /// Renders <paramref name="name"/> as a table reference that will be read back out of a
+        /// single-quoted SQL literal — e.g. PostgreSQL's <c>regclass</c> arguments. Returns the inner text
+        /// only; the caller supplies the surrounding quotes.
+        /// </summary>
+        /// <remarks>
+        /// <b>Quote as an identifier, then escape for the literal — and the two commute.</b> Neither step can
+        /// introduce the other's metacharacter: <see cref="QuoteIdentifier"/> emits and doubles only the
+        /// identifier quote, <see cref="SqlLiteral.EscapeLiteral"/> doubles only <c>'</c>. So either order
+        /// produces the same string, and a caller does not have to get it right.
+        /// <para>
+        /// That commutativity is <b>measured, not assumed</b>: swapping the two here fails 0 of 555 tests
+        /// (TASK-253). It is recorded because the obvious comment to write — "this order is the safe one" —
+        /// would be false, and a future reader who "fixes" the order should know nothing depends on it. What
+        /// does need pinning is that <i>both</i> quote kinds get doubled, which
+        /// <c>RegclassLiteral_EscapesBothQuoteKinds</c> covers.
+        /// </para>
+        /// <para>
+        /// <b>Why the quotes are needed at all.</b> A regclass argument is parsed as an identifier
+        /// <i>after</i> the literal is unwrapped, so on a folding provider a bare <c>'Widgets'</c> resolves
+        /// to <c>widgets</c> while <c>AbstractConnector.CreateTable</c> created <c>"Widgets"</c> — a missing
+        /// relation. TASK-472 measured that on TimescaleDB 2: <c>create_hypertable</c> raised <c>42P01</c>,
+        /// <c>IsMissingTableException</c> classified it as a missing table, the handler swallowed it, and
+        /// <b>no hypertable existed for any PascalCase entity</b> while a plain table served reads and writes.
+        /// </para>
+        /// <para>
+        /// Contrast <see cref="CatalogueNameLiteral"/>, which needs the opposite treatment for a name that is
+        /// compared against a catalogue column rather than re-parsed as an identifier. Two arguments of one
+        /// function can need one each, so read both before choosing.
+        /// </para>
+        /// </remarks>
+        public string RegclassLiteral(string name)
+            => SqlLiteral.EscapeLiteral(QualifiedIdentifier(name));
+
+        /// <summary>
+        /// The opening and closing delimiters <see cref="QuoteIdentifier"/> emits. Override together with it.
+        /// </summary>
+        /// <remarks>
+        /// Exposed so <see cref="QualifiedIdentifier"/> can tell a separator dot from a dot inside a quoted
+        /// name without re-deriving each provider's quoting. ANSI double quotes by default (PostgreSQL,
+        /// SQLite); MSSql overrides to <c>[</c>/<c>]</c> and MySQL to backticks. A provider that overrides
+        /// <see cref="QuoteIdentifier"/> with a different delimiter and forgets these gets a scanner that
+        /// cannot see its quotes — so change them in the same edit.
+        /// </remarks>
+        protected virtual char IdentifierQuoteOpen => '"';
+
+        /// <inheritdoc cref="IdentifierQuoteOpen"/>
+        protected virtual char IdentifierQuoteClose => '"';
+
+        /// <summary>
+        /// Renders <paramref name="name"/> as a possibly <b>qualified</b> object reference — each
+        /// dot-separated part quoted independently, e.g. <c>reporting.evts</c> to
+        /// <c>"reporting"."evts"</c>.
+        /// </summary>
+        /// <remarks>
+        /// <b>Why this is not <see cref="QuoteIdentifier"/>.</b> That method quotes its whole argument as ONE
+        /// identifier, which is right for a column and for a table name taken from <c>Table.Name</c> — those
+        /// are never qualified. Where the name comes from a <i>caller</i> who may qualify it, quoting the whole
+        /// string asks for one object whose name literally contains a period. Measured on TimescaleDB 2.29.2 /
+        /// PostgreSQL 16.15 (TASK-262):
+        /// <code>
+        /// create_hypertable('reporting.evts','ts')        -- works
+        /// create_hypertable('"reporting.evts2"','ts')     -- 42P01 relation "reporting.evts2" does not exist
+        /// create_hypertable('"reporting"."evts3"','ts')   -- works
+        /// </code>
+        /// <para>
+        /// <b>Strictly more capable than emitting the name bare</b>, which is what preceded TASK-253: a bare
+        /// qualified name resolves, but a bare <i>mixed-case</i> or spaced part does not. Per-part quoting
+        /// handles both — measured, <c>'"reporting"."Evts4"'</c> and <c>'"Rep Ort"."Ev ts"'</c> each created a
+        /// hypertable.
+        /// </para>
+        /// <para>
+        /// <b>Only UNQUOTED dots separate.</b> A part the caller already delimited is taken as one name, so a
+        /// table genuinely called <c>a.b</c> stays addressable as <c>"a.b"</c> — that is the escape hatch for
+        /// the one case splitting gives up, and it is why the split is on unquoted dots rather than on every
+        /// dot. Measured blast radius of the trade: 0 of 317 <c>[Table("…")]</c> declarations across the
+        /// framework, its tests and all 16 consumer repos contain a dot.
+        /// </para>
+        /// <para>
+        /// <b>Unqualified input is unchanged</b>, which is what keeps TASK-472 intact: <c>Widgets</c> has no
+        /// dot, so it is one part and emerges as <c>"Widgets"</c> exactly as before. The store path passes
+        /// <c>Table.Name</c> and is unaffected.
+        /// </para>
+        /// <para>
+        /// Escaping is preserved end to end: a part is unwrapped, its doubled delimiters collapsed, then
+        /// re-quoted through <see cref="QuoteIdentifier"/>, so an embedded delimiter is re-doubled rather than
+        /// passed through. <see cref="RegclassLiteral"/> then escapes the result for the surrounding literal.
+        /// </para>
+        /// </remarks>
+        public string QualifiedIdentifier(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return QuoteIdentifier(name);
+            }
+
+            var open = IdentifierQuoteOpen;
+            var close = IdentifierQuoteClose;
+
+            var parts = new List<string>();
+            var current = new StringBuilder();
+            var inQuotes = false;
+
+            for (var i = 0; i < name.Length; i++)
+            {
+                var c = name[i];
+
+                if (!inQuotes && c == open)
+                {
+                    inQuotes = true;
+                    current.Append(c);
+                    continue;
+                }
+
+                if (inQuotes && c == close)
+                {
+                    // A doubled closing delimiter is an escaped literal one, not the end of the part.
+                    if (i + 1 < name.Length && name[i + 1] == close)
+                    {
+                        current.Append(c).Append(c);
+                        i++;
+                        continue;
+                    }
+                    inQuotes = false;
+                    current.Append(c);
+                    continue;
+                }
+
+                if (c == '.' && !inQuotes)
+                {
+                    parts.Add(current.ToString());
+                    current.Clear();
+                    continue;
+                }
+
+                current.Append(c);
+            }
+
+            parts.Add(current.ToString());
+
+            for (var i = 0; i < parts.Count; i++)
+            {
+                parts[i] = QuoteIdentifier(UnwrapIdentifier(parts[i], open, close));
+            }
+
+            return string.Join(".", parts);
+        }
+
+        /// <summary>
+        /// Strips one layer of delimiters from an already-quoted part and collapses its doubled closing
+        /// delimiters, so the result can be re-quoted through <see cref="QuoteIdentifier"/> without gaining a
+        /// second layer.
+        /// </summary>
+        private static string UnwrapIdentifier(string part, char open, char close)
+        {
+            if (part.Length < 2 || part[0] != open || part[part.Length - 1] != close)
+            {
+                return part;
+            }
+
+            return part.Substring(1, part.Length - 2).Replace(
+                new string(close, 2), close.ToString());
+        }
+
+        /// <summary>
+        /// Renders <paramref name="name"/> as a bare object name that will be read back out of a
+        /// single-quoted SQL literal and compared <b>literally</b> against a catalogue column — PostgreSQL's
+        /// <c>name</c> arguments, matched against <c>pg_attribute.attname</c> and friends. Returns the inner
+        /// text only; the caller supplies the surrounding quotes.
+        /// </summary>
+        /// <remarks>
+        /// <b>Pre-folds when the provider folds, which is the opposite of quoting.</b> The parser never sees
+        /// an identifier here — the text is compared as data — so the folding that makes an ordinary
+        /// identifier reference resolve does not happen, and the name must arrive in the form the catalogue
+        /// stores. On PostgreSQL that is folded, because column definitions are emitted bare
+        /// (<see cref="FoldsUnquotedIdentifiers"/>).
+        /// <para>
+        /// Adding quotes here instead would be actively wrong: the comparison is textual, so
+        /// <c>'"Ts"'</c> would be looked up with its quotes included and match nothing. TASK-472 measured the
+        /// unfolded form as <c>42703 column "Ts" does not exist</c> — the loud half of that defect, hidden
+        /// only because the shipped default time column was already lower case and matched a folded property
+        /// by luck.
+        /// </para>
+        /// </remarks>
+        public string CatalogueNameLiteral(string name)
+            => SqlLiteral.EscapeLiteral(FoldsUnquotedIdentifiers ? name.ToLowerInvariant() : name);
+
+        /// <summary>
+        /// Converts a CLR value into the form the storage layer actually persists, before it is bound
+        /// to a <see cref="DbParameter"/>. Today that means one thing: unwrapping an enum to its
+        /// underlying integral value.
+        /// <para>
+        /// <see cref="Fields.AbstractField.CreateField"/> maps every enum property to an
+        /// <see cref="Fields.IntegerField"/>, so an enum column holds INTEGER. Enum EQUALITY never needed
+        /// help — the C# compiler lifts <c>x.Status == Foo</c> to the underlying integral type inside the
+        /// expression tree — but the members of a collection in <c>set.Contains(x.Status)</c>, and an enum
+        /// in an <c>UPDATE … SET</c>, reach the parameter still boxed as the enum, leaving each provider
+        /// to guess. Microsoft.Data.Sqlite happens to convert them; Npgsql rejects an unmapped CLR enum
+        /// outright. Binding the integral value the column actually stores removes the guess.
+        /// </para>
+        /// <para>
+        /// This is hardening, NOT the cause of the zero-rows defect that prompted it — that was
+        /// <c>DataBase.IsNonOperandArgument</c> (see Symbio TASK-249/TASK-254 and
+        /// <c>SqlEnumInPredicateTests</c>).
+        /// </para>
+        /// <para>
+        /// Every <c>AddParameter</c> override must funnel its value through here — the provider overrides
+        /// deliberately do not chain to this base implementation, so the conversion cannot live in the
+        /// body below.
+        /// </para>
+        /// </summary>
+        public static object? NormalizeParameterValue(object? value)
+        {
+            if (value == null) return null;
+            var type = value.GetType();
+            // Boxed nullable enums arrive already unwrapped to the underlying enum type.
+            if (!type.IsEnum) return value;
+            return System.Convert.ChangeType(
+                value,
+                Enum.GetUnderlyingType(type),
+                System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// Adds a parameter to a DbCommand.
+        /// </summary>
+        public virtual DbCommand AddParameter(DbCommand command, string name, object? value)
+        {
+            value = NormalizeParameterValue(value);
+            if (command.Parameters.Contains(name))
+            {
+                command.Parameters[name].Value = value ?? DBNull.Value;
+            }
+            else
+            {
+                var parameter = command.CreateParameter();
+                parameter.ParameterName = name;
+                parameter.Value = value ?? DBNull.Value;
+                command.Parameters.Add(parameter);
+            }
+            return command;
+        }
+
+        /// <summary>
+        /// Builds a SQL condition clause. Allocates one StringBuilder for the entire
+        /// condition tree (shared across all nested levels).
+        /// </summary>
+        public virtual string ConditionDefinition(Conditions.Condition condition, DbCommand command)
+        {
+            if (condition == null) return string.Empty;
+            // TASK-137: a tree that constrains nothing renders no WHERE, exactly like `x => true`. On a read
+            // that is read-everything; on a destructive statement it is what AddRequiredWhere refuses.
+            if (IsAlwaysTrueCondition(condition)) return string.Empty;
+            var sb = new StringBuilder();
+            AppendConditionTo(sb, condition, command);
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// The always-false constant. Emitted for a predicate that legitimately matches no row: an empty
+        /// <c>IN</c> (<see cref="Strategies.InConditionStrategy"/>), <c>_ =&gt; false</c>
+        /// (<c>DataBase.MakeFalseCondition</c>), and a negated group that reduces to always-true
+        /// (<c>NOT (A OR TRUE)</c>).
+        /// </summary>
+        /// <remarks>
+        /// There is deliberately <b>no always-TRUE counterpart</b> (TASK-137). An always-false term cannot be
+        /// dropped — <c>A AND FALSE</c> is <c>FALSE</c>, not <c>A</c> — so it has to be rendered, and
+        /// <c>1 = 0</c> carries no injection connotation. An always-true term is the opposite on both counts:
+        /// it can always be reduced away, and the constant that would express it (<c>1 = 1</c>) is the
+        /// signature of <c>' OR 1=1--</c>. It is therefore reduced by
+        /// <see cref="IsAlwaysTrueCondition"/> rather than emitted.
+        /// </remarks>
+        public const string AlwaysFalseSql = "1 = 0";
+
+        /// <summary>
+        /// True when <paramref name="condition"/> constrains nothing, i.e. it matches every row (TASK-137).
+        /// <b>The single producer of that verdict</b>: the renderer below reduces such terms away, and
+        /// <see cref="WouldTargetEveryRow"/> refuses a destructive statement built from them. Two
+        /// implementations of "means everything" is how a scope guard ends up agreeing with itself and
+        /// disagreeing with the emitted SQL.
+        /// </summary>
+        /// <remarks>
+        /// <para>Today exactly one leaf reduces: an <c>IN</c> with <see cref="Conditions.Condition.IsNot"/>
+        /// and no values. "Not in the empty set" is true of every row, and it used to render <c>1 = 1</c> —
+        /// which satisfied <see cref="AddRequiredWhere"/>'s "something was rendered" test with a tautology,
+        /// so <c>Delete(x =&gt; !empty.Contains(x.Col))</c> emptied the table and reported success. Measured:
+        /// 0 of 3 rows left, no exception.</para>
+        /// <para><b>Group algebra.</b> A group's children all share the group's separator (the parser expresses
+        /// precedence by nesting, never by a mixed unparenthesized chain), so: an AND group means everything
+        /// only if <i>every</i> child does; an OR group if <i>any</i> child does. A negated group inverts —
+        /// <c>NOT (A OR TRUE)</c> is always <b>false</b>, so it is not always-true and renders
+        /// <see cref="AlwaysFalseSql"/>.</para>
+        /// <para>This is not <c>DataBase.IsExplicitAllRows</c> and must not be confused with it. That one asks
+        /// "did the caller explicitly say every row", and answers yes only for a single normalized constant
+        /// node — the deliberate <c>DeleteAll()</c> synonym. This one asks "does this tree happen to reduce to
+        /// every row", which is the case TASK-109 refuses.</para>
+        /// </remarks>
+        public static bool IsAlwaysTrueCondition(Conditions.Condition? condition)
+        {
+            if (condition == null) return false;
+
+            var subConditions = condition.SubConditions;
+            if (subConditions?.Any() == true)
+            {
+                // A negated group that reduces to always-true is always-FALSE, never always-true.
+                if (condition.IsNot) return false;
+                return IsAlwaysTrueChain(subConditions.Select(sub => (condition.IsOr, IsAlwaysTrueCondition(sub))));
+            }
+
+            return condition.Type == Conditions.ConditionType.In
+                && condition.IsNot
+                && !HasAnyValue(condition.Values);
+        }
+
+        /// <summary>
+        /// True when a negated group reduces to always-<b>false</b> — the <c>NOT (A OR TRUE)</c> case, which
+        /// must render <see cref="AlwaysFalseSql"/> rather than have its inner terms dropped (dropping them
+        /// would turn "matches nothing" into "matches everything").
+        /// </summary>
+        private static bool IsNegatedAlwaysTrueGroup(Conditions.Condition condition)
+        {
+            var subConditions = condition.SubConditions;
+            if (subConditions?.Any() != true || !condition.IsNot) return false;
+            return IsAlwaysTrueChain(subConditions.Select(sub => (condition.IsOr, IsAlwaysTrueCondition(sub))));
+        }
+
+        /// <summary>
+        /// Reduces a chain of <c>(joinsWithOr, isAlwaysTrue)</c> terms to a single "means everything" verdict.
+        /// <para>Shared by groups (where every term carries the group's separator) and by the flat
+        /// <see cref="ConditionDefinition(IEnumerable{Conditions.Condition}, DbCommand)"/> list, where each
+        /// term brings its own. AND binds tighter than OR, so the chain is a series of AND-runs OR'd together:
+        /// a run means everything when all of its terms do, and the chain when any run does. Written this way
+        /// so the flat mixed case — <c>A OR TRUE AND B</c>, which is <c>A OR (TRUE AND B)</c> and NOT
+        /// always-true — cannot be over-reduced.</para>
+        /// </summary>
+        private static bool IsAlwaysTrueChain(IEnumerable<(bool JoinsWithOr, bool IsAlwaysTrue)> terms)
+        {
+            bool runIsAlwaysTrue = true;
+            bool anyRun = false;
+            bool first = true;
+
+            foreach (var (joinsWithOr, isAlwaysTrue) in terms)
+            {
+                if (!first && joinsWithOr)
+                {
+                    if (runIsAlwaysTrue) return true;   // a completed run means everything → so does the chain
+                    runIsAlwaysTrue = true;             // start the next AND-run
+                }
+                runIsAlwaysTrue &= isAlwaysTrue;
+                anyRun = true;
+                first = false;
+            }
+
+            return anyRun && runIsAlwaysTrue;
+        }
+
+        /// <summary>True when <paramref name="values"/> holds at least one element. Enumerates; stops at the first.</summary>
+        private static bool HasAnyValue(System.Collections.IEnumerable? values)
+        {
+            if (values == null) return false;
+            foreach (var _ in values) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Appends the SQL for <paramref name="condition"/> to a shared <paramref name="sb"/>,
+        /// avoiding per-level StringBuilder allocations in nested AND/OR trees.
+        /// </summary>
+        /// <remarks>
+        /// Callers must skip a condition for which <see cref="IsAlwaysTrueCondition"/> holds — it has no
+        /// rendering, which is the point (TASK-137). This method renders the <c>NOT (A OR TRUE)</c> case,
+        /// where the reduction is to always-<i>false</i> and so does have one.
+        /// </remarks>
+        private void AppendConditionTo(StringBuilder sb, Conditions.Condition condition, DbCommand command)
+        {
+            if (IsNegatedAlwaysTrueGroup(condition))
+            {
+                sb.Append(AlwaysFalseSql);
+                return;
+            }
+
+            if (condition.SubConditions?.Any() == true)
+                AppendSubConditionsTo(sb, condition, command);
+            else
+                sb.Append(BuildSingleCondition(condition, command));
+        }
+
+        /// <summary>
+        /// Appends nested sub-conditions to <paramref name="sb"/> using the parent's IsOr flag
+        /// as the join operator — no in-place mutation of sub.IsOr.
+        /// Wraps in parentheses when there are two or more children, or when the group is negated.
+        /// A negated group (parent IsNot, produced by <c>!(a &amp;&amp; b)</c> / <c>!(a || b)</c> or a
+        /// negated comparison that became a single-child group) is prefixed with <c>NOT</c> so the
+        /// negation binds the whole group — otherwise the flag would be silently dropped and the filter
+        /// would match the OPPOSITE rows.
+        /// </summary>
+        private void AppendSubConditionsTo(StringBuilder sb, Conditions.Condition condition, DbCommand command)
+        {
+            var separator = condition.IsOr ? " OR " : " AND ";
+            int startIndex = sb.Length;
+            int count = 0;
+            foreach (var sub in condition.SubConditions!)
+            {
+                // TASK-137: an always-true child is reduced away rather than rendered — `A AND TRUE` is `A`,
+                // and there is no constant for TRUE that is not an injection lookalike. The caller has already
+                // established the group as a whole is not always-true (IsAlwaysTrueCondition), so in an OR
+                // group no child can be always-true here and this only ever drops AND terms.
+                if (IsAlwaysTrueCondition(sub)) continue;
+
+                if (count > 0) sb.Append(separator);
+                AppendConditionTo(sb, sub, command);
+                count++;
+            }
+            if (count >= 1 && (count > 1 || condition.IsNot))
+            {
+                sb.Insert(startIndex, '(');
+                sb.Append(')');
+            }
+            if (count >= 1 && condition.IsNot)
+            {
+                sb.Insert(startIndex, "NOT ");
+            }
+        }
+
+        /// <summary>
+        /// Builds SQL for a single condition using the appropriate strategy.
+        /// </summary>
+        private string BuildSingleCondition(Conditions.Condition condition, DbCommand command)
+        {
+            if (string.IsNullOrEmpty(condition.Name))
+                throw new InvalidOperationException("Condition name cannot be null or empty for non-subconditions");
+
+            if (!_conditionStrategyMap.TryGetValue(condition.Type, out var strategy))
+                throw new NotSupportedException($"Condition type {condition.Type} is not supported");
+
+            var context = new SqlBuilderContext(this);
+            return strategy.BuildSql(condition, command, context);
+        }
+
+        /// <summary>
+        /// Builds SQL for multiple conditions using a single shared StringBuilder.
+        /// </summary>
+        public virtual string ConditionDefinition(IEnumerable<Conditions.Condition>? conditions, DbCommand command)
+        {
+            if (conditions == null) return string.Empty;
+            var terms = conditions as IList<Conditions.Condition> ?? conditions.ToList();
+            if (terms.Count == 0) return string.Empty;
+
+            // TASK-137: same reduction as the single-condition overload. Each term brings its own separator
+            // here, so the AND-run algebra in IsAlwaysTrueChain is what decides whether the whole flat chain
+            // means everything — `A OR TRUE AND B` is `A OR (TRUE AND B)`, which does not.
+            if (IsAlwaysTrueChain(terms.Select((term, i) => (i > 0 && term.IsOr, IsAlwaysTrueCondition(term)))))
+                return string.Empty;
+
+            var sb = new StringBuilder();
+            int count = 0;
+            bool inheritedOr = false;
+            foreach (var term in terms)
+            {
+                // An always-true term is dropped from its AND-run. Sound whatever the surrounding precedence:
+                // `X AND TRUE` is `X`, and the chain-level reduction above has already handled the case where
+                // dropping it would leave a run that is itself always-true.
+                if (IsAlwaysTrueCondition(term))
+                {
+                    // A dropped term that OPENED a run hands its OR to whichever term takes over that run —
+                    // otherwise `A OR TRUE AND B` would render `A AND B`, silently narrowing the result to the
+                    // intersection. (`A OR TRUE AND B` is `A OR (TRUE AND B)`, i.e. `A OR B`.)
+                    if (count > 0 && term.IsOr) inheritedOr = true;
+                    continue;
+                }
+
+                if (count > 0) sb.Append(term.IsOr || inheritedOr ? " OR " : " AND ");
+                inheritedOr = false;
+                AppendConditionTo(sb, term, command);
+                count++;
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Generates a CREATE INDEX SQL statement for the given table and index definition.
+        /// Override in provider-specific connectors if the DDL syntax differs.
+        /// </summary>
+        /// <param name="conditional">
+        /// When true (the default) the statement is an <i>ensure</i>: it must not fail because the index is
+        /// already present. Providers express that natively via <c>IF NOT EXISTS</c>; MySQL has no such form
+        /// and instead relies on <see cref="IsIndexAlreadyExistsException"/> at the
+        /// <c>CreateIndexes</c> funnel. When false the statement is a plain <i>create</i> that fails if the
+        /// index exists, which is what <c>CreateIndexes(..., throwIfExists: true)</c> asks for.
+        /// </param>
+        /// <remarks>
+        /// TASK-245 — <b>column identifiers are emitted BARE, table identifiers quoted</b>, per
+        /// CLAUDE.md § Conventions. This is not cosmetic: <c>CreateTable</c> emits column definitions bare,
+        /// so on PostgreSQL every column is stored case-folded, and a quoted <c>"Status"</c> here could not
+        /// resolve it — measured on PostgreSQL 16 as <c>ERROR 42703: column "Status" does not exist</c>,
+        /// which meant <b>no declared PascalCase index could be created on PostgreSQL at all</b>. Do not
+        /// "restore" the quoting from symmetry with the table name; the base-table DDL is what settles it.
+        /// </remarks>
+        public virtual string CreateIndexSql(string tableName, Tables.IndexDefinition index, bool conditional = true)
+        {
+            var columns = string.Join(", ", index.Columns.Select(c =>
+                c.ColumnName + (c.IsDescending ? " DESC" : "")));
+
+            var unique = index.Unique ? "UNIQUE " : "";
+            var ifNotExists = conditional ? "IF NOT EXISTS " : "";
+            return $"CREATE {unique}INDEX {ifNotExists}{QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})"
+                 + IndexPredicateClause(index);
+        }
+
+        /// <summary>
+        /// Whether this provider can restrict an index to a subset of rows — PostgreSQL/SQLite call it a
+        /// partial index, MSSql a filtered index. Default <c>true</c>; <b>false on MySQL alone</b>, which
+        /// accepts no <c>WHERE</c> on <c>CREATE INDEX</c> at all (measured on 8.4.11 as
+        /// <c>ERROR 1064</c>, a syntax error).
+        /// </summary>
+        /// <remarks>
+        /// TASK-273, in the family of <see cref="SupportsTransactionalDdl"/> and
+        /// <see cref="FoldsUnquotedIdentifiers"/>: stated once, consulted by the funnel and by this emitter,
+        /// never re-derived as an inline <c>is MySQLConnector</c> test at a call site.
+        /// <para>
+        /// <b>What "false" costs is asymmetric between the two predicate polarities, and that asymmetry is the
+        /// policy rather than an oversight.</b> An <c>IS NOT NULL</c> term is <i>dropped</i> where this is
+        /// false: MySQL treats NULLs as distinct, so the unfiltered index it emits enforces the same rule the
+        /// filtered one would. An <c>IS NULL</c> term cannot be dropped — measured on all four providers, a
+        /// full unique index rejects a row whose duplicate is soft-deleted, so dropping the term would make
+        /// the constraint <b>stricter</b> than declared and refuse legitimate rows. That case is refused at
+        /// <c>CreateIndexes</c> instead.
+        /// </para>
+        /// <para>
+        /// A future <i>general</i> predicate (<c>WHERE IsActive = 1</c>) must <b>refuse</b> here rather than
+        /// drop, in both polarities: nothing about it is behaviour-preserving.
+        /// </para>
+        /// </remarks>
+        public virtual bool SupportsPartialIndexes => true;
+
+        /// <summary>
+        /// Renders the partial/filtered tail — <c> WHERE a IS NOT NULL AND b IS NULL</c> — or the empty
+        /// string when there is nothing to filter (the overwhelming majority, and the reason an ordinary
+        /// index's DDL is byte-identical to what it was before TASK-273).
+        /// </summary>
+        /// <remarks>
+        /// Column identifiers are emitted <b>bare</b>, like the key columns above and for the same measured
+        /// reason: <c>CreateTable</c> emits column definitions bare, so PostgreSQL stores the case-folded
+        /// name and a quoted <c>"Status"</c> cannot resolve it (§ Conventions). <c>MSSqlConnector</c>
+        /// overrides this with bracket-quoted columns, consistent with its own key-column list.
+        /// <para>
+        /// Where <see cref="SupportsPartialIndexes"/> is false the <c>IS NOT NULL</c> terms are dropped and
+        /// an <c>IS NULL</c> term <b>throws</b> — § TASK-137's rule that a renderer asked to produce
+        /// something it cannot express refuses rather than emitting a quietly different statement. The
+        /// funnel refuses first, so this is the backstop for a direct caller.
+        /// </para>
+        /// </remarks>
+        protected virtual string IndexPredicateClause(Tables.IndexDefinition index)
+        {
+            if (index.Predicates == null || index.Predicates.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var terms = new List<string>();
+            foreach (var predicate in index.Predicates)
+            {
+                if (!SupportsPartialIndexes)
+                {
+                    if (!CanDropIndexPredicate(index, predicate))
+                    {
+                        throw new InvalidOperationException(UnexpressiblePredicateMessage(index, predicate));
+                    }
+                    continue;
+                }
+                terms.Add($"{PredicateColumn(predicate.ColumnName)} IS {(predicate.RequireNull ? "NULL" : "NOT NULL")}");
+            }
+
+            return terms.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", terms);
+        }
+
+        /// <summary>
+        /// Whether a predicate this provider cannot express may be <b>dropped</b> — i.e. whether the
+        /// unfiltered index enforces the same thing the declaration asked for.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-273, corrected at its close gate. One producer for the emitter and for
+        /// <c>CreateIndexes</c>' pre-check, because the two must not disagree about which declarations are
+        /// honourable — the same discipline § Conventions applies to scope and to identifier resolution.
+        /// </para>
+        /// <para>
+        /// <b>Three cases, and the middle one is the correction.</b>
+        /// </para>
+        /// <list type="number">
+        /// <item><b>A non-unique index enforces nothing</b>, so dropping a term only widens the set of rows
+        /// it covers: bigger index, identical semantics. Droppable — and refusing it would leave a declared
+        /// optimisation absent on this provider for no correctness benefit.</item>
+        /// <item><b>A UNIQUE index whose <c>IS NOT NULL</c> column is one of its own key columns</b> is
+        /// droppable, and only because this provider treats NULLs as distinct: a row with NULL there has a
+        /// distinct key and so is already exempt from the constraint. That is the whole argument, and it does
+        /// <b>not</b> survive the column not being part of the key — a
+        /// <c>UNIQUE (TenantGuid, Number) WHERE ApprovedAt IS NOT NULL</c> dropped to
+        /// <c>UNIQUE (TenantGuid, Number)</c> starts rejecting two unapproved drafts that share a number,
+        /// which the declaration explicitly permits. Stricter than declared, silently — the exact harm the
+        /// <c>WhereNull</c> refusal exists to prevent, arriving through the polarity that looked safe.</item>
+        /// <item><b>Everything else is refused</b>: any <c>IS NULL</c> term on a unique index (dropping it
+        /// makes the constraint cover soft-deleted rows too), and any <c>IS NOT NULL</c> term over a non-key
+        /// column of a unique index.</item>
+        /// </list>
+        /// <para>
+        /// Comparison is case-insensitive: both names come from the same metadata producer today, but the
+        /// second index lane is caller-fed (see TASK-274) and a case difference there must not silently turn
+        /// a droppable term into a refused one.
+        /// </para>
+        /// </remarks>
+        protected virtual bool CanDropIndexPredicate(Tables.IndexDefinition index, Tables.IndexPredicate predicate)
+        {
+            if (!index.Unique)
+            {
+                return true;
+            }
+            if (predicate.RequireNull)
+            {
+                return false;
+            }
+            return index.Columns.Any(c => string.Equals(c.ColumnName, predicate.ColumnName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Throws when <paramref name="index"/> carries a predicate this provider cannot express and whose
+        /// omission would change what the index means.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-273 introduced this at <c>AbstractConnector.CreateIndexes</c>; TASK-274 moved it here and made
+        /// it <c>public</c>, because a second caller appeared. <c>SqlIndexManager.CreateAsync</c> reaches
+        /// <c>CreateIndexSql</c> <b>directly</b> rather than through that funnel, and once the
+        /// <c>IIndexManager</c> lane learned to carry predicates (via <c>IndexDefinition.Sparse</c>) it needed
+        /// the same refusal. One producer, so the two callers cannot disagree about which declarations are
+        /// honourable — the alternative was the same check written twice, which is how this repository's
+        /// guards have drifted before.
+        /// </para>
+        /// <para>
+        /// Refuse <b>before</b> the statement is built: a callback exception inside <c>DoDdlCommand</c> is
+        /// re-wrapped by <c>InitException</c> as a bare <c>Exception</c>, which no
+        /// <c>catch (InvalidOperationException)</c> can select.
+        /// </para>
+        /// </remarks>
+        public void RequireExpressiblePredicates(Tables.IndexDefinition index)
+        {
+            if (SupportsPartialIndexes || index?.Predicates == null || index.Predicates.Count == 0)
+            {
+                return;
+            }
+
+            var unexpressible = index.Predicates.FirstOrDefault(p => !CanDropIndexPredicate(index, p));
+            if (unexpressible == null)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(UnexpressiblePredicateMessage(index, unexpressible));
+        }
+
+        /// <summary>
+        /// The refusal text for a predicate that can be neither expressed nor dropped. Names the reason and
+        /// the ways out — § SH-H037: a guard whose message only says "no" gets reached around.
+        /// </summary>
+        protected string UnexpressiblePredicateMessage(Tables.IndexDefinition index, Tables.IndexPredicate predicate)
+        {
+            var clause = predicate.RequireNull ? "WhereNull" : "WhereNotNull";
+            var why = predicate.RequireNull
+                ? "without it the index is a full unique index, which also covers the rows the predicate excludes — "
+                  + "so it would reject a value legitimately reused after a soft delete"
+                : $"'{predicate.ColumnName}' is not one of this index's key columns, so dropping the term would apply the "
+                  + "UNIQUE constraint to rows the declaration excludes and reject values it permits";
+
+            return $"Index '{index.Name}' declares {clause} on '{predicate.ColumnName}', and this provider supports no "
+                 + "partial index (MySQL: CREATE INDEX takes no WHERE clause, ERROR 1064). The term cannot simply be "
+                 + $"dropped: {why} — a stricter constraint than the one declared. Either remove the {clause} declaration "
+                 + "and enforce it in the application, or keep this entity off this provider.";
+        }
+
+        /// <summary>
+        /// How a predicate column is spelled. Bare by default; overridden where the provider's own column
+        /// lists are quoted, so a predicate never disagrees with the key columns beside it.
+        /// </summary>
+        protected virtual string PredicateColumn(string columnName) => columnName;
+
+        /// <summary>
+        /// Whether <paramref name="ex"/> reports that the index a <i>conditional</i> create asked for is
+        /// <b>already present</b> — not that it could not be built.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-245. Default <c>false</c>, and that is the whole behaviour off MySQL: SQLite and PostgreSQL
+        /// emit <c>IF NOT EXISTS</c> and MSSql synthesises a <c>sys.indexes</c> guard, so on those three the
+        /// condition never reaches the client and there is nothing to classify. MySQL supports no
+        /// conditional form for <c>CREATE INDEX</c> at all, so it emits the plain statement and answers this
+        /// question instead.
+        /// </para>
+        /// <para>
+        /// <b>"Already there" is not "unbuildable", and the distinction is the whole point.</b> On MySQL the
+        /// two are different codes — 1061 <c>Duplicate key name</c> versus 1062 <c>Duplicate entry</c> — so
+        /// tolerating the former cannot swallow the latter, and TASK-204's contract that a genuinely
+        /// unbuildable index is recorded (schema-ensure) or thrown (explicit call) is untouched. An
+        /// implementation must match on the provider's error <b>code</b>, never on message text, and must
+        /// walk <c>InnerException</c>: <c>AbstractConnector.InitException</c> re-wraps every command failure.
+        /// </para>
+        /// </remarks>
+        public virtual bool IsIndexAlreadyExistsException(Exception ex) => false;
+
+        /// <summary>
+        /// Whether <paramref name="ex"/> reports that the index a <i>conditional</i> drop asked for is
+        /// <b>already absent</b> — the mirror of <see cref="IsIndexAlreadyExistsException"/>.
+        /// </summary>
+        /// <remarks>
+        /// TASK-249. Default <c>false</c>, and off MySQL that is the whole behaviour: every other provider's
+        /// <see cref="DropIndexSql"/> carries <c>IF EXISTS</c>, so dropping an absent index is a server-side
+        /// no-op and nothing reaches the client. MySQL accepts no <c>IF EXISTS</c> on <c>DROP INDEX</c>, so it
+        /// answers here instead (error 1091).
+        /// <para>
+        /// This exists so <c>IIndexManager</c> is uniform across providers for the whole verb family rather
+        /// than for <c>CreateAsync</c> alone — fixing create and leaving drop would ship a manager whose
+        /// create tolerates "already there" beside a drop that throws for "already gone", on one provider
+        /// only. Note the connector's own <c>DropIndexes</c> deliberately does <b>not</b> consult this: a
+        /// caller naming a specific index to drop should fail loudly, and the migrations drop step depends on
+        /// that.
+        /// </para>
+        /// </remarks>
+        public virtual bool IsIndexMissingException(Exception ex) => false;
+
+        /// <summary>
+        /// Generates a DROP INDEX SQL statement.
+        /// Override in provider-specific connectors if the DDL syntax differs (e.g. MSSQL).
+        /// </summary>
+        public virtual string DropIndexSql(string tableName, Tables.IndexDefinition index)
+        {
+            return $"DROP INDEX IF EXISTS {QuoteIdentifier(index.Name)}";
+        }
+
+        /// <summary>
+        /// Whether this provider's limit/offset syntax is only legal in a query that also has an
+        /// <c>ORDER BY</c> — <b>true on SQL Server alone</b>, where <c>OFFSET</c>/<c>FETCH</c> is defined as
+        /// part of the sort clause.
+        /// </summary>
+        /// <remarks>
+        /// TASK-278, in the family of <see cref="SupportsTransactionalDdl"/>,
+        /// <see cref="FoldsUnquotedIdentifiers"/> and <c>SupportsPartialIndexes</c>: stated once, consulted
+        /// by the one producer that needs it (<c>CreateSelectCommand</c>), never re-derived per call site.
+        /// <para>
+        /// Measured on SQL Server 2022 (16.0.4265.3): <c>FETCH NEXT 1 ROWS ONLY</c> on its own is
+        /// <c>Msg 153</c>, and <c>OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY</c> without a sort is <c>Msg 102</c>;
+        /// with any <c>ORDER BY</c> — including the placeholder <c>(SELECT NULL)</c> — both are accepted.
+        /// SQLite, PostgreSQL and MySQL take <c>LIMIT</c>/<c>OFFSET</c> with no sort at all, which is why
+        /// this defaults to false.
+        /// </para>
+        /// <para>
+        /// <b>Where a sort is synthesised, the rows returned are arbitrary — exactly as they already are on
+        /// the other three providers for a limited read with no <c>ORDER BY</c>.</b> SQL Server merely
+        /// refuses to pretend otherwise. So synthesising it preserves the cross-provider behaviour rather
+        /// than inventing one; a caller who cares which rows they get has to pass a sort on every provider.
+        /// </para>
+        /// </remarks>
+        public virtual bool RequiresOrderByForPaging => false;
+
+        /// <summary>
+        /// The <c>ORDER BY</c> body used when <see cref="RequiresOrderByForPaging"/> forces a sort onto a
+        /// query the caller did not sort. Never emitted where that is false.
+        /// </summary>
+        protected virtual string PagingPlaceholderOrderBy => "(SELECT NULL)";
+
+        /// <summary>
+        /// Builds LIMIT and OFFSET clause
+        /// </summary>
+        public virtual string? LimitOffsetDefinition(DbCommand command, int? limit = null, int? offset = null)
+        {
+            if (limit == null)
+            {
+                return null;
+            }
+            var result = new StringBuilder();
+            result.Append(" LIMIT @LIMIT");
+            AddParameter(command, "@LIMIT", limit.Value);
+            if (offset != null)
+            {
+                result.Append(" OFFSET @OFFSET");
+                AddParameter(command, "@OFFSET", offset.Value);
+            }
+            return result.ToString();
+        }
+
+        /// <summary>
+        /// Adds WHERE clause to command
+        /// </summary>
+        public virtual DbCommand? AddWhere(IEnumerable<Conditions.Condition>? conditions, DbCommand? command)
+        {
+            if (command == null || conditions == null) return command;
+            var sql = ConditionDefinition(conditions, command);
+            if (!string.IsNullOrEmpty(sql))
+                command.CommandText += " WHERE " + sql;
+            return command;
+        }
+
+        /// <summary>
+        /// True when <paramref name="conditions"/> carries nothing, so a destructive statement built from it
+        /// would target every row. Checked by the four destructive funnels **before** they enter
+        /// <c>DoCommandWithTransaction</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Why a pre-check as well as <see cref="AddRequiredWhere"/>.</b> The transaction wrapper
+        /// funnels every exception from its command-building callback through <c>InitException</c>, which
+        /// re-wraps it in a bare <see cref="Exception"/> — so a refusal thrown from inside would reach the
+        /// caller as a generic exception that no <c>catch (WholeTableWriteException)</c> or
+        /// <c>catch (InvalidOperationException)</c> can select, i.e. an unhandled 500 for a request-shaped
+        /// problem. Refusing before the wrapper keeps the type intact, and avoids opening a connection and
+        /// beginning a transaction for a statement that will never run.</para>
+        /// <para>An empty collection is the common cause — a null filter, an untranslatable predicate and a
+        /// predicate reducing to <c>true</c> all produce one. <b>TASK-137: a NON-empty collection can mean
+        /// everything too</b>, when every term reduces away. That case used to render <c>1 = 1</c>, which
+        /// satisfied <see cref="AddRequiredWhere"/>'s "something was rendered" test, so
+        /// <c>Delete(x =&gt; !empty.Contains(x.Col))</c> reached a whole-table DELETE with the guard's
+        /// blessing — measured at 0 of 3 rows left, no exception. It is checked here, and not only at render
+        /// time, because a refusal thrown from inside the transaction callback is re-wrapped by
+        /// <c>InitException</c> into a bare <see cref="Exception"/> that no
+        /// <c>catch (WholeTableWriteException)</c> can select.</para>
+        /// <para><see cref="AddRequiredWhere"/> stays as the backstop for a non-empty collection that renders
+        /// to nothing for some other reason (e.g. a malformed condition).</para>
+        /// </remarks>
+        protected static bool WouldTargetEveryRow(IEnumerable<Conditions.Condition>? conditions)
+        {
+            if (conditions == null) return true;
+            var terms = conditions as IList<Conditions.Condition> ?? conditions.ToList();
+            // Enumerates rather than reading a Count — an empty collection constrains nothing.
+            if (terms.Count == 0) return true;
+            // Shares IsAlwaysTrueChain with the renderer, so the guard and the emitted SQL cannot disagree
+            // about what "everything" means.
+            return IsAlwaysTrueChain(terms.Select((term, i) => (i > 0 && term.IsOr, IsAlwaysTrueCondition(term))));
+        }
+
+        /// <summary>
+        /// Appends the <c>WHERE</c> clause for a <b>destructive</b> statement, throwing
+        /// <see cref="Data.Exceptions.WholeTableWriteException"/> when nothing would be appended.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>SH-H002 — the guard is on the RENDERED clause, not on the condition collection.</b>
+        /// <see cref="ConditionDefinition(IEnumerable{Conditions.Condition}, DbCommand)"/> returns
+        /// <see cref="string.Empty"/> for a null <i>or</i> empty enumerable, and builds each term through
+        /// <c>BuildSingleCondition</c>, which can yield an empty string for a malformed condition — so a
+        /// non-empty collection can still produce no <c>WHERE</c>.</para>
+        /// <para>A separate method rather than a flag on <see cref="AddWhere"/> because reads share
+        /// <c>AddWhere</c> and a null filter on a read legitimately means read-everything.</para>
+        /// <para><paramref name="allowAllRows"/> is the explicit opt-in used by <c>DeleteAll</c> /
+        /// <c>UpdateAll</c> and by a caller-supplied <c>x =&gt; true</c>. It renders the conditionless
+        /// statement — clean SQL, no <c>1 = 1</c> marker, since that pattern is indistinguishable from
+        /// <c>' OR 1=1--</c> in a query log and would train operators to ignore a real attack signature.</para>
+        /// </remarks>
+        public virtual DbCommand? AddRequiredWhere(
+            IEnumerable<Conditions.Condition>? conditions,
+            DbCommand? command,
+            string operation,
+            string tableName,
+            bool allowAllRows = false)
+        {
+            if (command == null) return command;
+
+            var sql = ConditionDefinition(conditions, command);
+            if (!string.IsNullOrEmpty(sql))
+            {
+                command.CommandText += " WHERE " + StripTargetTableQualifier(sql, tableName);
+                return command;
+            }
+
+            if (!allowAllRows)
+            {
+                throw new Data.Exceptions.WholeTableWriteException(operation, tableName);
+            }
+
+            return command;
+        }
+
+        /// <summary>
+        /// Removes the target table's qualifier from a rendered write clause, so
+        /// <c>WHERE Widgets.Name = @p</c> becomes <c>WHERE Name = @p</c>.
+        /// <para>
+        /// TASK-216, the write half of TASK-211. <c>DataBase.ResolveColumnName(…, withTableName: true)</c>
+        /// qualifies every condition name, and a write quotes its target table — so on PostgreSQL, the one
+        /// supported provider that case-folds an unquoted identifier, the bare qualifier folds and matches
+        /// nothing. Measured on 16.4: <c>DELETE FROM "FwPeople" WHERE FwPeople.Name = $1</c> →
+        /// <c>ERROR: missing FROM-clause entry for table "fwpeople"</c>, i.e. every filtered
+        /// <c>Delete</c>/<c>Update</c> on a PascalCase entity failed.
+        /// </para>
+        /// <para>
+        /// <b>Stripped rather than quoted, and stripped rather than aliased.</b> A write targets exactly one
+        /// table, so a qualifier carries no information there and a bare column cannot be ambiguous.
+        /// Quoting it would make the write path the only place a *qualifier* is quoted, while a read
+        /// resolves its qualifiers against a **bare alias** (<see cref="SelectTableReference"/>) — two
+        /// conventions for one thing, which is the shape this family of defects keeps arriving in. The
+        /// alias itself does not port: MSSql rejects <c>DELETE FROM t AS a</c>. Stripping keeps one
+        /// invariant — <i>a qualifier is only ever emitted where a bare alias introduces it</i> — and is
+        /// provider-independent.
+        /// </para>
+        /// <para>
+        /// Text-level on purpose. The qualifier can arrive <b>function-wrapped</b> — <c>LOWER(T.Col)</c>,
+        /// <c>COALESCE(T.A, T.B)</c>, and the <c>.Date</c> rewrite's <c>(T.Seen &gt;= @a AND T.Seen &lt; @b)</c>
+        /// — all measured on the same server, so rewriting condition names one at a time would miss exactly
+        /// the shapes a partial fix always misses. Operating on the rendered clause also means the caller's
+        /// <c>Condition</c> objects are never mutated (CR-M168 / TASK-113: this file has been bitten three
+        /// times by writing to a caller-owned object).
+        /// </para>
+        /// <para>
+        /// Safe against parameter names: <c>SqlBuilderContext.GenerateParameterName</c> sanitizes with
+        /// <c>[^a-zA-Z0-9_]</c>, so a parameter built from <c>Widgets.Name</c> is <c>@WHEREWidgetsName0_0</c>
+        /// and contains no <c>Widgets.</c> to strip. The left-edge guard stops a *different* table whose name
+        /// ends with the target's from being corrupted — with target <c>Person</c>, <c>MyPerson.Col</c> must
+        /// not become <c>MyCol</c>.
+        /// </para>
+        /// </summary>
+        protected virtual string StripTargetTableQualifier(string sql, string? tableName)
+        {
+            if (string.IsNullOrEmpty(sql) || string.IsNullOrEmpty(tableName)) return sql;
+            var pattern = @"(?<![A-Za-z0-9_.""])" + System.Text.RegularExpressions.Regex.Escape(tableName!) + @"\.";
+            return System.Text.RegularExpressions.Regex.Replace(sql, pattern, string.Empty);
+        }
+
+        /// <summary>
+        /// Creates a SELECT command with conditions, order, limit and offset.
+        /// </summary>
+        public virtual DbCommand CreateSelectCommand(DbCommand command, IEnumerable<string> tableNames, IDictionary<int, string> fields, IEnumerable<Conditions.Condition>? conditions = null, IDictionary<string, bool>? orderFields = null, int? limit = null, int? offset = null)
+        {
+            return CreateSelectCommand(command, tableNames, fields, null, conditions, null, orderFields, limit, offset);
+        }
+
+        /// <summary>
+        /// Returns the SQL aggregate function name for the given aggregate function.
+        /// Shared by store-level and view-level aggregation.
+        /// </summary>
+        public static string GetSqlFunctionName(Birko.Data.Stores.AggregateFunction function)
+        {
+            return function switch
+            {
+                Birko.Data.Stores.AggregateFunction.Count => "COUNT",
+                Birko.Data.Stores.AggregateFunction.Sum => "SUM",
+                Birko.Data.Stores.AggregateFunction.Avg => "AVG",
+                Birko.Data.Stores.AggregateFunction.Min => "MIN",
+                Birko.Data.Stores.AggregateFunction.Max => "MAX",
+                _ => throw new NotSupportedException($"Aggregate function {function} is not supported")
+            };
+        }
+
+        /// <summary>
+        /// Resolves a C# property name to its SQL column name using loaded field metadata.
+        /// </summary>
+        protected static string ResolveSqlName(IEnumerable<Birko.Data.SQL.Fields.AbstractField> fields, string propertyName)
+        {
+            var field = fields.FirstOrDefault(f =>
+                f.Property.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase));
+            if (field != null)
+                return field.Name;
+
+            // Fallback: use property name as-is
+            return propertyName;
+        }
+
+        /// <summary>
+        /// Builds SELECT and GROUP BY field dictionaries for an aggregation query.
+        /// Shared by sync and async aggregate connectors to avoid duplicating query-building logic.
+        /// </summary>
+        protected (Dictionary<int, string> fields, Dictionary<int, string> groupFields, IEnumerable<Conditions.Condition>? conditions) BuildAggregateQueryParts<T>(
+            Type type,
+            Birko.Data.Stores.AggregateQuery<T> query)
+            where T : Models.AbstractModel
+        {
+            var fields = new Dictionary<int, string>();
+            var groupFields = new Dictionary<int, string>();
+            int idx = 0;
+
+            var allFields = DataBase.LoadFields(type);
+            foreach (var groupBy in query.GroupByFields)
+            {
+                var sqlName = ResolveSqlName(allFields, groupBy);
+                fields[idx] = sqlName;
+                groupFields[idx] = sqlName;
+                idx++;
+            }
+
+            if (!string.IsNullOrEmpty(query.TimeBucketInterval) && !string.IsNullOrEmpty(query.TimeColumn))
+            {
+                var timeCol = ResolveSqlName(allFields, query.TimeColumn);
+                var interval = Birko.Data.Stores.TimeIntervalParser.ToSqlInterval(query.TimeBucketInterval);
+                fields[idx] = $"time_bucket('{interval}', {timeCol}) AS bucket_time";
+                groupFields[idx] = "bucket_time";
+                idx++;
+            }
+
+            foreach (var agg in query.Aggregates)
+            {
+                var alias = agg.ResolvedAlias;
+                var funcName = GetSqlFunctionName(agg.Function);
+                var sqlFunc = agg.Function == Birko.Data.Stores.AggregateFunction.Count
+                    ? "COUNT(*)"
+                    : $"{funcName}({ResolveSqlName(allFields, agg.SourcePropertyName)})";
+                fields[idx] = $"{sqlFunc} AS {QuoteIdentifier(alias)}";
+                idx++;
+            }
+
+            var conditions = query.Filter != null
+                ? DataBase.ParseConditionExpression(query.Filter as System.Linq.Expressions.LambdaExpression)
+                : null;
+
+            return (fields, groupFields, conditions);
+        }
+
+        /// <summary>
+        /// Maps a <see cref="DbDataReader"/> row to an <see cref="Birko.Data.Stores.AggregateResult"/>.
+        /// Shared by sync and async aggregate connectors.
+        /// </summary>
+        protected static Birko.Data.Stores.AggregateResult ReadAggregateResult(DbDataReader reader)
+        {
+            var dict = new Dictionary<string, object?>();
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                dict[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+            }
+            return new Birko.Data.Stores.AggregateResult(dict);
+        }
+
+        /// <summary>
+        /// A table name that can carry a bare SQL alias: a plain identifier, nothing needing quotes.
+        /// Anchored <c>\A…\z</c> rather than <c>^…$</c> because .NET's <c>$</c> also matches before a
+        /// trailing newline (the same anchoring rule as <c>ValidateRuleFieldIdentifier</c>).
+        /// </summary>
+        private static readonly System.Text.RegularExpressions.Regex PlainTableIdentifier =
+            new(@"\A[A-Za-z_][A-Za-z0-9_]*\z", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>
+        /// The token a SELECT's <c>FROM</c> / <c>JOIN</c> emits for a table: the <b>quoted</b> table name
+        /// followed by a <b>bare</b> alias equal to that name.
+        /// <para>
+        /// TASK-211. Every read this connector builds qualifies its columns — <c>Table.Column</c> from
+        /// <see cref="Birko.Data.SQL.Tables.Table.GetSelectFields"/> for the projection, from
+        /// <c>DataBase.ResolveColumnName(…, withTableName: true)</c> for the <c>WHERE</c>, and the same
+        /// again for <c>GROUP BY</c>, <c>ORDER BY</c> and a join's <c>ON</c>. Those qualifiers are emitted
+        /// bare, while the <c>FROM</c> quoted its table — and on PostgreSQL, the one supported provider that
+        /// case-folds an unquoted identifier, a bare <c>OfPersons</c> folds to <c>ofpersons</c> and does not
+        /// match the quoted relation. Measured on 16.4: <c>SELECT OfPersons.Name FROM "OfPersons"</c> →
+        /// <c>ERROR: missing FROM-clause entry for table "ofpersons"</c>, which this layer then swallowed
+        /// into an empty result. So <b>every read of every PascalCase-named entity returned zero rows</b>,
+        /// silently — reads, not just the views the defect was filed against.
+        /// </para>
+        /// <para>
+        /// The alias is what makes the fix total. Quoting each qualifier instead would mean teaching every
+        /// producer of a qualified name — including the ones that wrap it, <c>LOWER(T.Col)</c>,
+        /// <c>COALESCE</c>, the <c>.Date</c> rewrite — and a producer missed is the identical silent empty
+        /// result, which is precisely how this survived. Aliasing is one site and correct by construction:
+        /// the alias folds exactly as the qualifiers do. It also keeps
+        /// <c>DataBase.ParseConditionExpression</c> provider-independent, which the alternative would not.
+        /// </para>
+        /// <para>
+        /// Quoting the alias would defeat it — a quoted alias is case-sensitive again and the bare
+        /// qualifiers would stop matching. That is consistent with, not a departure from, § Conventions'
+        /// <i>quote tables, never quote columns</i>: the relation is still addressed quoted, and the alias
+        /// is the bare name every column reference already resolves against.
+        /// </para>
+        /// <para>
+        /// A name that cannot take a bare alias (quoted-only: spaces, punctuation, a reserved word) is
+        /// emitted unaliased, exactly as before. That is not a gap — such a table already cannot be read
+        /// through a qualified SELECT on any provider (measured on PostgreSQL: <c>SELECT Order.Guid FROM
+        /// "Order"</c> is <c>syntax error at or near "."</c> with or without an alias) — and it keeps the
+        /// change away from the one shape it is not about, an unqualified <c>SELECT COUNT(*)</c>, which
+        /// works today for such a table and must keep working.
+        /// </para>
+        /// </summary>
+        protected virtual string SelectTableReference(string table)
+        {
+            // The alias is emitted BARE and unescaped, so it is gated on a strict identifier pattern —
+            // anything else gets the quoted name only. That is what keeps § Conventions' rule that an
+            // identifier reaching interpolated SQL is never caller text validated loosely: a name that is
+            // not a plain identifier cannot reach the statement unquoted.
+            var quoted = QuoteIdentifier(table);
+            return PlainTableIdentifier.IsMatch(table)
+                ? quoted + " AS " + table
+                : quoted;
+        }
+
+        /// <summary>
+        /// Creates a SELECT command with joins, conditions, grouping, order, limit and offset.
+        /// </summary>
+        public virtual DbCommand CreateSelectCommand(DbCommand command, IEnumerable<string> tableNames, IDictionary<int, string> fields, IEnumerable<Conditions.Join>? joinconditions = null, IEnumerable<Conditions.Condition>? conditions = null, IDictionary<int, string>? groupFields = null, IDictionary<string, bool>? orderFields = null, int? limit = null, int? offset = null)
+        {
+            command.CommandText = "SELECT " + string.Join(", ", fields.Values) + " FROM ";
+
+            Dictionary<string, List<Conditions.Join>> joins = new();
+            if (joinconditions != null && joinconditions.Any())
+            {
+                string? prevleft = null;
+                string? prevright = null;
+                foreach (var join in joinconditions)
+                {
+                    if (!string.IsNullOrEmpty(prevleft) && !string.IsNullOrEmpty(prevright) && !joins.ContainsKey(join.Left) && prevright == join.Left && joins.ContainsKey(prevleft))
+                    {
+                        joins[prevleft].Add(join);
+                    }
+                    else
+                    {
+                        if (!joins.ContainsKey(join.Left))
+                        {
+                            joins.Add(join.Left, new List<Conditions.Join>());
+                        }
+                        joins[join.Left].Add(join);
+                        prevleft = join.Left;
+                    }
+                    prevright = join.Right;
+                }
+            }
+
+            int i = 0;
+            foreach (var table in tableNames.Distinct())
+            {
+                if (i > 0)
+                {
+                    command.CommandText += ", ";
+                }
+                command.CommandText += SelectTableReference(table);
+                if (joins != null && joins.ContainsKey(table))
+                {
+                    var joingroups = joins[table].GroupBy(x => new { x.Right, x.JoinType }).ToDictionary(x => x.Key, x => x.SelectMany(y => y.Conditions ?? Enumerable.Empty<Conditions.Condition>()).Where(z => z != null));
+                    foreach (var joingroup in joingroups.Where(x => x.Value.Any()))
+                    {
+                        command.CommandText +=
+                            joingroup.Key.JoinType switch
+                            {
+                                Conditions.JoinType.Inner => " INNER JOIN ",
+                                Conditions.JoinType.LeftOuter => " LEFT OUTER JOIN ",
+                                _ => " CROSS JOIN ",
+                            };
+                        command.CommandText += SelectTableReference(joingroup.Key.Right);
+                        if (joingroup.Key.JoinType != Conditions.JoinType.Cross && joingroup.Value != null && joingroup.Value.Any())
+                        {
+                            command.CommandText += " ON (";
+                            command.CommandText += ConditionDefinition(joingroup.Value, command);
+                            command.CommandText += ")";
+                        }
+                    }
+                }
+                i++;
+            }
+            AddWhere(conditions, command);
+            if (groupFields != null && groupFields.Any())
+            {
+                command.CommandText += " GROUP BY " + string.Join(", ", groupFields.Values);
+            }
+            if (orderFields != null && orderFields.Any())
+            {
+                command.CommandText += " ORDER BY " + string.Join(", ", orderFields.Select(kvp => string.Format("{0} {1}", kvp.Key, kvp.Value ? "DESC" : "ASC")));
+            }
+            else if (limit != null && RequiresOrderByForPaging)
+            {
+                // TASK-278 — SQL Server defines OFFSET/FETCH as part of the sort clause, so a limited read
+                // with no ORDER BY is a syntax error there (Msg 153 / Msg 102, measured). The sort is
+                // synthesised HERE rather than inside LimitOffsetDefinition because this is the only place
+                // that knows whether the caller supplied one — and adding that knowledge to the emitter's
+                // signature would silently orphan any existing override of it.
+                command.CommandText += " ORDER BY " + PagingPlaceholderOrderBy;
+            }
+            if (limit != null)
+            {
+                command.CommandText += LimitOffsetDefinition(command, limit, offset) ?? string.Empty;
+            }
+            return command;
+        }
+    }
+}

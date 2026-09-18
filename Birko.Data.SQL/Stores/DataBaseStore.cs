@@ -1,0 +1,248 @@
+using Birko.Data.SQL.Connectors;
+using Birko.Data.Stores;
+using Birko.Configuration;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+
+namespace Birko.Data.SQL.Stores
+{
+    /// <summary>
+    /// Basic database store for single-item CRUD operations.
+    /// Provides core database functionality without bulk operations.
+    /// For bulk operations, use <see cref="DataBaseBulkStore{DB, T}"/> instead.
+    /// </summary>
+    /// <typeparam name="DB">The type of database connector, must inherit from <see cref="AbstractConnector"/>.</typeparam>
+    /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
+    public class DataBaseStore<DB, T>
+        : AbstractStore<T>
+        , ISettingsStore<ISettings>
+        , ISettingsStore<PasswordSettings>
+        , ITransactionalStore<T, SqlTransactionContext>
+        where T : Models.AbstractModel
+        where DB : AbstractConnector
+    {
+        /// <summary>
+        /// Gets the database connector for this store.
+        /// </summary>
+        public DB Connector { get; protected set; } = null!;
+
+        /// <inheritdoc />
+        public SqlTransactionContext? TransactionContext { get; private set; }
+
+        /// <inheritdoc />
+        public void SetTransactionContext(SqlTransactionContext? context)
+        {
+            TransactionContext = context;
+        }
+
+        /// <summary>
+        /// Publishes <see cref="TransactionContext"/> for the duration of one operation. Returns null
+        /// (and costs nothing) when no context is set.
+        /// </summary>
+        /// <remarks>
+        /// Replaces the former <c>Connector.SetExternalTransaction</c> call, which published one caller's
+        /// transaction onto a connector cached process-wide per (type, settings id) — i.e. onto every
+        /// concurrent caller against the same database.
+        /// </remarks>
+        protected IDisposable? EnterTransactionScope()
+        {
+            var context = TransactionContext;
+            if (context == null || Connector == null)
+            {
+                return null;
+            }
+            return AmbientSqlTransaction.Enter(Connector.Settings.GetId(), context.Connection, context.Transaction);
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the DataBaseStore class.
+        /// </summary>
+        public DataBaseStore()
+        {
+        }
+
+        /// <summary>
+        /// Sets the connection settings using PasswordSettings.
+        /// </summary>
+        /// <param name="settings">The password settings containing connection information.</param>
+        public virtual void SetSettings(PasswordSettings settings)
+        {
+            SetSettings((ISettings)settings);
+        }
+
+        /// <summary>
+        /// Sets the connection settings.
+        /// </summary>
+        /// <param name="settings">The settings to use for database connection.</param>
+        public virtual void SetSettings(ISettings settings)
+        {
+            if (settings is PasswordSettings sets)
+            {
+                Connector = (DB)SQL.DataBase.GetConnector<DB>(sets);
+            }
+        }
+
+        /// <summary>
+        /// Adds an initialization callback to the connector.
+        /// </summary>
+        /// <param name="onInit">The callback to invoke during initialization.</param>
+        public void AddOnInit(InitConnector onInit)
+        {
+            if (onInit != null && Connector != null)
+            {
+                Connector.OnInit += onInit;
+            }
+        }
+
+        /// <summary>
+        /// Removes an initialization callback from the connector.
+        /// </summary>
+        /// <param name="onInit">The callback to remove.</param>
+        public void RemoveOnInit(InitConnector onInit)
+        {
+            if (onInit != null && Connector != null)
+            {
+                Connector.OnInit -= onInit;
+            }
+        }
+
+        #region Initialization and Lifecycle
+
+        /// <remarks>
+        /// TASK-244 — the scope is entered here as well as in every <c>*Core</c>, so the per-store
+        /// transaction door and the ambient door agree about whether schema-ensure participates. See the
+        /// async twin for the measurement.
+        /// </remarks>
+        protected override void InitCore()
+        {
+            using var _tx = EnterTransactionScope();
+            Connector?.CreateTable(new[] { typeof(T) });
+            Connector?.DoInit();
+            // TASK-288 — see the async twin. After CreateTable, deliberately.
+            _initSchemaGeneration = Connector?.SchemaGeneration ?? 0;
+
+            // TASK-290 — durability is asked HERE, while the scope this method entered is still published;
+            // the base asks CanRememberInitialization after this method returns, i.e. after `using var _tx`
+            // has already restored the ambient. See the async twin.
+            //
+            // ⚠ This store is the WORSE half of that defect, because SqlUnitOfWork.FromStore takes an
+            // AsyncDataBaseStore — so SetTransactionContext is the only transaction door a sync store has,
+            // and it was the door that did not work. There was no unaffected path here to compare against.
+            _initDdlSurvivedRollback = Connector?.DdlSurvivesRollback ?? true;
+        }
+
+        // TASK-290 — see the async twin. Defaults to true so a store that never enters a boundary behaves
+        // exactly as before.
+        private bool _initDdlSurvivedRollback = true;
+
+        /// <summary>
+        /// A schema-ensure that ran inside a caller's transaction boundary is not remembered (TASK-244) —
+        /// see the async twin.
+        /// </summary>
+        protected override bool CanRememberInitialization
+            => Connector == null || _initDdlSurvivedRollback;
+
+        // TASK-288 — the connector's SchemaGeneration as it stood when this store last schema-ensured.
+        //
+        // Captured AFTER CreateTable, not before: an escape observed while our own schema-ensure was
+        // running has just been addressed by it, and treating that as staleness would re-run forever.
+        private long _initSchemaGeneration;
+
+        /// <summary>
+        /// A remembered initialization stops being trusted once this connector has seen a table it created
+        /// being reported missing.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-288, from consumer Symbio's TASK-627. <c>EnsureSchemaAndReport</c> documented itself, and
+        /// TASK-277 justified it, as "rethrow so this attempt is reported, but call <c>DoInit()</c> so the
+        /// next attempt can succeed". The second half was not delivered: <c>DoInit()</c> raises an event no
+        /// framework code subscribes to and issues no per-entity DDL, so with the table dropped beneath an
+        /// initialised store <b>five consecutive writes threw and the table was never recreated</b> — only
+        /// a new store instance recovered it. This is the half that makes the promise true, and it is on
+        /// the store because the flag that was wrong is the store's.
+        /// </para>
+        /// <para>
+        /// ⚠ <b>Compared, not subscribed.</b> Connectors are cached process-wide per (type, settings id)
+        /// while a store is typically per-request, so an event subscription here would accumulate dead
+        /// stores on a process-lifetime object — TASK-204's defect. A counter read costs nothing and
+        /// cannot leak.
+        /// </para>
+        /// <para>
+        /// ⚠ <b>Gated on the anomaly, not on "a table was missing".</b> The generation only moves for a
+        /// table this connector itself created, which is the only case where a store can be initialised
+        /// and its table absent. Ordinary lazy first-touch is also a missing table and is roughly 245×
+        /// more common per bring-up (measured in Symbio); reacting to it would re-run schema-ensure for
+        /// every store on the database, hundreds of times per start-up, for no reason.
+        /// </para>
+        /// </remarks>
+        protected override bool CanTrustRememberedInitialization
+            => Connector == null || Connector.SchemaGeneration == _initSchemaGeneration;
+
+        /// <inheritdoc />
+        public override void Destroy()
+        {
+            Connector?.DropTable(new[] { typeof(T) });
+        }
+
+        #endregion
+
+        #region Core CRUD Operations - Single Item
+
+        protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
+        {
+            using var _tx = EnterTransactionScope();
+            data.Guid ??= Guid.NewGuid();
+            storeDelegate?.Invoke(data);
+            Connector.Insert(data);
+            return data.Guid!.Value;
+        }
+
+        protected override T? ReadCore(Expression<Func<T, bool>>? filter = null)
+        {
+            using var _tx = EnterTransactionScope();
+            return Connector?.Select(typeof(T), filter as LambdaExpression, null, 1, null)?.OfType<T>().FirstOrDefault();
+        }
+
+        protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
+        {
+            using var _tx = EnterTransactionScope();
+            List<SQL.Conditions.Condition> conditions = new List<SQL.Conditions.Condition>();
+
+            foreach (var field in SQL.DataBase.GetPrimaryFields(typeof(T)))
+            {
+                conditions.Add(SQL.DataBase.CreateCondition(field, data));
+            }
+
+            storeDelegate?.Invoke(data);
+            Connector.Update(data, conditions);
+        }
+
+        protected override void DeleteCore(T data)
+        {
+            if (data == null) return;
+            using var _tx = EnterTransactionScope();
+
+            List<SQL.Conditions.Condition> conditions = new List<SQL.Conditions.Condition>();
+            foreach (var field in SQL.DataBase.GetPrimaryFields(typeof(T)))
+            {
+                conditions.Add(SQL.DataBase.CreateCondition(field, data));
+            }
+            Connector.Delete(typeof(T), conditions);
+        }
+
+        #endregion
+
+        #region Query and Count Operations
+
+        protected override long CountCore(Expression<Func<T, bool>>? filter = null)
+        {
+            using var _tx = EnterTransactionScope();
+            return Connector?.SelectCount(typeof(T), filter) ?? 0;
+        }
+
+        #endregion
+    }
+}

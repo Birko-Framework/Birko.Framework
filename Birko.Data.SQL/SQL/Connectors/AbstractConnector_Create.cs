@@ -1,0 +1,275 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Text;
+
+namespace Birko.Data.SQL.Connectors
+{
+    public abstract partial class AbstractConnector
+    {
+        public void CreateTable(Type[] types)
+        {
+            CreateTable(DataBase.LoadTables(types));
+        }
+
+        public void CreateTable(IEnumerable<Tables.Table> tables)
+        {
+            if (tables != null && tables.Any() && tables.Any(x => x != null && x.Fields != null && x.Fields.Count > 0))
+            {
+                CreateTable(tables.ToDictionary(x => x.Name, x => x.Fields.Select(y => y.Value)));
+                foreach (var table in tables.Where(x => x.Indexes != null && x.Indexes.Count > 0))
+                {
+                    // An index that cannot be built is RECORDED, not thrown — one index per attempt so a
+                    // failure cannot hide the indexes behind it.
+                    //
+                    // This path is schema-ensure, which stores run LAZILY on first data access
+                    // (AbstractAsyncStore.EnsureInitializedAsync -> InitCoreAsync -> CreateTable). Letting
+                    // the exception escape therefore meant the store never initialised, and EVERY
+                    // subsequent operation on that entity re-attempted and re-threw: a single unbuildable
+                    // index took down the entity's whole surface, including reads that never touched the
+                    // indexed column, and it could not self-heal.
+                    //
+                    // Measured in consumer Symbio (TASK-354): one duplicate (TenantGuid, OrderNumber) pair
+                    // left behind by pre-allocator numbering made a later-declared UNIQUE index unbuildable,
+                    // and GET /api/manufacturing/orders, the same route with a status filter, and the detail
+                    // route all returned 500 while the sibling entity in the same module was fine. The same
+                    // annotation is on five further entities there, so the blast radius was six entities'
+                    // read surfaces — permanently, with no way to even read the rows to repair them.
+                    //
+                    // An index is a constraint/optimisation, so degrading it to "absent and reported" is
+                    // strictly better than "table unusable": the data stays reachable, and the host can
+                    // surface the failure (IndexCreationFailures / OnIndexCreationFailed) at startup. It is
+                    // NOT silent — that is the whole point of recording it rather than swallowing it.
+                    //
+                    // The public CreateIndexes(...) below still throws for an index that cannot be BUILT:
+                    // an explicit call (e.g. the migrations SqlSchemaBuilder) is a caller asking for this
+                    // index now, and must fail loudly. Only schema-ensure degrades.
+                    //
+                    // TASK-245 narrowed that to what it meant, so this comment no longer says "UNCHANGED":
+                    // the public path is now IDEMPOTENT for an index that is merely ALREADY PRESENT, because
+                    // that is what SQLite/PostgreSQL (native IF NOT EXISTS) and MSSql (a synthesised
+                    // sys.indexes guard) have always reported as success, and MySQL — which has no
+                    // conditional form — had been the only provider throwing. Unbuildable (MySQL 1062) and
+                    // already-present (1061) are distinct codes, so tolerating the latter cannot swallow the
+                    // former. Pass throwIfExists: true for the loud behaviour on every provider.
+                    foreach (var index in table.Indexes!.Values)
+                    {
+                        try
+                        {
+                            CreateIndexes(table.Name, new[] { index });
+                            // Schema-ensure re-runs on every store instance, so this is also the path by
+                            // which a previously unbuildable index recovers once its data is repaired.
+                            ClearIndexCreationFailure(table.Name, index?.Name);
+                        }
+                        catch (Exception ex)
+                        {
+                            RecordIndexCreationFailure(table.Name, index?.Name, ex);
+                        }
+                    }
+                }
+            }
+        }
+
+        public void CreateTable(IDictionary<string, IEnumerable<Fields.AbstractField>> tables)
+        {
+            if (tables != null && tables.Any() && tables.Any(x => x.Value != null && x.Value.Count() > 0))
+            {
+                foreach (var kvp in tables.Where(x => x.Value != null && x.Value.Any()))
+                {
+                    CreateTable(kvp.Key, WithCompositePrimaryKey(kvp.Key, kvp.Value));
+                }
+            }
+        }
+
+        /// <summary>
+        /// The column definitions for one table, plus a table-level <c>PRIMARY KEY (a, b)</c> clause when
+        /// more than one field is primary.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-303. <c>FieldDefinition</c> renders <c>PRIMARY KEY</c> inline from each field's flag, so
+        /// two primary fields emitted <b>two clauses</b> and every provider rejected the statement —
+        /// measured as PostgreSQL <c>42P16</c> and SQLite <c>"table has more than one primary key"</c>. A
+        /// composite key could therefore not be declared at all, which matters because TimescaleDB
+        /// <i>requires</i> one: <c>create_hypertable</c> on a Guid-keyed table answers
+        /// <c>cannot create a unique index without the column "ts" (used in partitioning)</c>, and its own
+        /// hint says to make the partitioning column "part of the primary or composite key".
+        /// </para>
+        /// <para>
+        /// The suppression lives on <see cref="Fields.AbstractField.UsesInlinePrimaryConstraint"/>, which
+        /// every provider's <c>FieldDefinition</c> consults, so the inline half and this clause cannot
+        /// disagree about which shape is in use.
+        /// </para>
+        /// <para>
+        /// ⚠ <b>Key order is declaration order</b> — <c>Table.Fields</c> preserves it — because a composite
+        /// key's column order decides which range scans the index can serve, so it must be the author's
+        /// rather than a dictionary's.
+        /// </para>
+        /// </remarks>
+        private IEnumerable<string> WithCompositePrimaryKey(string tableName, IEnumerable<Fields.AbstractField> fields)
+        {
+            var all = fields.ToList();
+            var primary = all.Where(x => x.IsPrimary).ToList();
+            var definitions = all.Select(x => FieldDefinition(x)).ToList();
+
+            if (primary.Count <= 1)
+            {
+                return definitions;
+            }
+
+            // SQLite's INTEGER PRIMARY KEY AUTOINCREMENT is a single-column form by construction: it is
+            // rejected alongside a table-level clause ("table has more than one primary key", measured).
+            // Refused here rather than emitted, because the alternative is a statement the server rejects
+            // with a message that says nothing about autoincrement.
+            var autoincrement = primary.FirstOrDefault(x => x.IsAutoincrement);
+            if (autoincrement != null)
+            {
+                throw new Exceptions.TableAttributeException(
+                    $"Table \"{tableName}\" declares a composite primary key that includes the "
+                  + $"auto-increment column \"{autoincrement.Name}\". An auto-increment column must be the "
+                  + "sole primary key. Drop the auto-increment, or make that column the only primary and "
+                  + "express the rest as a unique index.");
+            }
+
+            definitions.Add($"PRIMARY KEY ({string.Join(", ", primary.Select(x => x.Name))})");
+            return definitions;
+        }
+
+        /// <summary>
+        /// Creates one table and records that it was created. <b>Not virtual</b> — override
+        /// <see cref="CreateTableCore"/> to change the statement.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// ⚠ <b>TASK-295 — this used to be the virtual method AND the one place
+        /// <see cref="AbstractConnector.RecordTableCreated"/> was called, which meant it recorded on
+        /// exactly the providers that did not override it.</b> PostgreSQL, MySQL, SQL Server and
+        /// TimescaleDB all did, so <c>TablesCreated</c> was permanently <b>empty</b> on four of five
+        /// connectors — measured live — and with it TASK-286's annotation (always "NO recorded CREATE
+        /// TABLE"), TASK-287's <c>SchemaEscapes</c> channel and TASK-288's healing. A table that vanished
+        /// beneath an initialised store therefore never healed there, and every write threw until the
+        /// process restarted: the consumer-reported outage TASK-288 closed, still open on every provider
+        /// but SQLite.
+        /// </para>
+        /// <para>
+        /// TASK-286's comment claimed "every CreateTable overload funnels here, which is why this is the
+        /// one place it needs to go". The overloads did; the <i>providers</i> did not. Fifth instance of
+        /// § TASK-243's <i>"a funnel with four overrides is not a funnel"</i>.
+        /// </para>
+        /// <para>
+        /// <b>Why the template method rather than a call in each override.</b> Adding
+        /// <c>RecordTableCreated</c> to the four overrides is a fourth, fifth and sixth copy of the rule
+        /// and re-arms this defect for the next provider — which is how this repo already has five
+        /// instances of it. Here the recording cannot be bypassed: an override changes the statement and
+        /// never sees this wrapper. It also keeps the one <b>external</b> direct caller
+        /// (<c>Birko.Data.Migrations.SQL.SqlSchemaBuilder</c>) recorded, which placing the call in the
+        /// <c>IDictionary</c> dispatcher would have silently dropped.
+        /// </para>
+        /// <para>
+        /// Blast radius measured before the signature changed: <b>0</b> overrides of this method and
+        /// <b>0</b> subclasses of any Birko connector across all 16 consumer repos, so making it
+        /// non-virtual breaks nothing. Had there been any, the break would at least be loud (<c>CS0506</c>)
+        /// rather than a silently orphaned override — § TASK-278's hazard, in the direction that reports
+        /// itself.
+        /// </para>
+        /// </remarks>
+        public void CreateTable(string name, IEnumerable<string> fields)
+        {
+            CreateTableCore(name, fields);
+
+            // TASK-286 — recorded AFTER the statement returns, so a create that threw is not recorded.
+            //
+            // ⚠ It does NOT mean the table exists now: a create inside a caller's transaction boundary is
+            // undone by a rollback and stays recorded (measured in Symbio — the rolled-back cart create
+            // left no Carts table). That is deliberate, because the question it answers is "was this ever
+            // created, and when", which is precisely what cannot be reconstructed after the fact.
+            RecordTableCreated(name);
+        }
+
+        /// <summary>
+        /// Emits the <c>CREATE TABLE</c> statement. Providers override <b>this</b>, not
+        /// <see cref="CreateTable(string, IEnumerable{string})"/>, matching the framework's own
+        /// <c>*Core</c> convention — the public wrapper owns the bookkeeping the override must not be able
+        /// to skip.
+        /// </summary>
+        protected virtual void CreateTableCore(string name, IEnumerable<string> fields)
+        {
+            DoDdlCommand((command) =>
+            {
+                command.CommandText = "CREATE TABLE IF NOT EXISTS "
+                    + QuoteIdentifier(name)
+                    + " ("
+                    + string.Join(", ", fields.Where(x => !string.IsNullOrEmpty(x)))
+                    + ")";
+            }, (command) =>
+            {
+                command.ExecuteNonQuery();
+            }, true);
+        }
+
+        /// <param name="throwIfExists">
+        /// When false (the default) this is an <i>ensure</i>: an index that is already present is not an
+        /// error. When true the statement is emitted without any conditional form on every provider and an
+        /// already-present index throws — so the flag means the same thing everywhere rather than being
+        /// honoured on MySQL alone.
+        /// </param>
+        public virtual void CreateIndexes(string tableName, IEnumerable<Tables.IndexDefinition> indexes, bool throwIfExists = false)
+        {
+            foreach (var index in indexes)
+            {
+                // TASK-273 — refuse BEFORE DoDdlCommand, not inside it. A callback exception is re-wrapped
+                // by InitException as `new Exception(commandText, ex)`, so a caller could not select this
+                // refusal by type; thrown here it arrives intact. Schema-ensure's per-index catch still
+                // records it (TASK-204), and an explicit call still fails loudly, which is what criterion 4
+                // asks for: a provider that cannot honour the predicate must not quietly emit the index
+                // without it, because for an IS NULL term that is a STRICTER constraint than declared.
+                RequireExpressiblePredicates(index);
+
+                try
+                {
+                    DoDdlCommand((command) =>
+                    {
+                        command.CommandText = CreateIndexSql(tableName, index, conditional: !throwIfExists);
+                    }, (command) =>
+                    {
+                        command.ExecuteNonQuery();
+                    }, true);
+                }
+                catch (Exception ex) when (!throwIfExists && IsIndexAlreadyExistsException(ex))
+                {
+                    // TASK-245. The statement being emulated is CREATE INDEX **IF NOT EXISTS**, and MySQL
+                    // supports no conditional form for it — so MySQL emits the plain statement and the
+                    // "already there" case (error 1061, Duplicate key name) is answered HERE rather than by
+                    // the server. On SQLite/PostgreSQL (native IF NOT EXISTS) and MSSql (a synthesised
+                    // sys.indexes guard) the condition never reaches the client and this filter never fires,
+                    // which is why the base predicate returns false.
+                    //
+                    // This does NOT weaken TASK-204. That contract is about an index which cannot be BUILT;
+                    // on MySQL that is error 1062 (Duplicate entry), a different code, so it still reaches
+                    // the recorder in schema-ensure and still throws from an explicit call. "The object you
+                    // asked for already exists" is what the other three providers already report as success,
+                    // so tolerating it makes MySQL agree with them rather than diverge.
+                    //
+                    // The exception arrives WRAPPED: RunCommandTransaction routes failures through
+                    // InitException, which re-throws as `new Exception(commandText, ex)`. That is why the
+                    // predicate walks InnerException instead of testing the top-level type.
+                }
+            }
+        }
+
+        public virtual void DropIndexes(string tableName, IEnumerable<Tables.IndexDefinition> indexes)
+        {
+            foreach (var index in indexes)
+            {
+                DoDdlCommand((command) =>
+                {
+                    command.CommandText = DropIndexSql(tableName, index);
+                }, (command) =>
+                {
+                    command.ExecuteNonQuery();
+                }, true);
+            }
+        }
+    }
+}

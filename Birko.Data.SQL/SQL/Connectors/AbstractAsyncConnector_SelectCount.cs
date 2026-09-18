@@ -1,0 +1,90 @@
+using System;
+using System.Collections.Generic;
+using System.Data.Common;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Birko.Data.SQL.Connectors
+{
+    public abstract partial class AbstractAsyncConnector
+    {
+        public Task<long> SelectCountAsync(Type type, LambdaExpression? expr, CancellationToken ct = default)
+        {
+            return SelectCountAsync(new[] { type }, expr, ct);
+        }
+
+        public Task<long> SelectCountAsync(IEnumerable<Type> types, LambdaExpression? expr = null, CancellationToken ct = default)
+        {
+            return SelectCountAsync(types, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, ct);
+        }
+
+        public Task<long> SelectCountAsync(Type type, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
+        {
+            return SelectCountAsync(new[] { type }, conditions, ct);
+        }
+
+        public Task<long> SelectCountAsync(IEnumerable<Type> types, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
+        {
+            return (types != null) ? SelectCountAsync(types.Select(x => DataBase.LoadTable(x)), conditions, ct) : Task.FromResult(0L);
+        }
+
+        public Task<long> SelectCountAsync(IEnumerable<Tables.Table> tables, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
+        {
+            return (tables != null) ? SelectCountAsync(tables.Select(x => x.Name), conditions, ct) : Task.FromResult(0L);
+        }
+
+        public Task<long> SelectCountAsync(IEnumerable<string> tableNames, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
+        {
+            return SelectCountAsync(tableNames, null, conditions, ct);
+        }
+
+        public virtual async Task<long> SelectCountAsync(IEnumerable<string> tableNames, IEnumerable<Conditions.Join>? joinconditions = null, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
+        {
+            long count = 0;
+            if (tableNames != null && tableNames.Any() && tableNames.Any(x => !string.IsNullOrEmpty(x)))
+            {
+                try
+                {
+                    await DoCommandAsync(async (command) =>
+                    {
+                        command = CreateSelectCommand(
+                            command,
+                            tableNames.Where(x => !string.IsNullOrEmpty(x)).Distinct(),
+                            new Dictionary<int, string>()
+                            {
+                                { 0, "count(*) as count"}
+                            },
+                            joinconditions, conditions);
+                        await Task.CompletedTask;
+                    }, async (command) =>
+                    {
+                        var data = await command.ExecuteScalarAsync(ct);
+                        count = data != null ? Convert.ToInt64(data) : 0;
+                    });
+                }
+                catch (Exception ex) when (IsMissingTableExceptionChain(ex))
+                {
+                    // TASK-285 — the count of a table that does not exist is 0, exactly as the list of its
+                    // rows is empty. See the sync overload for why; the reasoning is not repeated.
+                    //
+                    // TASK-287 — and the escape is recorded here too. This is a SEPARATE code path from
+                    // the sync overload, not a wrapper over it, so a fix applied to one of the two looks
+                    // green while leaving the other exactly as it was; that asymmetry is the recurring
+                    // shape of defect in this area. Both call the same producer.
+                    //
+                    // ⚠ TASK-288 moved that recording one layer earlier and this call site is gone. The
+                    // anomaly is now detected once, in EnsureSchemaAndReport, where the annotation is
+                    // written — because the same detection also has to bump SchemaGeneration so a store
+                    // whose table vanished stops trusting its remembered initialization. Recording here as
+                    // well would have been unreachable in practice: the annotation only exists because
+                    // that handler ran, so anything this call could record it had already recorded.
+                    return 0;
+                }
+            }
+            return count;
+        }
+    }
+}
