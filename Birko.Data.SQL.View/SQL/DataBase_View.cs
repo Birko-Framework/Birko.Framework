@@ -34,8 +34,14 @@ namespace Birko.Data.SQL
         /// <see cref="EnsureViewResolverRegistered"/> is idempotent and no-ops on every call after the first.
         /// </para>
         /// </summary>
+        // CA2255 says a module initializer belongs in application code, not a library. Under the
+        // shared-project model it IS application code: .projitems compile into the consuming
+        // assembly, so this initializes the consumer's own module - which is precisely the property
+        // the remarks above rely on. The analyzer cannot see that distinction.
+#pragma warning disable CA2255
         [System.Runtime.CompilerServices.ModuleInitializer]
         internal static void InitializeViewResolver() => EnsureViewResolverRegistered();
+#pragma warning restore CA2255
 
         private static void EnsureViewResolverRegistered()
         {

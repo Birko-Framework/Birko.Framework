@@ -146,11 +146,15 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            // Before the dictionary is touched: a refusal that leaves a row behind is worse than
+            // the NullReferenceException it replaces.
+            var settings = RequireSettings();
+
             data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
             _items.Add(data.Guid.Value, data);
 
-            var fileName = $"{_settings.Name}-{data.Guid.Value}.xml";
+            var fileName = $"{settings.Name}-{data.Guid.Value}.xml";
             var filePath = PathValidator.CombineAndValidate(PathDirectory!, fileName);
 
             AddFile(data.Guid.Value, filePath);

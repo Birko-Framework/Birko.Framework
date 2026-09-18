@@ -8,6 +8,17 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Data</Import_RootNamespace>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- NU1510 claims Microsoft.Extensions.DependencyInjection.Abstractions below is "automatically
+         available" and should be removed. Measured 2026-09-18 with a probe console app importing this
+         projitems: removing it FAILS THE BUILD on net8.0 AND net10.0 with CS0234/CS0246 on
+         ServiceCollectionExtensions.cs - the assembly reaches a project through the ASP.NET Core
+         framework reference, which a console or class-library consumer does not have. So the advice is
+         wrong for this consumer shape and the reference is load-bearing.
+         Cost of this line: a consumer importing this projitems stops seeing NU1510 for its OWN
+         packages too. Accepted because NU1510 only ever says "you may delete this". -->
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
+  </PropertyGroup>
   <ItemGroup>
     <!-- TASK-229: ServiceCollectionExtensions uses IServiceCollection and ServiceLifetime.
          Abstractions is the right package for a library: the contracts, not the container. -->

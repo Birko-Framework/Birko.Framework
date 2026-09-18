@@ -8,6 +8,14 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Messaging.Razor</Import_RootNamespace>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- NU1510 says the Microsoft.Extensions.Caching.Memory reference below can be removed. Acting
+         on that would reintroduce GHSA-qj66-m88j-hmgj (high): the reference exists precisely to
+         override RazorLight 2.3.1's hard-pinned vulnerable 6.0.0 transitive - see the comment on the
+         reference itself. NuGet is reasoning about direct use; this pin is about resolution.
+         Same NoWarn cost as Birko.Data.Repositories: NU1510 is off for the whole consumer. -->
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
+  </PropertyGroup>
   <ItemGroup>
     <!-- TASK-230/TASK-229: this project `using`s RazorLight and declared nothing. -->
     <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT

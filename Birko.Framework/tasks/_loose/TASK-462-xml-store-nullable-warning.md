@@ -2,7 +2,7 @@
 id: TASK-462
 parent: null
 feature: null
-# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+# status: done | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 status: todo
 priority: P3
 assignee: ai
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-461]
 findings: []
-pr: null
+pr: see commit
 github-issue: null
 jira-key: null
 ---
@@ -79,3 +79,84 @@ it imports 38 projects through `$(BirkoSrc)` exactly as a real consumer does.
 Neither is a defect. But a build that always prints two warnings is a build whose warnings nobody
 reads, which is the same failure § Conventions records for a diagnostic channel with no subscriber —
 and the Sandbox's build output is now a CI step, so the noise is in front of everyone.
+
+
+---
+
+## Outcome (2026-09-18)
+
+**The whole framework now builds with 0 warnings.** Four distinct ones existed, not two, and **three
+of the four were false positives** — two of them with remedies that would have done real damage.
+
+### 1. CS8602 in `AsyncXmlSeparateStore` — real, and wider than the warning
+
+The value genuinely **can** be null, so `!` was never the right answer. `SetSettings` is a plain
+assignment nothing enforces, and `InitCore` silently no-ops without settings (its `is Settings`
+pattern just fails) — so lazy init reported success and the first create dereferenced null.
+Measured: `NullReferenceException`, thrown **after** the entity had been added to the in-memory
+dictionary, leaving the store holding a row no file backed.
+
+Fixed with `RequireSettings()` on both XML store bases, called **before** the dictionary is touched.
+
+**⚠ The compiler pointed at half of it.** The async family declares `protected Settings? _settings`
+and warned; the sync family declares `Settings _settings = null!` and said nothing about
+line-for-line identical code. *The sync store was never safer, only quieter* — so the guard went on
+both twins. Mutation B (revert the sync half alone) reds **3 of 24**, which is the whole argument.
+
+Criterion 2's sweep: JSON is **not** affected — its separate stores guard every site with
+`_settings?.Name` and defer file writing to a guarded flush. XML's create path was the only
+unguarded dereference in either family.
+
+### 2. NU1510 — measured, and the advice is wrong on both counts
+
+- **`Microsoft.Extensions.DependencyInjection.Abstractions`** (Birko.Data.Repositories): removing it
+  **fails the build on net8.0 AND net10.0** (CS0234/CS0246 in `ServiceCollectionExtensions.cs`),
+  measured with a probe console app. The assembly reaches a project through the ASP.NET Core
+  framework reference, which a console or class-library consumer does not have. NuGet's "automatically
+  available" is true for web projects only.
+- **`Microsoft.Extensions.Caching.Memory`** (Birko.Messaging.Razor): a deliberate **CVE override** —
+  it exists to beat RazorLight 2.3.1's hard-pinned vulnerable 6.0.0 transitive
+  (GHSA-qj66-m88j-hmgj, high). Removing it reintroduces a high-severity advisory.
+
+So this task's own acceptance ("either remove both lines, or condition on the TFM") is answered
+**neither** — the premise was wrong. `NoWarn` at each `.projitems`, with the measurement written
+beside the reference. **Cost stated rather than hidden:** a consumer importing either projitems stops
+seeing NU1510 for its own packages too; accepted because NU1510 only ever says "you may delete this".
+
+### 3 + 4. Two more the task did not know about
+
+- **CS0414 in `BluetoothLE`** — the field's *readers* live inside `#if WINDOWS` / `#if LINUX` while
+  its writers are unconditional, so a default build assigns and never reads it. Correct warning,
+  inert field; suppressed with the reason rather than conditioning three unrelated writes.
+- **CA2255 in `Birko.Data.SQL.View`** — a module initializer in a library. Under the shared-project
+  model it *is* application code (`.projitems` compile into the consuming assembly), which is exactly
+  the property the existing remarks rely on. The analyzer cannot see that distinction.
+
+### Mutations (three disjoint, all red)
+
+| Mutation | Result |
+|---|---|
+| A — revert the async guard only | 2 of 24 |
+| B — revert the **sync** guard only | 3 of 24 |
+| C — move the guard *after* `_items.Add` | 2 of 24 (exactly the "leaves no row behind" pair) |
+
+C is why the guard's **placement** is load-bearing rather than cosmetic: it still throws the right
+exception and still fails.
+
+### Also fixed, and MongoDB is the interesting one
+
+The two MongoDB CS8602s are a flow-analysis false positive — **every** caller of `FindIn`/`CountIn`
+already guards `Collection == null`. Rather than `!` plus a comment, the helpers now **take** the
+collection, so the compiler enforces the invariant the callers keep and no test is needed to pin it.
+⚠ And note why only one of two identical hazards was visible: `Find` is an **extension** method, so a
+null receiver never warns; `CountDocumentsAsync` is an instance method.
+
+## Out of scope
+
+- **The sync file stores NRE where the async ones degrade.** Every `_settings` dereference in the
+  *sync* XML stores (`XmlBatchStore:74`, `XmlSeparateStore:56,93`, …) is bare, including inside the
+  very guards meant to protect them, while the async twins use `_settings?.`. So an unconfigured sync
+  store throws where the async one returns empty. Invisible because `null!` suppresses it. Not a
+  warning and not what this task is about. → [[TASK-464]]
+- **`SetSettings(ISettings)` silently does nothing** when the argument is not a `Settings` — the
+  SH-H037 silent-drop family, in both XML and JSON store families. → [[TASK-464]]

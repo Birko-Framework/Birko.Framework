@@ -26,7 +26,15 @@ namespace Birko.Communication.Bluetooth.Ports
         // True while HandleReconnect is driving an Open() so the success path does not reset
         // _reconnectAttempts and fight the increment — otherwise MaxReconnectAttempts never binds
         // and reconnect loops forever (CR-M038).
+        // CS0414 on a build that defines neither WINDOWS nor LINUX: both READERS live inside the
+        // platform Open() implementations (#if WINDOWS / #if LINUX) while the writers in
+        // HandleReconnect are unconditional, so the default build assigns it and never reads it. The
+        // warning is correct and the field is not dead - it is simply inert without a transport.
+        // Suppressed rather than made conditional, because conditioning the declaration would force
+        // the same condition onto three unrelated writes for no behavioural gain.
+#pragma warning disable CS0414
         private volatile bool _reconnecting = false;
+#pragma warning restore CS0414
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BluetoothLE"/> class

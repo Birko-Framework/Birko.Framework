@@ -26,6 +26,27 @@ namespace Birko.Data.XML.Stores
         protected Settings? _settings = null;
 
         /// <summary>
+        /// The settings this store was given, or a refusal naming the call that supplies them.
+        /// </summary>
+        /// <remarks>
+        /// Nothing enforces that <c>SetSettings</c> was ever called: it is a plain assignment, and
+        /// <c>InitCore</c> silently no-ops when there are no settings (its <c>is Settings</c> pattern
+        /// simply fails), so lazy init reports success and the first write then dereferences null.
+        /// Measured before this guard existed: a create without SetSettings threw
+        /// <see cref="NullReferenceException"/> - and on the separate-file store it did so *after*
+        /// adding the entity to the in-memory dictionary, leaving the store holding a row that was
+        /// never written to disk.
+        ///
+        /// The read-shaped paths answer this state by returning empty, which is a reasonable thing for
+        /// a read to do. A write must not: § Conventions, a write that cannot be applied must never
+        /// report success, and it should say which door to use rather than only that something is null.
+        /// </remarks>
+        protected Settings RequireSettings()
+            => _settings ?? throw new InvalidOperationException(
+                $"{GetType().Name} has no settings, so it cannot write. Call "
+                + "SetSettings(new Settings(location, name)) before using the store.");
+
+        /// <summary>
         /// Gets the file path for the XML store.
         /// </summary>
         public string? Path

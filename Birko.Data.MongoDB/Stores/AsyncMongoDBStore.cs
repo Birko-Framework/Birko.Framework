@@ -100,18 +100,25 @@ namespace Birko.Data.MongoDB.Stores
         /// got the pre-transaction snapshot. That is a wrong answer rather than a missing feature, and it
         /// was invisible because the write paths did pass the session, so the store looked transactional.
         /// </remarks>
-        private IFindFluent<T, T> FindIn(FilterDefinition<T> filter)
+        /// <remarks>
+        /// Takes the collection rather than reading the nullable <c>Collection</c> property, so the
+        /// invariant every caller already keeps - each guards <c>Collection == null</c> first - is
+        /// checked by the compiler instead of asserted with <c>!</c> or a comment. <c>Find</c> is an
+        /// extension method, so a null receiver here would NOT have warned; only the instance-method
+        /// <c>CountDocumentsAsync</c> below did, which is why one of two identical hazards was visible.
+        /// </remarks>
+        private IFindFluent<T, T> FindIn(IMongoCollection<T> collection, FilterDefinition<T> filter)
             => TransactionContext != null
-                ? Collection.Find(TransactionContext, filter)
-                : Collection.Find(filter);
+                ? collection.Find(TransactionContext, filter)
+                : collection.Find(filter);
 
         /// <summary>
         /// Counts within <see cref="TransactionContext"/> when one is set. See <see cref="FindIn"/>.
         /// </summary>
-        private Task<long> CountIn(FilterDefinition<T> filter, CancellationToken ct)
+        private Task<long> CountIn(IMongoCollection<T> collection, FilterDefinition<T> filter, CancellationToken ct)
             => TransactionContext != null
-                ? Collection.CountDocumentsAsync(TransactionContext, filter, null, ct)
-                : Collection.CountDocumentsAsync(filter, null, ct);
+                ? collection.CountDocumentsAsync(TransactionContext, filter, null, ct)
+                : collection.CountDocumentsAsync(filter, null, ct);
 
         protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
@@ -129,10 +136,10 @@ namespace Birko.Data.MongoDB.Stores
 
             if (filter == null)
             {
-                return await FindIn(FilterDefinition<T>.Empty).FirstOrDefaultAsync(ct);
+                return await FindIn(Collection, FilterDefinition<T>.Empty).FirstOrDefaultAsync(ct);
             }
 
-            return await FindIn(filter).FirstOrDefaultAsync(ct);
+            return await FindIn(Collection, filter).FirstOrDefaultAsync(ct);
         }
 
         /// <summary>
@@ -145,7 +152,7 @@ namespace Birko.Data.MongoDB.Stores
                 return await Task.FromResult(Enumerable.Empty<T>());
             }
 
-            return await FindIn(Builders<T>.Filter.Empty).ToListAsync(ct);
+            return await FindIn(Collection, Builders<T>.Filter.Empty).ToListAsync(ct);
         }
 
         /// <inheritdoc />
@@ -159,10 +166,10 @@ namespace Birko.Data.MongoDB.Stores
 
             if (filter == null)
             {
-                return await CountIn(FilterDefinition<T>.Empty, ct);
+                return await CountIn(Collection, FilterDefinition<T>.Empty, ct);
             }
 
-            return await CountIn(filter, ct);
+            return await CountIn(Collection, filter, ct);
         }
 
         /// <inheritdoc />
@@ -279,7 +286,7 @@ namespace Birko.Data.MongoDB.Stores
             }
             filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-218 — see above
 
-            var query = FindIn(filter ?? FilterDefinition<T>.Empty);
+            var query = FindIn(Collection, filter ?? FilterDefinition<T>.Empty);
 
             if (orderBy?.Fields.Count > 0)
             {
