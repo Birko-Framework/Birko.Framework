@@ -8,6 +8,14 @@ using Xunit;
 
 namespace Birko.Communication.gRPC.Tests;
 
+// TASK-459: GrpcChannelPool._channels is STATIC and GrpcChannelPoolTests disposes every pooled
+// channel in its cleanup. That class names the collection; this one did not — and xUnit serialises
+// classes WITHIN a collection while running different collections in PARALLEL, so the disposal was
+// free to land in the middle of CreateClient_From_Settings_Uses_Pooled_Channel, which then failed
+// with ObjectDisposedException on a GrpcChannel it was legitimately holding. Failed 1 of 5 CI runs
+// and never locally, because the two classes have to genuinely overlap.
+// Both classes must name the collection, or neither is serialised against the other.
+[Collection("ChannelPool")]
 public class GrpcClientFactoryTests
 {
     private static readonly Marshaller<string> StringMarshaller =

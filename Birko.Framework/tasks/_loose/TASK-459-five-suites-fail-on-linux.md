@@ -126,9 +126,28 @@ removing the attribute reds exactly that test.
 > thing it forbids has to assemble the name, or it reports itself") — here it arrived from the other
 > side, through the string the guard *requires* rather than the one it forbids.
 
+## 5. The same isolation defect again, in gRPC — FIXED
+
+`Birko.Communication.gRPC.Tests` · `GrpcClientFactoryTests.CreateClient_From_Settings_Uses_Pooled_Channel`
+
+Surfaced on the run *after* §4 was fixed, with `ObjectDisposedException: GrpcChannel` — and it is
+§4's defect exactly. `GrpcChannelPool._channels` is `static`; `GrpcChannelPoolTests` **disposes every
+pooled channel** in both its constructor and `Dispose`, and carried `[Collection("ChannelPool")]`
+while `GrpcClientFactoryTests` did not. So the disposal ran in parallel with a test legitimately
+holding a channel.
+
+**Two accidental discoveries of one shape is a reason to sweep, not to wait for CI.** A scan of all
+167 test projects for *partial* collection coverage — some classes in a collection, others not —
+returned **exactly these two** and nothing else, so the pattern is now closed rather than merely
+twice-patched. (REST's third class and gRPC's other three genuinely do not touch the shared state;
+their own source scans assert it.)
+
+Guarded the same way, with comment-stripping from the start this time. Mutation-verified: removing
+the attribute reds exactly that test.
+
 ## Outcome
 
-**All five fixed. One product defect, four test defects.** Worth stating because the instinct on
+**All six fixed: one product defect, five test defects.** Worth stating because the instinct on
 seeing "5 tests fail on Linux" is to assume the code is wrong; it was wrong once, and that once was
 the one that ships to production.
 
