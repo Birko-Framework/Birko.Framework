@@ -1,0 +1,177 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Threading;
+using System.Threading.Tasks;
+using Birko.Data.Stores;
+using Birko.Data.Views;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Driver;
+
+namespace Birko.Data.MongoDB.Views;
+
+/// <summary>
+/// MongoDB implementation of <see cref="IViewStore{TView}"/>.
+/// Executes aggregation pipelines translated from ViewDefinition.
+/// </summary>
+public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new()
+{
+    private readonly IMongoDatabase _database;
+    private readonly ViewDefinition _definition;
+    private readonly List<BsonDocument> _basePipeline;
+
+    public MongoViewStore(IMongoDatabase database, ViewDefinition definition)
+    {
+        _database = database ?? throw new ArgumentNullException(nameof(database));
+        _definition = definition ?? throw new ArgumentNullException(nameof(definition));
+        _basePipeline = MongoViewTranslator.TranslatePipeline(definition);
+
+        // The rendered $match below and DeserializeView both read TView's class map, so it has to
+        // agree with the projection this same definition produces (TASK-219).
+        MongoViewSerialization.EnsureRegistered<TView>(definition);
+    }
+
+    public MongoViewStore(MongoDBClient client, ViewDefinition definition)
+        : this(client?.Database ?? throw new ArgumentNullException(nameof(client)), definition)
+    {
+    }
+
+    public async Task<IEnumerable<TView>> QueryAsync(
+        Expression<Func<TView, bool>>? filter = null,
+        OrderBy<TView>? orderBy = null,
+        int? limit = null,
+        int? offset = null,
+        CancellationToken ct = default)
+    {
+        var pipeline = BuildQueryStages(filter, orderBy, offset, limit);
+        var results = await ExecutePipelineAsync(pipeline, ct).ConfigureAwait(false);
+        return results.Select(DeserializeView);
+    }
+
+    public async Task<TView?> QueryFirstAsync(
+        Expression<Func<TView, bool>>? filter = null,
+        CancellationToken ct = default)
+    {
+        var pipeline = BuildQueryStages(filter, null, null, 1);
+        var results = await ExecutePipelineAsync(pipeline, ct).ConfigureAwait(false);
+        var first = results.FirstOrDefault();
+        return first != null ? DeserializeView(first) : null;
+    }
+
+    public async Task<long> CountAsync(
+        Expression<Func<TView, bool>>? filter = null,
+        CancellationToken ct = default)
+    {
+        var pipeline = BuildQueryStages(filter, null, null, null);
+        pipeline.Add(new BsonDocument("$count", "count"));
+
+        var results = await ExecutePipelineAsync(pipeline, ct).ConfigureAwait(false);
+        var countDoc = results.FirstOrDefault();
+        return countDoc?.GetValue("count", 0).ToInt64() ?? 0;
+    }
+
+    // Query-time stages only ($match/$sort/$skip/$limit over the VIEW's field shape). The base
+    // pipeline ($lookup/$group/$project) is prepended ONLY when running on-the-fly against the source
+    // collection; the persistent MongoDB view already has the base pipeline applied, so re-adding it
+    // would re-run the base over already-projected documents and produce wrong/empty results (CR-C15).
+    private List<BsonDocument> BuildQueryStages(
+        Expression<Func<TView, bool>>? filter,
+        OrderBy<TView>? orderBy,
+        int? offset,
+        int? limit)
+    {
+        var pipeline = new List<BsonDocument>();
+
+        // Add $match for filter (operates on view fields — valid both against the persistent view and
+        // after the base $project on the on-the-fly path)
+        if (filter != null)
+        {
+            var filterDef = Builders<TView>.Filter.Where(filter);
+            var serializer = BsonSerializer.SerializerRegistry.GetSerializer<TView>();
+            var renderArgs = new RenderArgs<TView>(serializer, BsonSerializer.SerializerRegistry);
+            var rendered = filterDef.Render(renderArgs);
+            pipeline.Add(new BsonDocument("$match", rendered));
+        }
+
+        // Add $sort
+        if (orderBy?.Fields != null && orderBy.Fields.Any())
+        {
+            var sortDoc = new BsonDocument();
+            foreach (var field in orderBy.Fields)
+            {
+                sortDoc.Add(field.PropertyName, field.Descending ? -1 : 1);
+            }
+            pipeline.Add(new BsonDocument("$sort", sortDoc));
+        }
+
+        // Add $skip and $limit
+        if (offset.HasValue && offset.Value > 0)
+        {
+            pipeline.Add(new BsonDocument("$skip", offset.Value));
+        }
+
+        if (limit.HasValue && limit.Value > 0)
+        {
+            pipeline.Add(new BsonDocument("$limit", limit.Value));
+        }
+
+        return pipeline;
+    }
+
+    private async Task<List<BsonDocument>> ExecutePipelineAsync(List<BsonDocument> stages, CancellationToken ct)
+    {
+        var collectionName = MongoViewTranslator.GetCollectionName(_definition.PrimarySource);
+
+        if (_definition.QueryMode == Birko.Data.Views.ViewQueryMode.Persistent ||
+            _definition.QueryMode == Birko.Data.Views.ViewQueryMode.Auto)
+        {
+            var viewName = _definition.Name;
+            if (!string.IsNullOrEmpty(viewName))
+            {
+                // CR-M122: decide explicitly whether to use the persistent view. Aggregating against a
+                // non-existent MongoDB view/collection returns an EMPTY cursor rather than throwing, so
+                // the old `catch (MongoCommandException) when (Auto)` fallback never fired — Auto mode
+                // silently returned empty when the view was missing. For Auto, check existence first and
+                // only use the view if it actually exists; for Persistent, use it unconditionally.
+                var useView = _definition.QueryMode == Birko.Data.Views.ViewQueryMode.Persistent
+                    || await ViewExistsAsync(viewName, ct).ConfigureAwait(false);
+                if (useView)
+                {
+                    var viewCollection = _database.GetCollection<BsonDocument>(viewName);
+                    var viewPipeline = PipelineDefinition<BsonDocument, BsonDocument>.Create(stages);
+                    var cursor = await viewCollection.AggregateAsync(viewPipeline, null, ct).ConfigureAwait(false);
+                    return await cursor.ToListAsync(ct).ConfigureAwait(false);
+                }
+                // Auto mode + missing view → fall through to on-the-fly.
+            }
+        }
+
+        // On-the-fly: run against the primary source collection. The base pipeline
+        // ($lookup/$group/$project) must run first to shape the documents into the view, then the
+        // query stages ($match/$sort/$skip/$limit) apply on the projected view fields.
+        var onTheFlyStages = new List<BsonDocument>(_basePipeline);
+        onTheFlyStages.AddRange(stages);
+
+        var collection = _database.GetCollection<BsonDocument>(collectionName);
+        var pipeline = PipelineDefinition<BsonDocument, BsonDocument>.Create(onTheFlyStages);
+        var result = await collection.AggregateAsync(pipeline, null, ct).ConfigureAwait(false);
+        return await result.ToListAsync(ct).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ViewExistsAsync(string viewName, CancellationToken ct)
+    {
+        // Mirrors MongoViewManager.ExistsAsync: a MongoDB view is a virtual collection, so it shows up
+        // in the collection-name listing filtered by name.
+        var filter = new BsonDocument("name", viewName);
+        var collections = await _database.ListCollectionNamesAsync(
+            new ListCollectionNamesOptions { Filter = filter }, ct).ConfigureAwait(false);
+        return await collections.AnyAsync(ct).ConfigureAwait(false);
+    }
+
+    private static TView DeserializeView(BsonDocument doc)
+    {
+        return BsonSerializer.Deserialize<TView>(doc);
+    }
+}
