@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>f5a6b7c8-d9e0-4f1a-b2c3-4d5e6f7a8b9c</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Health.Redis</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- External dependency: StackExchange.Redis — CONSUMER-SUPPLIED for this project alone:
+
+         <PackageReference Include="StackExchange.Redis" Version="2.*" />
+
+       Every other Birko project that wraps a driver declares it, so importing the project is all a
+       consumer has to do. This one is the documented exception, and both alternatives were measured
+       before choosing it (TASK-234):
+
+       It cannot declare the driver, because Birko.Redis.projitems does and Birko.Sandbox imports
+       both — two PackageReference items in one project file is NU1504, an error under the
+       -warnaserror the build sweep runs.
+
+       It also must not depend on Birko.Redis to inherit that declaration. RedisSettings extends
+       RemoteSettings and implements ILoadable, so importing it drags Configuration, Data.Core,
+       Data.Stores, Contracts and Time behind it — five shared projects, into a consumer that wanted
+       one health check. A consumer takes only the subset it needs, and that would break the rule.
+
+       In practice this costs nothing: RedisHealthCheck takes an IConnectionMultiplexer the consumer
+       already has, and a consumer importing Birko.Redis as well gets the driver from there. Declare
+       the line above only if you import this project on its own. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)RedisHealthCheck.cs" />
+  </ItemGroup>
+</Project>
