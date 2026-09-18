@@ -1,0 +1,136 @@
+using Birko.Data.SQL.Tests.TestResources.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq.Expressions;
+using Xunit;
+
+namespace Birko.Data.SQL.Tests.DataBase
+{
+    public class ExpressionTests
+    {
+        [Fact]
+        public void ParseValueExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => 3;
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("@Const0",  Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseFieldExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Amount;
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("DateModels.Amount", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseFieldExpression2()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Guid;
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("DateModels.Guid", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseFieldExpressionWithoutTableName()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Amount;
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("Amount", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters));
+        }
+
+        [Fact]
+        public void ParseDateFieldExpressionWithoutTableName()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => DateTime.UtcNow;
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("@Const0", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters));
+        }
+
+        [Fact]
+        public void ParseFieldAddExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Amount + x.Amount;
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("(DateModels.Amount + DateModels.Amount)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseFieldAddConstantExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Count + 3;
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("(DateModels.Count + @Const0)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+            Assert.Equal(3, parameters["@Const0"]);
+        }
+
+        [Fact]
+        public void ParseFieldSubstractConstantExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Count - 3;
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("(DateModels.Count - @Const0)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+            Assert.Equal(3, parameters["@Const0"]);
+        }
+
+        [Fact]
+        public void ParseFielSubstractFunctionExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Count - int.Parse("3");
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("(DateModels.Count - @Const0)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+            Assert.Equal(3, parameters["@Const0"]);
+        }
+
+        [Fact]
+        public void ParseFieldReplaceFunctionExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.Replace("original", "replace");
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("REPLACE(DateModels.Text, @Const0, @Const1)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+            Assert.Equal("original", parameters["@Const0"]);
+            Assert.Equal("replace", parameters["@Const1"]);
+        }
+
+        [Fact]
+        public void ParseToLowerExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.ToLower();
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("LOWER(DateModels.Text)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseToLowerInvariantExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.ToLowerInvariant();
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("LOWER(DateModels.Text)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseToUpperExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.ToUpper();
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("UPPER(DateModels.Text)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseToUpperInvariantExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.ToUpperInvariant();
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("UPPER(DateModels.Text)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseToLowerWithoutTableName()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.ToLower();
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("LOWER(Text)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, false));
+        }
+    }
+}
