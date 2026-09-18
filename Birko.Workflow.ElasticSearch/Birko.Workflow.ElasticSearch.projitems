@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d4e5f6a7-b8c9-4d0e-a1f2-c3d4e5f60702</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Workflow.ElasticSearch</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- External dependency: Nest (package NEST), declared by Birko.Data.ElasticSearch.projitems and
+       deliberately NOT repeated here. A consumer imports this projitems alongside that one — this
+       project extends the ElasticSearch store and cannot work without it — so a second declaration
+       lands in the same project file and restore reports NU1504, which the -warnaserror that
+       verify-conventions runs turns into an error. Import Birko.Data.ElasticSearch.projitems to get
+       the driver (TASK-234). -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ElasticWorkflowInstanceModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchWorkflowInstanceStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchWorkflowInstanceSchema.cs" />
+  </ItemGroup>
+</Project>
