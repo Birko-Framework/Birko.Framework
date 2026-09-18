@@ -71,7 +71,25 @@ escaped as a failure — reporting a *connection* error as though the guard had 
 Fixed by catching the `AggregateException` and falling through to the existing inspection, which
 preserves the intent exactly. The product code was never at fault.
 
-## 3. Intermittent, NOT reproduced — INSTRUMENTED, still open
+## 3. Tests encoding Windows assumptions — FIXED
+
+`Birko.Helpers.Tests` (3 tests). Found only after the `.trx` instrumentation below existed: the
+first two runs reported this suite as `Failed: 3` with **no test names at all**, because `-v q`
+suppressed them. The artifact gave both names and messages on the next run.
+
+| test | why it failed on Linux |
+|---|---|
+| `IsUnderDirectory_HandlesContainmentAndSiblingPrefix` ×2 | data was `@"C:\base\sub\file.txt"`; the helper compares against `Path.DirectorySeparatorChar`, which is `/` on Unix, so that string is one filename containing backslashes and is not under `C:\base` |
+| `ValidateUserPath_AbsolutePath_Throws` | data was `"C:\Windows\System32"`; the validator asks `Path.IsPathRooted`, and a drive letter means nothing on Unix, so nothing was thrown |
+
+**The product is correct in both cases** — `PathHelper` and `PathValidator` are deliberately
+platform-aware, and they behaved correctly on each platform. The test *data* was Windows-only.
+Rebuilt at runtime from `Path.DirectorySeparatorChar` and `OperatingSystem.IsWindows()`, keeping
+every original case. A companion test pins the other side of the switch (on Unix a drive-letter
+string is not rooted and is accepted) so that reads as a decision rather than a gap; traversal is
+still refused by the `..` check on both platforms, which is what carries the security property.
+
+## 4. Intermittent, NOT reproduced — INSTRUMENTED, still open
 
 `Birko.Communication.REST.Tests` · `RestClientCacheTests.GetClient_ConcurrentAccess_DoesNotCorruptCache`
 

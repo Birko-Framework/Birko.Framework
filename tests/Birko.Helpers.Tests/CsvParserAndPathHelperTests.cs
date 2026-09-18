@@ -98,12 +98,34 @@ public class CsvParserAndPathHelperTests
 
     // ── PathHelper.IsUnderDirectory ─────────────────────────
 
+    /// <summary>
+    /// The same five containment cases, built with THIS platform's root and separator.
+    /// </summary>
+    /// <remarks>
+    /// TASK-459: these were <c>[InlineData(@"C:\base\sub\file.txt", @"C:\base", true)]</c> and passed
+    /// for years because they had only ever run on Windows. <c>IsUnderDirectory</c> compares against
+    /// <see cref="Path.DirectorySeparatorChar"/>, which is <c>/</c> on Unix — so on Linux
+    /// <c>C:\base\sub\file.txt</c> is a single filename that happens to contain backslashes, is not
+    /// under <c>C:\base</c>, and the assertion failed. The PRODUCT is correct and platform-aware;
+    /// the data was not. Building the paths here keeps every case and states the rule on either
+    /// platform.
+    /// </remarks>
+    public static TheoryData<string, string, bool> ContainmentCases()
+    {
+        var root = OperatingSystem.IsWindows() ? @"C:\" : "/";
+        var s = Path.DirectorySeparatorChar;
+        return new TheoryData<string, string, bool>
+        {
+            { $"{root}base{s}sub{s}file.txt",   $"{root}base", true },
+            { $"{root}base",                    $"{root}base", true },  // identical path
+            { $"{root}base{s}",                 $"{root}base", true },  // trailing separator
+            { $"{root}base-sibling{s}file.txt", $"{root}base", false }, // sibling-prefix must NOT match
+            { $"{root}other{s}file.txt",        $"{root}base", false },
+        };
+    }
+
     [Theory]
-    [InlineData(@"C:\base\sub\file.txt", @"C:\base", true)]
-    [InlineData(@"C:\base", @"C:\base", true)]                 // identical path
-    [InlineData(@"C:\base\", @"C:\base", true)]                // trailing separator
-    [InlineData(@"C:\base-sibling\file.txt", @"C:\base", false)] // sibling-prefix must NOT match
-    [InlineData(@"C:\other\file.txt", @"C:\base", false)]
+    [MemberData(nameof(ContainmentCases))]
     public void IsUnderDirectory_HandlesContainmentAndSiblingPrefix(string fullPath, string dir, bool expected)
     {
         PathHelper.IsUnderDirectory(fullPath, dir).Should().Be(expected);

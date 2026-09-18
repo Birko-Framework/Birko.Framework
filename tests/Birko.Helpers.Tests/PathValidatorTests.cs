@@ -47,14 +47,45 @@ public class PathValidatorTests
         act.Should().Throw<ArgumentException>().WithMessage("*traversal*");
     }
 
+    /// <summary>
+    /// Paths that are rooted ON THIS PLATFORM, which is what <c>ValidateUserPath</c> refuses.
+    /// </summary>
+    /// <remarks>
+    /// TASK-459: <c>"C:\Windows\System32"</c> was an unconditional <c>[InlineData]</c> and passed for
+    /// years because it had only ever run on Windows. The validator asks
+    /// <see cref="Path.IsPathRooted(string)"/>, which is platform-dependent by design — a drive
+    /// letter means nothing on Unix, so on Linux that string is an ordinary relative filename and
+    /// nothing was thrown. <c>/etc/passwd</c> is rooted on BOTH (a leading slash is rooted on Windows
+    /// too), so it is the case that carries the rule everywhere.
+    /// </remarks>
+    public static TheoryData<string> RootedPaths()
+    {
+        var data = new TheoryData<string> { "/etc/passwd" };
+        if (OperatingSystem.IsWindows()) data.Add("C:\\Windows\\System32");
+        return data;
+    }
+
     [Theory]
-    [InlineData("/etc/passwd")]
-    [InlineData("C:\\Windows\\System32")]
+    [MemberData(nameof(RootedPaths))]
     public void ValidateUserPath_AbsolutePath_Throws(string path)
     {
         var act = () => PathValidator.ValidateUserPath(path);
 
         act.Should().Throw<ArgumentException>().WithMessage("*Absolute*");
+    }
+
+    [Fact]
+    public void ValidateUserPath_DriveLetterOnUnix_IsNotRootedAndIsAccepted()
+    {
+        // The other side of the switch above, asserted so it reads as a decision rather than a gap:
+        // on Unix a drive-letter string is NOT an absolute path, so the validator accepts it as an
+        // ordinary relative name. Traversal is still refused by the ".." check regardless of
+        // platform, which is what actually carries the security property here.
+        if (OperatingSystem.IsWindows()) return;
+
+        var act = () => PathValidator.ValidateUserPath("C:\\Windows\\System32");
+
+        act.Should().NotThrow();
     }
 
     [Fact]
