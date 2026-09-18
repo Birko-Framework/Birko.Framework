@@ -194,6 +194,38 @@ public class AzureKeyVaultSecretProviderTests
     }
 
     [Fact]
+    public async Task ListSecretsAsync_NonHttpSecretId_IsSkipped()
+    {
+        // TASK-459: the test above is platform-dependent as a guard. "/secrets/relative-only" is an
+        // absolute file: URI on Unix and unparseable on Windows, so on Windows it passes with or
+        // without the scheme check and proves nothing there - a revert that fails nothing is a
+        // missing test. This states the rule directly and fails on BOTH platforms without the fix:
+        // a secret id is an https URL, and something that merely parses as an absolute URI is not
+        // one.
+        var listResponse = JsonSerializer.Serialize(new
+        {
+            value = new[]
+            {
+                new { id = "file:///secrets/not-a-secret" },
+                new { id = "ftp://host/secrets/also-not" },
+                new { id = "https://test.vault.azure.net/secrets/good-key" }
+            }
+        });
+
+        var handler = new SequentialHttpHandler(
+            (HttpStatusCode.OK, JsonSerializer.Serialize(new { access_token = "token", expires_in = 3600 })),
+            (HttpStatusCode.OK, listResponse)
+        );
+        var httpClient = new HttpClient(handler);
+        var settings = new AzureKeyVaultSettings("https://test.vault.azure.net/", "t", "c", "s");
+        using var provider = new AzureKeyVaultSecretProvider(settings, httpClient);
+
+        var result = await provider.ListSecretsAsync();
+
+        result.Should().ContainSingle().Which.Should().Be("good-key");
+    }
+
+    [Fact]
     public async Task GetSecretPairsAsync_ReturnsSingleValueEntry()
     {
         // CR-L338: the concrete override surfaces the single-valued default behavior — one "value" entry.

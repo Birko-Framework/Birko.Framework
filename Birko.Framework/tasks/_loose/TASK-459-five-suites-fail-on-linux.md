@@ -3,7 +3,7 @@ id: TASK-459
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: review
 priority: P2
 assignee: ai
 created: 2026-09-18
@@ -20,37 +20,83 @@ jira-key: null
 
 ## Context
 
-[[TASK-457]] added `build-and-test.yml`, which is the **first CI this framework has ever had** beyond
-`token-parity.yml`. The old polyrepo had no build or test workflow at all, so **166 of the 167 test
-projects had never run on anything but Windows** — seven years of Windows-only development and
-testing.
+[[TASK-457]] added `build-and-test.yml`, the **first CI this framework has ever had** beyond
+`token-parity.yml`. The old polyrepo had no build or test workflow, so **166 of the 167 test projects
+had never run on anything but Windows** — seven years of Windows-only development.
 
-The first full Linux run was **162 of 167 suites green**. The five below are genuine cross-platform
-findings, not migration fallout: **all five pass locally on Windows**, verified immediately after the
-CI run.
+First full Linux run: **162 of 167 suites green.** The failures were three different things and
+needed three different answers.
 
-(A sixth suite, `Birko.DesignTokens.Tests`, also failed and is *not* in scope: its 19 failures are
+(`Birko.DesignTokens.Tests` also failed, 19 tests, and is *not* part of this: its failures are
 environmental — `CssParityTests` compares against `Birko.Web.Components/css/` in the other repo, and
-`token-parity.yml` is the only workflow that assembles `BIRKO_SRC` plus a `Birko.Web` checkout. It is
-now skipped in `build-and-test.yml` and covered there, where it passes.)
+`token-parity.yml` is the only workflow that assembles `BIRKO_SRC` plus a `Birko.Web` checkout, where
+it passes. Now skipped in `build-and-test.yml` with the reason in place.)
 
-## The failures
+## 1. Product defect that Windows hides — FIXED
 
-| Suite | Test | Note |
+`Birko.Security.AzureKeyVault` · `ExtractSecretName` / `ExtractVersion`
+
+`Uri.TryCreate(id, UriKind.Absolute, …)` is not a check for "is this a secret id", and what it accepts
+is **platform-dependent**. Measured on .NET 10:
+
+| input | Windows | Linux |
 |---|---|---|
-| `Birko.Communication.REST.Tests` | `RestClientCacheTests.GetClient_ConcurrentAccess_DoesNotCorruptCache` | Concurrency test on a 2-core runner. Could be a real race the Windows scheduler hides, or a test that assumes more parallelism than a runner gives. **Do not assume "just flaky" — decide which.** |
-| `Birko.Data.Migrations.CosmosDB.Tests` | `DegradedFilterRefusalTests.An_ordinary_filter_is_not_refused` (3 failed in the suite) | Only one distinct name surfaced in the log; confirm whether the other two are the same test in sibling classes. |
-| `Birko.Security.AzureKeyVault.Tests` | `AzureKeyVaultSecretProviderTests.ListSecretsAsync_MalformedSecretId_SkipsEntryWithoutThrowing` | A malformed-URI path. URI/path parsing is a classic Windows/Linux divergence. |
+| `/secrets/relative-only` | `false` — skipped | **`true`, scheme `file`, 3 segments** |
 
-## Acceptance
+So on Linux a malformed id yields the secret name `relative-only` instead of being skipped. CR-L340's
+original fix read as correct for exactly one reason: it had only ever been executed on Windows — and
+**the framework deploys in Linux containers, so the wrong answer was the one that shipped.**
 
-1. **Reproduce each on Linux before changing anything** — Docker with the `mcr.microsoft.com/dotnet/sdk`
-   image is enough; do not reason from the Windows result.
-2. **For each, decide which of two things it is, and say which**: a product defect that Windows hides,
-   or a test that encodes a Windows assumption. The remedies are opposite — fix the code, or fix the
-   test — and this file's § Conventions records repeatedly that picking the wrong one ships a narrower
-   bug.
-3. The concurrency one specifically: a test that passes because a scheduler happens to serialise it is
-   not passing for a reason. Establish whether `RestClientCache` has a real race.
-4. Green `build-and-test` on Linux without weakening an assertion to get there. If a test genuinely
-   cannot hold on Linux, skip it **with a stated reason**, not silently.
+Fixed with `TryParseSecretId`, which additionally requires an http/https scheme (http only because
+test doubles and emulators use it).
+
+**The pre-existing test could not have caught this on Windows**, so a new one was added
+(`ListSecretsAsync_NonHttpSecretId_IsSkipped`) that states the rule directly with `file:` and `ftp:`
+ids. Mutation-verified on Windows: removing the scheme check reds exactly that test, 1 of 28.
+
+## 2. Test bug — FIXED
+
+`Birko.Data.Migrations.CosmosDB.Tests` · `DegradedFilterRefusalTests.ShouldNotBeRefused` (3 tests)
+
+`Task.Wait(timeout)` **rethrows** as `AggregateException` when the task has already faulted; it only
+returns a bool when the task is still running or completed cleanly. The helper's intent is *"a
+connection error is fine, a refusal is not"*, and it inspects the exception on the line below — but
+the `Wait` threw first.
+
+On Windows the unreachable endpoint never resolves inside the 2-second grace period, so the timeout
+branch was always taken and the rethrow was **unreachable**. On Linux the connection is refused
+immediately (`Connection refused (localhost:1)`), the task faults in milliseconds, and the throw
+escaped as a failure — reporting a *connection* error as though the guard had misbehaved.
+
+Fixed by catching the `AggregateException` and falling through to the existing inspection, which
+preserves the intent exactly. The product code was never at fault.
+
+## 3. Intermittent, NOT reproduced — INSTRUMENTED, still open
+
+`Birko.Communication.REST.Tests` · `RestClientCacheTests.GetClient_ConcurrentAccess_DoesNotCorruptCache`
+
+Failed **once** in CI and has not reproduced: 5 clean runs in a Linux container, including
+CPU-limited, plus green on Windows. **No assertion message was captured**, because the workflow ran
+`dotnet test -v q`, which suppresses the detail.
+
+Ruled out by reading, not by guessing: `ConcurrentDictionary.GetOrAdd(key, factory)` may invoke the
+factory more than once under contention, but `TryAddInternal` returns the value **actually in the
+dictionary**, so every caller still receives the same instance and the test's
+`seen.Distinct().Should().HaveCount(40)` assertion is sound. What that does leave is discarded
+`RestClient` instances, each owning an undisposed `HttpClientHandler` + `HttpClient` — a plausible
+resource-pressure story on a 2-core runner, but **unverified and not to be treated as the cause
+without evidence**.
+
+**What was done instead of a speculative fix:** `build-and-test.yml` now writes a `.trx` per suite and
+uploads them as an artifact on failure, so the next occurrence carries its assertion text and stack.
+
+## Remaining acceptance
+
+1. When it recurs, read the `.trx` from the run artifact before changing anything.
+2. Then decide which it is: a real race, resource exhaustion from `GetOrAdd`'s discarded instances, or
+   a test that assumes more parallelism than a runner provides. **The remedies are opposite** — this
+   file's § Conventions records repeatedly that picking the wrong one ships a narrower bug.
+3. If it turns out to be the discarded instances, the fix is `ConcurrentDictionary<string,
+   Lazy<RestClient>>` with `LazyThreadSafetyMode.ExecutionAndPublication`, which constructs exactly
+   once per key. Do not apply that pre-emptively — it is a guess until the `.trx` says so.
+4. Do not weaken the assertion to get green.

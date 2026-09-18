@@ -91,11 +91,28 @@ public class DegradedFilterRefusalTests
         var task = System.Threading.Tasks.Task.Run(
             () => Migrator().DeleteDocuments("Widgets", filterJson!));
 
-        if (!task.Wait(TimeSpan.FromSeconds(2)))
+        // TASK-459: Task.Wait(timeout) RETHROWS as AggregateException when the task has already
+        // faulted — it only returns a bool when the task is still running or completed cleanly. On
+        // Windows the unreachable endpoint never resolves inside the grace period, so this always
+        // took the timeout branch and the rethrow was unreachable. On Linux the connection is
+        // refused immediately (measured: "Connection refused (localhost:1)"), the task faults in
+        // milliseconds, and the throw escaped as a test failure — reporting a *connection* error as
+        // though the guard had misbehaved. Swallowing it here is correct precisely because a fast
+        // failure is not the thing under test: what follows inspects the exception, and a
+        // WholeTableWriteException is the only outcome that fails.
+        try
         {
-            // Still going, so it is past the guard and out on the wire. That is the pass condition.
-            // The task is left to die with the test process; it holds no resource of ours.
-            return;
+            if (!task.Wait(TimeSpan.FromSeconds(2)))
+            {
+                // Still going, so it is past the guard and out on the wire. That is the pass
+                // condition. The task is left to die with the test process; it holds no resource
+                // of ours.
+                return;
+            }
+        }
+        catch (AggregateException)
+        {
+            // Faulted fast. Fall through and inspect what it faulted WITH.
         }
 
         task.Exception?.Flatten().InnerException

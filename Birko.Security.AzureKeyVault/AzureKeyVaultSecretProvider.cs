@@ -279,12 +279,40 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
         };
     }
 
+    /// <summary>
+    /// Parses a vault secret id, answering false for anything that is not one.
+    /// </summary>
+    /// <remarks>
+    /// TASK-459: <c>UriKind.Absolute</c> alone is NOT the check, and what it accepts is
+    /// platform-dependent. On Unix a leading-slash path IS an absolute <c>file:</c> URI, so
+    /// <c>/secrets/relative-only</c> parses with three segments and yields the secret name
+    /// <c>relative-only</c> — a malformed id silently becoming a real name. On Windows the same
+    /// string fails to parse and is skipped, which is why CR-L340's fix read as correct: it had
+    /// only ever been executed on Windows. Measured on .NET 10:
+    /// <c>Uri.TryCreate("/secrets/relative-only", UriKind.Absolute, out _)</c> is <c>false</c> on
+    /// Windows and <c>true</c> with <c>Scheme == "file"</c> on Linux — and this framework deploys
+    /// in Linux containers, so the wrong answer was the one that shipped.
+    /// <para>
+    /// The scheme is therefore part of the identity: a Key Vault secret id is an https URL. http is
+    /// accepted only because test doubles and local emulators use it. Anything else is not a secret
+    /// id, however well it parses.
+    /// </para>
+    /// </remarks>
+    private static bool TryParseSecretId(string? secretId, out Uri? uri)
+    {
+        uri = null;
+        if (!Uri.TryCreate(secretId, UriKind.Absolute, out var parsed)) return false;
+        if (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp) return false;
+        uri = parsed;
+        return true;
+    }
+
     private static string? ExtractSecretName(string? secretId)
     {
         // CR-L340: tolerate a relative/malformed id (return null) instead of letting new Uri(...) throw
         // UriFormatException up through ListSecretsAsync/GetSecretWithMetadataAsync.
-        if (!Uri.TryCreate(secretId, UriKind.Absolute, out var uri)) return null;
-        var segments = uri.Segments;
+        if (!TryParseSecretId(secretId, out var uri)) return null;
+        var segments = uri!.Segments;
         // /secrets/name or /secrets/name/version
         return segments.Length >= 3 ? segments[2].TrimEnd('/') : null;
     }
@@ -292,8 +320,8 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
     private static string? ExtractVersion(string? secretId)
     {
         // CR-L340: tolerate a relative/malformed id (return null) instead of throwing UriFormatException.
-        if (!Uri.TryCreate(secretId, UriKind.Absolute, out var uri)) return null;
-        var segments = uri.Segments;
+        if (!TryParseSecretId(secretId, out var uri)) return null;
+        var segments = uri!.Segments;
         return segments.Length >= 4 ? segments[3].TrimEnd('/') : null;
     }
 

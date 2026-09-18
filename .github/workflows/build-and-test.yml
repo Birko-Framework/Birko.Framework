@@ -49,13 +49,29 @@ jobs:
       # workflow that assembles what it needs: BIRKO_SRC plus a checkout of Birko.Web, because
       # CssParityTests compares against Birko.Web.Components/css/ in the other repo. Running it in
       # this job is not extra safety, it is a guaranteed 19 failures in the wrong environment.
+      # The --logger trx + artifact upload exist because a failure was once lost: a run reported
+      # RestClientCacheTests.GetClient_ConcurrentAccess_DoesNotCorruptCache [FAIL] with no message,
+      # because -v q suppresses the detail, and it then would not reproduce locally (5 clean Linux
+      # runs, CPU-limited). An intermittent whose identity is not captured costs a whole
+      # investigation; the trx keeps the assertion text and stack for the next occurrence.
       - name: Run offline suites
         working-directory: birko/Framework
         run: |
           fail=0
+          mkdir -p TestResults
           for p in tests/*/; do
             name=$(basename "$p")
             case "$name" in Birko.DesignTokens.Tests) echo "skipping $name (owned by token-parity.yml)"; continue;; esac
-            dotnet test "$p" --nologo -v q --no-build || { echo "::error::$name failed"; fail=1; }
+            dotnet test "$p" --nologo -v q --no-build \
+              --logger "trx;LogFileName=$name.trx" --results-directory TestResults \
+              || { echo "::error::$name failed"; fail=1; }
           done
           exit $fail
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: birko/Framework/TestResults/*.trx
+          if-no-files-found: warn
