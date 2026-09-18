@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>c8f4b2d5-e3a6-4f9b-a7c1-2d4e6f8a0b3c</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Security.NFC</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)NfcAuthResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)NfcTagMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)NfcAuthSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)INfcAuthProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)NfcAuthProvider.cs" />
+  </ItemGroup>
+</Project>
