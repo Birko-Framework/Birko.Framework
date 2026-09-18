@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>e6f7a8b9-c0d1-4e2f-3a4b-5c6d7e8f9a0b</SharedGUID>
+    <!-- Include-guard sentinel: parents that nest-import this file condition their import on
+         this NOT being set, so an aggregator listing the full closure doesn't double-import
+         (MSB4011). Set by any import of this file. -->
+    <BirkoTimeAbstractionsProjitemsImported>true</BirkoTimeAbstractionsProjitemsImported>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Time</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IDateTimeProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\SystemDateTimeProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\TestDateTimeProvider.cs" />
+  </ItemGroup>
+</Project>
