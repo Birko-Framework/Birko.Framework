@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>D4E5F6A7-B8C9-4D7E-9F3A-4B5C6D7E8F9A</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.WebSocket</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- Framework dependency: Microsoft.AspNetCore.App — CONSUMER-SUPPLIED, and never owned by a Birko
+       project. It is not a library this framework wraps; an ASP.NET Core host already has it from
+       Microsoft.NET.Sdk.Web. A non-web host that imports this projitems adds it itself:
+
+         <FrameworkReference Include="Microsoft.AspNetCore.App" />
+
+       This is stricter than an ordinary package, which is why the rule is absolute: a duplicate
+       FrameworkReference is NETSDK1087, a hard ERROR that cannot be suppressed, where a duplicate
+       PackageReference is only NU1504. Four Birko projitems use ASP.NET Core types and none of them
+       declares it (TASK-234).
+
+       Note Birko.Data.Tenant DOES declare it, which predates this rule. Any consumer importing that
+       project alongside this one already has the reference, and declaring it here would break every
+       such consumer at once. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Ports\WebSocketPort.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Servers\WebSocketServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\WebSocketAuthenticationConfiguration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\WebSocketAuthenticationService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\WebSocketEndpointExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\WebSocketMiddleware.cs" />
+  </ItemGroup>
+</Project>
