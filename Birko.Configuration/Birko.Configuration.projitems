@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a3b4c5d6-e7f8-4a9b-8c0d-1e2f3a4b5c6e</SharedGUID>
+    <!-- Include-guard sentinel: parents that nest-import this file condition their import on
+         this NOT being set, so an aggregator listing the full closure doesn't double-import
+         (MSB4011). Set by any import of this file. -->
+    <BirkoConfigurationProjitemsImported>true</BirkoConfigurationProjitemsImported>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Configuration</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- Birko.Contracts (ILoadable<T> etc.) imported by consumers via Birko.Data.Core -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Settings.cs" />
+  </ItemGroup>
+</Project>
