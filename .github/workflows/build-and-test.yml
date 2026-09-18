@@ -1,8 +1,16 @@
 # Build the whole solution and run every suite that needs no server.
 #
-# 345 projects build in ~80s, so this is deliberately NOT filtered by path — a change anywhere
-# can break a shared project, and the whole point of the monorepo is that one build proves it.
+# 345 projects build in ~80s, so this is deliberately NOT path-filtered: a change anywhere can
+# break a shared project, and proving that in one build is the point of the monorepo.
 # Server-backed suites live in live-tests.yml.
+#
+# WHY THE BUCKET LAYOUT: Birko.Framework.slnx registers the Sandbox aggregator as
+# ../../Consumers/Birko.Sandbox/Birko.Framework/Birko.Framework.csproj. Sandbox is a CONSUMER and
+# deliberately lives outside this repo, because its whole job is to exercise the $(BirkoSrc)
+# consumption mechanism from the outside, which an in-repo project cannot do. A bare checkout
+# therefore cannot build the solution (measured: MSB3202, project file not found). Reproducing the
+# on-disk bucket layout - Birko/Framework beside Birko/Consumers - makes both the .slnx reference
+# and Sandbox's own Directory.Build.props default resolve exactly as they do locally.
 
 name: build-and-test
 
@@ -16,19 +24,30 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out the framework
+        uses: actions/checkout@v4
+        with:
+          path: birko/Framework
+
+      - name: Check out the Sandbox consumer (registered in the .slnx)
+        uses: actions/checkout@v4
+        with:
+          repository: Birko-Framework/Birko.Sandbox
+          path: birko/Consumers/Birko.Sandbox
+          token: ${{ secrets.BIRKO_CI_TOKEN || github.token }}
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
       - name: Build the solution
-        run: dotnet build Birko.Framework/Birko.Framework.slnx --nologo
+        run: dotnet build birko/Framework/Birko.Framework/Birko.Framework.slnx --nologo
 
-      # BIRKO_REQUIRE_LIVE is deliberately NOT set: suites that need a server skip themselves here
-      # and are covered by live-tests.yml. Setting it would turn every skip into a failure.
+      # BIRKO_REQUIRE_LIVE is deliberately NOT set: suites needing a server skip themselves here and
+      # are covered by live-tests.yml. Setting it would turn every one of those skips into a failure.
       - name: Run offline suites
+        working-directory: birko/Framework
         run: |
-          set -o pipefail
           fail=0
           for p in tests/*/; do
             name=$(basename "$p")
