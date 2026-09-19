@@ -1,6 +1,6 @@
 ---
 id: FEATURE-009
-generated: 2026-08-01
+generated: 2026-09-19
 ---
 
 # Birko.Communication — Remaining protocols — Status

@@ -1,6 +1,6 @@
 ---
 id: FEATURE-015
-generated: 2026-08-01
+generated: 2026-09-19
 ---
 
 # Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — Status

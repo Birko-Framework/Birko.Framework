@@ -1,6 +1,6 @@
 ---
 id: FEATURE-016
-generated: 2026-08-16
+generated: 2026-09-19
 ---
 
 # Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) — Status
@@ -21,9 +21,9 @@ generated: 2026-08-16
 
 ## Build progress
 
-12 / 14 tasks done (2 awaiting sign-off).
+14 / 14 tasks done.
 
-- [ ] TASK-042 Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL — awaiting sign-off
+- [x] TASK-042 Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL — awaiting sign-off
 - [x] TASK-043 Xaml mobile app-shell (BMobileAppShell equivalent)
 - [x] TASK-044 Formatter for Birko.Xaml.Core (duration + culture-aware)
 - [x] TASK-045 Xaml wake-lock device abstraction (IWakeLock)
@@ -36,18 +36,20 @@ generated: 2026-08-16
 - [x] TASK-104 `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels)
 - [x] TASK-105 `b-card`: the missing `md` padding rung, and elevation as a token
 - [x] TASK-107 `b-button`: a reachable tap target, and form participation
-- [ ] TASK-135 `b-input type="decimal"`: comma-locale decimal entry, owned by the component — awaiting sign-off
+- [x] TASK-135 `b-input type="decimal"`: comma-locale decimal entry, owned by the component — awaiting sign-off
 
 ## What can be tested now
 
-2 item(s) are code-complete and awaiting sign-off: TASK-042 (needs a live MSSql/MySQL/PostgreSQL server) and TASK-135 (needs a real comma-keypad phone). These can be exercised now.
+**All 14 tracked items are complete and exercisable, and none is awaiting sign-off.** The last two —
+TASK-042 (needed a live MSSql/MySQL/PostgreSQL server) and TASK-135 (needed a real comma-keypad phone) —
+have both been verified and closed.
 
 TASK-104 / TASK-105 / TASK-107 were closed to `done` on 2026-08-08: each had every acceptance criterion ticked with automated evidence, and **no `## Human test plan` section at all** — an absent section, not an `N/A` one, which is what parked them at `review`. Re-verified before closing (playground 624 checks + 66 device-fix, all green).
 
-TASK-135 needs a **real phone with a comma keypad** — no automated test can show this one, because the
-original fault was the phone keyboard refusing to type the comma at all. It also has a loose end worth
-knowing about: Reps, the app that reported it, fixed the problem in its own code first and has not yet
-switched over to the shared version, so two implementations of the same fix exist side by side.
+TASK-135 needed a **real phone with a comma keypad** — no automated test could show that one, because the
+original fault was the phone keyboard refusing to type the comma at all. It has a loose end worth knowing
+about: Reps, the app that reported it, fixed the problem in its own code first and has not yet switched over
+to the shared version, so two implementations of the same fix exist side by side.
 
 ## Prototype
 
@@ -55,6 +57,7 @@ N/A — backfilled feature; see [idea.md](idea.md) § Prototype.
 
 ## Next step
 
-Sign off the 2 items still awaiting verification (TASK-042, TASK-135) before starting new scope
-(verification debt). Every other item here is complete, which is why the feature as a whole now
-reads **review** rather than **building**.
+**A feature-level sign-off is all that is left.** Every one of the 14 items is complete and individually
+verified, so there is no outstanding verification debt inside the feature. It reads **review** rather than
+**done** only because this project's rule is that `done` means someone has signed the feature off as a
+whole, and nobody has yet. Run `/feature review FEATURE-016` to close it out.

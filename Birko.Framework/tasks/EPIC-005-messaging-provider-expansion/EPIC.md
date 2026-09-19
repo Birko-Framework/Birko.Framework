@@ -16,8 +16,8 @@ Added 2026-09-19: **dual-channel providers**, whose single API serves email *and
 and Mailjet ([[TASK-472]]). They are **epic-direct**, not under a story, because the stories below split by
 channel and a dual-channel provider belongs to two of them at once; splitting one per channel would
 duplicate the client, settings and error mapping. Their scope decision is `D4` in
-[FEATURE-005's ledger](../../docs/features/FEATURE-005-messaging-provider-expansion/decisions.md) and is
-still `proposed` — the tasks were filed ahead of it.
+[FEATURE-005's ledger](../../docs/features/FEATURE-005-messaging-provider-expansion/decisions.md),
+**approved 2026-09-19**.
 
 ## Success criteria
 

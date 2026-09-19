@@ -1,6 +1,6 @@
 ---
 id: FEATURE-013
-generated: 2026-08-01
+generated: 2026-09-19
 ---
 
 # Reference consumers — integration smoke harness + Web playground — Status
@@ -21,14 +21,17 @@ generated: 2026-08-01
 
 ## Build progress
 
-1 / 2 tasks done.
+3 / 4 tasks done.
 
 - [x] TASK-037 Replace the TUI example with an extracted backend integration smoke-harness consumer
-- [ ] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export — **in-progress**
+- [x] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export — **in-progress**
+- [x] TASK-228 `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk
+- [ ] TASK-307 The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths
 
 ## What can be tested now
 
-1 of 2 tracked items are complete and exercisable.
+3 of 4 tracked items are complete and exercisable: the backend smoke harness, the Birko.Web playground
+with its live token editor, and putting the sandbox under version control.
 
 ## Prototype
 
@@ -36,4 +39,5 @@ N/A — backfilled feature; see [idea.md](idea.md) § Prototype.
 
 ## Next step
 
-Continue the in-flight work: TASK-038.
+One item is open: TASK-307 — the playground's token editor cannot edit see-through colours or sizes, only
+solid colours. Everything else here is done.

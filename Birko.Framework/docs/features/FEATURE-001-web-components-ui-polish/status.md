@@ -1,6 +1,6 @@
 ---
 id: FEATURE-001
-generated: 2026-08-01
+generated: 2026-09-19
 ---
 
 # Birko.Web.Components — UI polish — Status
@@ -21,29 +21,32 @@ generated: 2026-08-01
 
 ## Build progress
 
-4 / 13 tasks done.
+9 / 15 tasks done.
 
-- [ ] TASK-001 Add `bare` attribute to all form controls — **review**
-- [ ] TASK-002 Benchmark + migrate b-editable-table to bare components — **review**
+- [x] TASK-001 Add `bare` attribute to all form controls
+- [x] TASK-002 Benchmark + migrate b-editable-table to bare components
 - [ ] TASK-003 size attribute on b-pagination, b-dropdown-menu, b-breadcrumb
-- [ ] TASK-035 Make form controls form-associated via ElementInternals — **review**
+- [x] TASK-035 Make form controls form-associated via ElementInternals
 - [x] TASK-039 b-chart: coerce/validate a unitless `height` (avoid endless SVG stretch)
 - [x] TASK-040 Add a `b-accordion` (collapsible / disclosure group) component
 - [x] TASK-041 Extract a shared `coerceCssLength` helper and fix the unitless-length bug across components
 - [x] TASK-053 b-range: vertical orientation (equalizer-style slider)
-- [ ] TASK-091 `description` — a persistent help-text row on the form controls — **review**
-- [ ] TASK-136 Forms now catch text that isn't a number, instead of accepting it and saving nothing — **review**
+- [x] TASK-091 `description` — a persistent help-text row on the form controls
+- [x] TASK-136 Forms now catch text that isn't a number, instead of accepting it and saving nothing
 - [ ] TASK-132 "Required" on a tick box or toggle currently does nothing — an unticked box counts as answered
 - [ ] TASK-133 A multiple-choice (radio) question's answer is never saved, and marking it required makes the form impossible to submit
 - [ ] TASK-134 Decide whether the form should start rejecting more kinds of invalid input than it does today — **awaiting decision**
+- [ ] TASK-466 Firefox shows no validation bubble for an invalid `b-*` control, and logs an error instead
+- [ ] TASK-467 Borrowed validity enforces nothing, silently, where the engine lacks the input type
 
 ## What can be tested now
 
-5 item(s) are code-complete and awaiting sign-off: TASK-001, TASK-002, TASK-035, TASK-091, TASK-136. These can be exercised now.
+9 of 15 tracked items are complete and exercisable. **Nothing is awaiting sign-off any more** — the five
+that were (TASK-001, TASK-002, TASK-035, TASK-091, TASK-136) have all been verified and closed.
 
-TASK-136 is the one with a specific thing to try, in Symbio: open a tax rate, type letters into the
-percentage box and save. It must refuse, and the stored percentage must be unchanged. That second half is
-the fault it was written for — before the fix, an edit reported success and quietly kept the old figure.
+TASK-136's check was the one with a specific thing to try, in Symbio: open a tax rate, type letters into the
+percentage box and save. It refuses, and the stored percentage is unchanged. That second half is the fault
+it was written for — before the fix, an edit reported success and quietly kept the old figure.
 
 ## Prototype
 
@@ -51,10 +54,14 @@ N/A — backfilled feature; see [idea.md](idea.md) § Prototype.
 
 ## Next step
 
-Sign off the 5 item(s) in review before starting new scope (verification debt).
+Pick up the next open item. Nothing here is blocked on verification any longer.
 
-Two newly-found faults are queued behind that (TASK-132, TASK-133). Neither affects anything shipped —
+Two newly-found faults lead the queue (TASK-132, TASK-133). Neither affects anything shipped —
 nothing in any of the 16 apps built on this library uses the two settings involved — which is why they went
 unnoticed, and why fixing them now cannot break an existing screen. The third item (TASK-134) is a
 **question, not work**: it would make forms reject more kinds of bad input, which is visible to users, so it
 waits for a decision (D8) rather than being built.
+
+Two more were added since this file was last generated — TASK-466 (a browser shows no validation message and
+logs an error instead) and TASK-467 (a validity rule that silently enforces nothing where the browser lacks
+the input type). Both are faults in what already ships.

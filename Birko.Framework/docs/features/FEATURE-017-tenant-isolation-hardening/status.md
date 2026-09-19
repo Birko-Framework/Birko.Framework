@@ -1,6 +1,6 @@
 ---
 id: FEATURE-017
-generated: 2026-08-16
+generated: 2026-09-19
 ---
 
 # Tenant isolation hardening — Status

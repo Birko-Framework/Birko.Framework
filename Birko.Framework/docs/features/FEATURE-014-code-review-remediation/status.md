@@ -1,6 +1,6 @@
 ---
 id: FEATURE-014
-generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329, then TASK-308)
+generated: 2026-09-19
 ---
 
 # Code review — audit remediation — Status
@@ -21,15 +21,7 @@ generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329, then 
 
 ## Build progress
 
-101 / 188 tasks done (1 awaiting sign-off).
-
-> ⚠ **This file is a PARTIAL refresh, not a full `/feature status` regen.** The counts above were
-> re-measured 2026-09-09 at TASK-308's close and are accurate; the list below is not — it carries 147
-> of the feature's 188 tasks, because 41 were filed after this file was last fully generated
-> (2026-08-19). That gap is the same drift `tasks/README.md` reports as **DV9 ×62** (the feature's
-> `decisions.md` `→ Tasks` column does not know about 63 of its own tasks), owned by [[TASK-251]].
-> Run `/feature status FEATURE-014` for the real thing. Refreshing the counts while saying the list is
-> short beats leaving `69 / 140`, which was wrong in both numbers.
+112 / 199 tasks done.
 
 - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
@@ -42,7 +34,7 @@ generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329, then 
 - [x] TASK-115 A nested `WithTenant` does not narrow reads inside an all-tenants scope
 - [x] TASK-116 `RuleSpecification` leaves degrade to match-all — on the destructive paths
 - [x] TASK-117 `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set
-- [ ] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id`  _(review)_
+- [x] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id`
 - [x] TASK-125 `ReadOne` queries the connector directly, bypassing every store decorator
 - [x] TASK-126 `TagServiceBase` states its tenant contract in a comment and enforces nothing
 - [x] TASK-128 The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover
@@ -97,7 +89,7 @@ generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329, then 
 - [ ] TASK-192 Triage the 10 low spec-harvest findings in `schema-index-and-ddl`
 - [ ] TASK-193 Triage the 10 low spec-harvest findings in `repository-contract`
 - [ ] TASK-194 Triage the 10 low spec-harvest findings in `entity-localization`
-- [ ] TASK-195 Rate, ID and fold the 16 recovered findings into the severity backlog
+- [x] TASK-195 Rate, ID and fold the 16 recovered findings into the severity backlog
 - [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day
 - [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down
 - [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently
@@ -145,31 +137,31 @@ generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329, then 
 - [x] TASK-249 Four close-gate findings on TASK-245 — including a second injection sink its own rule pointed at
 - [x] TASK-250 A spec source glob is not a git pathspec, so the staleness check never saw 124 files
 - [ ] TASK-251 Regen the three wide-surface spec areas DV7 still reports
-- [ ] TASK-252 Six latent per-provider gaps found while closing the index-DDL thread
+- [x] TASK-252 Six latent per-provider gaps found while closing the index-DDL thread
 - [x] TASK-253 The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel
 - [x] TASK-254 A hypertable conversion that cannot succeed now bricks the store instead of degrading
-- [ ] TASK-283 A throwing `OnIndexCreationFailed` subscriber defeats TASK-204's degrade and bricks the entity
+- [x] TASK-283 A throwing `OnIndexCreationFailed` subscriber defeats TASK-204's degrade and bricks the entity
 - [x] TASK-255 `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door
-- [ ] TASK-279 `BuildCompressionPolicySql` keeps CR-H070's `orderByColumn = "time"` — the half of the remedy that was a compatibility artefact
-- [ ] TASK-280 `IsHypertable` and `GetChunkInterval` ignore the schema half of the qualified name TASK-262 taught them to accept
+- [x] TASK-279 `BuildCompressionPolicySql` keeps CR-H070's `orderByColumn = "time"` — the half of the remedy that was a compatibility artefact
+- [x] TASK-280 `IsHypertable` and `GetChunkInterval` ignore the schema half of the qualified name TASK-262 taught them to accept
 - [x] TASK-281 A continuous aggregate cannot be created or refreshed inside a transaction — so it may never have worked through the runner at all
-- [ ] TASK-282 The TimescaleDB migration emitters bypass the connector — an option TASK-259 reopened and nobody owns
+- [ ] TASK-282 The TimescaleDB migration emitters bypass the connector — an option TASK-259 reopened and nobody owns _(cancelled)_
 - [x] TASK-256 PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it
 - [x] TASK-257 On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works**
 - [x] TASK-263 There is no way to persist an instant with its offset — the timezone-aware column type is mapped but unreachable
-- [ ] TASK-264 A migration's declared column metadata is dropped on the way to the connector
+- [x] TASK-264 A migration's declared column metadata is dropped on the way to the connector
 - [x] TASK-265 On MySQL a `[UniqueField]`/`[PrimaryField]` unlengthed string emitted `LONGTEXT`, so the table could not be created
-- [ ] TASK-266 Index keys still wrong after TASK-257: a `byte[]` column, and a composite too wide for the key limit
-- [ ] TASK-267 The project-local `verify-conventions` did not run at the close gate, again
+- [x] TASK-266 Index keys still wrong after TASK-257: a `byte[]` column, and a composite too wide for the key limit
+- [x] TASK-267 The project-local `verify-conventions` did not run at the close gate, again
 - [ ] TASK-268 Two small SQL field-mapping gaps found while typing MSSql's string columns
-- [ ] TASK-269 Nothing reports a column whose stored type no longer matches what the model declares
-- [ ] TASK-270 `DataBase.GetConnector` shares one connector process-wide, and three features have put per-caller state on it
+- [x] TASK-269 Nothing reports a column whose stored type no longer matches what the model declares
+- [x] TASK-270 `DataBase.GetConnector` shares one connector process-wide, and three features have put per-caller state on it
 - [ ] TASK-271 The TimescaleDB migration emitters bypass the connector for a reason that no longer exists
 - [ ] TASK-272 An entity cannot say which schema it lives in
-- [ ] TASK-258 `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does
+- [x] TASK-258 `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does
 - [x] TASK-259 `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it
 - [x] TASK-260 `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained
-- [ ] TASK-284 An empty `startOffset` silently widens a refresh policy to all of history
+- [x] TASK-284 An empty `startOffset` silently widens a refresh policy to all of history
 - [x] TASK-261 `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0
 - [x] TASK-262 The migration emitters' identifier rules assume this framework created the object — twice over
 - [x] TASK-273 `CompositeIndex` cannot say "unique only where the column is not null", so a nullable unique index breaks ordinary inserts on MSSql
@@ -182,18 +174,67 @@ generated: 2026-08-19   # counts partially refreshed 2026-09-09 (TASK-329, then 
 - [ ] TASK-330 Decide whether an all-rows update needs a second spelling that takes a change function
 - [x] TASK-308 Seven ways a database filter could quietly mean something other than what it said
 - [ ] TASK-331 An update that computes a value from the record itself sometimes did nothing at all
+- [x] TASK-289 A throwing `OnSchemaEscapeDetected` subscriber reopens TASK-285 and destroys TASK-286's annotation
+- [x] TASK-290 Name the mechanism behind the schema-ensure escape
+- [x] TASK-291 `EnsureSchemaAndReport` rewraps a cancellation as a bare `Exception`, so a client that hung up becomes a 500
+- [x] TASK-292 The per-store transaction door remembers a schema-ensure that was rolled back
+- [x] TASK-293 The escape "anomaly" is decided by a substring of the statement, so it fabricates anomalies
+- [x] TASK-294 A count that hits lock contention is a 500, while a count of a missing table is `0`
+- [x] TASK-295 The escape and heal apparatus is SQLite-only: three providers record no created tables
+- [x] TASK-296 SQLite connection pooling serves a stale schema image, so a freshly created table reads as missing
+- [ ] TASK-298 A migration can declare a column default, and no connector emits one
+- [ ] TASK-299 `FieldDescriptor`'s three index properties are read by nothing, in any backend
+- [ ] TASK-300 A skill instruction is not an enforcement mechanism — only a hook cannot be skipped
+- [ ] TASK-301 `Birko.EventBus.Outbox.SQL` is in the build and in no documentation index
+- [ ] TASK-302 The SQL test suites have leaked ~90,000 temp directories, and every teardown swallows the failure
+- [x] TASK-303 A composite `PRIMARY KEY (a, b)` cannot be declared at all, and TimescaleDB needs one
+- [ ] TASK-304 `AbstractDatabaseModel`'s `[UniqueField]` on `Guid` forbids the composite key TASK-303 just enabled
+- [ ] TASK-305 The default `RetryPolicy` is `None`, so every retry path in the SQL layer is inert — decide whether it should be
+- [ ] TASK-306 Every live provider suite runs ~19 parallel classes against ONE database, and two different failures follow
+- [x] TASK-309 Triage the 7 remaining high spec-harvest findings in `data-sync`
+- [x] TASK-310 Triage the 3 remaining high spec-harvest findings in `caching`
+- [x] TASK-311 Triage the 2 remaining high spec-harvest findings in `tenant-isolation`
+- [x] TASK-312 Triage the 1 remaining high spec-harvest finding in `security-and-authorization`
+- [x] TASK-313 Triage the 4 remaining high spec-harvest findings in `entity-localization`
+- [x] TASK-314 Triage the 5 remaining high spec-harvest findings in `migrations`
+- [x] TASK-315 Triage the 2 remaining high spec-harvest findings in `workflow-state-machine`
+- [x] TASK-316 Triage the 2 remaining high spec-harvest findings in `repository-contract`
+- [ ] TASK-317 Triage the 1 remaining high spec-harvest finding in `background-jobs`
+- [ ] TASK-318 Triage the 1 remaining high spec-harvest finding in `event-bus-and-messaging`
+- [ ] TASK-319 Triage the 1 remaining high spec-harvest finding in `schema-index-and-ddl`
+- [ ] TASK-320 Triage the 1 remaining high spec-harvest finding in `specifications-and-paging`
+- [x] TASK-321 Triage the 1 remaining high spec-harvest finding in `store-crud-contract`
+- [x] TASK-322 Triage the 1 remaining high spec-harvest finding in `views-and-aggregation`
+- [ ] TASK-323 Fix the 3 verified medium findings in `core-model-contracts`
+- [ ] TASK-324 Fix the 1 verified medium finding in `store-lazy-initialization`
+- [ ] TASK-325 Fix the 3 verified medium findings in `unit-of-work-and-transactions`
+- [ ] TASK-326 Fix the 1 verified low finding in `core-model-contracts`
+- [ ] TASK-327 Fix the 3 verified low findings in `unit-of-work-and-transactions`
+- [ ] TASK-328 Decide: should the event↔tenant bridge REFUSE to widen when it cannot establish a tenant?
+- [x] TASK-332 The migration runner's own bookkeeping table could not be created on MySQL or SQL Server
+- [ ] TASK-445 `ConflictResolution.Merge` is a silent no-op, and the enum advertises it as supported
+- [ ] TASK-446 All seven workflow instance stores have zero store-level tests, and that is where two high findings lived
+- [x] TASK-447 A Cosmos view filter's string value breaks out of its own quotes
+- [ ] TASK-448 Two § Conventions entries disagree about what a rendered expression tree leaks, and one sink acts on the wrong one
+- [x] TASK-450 The Cosmos migrator escapes filter values with SQL-standard doubling, which Cosmos does not use
+- [ ] TASK-451 `StoreDataDelegate<T>` declares a return value that 96 call sites discard
+- [ ] TASK-452 The "detach before writing to a store-owned object" rule now has three implementations
+- [ ] TASK-453 Decide whether an unchanged ViewModel save should skip the write
+- [ ] TASK-454 A decorator-hidden row reads as absent, and updating it resurrects it with its columns blanked
+- [ ] TASK-456 `AsyncMongoDBStore.CountIn` dereferences a nullable `Collection` — two CS8602 warnings
 
 ## What can be tested now
 
-30 of 78 tracked items are complete and exercisable, and one more is code-complete awaiting
-sign-off. The denominator keeps growing because fixing a finding keeps uncovering the next one: the
+112 of 199 tracked items are complete and exercisable, and **none is awaiting sign-off** — TASK-118, the
+last one, has been verified and closed. The denominator keeps growing because fixing a finding keeps
+uncovering the next one: the
 2026-08-16 run closed nine items, and **eight of those nine did not exist when it started** — they
 were found while fixing the ninth, mostly by finally being able to run a test suite that had never
 been able to run before. That is the backlog working, not progress reversing; "10 of 18" and
 "21 of 70" were each honest when written.
 
-The one item awaiting sign-off is TASK-118 (tenant header/claim guard). It needs a real
-sign-in-protected test application, which no automated run here can stand up.
+TASK-118 (tenant header/claim guard) was the long-standing exception — it needed a real sign-in-protected
+test application, which no automated run here can stand up. It has since been signed off.
 
 ## Prototype
 
@@ -201,4 +242,5 @@ N/A — backfilled feature; see [idea.md](idea.md) § Prototype.
 
 ## Next step
 
-Sign off TASK-118, the one item awaiting verification, then continue the backlog.
+Continue the backlog — 87 of the 199 items are still open, and nothing is held up waiting for a human to
+verify it.

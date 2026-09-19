@@ -1,6 +1,6 @@
 ---
 id: FEATURE-018
-generated: 2026-08-17
+generated: 2026-09-19
 ---
 
 # Birko.Web.Core — the browser-side runtime — Status
