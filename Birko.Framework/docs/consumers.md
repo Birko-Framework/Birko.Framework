@@ -2,6 +2,16 @@
 
 Birko Framework is consumed by several projects via `.projitems` shared project imports. This document tracks which Birko components each consumer uses.
 
+> ℹ **Lifecycle, recorded 2026-09-19.** **Symbio is the successor product to FisData.Stock.** The
+> five `dev.azure.com/FisData/Stock` repositories are being retired, and **Affiliate** is being
+> transformed to use Symbio as its backend rather than continuing as an independent stack. Both are
+> therefore **out of scope for workspace hygiene** — their uncommitted and unpushed state is expected
+> and should not be reported as debt — and neither needs cloning on a new machine. They are the only
+> Azure DevOps remotes in the family, so a checkout that skips them needs GitHub auth only.
+>
+> Provisional: no retirement date is set, and the sections below are left intact rather than deleted
+> so the component inventory survives the wind-down.
+
 ---
 
 ## Symbio
@@ -176,6 +186,10 @@ Standalone WebSocket client library.
 
 ## Affiliate
 
+> ⚠ **Being re-platformed onto Symbio (2026-09-19)** — Affiliate is not retired, but will consume
+> Symbio as its backend instead of running its own stack. Its `$(BirkoSrc)` wiring is expected to
+> survive; the Birko component list below will not.
+
 **Location:** `C:\Source\Affiliate`
 **Description:** Product/category aggregation platform using Elasticsearch and InfluxDB
 **Birko projects referenced:** 22 (unique across all modules)
@@ -218,6 +232,9 @@ Data import pipeline with JSON and CSV processing.
 ---
 
 ## FisData.Stock
+
+> ⚠ **Retired — succeeded by Symbio (2026-09-19).** Kept for the record of which models were
+> extracted into `Birko.Models.*`, which is the part that outlived the product.
 
 **Location:** `C:\Source\FisData.Stock`
 **Description:** Stock/inventory management (currently inactive — models extracted to Birko.Models.*)
@@ -464,10 +481,14 @@ Single lean aggregator (`Reps.Birko/Reps.Birko.csproj`) consumed by `Reps.Domain
 | Symbio | 50 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES | Full stack: IoT, multi-tenant, event sourcing, health, telemetry |
 | BardStudio | 31 | SQLite | AI/LLM agents, GitHub OAuth, background jobs, Birko.Xaml Avalonia UI |
 | DraCode | 26 | SQLite | WebSocket real-time, event sourcing, in-memory messaging |
-| Affiliate | 22 | Elasticsearch, InfluxDB | Product aggregation, data import/processing |
+| Affiliate ⚠ | 22 | Elasticsearch, InfluxDB | Product aggregation, data import/processing |
 | Presenter | 20 | SQLite | Markdown slide rendering, YAML deck metadata, Birko.Web SPA |
 | WorkoutTracker | 20 | SQLite | User/RBAC models, SQL migrations |
 | Gameshow | 15 | *(in-memory + REST proxy)* | Authoritative WebSocket state, Birko.Web.Shell operator UI |
 | WebFinstatApiTester | 11 | *(none — calls public APIs)* | Vault-backed secrets, health checks, Birko.Web.Shell test harness |
 | Latent | 3 | *(none — filesystem batch tool)* | Birko.Xaml Avalonia UI (tokens/themes), Helpers path safety |
-| FisData.Stock | 0 | *(inactive)* | Models extracted to Birko.Models.* |
+| FisData.Stock ⚠ | 0 | *(inactive)* | Models extracted to Birko.Models.* |
+
+⚠ = winding down; see the Lifecycle note at the top. `Location:` paths throughout this document
+predate the `Birko\{Framework,Web,Consumers}` bucket layout and the monorepo consolidation — consumers
+now live under `C:\Source\Birko\Consumers\`.

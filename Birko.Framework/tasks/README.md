@@ -29,7 +29,7 @@
 > it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays `in-progress`
 > with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-19 (`/tasks triage`, chained from `/tasks new TASK-468`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-19 (`/tasks triage`, chained from `/tasks cancel TASK-235`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
@@ -39,9 +39,9 @@ _Generated 2026-09-19 (`/tasks triage`, chained from `/tasks new TASK-468`). Run
 | todo         | —     | —       | 153   |
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 0     |
-| blocked      | —     | —       | 2     |
+| blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 169   |
-| cancelled    | 0     | 0       | 3     |
+| cancelled    | 0     | 0       | 4     |
 
 `todo` by priority: 32× P1 · 98× P2 · 23× P3.  
 > ℹ Recounted from the files on each refresh rather than incremented — a breakdown that sums correctly
@@ -52,6 +52,12 @@ _Generated 2026-09-19 (`/tasks triage`, chained from `/tasks new TASK-468`). Run
 > dashboard listed on 2026-09-17 were all signed off on 2026-09-19 (TASK-035, TASK-038, TASK-091,
 > TASK-118, TASK-201 and the rest). That is a drained queue, not a dropped section: `review` is
 > rendered in the counts table at 0 rather than omitted, so the distinction stays visible.
+>
+> ⚠ **[[TASK-235]] was cancelled 2026-09-19, not completed** — its subject is
+> `FisData.Stock.Angular.Server`, and Symbio is FisData's successor, so the net10 migration it was
+> `blocked` on will never land. That is the only `blocked` task gone; **TASK-148 remains the single
+> blocked entry**. The file is kept, per the tree's never-delete rule, because the process lesson in
+> its § Context (sweep consumers by ownership, not by path glob) outlives the consumer.
 
 ## In progress now
 
@@ -152,7 +158,7 @@ _None_
   - [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day · FEATURE-014
   - [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down · FEATURE-014
   - [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently · FEATURE-014
-  - [ ] TASK-205 A qualified `Table.Column` is emitted unquoted while `FROM "Table"` is quoted — PostgreSQL folds them apart · FEATURE-014
+  - ~~TASK-205 A qualified `Table.Column` is emitted unquoted while `FROM "Table"` is quoted — PostgreSQL folds them apart~~ · FEATURE-014
   - [ ] TASK-208 DECISION: which of `Birko.Data.SQL.View` the spec map should cover — two fixes have now landed in the excluded part · FEATURE-014
   - [x] TASK-210 `MongoDB.Driver 3.2.0` pulls two vulnerable transitive packages, and nothing reports it · FEATURE-014
   - [x] TASK-211 On-the-fly views are broken on PostgreSQL — and the error is swallowed, so they return an empty result · FEATURE-014
@@ -212,7 +218,7 @@ _None_
   - [x] TASK-279 `BuildCompressionPolicySql` keeps CR-H070's `orderByColumn = "time"` — the half of the remedy that was a compatibility artefact · FEATURE-014
   - [x] TASK-280 `IsHypertable` and `GetChunkInterval` ignore the schema half of the qualified name TASK-262 taught them to accept · FEATURE-014
   - [x] TASK-281 A continuous aggregate cannot be created or refreshed inside a transaction — so it may never have worked through the runner at all · FEATURE-014
-  - [ ] TASK-282 The TimescaleDB migration emitters bypass the connector — an option TASK-259 reopened and nobody owns · FEATURE-014
+  - ~~TASK-282 The TimescaleDB migration emitters bypass the connector — an option TASK-259 reopened and nobody owns~~ · FEATURE-014
   - [x] TASK-283 A throwing `OnIndexCreationFailed` subscriber defeats TASK-204's degrade and bricks the entity · FEATURE-014
   - [x] TASK-284 An empty `startOffset` silently widens a refresh policy to all of history — and the escape hatch that relies on it is untested · FEATURE-014
   - [x] TASK-285 A `COUNT` of a missing table throws while a `SELECT` of the same table returns empty — the one read that answers 500
@@ -444,12 +450,12 @@ _None_
 - [x] TASK-449 `PerlinNoise` and `SimplexNoise` take a seed but are not reproducible across .NET versions (P2, ai)
 - [x] TASK-459 Five tests fail on Linux that pass on Windows (P2, ai)
 - [x] TASK-461 Sandbox covers every reachable area, and reports it readably (P2, ai)
-- [ ] TASK-463 ~~`TagServiceBase` is documented in three places and exists in none~~ — CANCELLED, the premise was false (P2, ai)
+- ~~TASK-463 `TagServiceBase` is documented in three places and exists in none — CANCELLED, the premise was false~~ (P2, ai)
 - [ ] TASK-466 Firefox shows no validation bubble for an invalid `b-*` control, and logs an error instead (P2, ai)
 - [ ] TASK-468 `BIRKO_SRC` names the Framework checkout to MSBuild and the Web checkout to esbuild (P2, ai)
 - [ ] TASK-059 Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3, ai)
 - [ ] TASK-106 Decide whether `::part` is a catalogue convention or stays a one-off (P3, human)
-- [ ] TASK-235 `FisData.Stock.Angular.Server` will fail `NETSDK1087` when its net10 migration lands ⚠ blocked (P3, ai)
+- ~~TASK-235 `FisData.Stock.Angular.Server` will fail `NETSDK1087` when its net10 migration lands~~ (P3, ai)
 - [x] TASK-444 `Birko.Models.Inventory` had no stock-balance model, and `IBatchable` had no implementors (P3, unassigned)
 - [x] TASK-455 `Udp` cannot receive multicast, and binds exclusively — LAN device discovery is not expressible (P3, ai)
 - [x] TASK-458 Turn `PREZENTACIA.md` into published framework documentation (P3, ai)

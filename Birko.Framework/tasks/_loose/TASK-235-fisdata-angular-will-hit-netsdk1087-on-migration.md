@@ -3,7 +3,7 @@ id: TASK-235
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: blocked
+status: cancelled
 priority: P3
 assignee: ai
 created: 2026-08-17
@@ -18,6 +18,9 @@ jira-key: null
 
 # `FisData.Stock.Angular.Server` will fail `NETSDK1087` when its net10 migration lands
 
+> **⚠ Superseded 2026-09-19 — this task is `cancelled`; the reason is the note at the end of
+> this file. The paragraph below is kept as the record of why it was held, not as its current state.**
+>
 > **Blocked 2026-08-17 on an external condition, not on another task.** The project already cannot build for
 > an unrelated, pre-existing reason (below), and its repository holds substantial uncommitted migration work
 > that is not ours to finish. This becomes actionable the moment that migration builds. Held out of the
@@ -80,3 +83,21 @@ original position — it is now first in its `ItemGroup`. Cosmetic, but real, an
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-235` — leave empty until then._
+
+---
+
+> **Cancelled 2026-09-19 — the consumer is being retired, so the condition this was blocked on will
+> never arrive.** `Symbio` is the successor product to `FisData.Stock`; the five
+> `dev.azure.com/FisData/Stock` repositories are being wound down and the net10 migration this task
+> waits on will not land. The duplicate `FrameworkReference` is therefore not a defect anyone will
+> meet.
+>
+> Kept rather than deleted because the **correction** in § Context is the part that outlives the
+> consumer: `Consumers/*` was once swept by glob rather than by ownership and this file was edited,
+> which is a framework-side process lesson (sweep by ownership, not by path shape) that holds whatever
+> happens to FisData. [[TASK-229]]'s `FrameworkReference` reasoning and the `NETSDK1087`-vs-`NU1504`
+> asymmetry likewise stay useful to the next consumer that imports `Birko.Data.Tenant`.
+>
+> ⚠ The third acceptance criterion — *check `FisData.Stock.API`, `.Core`, `.Web` the same way* — is
+> cancelled with it and was **never run**. If any of those repositories is revived or forked rather
+> than retired, that check is still owed.
