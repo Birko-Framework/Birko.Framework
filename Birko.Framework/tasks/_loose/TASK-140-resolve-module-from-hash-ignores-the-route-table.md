@@ -10,7 +10,7 @@ created: 2026-08-06
 depends-on: []
 blocks: []
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
-findings: []
+findings: [FIELD-003]
 pr: null
 github-issue: null
 jira-key: null

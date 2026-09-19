@@ -2,8 +2,8 @@
 id: TASK-462
 parent: null
 feature: null
-# status: done | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: done
 priority: P3
 assignee: ai
 created: 2026-09-18
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-461]
 findings: []
-pr: see commit
+pr: 865f60be
 github-issue: null
 jira-key: null
 ---

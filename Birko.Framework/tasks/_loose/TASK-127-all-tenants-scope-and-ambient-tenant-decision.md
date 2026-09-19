@@ -10,6 +10,9 @@ assignee: human
 created: 2026-07-31
 depends-on: []
 blocks: []
+# [] deliberately: acceptance here is a DECISION, so /fix-next must not rank it
+#    (its step 1 excludes decision tasks — they need the user and cannot run unattended).
+findings: []
 related: [TASK-114, TASK-115]
 pr: null
 github-issue: null

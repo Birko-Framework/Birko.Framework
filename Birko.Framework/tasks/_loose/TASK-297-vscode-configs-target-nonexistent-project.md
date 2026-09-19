@@ -8,6 +8,7 @@ assignee: ai
 created: 2026-09-01
 depends-on: []
 blocks: []
+findings: [FIELD-005]
 pr: null
 github-issue: null
 jira-key: null

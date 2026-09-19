@@ -8,6 +8,7 @@ assignee: ai
 created: 2026-08-01
 depends-on: []
 blocks: []
+findings: [FIELD-001]
 related: [TASK-103]
 pr: null
 github-issue: null

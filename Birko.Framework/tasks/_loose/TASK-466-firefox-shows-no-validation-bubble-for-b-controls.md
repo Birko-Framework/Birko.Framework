@@ -10,7 +10,7 @@ created: 2026-09-19
 depends-on: []
 blocks: []
 related: [TASK-001, TASK-035, TASK-136]
-findings: []
+findings: [FIELD-007]
 pr: null
 github-issue: null
 jira-key: null
