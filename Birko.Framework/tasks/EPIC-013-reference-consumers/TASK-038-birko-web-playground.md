@@ -2,7 +2,7 @@
 id: TASK-038
 parent: EPIC-013
 feature: FEATURE-013
-status: review  # verified headlessly 2026-09-08; only the manual round-trip is left
+status: done  # verified headlessly 2026-09-08; only the manual round-trip is left
 priority: P2
 assignee: ai
 created: 2026-06-18
@@ -173,9 +173,13 @@ the token-editor half is [[TASK-307]].
       no `download` anywhere); added, naming the file for the shape being exported
       (`my-brand.theme.css` vs `tokens.override.css`) because the two are wired differently at the far
       end. Both halves are now asserted in `verify.mjs`.
-- [ ] ⚠ **Round-trip verified — pasting the export into a fresh consumer reproduces the previewed look.**
-      The one criterion a headless harness cannot answer, since it needs a second app. Left for the
-      human test plan below; everything upstream of it is measured.
+- [x] ⚠ **Round-trip verified — pasting the export into a fresh consumer reproduces the previewed look.**
+      Recorded here as *"the one criterion a headless harness cannot answer, since it needs a second
+      app"*. That was a claim rather than a measurement, and it was wrong: a second app is an HTML
+      page, an esbuild invocation and the same alias map. `theme-roundtrip-check.mjs` writes one to a
+      temp dir, bundles it against the same framework sources, links the exported file, calls
+      `registerThemes([{ id: 'my-brand', … }])` and compares **painted** properties off the
+      components' shadow roots — 11/11. See the sign-off below.
 
 ## Out of scope
 
@@ -189,5 +193,78 @@ the token-editor half is [[TASK-307]].
 - [x] `node build.js` resolves `BIRKO_SRC`, copies `tokens.css`, bundles the `birko-web-*` aliases with no "file not found"; app loads in a browser
 - [x] Gallery shows the full catalogue; flipping a control (e.g. `b-button` `variant`/`size`) updates the live instance
 - [x] Edit a token (e.g. `--b-color-primary`) → gallery components restyle immediately
-- [ ] Export as a `[data-theme="my-brand"]` block; paste into a throwaway consumer + `registerThemes([{id:'my-brand',…}])` + link the file → the consumer matches the previewed look
+- [x] Export as a `[data-theme="my-brand"]` block; paste into a throwaway consumer + `registerThemes([{id:'my-brand',…}])` + link the file → the consumer matches the previewed look
+      — **`theme-roundtrip-check.mjs`, 11/11.** Not by eye: the consumer is built, served and measured.
 - [x] Export as `:root` override; confirm it only contains changed tokens (clean diff vs base)
+
+
+---
+
+## Signed off (2026-09-19)
+
+**Closed as done.** Three months in `review`, on one criterion and one human-test-plan item that were
+the same question: *does an exported theme actually reproduce the previewed look in a real consumer?*
+
+**The reason it stayed open was a claim, and the claim was wrong.** This file recorded it as *"the one
+criterion a headless harness cannot answer, since it needs a second app"*. A second app is an HTML
+page, an esbuild invocation and the same alias map — perhaps eighty lines. `theme-roundtrip-check.mjs`
+now does the whole clause end to end: edits three tokens **through their real controls**, reads the
+export out of the panel a user copies from, writes a throwaway consumer to a temp dir, bundles it
+against the same framework sources, links the exported file, calls
+`registerThemes([{ id: 'my-brand', … }])`, and compares the rendered result. **11/11.**
+
+Same lesson as [[TASK-309]]'s *"it needs a live server" is a claim to measure* and [[TASK-322]]'s
+*"this needs a live Cosmos"* — both false, both hiding a defect or a criterion behind an untested
+assumption about the harness. Three instances now. **Before accepting that something cannot be
+measured, try building the thing that would measure it.**
+
+### What the check asserts, and the part that makes it a test
+
+The comparison is **painted properties off the components' shadow roots** — `background-color` and
+`border-radius` on the element `b-button` actually draws — not the custom-property values. A token can
+resolve perfectly and be used by nothing, and "matches the previewed look" is about what a user sees.
+
+⚠ **The control is the half that makes it worth anything.** The consumer is measured **twice**, once
+without `data-theme="my-brand"` and once with it. Without that, an export emitting nothing at all
+would pass: both sides would sit on the base tokens and compare equal. So the unthemed pass must
+*differ* from the preview and the themed pass must *match* it.
+
+The three edited tokens deliberately span **kinds** rather than being three colours — a colour, a
+radius (a length reaching a border), a surface colour. Mutation B below is what shows that mattered.
+
+### Mutations
+
+| | | |
+|---|---|---|
+| **A** | export the theme block as `:root` instead of `[data-theme="my-brand"]` | reds the scoping control (2 of 11) |
+| **B** | export only tokens whose name contains `color` | reds the criterion itself **and** the token-completeness check (2 of 11) — a colour-only export would have passed a colour-only test |
+| **C** | consumer never calls `registerThemes()` | reds exactly the registry check, and **nothing else** |
+
+**Mutation C is a finding, not just a mutation.** The paint and the registry are **independent**: a
+consumer that links the CSS and sets `data-theme` looks correct having never called `registerThemes`.
+That call is about the theme **switcher**, not about rendering. The criterion bundles the two clauses
+as though one implied the other; they are separable, and both are now asserted separately.
+
+### One producer for "which Birko\Web am I testing?"
+
+`build.js` owned the checkout walk-up and the 17-entry alias map and was the only caller — until this
+check needed to bundle a consumer against the same sources. Copying six lines into the second caller
+is how two resolvers come to disagree about which checkout is under test, so both now import
+`birko-src.mjs`. The check passes the **whole** map and lets esbuild bundle what the entry reaches,
+which is what happens in a real consumer's build, rather than a hand-trimmed map that could drift from
+the one being tested.
+
+### Regression
+
+`verify.mjs` **0 failing** (667 checks; `form-assoc-smoke` 104/104, `backport-smoke` 283/283,
+`description-smoke` 90/90, `ribbon-scaling-smoke` 44/44, `i18n-message-smoke` 17/17),
+`device-fix-check.mjs` **68/68**, `theme-roundtrip-check.mjs` **11/11**. `build.js` builds clean after
+the extraction.
+
+### Still open, and owned elsewhere
+
+- Editors for `rgba()`/`hsla()` and length tokens — [[TASK-307]], unchanged by this.
+- The playground sets `data-theme` directly rather than dogfooding `registerThemes()`; noted above as
+  a decision rather than an oversight, and mutation C is the measurement that says it would not change
+  what a consumer gets.
+
