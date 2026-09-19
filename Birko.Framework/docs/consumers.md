@@ -16,7 +16,7 @@ Birko Framework is consumed by several projects via `.projitems` shared project 
 
 ## Symbio
 
-**Location:** `C:\Source\Symbio`
+**Location:** `C:\Source\Birko\Consumers\Symbio`
 **Description:** IoT-capable, multi-tenant enterprise platform
 **Birko projects referenced:** 50 (unique across all modules)
 
@@ -125,7 +125,7 @@ Warehouse/inventory module with clean Birko model projects.
 
 ## DraCode
 
-**Location:** `C:\Source\DraCode`
+**Location:** `C:\Source\Birko\Consumers\DraCode`
 **Description:** Game/application platform using SQLite, WebSocket real-time, and event sourcing
 **Birko projects referenced:** 26 (unique across all modules)
 
@@ -190,7 +190,7 @@ Standalone WebSocket client library.
 > Symbio as its backend instead of running its own stack. Its `$(BirkoSrc)` wiring is expected to
 > survive; the Birko component list below will not.
 
-**Location:** `C:\Source\Affiliate`
+**Location:** `C:\Source\Birko\Consumers\Affiliate`
 **Description:** Product/category aggregation platform using Elasticsearch and InfluxDB
 **Birko projects referenced:** 22 (unique across all modules)
 
@@ -236,7 +236,7 @@ Data import pipeline with JSON and CSV processing.
 > ⚠ **Retired — succeeded by Symbio (2026-09-19).** Kept for the record of which models were
 > extracted into `Birko.Models.*`, which is the part that outlived the product.
 
-**Location:** `C:\Source\FisData.Stock`
+**Location:** `C:\Source\Birko\Consumers\FisData.Stock`
 **Description:** Stock/inventory management (currently inactive — models extracted to Birko.Models.*)
 **Birko projects referenced:** 0 (empty solution)
 
@@ -254,7 +254,7 @@ FisData.Stock.Core models were refactored in March 2026 to extend Birko.Models.*
 
 ## Presenter
 
-**Location:** `C:\Source\Presenter`
+**Location:** `C:\Source\Birko\Consumers\Presenter`
 **Description:** Web app that renders markdown files as slide decks with a paired-mobile remote. ASP.NET Core host + esbuild TypeScript SPA.
 **Birko projects referenced:** 20 (18 backend + 2 frontend)
 
@@ -296,9 +296,12 @@ TypeScript SPA bundled by esbuild; resolves Birko.Web.* sources via the same `BI
 
 ## Gameshow
 
-**Location:** `C:\Source\gameshow`
-**Description:** Convention gameshow control + display server. Single ASP.NET host serving an OBS browser-source display, a Birko.Web operator UI, and authoritative WebSocket state. Replaces a legacy React app (`C:\Source\gameshow-app`).
+**Location:** `C:\Source\Birko\Consumers\gameshow-app`
+**Description:** Convention gameshow control + display server. Single ASP.NET host serving an OBS browser-source display, a Birko.Web operator UI, and authoritative WebSocket state. Replaces a legacy React app, which no longer exists on disk (it occupied `C:\Source\gameshow-app` before the bucket reorg; the name was inherited by the replacement's own folder).
 **Birko projects referenced:** 15 (12 backend + 3 frontend)
+
+> ℹ The directory and repository keep the **legacy** name `gameshow-app` while holding the ASP.NET
+> host that replaced it — `Gameshow.slnx`, `Gameshow.Birko`, `Gameshow.Web`. Verified 2026-09-19.
 
 ### Gameshow.Birko (12 projects)
 Single lean aggregator for the host. No data store — game state lives in-memory and is broadcast over WebSockets; the existing CRUD backend is proxied via REST.
@@ -334,6 +337,10 @@ TypeScript bundle for the operator UI; the display surface is plain HTML/CSS/JS 
 **Location:** `C:\Source\ClientApi.CSharp\Tester\WebFinstatApiTester`
 **Description:** ASP.NET Core web tester for the public FinStat / FinStat.cz APIs (`FinStatApi` / `FinStatApiCZ`). Browser UI for exercising every endpoint of the C# client. Companion to the WPF `DesktopFinstatApiTester` (which uses no Birko projects).
 **Birko projects referenced:** 11 (8 backend + 3 frontend)
+
+> ℹ **Deliberately outside the `Birko\Consumers` bucket** — it is a FinStat repository that happens
+> to consume Birko, not a Birko-family product, and ADR-001 keeps the FinStat repos flat at the root.
+> Verified 2026-09-19; do not "correct" this path to a bucket path.
 
 > **No aggregator.** The csproj imports the lean Birko subset directly — the project is small enough that overlapping-import risk is nil. Used in the framework README as the canonical example of skipping the aggregator pattern.
 
@@ -489,6 +496,7 @@ Single lean aggregator (`Reps.Birko/Reps.Birko.csproj`) consumed by `Reps.Domain
 | Latent | 3 | *(none — filesystem batch tool)* | Birko.Xaml Avalonia UI (tokens/themes), Helpers path safety |
 | FisData.Stock ⚠ | 0 | *(inactive)* | Models extracted to Birko.Models.* |
 
-⚠ = winding down; see the Lifecycle note at the top. `Location:` paths throughout this document
-predate the `Birko\{Framework,Web,Consumers}` bucket layout and the monorepo consolidation — consumers
-now live under `C:\Source\Birko\Consumers\`.
+⚠ = winding down; see the Lifecycle note at the top.
+
+**`Location:` paths verified against disk 2026-09-19.** Nine of the ten consumers live under
+`C:\Source\Birko\Consumers\`; `WebFinstatApiTester` is the documented exception and is not a mistake.
