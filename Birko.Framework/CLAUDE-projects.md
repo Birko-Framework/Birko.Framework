@@ -1,5 +1,69 @@
 # Birko Framework — Project Catalog
 
+## Dependency Flow
+
+Which project may reference which. **This is the one producer of the graph** — [CLAUDE.md](CLAUDE.md)
+§ Architecture points here rather than carrying a copy. Update it whenever a project is added or its
+dependencies change; a leaf documented as `zero deps` is a promise consumer aggregators rely on.
+
+```
+Birko.Contracts (zero deps: ILoadable, ICopyable, IDefault, ITimestamped, IGuidEntity, ILogEntity, RetryPolicy)
+  -> Birko.Configuration (Settings hierarchy, namespace Birko.Configuration)
+  -> Birko.Data.Core (AbstractModel, ViewModels, Filters, Exceptions)
+    -> Birko.Data.Stores (store interfaces, imports Configuration)
+      -> Birko.Data.Repositories
+
+Birko.Models.Contracts (zero deps: ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument, IContactable, IAddressable)
+  -> Birko.Models (AbstractPercentage, AbstractTree, ValueData + Value Objects: Money, MoneyWithTax, Percentage, PostalAddress, Quantity)
+    -> Birko.Models.Inventory / .Pricing / .Customers / .Users / .Product / .Category / .SEO (clean, no SQL attrs)
+    -> Birko.Models.SQL (ModelMap<T>, IModelMapping<T>, ModelMapRegistry — fluent SQL mapping framework only, no canonical mappings)
+      -> Birko.Models.Users.SQL / .Customers.SQL / .Inventory.SQL / .Pricing.SQL / .Product.SQL
+         (one optional sibling per domain — pre-built IModelMapping<T> for User/Role/Tenant, Address/Customer,
+          StockItem/StorageLocation/InventoryDocumentLine, Currency/Tax/PriceGroup, MeasureUnit/UnitConversion/ProductPartnerCode)
+
+Birko.Time.Abstractions (zero deps: IDateTimeProvider, SystemDateTimeProvider, TestDateTimeProvider)
+  -> Birko.Time (calendars, working hours, time zones)
+
+Birko.Data.Patterns + Birko.Data.Tenant + Birko.Time.Abstractions
+  -> Birko.Data.Composition (StoreWrapperBuilder — runtime decorator chains)
+
+Birko.Data.Core
+  -> Birko.Data.Tagging (ITaggable, Tag, EntityTag, ITagService, TagServiceBase)
+
+Birko.Data.Patterns (FieldType, FieldDescriptor, ISchemaBuilder, ICollectionBuilder, IIndexBuilder, IIndexManager, IndexDefinition, ISoftDeletable, IAuditable, ISpecification, IUnitOfWork, PagedResult)
+  + Birko.Data.Core (for Exceptions.WholeTableWriteException only — TASK-314's MigrationFilter refuses
+    with the framework's one whole-table refusal type rather than inventing a per-backend one; measured
+    first: all 4 consumer aggregators importing Migrations already import Birko.Data.Core)
+  -> Birko.Data.Migrations (IMigrationContext, IDataMigrator, IContextualMigration, IMigration, IMigrationRunner, IMigrationStore, MigrationFilter)
+    -> Birko.Data.Migrations.SQL (SqlMigrationContext — reuses AbstractConnector), .MongoDB, .ElasticSearch, .RavenDB, .CosmosDB, .InfluxDB, .TimescaleDB
+
+Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentOptions, LlmProviderFactory)
+  -> Birko.AI (LlmProviderBase, Agent base, AgentFactory (registration-based), default tools)
+    -> Birko.AI.Providers (Claude, OpenAI, Gemini, Ollama, AzureOpenAI, etc. + ProviderRegistration)
+    -> Birko.AI.Agents (CodingAgent, language agents, media agents + AgentRegistration)
+    -> Birko.AI.Orchestration (ITaskDispatcher, ImplementationPlan, StepDependencyAnalyzer)
+  -> Birko.AI.Resilience (ProviderRateLimiter, ProviderCircuitBreaker, CostTrackingService, TrackedLlmProvider)
+
+Birko.Health (IHealthCheck, HealthCheckResult, HealthCheckRunner — zero deps)
+  -> Birko.Health.Data (SQL, Mongo, Raven, SMTP, MQTT, TCP … — still zero Birko deps, BCL + delegates only)
+  -> Birko.Health.Data.SQL (SchemaDriftHealthCheck) + Birko.Data.SQL
+     (a per-dependency sibling, like .Redis and .Azure, so the Health leaf stays dependency-free)
+
+Birko.Communication.OAuth (IOAuthClient, OAuthClient, OAuthSettings)
+  -> Birko.Communication.OAuth.Providers (GitHubOAuthProvider — pre-configured device flow)
+
+Birko.Communication.GraphQL (IGraphQLClient, GraphQLClient, GraphQLSettings — queries, mutations, subscriptions over HttpClient + ClientWebSocket)
+
+Birko.Communication.gRPC (GrpcSettings, GrpcChannelPool, GrpcClientFactory, GrpcAuthenticationInterceptor, GrpcException — client over Grpc.Net.Client)
+  -> Birko.Communication.gRPC.Server (GrpcServerSettings, AddBirkoGrpc, GrpcServerAuthenticationInterceptor — server over Grpc.AspNetCore; mirrors REST / REST.Server split)
+
+Birko.BackgroundJobs (IJobQueue, JobDescriptor, RetryPolicy, JobProcessor, JobScheduler)
+  -> 8 backends: .SQL, .ElasticSearch, .MongoDB, .RavenDB, .JSON, .XML, .Redis, .CosmosDB
+
+Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
+  -> 7 backends: .SQL, .ElasticSearch, .MongoDB, .RavenDB, .JSON, .XML, .CosmosDB
+```
+
 ## Core Projects
 - **Birko.Framework** - Main framework application (.NET 10.0, shared projects via .projitems)
 - **Birko.Contracts** - Pure interfaces (ILoadable, ICopyable, IDefault, ITimestamped) with zero dependencies

@@ -1,8 +1,245 @@
 # Birko Framework — Changelog
 
-Newest-first record of architectural and behavioral changes that preserve design context. New notes may land first in the short `Recent Updates` section of [CLAUDE.md](CLAUDE.md) and roll here once that section grows (via the project-local `/roll-changelog` skill). The definitive change history is `git log`; this file is a summarized narrative for architecture-level decisions that would be hard to reconstruct from commit-level diffs.
+Newest-first record of architectural and behavioral changes that preserve design context. New notes may land first in the short `Recent Updates` section of [CLAUDE.md](CLAUDE.md) and roll here once that section grows (via the project-local `/roll-birko-changelog` skill — the generic `/roll-changelog` resolves user-level first and does not know these files). The definitive change history is `git log`; this file is a summarized narrative for architecture-level decisions that would be hard to reconstruct from commit-level diffs.
 
 ---
+
+## 2026-09-18 — The framework is one repo: 349 repos consolidated, with every commit preserved
+
+[[TASK-457]], closing the open question `docs/adr/ADR-001` (the former untracked
+`WORKSPACE-STRUCTURE.md`) left in June. The family was **365 git repos** on a personal account; the
+framework is now `Birko-Framework/Birko.Framework` — 178 projects at the root, 167 test projects under
+`tests/` — beside `Birko-Framework/Birko.Web` and `Birko-Framework/Birko.Sandbox`. Consumers untouched.
+**349/349 absorbed, 0 failures.** Eight things worth carrying:
+
+- **Commit reconciliation was exact: 4,096 = 2,676 + 1,074 + 1 root + 345 merges**, and history
+  survives as history — oldest commit **2019-03-15**, with `git log --follow` and `git blame`
+  resolving back *through renames* (`Birko.Data.SQL/Attribute/` → `Attributes/`). `filter-repo
+  --to-subdirectory-filter` then merge, 349 times.
+- **⚠ The strongest argument for the migration was a defect already on file.** [[TASK-131]] measured
+  that every spec area globbed *out* of the aggregator's repo while `generated-at` stamped only that
+  repo's HEAD, so `/specs verify`'s staleness primitive **could never observe a source change** — not
+  weak, *decorative*, with `roadmap` DV7/DV8 inheriting it. One repo fixes it outright. **A polyrepo
+  had been the root cause of a filed defect for six weeks and nobody had connected the two.**
+- **A fix and its test could not be atomic, and three things silently followed:** `git bisect` ran
+  tests from the test repo's **HEAD** — a tree from a different day, so you were not testing the
+  commit you thought; CI could not know which test-repo commit matched a framework commit; and
+  `git revert` of a fix left its test behind, asserting the fixed behaviour and going red for the
+  wrong reason. For a codebase whose method is mutation testing, that is the real cost.
+- **The size argument was measured away, and inverted.** 178 repos ≈ 47 MB of history; the
+  consolidated repo packs to **14 MB** — the 200 MB aggregator was **6,566 never-gc'd loose objects**,
+  not content. So **no history rewrite was needed**: `mermaid.min.js` (3.2 MB) and the 1.5 MB audit
+  file stayed, and the audit file turned out to be referenced by 8 task/story files anyway.
+- **⚠ `.github/workflows/` is read only from the REPOSITORY ROOT.** The four `token-parity.yml` copies
+  existed per-repo *deliberately* — *"a gate that only fires on the source cannot catch an edit made to
+  the output"*, the failure that had already happened twice — and three of them became **inert files**
+  the moment their repos became directories. Replaced with one root workflow per repo, four checkouts
+  down to two. **When a repo becomes a subdirectory, everything that only works at a repo root dies
+  silently.**
+- **⚠ Deleting duplicated boilerplate ripples into the rules that mandate it.** 334 identical
+  `.gitignore` and 266 `License.md` went to one root each — and that invalidated the New Project
+  Checklist, two scaffolding skills, and a `verify-birko-conventions` check that asserts *every project
+  dir must have `License.md` and `.gitignore`*, which would have failed **345 times**. The root
+  `.gitignore` also had to keep the aggregator's `!.claude/skills/` un-ignore and an exception for the
+  tracked `.code-workspace`, or it would have started ignoring files the repo deliberately keeps.
+- **⚠ Windows MAX_PATH bit twice and `safe.directory` is protected-config only.**
+  `--to-subdirectory-filter` doubles the name depth, so `Birko.Communication.OAuth.Providers.Tests`
+  blew 260 chars under a long scratch path — git needs `core.longpaths=true` and Python's `io.open`
+  fails outright. And `-c safe.directory=*` is **ignored by design**; a temp `GIT_CONFIG_GLOBAL` that
+  `[include]`s the real one works and leaves the machine's config untouched.
+- **⚠ 46 repos had unpushed commits, so the local disk was the source of truth, not GitHub.** The
+  migration cloned from local paths. Worth stating because the instinct is to clone from the remote.
+  Still outstanding by explicit decision: **433 commits in WorkoutTracker (298), Presenter (72),
+  BardStudio (50) and Latent (13) are local-only with no remote.**
+
+## 2026-09-17 — A migration filter that named a field but matched nothing deleted the whole collection
+
+TASK-314, the last high-tier `migrations` task and the fifth member of the scope-guard family — the first
+where the filter is **data** rather than a predicate, so `PredicateScope` has nothing to analyse. All five
+findings **CONFIRMED, 2 wider than filed, 0 refuted.** 263/263 green across 7 suites (205 before, 58 new),
+plus 894 in four `Birko.Data.Core`-consuming suites to show the exception change did not ripple. **Eight
+disjoint mutations.** The standing rules are in § Conventions. Nine things worth carrying:
+
+- **`{"status":{}}` is a typo that meant "everything".** It takes the object branch in every translator and
+  the operator loop adds nothing, so the clause came back empty and each caller appended its constraint
+  *only when non-empty*: SQL emitted `DELETE FROM {table}` with no `WHERE`, RavenDB sent
+  `FROM '{collection}'` unfiltered, Cosmos selected every document and deleted them one at a time.
+  Confirmed on all four named backends.
+- **ElasticSearch reached the same end state with a NON-NULL query.** `BoolQuery { Must = [] }` is
+  well-formed and means match-all, so the obvious guard — refuse a null query — never fires. Third time
+  this family has arrived as *a one-term thing that looks ordinary and means everything*, after `1 = 1`
+  and `{ "$nin": [] }`. The discriminator has to be the **term count**.
+- **One producer in `Birko.Data.Migrations`, not four copies**, guarding on each backend's own
+  translation rather than re-parsing the JSON — so the guard and the emitted statement cannot disagree.
+  Reusing `WholeTableWriteException` was priced first: all 4 consumer aggregators importing Migrations
+  already import `Birko.Data.Core`.
+- **Guard the whole verb family — including `CountDocuments`, which the finding did not name.** A count
+  answering for the whole collection beside a delete refused on the identical filter is § TASK-313's
+  defect. Safe to widen because the only way to mean "everything" here is the explicit `{}` door, which is
+  untouched and pinned on every backend.
+- **⚠ MongoDB and InfluxDB are immune by a DIFFERENT mechanism, measured and pinned rather than "fixed
+  from symmetry".** Mongo hands the parsed document to the driver, where `{"status":{}}` is an exact match
+  on an empty subdocument; Influx refuses a JSON filter outright (CR-M111).
+- **`SH-H029` was wider: the gate one line ABOVE the filed one has the identical defect and fires first.**
+  NEST's `ExistsResponse.Exists` is `HttpStatusCode == 200`, so an unreachable cluster answers "the index
+  is not there". Measured — reverting only the unfiled half reds all 3 tests, i.e. fixing what the finding
+  named would have changed nothing observable.
+- **`SH-H033` was wider in the other direction: points are stamped with the migration's AUTHORED date.**
+  So the 365-day expiry did not merely age records out — a migration authored over a year ago fell outside
+  the retention window the moment it was written and was never durably recorded at all.
+- **⚠ Two mutations failed ZERO, and both were my tests rather than the fix.** `SH-H030`'s suite never
+  reached the swallow: `GetAppliedVersions` opens with `EnsureInitialized()` → `FindBucketsAsync()`,
+  **outside** the try (§ TASK-291's exact trap) — and the second attempt, which did reach `QueryAsync`
+  inside the try, met a raw `HttpRequestException` that is not an `InfluxException` and was never
+  swallowed either. So that swallow only ever fired for failures Influx itself *reports*, which needs a
+  live server; the offline cover is now an honest source scan and both dead ends are written into the test
+  file. The Raven mutation exposed the same shape: a scan asserting the guard's call site but not the
+  helper's counting.
+- **⚠ And `SH-H031`'s fix had to go where the state is, not where the defect is.** `IMigrationStore` cannot
+  carry a session in its signature without changing every backend, so it is ambient on the concrete store
+  — entered through a **self-restoring scope**, because per-caller state assigned onto a longer-lived
+  object is the trap § Conventions keeps recording. Its behavioural assertion needs a replica set, not
+  merely a mongod, and skips loudly rather than passing when it finds one.
+
+## 2026-09-17 — A ViewModel update blanked every column the ViewModel could not express
+
+TASK-316 / `SH-H034` + `SH-H035`, ranked to the top of [[STORY-051]] as silent corruption of a stored row
+on an **ordinary** write path. **Both confirmed WIDER than filed.** 37/37 in
+`Birko.Data.ViewModel.Tests` (17 pre-existing + 20 new), 263 across seven suites, **eleven disjoint
+mutations, every one red**. Ten things worth carrying:
+
+- **A ViewModel is a PARTIAL projection, so an update built from a fresh model is structurally unable to
+  be correct.** `Update` called `LoadModelInstance` — `CreateModelInstance()` + `MapToModel` — and never
+  read the row; every backend then persisted it whole. So `CreatedAt`/`UpdatedAt` and the `TenantGuid` a
+  wrapper injects — columns a ViewModel *cannot* map — were reset to their defaults on every update. The
+  fix maps onto a **detached copy of the stored row**.
+- **⚠ Both findings were WIDER, in different directions, and both widenings changed the work.** `SH-H034`
+  was filed against the two single-item repositories; the two **bulk** ones use the same helper, so it was
+  **4** update paths. `SH-H035` named 5 backends; measured, it is **96** `storeDelegate?.Invoke(...)` sites
+  with **0** consuming the result.
+- **⚠ And all nine live consumer repositories derive from a BULK base** — seven via
+  `ElasticSearchRepository`, two via `AsyncDataBaseRepository` — i.e. the half the finding did **not**
+  name. Fixing only the filed pair would have left **100% of the live consumers broken** while closing the
+  ticket. § TASK-215 is usually argued from consistency; here it was the difference between fixing the
+  defect and fixing nothing. **Widen on the root cause, then measure which half the consumers use.**
+- **⚠ The inherited reach number was wrong, and re-measuring at the close gate inverted it.** The task
+  recorded *"0 consumer `.cs` references to `AbstractViewModelRepository`"* — true, and irrelevant, because
+  consumers never name the base. Re-measured: **9 `override void MapToModel`** across **2** repos, so
+  **live, not latent**. § TASK-283's *grep for the subscription, not the identifier*, as *grep for the
+  override, not the base name*. One of them, `ProductRepository.cs:25`, even documents the false
+  assumption: *"Guid, CreatedAt, UpdatedAt are handled by base"*. Nothing handled them.
+- **⚠ THE REVIEW GATE REWROTE THIS FIX, and that is the session's main lesson.** The version that was
+  36/36 green and read cleanly had three real defects that `/code-review` and a security pass found
+  between them. None was visible from the tests.
+- **⚠ The worst of the three was a rule already in this file, six days old.** The merge mutated the object
+  the store handed back — SH-H016's mechanism, which [[TASK-313]] wrote up as *hand the inner store a
+  detached copy*. So the update reached store state **before** and **independently of** the write: a failed
+  write left it applied, and on JSON/XML the next unrelated write would flush it to disk. **And my own
+  probe store detached, which is exactly what hid it** — the test double was kinder than every real
+  backend, so the suite could not see it. Proving the fix needed a *live-reference* store.
+- **⚠ Enabling a dormant optimisation is a behaviour change, and it was backed out.** Making the inert hash
+  skip real looked like the point of `SH-H035`. `AuditStoreWrapper`, `TimestampStoreWrapper` and
+  `EventSourcingStoreWrapper` all sit **inside** `Store.Update` in `StoreWrapperBuilder`'s **recommended**
+  chain, so a suppressed write silently drops the audit stamp, the `UpdatedAt` bump and the domain event —
+  and `VersionedStoreWrapper`'s optimistic check stops running. § TASK-287: a fix must not smuggle in a
+  behaviour change. The write stays unconditional; the decision is [[TASK-453]].
+- **The skip's two silent-loss paths survive as GUARD TESTS rather than as behaviour.** While it existed it
+  had a stale hash oracle (a caller restoring a value someone else changed matched the old hash and their
+  write was dropped) and a hash refreshed before the write (so a retry after a failure was a no-op). Both
+  are now tests that red on the naive re-enable, written onto TASK-453. **Building a thing and taking it
+  out can still leave the measurement behind.**
+- **Hoisting a delegate changes WHEN it sees things.** `CreateCore` assigns `data.Guid ??= …` *before*
+  invoking the store delegate, so a transform that ran there could stamp child rows with the new key.
+  Moving it out would have taken that away silently — so the key is pre-assigned first, which every store
+  honours because every one uses `??=` (checked, not assumed).
+- **Cost recorded rather than hidden, and the cheap alternative refused for a measured reason.** The merge
+  is **one extra read per updated entity, including on the bulk path**. A single bulk read keyed on a Guid
+  `Contains` would be one round trip and is the translation landmine § TASK-218/137 record across these
+  eight backends, so `Read(Guid)` — no translator involved — was chosen deliberately. **Contract change
+  stated where a consumer meets it:** `MapToModel` may now receive a **populated** target, so it must
+  assign rather than accumulate; checked against all nine consumer implementations, 0 of 9 accumulate.
+  ⚠ Spawned [[TASK-451]], [[TASK-452]], [[TASK-453]], [[TASK-454]].
+
+## 2026-09-17 — Localized writes destroyed the default-culture text, and localized deletes hit the wrong rows
+
+TASK-313, the first of [[STORY-051]]'s seven remaining high triage tasks and the top of its blast-radius
+ranking: `SH-H015`/`SH-H017` claim silent corruption of stored text and `SH-H018` a destructive statement
+selecting a different set of rows than its own read. **3 CONFIRMED, 1 CONFIRMED-NARROWER, 0 refuted.**
+**112/112 green** (79 pre-existing + 33 new), **four disjoint mutations** — A 7, B 9, C 5, D 6 of 112. The
+standing rule is in § Conventions. Eight things worth carrying:
+
+- **All four are one root cause seen from four sides:** the decorators treat an entity's own column and
+  its translation as the same slot, and they resolve a filter for reads but not for writes. Fixing the
+  file a finding happened to name would have left three copies live, which is why the rule now lives once
+  in `Decorators/LocalizedEntityFields.cs` and all four wrappers call it.
+- **⚠ The obvious fix wrote through, and only a test caught it.** Preserving the base column by swapping
+  the caller's values and restoring them in a `finally` fails on exactly the stores `SH-H016` is about —
+  they keep the reference, so the restore lands in the store. 4 tests red. The fix hands over a detached
+  copy instead.
+- **⚠ All 79 pre-existing tests passed against the unfixed code and still pass now.** Nothing in a
+  harvest-grade suite could see any of the four defects — the reason they survived. A green suite said
+  nothing.
+- **`SH-H015` narrowed on measurement:** the corruption holds for `Update`, where a stored default-culture
+  value is destroyed; `Create` has no stored row, so both the column and the translation take the caller's
+  text, which is a fallback and not a defect. Deliberately unchanged, and said so rather than fixed from
+  symmetry.
+- **Mutation B reds an `SH-H015` test, and that is the finding not the leak.** `SH-H016` *defeats*
+  `SH-H015`'s fix on a live-instance store: preserving the base column works by reading the stored value
+  back, and a corrupting read leaves nothing correct to read. The coupling is recorded on the finding.
+- **The crossed-row fixture is what makes `SH-H018` provable** — one row whose Slovak *translation* is
+  `Stolicka`, one with `Stolicka` in its *base* column — so a predicate naming it under `sk` has a right
+  answer and a wrong one, and the delete is asserted to agree with the equivalent read.
+- **Both twins are covered, because they are different code.** The async bulk wrapper implements
+  `UpdateAsync(filter, action)` and `DeleteAsync(filter)` by reading and looping where the sync one hands
+  a callback to the inner store (§ TASK-245: the twin you patched may not be the one anything calls).
+- **⚠ Consumer reach re-measured: 0 `.cs` files across all 16 consumer repos**, so nothing observable
+  changes for a consumer today — a reason not to overstate urgency, and per § TASK-219/256 not a reason to
+  discount the fix.
+
+## 2026-09-17 — `Destroy()` read as disposal on the framework's central store interface
+
+TASK-321 / `SH-H046`, picked because it was the **only non-latent** item left in the high tier — every
+other one measures 0 consumer references, while `IStore` is the interface every consumer reads.
+`Destroy()` / `DestroyAsync()` were documented as *"destroys the store and releases all resources"*,
+while all 17 implementations permanently delete data and `RavenDBStore` drops the **entire database**
+(`hardDelete: true`). **133/133 green** across four suites, 7 new, **four mutations**. Documentation
+only — no implementation changed. Seven things worth carrying:
+
+- **⚠ The finding's supporting claim was FALSE, and correcting it made the defect worse, not smaller.**
+  It said *"no store implements IDisposable, so a consumer looking for cleanup finds only Destroy()"*.
+  Measured: `RavenDBStore` and `InfluxDBStore` declare it and the SQL stores reference it, releasing
+  exactly the resources the doc claimed. So the doc did not merely mislead — it **described what an
+  existing, correct member already does**, giving a reader no reason to look for `Dispose()`. Disposal
+  is genuinely absent from the *contract*, which is why the fix belongs there and on no implementation.
+  **Re-verify a finding's supporting claims, not only its headline**; this one changed the framing.
+- **⚠ Widened by the SPEC REGEN, not by reading code.** Grepping the spec tree for the old phrase found
+  a second area documenting the same disagreement, which traced to `IBaseRepository.Destroy()` carrying
+  the **identical sentence** — and every repository family forwards to the store, so a SQL repository's
+  `Destroy()` drops the entity's table. Fixed together per § TASK-215: a warning on one contract beside
+  a reassurance on the other, for one operation, is the half-fix that rule names. **Step 7 is a place
+  findings are discovered, not just a place specs are updated.**
+- **A doc fix with no test is a doc fix somebody reverts while tidying.** The tests pin the contract
+  shape (no disposal member, so the redirect stays honest) and the doc text itself. Restoring the old
+  summary reds 2; deleting the paragraph that names the alternatives reds 1 — § SH-H037's *a guard that
+  only says no gets reached around*, as an assertion.
+- **⚠ The doors were verified before being named** (§ TASK-263). `Delete(filter)` is on
+  `IBulkDeleteStore<T>`, but `DeleteAll()` is a **base-class** member and on no interface — so the doc
+  says that rather than implying otherwise, and a test asserts both against the types.
+- **⚠ A mutation showed two of my own tests were duplicates.** Making InMemory's `Destroy` a no-op red
+  2 tests and **neither was mine** — the pre-existing behaviour tests carry that weight. My versions
+  were deleted and the class remarks point at them. *A mutation tells you who owns a guarantee, not
+  only whether one exists.*
+- **⚠ Third scan this session to match its own explanation, and the fix had to be right twice.** The
+  new remarks quote the old wording to record it, so a flat `NotContain` fails; a line-based filter
+  then passed on the store interfaces **by luck** (each quotation on one line) and failed on the
+  repository contract, whose async remark wraps across two. Both files now share one
+  `WithoutQuotations` helper — two tests checking one thing two different ways is the shape this file
+  keeps recording, and it does not stop being that because they are tests.
+- **Rejected, with reasons recorded rather than left implicit:** renaming to `DestroyAll` (§ Conventions'
+  naming rule is about a short name one keystroke from a safe one; `Destroy` is already alarming and it
+  was the sentence underneath that disarmed it — and a rename breaks 17 implementations, 7
+  `JobQueueSchema.DropAsync` helpers and every wrapper), and adding `IDisposable` to `IStore` (a design
+  decision about a central interface, not something to slip into a documentation fix).
 
 ## 2026-09-16 — The Cosmos migrator escaped with the wrong dialect, and three parts of the fix had no test
 

@@ -62,63 +62,11 @@ ISettings (GetId)
 ```
 
 ### Dependency Flow
-```
-Birko.Contracts (zero deps: ILoadable, ICopyable, IDefault, ITimestamped, IGuidEntity, ILogEntity, RetryPolicy)
-  -> Birko.Configuration (Settings hierarchy, namespace Birko.Configuration)
-  -> Birko.Data.Core (AbstractModel, ViewModels, Filters, Exceptions)
-    -> Birko.Data.Stores (store interfaces, imports Configuration)
-      -> Birko.Data.Repositories
 
-Birko.Models.Contracts (zero deps: ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument, IContactable, IAddressable)
-  -> Birko.Models (AbstractPercentage, AbstractTree, ValueData + Value Objects: Money, MoneyWithTax, Percentage, PostalAddress, Quantity)
-    -> Birko.Models.Inventory / .Pricing / .Customers / .Users / .Product / .Category / .SEO (clean, no SQL attrs)
-    -> Birko.Models.SQL (ModelMap<T>, IModelMapping<T>, ModelMapRegistry — fluent SQL mapping framework only, no canonical mappings)
-      -> Birko.Models.Users.SQL / .Customers.SQL / .Inventory.SQL / .Pricing.SQL / .Product.SQL
-         (one optional sibling per domain — pre-built IModelMapping<T> for User/Role/Tenant, Address/Customer,
-          StockItem/StorageLocation/InventoryDocumentLine, Currency/Tax/PriceGroup, MeasureUnit/UnitConversion/ProductPartnerCode)
-
-Birko.Time.Abstractions (zero deps: IDateTimeProvider, SystemDateTimeProvider, TestDateTimeProvider)
-  -> Birko.Time (calendars, working hours, time zones)
-
-Birko.Data.Patterns + Birko.Data.Tenant + Birko.Time.Abstractions
-  -> Birko.Data.Composition (StoreWrapperBuilder — runtime decorator chains)
-
-Birko.Data.Core
-  -> Birko.Data.Tagging (ITaggable, Tag, EntityTag, ITagService, TagServiceBase)
-
-Birko.Data.Patterns (FieldType, FieldDescriptor, ISchemaBuilder, ICollectionBuilder, IIndexBuilder, IIndexManager, IndexDefinition, ISoftDeletable, IAuditable, ISpecification, IUnitOfWork, PagedResult)
-  + Birko.Data.Core (for Exceptions.WholeTableWriteException only — TASK-314's MigrationFilter refuses
-    with the framework's one whole-table refusal type rather than inventing a per-backend one; measured
-    first: all 4 consumer aggregators importing Migrations already import Birko.Data.Core)
-  -> Birko.Data.Migrations (IMigrationContext, IDataMigrator, IContextualMigration, IMigration, IMigrationRunner, IMigrationStore, MigrationFilter)
-    -> Birko.Data.Migrations.SQL (SqlMigrationContext — reuses AbstractConnector), .MongoDB, .ElasticSearch, .RavenDB, .CosmosDB, .InfluxDB, .TimescaleDB
-
-Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentOptions, LlmProviderFactory)
-  -> Birko.AI (LlmProviderBase, Agent base, AgentFactory (registration-based), default tools)
-    -> Birko.AI.Providers (Claude, OpenAI, Gemini, Ollama, AzureOpenAI, etc. + ProviderRegistration)
-    -> Birko.AI.Agents (CodingAgent, language agents, media agents + AgentRegistration)
-    -> Birko.AI.Orchestration (ITaskDispatcher, ImplementationPlan, StepDependencyAnalyzer)
-  -> Birko.AI.Resilience (ProviderRateLimiter, ProviderCircuitBreaker, CostTrackingService, TrackedLlmProvider)
-
-Birko.Health (IHealthCheck, HealthCheckResult, HealthCheckRunner — zero deps)
-  -> Birko.Health.Data (SQL, Mongo, Raven, SMTP, MQTT, TCP … — still zero Birko deps, BCL + delegates only)
-  -> Birko.Health.Data.SQL (SchemaDriftHealthCheck) + Birko.Data.SQL
-     (a per-dependency sibling, like .Redis and .Azure, so the Health leaf stays dependency-free)
-
-Birko.Communication.OAuth (IOAuthClient, OAuthClient, OAuthSettings)
-  -> Birko.Communication.OAuth.Providers (GitHubOAuthProvider — pre-configured device flow)
-
-Birko.Communication.GraphQL (IGraphQLClient, GraphQLClient, GraphQLSettings — queries, mutations, subscriptions over HttpClient + ClientWebSocket)
-
-Birko.Communication.gRPC (GrpcSettings, GrpcChannelPool, GrpcClientFactory, GrpcAuthenticationInterceptor, GrpcException — client over Grpc.Net.Client)
-  -> Birko.Communication.gRPC.Server (GrpcServerSettings, AddBirkoGrpc, GrpcServerAuthenticationInterceptor — server over Grpc.AspNetCore; mirrors REST / REST.Server split)
-
-Birko.BackgroundJobs (IJobQueue, JobDescriptor, RetryPolicy, JobProcessor, JobScheduler)
-  -> 8 backends: .SQL, .ElasticSearch, .MongoDB, .RavenDB, .JSON, .XML, .Redis, .CosmosDB
-
-Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
-  -> 7 backends: .SQL, .ElasticSearch, .MongoDB, .RavenDB, .JSON, .XML, .CosmosDB
-```
+The full layering graph moved to [CLAUDE-projects.md](CLAUDE-projects.md) § Dependency Flow, beside
+the catalog it describes — **that file is the one producer; edit the graph there, not here.** Consult
+it before adding any project reference: the graph is what says whether an edge is legal, and a leaf
+documented as "zero deps" is a promise consumer aggregators rely on.
 
 ### Reference Implementations
 - **ElasticSearch** store — reference for async/bulk operations
@@ -240,43 +188,19 @@ and the plan. This is the aggregator override the generic `tasks` skill's shape 
 
 ### Integration model — commit to `main`, one commit per repo
 
-`tasks/.config.yml` sets `integration: single-branch`. **This family does not branch per task**, so
-`/tasks pick` offers no `task/TASK-NNN` branch and `/tasks close` skips its merge step. `done` still
-means *landed on the default branch* — only the mechanism differs from the generic PR-per-task default.
+`tasks/.config.yml` sets `integration: single-branch`: **this family does not branch per task**, so
+`/tasks pick` offers no `task/TASK-NNN` branch and `/tasks close` skips its merge step. **One fix is
+ONE commit** — production change, regression suite and task file land together. The full rules, and
+why atomicity is load-bearing rather than tidy, are in [CLAUDE-maintenance.md](CLAUDE-maintenance.md)
+§ Integration model.
 
-**One fix is now ONE commit.** The production change, its regression suite and the task file are
-paths in the same repo, so they land together:
+⚠ Three of them bite on *every* commit, so they stay here rather than one file away:
 
-| Path | Contents |
-|---|---|
-| `Birko.{Project}/` | the production change |
-| `tests/Birko.{Project}.Tests/` | the regression suite |
-| `Birko.Framework/` (here) | task file + spec + dashboard |
-
-Message shape: `fix(<FINDING-ID>): <what now holds>`, with the task id in the body.
-
-**Why this matters beyond convenience.** Under the old three-repo model a fix and its test could
-not be atomic, and three things silently followed: `git bisect` on the framework ran tests from the
-*test repo's* HEAD — a tree from a different day, so you were not testing the commit you thought;
-CI had no way to know which test-repo commit corresponded to a framework commit; and `git revert`
-of a fix left its test behind, asserting the fixed behaviour and going red for the wrong reason.
-Given how much of this file rests on mutation testing — *"a revert that fails nothing is a missing
-test"* — the code and the tests that measure it have to be one versioned unit. **Do not split a fix
-from its test across commits.**
-
-- **An `## Out of scope` bullet that describes WORK gets an id before the task closes.** The generic
-  `/tasks close` step 5d sweeps for this, and it exists because of this repo: the index-DDL thread
-  (TASK-245 → 249) left **six** latent per-provider gaps as out-of-scope prose across five closed tasks,
-  which nothing ranks — the same evaporation the § *findings become tasks* rule is about, wearing a
-  different heading. They were eventually collected as [[TASK-252]]; the point is that they should each
-  have been offered as a spawn when they surfaced. A bullet naming an owner (`TASK-NNN owns it`) is a
-  boundary and belongs there; an unowned "Z is also broken" is a spawn that was skipped. Several small
-  ones from the same thread → **one grouped task**, not six.
 - **Stage explicitly. Never `git add -A`.**
 - **No `Co-Authored-By:` trailer.** Standing preference; overrides the harness default. Don't copy it
   from older commits that carry it.
-- Body over subject: say what was wrong and why the fix is shaped the way it is. A future reader gets
-  the commit, not the session that produced it.
+- **Do not split a fix from its test across commits.** `git bisect`, CI and `git revert` all break
+  quietly when you do — see the maintenance file for the measurement.
 
 ## Skills shipped by this repo
 
@@ -315,7 +239,15 @@ immediately).
 
 ## Recent Updates
 
-The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
+
+```sh
+awk '/^## Recent Updates/{s=1} s&&/^### /{f=1} f' CLAUDE.md | wc -c
+```
+
+The project-local `/roll-birko-changelog` skill performs the roll; mind the name, because the generic `/roll-changelog` resolves user-level first (§ Skills) and does not know this file. Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+⚠ **The budget counts BYTES OF ENTRIES, and both halves of that were earned.** The rule it replaces said "past ~5–8 entries" — measured 2026-09-19, **7 entries, inside that limit, were 31 KB: 52% of this file**, because an entry had grown from a paragraph to a 36–59 line essay since the rule was written. A file *just* cut from 408 KB to 50 KB (`68b26b5b`, the rulebook split) was back to 59.6 KB four commits later, reporting itself compliant the whole way — and the monorepo migration, which got the blame, had changed it by **24 bytes**. Then the first byte budget written here measured the whole **section**, counted this very paragraph as log content, and tripped on itself the moment it was saved. **A threshold counts the thing that grows — not the thing that is easy to count, and not itself.**
 
 ### The four root helper scripts were PowerShell, and none of them ran on Linux (2026-09-19)
 
@@ -420,240 +352,3 @@ promotion. Six things worth carrying:
   been reporting **81 of 248 projects** as a whole-tree result since 2026-09-18. Six occurrences in three
   files, two of them in the scaffolding skills that create test projects. **A guard for "none" is not a
   guard for "fewer than asked for."**
-
-### The framework is one repo: 349 repos consolidated, with every commit preserved (2026-09-18)
-
-[[TASK-457]], closing the open question `docs/adr/ADR-001` (the former untracked
-`WORKSPACE-STRUCTURE.md`) left in June. The family was **365 git repos** on a personal account; the
-framework is now `Birko-Framework/Birko.Framework` — 178 projects at the root, 167 test projects under
-`tests/` — beside `Birko-Framework/Birko.Web` and `Birko-Framework/Birko.Sandbox`. Consumers untouched.
-**349/349 absorbed, 0 failures.** Eight things worth carrying:
-
-- **Commit reconciliation was exact: 4,096 = 2,676 + 1,074 + 1 root + 345 merges**, and history
-  survives as history — oldest commit **2019-03-15**, with `git log --follow` and `git blame`
-  resolving back *through renames* (`Birko.Data.SQL/Attribute/` → `Attributes/`). `filter-repo
-  --to-subdirectory-filter` then merge, 349 times.
-- **⚠ The strongest argument for the migration was a defect already on file.** [[TASK-131]] measured
-  that every spec area globbed *out* of the aggregator's repo while `generated-at` stamped only that
-  repo's HEAD, so `/specs verify`'s staleness primitive **could never observe a source change** — not
-  weak, *decorative*, with `roadmap` DV7/DV8 inheriting it. One repo fixes it outright. **A polyrepo
-  had been the root cause of a filed defect for six weeks and nobody had connected the two.**
-- **A fix and its test could not be atomic, and three things silently followed:** `git bisect` ran
-  tests from the test repo's **HEAD** — a tree from a different day, so you were not testing the
-  commit you thought; CI could not know which test-repo commit matched a framework commit; and
-  `git revert` of a fix left its test behind, asserting the fixed behaviour and going red for the
-  wrong reason. For a codebase whose method is mutation testing, that is the real cost.
-- **The size argument was measured away, and inverted.** 178 repos ≈ 47 MB of history; the
-  consolidated repo packs to **14 MB** — the 200 MB aggregator was **6,566 never-gc'd loose objects**,
-  not content. So **no history rewrite was needed**: `mermaid.min.js` (3.2 MB) and the 1.5 MB audit
-  file stayed, and the audit file turned out to be referenced by 8 task/story files anyway.
-- **⚠ `.github/workflows/` is read only from the REPOSITORY ROOT.** The four `token-parity.yml` copies
-  existed per-repo *deliberately* — *"a gate that only fires on the source cannot catch an edit made to
-  the output"*, the failure that had already happened twice — and three of them became **inert files**
-  the moment their repos became directories. Replaced with one root workflow per repo, four checkouts
-  down to two. **When a repo becomes a subdirectory, everything that only works at a repo root dies
-  silently.**
-- **⚠ Deleting duplicated boilerplate ripples into the rules that mandate it.** 334 identical
-  `.gitignore` and 266 `License.md` went to one root each — and that invalidated the New Project
-  Checklist, two scaffolding skills, and a `verify-birko-conventions` check that asserts *every project
-  dir must have `License.md` and `.gitignore`*, which would have failed **345 times**. The root
-  `.gitignore` also had to keep the aggregator's `!.claude/skills/` un-ignore and an exception for the
-  tracked `.code-workspace`, or it would have started ignoring files the repo deliberately keeps.
-- **⚠ Windows MAX_PATH bit twice and `safe.directory` is protected-config only.**
-  `--to-subdirectory-filter` doubles the name depth, so `Birko.Communication.OAuth.Providers.Tests`
-  blew 260 chars under a long scratch path — git needs `core.longpaths=true` and Python's `io.open`
-  fails outright. And `-c safe.directory=*` is **ignored by design**; a temp `GIT_CONFIG_GLOBAL` that
-  `[include]`s the real one works and leaves the machine's config untouched.
-- **⚠ 46 repos had unpushed commits, so the local disk was the source of truth, not GitHub.** The
-  migration cloned from local paths. Worth stating because the instinct is to clone from the remote.
-  Still outstanding by explicit decision: **433 commits in WorkoutTracker (298), Presenter (72),
-  BardStudio (50) and Latent (13) are local-only with no remote.**
-
-### A migration filter that named a field but matched nothing deleted the whole collection (2026-09-17)
-
-TASK-314, the last high-tier `migrations` task and the fifth member of the scope-guard family — the first
-where the filter is **data** rather than a predicate, so `PredicateScope` has nothing to analyse. All five
-findings **CONFIRMED, 2 wider than filed, 0 refuted.** 263/263 green across 7 suites (205 before, 58 new),
-plus 894 in four `Birko.Data.Core`-consuming suites to show the exception change did not ripple. **Eight
-disjoint mutations.** The standing rules are in § Conventions. Nine things worth carrying:
-
-- **`{"status":{}}` is a typo that meant "everything".** It takes the object branch in every translator and
-  the operator loop adds nothing, so the clause came back empty and each caller appended its constraint
-  *only when non-empty*: SQL emitted `DELETE FROM {table}` with no `WHERE`, RavenDB sent
-  `FROM '{collection}'` unfiltered, Cosmos selected every document and deleted them one at a time.
-  Confirmed on all four named backends.
-- **ElasticSearch reached the same end state with a NON-NULL query.** `BoolQuery { Must = [] }` is
-  well-formed and means match-all, so the obvious guard — refuse a null query — never fires. Third time
-  this family has arrived as *a one-term thing that looks ordinary and means everything*, after `1 = 1`
-  and `{ "$nin": [] }`. The discriminator has to be the **term count**.
-- **One producer in `Birko.Data.Migrations`, not four copies**, guarding on each backend's own
-  translation rather than re-parsing the JSON — so the guard and the emitted statement cannot disagree.
-  Reusing `WholeTableWriteException` was priced first: all 4 consumer aggregators importing Migrations
-  already import `Birko.Data.Core`.
-- **Guard the whole verb family — including `CountDocuments`, which the finding did not name.** A count
-  answering for the whole collection beside a delete refused on the identical filter is § TASK-313's
-  defect. Safe to widen because the only way to mean "everything" here is the explicit `{}` door, which is
-  untouched and pinned on every backend.
-- **⚠ MongoDB and InfluxDB are immune by a DIFFERENT mechanism, measured and pinned rather than "fixed
-  from symmetry".** Mongo hands the parsed document to the driver, where `{"status":{}}` is an exact match
-  on an empty subdocument; Influx refuses a JSON filter outright (CR-M111).
-- **`SH-H029` was wider: the gate one line ABOVE the filed one has the identical defect and fires first.**
-  NEST's `ExistsResponse.Exists` is `HttpStatusCode == 200`, so an unreachable cluster answers "the index
-  is not there". Measured — reverting only the unfiled half reds all 3 tests, i.e. fixing what the finding
-  named would have changed nothing observable.
-- **`SH-H033` was wider in the other direction: points are stamped with the migration's AUTHORED date.**
-  So the 365-day expiry did not merely age records out — a migration authored over a year ago fell outside
-  the retention window the moment it was written and was never durably recorded at all.
-- **⚠ Two mutations failed ZERO, and both were my tests rather than the fix.** `SH-H030`'s suite never
-  reached the swallow: `GetAppliedVersions` opens with `EnsureInitialized()` → `FindBucketsAsync()`,
-  **outside** the try (§ TASK-291's exact trap) — and the second attempt, which did reach `QueryAsync`
-  inside the try, met a raw `HttpRequestException` that is not an `InfluxException` and was never
-  swallowed either. So that swallow only ever fired for failures Influx itself *reports*, which needs a
-  live server; the offline cover is now an honest source scan and both dead ends are written into the test
-  file. The Raven mutation exposed the same shape: a scan asserting the guard's call site but not the
-  helper's counting.
-- **⚠ And `SH-H031`'s fix had to go where the state is, not where the defect is.** `IMigrationStore` cannot
-  carry a session in its signature without changing every backend, so it is ambient on the concrete store
-  — entered through a **self-restoring scope**, because per-caller state assigned onto a longer-lived
-  object is the trap § Conventions keeps recording. Its behavioural assertion needs a replica set, not
-  merely a mongod, and skips loudly rather than passing when it finds one.
-
-### A ViewModel update blanked every column the ViewModel could not express (2026-09-17)
-
-TASK-316 / `SH-H034` + `SH-H035`, ranked to the top of [[STORY-051]] as silent corruption of a stored row
-on an **ordinary** write path. **Both confirmed WIDER than filed.** 37/37 in
-`Birko.Data.ViewModel.Tests` (17 pre-existing + 20 new), 263 across seven suites, **eleven disjoint
-mutations, every one red**. Ten things worth carrying:
-
-- **A ViewModel is a PARTIAL projection, so an update built from a fresh model is structurally unable to
-  be correct.** `Update` called `LoadModelInstance` — `CreateModelInstance()` + `MapToModel` — and never
-  read the row; every backend then persisted it whole. So `CreatedAt`/`UpdatedAt` and the `TenantGuid` a
-  wrapper injects — columns a ViewModel *cannot* map — were reset to their defaults on every update. The
-  fix maps onto a **detached copy of the stored row**.
-- **⚠ Both findings were WIDER, in different directions, and both widenings changed the work.** `SH-H034`
-  was filed against the two single-item repositories; the two **bulk** ones use the same helper, so it was
-  **4** update paths. `SH-H035` named 5 backends; measured, it is **96** `storeDelegate?.Invoke(...)` sites
-  with **0** consuming the result.
-- **⚠ And all nine live consumer repositories derive from a BULK base** — seven via
-  `ElasticSearchRepository`, two via `AsyncDataBaseRepository` — i.e. the half the finding did **not**
-  name. Fixing only the filed pair would have left **100% of the live consumers broken** while closing the
-  ticket. § TASK-215 is usually argued from consistency; here it was the difference between fixing the
-  defect and fixing nothing. **Widen on the root cause, then measure which half the consumers use.**
-- **⚠ The inherited reach number was wrong, and re-measuring at the close gate inverted it.** The task
-  recorded *"0 consumer `.cs` references to `AbstractViewModelRepository`"* — true, and irrelevant, because
-  consumers never name the base. Re-measured: **9 `override void MapToModel`** across **2** repos, so
-  **live, not latent**. § TASK-283's *grep for the subscription, not the identifier*, as *grep for the
-  override, not the base name*. One of them, `ProductRepository.cs:25`, even documents the false
-  assumption: *"Guid, CreatedAt, UpdatedAt are handled by base"*. Nothing handled them.
-- **⚠ THE REVIEW GATE REWROTE THIS FIX, and that is the session's main lesson.** The version that was
-  36/36 green and read cleanly had three real defects that `/code-review` and a security pass found
-  between them. None was visible from the tests.
-- **⚠ The worst of the three was a rule already in this file, six days old.** The merge mutated the object
-  the store handed back — SH-H016's mechanism, which [[TASK-313]] wrote up as *hand the inner store a
-  detached copy*. So the update reached store state **before** and **independently of** the write: a failed
-  write left it applied, and on JSON/XML the next unrelated write would flush it to disk. **And my own
-  probe store detached, which is exactly what hid it** — the test double was kinder than every real
-  backend, so the suite could not see it. Proving the fix needed a *live-reference* store.
-- **⚠ Enabling a dormant optimisation is a behaviour change, and it was backed out.** Making the inert hash
-  skip real looked like the point of `SH-H035`. `AuditStoreWrapper`, `TimestampStoreWrapper` and
-  `EventSourcingStoreWrapper` all sit **inside** `Store.Update` in `StoreWrapperBuilder`'s **recommended**
-  chain, so a suppressed write silently drops the audit stamp, the `UpdatedAt` bump and the domain event —
-  and `VersionedStoreWrapper`'s optimistic check stops running. § TASK-287: a fix must not smuggle in a
-  behaviour change. The write stays unconditional; the decision is [[TASK-453]].
-- **The skip's two silent-loss paths survive as GUARD TESTS rather than as behaviour.** While it existed it
-  had a stale hash oracle (a caller restoring a value someone else changed matched the old hash and their
-  write was dropped) and a hash refreshed before the write (so a retry after a failure was a no-op). Both
-  are now tests that red on the naive re-enable, written onto TASK-453. **Building a thing and taking it
-  out can still leave the measurement behind.**
-- **Hoisting a delegate changes WHEN it sees things.** `CreateCore` assigns `data.Guid ??= …` *before*
-  invoking the store delegate, so a transform that ran there could stamp child rows with the new key.
-  Moving it out would have taken that away silently — so the key is pre-assigned first, which every store
-  honours because every one uses `??=` (checked, not assumed).
-- **Cost recorded rather than hidden, and the cheap alternative refused for a measured reason.** The merge
-  is **one extra read per updated entity, including on the bulk path**. A single bulk read keyed on a Guid
-  `Contains` would be one round trip and is the translation landmine § TASK-218/137 record across these
-  eight backends, so `Read(Guid)` — no translator involved — was chosen deliberately. **Contract change
-  stated where a consumer meets it:** `MapToModel` may now receive a **populated** target, so it must
-  assign rather than accumulate; checked against all nine consumer implementations, 0 of 9 accumulate.
-  ⚠ Spawned [[TASK-451]], [[TASK-452]], [[TASK-453]], [[TASK-454]].
-
-### Localized writes destroyed the default-culture text, and localized deletes hit the wrong rows (2026-09-17)
-
-TASK-313, the first of [[STORY-051]]'s seven remaining high triage tasks and the top of its blast-radius
-ranking: `SH-H015`/`SH-H017` claim silent corruption of stored text and `SH-H018` a destructive statement
-selecting a different set of rows than its own read. **3 CONFIRMED, 1 CONFIRMED-NARROWER, 0 refuted.**
-**112/112 green** (79 pre-existing + 33 new), **four disjoint mutations** — A 7, B 9, C 5, D 6 of 112. The
-standing rule is in § Conventions. Eight things worth carrying:
-
-- **All four are one root cause seen from four sides:** the decorators treat an entity's own column and
-  its translation as the same slot, and they resolve a filter for reads but not for writes. Fixing the
-  file a finding happened to name would have left three copies live, which is why the rule now lives once
-  in `Decorators/LocalizedEntityFields.cs` and all four wrappers call it.
-- **⚠ The obvious fix wrote through, and only a test caught it.** Preserving the base column by swapping
-  the caller's values and restoring them in a `finally` fails on exactly the stores `SH-H016` is about —
-  they keep the reference, so the restore lands in the store. 4 tests red. The fix hands over a detached
-  copy instead.
-- **⚠ All 79 pre-existing tests passed against the unfixed code and still pass now.** Nothing in a
-  harvest-grade suite could see any of the four defects — the reason they survived. A green suite said
-  nothing.
-- **`SH-H015` narrowed on measurement:** the corruption holds for `Update`, where a stored default-culture
-  value is destroyed; `Create` has no stored row, so both the column and the translation take the caller's
-  text, which is a fallback and not a defect. Deliberately unchanged, and said so rather than fixed from
-  symmetry.
-- **Mutation B reds an `SH-H015` test, and that is the finding not the leak.** `SH-H016` *defeats*
-  `SH-H015`'s fix on a live-instance store: preserving the base column works by reading the stored value
-  back, and a corrupting read leaves nothing correct to read. The coupling is recorded on the finding.
-- **The crossed-row fixture is what makes `SH-H018` provable** — one row whose Slovak *translation* is
-  `Stolicka`, one with `Stolicka` in its *base* column — so a predicate naming it under `sk` has a right
-  answer and a wrong one, and the delete is asserted to agree with the equivalent read.
-- **Both twins are covered, because they are different code.** The async bulk wrapper implements
-  `UpdateAsync(filter, action)` and `DeleteAsync(filter)` by reading and looping where the sync one hands
-  a callback to the inner store (§ TASK-245: the twin you patched may not be the one anything calls).
-- **⚠ Consumer reach re-measured: 0 `.cs` files across all 16 consumer repos**, so nothing observable
-  changes for a consumer today — a reason not to overstate urgency, and per § TASK-219/256 not a reason to
-  discount the fix.
-
-### `Destroy()` read as disposal on the framework's central store interface (2026-09-17)
-
-TASK-321 / `SH-H046`, picked because it was the **only non-latent** item left in the high tier — every
-other one measures 0 consumer references, while `IStore` is the interface every consumer reads.
-`Destroy()` / `DestroyAsync()` were documented as *"destroys the store and releases all resources"*,
-while all 17 implementations permanently delete data and `RavenDBStore` drops the **entire database**
-(`hardDelete: true`). **133/133 green** across four suites, 7 new, **four mutations**. Documentation
-only — no implementation changed. Seven things worth carrying:
-
-- **⚠ The finding's supporting claim was FALSE, and correcting it made the defect worse, not smaller.**
-  It said *"no store implements IDisposable, so a consumer looking for cleanup finds only Destroy()"*.
-  Measured: `RavenDBStore` and `InfluxDBStore` declare it and the SQL stores reference it, releasing
-  exactly the resources the doc claimed. So the doc did not merely mislead — it **described what an
-  existing, correct member already does**, giving a reader no reason to look for `Dispose()`. Disposal
-  is genuinely absent from the *contract*, which is why the fix belongs there and on no implementation.
-  **Re-verify a finding's supporting claims, not only its headline**; this one changed the framing.
-- **⚠ Widened by the SPEC REGEN, not by reading code.** Grepping the spec tree for the old phrase found
-  a second area documenting the same disagreement, which traced to `IBaseRepository.Destroy()` carrying
-  the **identical sentence** — and every repository family forwards to the store, so a SQL repository's
-  `Destroy()` drops the entity's table. Fixed together per § TASK-215: a warning on one contract beside
-  a reassurance on the other, for one operation, is the half-fix that rule names. **Step 7 is a place
-  findings are discovered, not just a place specs are updated.**
-- **A doc fix with no test is a doc fix somebody reverts while tidying.** The tests pin the contract
-  shape (no disposal member, so the redirect stays honest) and the doc text itself. Restoring the old
-  summary reds 2; deleting the paragraph that names the alternatives reds 1 — § SH-H037's *a guard that
-  only says no gets reached around*, as an assertion.
-- **⚠ The doors were verified before being named** (§ TASK-263). `Delete(filter)` is on
-  `IBulkDeleteStore<T>`, but `DeleteAll()` is a **base-class** member and on no interface — so the doc
-  says that rather than implying otherwise, and a test asserts both against the types.
-- **⚠ A mutation showed two of my own tests were duplicates.** Making InMemory's `Destroy` a no-op red
-  2 tests and **neither was mine** — the pre-existing behaviour tests carry that weight. My versions
-  were deleted and the class remarks point at them. *A mutation tells you who owns a guarantee, not
-  only whether one exists.*
-- **⚠ Third scan this session to match its own explanation, and the fix had to be right twice.** The
-  new remarks quote the old wording to record it, so a flat `NotContain` fails; a line-based filter
-  then passed on the store interfaces **by luck** (each quotation on one line) and failed on the
-  repository contract, whose async remark wraps across two. Both files now share one
-  `WithoutQuotations` helper — two tests checking one thing two different ways is the shape this file
-  keeps recording, and it does not stop being that because they are tests.
-- **Rejected, with reasons recorded rather than left implicit:** renaming to `DestroyAll` (§ Conventions'
-  naming rule is about a short name one keystroke from a safe one; `Destroy` is already alarming and it
-  was the sentence underneath that disarmed it — and a rename breaks 17 implementations, 7
-  `JobQueueSchema.DropAsync` helpers and every wrapper), and adding `IDisposable` to `IStore` (a design
-  decision about a central interface, not something to slip into a documentation fix).

@@ -66,5 +66,5 @@ and correctly filed nothing — that was symmetry; this is a stated remedy nobod
 ## Out of scope
 
 - Changing what the Birko checks assert (TASK-267's boundary, inherited).
-- The `~5–8 entries` `## Recent Updates` rolling rule — that is a `/roll-birko-changelog` run, not a
-  hook.
+- The `## Recent Updates` rolling rule — `~10 KB of entries` (retuned 2026-09-19; was `~5–8 entries`)
+  — that is a `/roll-birko-changelog` run, not a hook.

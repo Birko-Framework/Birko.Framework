@@ -346,23 +346,30 @@ ISettings (GetId)
 
 ## Dependency Flow
 
-```
-Birko.Contracts (zero deps)
-  -> Birko.Configuration (settings)
-  -> Birko.Data.Core (models, ViewModels, filters)
-       -> Birko.Data.Stores (store interfaces, imports Configuration)
-            -> Birko.Data.Repositories (repository interfaces)
-            -> Provider Implementations (SQL, NoSQL, JSON)
-            -> ViewModel Repositories
-            -> Features (Migrations, Sync, Tenant, EventSourcing, Patterns)
-  -> Birko.BackgroundJobs (RetryPolicy from Contracts)
-  -> Birko.MessageQueue (RetryPolicy from Contracts)
+The **authoritative graph** — every project and every edge — is
+[CLAUDE-projects.md](../CLAUDE-projects.md) § Dependency Flow. That file is the single producer;
+this section states the rules the graph encodes and deliberately does not copy it.
 
-Birko.Time.Abstractions (zero deps)
-  -> Birko.Time (calendars, working hours)
+The invariants:
 
-Validation, Caching, Security, EventBus, Storage, Messaging, Telemetry
-```
+- **Contracts projects have zero dependencies.** `Birko.Contracts`, `Birko.Models.Contracts` and
+  `Birko.AI.Contracts` import nothing, so a consumer can reference a contract without pulling in an
+  implementation. Adding a dependency to one breaks that promise for every consumer aggregator.
+- **The data layer flows one way:** `Birko.Contracts` → `Birko.Configuration` → `Birko.Data.Core`
+  → `Birko.Data.Stores` → `Birko.Data.Repositories`. Provider implementations (SQL, NoSQL, file)
+  and feature layers (Migrations, Sync, Tenant, EventSourcing, Patterns, Tagging, Composition)
+  attach at or above the store level, never below it.
+- **Heavy dependencies live in optional siblings.** Anything needing a database driver, a cloud SDK
+  or a UI toolkit is its own project — `Birko.Data.SQL.PostgreSQL`, `Birko.Health.Data.SQL`,
+  `Birko.AI.Providers`, `Birko.Models.Users.SQL` — so the layer it extends stays importable alone.
+- **Models, AI, Health, Workflow, BackgroundJobs, Communication and Time are independent stacks,**
+  each rooted at its own zero-dependency contract or abstraction project. They are not descendants
+  of the data layer, and the graph is not a single tree.
+
+⚠ This section carried its own abbreviated copy of the graph until 2026-09-19. Nothing kept it in
+sync, and it had drifted to describe roughly a fifth of the framework — the Models, AI, Health,
+Workflow, Communication, Migrations, Tagging and Composition families were **all eight** absent.
+Link to the canonical graph; do not reintroduce a second copy.
 
 ## Extensibility
 

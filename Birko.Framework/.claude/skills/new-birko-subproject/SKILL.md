@@ -14,8 +14,8 @@ This skill is the inverse of [[birko-new-project]]: that one scaffolds a **consu
 Before generating anything, open and re-read these files in `C:\Source\Birko\Framework\Birko.Framework\`. They are the source of truth — if anything in this skill drifts from them, **follow the files**.
 
 - `CLAUDE-maintenance.md` — full new-project checklist, GUID requirements, solution + workspace folder groups, test + health-check requirements.
-- `CLAUDE.md` — root architecture overview + dependency flow diagram (helps decide which existing project the new one depends on).
-- `CLAUDE-projects.md` — catalog of existing projects; check whether the proposed work belongs in an existing project before creating a new one.
+- `CLAUDE.md` — root architecture overview (store/repository hierarchies, settings chain).
+- `CLAUDE-projects.md` — catalog of existing projects **and the Dependency Flow graph** (helps decide which existing project the new one depends on); check whether the proposed work belongs in an existing project before creating a new one.
 - `Birko.Framework.slnx` — canonical solution shape; copy a similar entry.
 - `Birko.Framework.code-workspace` — workspace folder entries, alphabetically sorted within each Group.
 - `Birko.Framework.csproj` — aggregator that imports every shared project's `.projitems`.
@@ -96,9 +96,9 @@ Add the `.projitems` import alongside the existing imports for that folder group
 <Import Project="..\Birko.X\Birko.X.projitems" Label="Shared" />
 ```
 
-### Root `CLAUDE.md` — Dependency Flow
+### `CLAUDE-projects.md` — Dependency Flow
 
-If the new project changes the dependency tree (most do), update the **Dependency Flow** ASCII diagram in `C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md` so future reads of the architecture stay accurate.
+If the new project changes the dependency tree (most do), update the **Dependency Flow** ASCII diagram in `C:\Source\Birko\Framework\Birko.Framework\CLAUDE-projects.md` so future reads of the architecture stay accurate. ⚠ The graph moved out of root `CLAUDE.md` on 2026-09-19 — that file now carries only a pointer, so an edit made there changes nothing.
 
 ### Root `README.md` + `docs/`
 

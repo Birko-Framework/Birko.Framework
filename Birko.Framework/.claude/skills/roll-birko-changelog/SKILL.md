@@ -5,7 +5,13 @@ description: Prune the "Recent Updates" section in `Birko.Framework/CLAUDE.md` b
 
 # Birko Framework — Roll Recent Updates into CHANGELOG
 
-The `## Recent Updates` section at the bottom of `C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md` is a rolling log of architectural changes. It grows on every change and would eventually bloat the project instructions (which Claude reads on every invocation). When it has more than ~5–8 entries, the oldest entries should be moved to `CHANGELOG.md` for long-term preservation while keeping `CLAUDE.md` focused on the latest changes.
+The `## Recent Updates` section at the bottom of `C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md` is a rolling log of architectural changes. It grows on every change and bloats the project instructions, which Claude reads on every invocation. **Roll the oldest entries into `CHANGELOG.md` whenever the ENTRIES exceed ~10 KB** — the same trigger CLAUDE.md § Recent Updates records:
+
+```sh
+awk '/^## Recent Updates/{s=1} s&&/^### /{f=1} f' CLAUDE.md | wc -c
+```
+
+⚠ **Measure the entries — not the whole section, and never the entry COUNT.** This replaced a *"more than ~5–8 entries"* trigger on 2026-09-19, when **7 entries, inside that limit, were 31 KB and 52% of CLAUDE.md**, because an entry had grown from a paragraph to a 36–59 line essay since the count was chosen. A first attempt at the byte budget measured the whole section, counted its own rule text as log content, and tripped immediately. See CLAUDE.md § Recent Updates for the full measurement.
 
 This is the same manual chore the user performed in commit `0f51a01` (*docs: backfill CHANGELOG with 5 entries from CLAUDE.md Recent Updates*).
 
@@ -18,7 +24,7 @@ If either file's structure has evolved since this skill was written, **follow th
 
 ## Inputs to gather
 
-1. **How many entries to roll** — default to **all entries older than 30 days** from today (`2026-05-26` was the date when this skill was authored — use today's actual date via the conversation context, not this literal). Offer alternatives: "oldest 3", "oldest 5", "everything before YYYY-MM-DD", "everything except the most recent N".
+1. **How many entries to roll** — default to **the oldest entries needed to bring the remainder under ~10 KB**, computed with the command above. ⚠ Do **not** default to an age window. Entries land several per day at ~2.5 KB each, so the section passes 10 KB in roughly 3–5 entries: the previous *"all entries older than 30 days"* default would have rolled **nothing** on 2026-09-19, with the section sitting at 31 KB and two entries dated that same day. Offer alternatives: "oldest 3", "oldest 5", "everything before YYYY-MM-DD", "everything except the most recent N".
 2. **Confirm the cutoff** — list the entries that will be moved and ask the user to confirm before mutating files.
 
 ## Format conversion

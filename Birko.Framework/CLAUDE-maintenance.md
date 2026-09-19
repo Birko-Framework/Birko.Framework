@@ -15,6 +15,47 @@ When making major changes to a project, update its CLAUDE.md to reflect:
 - Updated interfaces or abstract class signatures
 - New conventions or important notes
 
+## Integration model — commit to `main`, one commit per repo
+
+
+`tasks/.config.yml` sets `integration: single-branch`. **This family does not branch per task**, so
+`/tasks pick` offers no `task/TASK-NNN` branch and `/tasks close` skips its merge step. `done` still
+means *landed on the default branch* — only the mechanism differs from the generic PR-per-task default.
+
+**One fix is now ONE commit.** The production change, its regression suite and the task file are
+paths in the same repo, so they land together:
+
+| Path | Contents |
+|---|---|
+| `Birko.{Project}/` | the production change |
+| `tests/Birko.{Project}.Tests/` | the regression suite |
+| `Birko.Framework/` (here) | task file + spec + dashboard |
+
+Message shape: `fix(<FINDING-ID>): <what now holds>`, with the task id in the body.
+
+**Why this matters beyond convenience.** Under the old three-repo model a fix and its test could
+not be atomic, and three things silently followed: `git bisect` on the framework ran tests from the
+*test repo's* HEAD — a tree from a different day, so you were not testing the commit you thought;
+CI had no way to know which test-repo commit corresponded to a framework commit; and `git revert`
+of a fix left its test behind, asserting the fixed behaviour and going red for the wrong reason.
+Given how much of this file rests on mutation testing — *"a revert that fails nothing is a missing
+test"* — the code and the tests that measure it have to be one versioned unit. **Do not split a fix
+from its test across commits.**
+
+- **An `## Out of scope` bullet that describes WORK gets an id before the task closes.** The generic
+  `/tasks close` step 5d sweeps for this, and it exists because of this repo: the index-DDL thread
+  (TASK-245 → 249) left **six** latent per-provider gaps as out-of-scope prose across five closed tasks,
+  which nothing ranks — the same evaporation the § *findings become tasks* rule is about, wearing a
+  different heading. They were eventually collected as [[TASK-252]]; the point is that they should each
+  have been offered as a spawn when they surfaced. A bullet naming an owner (`TASK-NNN owns it`) is a
+  boundary and belongs there; an unowned "Z is also broken" is a spawn that was skipped. Several small
+  ones from the same thread → **one grouped task**, not six.
+- **Stage explicitly. Never `git add -A`.**
+- **No `Co-Authored-By:` trailer.** Standing preference; overrides the harness default. Don't copy it
+  from older commits that carry it.
+- Body over subject: say what was wrong and why the fix is shaped the way it is. A future reader gets
+  the commit, not the session that produced it.
+
 ## New Project Checklist
 Every project directory must contain:
 
