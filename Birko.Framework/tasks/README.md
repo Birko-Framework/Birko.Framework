@@ -29,21 +29,21 @@
 > it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays `in-progress`
 > with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-19 (`/tasks triage`, chained from `/tasks new TASK-470`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-19 (`/tasks triage`, chained from `/tasks new TASK-471`/`TASK-472`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 155   |
+| todo         | —     | —       | 157   |
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 169   |
 | cancelled    | 0     | 0       | 4     |
 
-`todo` by priority: 32× P1 · 98× P2 · 25× P3.  
+`todo` by priority: 32× P1 · 100× P2 · 25× P3.  
 > ℹ Recounted from the files on each refresh rather than incremented — a breakdown that sums correctly
 > is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
 > one P3 short, while still totalling right). No P0 is open.
@@ -96,7 +96,9 @@ _None_
     - [ ] TASK-007 Implement Birko.Storage.Google · FEATURE-004
   - STORY-006 MinIO (S3-compatible) — planned (0/1 done)
     - [ ] TASK-008 Implement Birko.Storage.Minio · FEATURE-004
-- **EPIC-005** Birko.Messaging — Provider expansion — planned (0/5 tasks done)
+- **EPIC-005** Birko.Messaging — Provider expansion — planned (0/7 tasks done)
+  - [ ] TASK-471 Implement Birko.Messaging.Brevo · FEATURE-005 _(epic-direct — dual-channel)_
+  - [ ] TASK-472 Implement Birko.Messaging.Mailjet · FEATURE-005 _(epic-direct — dual-channel)_
   - STORY-007 Email providers (SendGrid + Mailgun) — planned (0/2 done)
     - [ ] TASK-009 Implement Birko.Messaging.SendGrid · FEATURE-005
     - [ ] TASK-010 Implement Birko.Messaging.Mailgun · FEATURE-005

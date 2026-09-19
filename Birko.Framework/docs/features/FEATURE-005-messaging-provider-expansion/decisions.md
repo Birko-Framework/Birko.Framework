@@ -14,6 +14,7 @@ created: 2026-05-28
 | D1 | Email providers (SendGrid + Mailgun) ([[STORY-007]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `planned`. | 2026-05-28 | ai | [[TASK-009]], [[TASK-010]] |
 | D2 | SMS via Twilio ([[STORY-008]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `planned`. | 2026-05-28 | ai | [[TASK-011]] |
 | D3 | Push notifications (Firebase + APNs) ([[STORY-009]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `planned`. | 2026-05-28 | ai | [[TASK-012]], [[TASK-013]] |
+| D4 | Dual-channel providers — Brevo + Mailjet, each one project implementing **both** `IEmailSender` and `ISmsSender` | proposed | Raised 2026-09-19. Neither provider was covered by D1–D3, and neither fits their channel split: one API and one credential set serve email *and* SMS, so splitting per channel would duplicate the client, settings and error mapping. Tasks were filed epic-direct **ahead of the decision** at the user's request, so they are `todo` under a `proposed` row — run `/feature decide` to flip this to `approved` (or `deferred`/`removed`, in which case `/tasks cancel` the two). | 2026-09-19 | ai | [[TASK-471]], [[TASK-472]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -34,3 +35,9 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   reconstructed. Where a real dated decision with reasoning exists it lives in `CHANGELOG.md` or
   `CLAUDE.md` § Recent Updates, which remain the authority for *why*. Rows carry no invented `deferred`
   or `removed` history, so the absence of such rows means "not recorded", not "never considered".
+- 2026-09-19 — **D4 opened as `proposed`.** Asked whether Birko had a Brevo/Mailjet gate: the abstractions
+  exist (`IEmailSender`, `ISmsSender`) but the only implementation in the framework is `SmtpEmailSender`, and
+  `ISmsSender` has **no** implementation at all, so EPIC-005 is entirely unstarted. Filed [[TASK-471]] and
+  [[TASK-472]] epic-direct rather than under [[STORY-007]]/[[STORY-008]], because a dual-channel provider
+  belongs to both stories at once. The row is `proposed`, not `approved`: the placement was decided, the
+  build was not.

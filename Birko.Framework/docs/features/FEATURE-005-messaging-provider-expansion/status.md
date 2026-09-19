@@ -1,6 +1,6 @@
 ---
 id: FEATURE-005
-generated: 2026-08-01
+generated: 2026-09-19
 ---
 
 # Birko.Messaging — Provider expansion — Status
@@ -17,17 +17,19 @@ generated: 2026-08-01
 | ✏️ changed | 0 |
 | ⏸️ deferred | 0 |
 | ❌ removed | 0 |
-| 💭 proposed (undecided) | 0 |
+| 💭 proposed (undecided) | 1 |
 
 ## Build progress
 
-0 / 5 tasks done.
+0 / 7 tasks done.
 
 - [ ] TASK-009 Implement Birko.Messaging.SendGrid
 - [ ] TASK-010 Implement Birko.Messaging.Mailgun
 - [ ] TASK-011 Implement Birko.Messaging.Twilio
 - [ ] TASK-012 Implement Birko.Messaging.Firebase
 - [ ] TASK-013 Implement Birko.Messaging.Apple
+- [ ] TASK-471 Implement Birko.Messaging.Brevo — *filed ahead of its decision (D4 is still undecided)*
+- [ ] TASK-472 Implement Birko.Messaging.Mailjet — *filed ahead of its decision (D4 is still undecided)*
 
 ## What can be tested now
 
@@ -39,4 +41,6 @@ N/A — backfilled feature; see [idea.md](idea.md) § Prototype.
 
 ## Next step
 
-Nothing scheduled. Work begins when the first task is picked.
+One decision is waiting: **D4** — whether to add Brevo and Mailjet, two services that send both email and
+text messages through a single account. The work has been written up so it is ready to start, but nobody has
+said yes to it yet. Everything else here was agreed in May and simply has not been started.
