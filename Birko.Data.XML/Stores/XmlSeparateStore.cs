@@ -134,15 +134,12 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
-            // Before the dictionary is touched: a refusal that leaves a row behind is worse than
-            // the NullReferenceException it replaces.
-            var settings = RequireSettings();
-
+            EnsureWritable();
             data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
             _items.Add(data.Guid.Value, data);
 
-            var fileName = $"{settings.Name}-{data.Guid.Value}.xml";
+            var fileName = $"{RequireSettings().Name}-{data.Guid.Value}.xml";
             var filePath = PathValidator.CombineAndValidate(PathDirectory!, fileName);
 
             AddFile(data.Guid.Value, filePath);
@@ -159,6 +156,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
             {
                 storeDelegate?.Invoke(data);
@@ -177,6 +175,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void DeleteCore(T data)
         {
+            EnsureWritable();
             if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
             {
                 _items.Remove(data.Guid.Value);
@@ -197,6 +196,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void CreateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             foreach (var item in data.Where(x => x != null))
             {
                 CreateCore(item, storeDelegate);
@@ -206,6 +206,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void UpdateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             foreach (var item in data.Where(x => x != null))
             {
                 UpdateCore(item, storeDelegate);
@@ -215,6 +216,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void DeleteCore(IEnumerable<T> data)
         {
+            EnsureWritable();
             foreach (var item in data.Where(x => x != null))
             {
                 DeleteCore(item);

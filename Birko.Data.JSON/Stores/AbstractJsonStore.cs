@@ -72,6 +72,7 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
             _items.Add(data.Guid.Value, data);
@@ -82,6 +83,7 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
             {
                 storeDelegate?.Invoke(data);
@@ -93,6 +95,7 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override void DeleteCore(T data)
         {
+            EnsureWritable();
             if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
             {
                 _items.Remove(data.Guid.Value);
@@ -123,6 +126,34 @@ namespace Birko.Data.JSON.Stores
         /// Saves data to the JSON file.
         /// </summary>
         protected abstract void SaveData();
+
+        /// <summary>
+        /// Refuses a write this store cannot persist. Called as the first statement of every write
+        /// seam, before anything is mutated.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Measured on the shipped code: an unconfigured store accepted a create, returned a real
+        /// Guid and reported <c>Count == 1</c>, and wrote nothing to disk — on every file store, both
+        /// twins, both formats. The persistence methods each opened with a guard that <c>return</c>ed
+        /// when there was no path or name, so the failure was reported as success. That is
+        /// § Conventions' rule exactly: a write that cannot be applied must never report success.
+        /// </para>
+        /// <para>
+        /// The default is a no-op because this base cannot see settings — they are declared one level
+        /// down, in the class that owns <c>SetSettings</c>. That class supplies the check once for its
+        /// whole family, so the separate- and batch-file stores below it inherit it.
+        /// </para>
+        /// <para>
+        /// ⚠ First statement, not last. A guard that runs after the in-memory dictionary is updated
+        /// still throws the right exception and still leaves the store holding a row no file backs —
+        /// a caller that catches the refusal is then worse off than one that never tried.
+        /// </para>
+        /// </remarks>
+        protected virtual void EnsureWritable()
+        {
+        }
+
 
         /// <summary>
         /// Deserializes data from a stream using the configured serializer.
@@ -174,6 +205,7 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override void CreateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             bool save = false;
             foreach (var item in data.Where(x => x != null))
             {
@@ -194,6 +226,7 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override void UpdateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             bool save = false;
             foreach (var item in data.Where(x => x != null))
             {
@@ -213,6 +246,7 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override void DeleteCore(IEnumerable<T> data)
         {
+            EnsureWritable();
             bool save = false;
             foreach (var item in data.Where(x => x != null))
             {

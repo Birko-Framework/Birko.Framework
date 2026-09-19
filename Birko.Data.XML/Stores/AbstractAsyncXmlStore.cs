@@ -72,6 +72,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             await EnsureDataLoadedAsync(ct);
 
             if (data == null) return Guid.Empty;
@@ -88,6 +89,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             await EnsureDataLoadedAsync(ct);
 
             if (data?.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
@@ -101,6 +103,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
         {
+            EnsureWritable();
             await EnsureDataLoadedAsync(ct);
 
             if (data?.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
@@ -142,6 +145,34 @@ namespace Birko.Data.XML.Stores
         /// Loads data from the XML file asynchronously.
         /// </summary>
         /// <param name="ct">Cancellation token.</param>
+
+        /// <summary>
+        /// Refuses a write this store cannot persist. Called as the first statement of every write
+        /// seam, before anything is mutated.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Measured on the shipped code: an unconfigured store accepted a create, returned a real
+        /// Guid and reported <c>Count == 1</c>, and wrote nothing to disk — on every file store, both
+        /// twins, both formats. The persistence methods each opened with a guard that <c>return</c>ed
+        /// when there was no path or name, so the failure was reported as success. That is
+        /// § Conventions' rule exactly: a write that cannot be applied must never report success.
+        /// </para>
+        /// <para>
+        /// The default is a no-op because this base cannot see settings — they are declared one level
+        /// down, in the class that owns <c>SetSettings</c>. That class supplies the check once for its
+        /// whole family, so the separate- and batch-file stores below it inherit it.
+        /// </para>
+        /// <para>
+        /// ⚠ First statement, not last. A guard that runs after the in-memory dictionary is updated
+        /// still throws the right exception and still leaves the store holding a row no file backs —
+        /// a caller that catches the refusal is then worse off than one that never tried.
+        /// </para>
+        /// </remarks>
+        protected virtual void EnsureWritable()
+        {
+        }
+
         protected abstract Task LoadDataAsync(CancellationToken ct);
 
         /// <summary>
@@ -240,6 +271,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task CreateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             await EnsureDataLoadedAsync(ct);
 
             if (data == null) return;
@@ -260,6 +292,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task UpdateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             await EnsureDataLoadedAsync(ct);
             if (data == null) return;
 
@@ -275,6 +308,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task DeleteCoreAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
+            EnsureWritable();
             await EnsureDataLoadedAsync(ct);
             if (data == null) return;
 

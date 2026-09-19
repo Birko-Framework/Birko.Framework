@@ -46,6 +46,10 @@ namespace Birko.Data.XML.Stores
                 $"{GetType().Name} has no settings, so it cannot write. Call "
                 + "SetSettings(new Settings(location, name)) before using the store.");
 
+
+        /// <inheritdoc />
+        protected override void EnsureWritable() => RequireSettings();
+
         /// <summary>
         /// Gets the file path for the XML store.
         /// </summary>
@@ -106,7 +110,22 @@ namespace Birko.Data.XML.Stores
             if (settings is Settings settings1)
             {
                 SetSettings(settings1);
+                return;
             }
+
+            // Silently ignoring it left the store unconfigured, and an unconfigured store used to
+            // accept writes and persist nothing (see EnsureWritable). So the caller believed both
+            // that they had configured the store and that their writes had been saved.
+            //
+            // Measured before making this throw: Settings is the ONLY implementation of ISettings
+            // across the framework and all consumer repos - every other match is a
+            // `where TSettings : ISettings` constraint - so this refusal cannot fire for any type
+            // that exists today. It is here for whoever writes the first one.
+            throw new ArgumentException(
+                $"Settings of type '{settings?.GetType().Name ?? "null"}' cannot configure "
+                + $"{GetType().Name}; it needs a {nameof(Settings)} (or a subclass such as "
+                + "SqLiteSettings). This used to be ignored, which left the store unconfigured.",
+                nameof(settings));
         }
 
         /// <inheritdoc />

@@ -146,15 +146,12 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
-            // Before the dictionary is touched: a refusal that leaves a row behind is worse than
-            // the NullReferenceException it replaces.
-            var settings = RequireSettings();
-
+            EnsureWritable();
             data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
             _items.Add(data.Guid.Value, data);
 
-            var fileName = $"{settings.Name}-{data.Guid.Value}.xml";
+            var fileName = $"{RequireSettings().Name}-{data.Guid.Value}.xml";
             var filePath = PathValidator.CombineAndValidate(PathDirectory!, fileName);
 
             AddFile(data.Guid.Value, filePath);
@@ -173,6 +170,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
             {
                 storeDelegate?.Invoke(data);
@@ -194,6 +192,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
         {
+            EnsureWritable();
             if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
             {
                 _items.Remove(data.Guid.Value);
@@ -214,6 +213,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task CreateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             foreach (var item in data.Where(x => x != null))
             {
                 await CreateCoreAsync(item, storeDelegate, ct);
@@ -223,6 +223,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task UpdateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             foreach (var item in data.Where(x => x != null))
             {
                 await UpdateCoreAsync(item, storeDelegate, ct);
@@ -232,6 +233,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task DeleteCoreAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
+            EnsureWritable();
             foreach (var item in data.Where(x => x != null))
             {
                 await DeleteCoreAsync(item, ct);

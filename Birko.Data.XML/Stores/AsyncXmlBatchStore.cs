@@ -104,6 +104,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
             _items[data.Guid.Value] = data;
@@ -114,6 +115,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             if (data.Guid != null && _items.ContainsKey(data.Guid.Value))
             {
                 storeDelegate?.Invoke(data);
@@ -125,6 +127,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
         {
+            EnsureWritable();
             if (data.Guid != null && _items.Remove(data.Guid.Value))
             {
                 await SaveDataAsync(ct);
@@ -134,6 +137,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task CreateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             var changed = false;
             foreach (var item in data.Where(x => x != null))
             {
@@ -148,6 +152,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task UpdateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
+            EnsureWritable();
             var changed = false;
             foreach (var item in data.Where(x => x != null))
             {
@@ -164,6 +169,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task DeleteCoreAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
+            EnsureWritable();
             var changed = false;
             foreach (var item in data.Where(x => x != null))
             {

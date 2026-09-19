@@ -105,6 +105,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
             _items[data.Guid.Value] = data;
@@ -115,6 +116,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             if (data.Guid != null && _items.ContainsKey(data.Guid.Value))
             {
                 storeDelegate?.Invoke(data);
@@ -126,6 +128,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void DeleteCore(T data)
         {
+            EnsureWritable();
             if (data.Guid != null && _items.Remove(data.Guid.Value))
             {
                 SaveData();
@@ -135,6 +138,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void CreateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             var changed = false;
             foreach (var item in data.Where(x => x != null))
             {
@@ -149,6 +153,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void UpdateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            EnsureWritable();
             var changed = false;
             foreach (var item in data.Where(x => x != null))
             {
@@ -165,6 +170,7 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void DeleteCore(IEnumerable<T> data)
         {
+            EnsureWritable();
             var changed = false;
             foreach (var item in data.Where(x => x != null))
             {
