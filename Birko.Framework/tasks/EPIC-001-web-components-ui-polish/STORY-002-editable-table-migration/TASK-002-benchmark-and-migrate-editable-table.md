@@ -2,7 +2,7 @@
 id: TASK-002
 feature: FEATURE-001
 parent: STORY-002
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-05-28
@@ -108,3 +108,58 @@ _For behaviour that unit/AI tests can't fully cover (UI/UX, edge cases, system i
 - [ ] No visible flicker or layout shift while editing a cell; row height matches `--b-control-min-height-sm` density
 - [ ] If the decision is "migrate" — tab/arrow navigation between editable cells still works; if "don't migrate" — confirm the documented numbers justify it
 - [ ] Verify in Chromium + Firefox
+
+
+---
+
+## Signed off (2026-09-19)
+
+**Closed as done.** The decision stands, re-measured on a different machine sixteen weeks later and —
+for the first time — in a second engine.
+
+### Re-run, 500 rows, median of 3
+
+| | recorded (Chromium) | Chromium now | **Firefox now** |
+|---|---|---|---|
+| build ratio | 1.8× | 3.2× | 1.7× |
+| **re-render ratio** | **3.1×** | **3.3×** | **1.7×** |
+| edit ratio | 1.6× | 2.2× | 1.5× |
+| raw re-render, absolute | 268 ms | 328 ms | **1176 ms** |
+| bare re-render, absolute | 834 ms | 1098 ms | **2000 ms** |
+
+**Item 1 and item 6 are discharged.** The task set the trigger for revisiting explicitly: *"if the
+500-row re-render ratio comes out near 1× rather than ~3×, the decision deserves revisiting."* On
+Chromium it is **3.3×** against the recorded 3.1×. It reproduced.
+
+### Item 7 — and the cross-engine run says something the ratio alone would hide
+
+Firefox's re-render ratio is **1.7×**, which read naively looks like the trigger for revisiting. It is
+not, and the absolute column is why: Firefox's **raw** baseline is already 1176 ms where Chromium's is
+328 ms, so the bare variant's *relative* penalty is smaller only because there is less headroom to
+lose. What a user meets is `bare` re-rendering a 500-row grid in **2000 ms** — the worst figure in the
+table, on the engine with the kinder ratio.
+
+**So: a ratio is the durable result across machines, and can mislead across engines.** The task was
+right to record ratios rather than milliseconds, and would have reached the wrong conclusion from
+Firefox's ratio alone. Don't-migrate is *strengthened* by the second engine, not weakened.
+
+### What else the re-run settled
+
+- **Caret survives everywhere.** `caret=kept caretOnRerender=kept` in all eight configurations —
+  2 variants × 2 row counts × 2 engines. The task had established this in Chromium only; it now holds
+  in Firefox too, which is the engine where the shadow boundary behaves differently (see
+  [[TASK-466]]).
+- **The 30-row regime still favours bare on edit** — 0.6× Chromium, 0.3× Firefox — so the recorded
+  "the constraint is the unpaged grid, not the components" holds in both engines. If
+  `b-editable-table` ever gains virtualisation, the harness takes a row count and this is a re-measure.
+- **Build ratio is the noisy one**: 1.8× recorded, 3.2× here, 1.7× on Firefox, while re-render sits
+  between 3.1× and 3.3× on Chromium across two machines and sixteen weeks. The decision rests on
+  re-render, which is the stable figure — worth knowing before anyone reads a build-ratio swing as a
+  regression.
+
+**Still human, and left unticked as an invitation rather than a blocker:** real typing, drag-selection
+and IME composition (items 2-4 — synthetic `input` events are not a keyboard), and the visual
+flicker / row-height check (item 5). The automated caret result now covers both engines, so the
+residual risk is narrower than when the plan was written.
+
+`cross-engine-check.mjs grid-bench` re-runs this whole comparison.
