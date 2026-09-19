@@ -115,15 +115,58 @@ then a **green** *"nothing below, nothing duplicated"* underneath it. That is ex
 to report" is worse than no checker, because it is trusted* — reproduced in the sibling written to sit
 beside it. An unknown now suppresses the green line and exits 1 under `-FailOnFinding`.
 
+## ⚠ Re-measured 2026-09-19 after Symbio closed its half — the check had a structural hole
+
+Symbio landed its fix (its TASK-745) and then went further than asked: **TASK-738 resolved by adopting
+Central Package Management**. Re-running the audit reported Symbio clean, 13 findings down to 5 — and
+that clean result was **not trustworthy**.
+
+Under CPM the framework's declaration is the *bare* half of its conditioned pair
+(`<PackageReference Include="Npgsql" />`, no version) and the version comes from the consumer's
+`Directory.Packages.props`. The consumer's project files then declare nothing at all, so a scan of
+project files compares nothing and prints a zero. **A downgrade written as a `PackageVersion` is
+invisible to it while being exactly as effective as one written as a `PackageReference`.** Symbio's 16
+entries happened to be correct — checked by hand, all matching the framework's majors — so the audit
+was right by accident, about a file it never opened.
+
+Closing it added a `Directory.Packages.props` pass and **five findings that were structurally
+invisible**, in the three consumers that were already on CPM before Symbio joined them:
+
+| Consumer | Finding |
+|---|---|
+| BardStudio | `Microsoft.Data.Sqlite` **9.0.x** central, vs framework `10.*` — BELOW |
+| BardStudio | `Microsoft.Extensions.DependencyInjection.Abstractions` — **no central entry at all** |
+| Presenter | `Microsoft.Data.Sqlite`, `…DependencyInjection.Abstractions`, `YamlDotNet` — three exact pins under framework floats |
+
+**⚠ BardStudio's missing entry is a prediction this task has not verified.** It imports
+`Birko.Data.Repositories`, which declares that package, and under CPM a bare `Include` with no central
+`PackageVersion` fails restore with `NU1010`. Either BardStudio's restore is broken today, or something
+about its layout defeats the inference — and which of those it is, is the first step of BardStudio's
+follow-up, not a claim made here.
+
+**And a second pass was needed to make the rows honest.** The first CPM implementation resolved a
+project's bare `Include` against the central file and printed
+`BardStudio.Birko.csproj … Include=9.0.3 … BELOW` — for a file containing **no version at all**. One
+fact reported twice, naming the wrong file as the place to fix it. A project's bare `Include` is now
+classified as what it actually is (a duplicate beside the framework's, `NU1504`) and the version
+verdict belongs to the `Directory.Packages.props` row. **Every finding names the file that holds the
+version it is complaining about.**
+
+Current state: **10 findings — 2 BELOW, 5 PINNED, 2 EQUAL, 1 MISSING-CENTRAL — across BardStudio,
+DraCode, Presenter and WorkoutTracker. Symbio: 0, and now for the right reason.**
+
 ## Out of scope
 
 - **The consumer-side fixes. Each is that consumer's own commit**, per [[TASK-230]]'s precedent
   (*"Consumer-owned rows: reported, not edited"*). Named here so they are not lost:
-  - **Symbio** — 1 BELOW + 7 EQUAL + a wrong-cased `Birko.Data.Elasticsearch` import path that cannot
-    resolve on Linux. A handoff prompt was written for it on 2026-09-19; it is filed in Symbio's own
-    `tasks/EPIC-027-infrastructure-improvements/`.
+  - ~~**Symbio**~~ — **DONE 2026-09-19** (its TASK-745, then TASK-738): 8 findings cleared, the
+    wrong-cased `Birko.Data.Elasticsearch` import fixed, and CPM adopted with the policy written into
+    its `Directory.Packages.props` header. Verified by re-running this audit: 0 findings, and after the
+    CPM pass above, 0 for the right reason.
   - **DraCode** — 1 BELOW + 2 PINNED. Also the largest single contributor to TASK-230's leftover rows.
-  - **BardStudio** — 1 BELOW (`Microsoft.Data.Sqlite 9.0.3`, CPM consumer).
+  - **BardStudio** — 1 BELOW + 1 MISSING-CENTRAL, both in `Directory.Packages.props`. **Start by
+    establishing whether its restore currently succeeds** — see the `NU1010` prediction above.
+  - **Presenter** — 3 PINNED, all in `Directory.Packages.props`. Decide or drop each.
   - **WorkoutTracker** — 1 EQUAL.
 - **Wiring the audit into a gate.** It takes `-FailOnFinding` and is ready for one, but 13 findings
   exist today, so turning it on now fails every run. It becomes a gate when the consumers are clean —

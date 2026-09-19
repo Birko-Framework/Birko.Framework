@@ -348,6 +348,16 @@ promotion. Six things worth carrying:
   and DraCode `9.0.4`. It recorded them as *"8 projects carry their own `SQLitePCLRaw` 2.1.10"* — consumer
   rows to report. One pin below the floor produces many advisory rows: **the audit names the line, the
   sweep names the rows.**
+- **⚠ Symbio closed its half the same day, adopted CPM — and that exposed a structural hole in the check,
+  which reported it clean by looking in the wrong file.** Under central management the framework's
+  declaration is the *bare* half of its pair and the version lives in the consumer's
+  `Directory.Packages.props`, so the project files declare nothing and a project-file scan prints a zero.
+  Symbio's 16 entries were correct, so the audit was **right by accident**. Closing it added five findings
+  that were structurally invisible, in the three consumers already on CPM. **Half the importing consumers
+  are now CPM: this is the common case, not the exotic one.** A second pass was then needed to make the
+  rows honest — the first version resolved a bare `Include` against the central file and printed
+  `Include=9.0.3` for a csproj containing no version at all, reporting one fact twice and naming the wrong
+  file to fix. **A finding must name the file that holds the thing it complains about.**
 - **⚠ The fixture found a defect in the checker before anyone trusted it, and `audit-dependencies.ps1` had
   the same one for real.** The new script printed "could not be compared" in magenta and then a **green**
   "nothing found" underneath — the exact failure its sibling's header warns about. And reading that sibling

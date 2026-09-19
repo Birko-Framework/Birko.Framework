@@ -83,6 +83,13 @@ Every project directory must contain:
   Symbio carried `Npgsql 9.*` against the framework's `10.*` and restore reported only a duplicate. **This is
   a named cost of the deferral two bullets down** — shipping as real packages deletes the problem. Until then
   the rule is enforced by [`audit-consumer-versions.ps1`](audit-consumer-versions.ps1), not by restore.
+- **⚠ A CPM consumer writes its version somewhere else, and the rule follows it there.** Under central
+  package management the framework's declaration is the *bare* half of its conditioned pair and the version
+  comes from the consumer's `Directory.Packages.props` — so the consumer's project files declare nothing,
+  and a check that reads project files reports it clean. Measured 2026-09-19, the day Symbio adopted CPM:
+  its 16 entries were all correct, and the audit said so **by looking in the wrong file**. Four of the eight
+  importing consumers are now CPM, so this is the common case, not the exotic one. A missing entry is at
+  least loud (`NU1010` names the package); a *lower* one is silent, and that is the whole point of the rule.
 - **A consumer pinning an exact version where the framework floats is not a violation, but it is a decision.**
   It opts that consumer out of the self-healing the float bullet above exists for, and it does so invisibly
   when the pin happens to sit on the framework's floor. Measured: DraCode's `JwtBearer 10.0.0` against

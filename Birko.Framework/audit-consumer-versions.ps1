@@ -26,6 +26,13 @@
     Shipping the backends as real NuGet packages would delete this script. That is deferred until the
     libraries stabilise (TASK-234 section "Out of scope"), so until then the rule is enforced here.
 
+    A CONSUMER HAS TWO PLACES TO WRITE A VERSION, AND BOTH ARE CHECKED. Without central package
+    management the version is on the project's own PackageReference. With it, the project declares a
+    bare Include and the version lives in Directory.Packages.props - so a csproj scan alone sees
+    nothing and reports the consumer clean. Symbio adopted CPM on 2026-09-19 and that is exactly what
+    happened on the first run afterwards; its 16 entries were correct, but the zero was arrived at by
+    looking in the wrong file. Both passes run, and each finding names the file that holds the version.
+
     THREE THINGS TO KNOW BEFORE TRUSTING A ZERO:
 
     1. Only $(BirkoSrc)-rooted imports are followed. A consumer that reaches the framework through a
@@ -155,6 +162,7 @@ foreach ($consumer in (Get-ChildItem -Path $consumerBucket -Directory | Sort-Obj
                 Where-Object { $_.FullName -notmatch '\\(bin|obj|node_modules)\\' }
 
     $importCount = 0
+    $consumerInherited = @{}
     foreach ($proj in $projects) {
         $ptxt = Remove-XmlComments ([System.IO.File]::ReadAllText($proj.FullName))
         if (-not $ptxt.Contains('$(BirkoSrc)')) { continue }
@@ -166,7 +174,10 @@ foreach ($consumer in (Get-ChildItem -Path $consumerBucket -Directory | Sort-Obj
         foreach ($pi in $imported) {
             $owner = [IO.Path]::GetFileNameWithoutExtension($pi)
             foreach ($k in $frameworkDecl.Keys) {
-                if ($frameworkDecl[$k].Owner -eq $owner) { $inherited[$k] = $frameworkDecl[$k] }
+                if ($frameworkDecl[$k].Owner -eq $owner) {
+                    $inherited[$k] = $frameworkDecl[$k]
+                    $consumerInherited[$k] = $frameworkDecl[$k]
+                }
             }
         }
 
@@ -177,7 +188,24 @@ foreach ($consumer in (Get-ChildItem -Path $consumerBucket -Directory | Sort-Obj
 
             $own = $null
             if ($m.Groups[3].Value -match 'Version="([^"]+)"') { $own = $Matches[1] }
-            elseif ($isCpm -and $central.ContainsKey($pkg))    { $own = $central[$pkg] }
+
+            # Under CPM a project's PackageReference carries no version by design, so this item says
+            # nothing about WHICH version and everything about there being a second Include beside the
+            # framework's - NU1504, and nothing more. Resolving it against the central file and calling
+            # it BELOW reported one fact twice and named the wrong file as the place to fix it:
+            # BardStudio.Birko.csproj was printed as "Include=9.0.3" while containing no version at all.
+            # The version question belongs to the Directory.Packages.props pass further down.
+            if ($isCpm -and -not $own) {
+                $findings.Add([pscustomobject]@{
+                    Consumer  = $consumer.Name
+                    Project   = $proj.Name
+                    Package   = $pkg
+                    Declares  = "$verb=(central)"
+                    Framework = "$($inherited[$pkg].Version) ($($inherited[$pkg].Owner))"
+                    Verdict   = 'EQUAL'
+                })
+                continue
+            }
 
             $fwVer = $inherited[$pkg].Version
             $a = Get-VersionFloor $own
@@ -223,11 +251,68 @@ foreach ($consumer in (Get-ChildItem -Path $consumerBucket -Directory | Sort-Obj
             })
         }
     }
+    # ---- CPM: the version is NOT in the csproj, so the loop above cannot see it ------------------
+    # Under central management the framework's own declaration is the bare half of its conditioned
+    # pair - <PackageReference Include="Npgsql" /> with no version - and the version comes from the
+    # consumer's Directory.Packages.props. The consumer's project files then declare nothing at all,
+    # so everything above compares nothing and the consumer reports clean.
+    #
+    # ⚠ That is the hole this block exists for, and it went live the day Symbio adopted CPM
+    # (its TASK-738, 2026-09-19). A downgrade written as a PackageVersion is invisible to a csproj
+    # scan while being every bit as effective as one written as a PackageReference. Symbio's 16
+    # entries happened to be correct; the check reported that for the wrong reason, which is a zero
+    # nobody should have trusted.
+    #
+    # Note EQUAL is NOT a finding here, unlike in the csproj case: under CPM the central entry is
+    # REQUIRED for every inherited package, and its absence is NU1010 at restore.
+    if ($isCpm -and $consumerInherited.Count) {
+        foreach ($pkg in ($consumerInherited.Keys | Sort-Object)) {
+            $fwVer = $consumerInherited[$pkg].Version
+            if (-not $central.ContainsKey($pkg)) {
+                $findings.Add([pscustomobject]@{
+                    Consumer  = $consumer.Name
+                    Project   = 'Directory.Packages.props'
+                    Package   = $pkg
+                    Declares  = '(absent)'
+                    Framework = "$fwVer ($($consumerInherited[$pkg].Owner))"
+                    Verdict   = 'MISSING-CENTRAL'
+                })
+                continue
+            }
+            $own = $central[$pkg]
+            $a = Get-VersionFloor $own
+            $b = Get-VersionFloor $fwVer
+            if ($null -eq $a -or $null -eq $b) {
+                $unparsed.Add([pscustomobject]@{
+                    Consumer          = $consumer.Name
+                    Project           = 'Directory.Packages.props'
+                    Package           = $pkg
+                    Consumer_Version  = $own
+                    Framework_Version = $fwVer
+                })
+                continue
+            }
+            $verdict = $null
+            if ($a -lt $b)                                        { $verdict = 'BELOW' }
+            elseif ($fwVer.Contains('*') -and -not $own.Contains('*')) { $verdict = 'PINNED' }
+            if (-not $verdict) { continue }
+            $findings.Add([pscustomobject]@{
+                Consumer  = $consumer.Name
+                Project   = 'Directory.Packages.props'
+                Package   = $pkg
+                Declares  = "PackageVersion=$own"
+                Framework = "$fwVer ($($consumerInherited[$pkg].Owner))"
+                Verdict   = $verdict
+            })
+        }
+    }
+
     if ($importCount) {
         $perConsumer.Add([pscustomobject]@{
             Consumer = $consumer.Name
             Imports  = $importCount
             CPM      = $(if ($isCpm) { 'yes' } else { 'no' })
+            Central  = $(if ($isCpm) { "$($consumerInherited.Count) inherited" } else { '-' })
         })
     }
 }
@@ -237,7 +322,7 @@ $ownerCount = ($frameworkDecl.Values | ForEach-Object { $_.Owner } | Sort-Object
 Write-Host ''
 Write-Host "Framework declares $($frameworkDecl.Count) packages across $ownerCount shared projects." -ForegroundColor Cyan
 Write-Host "Consumers importing them: $($perConsumer.Count)" -ForegroundColor Cyan
-$perConsumer | ForEach-Object { Write-Host ("    {0,-24} {1,4} projitems   CPM={2}" -f $_.Consumer, $_.Imports, $_.CPM) }
+$perConsumer | ForEach-Object { Write-Host ("    {0,-24} {1,4} projitems   CPM={2,-3}  {3}" -f $_.Consumer, $_.Imports, $_.CPM, $_.Central) }
 
 if ($unparsed.Count) {
     Write-Host ''
@@ -265,10 +350,12 @@ $below  = @($findings | Where-Object { $_.Verdict -eq 'BELOW' })
 $pinned = @($findings | Where-Object { $_.Verdict -eq 'PINNED' })
 $equal  = @($findings | Where-Object { $_.Verdict -eq 'EQUAL' })
 $higher = @($findings | Where-Object { $_.Verdict -eq 'HIGHER-VIA-INCLUDE' })
+$absent = @($findings | Where-Object { $_.Verdict -eq 'MISSING-CENTRAL' })
 
 Write-Host ''
 Write-Host ("=== $($findings.Count) finding(s): $($below.Count) BELOW, $($pinned.Count) PINNED, " +
-            "$($equal.Count) EQUAL, $($higher.Count) HIGHER-VIA-INCLUDE") -ForegroundColor Yellow
+            "$($equal.Count) EQUAL, $($higher.Count) HIGHER-VIA-INCLUDE, " +
+            "$($absent.Count) MISSING-CENTRAL") -ForegroundColor Yellow
 $findings | Sort-Object Verdict, Consumer, Package | Format-Table -AutoSize | Out-String | Write-Host
 
 if ($below.Count) {
@@ -290,6 +377,12 @@ if ($higher.Count) {
     Write-Host 'HIGHER-VIA-INCLUDE - the intent is allowed, the mechanism is not: a second Include is NU1504,' -ForegroundColor Yellow
     Write-Host '         not an override. Use <PackageReference Update="..." Version="..." /> AFTER the' -ForegroundColor Yellow
     Write-Host '         $(BirkoSrc) imports - an Update placed before them is a SILENT no-op.' -ForegroundColor Yellow
+}
+
+if ($absent.Count) {
+    Write-Host 'MISSING-CENTRAL - a CPM consumer inherits this package from a .projitems it imports but' -ForegroundColor Yellow
+    Write-Host '         declares no PackageVersion for it. Restore fails NU1010 naming the package, so this' -ForegroundColor Yellow
+    Write-Host '         is loud rather than silent - reported because it is visible here without a restore.' -ForegroundColor Yellow
 }
 
 if ($FailOnFinding) { exit 1 }
