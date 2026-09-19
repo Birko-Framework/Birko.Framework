@@ -66,6 +66,28 @@ Every project directory must contain:
   declares it gets **NU1504 duplicate PackageReference** — a warning normally, an **error** under the
   `-warnaserror` that `verify-birko-conventions` check 1 runs. So when you add a declaration, remove it from the
   dependents in the same change.
+- **A consumer never declares a version BELOW the framework's; higher is allowed and it owns the breakage.**
+  The rule the NU1504 bullet above only half-states. Three shapes, and the mechanism differs for each:
+  **equal** → do not declare it at all, delete the line and leave a comment naming the owning `.projitems`;
+  **higher** → allowed, but a second `Include` is a *duplicate*, not an override, so it must be
+  `<PackageReference Update="…" Version="…" />` placed **after** the `$(BirkoSrc)` imports — an `Update`
+  above them is a **silent no-op**, because `Update` only reaches an item that already exists and the
+  imports are at the bottom of an aggregator; **lower** → refused. If a framework major genuinely breaks a
+  consumer, the consumer fixes forward or the **framework** lowers its own declaration. Re-pinning the
+  consumer is the move this rule exists to prevent.
+- **⚠ NuGet already enforces exactly this rule for free, and the `.projitems` model gives it up.** "Consumer
+  below framework" is `NU1605` *detected package downgrade*, an **error** by default — but `NU1605` compares
+  across a *package dependency edge*, and a shared project compiled into the consumer's own assembly has no
+  package identity to hang one on. So the framework's `10.*` and a consumer's `9.*` are two items in one
+  project: `NU1504`, a warning, about duplication, saying nothing about which is lower. Measured 2026-09-19:
+  Symbio carried `Npgsql 9.*` against the framework's `10.*` and restore reported only a duplicate. **This is
+  a named cost of the deferral two bullets down** — shipping as real packages deletes the problem. Until then
+  the rule is enforced by [`audit-consumer-versions.ps1`](audit-consumer-versions.ps1), not by restore.
+- **A consumer pinning an exact version where the framework floats is not a violation, but it is a decision.**
+  It opts that consumer out of the self-healing the float bullet above exists for, and it does so invisibly
+  when the pin happens to sit on the framework's floor. Measured: DraCode's `JwtBearer 10.0.0` against
+  `10.*` compares as *equal* on floors and is nothing of the kind. The audit reports it as `PINNED`; record
+  why, or drop it.
 - Shipping the backends as real NuGet packages is **deferred** until the libraries stabilise. Declaring here
   is forward-compatible with that: a package's dependency list is exactly this set.
 - **Write the declaration in the dual, CPM-compatible form.** A consumer using Central Package Management
@@ -115,6 +137,20 @@ and that are easy to get wrong by hand:
 Promotion to a build error stays where it is — `verify-birko-conventions` check 1, on the diff of the task in hand,
 where a human is present to judge it. Making it a global error would break every affected project today and,
 with floating versions, could break any build at any time from an upstream publication nobody chose.
+
+### The three audits, and the different question each asks
+
+They are siblings on purpose; a zero from one says nothing about the others.
+
+```powershell
+.\audit-declarations.ps1        # does every shared project ACCOUNT for the packages it uses?
+.\audit-dependencies.ps1        # is any RESOLVED package vulnerable?  (sweeps tests/ + Consumers/)
+.\audit-consumer-versions.ps1   # does any consumer DECLARE a version below the framework's?
+```
+
+The third exists because `NU1605` cannot see a shared-project boundary — see the ⚠ bullet under § External
+dependencies. It is also the one that finds the *cause* where the second finds the *symptom*: a consumer
+pinned below the framework's floor is one line, while the advisory rows it produces are many.
 
 ## Solution & Workspace Registration
 When adding a new project, register in **all four**:

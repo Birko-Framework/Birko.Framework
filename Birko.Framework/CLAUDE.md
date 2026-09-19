@@ -316,6 +316,48 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### A consumer can ship a package older than the framework, and NuGet's own guard cannot see it (2026-09-19)
+
+[[TASK-473]] + [[TASK-474]], both from one Symbio build failure on a Linux box. The reported errors were
+32 × `NU1605` from a stale `Tmds.DBus` pin — already fixed in Symbio and merely unpushed — but underneath
+them sat 7 × `NU1504` nobody had chased, one of which was `Npgsql 9.*` against the framework's `10.*`. The
+standing rule is in [CLAUDE-maintenance.md](CLAUDE-maintenance.md) § External dependencies; it is
+deliberately **not** in [CLAUDE-conventions.md](CLAUDE-conventions.md), which holds runtime-code rules —
+same placement as [[TASK-229]] and [[TASK-234]], noted so a later sweep does not read it as a skipped
+promotion. Six things worth carrying:
+
+- **⚠ NuGet already enforces this rule for free, and the `.projitems` model gives it up.** "Consumer
+  declares something older than its dependency" *is* `NU1605`, an **error** by default — but `NU1605`
+  compares across a **package dependency edge**, and a shared project compiled into the consumer's own
+  assembly has no package identity to hang one on. So the two declarations are just two items in one
+  project: `NU1504`, a warning, about *duplication*, silent on which side is older. A named cost of the
+  "ship as real packages is deferred" decision, which nobody had priced.
+- **The policy, settled with the user:** a consumer never declares **lower**; **higher** is allowed and it
+  owns the breakage; **equal** means do not declare it at all. The middle shape is the trap — a second
+  `Include` is a duplicate, not an override, so it must be `Update=`, and an `Update` placed **before** the
+  `$(BirkoSrc)` imports is a **silent no-op**, because `Update` only reaches an item that already exists
+  and an aggregator's imports sit at the bottom of the file.
+- **Measured across all 8 importing consumers: 13 findings in 4 of them** — 3 BELOW, 2 PINNED, 8 EQUAL.
+  Symbio owns 8 of the 13; DraCode 3; BardStudio and WorkoutTracker 1 each.
+- **⚠ A verdict the first version of the check did not have changed a result.** Comparing *floors* called
+  DraCode's `JwtBearer 10.0.0` identical to `10.*`. It is not: the framework floats so a published advisory
+  heals on the next restore, and an exact pin freezes that — invisibly, when the pin sits on the floor.
+  `PINNED` is not a violation, it is a decision that was living in a file as an unremarked line.
+- **⚠ Two BELOW rows are [[TASK-230]]'s leftovers seen from the other end.** That task set the remedy floor
+  at `Microsoft.Data.Sqlite ≥ 9.0.19 or ≥ 10.0.11` past a **High** advisory; BardStudio declares `9.0.3`
+  and DraCode `9.0.4`. It recorded them as *"8 projects carry their own `SQLitePCLRaw` 2.1.10"* — consumer
+  rows to report. One pin below the floor produces many advisory rows: **the audit names the line, the
+  sweep names the rows.**
+- **⚠ The fixture found a defect in the checker before anyone trusted it, and `audit-dependencies.ps1` had
+  the same one for real.** The new script printed "could not be compared" in magenta and then a **green**
+  "nothing found" underneath — the exact failure its sibling's header warns about. And reading that sibling
+  to copy its discipline is how [[TASK-474]] surfaced: [[TASK-457]]'s migration rewrote `'Framework.Tests'`
+  → `'Framework\tests'` with a **literal tab** for the `\t`, so the bucket silently vanished, the
+  `if (-not $buckets) { throw }` guard could not fire because `Consumers` still resolved, and the sweep has
+  been reporting **81 of 248 projects** as a whole-tree result since 2026-09-18. Six occurrences in three
+  files, two of them in the scaffolding skills that create test projects. **A guard for "none" is not a
+  guard for "fewer than asked for."**
+
 ### The framework is one repo: 349 repos consolidated, with every commit preserved (2026-09-18)
 
 [[TASK-457]], closing the open question `docs/adr/ADR-001` (the former untracked
