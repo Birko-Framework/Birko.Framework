@@ -2,7 +2,7 @@
 id: TASK-035
 feature: FEATURE-001
 parent: STORY-023
-status: review
+status: done
 priority: P3
 assignee: ai
 created: 2026-06-15
@@ -231,3 +231,70 @@ _For behaviour that unit/AI tests can't fully cover (UI/UX, edge cases, system i
 - [ ] Disable the form (`<fieldset disabled>`) and confirm `formDisabledCallback` propagates the disabled state into each control
 - [ ] Regression: run an existing `b-form`-based screen and confirm value collection / validation behaves exactly as before (this layer must not break the programmatic path)
 - [ ] Verify in Chromium + Firefox + WebKit (Safari) — `ElementInternals` / form-association support and validation-bubble behaviour differ across engines
+
+
+---
+
+## Signed off (2026-09-19)
+
+**Closed as done**, fourteen weeks in `review` on a six-item human test plan. Five items were already
+measurable; the sixth was the one that mattered, and running it found a second engine gap.
+
+**Items 1, 3, 4 and 5 were already covered** by `form-assoc-smoke`, which has grown from the 97 checks
+this file records to **104** (TASK-136 added the `b-form.validate()` half). Item 1 — `FormData`
+contents per control — is the bulk of the suite: a seeded attribute, a property set and a real user
+edit, for all fifteen controls, plus the multi-entry shape, the suffixed two-value names, base hex,
+ISO-not-display-text and markdown-not-HTML. Item 3 is the 15 reset checks spanning every state shape.
+Item 4 is `<fieldset disabled>` propagating **both ways** without touching the host attribute — the
+one that caught the permanently-stuck-disabled defect recorded above. Item 5 is the `b-form`
+regression block.
+
+**Item 2 — the validation bubble anchored to the component — is [[TASK-466]].** Measured while signing
+off [[TASK-001]] the same day: Chromium anchors it, **Firefox shows no bubble at all**, because it
+cannot focus a form-associated control whose focusable element is inside a shadow root. Both engines
+suppress the submit identically, so the correctness half of this task holds in both; what differs is
+the bubble, which is exactly what item 2 asks about. The item is therefore *answered* rather than
+ticked: it is engine-dependent and the dependency is now filed.
+
+**Item 6 — Chromium + Firefox + WebKit — was the real gap**, and unrunnable: `verify.mjs` drives
+Chromium, `cross-engine-check.mjs` (TASK-001) added Firefox, and neither can drive WebKit — puppeteer
+does not build it. Now `webkit-check.mjs`, which borrows Playwright and its WebKit build from the
+sibling Reps `ui-e2e` suite rather than adding a second heavyweight dependency to the playground for
+one script, and fails with an explanation rather than a module-not-found stack when that sibling is
+absent.
+
+**Result:**
+
+| engine | `form-assoc-smoke` |
+|---|---|
+| Chromium | **104/104** |
+| Firefox | **104/104** (+ the TASK-466 bubble difference) |
+| WebKit (Playwright build) | **103/104** |
+
+### The WebKit failure is a real finding about the design, and it is filed
+
+The single failure is `b-date-picker native mirrors min via rangeUnderflow`. Probed directly rather
+than guessed at, with identical markup in both engines:
+
+| | reported `type` | `rangeUnderflow` | `validity.valid` |
+|---|---|---|---|
+| Chromium | `date` | true | false |
+| WebKit | **`text`** | false | **true** |
+
+That build does not implement `<input type="date">`, so it falls back to a text input — and this
+task's central decision, *"validity is **borrowed**, not reimplemented"*, has nothing to borrow. The
+control reports **valid** and the `min` is enforced by nobody, with no signal that it was not. The
+design is still right (it is what makes `type=url`, `min`, `step` and `pattern` work at all); what it
+assumes is that the engine **has** the primitive, and that assumption is unstated. Filed as
+[[TASK-467]], which is explicitly scoped to measure a **real Safari** first — this is Playwright's
+WebKit, and real Safari does implement the type, so what is demonstrated is the *class* of problem,
+not that Safari is affected.
+
+The check is excused in `webkit-check.mjs` **by exact name, with TASK-467 named**, never by ignoring
+WebKit failures — same reasoning as TASK-466's entry in the Firefox harness, and for the same reason:
+a blanket would have discarded, on the very first WebKit run, the one thing a third engine is for.
+
+### What this does not claim
+
+`webkit-check.mjs` runs one suite in one WebKit build. It is not Safari, not iOS, and not the other
+six playground suites. The three-engine claim above is about `form-assoc-smoke` and nothing wider.
