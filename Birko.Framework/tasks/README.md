@@ -1,13 +1,13 @@
 # Tasks — Birko.Framework
 
-> ⚠ **Feature drift (3 groups, 109 items)** — **all three re-measured 2026-09-19**, and two grew
+> ⚠ **Feature drift (3 groups, 110 items)** — **all three re-measured 2026-09-19**, and two grew
 > since the 2026-09-16 pass.
 > **DV9 ×74** — 199 tasks carry `feature: FEATURE-014` and its `decisions.md` names 128 TASK ids, so
 > the ledger does not know about **74** of its own tasks (×64 on 2026-09-16, ×63 on 2026-09-09, ×62
 > and ×59 earlier that week, ×31 on 2026-09-04). Measured rather than incremented, per § TASK-283.
 > The reverse gap is unchanged: **3** ids in the ledger are not FEATURE-014 tasks ·
-> **DV5 ×31** (every task in `_loose/` has no epic *and* no feature, so none appears in a feature row
-> — was ×19; the 12 added are the `_loose` intake since 2026-09-16, TASK-468 among them) ·
+> **DV5 ×32** (every task in `_loose/` has no epic *and* no feature, so none appears in a feature row
+> — was ×19; the 13 added are the `_loose` intake since 2026-09-16, TASK-468 and TASK-469 among them) ·
 > **DV3 ×4** (TASK-285/286/287/288 sit under EPIC-014 with `feature: null` while every sibling links
 > to FEATURE-014 — a broken back-link; unchanged).
 > Run `/roadmap --check` for the full audit, or `/tasks audit --fix` for the safe ones.
@@ -29,21 +29,21 @@
 > it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays `in-progress`
 > with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-19 (`/tasks triage`, chained from `/tasks cancel TASK-235`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-19 (`/tasks triage`, chained from `/tasks new TASK-469`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 153   |
+| todo         | —     | —       | 154   |
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 169   |
 | cancelled    | 0     | 0       | 4     |
 
-`todo` by priority: 32× P1 · 98× P2 · 23× P3.  
+`todo` by priority: 32× P1 · 98× P2 · 24× P3.  
 > ℹ Recounted from the files on each refresh rather than incremented — a breakdown that sums correctly
 > is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
 > one P3 short, while still totalling right). No P0 is open.
@@ -464,6 +464,7 @@ _None_
 - [x] TASK-464 ~~An unconfigured sync file store throws where its async twin returns empty~~ (P3, ai)
 - [ ] TASK-465 Every `pr:` SHA recorded before the monorepo resolves to nothing (P3, ai)
 - [ ] TASK-467 Borrowed validity enforces nothing, silently, where the engine lacks the input type (P3, ai)
+- [ ] TASK-469 Decide whether Birko gets a Meilisearch backend — and if so, at which layer (P3, human)
 
 ## Completed
 
