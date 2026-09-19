@@ -1,23 +1,26 @@
 # Tasks — Birko.Framework
 
-> ⚠ **Feature drift (3 groups, 87 items)** — **all three re-measured 2026-09-16**; none is carried
-> forward this pass.
-> **DV9 ×64** — 189 tasks carry `feature: FEATURE-014` and its `decisions.md` names 128 TASK ids, so
-> the ledger does not know about **64** of its own tasks (×63 on 2026-09-09, ×62 and ×59 earlier that
-> week, ×31 on 2026-09-04). Measured rather than incremented, per § TASK-283. ⚠ The reverse gap is
-> also non-zero and was not reported before: **3** ids in the ledger are not FEATURE-014 tasks ·
-> **DV5 ×19** (every task in `_loose/` has no epic *and* no feature, so none appears in a feature row
-> — was ×18; TASK-444 is the one added) · **DV3 ×4** (TASK-285/286/287/288 sit under EPIC-014 with
-> `feature: null` while every sibling links to FEATURE-014 — a broken back-link; unchanged).
+> ⚠ **Feature drift (3 groups, 109 items)** — **all three re-measured 2026-09-19**, and two grew
+> since the 2026-09-16 pass.
+> **DV9 ×74** — 199 tasks carry `feature: FEATURE-014` and its `decisions.md` names 128 TASK ids, so
+> the ledger does not know about **74** of its own tasks (×64 on 2026-09-16, ×63 on 2026-09-09, ×62
+> and ×59 earlier that week, ×31 on 2026-09-04). Measured rather than incremented, per § TASK-283.
+> The reverse gap is unchanged: **3** ids in the ledger are not FEATURE-014 tasks ·
+> **DV5 ×31** (every task in `_loose/` has no epic *and* no feature, so none appears in a feature row
+> — was ×19; the 12 added are the `_loose` intake since 2026-09-16, TASK-468 among them) ·
+> **DV3 ×4** (TASK-285/286/287/288 sit under EPIC-014 with `feature: null` while every sibling links
+> to FEATURE-014 — a broken back-link; unchanged).
 > Run `/roadmap --check` for the full audit, or `/tasks audit --fix` for the safe ones.
 >
 > ⚠ **DV7 was NOT recomputed in this pass and is not being reported as clean.** Spec staleness needs a
-> `git diff` per area against `generated-at`, and most areas here glob **sibling repos** resolved
-> through `source-commits` — a cost this dashboard refresh did not pay. The last measured value was
+> `git diff` per area against `generated-at` — a cost this dashboard refresh did not pay. Note the
+> reason has changed since the last pass, which cited areas globbing *sibling repos*: [[TASK-457]]
+> consolidated the framework into one repo on 2026-09-18, so `generated-at` can now observe a source
+> change for the first time and the measurement is newly *worth* taking. The last measured value was
 > **DV7 ×3** (`filter-expression-translation`, `bulk-filter-operations`,
-> `unit-of-work-and-transactions`), owned by [[TASK-251]]; two of those three were regenerated on
-> 2026-09-09, so it is very likely **×1** (`unit-of-work-and-transactions`, subject of [[TASK-325]]/
-> [[TASK-327]]) — arithmetic on a stale total, not a measurement, and not reported as one.
+> `unit-of-work-and-transactions`), owned by [[TASK-251]]. Do not carry the previous pass's "very
+> likely ×1" forward as a number — it was arithmetic on a stale total then, and the monorepo has since
+> moved the baseline underneath it.
 > DV8/DV10/DV11 were clean at the last measurement: all 25 mapped areas exist on disk and carry
 > `shaped-by-derived: true`.
 >
@@ -26,72 +29,56 @@
 > it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays `in-progress`
 > with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-17 (`/tasks close TASK-313`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-19 (`/tasks triage`, chained from `/tasks new TASK-468`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 145   |
+| todo         | —     | —       | 153   |
 | in-progress  | 7     | 9       | 0     |
-| review       | —     | —       | 11    |
+| review       | —     | —       | 0     |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 23      | 149   |
-| cancelled    | 0     | 0       | 2     |
+| done         | 1     | 23      | 169   |
+| cancelled    | 0     | 0       | 3     |
 
-`todo` by priority: 34× P1 · 93× P2 · 18× P3.  
-> ℹ Recounted from the files on each close rather than incremented — a breakdown that sums correctly
+`todo` by priority: 32× P1 · 98× P2 · 23× P3.  
+> ℹ Recounted from the files on each refresh rather than incremented — a breakdown that sums correctly
 > is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
-> one P3 short, while still totalling right). The P0 filed on 2026-09-16 as [[TASK-447]] is now closed.
+> one P3 short, while still totalling right). No P0 is open.
 >
-> ⚠ **[[TASK-449]] is now committed and `done`** — it arrived untracked, and was worked only because
-> it was picked by explicit instruction. It was outside [[fix-next]]'s pool (`_loose`, `findings: []`,
-> no `review-intake` parent), which is half the contradiction its own § *Note on placement* records:
-> the convention says file single-sub-project work in the sub-repo, 1 of 178 sub-projects has a
-> `tasks/` folder, and every scheduler runs from here. **A defect filed either way is ranked by
-> nothing.** Whoever owns § *Task tracking* should settle it.
+> ⚠ **The review queue is empty for the first time since it was introduced** — the 11 tasks this
+> dashboard listed on 2026-09-17 were all signed off on 2026-09-19 (TASK-035, TASK-038, TASK-091,
+> TASK-118, TASK-201 and the rest). That is a drained queue, not a dropped section: `review` is
+> rendered in the counts table at 0 rather than omitted, so the distinction stays visible.
 
 ## In progress now
 
 _None_
 
-## In review (awaiting sign-off)
-
-- [TASK-118](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-118-tenant-header-guard-covers-only-x-tenant-id.md) — The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` (P1, ai)
-- [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) — `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1, ai)
-- [TASK-136](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-136-bform-validate-surfaces-control-validity.md) — `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()` (P1, ai)
-- [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) — `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1, ai)
-- [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) — Add `bare` attribute to all form controls (P2, ai)
-- [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) — Benchmark + migrate b-editable-table to bare components (P2, ai)
-- [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) — Birko.Web playground: component gallery + live token editor + theme-CSS export (P2, ai)
-- [TASK-042](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-042-store-factory-di-mssql-mysql-postgres.md) — Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL (P2, ai)
-- [TASK-091](EPIC-001-web-components-ui-polish/STORY-050-help-text-row/TASK-091-description-help-text-row.md) — `description` — a persistent help-text row on the form controls (P2, ai)
-- [TASK-201](_loose/TASK-201-reps-declare-idpinned-on-client-minted-creates.md) — Reps: declare `idPinned` on the client-minted creates — and not on the one that must not have it (P2, ai)
-- [TASK-035](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-035-element-internals-form-association.md) — Make form controls form-associated via ElementInternals (P3, ai)
-
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (4/13 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (9/13 tasks done)
   - [x] TASK-053 b-range: vertical orientation (equalizer-style slider) · FEATURE-001
-  - STORY-001 bare attribute for inline form usage — in-progress (0/1 done)
-    - [ ] TASK-001 Add `bare` attribute to all form controls 🔍 review · FEATURE-001
-  - STORY-002 b-editable-table migration to bare components — in-progress (0/1 done)
-    - [ ] TASK-002 Benchmark + migrate b-editable-table to bare components 🔍 review · FEATURE-001
+  - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
+    - [x] TASK-001 Add `bare` attribute to all form controls · FEATURE-001
+  - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
+    - [x] TASK-002 Benchmark + migrate b-editable-table to bare components · FEATURE-001
   - STORY-003 size attribute coverage — planned (0/1 done)
     - [ ] TASK-003 size attribute on b-pagination, b-dropdown-menu, b-breadcrumb · FEATURE-001
-  - STORY-023 Form-associated custom elements (ElementInternals) — in-progress (0/5 done)
-    - [ ] TASK-035 Make form controls form-associated via ElementInternals 🔍 review · FEATURE-001
+  - STORY-023 Form-associated custom elements (ElementInternals) — in-progress (2/5 done)
+    - [x] TASK-035 Make form controls form-associated via ElementInternals · FEATURE-001
     - [ ] TASK-132 `b-form`: `required` on a checkbox / switch is inert — an unchecked toggle counts as filled · FEATURE-001
     - [ ] TASK-133 `b-form`: a `radio` field's value is never collected, and a `required` radio group can never validate · FEATURE-001
     - [ ] TASK-134 Decide whether `b-form.validate()` adopts the remaining validity flags, starting with `typeMismatch` · FEATURE-001
-    - [ ] TASK-136 `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()` 🔍 review · FEATURE-001
+    - [x] TASK-136 `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()` · FEATURE-001
   - STORY-028 Display & disclosure components — done (3/3 done)
     - [x] TASK-039 b-chart: coerce/validate a unitless `height` (avoid endless SVG stretch) · FEATURE-001
     - [x] TASK-040 Add a `b-accordion` (collapsible / disclosure group) component · FEATURE-001
     - [x] TASK-041 Extract a shared `coerceCssLength` helper and fix the unitless-length bug across components · FEATURE-001
-  - STORY-050 Visible help text on form controls — in-progress (0/1 done)
-    - [ ] TASK-091 `description` — a persistent help-text row on the form controls 🔍 review · FEATURE-001
+  - STORY-050 Visible help text on form controls — in-progress (1/1 done)
+    - [x] TASK-091 `description` — a persistent help-text row on the form controls · FEATURE-001
 - **EPIC-002** Birko.Data.Redis — planned (0/1 tasks done)
   - [ ] TASK-004 Implement Birko.Data.Redis · FEATURE-002
 - **EPIC-003** Birko.Caching.NCache — planned (0/1 tasks done)
@@ -151,12 +138,12 @@ _None_
     - [ ] TASK-060 Run & review the live null-filter parser tests · FEATURE-011
 - **EPIC-012** Birko.MessageQueue.MQTT — v5 features — planned (0/1 tasks done)
   - [ ] TASK-034 MQTT v5 topic aliases + user properties · FEATURE-012
-- **EPIC-013** Reference consumers — integration smoke harness + Web playground — in-progress (1/4 tasks done)
+- **EPIC-013** Reference consumers — integration smoke harness + Web playground — in-progress (3/4 tasks done)
   - [x] TASK-037 Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
-  - [ ] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export 🔍 review · FEATURE-013
-  - [ ] TASK-228 `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk 🔍 review · FEATURE-013
+  - [x] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export · FEATURE-013
+  - [x] TASK-228 `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk · FEATURE-013
   - [ ] TASK-307 The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (110/198 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (116/203 tasks done)
   - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) · FEATURE-014
   - [x] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire · FEATURE-014
   - [ ] TASK-144 `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model · FEATURE-014
@@ -165,7 +152,7 @@ _None_
   - [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day · FEATURE-014
   - [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down · FEATURE-014
   - [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently · FEATURE-014
-  - ~~TASK-205 A qualified `Table.Column` is emitted unquoted while `FROM "Table"` is quoted — PostgreSQL folds them apart~~ · FEATURE-014
+  - [ ] TASK-205 A qualified `Table.Column` is emitted unquoted while `FROM "Table"` is quoted — PostgreSQL folds them apart · FEATURE-014
   - [ ] TASK-208 DECISION: which of `Birko.Data.SQL.View` the spec map should cover — two fixes have now landed in the excluded part · FEATURE-014
   - [x] TASK-210 `MongoDB.Driver 3.2.0` pulls two vulnerable transitive packages, and nothing reports it · FEATURE-014
   - [x] TASK-211 On-the-fly views are broken on PostgreSQL — and the error is swallowed, so they return an empty result · FEATURE-014
@@ -225,7 +212,7 @@ _None_
   - [x] TASK-279 `BuildCompressionPolicySql` keeps CR-H070's `orderByColumn = "time"` — the half of the remedy that was a compatibility artefact · FEATURE-014
   - [x] TASK-280 `IsHypertable` and `GetChunkInterval` ignore the schema half of the qualified name TASK-262 taught them to accept · FEATURE-014
   - [x] TASK-281 A continuous aggregate cannot be created or refreshed inside a transaction — so it may never have worked through the runner at all · FEATURE-014
-  - ~~TASK-282 The TimescaleDB migration emitters bypass the connector — an option TASK-259 reopened and nobody owns~~ · FEATURE-014
+  - [ ] TASK-282 The TimescaleDB migration emitters bypass the connector — an option TASK-259 reopened and nobody owns · FEATURE-014
   - [x] TASK-283 A throwing `OnIndexCreationFailed` subscriber defeats TASK-204's degrade and bricks the entity · FEATURE-014
   - [x] TASK-284 An empty `startOffset` silently widens a refresh policy to all of history — and the escape hatch that relies on it is untested · FEATURE-014
   - [x] TASK-285 A `COUNT` of a missing table throws while a `SELECT` of the same table returns empty — the one read that answers 500
@@ -256,15 +243,20 @@ _None_
   - [x] TASK-332 The migration runner's own bookkeeping table could not be created on MySQL or SQL Server · FEATURE-014
   - [ ] TASK-446 All seven workflow instance stores have zero store-level tests, and that is where two high findings lived · FEATURE-014
   - [x] TASK-447 A Cosmos view filter's string value breaks out of its own quotes · FEATURE-014
-  - [ ] TASK-448 Two records disagree about what a rendered expression tree leaks · FEATURE-014
-  - [x] TASK-450 The Cosmos migrator escapes filter values with the wrong dialect · FEATURE-014
+  - [ ] TASK-448 Two § Conventions entries disagree about what a rendered expression tree leaks, and one sink acts on the wrong one · FEATURE-014
+  - [x] TASK-450 The Cosmos migrator escapes filter values with SQL-standard doubling, which Cosmos does not use · FEATURE-014
+  - [ ] TASK-451 `StoreDataDelegate<T>` declares a return value that 96 call sites discard · FEATURE-014
+  - [ ] TASK-452 The "detach before writing to a store-owned object" rule now has three implementations · FEATURE-014
+  - [ ] TASK-453 Decide whether an unchanged ViewModel save should skip the write · FEATURE-014
+  - [ ] TASK-454 A decorator-hidden row reads as absent, and updating it resurrects it with its columns blanked · FEATURE-014
+  - [ ] TASK-456 `AsyncMongoDBStore.CountIn` dereferences a nullable `Collection` — two CS8602 warnings · FEATURE-014
   - STORY-024 Critical findings — done (0/0 done)
   - STORY-025 High findings — done (0/0 done)
   - STORY-026 Medium findings — in-progress (0/0 done)
   - STORY-027 Low findings — done (0/0 done)
   - STORY-042 Integration-test tier — the Docker-gated remediation findings — planned (0/0 done)
   - STORY-043 Workflow backends — unify the serialization seam (ISerializer everywhere) — done (0/0 done)
-  - STORY-051 Spec-harvest — high findings — in-progress (41/47 done)
+  - STORY-051 Spec-harvest — high findings — in-progress (42/47 done)
     - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash · FEATURE-014
     - [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table · FEATURE-014
     - [x] TASK-110 ORDER BY identifiers reach SQL text unresolved and unquoted · FEATURE-014
@@ -275,7 +267,7 @@ _None_
     - [x] TASK-115 A nested `WithTenant` does not narrow reads inside an all-tenants scope · FEATURE-014
     - [x] TASK-116 `RuleSpecification` leaves degrade to match-all — on the destructive paths · FEATURE-014
     - [x] TASK-117 `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set · FEATURE-014
-    - [ ] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` 🔍 review · FEATURE-014
+    - [x] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` · FEATURE-014
     - [x] TASK-125 `ReadOne` queries the connector directly, bypassing every store decorator · FEATURE-014
     - [x] TASK-126 `TagServiceBase` states its tenant contract in a comment and enforces nothing · FEATURE-014
     - [x] TASK-128 The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover · FEATURE-014
@@ -399,11 +391,11 @@ _None_
     - [ ] TASK-122 Render mixed columns — the CSS grid and the Avalonia panel · FEATURE-015
     - [ ] TASK-123 Panel height under mixed sizes, and extending the clipping guard · FEATURE-015
     - [ ] TASK-124 The `RibbonGroupSize` doc comment describes a parity gap that no longer exists · FEATURE-015
-- **EPIC-016** Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) — in-progress (12/14 tasks done)
+- **EPIC-016** Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) — in-progress (14/14 tasks done)
   - STORY-037 Backend / SQL framework backports (shipped) — done (0/0 done)
   - STORY-038 Frontend Birko.Web backports (shipped) — done (0/0 done)
-  - STORY-039 Cross-provider SQL store-factory + DI backport — in-progress (1/2 done)
-    - [ ] TASK-042 Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL 🔍 review · FEATURE-016
+  - STORY-039 Cross-provider SQL store-factory + DI backport — in-progress (2/2 done)
+    - [x] TASK-042 Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL · FEATURE-016
     - [x] TASK-051 FIX: MSSqlStore.SetSettings drops connection fields (lossy) · FEATURE-016
   - STORY-040 Web → Xaml UI / offline / device backports — done (6/6 done)
     - [x] TASK-043 Xaml mobile app-shell (BMobileAppShell equivalent) · FEATURE-016
@@ -415,11 +407,11 @@ _None_
   - STORY-041 BMobileAppShell showcase / placement — done (2/2 done)
     - [x] TASK-049 BMobileAppShell — better placement / demo in Birko.Web.Playground · FEATURE-016
     - [x] TASK-050 BMobileAppShell (Xaml) — showcase in Birko.Xaml.Gallery · FEATURE-016
-  - STORY-052 Component gaps found by consumers adopting the `b-*` catalogue — in-progress (3/4 done)
+  - STORY-052 Component gaps found by consumers adopting the `b-*` catalogue — in-progress (4/4 done)
     - [x] TASK-104 `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels) · FEATURE-016
     - [x] TASK-105 `b-card`: the missing `md` padding rung, and elevation as a token · FEATURE-016
     - [x] TASK-107 `b-button`: a reachable tap target, and form participation · FEATURE-016
-    - [ ] TASK-135 `b-input type="decimal"`: comma-locale decimal entry, owned by the component 🔍 review · FEATURE-016
+    - [x] TASK-135 `b-input type="decimal"`: comma-locale decimal entry, owned by the component · FEATURE-016
 - **EPIC-017** Tenant isolation hardening — in-progress (0/1 tasks done)
   - STORY-044 Opt-in strict (fail-closed) tenancy mode — done (0/0 done)
   - STORY-045 Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped — done (0/0 done)
@@ -437,7 +429,7 @@ _None_
 - [ ] TASK-130 Scan every shipped theme for colour contrast, and gate it like the drift check (P1, ai)
 - [ ] TASK-140 `resolveModuleFromHash` derives the module positionally and never consults the route table (P1, ai)
 - [ ] TASK-200 Symbio: an outbox replay duplicates a create, and TASK-151 scoped the cause out of itself (P1, ai)
-- [x] TASK-449 `PerlinNoise` and `SimplexNoise` take a seed but are not reproducible across .NET versions (P2, ai)
+- [x] TASK-457 Consolidate the 349-repo framework polyrepo into one repo under a GitHub org (P1, ai)
 - [ ] TASK-127 Decide what `WithAllTenants` means when a tenant is also in scope (P2, human)
 - [ ] TASK-138 `ReadAsync()` with no arguments does not compile — CS0121 between the read-all and filtered overloads (P2, ai)
 - [ ] TASK-139 Decide whether a `pointer: coarse` rule inside a `b-*` component is policy or a knob (P2, human)
@@ -446,13 +438,26 @@ _None_
 - [ ] TASK-145 Nothing at the `GetUnwrappedStore` call sites says they strip every decorator (P2, ai)
 - [ ] TASK-147 `AttachTagAsync` validates neither a tag's existence nor its ownership (P2, human)
 - [ ] TASK-149 A story that tracks work without task files is invisible to every scheduler (P2, human)
-- [ ] TASK-201 Reps: declare `idPinned` on the client-minted creates — and not on the one that must not have it 🔍 review (P2, ai)
+- [x] TASK-201 Reps: declare `idPinned` on the client-minted creates — and not on the one that must not have it (P2, ai)
 - [ ] TASK-206 `HybridCache`'s L2 fallback filter cannot tell a misconfiguration from an outage (P2, human)
 - [ ] TASK-297 `.vscode/tasks.json` and `launch.json` target a project this repo does not contain (P2, ai)
+- [x] TASK-449 `PerlinNoise` and `SimplexNoise` take a seed but are not reproducible across .NET versions (P2, ai)
+- [x] TASK-459 Five tests fail on Linux that pass on Windows (P2, ai)
+- [x] TASK-461 Sandbox covers every reachable area, and reports it readably (P2, ai)
+- [ ] TASK-463 ~~`TagServiceBase` is documented in three places and exists in none~~ — CANCELLED, the premise was false (P2, ai)
+- [ ] TASK-466 Firefox shows no validation bubble for an invalid `b-*` control, and logs an error instead (P2, ai)
+- [ ] TASK-468 `BIRKO_SRC` names the Framework checkout to MSBuild and the Web checkout to esbuild (P2, ai)
 - [ ] TASK-059 Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3, ai)
 - [ ] TASK-106 Decide whether `::part` is a catalogue convention or stays a one-off (P3, human)
-- [x] TASK-444 `Birko.Models.Inventory` had no stock-balance model, and `IBatchable` had no implementors (P3, unassigned)
 - [ ] TASK-235 `FisData.Stock.Angular.Server` will fail `NETSDK1087` when its net10 migration lands ⚠ blocked (P3, ai)
+- [x] TASK-444 `Birko.Models.Inventory` had no stock-balance model, and `IBatchable` had no implementors (P3, unassigned)
+- [x] TASK-455 `Udp` cannot receive multicast, and binds exclusively — LAN device discovery is not expressible (P3, ai)
+- [x] TASK-458 Turn `PREZENTACIA.md` into published framework documentation (P3, ai)
+- [ ] TASK-460 Move the 350 archived repos into an attic org (P3, ai)
+- [x] TASK-462 Two warnings a consumer sees on every build (P3, ai)
+- [x] TASK-464 ~~An unconfigured sync file store throws where its async twin returns empty~~ (P3, ai)
+- [ ] TASK-465 Every `pr:` SHA recorded before the monorepo resolves to nothing (P3, ai)
+- [ ] TASK-467 Borrowed validity enforces nothing, silently, where the engine lacks the input type (P3, ai)
 
 ## Completed
 
