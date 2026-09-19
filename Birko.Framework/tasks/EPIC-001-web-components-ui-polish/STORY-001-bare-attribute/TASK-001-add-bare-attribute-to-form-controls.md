@@ -2,7 +2,7 @@
 id: TASK-001
 feature: FEATURE-001
 parent: STORY-001
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-05-28
@@ -91,3 +91,43 @@ _For behaviour that unit/AI tests can't fully cover (UI/UX, edge cases, system i
 - [ ] Set the `error` attribute on a bare control and confirm the error state is still reflected on the host (e.g. `aria-invalid` / border) even though no message row is drawn
 - [ ] Spot-check at least one non-converted (full-chrome) instance of the same component to confirm default rendering is unchanged
 - [ ] Verify in Chromium + Firefox (Shadow DOM slot rendering differs between engines)
+
+
+---
+
+## Signed off (2026-09-19)
+
+**Closed as done**, after sixteen weeks in `review` on a human test plan whose last item turned out to
+be both runnable and worth running.
+
+**Four of the five items were already covered** by `bare-smoke`, which has grown to **113** checks:
+no `.field`/label/error in bare mode across all twelve controls (item 1); `bare keeps the error state
+on the control` plus `surfaces the message as title` (item 3); `chromed has no aria-label` / `no
+title` / `links the error span` / `starts chromed` (item 4). Item 2's vertical-space half is
+`bare is shorter than chromed`; its baseline-alignment half remains visual and is not worth a
+harness.
+
+**Item 5 — Chromium + Firefox — was the real gap, and it had sat unrunnable**, because `verify.mjs`
+launches Chromium only. It is now `cross-engine-check.mjs`: puppeteer 25 drives Firefox over
+WebDriver BiDi from its own browser cache, so no system Firefox and no second driver.
+
+**Result: `bare-smoke` is 113/113 in both engines.** The `bare` work itself is cross-engine clean,
+which is what this task needed to hear.
+
+### It also found something, which is the point of running a second engine
+
+Firefox logs `The invalid form control with name='x' is not focusable` where Chromium is silent. Both
+engines **suppress the submit** identically — the correctness half agrees — but Firefox cannot focus a
+form-associated control whose focusable element is inside a shadow root, so it **never shows its
+validation bubble**. A user sees the form simply do nothing. Filed as [[TASK-466]]; consumers using
+`b-form` are unaffected, since `validate()` renders its own errors.
+
+⚠ **I had the cause wrong first and measured my way out of it.** The obvious reading was the harness's
+own `left:-9999px` fixture — an off-screen control is not focusable. A probe building the same form
+**on-screen** produced the error identically (2 errors, 2 forms, both `submitted: false`). It is the
+shadow boundary, not the position. Had I not checked, TASK-466 would have been filed as a test-fixture
+artefact and closed as nothing.
+
+The message is excused in `cross-engine-check.mjs` **by exact pattern and with TASK-466 named**, never
+by ignoring Firefox page errors — a blanket would have discarded, on its very first run, the one thing
+the second engine is for.
