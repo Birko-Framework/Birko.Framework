@@ -1,3 +1,6 @@
+using System;
+using System.Linq.Expressions;
+using System.Threading.Tasks;
 using Birko.Data.Models;
 using Birko.Data.SQL.MSSql;
 using Birko.Data.SQL.MSSql.Stores;
@@ -18,8 +21,24 @@ namespace Birko.Data.SQL.Providers.Tests;
 /// </summary>
 public class ProviderStoreFactoryTests
 {
+    private readonly Xunit.Abstractions.ITestOutputHelper _output;
+
+    public ProviderStoreFactoryTests(Xunit.Abstractions.ITestOutputHelper output) => _output = output;
+
     public class Widget : AbstractModel
     {
+        public string? Name { get; set; }
+    }
+
+    /// <summary>
+    /// The round-trip entity: mapped, unlike <see cref="Widget"/>, because a store cannot create a
+    /// table for a type the mapper cannot see — and a factory that hands back a store is worth
+    /// nothing if that store cannot reach the database.
+    /// </summary>
+    [Birko.Data.SQL.Attributes.Table("TASK042_RoundTrip")]
+    public class RoundTripRow : AbstractDatabaseModel
+    {
+        [Birko.Data.SQL.Attributes.MaxLengthField(64)]
         public string? Name { get; set; }
     }
 
@@ -77,14 +96,15 @@ public class ProviderStoreFactoryTests
     }
 
     [Fact]
-    public void MSSql_live_crud_round_trip()
+    public async Task MSSql_live_crud_round_trip()
     {
-        RunLiveCrud(System.Environment.GetEnvironmentVariable("BIRKO_MSSQL_TEST"), cs =>
+        await RunLiveAsync("BIRKO_MSSQL_TEST", async p =>
         {
-            // Opt-in: BIRKO_MSSQL_TEST = "host;db;user;pass". Absent → skipped above.
-            var p = cs.Split(';');
-            var factory = new MSSqlStoreFactory(new MSSqlStoreFactoryOptions { Location = p[0], Name = p[1], UserName = p[2], Password = p[3], TrustServerCertificate = true });
-            factory.GetConnector().Should().NotBeNull();
+            var factory = new MSSqlStoreFactory(new MSSqlStoreFactoryOptions
+            {
+                Location = p[0], Name = p[1], UserName = p[2], Password = p[3], TrustServerCertificate = true,
+            });
+            await RoundTripAsync(factory.GetAsyncStore<RoundTripRow>());
         });
     }
 
@@ -103,6 +123,19 @@ public class ProviderStoreFactoryTests
         factory.Settings.GetConnectionString().Should().Contain("AppDb");
         factory.GetAsyncStore<Widget>().Should().NotBeNull();
         factory.GetConnector().Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task MySql_live_crud_round_trip()
+    {
+        await RunLiveAsync("BIRKO_MYSQL_TEST", async p =>
+        {
+            var factory = new MySQLStoreFactory(new MySQLStoreFactoryOptions
+            {
+                Location = p[0], Name = p[1], UserName = p[2], Password = p[3],
+            });
+            await RoundTripAsync(factory.GetAsyncStore<RoundTripRow>());
+        });
     }
 
     [Fact]
@@ -136,6 +169,19 @@ public class ProviderStoreFactoryTests
     }
 
     [Fact]
+    public async Task PostgreSql_live_crud_round_trip()
+    {
+        await RunLiveAsync("BIRKO_POSTGRES_TEST", async p =>
+        {
+            var factory = new PostgreSQLStoreFactory(new PostgreSQLStoreFactoryOptions
+            {
+                Location = p[0], Name = p[1], UserName = p[2], Password = p[3],
+            });
+            await RoundTripAsync(factory.GetAsyncStore<RoundTripRow>());
+        });
+    }
+
+    [Fact]
     public void AddPostgreSqlStores_registers_a_resolvable_singleton()
     {
         var services = new ServiceCollection();
@@ -148,10 +194,77 @@ public class ProviderStoreFactoryTests
         a!.Settings.Name.Should().Be("d");
     }
 
-    // Runs the live body only when a connection string is configured; otherwise a no-op skip.
-    private static void RunLiveCrud(string? connString, System.Action<string> body)
+    /// <summary>
+    /// Runs <paramref name="body"/> against the server described by <paramref name="envVar"/>
+    /// (<c>host;db;user;pass</c>), or reports a skip.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ The previous version returned **silently** when the variable was absent, so the suite
+    /// reported every test passed whether a server had been involved or not — and a test that passes
+    /// without running is indistinguishable from one that ran and proved something. The skip is now
+    /// written to the test output, and <c>BIRKO_REQUIRE_LIVE</c> turns it into a failure, which is
+    /// the convention the framework's other live suites already use: without it a CI job whose
+    /// containers never came up reports success.
+    /// </remarks>
+    private async Task RunLiveAsync(string envVar, Func<string[], Task> body)
     {
-        if (string.IsNullOrWhiteSpace(connString)) return; // opt-in: env var absent → skipped
-        body(connString);
+        var connString = Environment.GetEnvironmentVariable(envVar);
+        if (string.IsNullOrWhiteSpace(connString))
+        {
+            var message = $"SKIPPED: no live server. Set {envVar}=host;db;user;pass to exercise this "
+                        + "test; set BIRKO_REQUIRE_LIVE to make its absence a failure.";
+            _output.WriteLine(message);
+            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE")))
+            {
+                throw new InvalidOperationException(message);
+            }
+            return;
+        }
+
+        var parts = connString.Split(';');
+        parts.Length.Should().BeGreaterThanOrEqualTo(4, $"{envVar} must be host;db;user;pass");
+        await body(parts);
+    }
+
+    /// <summary>
+    /// A real round-trip: create the table, write a row, read it back **by value**, then delete it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is what the acceptance criterion asked for and what the previous version did not do. It
+    /// asserted <c>factory.GetConnector().Should().NotBeNull()</c> — constructing an object, opening
+    /// no connection, touching no server. It passed with every database on the machine stopped, which
+    /// is how a criterion reading "live CRUD round-trip" stayed ticked for eleven weeks without one
+    /// ever happening. MySQL and PostgreSQL had no live test at all.
+    /// </para>
+    /// <para>
+    /// Reading back by <c>Name</c> rather than by the returned id is deliberate: an id that
+    /// round-trips only proves the id was echoed back, while a filter forces the value through the
+    /// provider's own parameter binding and out again through its reader — which is where the
+    /// per-provider column typing this factory selects actually shows up.
+    /// </para>
+    /// </remarks>
+    private static async Task RoundTripAsync(dynamic store)
+    {
+        var marker = $"task042-{Guid.NewGuid():N}";
+        Expression<Func<RoundTripRow, bool>> mine = r => r.Name == marker;
+        try
+        {
+            Guid id = await store.CreateAsync(new RoundTripRow { Name = marker });
+            id.Should().NotBe(Guid.Empty, "create must return the row's id");
+
+            long count = await store.CountAsync(mine);
+            count.Should().Be(1, "the row must be readable back from the server, not merely written");
+
+            await store.DeleteAsync(mine);
+            long after = await store.CountAsync(mine);
+            after.Should().Be(0, "delete must remove it — otherwise every run leaves a row behind");
+        }
+        finally
+        {
+            // Best effort: a failed assertion above must not leave the marker row on a shared server.
+            try { await store.DeleteAsync(mine); }
+            catch { /* the assertion is the interesting failure, not the cleanup */ }
+        }
     }
 }
