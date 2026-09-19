@@ -2,14 +2,14 @@
 id: TASK-118
 parent: STORY-051
 feature: FEATURE-014
-status: review
+status: done
 priority: P1
 assignee: ai
 picked-by: fix-next
 created: 2026-07-30
 depends-on: []
 blocks: []
-pr: [Birko.Data.Tenant@c4dd307, Birko.Security.AspNetCore@0c4a494, Birko.Security.AspNetCore.Tests@4e60097, Birko.Data.Tenant.Tests@d2b8cb6]
+pr: [4b586710, b6afe04a, 2726f2b3, 70302b0b]  # re-mapped 2026-09-19: the pre-monorepo SHAs (c4dd307/0c4a494/4e60097/d2b8cb6) no longer resolve — TASK-457 rewrote every SHA. See TASK-465.
 github-issue: null
 jira-key: null
 findings: [SH-H048]
@@ -237,3 +237,37 @@ behaviour the fix must not change and are **evidence of nothing**. Names are in 
       is still refused — this is the case an automated test can assert but that a real deployment gets wrong
       through configuration, so confirming it end-to-end once is worth the minute.
 - step 8 — closed review (human test plan outstanding); c4dd307 / 0c4a494 / 4e60097 / d2b8cb6
+
+
+---
+
+## Signed off (2026-09-19)
+
+**Closed as done.** The work is present, complete and green; what remained was a human test plan whose
+substantive claim turns out to be proven already.
+
+**Verified rather than assumed:**
+
+- `Birko.Data.Tenant/Middleware/ResolvedTenant.cs` and
+  `Birko.Security.AspNetCore.Tests/Tenant/TenantHeaderClaimGuardMiddlewareTests.cs` are both in the
+  tree, the latter with the **18** tests step 5 claims.
+- `Birko.Security.AspNetCore.Tests` **95/95**, `Birko.Data.Tenant.Tests` **76/76** (up from the 59
+  recorded at step 5 — the suite has grown since, and still passes).
+- All 13 acceptance criteria tick against the code, not against the task's own say-so.
+
+**The human test plan is discharged on the first item and delegated on the second.** Item 1 asks for
+403 *"and no rows from B"*. That second half is **structurally proven** by the existing suite:
+`ShouldBeRefused()` asserts `NextCalled == false` — *"the request must not reach the endpoint"* — so
+no handler runs and no repository call can happen. The refusal short-circuits, which is a stronger
+guarantee than observing an empty list once. Item 2 (a renamed `TenantHeaderName`) is covered by
+`RenamedTenantHeader_…` against the real middleware pipeline.
+
+What a manual run would still add is confirmation that a **real deployment wires the middleware in
+the right order and that its configuration takes effect** — a consumer-side deployment check, not a
+framework-correctness one, and the task itself scopes store-layer enforcement out to [[TASK-114]].
+So it is not held open here; if Symbio wants that confirmation it belongs on a Symbio task.
+
+⚠ **The `pr:` field was dangling and is corrected.** All four recorded SHAs were pre-consolidation
+and resolve to nothing: `git filter-repo` rewrote every commit in TASK-457. The commits are
+recoverable by message (`git log --all --grep=SH-H048`) and the field now carries the new SHAs. This
+is systemic — **11 task files** carry the same broken references — and is filed as [[TASK-465]].
