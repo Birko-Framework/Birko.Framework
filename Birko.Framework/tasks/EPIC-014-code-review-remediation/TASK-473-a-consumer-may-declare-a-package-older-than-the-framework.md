@@ -163,11 +163,40 @@ DraCode, Presenter and WorkoutTracker. Symbio: 0, and now for the right reason.*
     wrong-cased `Birko.Data.Elasticsearch` import fixed, and CPM adopted with the policy written into
     its `Directory.Packages.props` header. Verified by re-running this audit: 0 findings, and after the
     CPM pass above, 0 for the right reason.
-  - **DraCode** — 1 BELOW + 2 PINNED. Also the largest single contributor to TASK-230's leftover rows.
-  - **BardStudio** — 1 BELOW + 1 MISSING-CENTRAL, both in `Directory.Packages.props`. **Start by
-    establishing whether its restore currently succeeds** — see the `NU1010` prediction above.
-  - **Presenter** — 3 PINNED, all in `Directory.Packages.props`. Decide or drop each.
-  - **WorkoutTracker** — 1 EQUAL.
+  - ~~**DraCode**~~ — **DONE** (its TASK-076). 3 declarations removed. ⚠ Raising `DraCode.Birko` to the
+    framework's `10.*` turned a *latent* `Microsoft.Data.Sqlite 9.0.4` pin in `DraCode.KoboldLair` into
+    a hard `NU1605` in three projects — it reaches the package by `ProjectReference`, which **is** a
+    dependency edge. **This audit's out-of-scope limit #3, arriving in practice on the first repo that
+    exercised it.** Raised to `10.*`; TASK-230's "DraCode ×5" SQLitePCLRaw rows all cleared.
+  - ~~**BardStudio**~~ — **DONE** (its TASK-029). ⚠ **The `NU1010` prediction was correct: its restore
+    was failing outright**, and had been. Central `Microsoft.Data.Sqlite` `9.0.3` → `10.*`, the missing
+    `…DependencyInjection.Abstractions` added, the duplicate `Include` removed,
+    `CentralPackageFloatingVersionsEnabled` set (`NU1011`). `9.0.3` was below **both** of TASK-230's
+    advisory thresholds; now resolves 10.0.12 → SQLitePCLRaw 2.1.12, `--vulnerable` reports none.
+  - ~~**Presenter**~~ — **DONE** (its TASK-010), and **the best argument in this whole thread for
+    reporting `PINNED` at all.** All three pins sat exactly *at* the framework's floor, so nothing was
+    below anything and nothing looked wrong — and `Microsoft.Data.Sqlite 10.0.0` was resolving
+    `SQLitePCLRaw.lib.e_sqlite3` **2.1.11, High severity, live in all three projects**. TASK-230 had
+    already measured that 10.0.0 is the affected version and 10.0.11 the first that is not. **A float
+    would have healed it months ago with no commit anywhere.** A pin that broke no rule and passed
+    every review kept a High advisory open across an entire repository.
+  - ~~**WorkoutTracker**~~ — **DONE** (its TASK-191). One redundant line; both sides already `10.*`, so
+    resolved versions are identical before and after.
+
+## Outcome — 2026-09-19
+
+**All 8 importing consumers clean.** `audit-consumer-versions.ps1`: *"No consumer declares a
+framework-owned package. Nothing below, nothing duplicated."*
+
+Three High-severity advisory exposures were cleared as a side effect, in DraCode, BardStudio and
+Presenter — every one of them a `SQLitePCLRaw.lib.e_sqlite3` row that Birko's [[TASK-230]] had
+reported as consumer-owned and left. **That task was not wrong to leave them; it was looking at the
+symptom.** One version declared below the framework's floor produces many advisory rows, and fixing
+the declaration cleared all of them at once. It also unbroke a build nobody had noticed was broken.
+
+⚠ **The gate is now unblocked.** `-FailOnFinding` exists and the tree is clean, which was the stated
+precondition. Wiring it somewhere — `verify-birko-conventions`, a scheduled job, or both — is a
+separate decision and still open.
 - **Wiring the audit into a gate.** It takes `-FailOnFinding` and is ready for one, but 13 findings
   exist today, so turning it on now fails every run. It becomes a gate when the consumers are clean —
   and that ordering is the point, not an oversight.
