@@ -4,7 +4,7 @@
 Camera frame capture abstraction using FFmpeg. Provides ICameraSource interface and FfmpegCameraSource implementation for capturing JPEG snapshots from camera devices.
 
 ## Project Location
-`C:\Source\Birko.Communication.Camera\`
+`Birko.Communication.Camera/`
 
 ## Components
 

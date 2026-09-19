@@ -4,7 +4,7 @@
 SQLite-specific view DDL overrides for the Birko.Data.SQL.View framework. Provides `CREATE VIEW IF NOT EXISTS` syntax and `sqlite_master`-based existence checks.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.SqLite.View\`
+`Birko.Data.SQL.SqLite.View/`
 
 ## Components
 

@@ -4,7 +4,7 @@
 WebSocket communication implementation for real-time bidirectional communication.
 
 ## Project Location
-`C:\Source\Birko.Communication.WebSocket\`
+`Birko.Communication.WebSocket/`
 
 ## Purpose
 - WebSocket client communication

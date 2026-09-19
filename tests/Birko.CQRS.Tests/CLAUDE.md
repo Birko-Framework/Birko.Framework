@@ -4,7 +4,7 @@
 Unit tests for Birko.CQRS — mediator, pipeline behaviors, DI registration, and core types.
 
 ## Project Location
-`C:\Source\Birko.CQRS.Tests\` (.csproj, xUnit + FluentAssertions)
+`tests/Birko.CQRS.Tests/` (.csproj, xUnit + FluentAssertions)
 
 ## Components
 - **UnitTests.cs** — Unit struct tests (equality, comparison, hash, toString, task)

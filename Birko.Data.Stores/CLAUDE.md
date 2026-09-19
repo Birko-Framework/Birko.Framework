@@ -4,7 +4,7 @@
 Store abstractions for the Birko Framework. Contains store interfaces, abstract implementations, settings hierarchy, ordering, and service locator.
 
 ## Project Location
-`C:\Source\Birko.Data.Stores\`
+`Birko.Data.Stores/`
 
 ## Components
 

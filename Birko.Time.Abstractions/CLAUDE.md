@@ -4,7 +4,7 @@
 Zero-dependency shared project containing the clock abstraction and providers extracted from Birko.Time. Enables lightweight consumers to depend on `IDateTimeProvider` without pulling in calendars, holidays, and working hours.
 
 ## Project Location
-`C:\Source\Birko.Time.Abstractions\`
+`Birko.Time.Abstractions/`
 
 ## Namespace
 `Birko.Time` — preserves backward compatibility with Birko.Time.

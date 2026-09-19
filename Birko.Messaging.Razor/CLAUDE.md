@@ -6,7 +6,7 @@ Razor template engine for the Birko Messaging framework. Implements `ITemplateEn
 
 ## Project Location
 
-- **Path:** `C:\Source\Birko.Messaging.Razor\`
+- **Path:** `Birko.Messaging.Razor/`
 - **Type:** Shared project (`.shproj` / `.projitems`)
 - **Namespace:** `Birko.Messaging.Razor`
 - **GUID:** `c8d2e4f6-a1b3-4c5d-9e7f-2a3b4c5d6e8f`

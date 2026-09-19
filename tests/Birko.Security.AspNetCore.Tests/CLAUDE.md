@@ -4,7 +4,7 @@
 Unit tests for the Birko.Security.AspNetCore project — JWT Bearer auth, ICurrentUser, permission checking, tenant resolution, and middleware.
 
 ## Location
-`C:\Source\Birko.Security.AspNetCore.Tests\`
+`tests/Birko.Security.AspNetCore.Tests/`
 
 ## Structure
 ```

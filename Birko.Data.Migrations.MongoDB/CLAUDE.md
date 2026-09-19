@@ -4,7 +4,7 @@
 MongoDB migration backend using MongoDBClient from Birko.Data.MongoDB. Implements platform-agnostic IMigrationContext.
 
 ## Project Location
-`C:\Source\Birko.Data.Migrations.MongoDB\`
+`Birko.Data.Migrations.MongoDB/`
 
 ## Components
 

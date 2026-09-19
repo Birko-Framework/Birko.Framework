@@ -4,7 +4,7 @@
 Cosmos DB-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncCosmosDBStore` from Birko.Data.CosmosDB.
 
 ## Project Location
-`C:\Source\Birko.BackgroundJobs.CosmosDB\`
+`Birko.BackgroundJobs.CosmosDB/`
 
 ## Components
 

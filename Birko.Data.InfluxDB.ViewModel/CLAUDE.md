@@ -4,7 +4,7 @@
 ViewModel repository implementations for InfluxDB stores.
 
 ## Project Location
-`C:\Source\Birko.Data.InfluxDB.ViewModel\`
+`Birko.Data.InfluxDB.ViewModel/`
 
 ## Components
 

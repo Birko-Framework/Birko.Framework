@@ -6,7 +6,7 @@ xUnit + FluentAssertions test project for `Birko.Communication.gRPC` (client pri
 
 ## Project Location
 
-`C:\Source\Birko.Communication.gRPC.Tests\`
+`tests/Birko.Communication.gRPC.Tests/`
 
 ## Scope
 

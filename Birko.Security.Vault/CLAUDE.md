@@ -4,7 +4,7 @@
 HashiCorp Vault secret provider — uses Vault HTTP API directly, no VaultSharp dependency.
 
 ## Project Location
-`C:\Source\Birko.Security.Vault\` — Shared project (.shproj + .projitems)
+`Birko.Security.Vault/` — Shared project (.shproj + .projitems)
 
 ## Components
 - **VaultSettings.cs** — Address, Token, MountPath, KvVersion (1 or 2), Namespace, TimeoutSeconds

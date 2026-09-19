@@ -4,7 +4,7 @@
 Unit tests for all Birko.EventBus projects — core event bus, pipeline, deduplication, topic conventions, distributed bus, outbox, and event sourcing integration.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.EventBus.Tests\`
+- **Directory:** `tests/Birko.EventBus.Tests/`
 - **Type:** Test Project (.csproj, xUnit)
 - **Target:** net10.0
 

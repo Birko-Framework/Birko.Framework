@@ -4,7 +4,7 @@
 Canonical `IModelMapping<T>` implementations for the `Birko.Models.Product` domain. Provides ready-to-use fluent SQL mappings for MeasureUnit, UnitConversion, and ProductPartnerCode — paired with `Birko.Models.SQL` (the fluent mapping framework).
 
 ## Project Location
-`C:\Source\Birko.Models.Product.SQL\`
+`Birko.Models.Product.SQL/`
 
 ## Components (`Birko.Models.Product.SQL.Mappings`)
 - **MeasureUnitMapping** → `MeasureUnits` table (Code unique, Name, Symbol)

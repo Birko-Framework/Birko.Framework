@@ -4,7 +4,7 @@
 Cosmos DB migration backend using Database. Implements platform-agnostic IMigrationContext.
 
 ## Project Location
-`C:\Source\Birko.Data.Migrations.CosmosDB\`
+`Birko.Data.Migrations.CosmosDB/`
 
 ## Components
 

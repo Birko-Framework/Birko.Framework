@@ -4,7 +4,7 @@
 Azure Cosmos DB (NoSQL API) implementation of the Birko.Data.Views interfaces, providing read-only view queries over Cosmos DB containers.
 
 ## Project Location
-`C:\Source\Birko.Data.CosmosDB.Views\`
+`Birko.Data.CosmosDB.Views/`
 
 ## Purpose
 - Read-only view queries over Cosmos DB containers via `IViewStore<TView>`

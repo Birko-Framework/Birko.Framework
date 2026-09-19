@@ -4,7 +4,7 @@
 22 specialized AI agent implementations (no factory - factory has been moved to `Birko.AI`).
 
 ## Project Location
-`C:\Source\Birko.AI.Agents\`
+`Birko.AI.Agents/`
 
 ## Namespace
 `Birko.AI.Agents`, `Birko.AI.Agents.Coding`, `Birko.AI.Agents.Coding.Specialized`, `Birko.AI.Agents.Media`

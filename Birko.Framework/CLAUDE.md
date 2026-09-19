@@ -2706,7 +2706,7 @@ edit here, live immediately).
 ## Testing
 - All test projects use **xUnit + FluentAssertions**
 - **Tests live under `tests/` in the same repo:** `Birko.{Project}`'s tests are at
-  `C:\Source\Birko\Framework	ests\Birko.{Project}.Tests`, and import the project under test as
+  `tests/Birko.{Project}.Tests/`, and import the project under test as
   `..\..\Birko.{Project}\Birko.{Project}.projitems`. A fix and its regression suite are **one
   commit** — see the integration model above. Run with `dotnet test --nologo` from the test project.
 - Every new public functionality must have corresponding tests in `Birko.{ProjectName}.Tests`

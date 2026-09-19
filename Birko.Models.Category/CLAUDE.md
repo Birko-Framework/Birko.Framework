@@ -4,7 +4,7 @@
 Category domain models for the Birko Framework.
 
 ## Project Location
-`C:\Source\Birko.Models.Category\`
+`Birko.Models.Category/`
 
 ## Purpose
 - Category entity models

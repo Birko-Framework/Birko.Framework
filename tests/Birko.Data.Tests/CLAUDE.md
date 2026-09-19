@@ -4,7 +4,7 @@
 Unit tests for the core Birko data layer - store and repository abstractions.
 
 ## Project Location
-`C:\Source\Birko.Data.Tests\`
+`tests/Birko.Data.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

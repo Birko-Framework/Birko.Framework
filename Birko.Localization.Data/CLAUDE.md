@@ -4,7 +4,7 @@
 Database-backed translation provider for Birko.Localization. Works with any Birko.Data async bulk store (SQL, MongoDB, ElasticSearch, JSON, RavenDB, etc.).
 
 ## Project Location
-- **Path:** `C:\Source\Birko.Localization.Data\`
+- **Path:** `Birko.Localization.Data/`
 - **Type:** Shared Project (.shproj/.projitems)
 - **Namespace:** `Birko.Localization.Data`
 

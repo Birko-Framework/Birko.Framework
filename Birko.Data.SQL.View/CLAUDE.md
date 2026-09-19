@@ -4,7 +4,7 @@
 SQL view generation framework for creating database views from entity attributes.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.View\`
+`Birko.Data.SQL.View/`
 
 ## Purpose
 - Generate database views from C# attributes

@@ -4,7 +4,7 @@
 XML file-based job queue for Birko.BackgroundJobs. Uses `AsyncXmlStore` from Birko.Data.XML. Ideal for development, testing, single-process deployments, and scenarios where a human-readable XML audit trail is preferred over JSON.
 
 ## Project Location
-`C:\Source\Birko.BackgroundJobs.XML\`
+`Birko.BackgroundJobs.XML/`
 
 ## Components
 

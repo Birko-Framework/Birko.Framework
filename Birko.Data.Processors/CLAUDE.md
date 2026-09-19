@@ -4,7 +4,7 @@
 Generic stream processor framework for composable data pipelines. Event-driven processors for XML, CSV, HTTP, and ZIP sources with decorator-based composition.
 
 ## Project Location
-`C:\Source\Birko.Data.Processors\` (shared project, .shproj)
+`Birko.Data.Processors/` (shared project, .shproj)
 
 ## Components
 

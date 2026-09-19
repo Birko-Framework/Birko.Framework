@@ -4,7 +4,7 @@
 OAuth2 client library providing multiple grant type flows with automatic token caching, thread-safe refresh, and HttpClient integration via DelegatingHandler.
 
 ## Project Location
-`C:\Source\Birko.Communication.OAuth\`
+`Birko.Communication.OAuth/`
 
 ## Components
 

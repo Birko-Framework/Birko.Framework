@@ -4,7 +4,7 @@
 ASP.NET Core integration for Birko.Security — JWT Bearer authentication, current user resolution, claims-based permission checking, and multi-tenant middleware.
 
 ## Location
-`C:\Source\Birko.Security.AspNetCore\`
+`Birko.Security.AspNetCore/`
 
 ## Structure
 ```

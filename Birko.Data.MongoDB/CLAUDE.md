@@ -4,7 +4,7 @@
 MongoDB implementation for the Birko data layer providing document-based storage.
 
 ## Project Location
-`C:\Source\Birko.Data.MongoDB\`
+`Birko.Data.MongoDB/`
 
 ## Purpose
 - Document-based storage

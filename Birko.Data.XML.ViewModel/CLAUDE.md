@@ -4,7 +4,7 @@
 XML-based repository layer for ViewModel-to-Model mapping. Provides sync and async repository base classes that pair with `XmlStore`/`AsyncXmlStore` from Birko.Data.XML, supporting bulk operations and store wrapping (e.g., tenant wrappers).
 
 ## Project Location
-`C:\Source\Birko.Data.XML.ViewModel\` — Shared project (.shproj + .projitems)
+`Birko.Data.XML.ViewModel/` — Shared project (.shproj + .projitems)
 
 ## Components
 - **Repositories/XmlRepository.cs** — Abstract sync repository with bulk support. Validates that the injected store is `XmlStore<TModel>` or a wrapper around it. Exposes `XmlStore` property via `GetUnwrappedStore`.

@@ -4,7 +4,7 @@
 TimescaleDB migration backend extending SQL migrations. Uses AbstractConnector (PostgreSQL). TimescaleDB-specific operations (hypertables, compression policies) use the Raw() escape hatch.
 
 ## Project Location
-`C:\Source\Birko.Data.Migrations.TimescaleDB\`
+`Birko.Data.Migrations.TimescaleDB/`
 
 ## Components
 

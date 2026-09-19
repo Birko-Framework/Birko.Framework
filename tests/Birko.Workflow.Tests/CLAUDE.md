@@ -4,7 +4,7 @@
 Unit tests for Birko.Workflow — state machine engine for business process automation.
 
 ## Project Location
-`C:\Source\Birko.Workflow.Tests\` (.csproj test project)
+`tests/Birko.Workflow.Tests/` (.csproj test project)
 
 ## Test Classes
 - **WorkflowBuilderTests.cs** — Builder validation: valid definitions, missing initial state, undefined states, final initial state, state descriptions, multiple triggers

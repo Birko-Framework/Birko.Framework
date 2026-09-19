@@ -4,7 +4,7 @@
 Core AI agent framework with LLM provider base class, agent run loop, factories, and default tools.
 
 ## Project Location
-`C:\Source\Birko.AI\`
+`Birko.AI/`
 
 ## Namespace
 `Birko.AI.Providers`, `Birko.AI.Agents`, `Birko.AI.Factories`, `Birko.AI.Tools`

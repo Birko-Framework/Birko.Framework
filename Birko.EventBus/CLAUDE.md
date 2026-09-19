@@ -4,7 +4,7 @@
 Strongly-typed event bus for modular monolith architectures. In-process pub/sub with pipeline behaviors, enrichment, deduplication, and DI integration.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.EventBus\`
+- **Directory:** `Birko.EventBus/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.EventBus`
 

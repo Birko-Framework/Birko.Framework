@@ -4,7 +4,7 @@
 Unit tests for Birko.Data.MongoDB — aggregation pipeline building and change stream options.
 
 ## Project Location
-`C:\Source\Birko.Data.MongoDB.Tests\`
+`tests/Birko.Data.MongoDB.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

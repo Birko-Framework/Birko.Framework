@@ -4,7 +4,7 @@
 ViewModel repository implementations for Elasticsearch stores.
 
 ## Project Location
-`C:\Source\Birko.Data.ElasticSearch.ViewModel\`
+`Birko.Data.ElasticSearch.ViewModel/`
 
 ## Components
 

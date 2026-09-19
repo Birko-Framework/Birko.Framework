@@ -4,7 +4,7 @@
 ViewModel repository implementations for TimescaleDB stores.
 
 ## Project Location
-`C:\Source\Birko.Data.TimescaleDB.ViewModel\`
+`Birko.Data.TimescaleDB.ViewModel/`
 
 ## Components
 

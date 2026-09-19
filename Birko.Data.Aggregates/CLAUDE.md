@@ -4,7 +4,7 @@
 SQL-to-NoSQL aggregate mapper. Defines aggregate shapes (which related entities to include), flattens normalized SQL data into nested documents for NoSQL stores, and expands nested documents back into relational insert/delete operations.
 
 ## Project Location
-`C:\Source\Birko.Data.Aggregates\` (Shared Project - `.shproj`)
+`Birko.Data.Aggregates/` (Shared Project - `.shproj`)
 
 ## Components
 

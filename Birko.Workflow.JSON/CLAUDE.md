@@ -4,7 +4,7 @@
 JSON file-based workflow instance persistence using AsyncJsonStore. For development and testing.
 
 ## Project Location
-`C:\Source\Birko.Workflow.JSON\` (shared project via `.projitems`)
+`Birko.Workflow.JSON/` (shared project via `.projitems`)
 
 ## Components
 - **Models/JsonWorkflowInstanceModel.cs** — AbstractModel + JsonPropertyName attributes

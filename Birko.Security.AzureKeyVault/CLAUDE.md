@@ -4,7 +4,7 @@
 Azure Key Vault secret provider — uses Key Vault REST API with OAuth2 client credentials, no Azure SDK dependency.
 
 ## Project Location
-`C:\Source\Birko.Security.AzureKeyVault\` — Shared project (.shproj + .projitems)
+`Birko.Security.AzureKeyVault/` — Shared project (.shproj + .projitems)
 
 ## Components
 - **AzureKeyVaultSettings.cs** — VaultUri, TenantId, ClientId, ClientSecret, TimeoutSeconds

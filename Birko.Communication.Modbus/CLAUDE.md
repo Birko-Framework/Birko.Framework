@@ -4,7 +4,7 @@
 Modbus master protocol implementation over any Birko.Communication IPort transport.
 
 ## Project Location
-`C:\Source\Birko.Communication.Modbus\`
+`Birko.Communication.Modbus/`
 
 ## Components
 

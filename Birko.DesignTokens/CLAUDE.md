@@ -108,7 +108,7 @@ Never hand-edit the generated CSS or AXAML. Adding a theme = add a `Sheet`; addi
 
 ## Tests
 
-`Birko.DesignTokens.Tests` (xUnit + FluentAssertions, in `Birko\Framework	ests`): CSS round-trip
+`Birko.DesignTokens.Tests` (xUnit + FluentAssertions, in `tests/`): CSS round-trip
 parity per sheet, extractor round-trip on the live files, single-source/uniqueness checks, AXAML
 well-formedness, per-theme resolution, color/length/key-name conversion unit tests, and
 cross-theme key-set parity (swap safety).

@@ -4,7 +4,7 @@
 General-purpose utility classes for the Birko Framework — string manipulation, HTML stripping, path validation, CSV parsing, expression building, object comparison, and collection diffing.
 
 ## Project Location
-`C:\Source\Birko.Helpers\` (Shared Project - `.shproj`)
+`Birko.Helpers/` (Shared Project - `.shproj`)
 
 ## Components
 

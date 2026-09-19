@@ -5,7 +5,7 @@ Low-level hardware ports for Birko.Communication. Each port derives from `Abstra
 `IPort`) and is configured by a `PortSettings`-derived settings object.
 
 ## Project Location
-`C:\Source\Birko\Framework\Birko.Communication.Hardware\`
+`Birko.Communication.Hardware/`
 
 ## Components
 

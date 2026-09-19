@@ -4,7 +4,7 @@
 Unit tests for Birko.Security.AzureKeyVault — settings, OAuth2 token flow, API response parsing.
 
 ## Project Location
-`C:\Source\Birko.Security.AzureKeyVault.Tests\`
+`tests/Birko.Security.AzureKeyVault.Tests/`
 
 ## Components
 - **AzureKeyVaultSettingsTests.cs** — Settings defaults, property aliases to RemoteSettings

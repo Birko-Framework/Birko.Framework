@@ -4,7 +4,7 @@
 Zero-dependency shared project providing pluggable random number generation with testable abstractions. Includes providers, statistical distributions, ID/token sequences, and noise generators.
 
 ## Project Location
-`C:\Source\Birko.Random\`
+`Birko.Random/`
 
 ## Namespace
 `Birko.Random`

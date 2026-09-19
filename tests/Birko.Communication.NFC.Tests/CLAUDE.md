@@ -4,7 +4,7 @@
 Unit tests for Birko.Communication.NFC tag communication (models, protocols, transports).
 
 ## Project Location
-`C:\Source\Birko.Communication.NFC.Tests\`
+`tests/Birko.Communication.NFC.Tests/`
 
 ## Components
 - **NfcTagDataTests.cs** — Tag data model: ToString, GetFormattedUid, default values

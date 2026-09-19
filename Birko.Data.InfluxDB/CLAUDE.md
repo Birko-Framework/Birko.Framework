@@ -4,7 +4,7 @@
 InfluxDB implementation for the Birko data layer providing time-series database storage.
 
 ## Project Location
-`C:\Source\Birko.Data.InfluxDB\`
+`Birko.Data.InfluxDB/`
 
 ## Purpose
 - Time-series data storage

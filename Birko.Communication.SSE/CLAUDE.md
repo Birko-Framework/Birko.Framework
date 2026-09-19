@@ -4,7 +4,7 @@
 Server-Sent Events (SSE) client implementation for Birko.Communication.
 
 ## Project Location
-`C:\Source\Birko.Communication.SSE\`
+`Birko.Communication.SSE/`
 
 ## Purpose
 - Server-Sent Events client

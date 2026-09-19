@@ -4,7 +4,7 @@
 SEO (Search Engine Optimization) domain models for the Birko Framework.
 
 ## Project Location
-`C:\Source\Birko.Models.SEO\`
+`Birko.Models.SEO/`
 
 ## Purpose
 - SEO metadata models

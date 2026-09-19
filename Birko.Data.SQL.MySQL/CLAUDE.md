@@ -4,7 +4,7 @@
 MySQL implementation of Birko.Data.SQL stores and repositories.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.MySQL\`
+`Birko.Data.SQL.MySQL/`
 
 ## Purpose
 - Provides MySQL-specific data store implementations

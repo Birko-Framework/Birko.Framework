@@ -4,7 +4,7 @@ A single `IHealthCheck` that answers *"is my schema still what my models think i
 
 ## Project Location
 
-`C:\Source\Birko\Framework\Birko.Health.Data.SQL\`
+`Birko.Health.Data.SQL/`
 
 ## Overview
 

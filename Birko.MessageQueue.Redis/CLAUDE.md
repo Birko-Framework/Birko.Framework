@@ -4,7 +4,7 @@
 Redis Streams implementation of Birko.MessageQueue interfaces. Provides persistent, ordered messaging using Redis Streams with consumer group support.
 
 ## Project Location
-`C:\Source\Birko.MessageQueue.Redis\` (Shared project via .projitems)
+`Birko.MessageQueue.Redis/` (Shared project via .projitems)
 
 ## Components
 

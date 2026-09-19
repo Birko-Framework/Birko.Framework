@@ -4,7 +4,7 @@
 Unit tests for Birko.Data.SQL.Caching — transparent SQL query caching + invalidation.
 
 ## Project Location
-`C:\Source\Birko\Framework	ests\Birko.Data.SQL.Caching.Tests\`
+`tests/Birko.Data.SQL.Caching.Tests/`
 
 ## Test Framework
 xUnit + FluentAssertions

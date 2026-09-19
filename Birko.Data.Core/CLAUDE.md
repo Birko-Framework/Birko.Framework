@@ -4,7 +4,7 @@
 Core data layer foundation for the Birko Framework. Contains base models, view models, filters, and exceptions. Imports Birko.Contracts for shared interfaces (IGuidEntity, ILogEntity, ILoadable, ICopyable, ITimestamped, IDefault).
 
 ## Project Location
-`C:\Source\Birko.Data.Core\` (shared project, .shproj/.projitems)
+`Birko.Data.Core/` (shared project, .shproj/.projitems)
 
 ## Namespace
 `Birko.Data` with sub-namespaces: `Birko.Data.Models`, `Birko.Data.ViewModels`, `Birko.Data.Filters`, `Birko.Data.Exceptions`.

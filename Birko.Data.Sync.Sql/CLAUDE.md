@@ -4,7 +4,7 @@
 SQL-specific sync knowledge item implementation for the Birko.Data.Sync framework.
 
 ## Project Location
-`C:\Source\Birko.Data.Sync.Sql\`
+`Birko.Data.Sync.Sql/`
 
 ## Components
 

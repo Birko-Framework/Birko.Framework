@@ -4,7 +4,7 @@
 Unit tests for entity-level localization (Birko.Data.Localization).
 
 ## Project Location
-`C:\Source\Birko.Data.Localization.Tests\` (test project, .csproj, net10.0)
+`tests/Birko.Data.Localization.Tests/` (test project, .csproj, net10.0)
 
 ## Components
 

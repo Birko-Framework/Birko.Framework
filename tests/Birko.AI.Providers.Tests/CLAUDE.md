@@ -5,7 +5,7 @@ Unit tests for Birko.AI.Providers — the concrete `ILlmProvider` implementation
 Claude, etc.).
 
 ## Project Location
-`C:\Source\Birko\Framework	ests\Birko.AI.Providers.Tests\`
+`tests/Birko.AI.Providers.Tests/`
 
 ## Test Framework
 xUnit + FluentAssertions

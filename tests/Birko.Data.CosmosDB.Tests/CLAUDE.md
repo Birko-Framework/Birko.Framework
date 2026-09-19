@@ -4,7 +4,7 @@
 Unit tests for Birko.Data.CosmosDB — stores, repositories, UnitOfWork, and index management.
 
 ## Project Location
-`C:\Source\Birko.Data.CosmosDB.Tests\`
+`tests/Birko.Data.CosmosDB.Tests/`
 
 ## Test Framework
 xUnit + FluentAssertions + Moq

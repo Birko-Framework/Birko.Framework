@@ -4,7 +4,7 @@
 RavenDB migration backend using IDocumentStore. Implements platform-agnostic IMigrationContext.
 
 ## Project Location
-`C:\Source\Birko.Data.Migrations.RavenDB\`
+`Birko.Data.Migrations.RavenDB/`
 
 ## Components
 

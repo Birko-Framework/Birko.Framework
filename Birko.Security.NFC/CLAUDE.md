@@ -4,7 +4,7 @@
 NFC-based authentication — maps NFC tag UIDs to user identities and optionally issues JWT tokens.
 
 ## Project Location
-`C:\Source\Birko.Security.NFC\`
+`Birko.Security.NFC/`
 
 ## Components
 - **INfcAuthProvider.cs** — Interface: AuthenticateAsync, EnrollAsync, RevokeAsync, RevokeAllAsync, GetUserTagsAsync, GetTagMappingAsync, IsEnrolledAsync

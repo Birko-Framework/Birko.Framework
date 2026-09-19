@@ -4,7 +4,7 @@
 Translations and culture support for the Birko Framework. Provides a pluggable localization system with culture fallback chains, CLDR-based pluralization, and multiple translation storage backends.
 
 ## Project Location
-- **Path:** `C:\Source\Birko.Localization\`
+- **Path:** `Birko.Localization/`
 - **Type:** Shared Project (.shproj/.projitems)
 - **Namespace:** `Birko.Localization`
 

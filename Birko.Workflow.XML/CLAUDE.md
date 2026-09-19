@@ -4,7 +4,7 @@
 XML file-based persistence for workflow instances. Uses `AsyncXmlStore` from Birko.Data.XML to store workflow state, supporting Save, Load, Delete, and query-by-state/status/workflow-name operations. Suitable for development, testing, and single-process deployments.
 
 ## Project Location
-`C:\Source\Birko.Workflow.XML\` — Shared project (.shproj + .projitems)
+`Birko.Workflow.XML/` — Shared project (.shproj + .projitems)
 
 ## Components
 - **Models/XmlWorkflowInstanceModel.cs** — XML-serializable workflow instance model extending AbstractModel. Holds WorkflowName, CurrentState, Status, DataXml, HistoryXml, timestamps. Converts to/from WorkflowInstance<TData> via ISerializer (defaults to SystemXmlSerializer). Uses [XmlRoot]/[XmlElement] attributes.

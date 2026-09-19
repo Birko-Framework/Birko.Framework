@@ -4,7 +4,7 @@
 Tests for Birko.Data.Migrations.MongoDB — the MongoDB provider for the platform-agnostic migrations.
 
 ## Project Location
-`C:\Source\Birko\Framework	ests\Birko.Data.Migrations.MongoDB.Tests\`
+`tests/Birko.Data.Migrations.MongoDB.Tests/`
 
 ## Test Framework
 xUnit + FluentAssertions

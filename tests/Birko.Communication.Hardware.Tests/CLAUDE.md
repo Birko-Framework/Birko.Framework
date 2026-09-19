@@ -4,7 +4,7 @@
 Unit tests for Birko.Communication.Hardware — the low-level port helpers (LPT parallel port, serial).
 
 ## Project Location
-`C:\Source\Birko\Framework	ests\Birko.Communication.Hardware.Tests\`
+`tests/Birko.Communication.Hardware.Tests/`
 
 ## Test Framework
 xUnit + FluentAssertions

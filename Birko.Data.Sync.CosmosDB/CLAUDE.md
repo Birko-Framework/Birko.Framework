@@ -4,7 +4,7 @@
 Cosmos DB-specific sync knowledge item and store implementations for the Birko.Data.Sync framework.
 
 ## Project Location
-`C:\Source\Birko.Data.Sync.CosmosDB\`
+`Birko.Data.Sync.CosmosDB/`
 
 ## Components
 

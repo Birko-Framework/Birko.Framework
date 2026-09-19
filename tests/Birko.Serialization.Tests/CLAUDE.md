@@ -4,7 +4,7 @@
 Unit tests for all Birko.Serialization projects.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.Serialization.Tests\`
+- **Directory:** `tests/Birko.Serialization.Tests/`
 - **Type:** Test Project (.csproj, xUnit)
 - **Framework:** net10.0, xUnit 2.9.3, FluentAssertions 7.0.0
 

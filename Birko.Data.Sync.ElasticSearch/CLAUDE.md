@@ -4,7 +4,7 @@
 Elasticsearch-specific sync knowledge item implementation for the Birko.Data.Sync framework.
 
 ## Project Location
-`C:\Source\Birko.Data.Sync.ElasticSearch\`
+`Birko.Data.Sync.ElasticSearch/`
 
 ## Components
 

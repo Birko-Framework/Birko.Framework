@@ -4,7 +4,7 @@
 Unit tests for the Birko.Communication.WebSocket project - WebSocket communication and settings tests.
 
 ## Project Location
-`C:\Source\Birko.Communication.WebSocket.Tests\`
+`tests/Birko.Communication.WebSocket.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

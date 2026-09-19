@@ -4,7 +4,7 @@
 Entity-level localization for Birko.Data stores. Provides transparent translation of entity fields via store decorator wrappers.
 
 ## Project Location
-`C:\Source\Birko.Data.Localization\` (shared project, .shproj)
+`Birko.Data.Localization/` (shared project, .shproj)
 
 ## Components
 

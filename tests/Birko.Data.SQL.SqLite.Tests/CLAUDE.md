@@ -6,7 +6,7 @@ xUnit + FluentAssertions test project for `Birko.Data.SQL.SqLite` (the SQLite st
 
 ## Project Location
 
-`C:\Source\Birko.Data.SQL.SqLite.Tests\`
+`tests/Birko.Data.SQL.SqLite.Tests/`
 
 ## Scope
 

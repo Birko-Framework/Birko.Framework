@@ -4,7 +4,7 @@
 Azure-specific health checks for the Birko.Health framework. Covers Azure Blob Storage and Azure Key Vault connectivity verification.
 
 ## Project Location
-`C:\Source\Birko.Health.Azure\` — Shared project (.shproj + .projitems)
+`Birko.Health.Azure/` — Shared project (.shproj + .projitems)
 
 ## Components
 

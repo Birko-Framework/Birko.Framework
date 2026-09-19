@@ -4,7 +4,7 @@
 PostgreSQL-specific view DDL overrides for the Birko.Data.SQL.View framework. Provides `information_schema`-based existence checks and materialized view support.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.PostgreSQL.View\`
+`Birko.Data.SQL.PostgreSQL.View/`
 
 ## Components
 

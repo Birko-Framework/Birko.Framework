@@ -4,7 +4,7 @@
 Unit tests for Birko.Storage — file/blob storage abstraction.
 
 ## Location
-`C:\Source\Birko.Storage.Tests\`
+`tests/Birko.Storage.Tests/`
 
 ## Structure
 ```

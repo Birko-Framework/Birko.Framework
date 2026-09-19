@@ -4,7 +4,7 @@
 11 LLM provider implementations for cloud and local inference servers.
 
 ## Project Location
-`C:\Source\Birko.AI.Providers\`
+`Birko.AI.Providers/`
 
 ## Namespace
 `Birko.AI.Providers`

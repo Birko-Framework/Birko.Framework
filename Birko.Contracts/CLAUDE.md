@@ -4,7 +4,7 @@
 Zero-dependency shared project containing the most fundamental interfaces used across the Birko Framework. Extracted from Birko.Data.Core to enable lightweight consumers to depend on core contracts without pulling in models, ViewModels, filters, or exceptions.
 
 ## Project Location
-`C:\Source\Birko.Contracts\`
+`Birko.Contracts/`
 
 ## Namespace
 `Birko.Data.Models` — preserves backward compatibility with Birko.Data.Core.

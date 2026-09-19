@@ -5,7 +5,7 @@ In-memory storage implementation for the Birko data layer. Backs the entity set 
 thread-safe `ConcurrentDictionary<Guid, T>` that lives for the lifetime of the store instance.
 
 ## Project Location
-`C:\Source\Birko.Data.InMemory\`
+`Birko.Data.InMemory/`
 
 ## Purpose
 - **Testing** — a single, correct, thread-safe store to use as a test double instead of

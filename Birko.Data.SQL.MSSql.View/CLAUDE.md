@@ -4,7 +4,7 @@
 SQL Server-specific view DDL overrides for the Birko.Data.SQL.View framework. Provides `CREATE OR ALTER VIEW` syntax and `sys.views` catalog-based existence checks.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.MSSql.View\`
+`Birko.Data.SQL.MSSql.View/`
 
 ## Components
 

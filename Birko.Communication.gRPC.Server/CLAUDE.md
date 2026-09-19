@@ -8,7 +8,7 @@ interceptor scaffold over `Grpc.AspNetCore`. Client counterpart: `Birko.Communic
 
 ## Project Location
 
-`C:\Source\Birko.Communication.gRPC.Server\`
+`Birko.Communication.gRPC.Server/`
 
 ## Components
 

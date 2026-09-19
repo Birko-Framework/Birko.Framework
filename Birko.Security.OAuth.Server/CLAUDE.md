@@ -6,7 +6,7 @@ OAuth2 authorization server implementation. Pure handler library — no ASP.NET 
 Companion to `Birko.Communication.OAuth` (client side). Both projects can be used in the same process — a service issuing tokens with this project and consuming tokens from upstream providers with the client.
 
 ## Project Location
-`C:\Source\Birko.Security.OAuth.Server\`
+`Birko.Security.OAuth.Server/`
 
 ## Structure
 ```

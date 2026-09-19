@@ -4,7 +4,7 @@
 MongoDB-specific sync knowledge item implementation for the Birko.Data.Sync framework.
 
 ## Project Location
-`C:\Source\Birko.Data.Sync.MongoDb\`
+`Birko.Data.Sync.MongoDb/`
 
 ## Components
 

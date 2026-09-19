@@ -4,7 +4,7 @@
 Elasticsearch-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncElasticSearchStore` from Birko.Data.ElasticSearch.
 
 ## Project Location
-`C:\Source\Birko.BackgroundJobs.ElasticSearch\`
+`Birko.BackgroundJobs.ElasticSearch/`
 
 ## Components
 

@@ -4,7 +4,7 @@
 Unit tests for the Birko.BackgroundJobs core framework (in-memory queue, dispatcher, executor, processor, scheduler, serialization, retry policies).
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.BackgroundJobs.Tests\`
+- **Directory:** `tests/Birko.BackgroundJobs.Tests/`
 - **Project File:** `Birko.BackgroundJobs.Tests.csproj` (.NET 10.0 test project)
 
 ## Components

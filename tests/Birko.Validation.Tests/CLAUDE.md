@@ -4,7 +4,7 @@
 Unit tests for the Birko.Validation project - validation rules, fluent validators, and store wrapper integration tests.
 
 ## Project Location
-`C:\Source\Birko.Validation.Tests\`
+`tests/Birko.Validation.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

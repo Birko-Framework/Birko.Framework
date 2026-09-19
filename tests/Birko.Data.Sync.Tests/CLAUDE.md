@@ -4,7 +4,7 @@
 Unit tests for the Birko.Data.Sync project - data synchronization provider and queue tests.
 
 ## Project Location
-`C:\Source\Birko.Data.Sync.Tests\`
+`tests/Birko.Data.Sync.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

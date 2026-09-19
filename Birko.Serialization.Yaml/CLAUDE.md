@@ -4,7 +4,7 @@
 YamlDotNet implementation of `ISerializer` for the Birko Framework.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.Serialization.Yaml\`
+- **Directory:** `Birko.Serialization.Yaml/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.Serialization.Yaml`
 

@@ -4,7 +4,7 @@
 Multi-agent task orchestration — dispatch, planning, dependency analysis, escalation.
 
 ## Project Location
-`C:\Source\Birko.AI.Orchestration\`
+`Birko.AI.Orchestration/`
 
 ## Namespace
 `Birko.AI.Orchestration.Models`, `Birko.AI.Orchestration.Dispatch`, `Birko.AI.Orchestration.Services`

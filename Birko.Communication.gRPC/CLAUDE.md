@@ -8,7 +8,7 @@ The server counterpart is `Birko.Communication.gRPC.Server` (mirrors the `REST` 
 
 ## Project Location
 
-`C:\Source\Birko.Communication.gRPC\`
+`Birko.Communication.gRPC/`
 
 ## Components
 

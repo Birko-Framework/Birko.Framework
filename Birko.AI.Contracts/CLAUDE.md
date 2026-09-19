@@ -4,7 +4,7 @@
 Zero-dependency shared project with LLM provider interface, message models, tool base class, and agent options.
 
 ## Project Location
-`C:\Source\Birko.AI.Contracts\`
+`Birko.AI.Contracts/`
 
 ## Namespace
 `Birko.AI`, `Birko.AI.Models`, `Birko.AI.Providers`, `Birko.AI.Tools`

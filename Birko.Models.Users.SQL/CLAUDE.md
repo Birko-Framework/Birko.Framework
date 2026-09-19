@@ -4,7 +4,7 @@
 Canonical `IModelMapping<T>` implementations for the `Birko.Models.Users` domain. Provides ready-to-use fluent SQL mappings for User, UserLogin, UserProfile, UserRole, UserTenant, Role, RolePermission, and Tenant — paired with `Birko.Models.SQL` (the fluent mapping framework).
 
 ## Project Location
-`C:\Source\Birko.Models.Users.SQL\`
+`Birko.Models.Users.SQL/`
 
 ## Components (`Birko.Models.Users.SQL.Mappings`)
 - **UserMapping** → `Users` table (UserName, Email both unique)

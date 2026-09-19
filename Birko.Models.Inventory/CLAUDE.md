@@ -4,7 +4,7 @@
 Clean inventory domain models for the Birko Framework. Replaces `Birko.Models.Warehouse` for new consumers — no SQL attributes, uses contracts and value objects.
 
 ## Project Location
-`C:\Source\Birko.Models.Inventory\`
+`Birko.Models.Inventory/`
 
 ## Components
 

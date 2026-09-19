@@ -4,7 +4,7 @@
 SQL-specific data access layer providing abstract base classes for SQL database operations.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL\`
+`Birko.Data.SQL/`
 
 ## Purpose
 - Provides abstract base classes for SQL database operations

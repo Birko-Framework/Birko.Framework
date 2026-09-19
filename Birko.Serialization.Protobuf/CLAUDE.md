@@ -4,7 +4,7 @@
 Protocol Buffers binary serialization implementation of `ISerializer` for the Birko Framework.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.Serialization.Protobuf\`
+- **Directory:** `Birko.Serialization.Protobuf/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.Serialization.Protobuf`
 

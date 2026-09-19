@@ -6,7 +6,7 @@ Core health check framework for monitoring application components. Provides `IHe
 
 ## Project Location
 
-- **Path:** `C:\Source\Birko.Health\`
+- **Path:** `Birko.Health/`
 - **Type:** Shared project (`.shproj` / `.projitems`)
 - **Namespace:** `Birko.Health`, `Birko.Health.Checks`
 - **GUID:** `d3e4f5a6-b7c8-4d9e-a0f1-2b3c4d5e6f7a`

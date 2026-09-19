@@ -6,7 +6,7 @@ xUnit + FluentAssertions test project for `Birko.Communication.AspNetCore` (the 
 
 ## Project Location
 
-`C:\Source\Birko.Communication.AspNetCore.Tests\`
+`tests/Birko.Communication.AspNetCore.Tests/`
 
 ## Scope
 

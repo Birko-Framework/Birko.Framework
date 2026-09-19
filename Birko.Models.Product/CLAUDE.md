@@ -4,7 +4,7 @@
 Product domain models for the Birko Framework.
 
 ## Project Location
-`C:\Source\Birko.Models.Product\`
+`Birko.Models.Product/`
 
 ## Purpose
 - Product entity models

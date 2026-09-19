@@ -4,7 +4,7 @@
 JSON file-based job queue for Birko.BackgroundJobs. Uses `AsyncJsonStore` from Birko.Data.JSON. Ideal for development, testing, and single-process deployments.
 
 ## Project Location
-`C:\Source\Birko.BackgroundJobs.JSON\`
+`Birko.BackgroundJobs.JSON/`
 
 ## Components
 

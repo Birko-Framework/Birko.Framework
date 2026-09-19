@@ -4,7 +4,7 @@
 Tenant-aware synchronization support for multi-tenant applications using the Birko.Data.Sync framework.
 
 ## Project Location
-`C:\Source\Birko.Data.Sync.Tenant\`
+`Birko.Data.Sync.Tenant/`
 
 ## Components
 

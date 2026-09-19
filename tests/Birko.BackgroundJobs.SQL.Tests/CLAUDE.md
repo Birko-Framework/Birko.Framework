@@ -4,7 +4,7 @@
 Unit tests for the Birko.BackgroundJobs.SQL project - SQL-based background job persistence and scheduling tests.
 
 ## Project Location
-`C:\Source\Birko.BackgroundJobs.SQL.Tests\`
+`tests/Birko.BackgroundJobs.SQL.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

@@ -4,7 +4,7 @@
 OpenTelemetry SDK integration for Birko.Telemetry. Auto-wires Birko meters and activity sources to OTLP and Console exporters via a single `AddBirkoOpenTelemetry()` DI call.
 
 ## Project Location
-`C:\Source\Birko.Telemetry.OpenTelemetry\` (shared project, .shproj)
+`Birko.Telemetry.OpenTelemetry/` (shared project, .shproj)
 
 ## Components
 

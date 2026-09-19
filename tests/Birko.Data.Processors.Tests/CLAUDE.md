@@ -4,7 +4,7 @@
 Unit tests for the Birko.Data.Processors stream processing framework.
 
 ## Project Location
-`C:\Source\Birko.Data.Processors.Tests\` (xUnit test project, .csproj)
+`tests/Birko.Data.Processors.Tests/` (xUnit test project, .csproj)
 
 ## Test Classes
 - **CsvParserTests** — RFC 4180 parser: simple rows, quoted fields, escaped quotes, custom delimiter, no trailing newline, empty stream, no enclosure, multiline quotes, line tracking

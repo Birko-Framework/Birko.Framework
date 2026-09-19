@@ -4,7 +4,7 @@
 Unit tests for Birko.Caching.Hybrid — two-tier L1/L2 cache.
 
 ## Project Location
-`C:\Source\Birko.Caching.Hybrid.Tests\`
+`tests/Birko.Caching.Hybrid.Tests/`
 
 ## Structure
 ```

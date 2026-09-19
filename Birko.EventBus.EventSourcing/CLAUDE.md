@@ -4,7 +4,7 @@
 Integration layer between Birko.EventBus and Birko.Data.EventSourcing. Publishes domain events to the event bus after event store append, and provides replay for projection rebuilding.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.EventBus.EventSourcing\`
+- **Directory:** `Birko.EventBus.EventSourcing/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.EventBus.EventSourcing`
 

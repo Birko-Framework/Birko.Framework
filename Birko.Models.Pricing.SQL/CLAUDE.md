@@ -4,7 +4,7 @@
 Canonical `IModelMapping<T>` implementations for the `Birko.Models.Pricing` domain. Provides ready-to-use fluent SQL mappings for Currency, Tax, and PriceGroup — paired with `Birko.Models.SQL` (the fluent mapping framework).
 
 ## Project Location
-`C:\Source\Birko.Models.Pricing.SQL\`
+`Birko.Models.Pricing.SQL/`
 
 ## Components (`Birko.Models.Pricing.SQL.Mappings`)
 - **CurrencyMapping** → `Currencies` table (Code unique, Name, Symbol)

@@ -4,7 +4,7 @@
 Unit tests for Birko.Data.CosmosDB.ViewModel — the ViewModel repositories over the CosmosDB store.
 
 ## Project Location
-`C:\Source\Birko\Framework	ests\Birko.Data.CosmosDB.ViewModel.Tests\`
+`tests/Birko.Data.CosmosDB.ViewModel.Tests/`
 
 ## Test Framework
 xUnit + FluentAssertions

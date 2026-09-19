@@ -4,7 +4,7 @@
 TimescaleDB implementation for the Birko data layer providing time-series database storage built on PostgreSQL.
 
 ## Project Location
-`C:\Source\Birko\Framework\Birko.Data.TimescaleDB\`
+`Birko.Data.TimescaleDB/`
 
 ## Purpose
 - Time-series data storage

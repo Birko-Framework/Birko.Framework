@@ -4,7 +4,7 @@
 ViewModel repository implementations for RavenDB stores.
 
 ## Project Location
-`C:\Source\Birko.Data.RavenDB.ViewModel\`
+`Birko.Data.RavenDB.ViewModel/`
 
 ## Components
 

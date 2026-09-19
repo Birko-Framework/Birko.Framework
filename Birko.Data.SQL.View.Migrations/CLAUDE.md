@@ -4,7 +4,7 @@
 Integration layer connecting SQL View definitions (from Birko.Data.SQL.View attributes) with the Migration framework (Birko.Data.Migrations.SQL). Allows views to be created and dropped as part of versioned database migrations.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.View.Migrations\`
+`Birko.Data.SQL.View.Migrations/`
 
 ## Components
 

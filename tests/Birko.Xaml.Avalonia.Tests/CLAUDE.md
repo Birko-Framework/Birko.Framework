@@ -8,7 +8,7 @@ Tier-1 controls, Tier-2 composites, the shell/ribbon/mobile views, and the schem
 
 ## Project Location
 
-`C:\Source\Birko.Xaml.Avalonia.Tests\`
+`tests/Birko.Xaml.Avalonia.Tests/`
 
 ## Scope
 

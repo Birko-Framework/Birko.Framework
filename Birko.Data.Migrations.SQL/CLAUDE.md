@@ -4,7 +4,7 @@
 SQL migration backend using AbstractConnector from Birko.Data.SQL. Implements platform-agnostic IMigrationContext for SQL databases.
 
 ## Project Location
-`C:\Source\Birko.Data.Migrations.SQL\`
+`Birko.Data.Migrations.SQL/`
 
 ## Components
 

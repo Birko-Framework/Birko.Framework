@@ -6,7 +6,7 @@ ASP.NET Core minimal-API helpers for the Birko Framework. Its one feature today 
 
 ## Project Location
 
-`C:\Source\Birko.Communication.AspNetCore\`
+`Birko.Communication.AspNetCore/`
 
 ## Components
 

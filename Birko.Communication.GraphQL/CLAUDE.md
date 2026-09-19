@@ -4,7 +4,7 @@
 GraphQL client library providing zero-dependency query, mutation, and subscription support with optional OAuth2 Bearer token injection.
 
 ## Project Location
-`C:\Source\Birko.Communication.GraphQL\`
+`Birko.Communication.GraphQL/`
 
 ## Components
 

@@ -4,7 +4,7 @@
 MQTT message queue implementation using MQTTnet. For IoT device communication, sensor networks, and real-time telemetry.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.MessageQueue.MQTT\`
+- **Directory:** `Birko.MessageQueue.MQTT/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.MessageQueue.Mqtt`
 

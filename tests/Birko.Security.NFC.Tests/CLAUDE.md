@@ -4,7 +4,7 @@
 Unit tests for Birko.Security.NFC authentication (auth provider, tag mappings, in-memory store).
 
 ## Project Location
-`C:\Source\Birko.Security.NFC.Tests\`
+`tests/Birko.Security.NFC.Tests/`
 
 ## Components
 - **NfcAuthProviderTests.cs** — Enroll (valid, duplicate, revoked re-enroll, max tags, empty UID), Authenticate (success, unknown, revoked, expired, expiration disabled), UID normalization (case, colons, dashes), usage tracking (enabled/disabled), Revoke (single, all, unknown), Query (active only, IsEnrolled, GetTagMapping)

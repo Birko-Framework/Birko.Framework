@@ -4,7 +4,7 @@
 Canonical `IModelMapping<T>` implementations for the `Birko.Models.Inventory` domain. Provides ready-to-use fluent SQL mappings for StockItem, StorageLocation, and InventoryDocumentLine — paired with `Birko.Models.SQL` (the fluent mapping framework).
 
 ## Project Location
-`C:\Source\Birko.Models.Inventory.SQL\`
+`Birko.Models.Inventory.SQL/`
 
 ## Components (`Birko.Models.Inventory.SQL.Mappings`)
 - **StockItemMapping** → `Items` table (Code, BarCode, Name, ShortName, Type)

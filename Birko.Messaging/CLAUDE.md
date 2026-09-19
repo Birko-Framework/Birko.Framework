@@ -4,7 +4,7 @@
 Core messaging framework providing unified interfaces for email, SMS, and push notifications, plus a built-in SMTP email sender and string template engine.
 
 ## Project Location
-`C:\Source\Birko.Messaging\` (shared project: `.shproj` + `.projitems`)
+`Birko.Messaging/` (shared project: `.shproj` + `.projitems`)
 
 ## Components
 

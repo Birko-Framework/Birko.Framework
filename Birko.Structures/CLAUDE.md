@@ -4,7 +4,7 @@
 General-purpose data structure library for the Birko Framework — trees, graphs, heaps, tries, caches, filters, buffers, sets, and lists.
 
 ## Project Location
-`C:\Source\Birko.Structures\`
+`Birko.Structures/`
 
 ## Purpose
 - Tree hierarchies (general, binary, AVL, interval)

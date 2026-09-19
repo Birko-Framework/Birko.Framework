@@ -4,7 +4,7 @@
 Test suite for the Birko.Time library. Validates business calendars, holiday handling, working hours scheduling, day schedules, time zone conversion, and date/time provider abstractions using xUnit and FluentAssertions.
 
 ## Project Location
-`C:\Source\Birko.Time.Tests\` — Test project (.csproj)
+`tests/Birko.Time.Tests/` — Test project (.csproj)
 
 ## Components
 - **BusinessCalendarTests.cs** — Tests BusinessCalendar weekday/holiday/weekend detection, working time checks, AddBusinessDays (positive, zero, negative), CountBusinessDays, GetWorkingHours, and GetHolidays.

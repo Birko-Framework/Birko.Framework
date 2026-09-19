@@ -4,7 +4,7 @@
 Unit tests for Birko.Data.Views — view definition builder, view map registry, and view result types.
 
 ## Project Location
-`C:\Source\Birko.Data.Views.Tests\` (.csproj, xUnit + FluentAssertions)
+`tests/Birko.Data.Views.Tests/` (.csproj, xUnit + FluentAssertions)
 
 ## Components
 - **TestModels.cs** — Shared test source entities and view models

@@ -4,7 +4,7 @@
 Unit tests for the Birko.Localization.Data project.
 
 ## Project Location
-- **Path:** `C:\Source\Birko.Localization.Data.Tests\`
+- **Path:** `tests/Birko.Localization.Data.Tests/`
 - **Type:** Test Project (.csproj, net10.0)
 - **Framework:** xUnit 2.9.3, FluentAssertions 7.0.0
 

@@ -4,7 +4,7 @@
 ViewModel repositories for Azure Cosmos DB providing ViewModel-to-Model mapping with bulk operations.
 
 ## Project Location
-`C:\Source\Birko.Data.CosmosDB.ViewModel\`
+`Birko.Data.CosmosDB.ViewModel/`
 
 ## Components
 

@@ -4,7 +4,7 @@
 RavenDB workflow instance persistence using AsyncRavenDBStore. Convention-based mapping.
 
 ## Project Location
-`C:\Source\Birko.Workflow.RavenDB\` (shared project via `.projitems`)
+`Birko.Workflow.RavenDB/` (shared project via `.projitems`)
 
 ## Components
 - **Models/RavenWorkflowInstanceModel.cs** — AbstractModel (no attributes, convention-based)

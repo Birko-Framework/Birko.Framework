@@ -4,7 +4,7 @@
 Newtonsoft.Json implementation of `ISerializer` for the Birko Framework.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.Serialization.Newtonsoft\`
+- **Directory:** `Birko.Serialization.Newtonsoft/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.Serialization.Newtonsoft`
 

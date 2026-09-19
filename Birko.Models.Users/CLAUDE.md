@@ -3,7 +3,7 @@
 User, authentication, profile, role-based access control, and agenda management models for the Birko Framework.
 
 ## Project Location
-`C:\Source\Birko.Models.Users\`
+`Birko.Models.Users/`
 
 ## Components
 

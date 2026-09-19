@@ -4,7 +4,7 @@
 In-memory message queue implementation using `System.Threading.Channels`. For testing and development — messages are not persisted.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.MessageQueue.InMemory\`
+- **Directory:** `Birko.MessageQueue.InMemory/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.MessageQueue.InMemory`
 

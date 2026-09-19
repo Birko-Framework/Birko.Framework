@@ -4,7 +4,7 @@
 Consumer infrared (38 kHz modulated) communication for remote control protocols. NOT IrDA/IrCOMM — that is Birko.Communication.Hardware.Ports.Infraport.
 
 ## Project Location
-`C:\Source\Birko.Communication.IR\`
+`Birko.Communication.IR/`
 
 ## Components
 

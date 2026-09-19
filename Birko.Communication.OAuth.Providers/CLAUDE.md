@@ -4,7 +4,7 @@
 Pre-configured OAuth client factories for specific services.
 
 ## Project Location
-`C:\Source\Birko.Communication.OAuth.Providers\`
+`Birko.Communication.OAuth.Providers/`
 
 ## Namespace
 `Birko.Communication.OAuth.Providers`

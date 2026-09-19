@@ -4,7 +4,7 @@
 Unit tests for the Birko.Data.SQL project - SQL connector condition builders, strategies, and expression parsing.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.Tests\`
+`tests/Birko.Data.SQL.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

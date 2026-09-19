@@ -4,7 +4,7 @@
 ViewModel repository implementations for JSON file-based stores.
 
 ## Project Location
-`C:\Source\Birko.Data.JSON.ViewModel\`
+`Birko.Data.JSON.ViewModel/`
 
 ## Components
 

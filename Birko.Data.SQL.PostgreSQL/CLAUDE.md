@@ -4,7 +4,7 @@
 PostgreSQL implementation of Birko.Data.SQL stores and repositories.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.PostgreSQL\`
+`Birko.Data.SQL.PostgreSQL/`
 
 ## Purpose
 - Provides PostgreSQL-specific data store implementations

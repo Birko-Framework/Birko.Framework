@@ -4,7 +4,7 @@
 Domain contract interfaces for the Birko Framework. Defines cross-cutting behavioral contracts that model projects implement for gradual compatibility and clean domain boundaries.
 
 ## Project Location
-`C:\Source\Birko.Models.Contracts\`
+`Birko.Models.Contracts/`
 
 ## Components
 

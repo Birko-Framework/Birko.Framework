@@ -4,7 +4,7 @@
 Clean pricing domain models for the Birko Framework. Consolidates pricing from Warehouse and Accounting into a dedicated domain. No SQL attributes.
 
 ## Project Location
-`C:\Source\Birko.Models.Pricing\`
+`Birko.Models.Pricing/`
 
 ## Components
 

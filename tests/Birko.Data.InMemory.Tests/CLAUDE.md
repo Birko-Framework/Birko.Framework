@@ -11,4 +11,4 @@ xUnit + FluentAssertions tests for `Birko.Data.InMemory` — the in-memory store
   `Save` create-vs-update, `Destroy`, the settings-compatibility surface, and (async) cancellation.
 
 ## Running
-`dotnet test C:\Source\Birko.Data.InMemory.Tests\Birko.Data.InMemory.Tests.csproj`
+`dotnet test tests/Birko.Data.InMemory.Tests/Birko.Data.InMemory.Tests.csproj`

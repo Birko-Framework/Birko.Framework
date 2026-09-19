@@ -4,7 +4,7 @@
 State machine engine for business process automation. Trigger-based transitions with fluent builder API, guards, actions, and diagram visualization.
 
 ## Project Location
-`C:\Source\Birko.Workflow\` (shared project via `.projitems`)
+`Birko.Workflow/` (shared project via `.projitems`)
 
 ## Components
 

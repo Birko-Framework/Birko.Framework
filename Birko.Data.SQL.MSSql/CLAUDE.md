@@ -4,7 +4,7 @@
 Microsoft SQL Server implementation of Birko.Data.SQL stores and repositories.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.MSSql\`
+`Birko.Data.SQL.MSSql/`
 
 ## Purpose
 - Provides SQL Server-specific data store implementations

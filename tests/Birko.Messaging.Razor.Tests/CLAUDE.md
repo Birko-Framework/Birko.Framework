@@ -6,7 +6,7 @@ Unit tests for Birko.Messaging.Razor — Razor template engine for the Birko Mes
 
 ## Project Location
 
-- **Path:** `C:\Source\Birko.Messaging.Razor.Tests\`
+- **Path:** `tests/Birko.Messaging.Razor.Tests/`
 - **Type:** Test project (`.csproj`, xUnit)
 - **Target:** net10.0
 

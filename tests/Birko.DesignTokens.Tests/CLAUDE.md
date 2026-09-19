@@ -8,7 +8,7 @@ generator that turns `tokens.json` into web CSS and Avalonia AXAML (via the
 
 ## Project Location
 
-`C:\Source\Birko.DesignTokens.Tests\`
+`tests/Birko.DesignTokens.Tests/`
 
 ## Scope
 

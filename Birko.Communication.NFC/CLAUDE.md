@@ -4,7 +4,7 @@
 NFC/RFID tag communication with pluggable transports (Serial, HTTP, HID) and protocol handlers (ISO 14443A, NDEF).
 
 ## Project Location
-`C:\Source\Birko.Communication.NFC\`
+`Birko.Communication.NFC/`
 
 ## Components
 

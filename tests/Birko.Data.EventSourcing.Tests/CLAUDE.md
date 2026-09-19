@@ -4,7 +4,7 @@
 Unit tests for Birko.Data.EventSourcing — the store wrappers that record CRUD as domain events.
 
 ## Project Location
-`C:\Source\Birko\Framework	ests\Birko.Data.EventSourcing.Tests\`
+`tests/Birko.Data.EventSourcing.Tests/`
 
 ## Test Framework
 xUnit + FluentAssertions

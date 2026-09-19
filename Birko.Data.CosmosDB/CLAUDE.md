@@ -4,7 +4,7 @@
 Azure Cosmos DB (NoSQL API) implementation for the Birko data layer providing document-based storage with transactional batch support.
 
 ## Project Location
-`C:\Source\Birko.Data.CosmosDB\`
+`Birko.Data.CosmosDB/`
 
 ## Purpose
 - Document-based storage via Azure Cosmos DB NoSQL API

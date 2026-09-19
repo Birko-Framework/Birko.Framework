@@ -4,7 +4,7 @@
 Unit tests for the Birko.Data.Migrations.SQL project - SQL database migration framework tests.
 
 ## Project Location
-`C:\Source\Birko.Data.Migrations.SQL.Tests\`
+`tests/Birko.Data.Migrations.SQL.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

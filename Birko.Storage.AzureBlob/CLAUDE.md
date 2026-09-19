@@ -4,7 +4,7 @@
 Azure Blob Storage provider for the Birko.Storage abstraction. Implements `IFileStorage` and `IPresignedUrlStorage` using the Azure Blob Storage REST API directly with OAuth2 client credentials — no Azure.Storage.Blobs SDK dependency required.
 
 ## Project Location
-`C:\Source\Birko.Storage.AzureBlob\` — Shared project (.shproj + .projitems)
+`Birko.Storage.AzureBlob/` — Shared project (.shproj + .projitems)
 
 ## Components
 

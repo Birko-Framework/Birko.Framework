@@ -4,7 +4,7 @@
 RavenDB view implementation for the Birko data layer. Translates portable `ViewDefinition` into RavenDB static indexes (Map/Reduce) and provides query access via `IViewStore<TView>` and lifecycle management via `IViewManager`.
 
 ## Project Location
-`C:\Source\Birko.Data.RavenDB.Views\`
+`Birko.Data.RavenDB.Views/`
 
 ## Components
 

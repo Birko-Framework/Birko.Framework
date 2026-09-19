@@ -4,7 +4,7 @@
 MySQL-specific view DDL overrides for the Birko.Data.SQL.View framework. Provides `information_schema.VIEWS`-based existence checks scoped to the current database.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.MySQL.View\`
+`Birko.Data.SQL.MySQL.View/`
 
 ## Components
 

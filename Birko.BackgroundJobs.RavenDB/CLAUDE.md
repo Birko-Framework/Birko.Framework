@@ -4,7 +4,7 @@
 RavenDB-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncRavenDBStore` from Birko.Data.RavenDB.
 
 ## Project Location
-`C:\Source\Birko.BackgroundJobs.RavenDB\`
+`Birko.BackgroundJobs.RavenDB/`
 
 ## Components
 

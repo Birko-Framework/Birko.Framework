@@ -4,7 +4,7 @@
 Production resilience for LLM API calls — rate limiting, circuit breaker, cost tracking.
 
 ## Project Location
-`C:\Source\Birko.AI.Resilience\`
+`Birko.AI.Resilience/`
 
 ## Namespace
 `Birko.AI.Resilience.Services`, `Birko.AI.Resilience.Configuration`, `Birko.AI.Resilience.Stores`

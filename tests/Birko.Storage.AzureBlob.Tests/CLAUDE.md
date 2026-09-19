@@ -4,7 +4,7 @@
 Unit tests for the Birko.Storage.AzureBlob project. Tests settings mapping, path validation, presigned URL generation, constructor validation, and content-type/size enforcement — all without requiring a live Azure account.
 
 ## Project Location
-`C:\Source\Birko.Storage.AzureBlob.Tests\` — .csproj test project (net10.0, xUnit, FluentAssertions)
+`tests/Birko.Storage.AzureBlob.Tests/` — .csproj test project (net10.0, xUnit, FluentAssertions)
 
 ## Test Files
 

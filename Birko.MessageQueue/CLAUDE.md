@@ -4,7 +4,7 @@
 Core message queue abstractions for the Birko Framework. Provides interfaces for asynchronous messaging (pub/sub, point-to-point) that are implemented by transport-specific projects (MQTT, RabbitMQ, Kafka, etc.).
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.MessageQueue\`
+- **Directory:** `Birko.MessageQueue/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.MessageQueue`
 

@@ -6,7 +6,7 @@ Decorator-style event sourcing for Birko stores. Wraps any `IStore<T>` / `IAsync
 This project ships **interfaces, wrappers, and an aggregate base class only** — no concrete `IEventStore` backend, no snapshot store, no built-in projections. Bring your own event-store implementation (typically backed by another Birko store, e.g. SQL/Mongo/JSON).
 
 ## Project Location
-`C:\Source\Birko.Data.EventSourcing\`
+`Birko.Data.EventSourcing/`
 
 ## Layout
 

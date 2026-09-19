@@ -4,7 +4,7 @@
 Platform-agnostic database migration framework. Write migrations once and run them against any provider (SQL, MongoDB, ElasticSearch, RavenDB, CosmosDB, InfluxDB, TimescaleDB).
 
 ## Project Location
-`C:\Source\Birko.Data.Migrations\`
+`Birko.Data.Migrations/`
 
 ## Components
 

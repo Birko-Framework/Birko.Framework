@@ -4,7 +4,7 @@
 Lightweight shared project containing the settings hierarchy extracted from Birko.Data.Stores. Enables lightweight consumers to depend on connection settings without the full store abstraction layer.
 
 ## Project Location
-`C:\Source\Birko.Configuration\`
+`Birko.Configuration/`
 
 ## Namespace
 `Birko.Configuration` — uses a distinct namespace to avoid collision with local `Settings` classes in other projects.

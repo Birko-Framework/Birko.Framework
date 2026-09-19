@@ -4,7 +4,7 @@
 SQLite implementation of Birko.Data.SQL stores and repositories.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.SqLite\`
+`Birko.Data.SQL.SqLite/`
 
 ## Purpose
 - Provides SQLite-specific data store implementations

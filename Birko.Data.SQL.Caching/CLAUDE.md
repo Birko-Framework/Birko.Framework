@@ -4,7 +4,7 @@
 Query caching layer for Birko SQL stores using the decorator pattern. Wraps async SQL stores with transparent ICache integration for read-through caching and automatic write-through invalidation.
 
 ## Project Location
-`C:\Source\Birko.Data.SQL.Caching\`
+`Birko.Data.SQL.Caching/`
 
 ## Components
 

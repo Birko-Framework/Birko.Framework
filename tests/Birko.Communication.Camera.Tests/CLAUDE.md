@@ -4,7 +4,7 @@
 Unit tests for the Birko.Communication.Camera project - camera communication and frame capture tests.
 
 ## Project Location
-`C:\Source\Birko.Communication.Camera.Tests\`
+`tests/Birko.Communication.Camera.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

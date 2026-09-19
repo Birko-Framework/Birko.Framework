@@ -4,7 +4,7 @@
 Unit tests for Birko.Health.Azure health checks. Tests constructor validation, error handling, and cancellation behavior without requiring live Azure services.
 
 ## Project Location
-`C:\Source\Birko.Health.Azure.Tests\` — .csproj test project (net10.0, xUnit, FluentAssertions)
+`tests/Birko.Health.Azure.Tests/` — .csproj test project (net10.0, xUnit, FluentAssertions)
 
 ## Test Files
 

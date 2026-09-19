@@ -4,7 +4,7 @@
 Thin instrumentation layer over .NET built-in telemetry APIs (`System.Diagnostics.Metrics`, `System.Diagnostics.Activity`, `ILogger<T>`). No external NuGet dependencies.
 
 ## Project Location
-`C:\Source\Birko.Telemetry\` — Shared project (.shproj + .projitems)
+`Birko.Telemetry/` — Shared project (.shproj + .projitems)
 
 ## Components
 

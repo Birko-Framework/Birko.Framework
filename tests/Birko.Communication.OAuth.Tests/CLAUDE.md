@@ -4,7 +4,7 @@
 Unit tests for Birko.Communication.OAuth — OAuth2 client library.
 
 ## Project Location
-`C:\Source\Birko.Communication.OAuth.Tests\`
+`tests/Birko.Communication.OAuth.Tests/`
 
 ## Test Classes
 - **OAuthSettingsTests** — Settings hierarchy, property aliases, defaults

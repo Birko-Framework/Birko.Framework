@@ -4,7 +4,7 @@
 Unit tests for Birko.Data.RavenDB — index management, assembly deployment, and Map/Reduce query helpers.
 
 ## Project Location
-`C:\Source\Birko.Data.RavenDB.Tests\`
+`tests/Birko.Data.RavenDB.Tests/`
 
 ## Test Framework
 xUnit + FluentAssertions + Moq

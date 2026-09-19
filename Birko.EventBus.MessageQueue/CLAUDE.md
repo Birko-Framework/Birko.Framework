@@ -4,7 +4,7 @@
 Distributed event bus backed by Birko.MessageQueue. Bridges strongly-typed IEventBus with transport-agnostic IMessageQueue.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.EventBus.MessageQueue\`
+- **Directory:** `Birko.EventBus.MessageQueue/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.EventBus.MessageQueue`
 

@@ -4,7 +4,7 @@
 Unit tests for the Birko.Communication.REST project - REST client communication tests.
 
 ## Project Location
-`C:\Source\Birko.Communication.REST.Tests\`
+`tests/Birko.Communication.REST.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

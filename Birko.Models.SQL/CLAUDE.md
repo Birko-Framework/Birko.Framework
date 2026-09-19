@@ -6,7 +6,7 @@ Fluent SQL mapping framework for Birko domain models. Replaces attribute-based m
 **This project is framework-only as of 2026-05-24.** The canonical `IModelMapping<T>` implementations for `Birko.Models.Users` / `.Customers` / `.Inventory` / `.Pricing` / `.Product` moved into dedicated sibling projects (`Birko.Models.{Domain}.SQL`) so consumers can pick exactly the domains they persist.
 
 ## Project Location
-`C:\Source\Birko.Models.SQL\`
+`Birko.Models.SQL/`
 
 ## Components (`Birko.Models.SQL.Mapping`)
 - **ModelMap\<T\>** — Fluent configuration: `ToTable()`, `HasUnique()`, `HasPrimary()`, `Ignore()`, `Property()`

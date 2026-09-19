@@ -4,7 +4,7 @@
 xUnit + FluentAssertions tests for `Birko.Security.OAuth.Server`. Every grant type and every endpoint handler has at least success-path and protocol-error-path coverage. Internal helpers (`PkceValidator`, `ClientSecretHasher`, `RandomStringGenerator`) are tested directly — they're `internal` to the OAuth.Server shared project, which is recompiled into this test assembly, so the test code can see them.
 
 ## Project Location
-`C:\Source\Birko.Security.OAuth.Server.Tests\`
+`tests/Birko.Security.OAuth.Server.Tests/`
 
 ## Structure
 ```

@@ -6,7 +6,7 @@ Health checks for infrastructure backends — databases, message brokers, secret
 
 ## Project Location
 
-- **Path:** `C:\Source\Birko.Health.Data\`
+- **Path:** `Birko.Health.Data/`
 - **Type:** Shared project (`.shproj` / `.projitems`)
 - **Namespace:** `Birko.Health.Data`
 - **GUID:** `e4f5a6b7-c8d9-4e0f-b1a2-3c4d5e6f7a8b`

@@ -4,7 +4,7 @@
 MessagePack binary serialization implementation of `ISerializer` for the Birko Framework.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.Serialization.MessagePack\`
+- **Directory:** `Birko.Serialization.MessagePack/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.Serialization.MessagePack`
 

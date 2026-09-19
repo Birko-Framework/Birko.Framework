@@ -6,7 +6,7 @@ Redis health check using StackExchange.Redis PING command.
 
 ## Project Location
 
-- **Path:** `C:\Source\Birko.Health.Redis\`
+- **Path:** `Birko.Health.Redis/`
 - **Type:** Shared project (`.shproj` / `.projitems`)
 - **Namespace:** `Birko.Health.Redis`
 - **GUID:** `f5a6b7c8-d9e0-4f1a-b2c3-4d5e6f7a8b9c`

@@ -4,7 +4,7 @@
 JSON file-based sync knowledge item implementation for the Birko.Data.Sync framework.
 
 ## Project Location
-`C:\Source\Birko.Data.Sync.Json\`
+`Birko.Data.Sync.Json/`
 
 ## Components
 

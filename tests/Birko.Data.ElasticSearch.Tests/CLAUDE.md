@@ -4,7 +4,7 @@
 Unit tests for the Birko.Data.ElasticSearch project - expression parsing and query building.
 
 ## Project Location
-`C:\Source\Birko.Data.ElasticSearch.Tests\`
+`tests/Birko.Data.ElasticSearch.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

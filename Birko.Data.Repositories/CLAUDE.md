@@ -4,7 +4,7 @@
 Repository abstractions for the Birko Framework. Contains repository interfaces, abstract implementations, service locator, and DI extensions.
 
 ## Project Location
-`C:\Source\Birko.Data.Repositories\`
+`Birko.Data.Repositories/`
 
 ## Components
 

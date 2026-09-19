@@ -7,7 +7,7 @@ published under — required for tenant-scoped event handlers to work under `Ten
 (STORY-046, EPIC-017).
 
 ## Project Location
-- **Directory:** `C:\Source\Birko\Framework\Birko.EventBus.Tenant\`
+- **Directory:** `Birko.EventBus.Tenant/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.EventBus.Tenant`
 

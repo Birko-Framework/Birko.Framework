@@ -4,7 +4,7 @@
 Test suite for the Birko.Messaging library. Validates core message types (address, attachment, result), email messaging (settings, message construction, SMTP sender), and the string template engine using xUnit and FluentAssertions.
 
 ## Project Location
-`C:\Source\Birko.Messaging.Tests\` — Test project (.csproj)
+`tests/Birko.Messaging.Tests/` — Test project (.csproj)
 
 ## Components
 - **Core/MessageAddressTests.cs** — Tests MessageAddress construction, ToString formatting, case-insensitive equality, and GetHashCode consistency.

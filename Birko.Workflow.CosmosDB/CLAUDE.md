@@ -4,7 +4,7 @@
 Cosmos DB workflow instance persistence using AsyncCosmosDBStore.
 
 ## Project Location
-`C:\Source\Birko.Workflow.CosmosDB\`
+`Birko.Workflow.CosmosDB/`
 
 ## Components
 - **Models/CosmosWorkflowInstanceModel.cs** — AbstractModel, JSON-serialized data/history

@@ -4,7 +4,7 @@
 InfluxDB migration backend using InfluxDBClient. Implements platform-agnostic IMigrationContext.
 
 ## Project Location
-`C:\Source\Birko.Data.Migrations.InfluxDB\`
+`Birko.Data.Migrations.InfluxDB/`
 
 ## Components
 

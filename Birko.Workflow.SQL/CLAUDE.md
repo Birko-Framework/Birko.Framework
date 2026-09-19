@@ -4,7 +4,7 @@
 SQL-based workflow instance persistence using AsyncDataBaseBulkStore. Works with any SQL connector.
 
 ## Project Location
-`C:\Source\Birko.Workflow.SQL\` (shared project via `.projitems`)
+`Birko.Workflow.SQL/` (shared project via `.projitems`)
 
 ## Components
 - **Models/WorkflowInstanceModel.cs** — AbstractModel + SQL attributes, `__WorkflowInstances` table

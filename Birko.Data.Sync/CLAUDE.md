@@ -4,7 +4,7 @@
 Data synchronization framework for keeping data in sync across different storage backends.
 
 ## Project Location
-`C:\Source\Birko.Data.Sync\`
+`Birko.Data.Sync/`
 
 ## Purpose
 - Synchronize data between different databases

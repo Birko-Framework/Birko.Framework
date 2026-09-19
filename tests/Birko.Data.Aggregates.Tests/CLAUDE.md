@@ -4,7 +4,7 @@
 Unit tests for the Birko.Data.Aggregates project — SQL ↔ NoSQL aggregate mapper.
 
 ## Project Location
-`C:\Source\Birko.Data.Aggregates.Tests\`
+`tests/Birko.Data.Aggregates.Tests/`
 
 ## Dependencies
 - **Birko.Data.Aggregates** (shared project via .projitems)

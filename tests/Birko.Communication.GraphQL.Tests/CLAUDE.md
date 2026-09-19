@@ -4,7 +4,7 @@
 Unit tests for Birko.Communication.GraphQL covering settings, request/response serialization, client operations, exception handling, and request builder.
 
 ## Project Location
-`C:\Source\Birko.Communication.GraphQL.Tests\`
+`tests/Birko.Communication.GraphQL.Tests/`
 
 ## Test Classes
 

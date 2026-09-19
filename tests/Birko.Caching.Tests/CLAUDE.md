@@ -4,7 +4,7 @@
 Unit tests for the Birko.Caching project - caching abstractions and memory cache implementation tests.
 
 ## Project Location
-`C:\Source\Birko.Caching.Tests\`
+`tests/Birko.Caching.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

@@ -4,7 +4,7 @@
 Unit tests for Birko.Telemetry.OpenTelemetry integration.
 
 ## Project Location
-`C:\Source\Birko.Telemetry.OpenTelemetry.Tests\` (xUnit test project, .csproj)
+`tests/Birko.Telemetry.OpenTelemetry.Tests/` (xUnit test project, .csproj)
 
 ## Test Classes
 - **BirkoOpenTelemetryOptionsTests** — Default values, property mutability

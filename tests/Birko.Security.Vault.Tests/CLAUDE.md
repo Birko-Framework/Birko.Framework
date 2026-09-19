@@ -4,7 +4,7 @@
 Unit tests for Birko.Security.Vault — settings, HTTP API mocking, response parsing.
 
 ## Project Location
-`C:\Source\Birko.Security.Vault.Tests\`
+`tests/Birko.Security.Vault.Tests/`
 
 ## Components
 - **VaultSettingsTests.cs** — Settings defaults, property aliases to PasswordSettings, GetId

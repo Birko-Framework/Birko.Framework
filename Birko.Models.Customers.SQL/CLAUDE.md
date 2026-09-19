@@ -4,7 +4,7 @@
 Canonical `IModelMapping<T>` implementations for the `Birko.Models.Customers` domain. Provides ready-to-use fluent SQL mappings for Address, InvoiceAddress, ContactPerson, and Customer — paired with `Birko.Models.SQL` (the fluent mapping framework).
 
 ## Project Location
-`C:\Source\Birko.Models.Customers.SQL\`
+`Birko.Models.Customers.SQL/`
 
 ## Components (`Birko.Models.Customers.SQL.Mappings`)
 - **AddressMapping** → `Addresses` table

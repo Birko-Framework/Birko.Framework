@@ -4,7 +4,7 @@
 BCrypt password hashing — pure C# Blowfish/BCrypt implementation. No external NuGet dependencies.
 
 ## Project Location
-`C:\Source\Birko.Security.BCrypt\` — Shared project (.shproj + .projitems)
+`Birko.Security.BCrypt/` — Shared project (.shproj + .projitems)
 
 ## Components
 - **Hashing/BCryptPasswordHasher.cs** — Implements `IPasswordHasher`. BCrypt adaptive hashing with configurable work factor (4–31, default 12). Output format: `$2a$XX$` standard modular crypt. Includes `NeedsRehash()` for work factor upgrade detection. Full Blowfish implementation with S-boxes, P-array, EksBlowfish key schedule, BCrypt-specific Base64 encoding.

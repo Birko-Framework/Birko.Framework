@@ -4,7 +4,7 @@
 Transactional outbox pattern for Birko.EventBus. Persists events in a store, publishes asynchronously via background processor.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.EventBus.Outbox\`
+- **Directory:** `Birko.EventBus.Outbox/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.EventBus.Outbox`
 

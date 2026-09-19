@@ -4,7 +4,7 @@
 SOAP client implementation for Birko.Communication.
 
 ## Project Location
-`C:\Source\Birko.Communication.SOAP\`
+`Birko.Communication.SOAP/`
 
 ## Purpose
 - SOAP web service client

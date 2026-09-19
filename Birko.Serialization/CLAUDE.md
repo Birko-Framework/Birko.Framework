@@ -4,7 +4,7 @@
 Unified serialization abstraction for the Birko Framework. Provides a common `ISerializer` interface and a built-in System.Text.Json implementation.
 
 ## Project Location
-- **Directory:** `C:\Source\Birko.Serialization\`
+- **Directory:** `Birko.Serialization/`
 - **Type:** Shared Project (.shproj / .projitems)
 - **Namespace:** `Birko.Serialization`, `Birko.Serialization.Json`, `Birko.Serialization.Xml`
 

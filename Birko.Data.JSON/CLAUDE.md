@@ -4,7 +4,7 @@
 JSON file-based storage implementation for the Birko data layer.
 
 ## Project Location
-`C:\Source\Birko.Data.JSON\`
+`Birko.Data.JSON/`
 
 ## Purpose
 - Simple file-based data persistence

@@ -4,7 +4,7 @@
 Elasticsearch workflow instance persistence using AsyncElasticSearchStore. Index: `workflow-instances`.
 
 ## Project Location
-`C:\Source\Birko.Workflow.ElasticSearch\` (shared project via `.projitems`)
+`Birko.Workflow.ElasticSearch/` (shared project via `.projitems`)
 
 ## Components
 - **Models/ElasticWorkflowInstanceModel.cs** — AbstractModel + NEST attributes

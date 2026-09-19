@@ -7,7 +7,7 @@ create/drop-view migration helpers (CR-M150).
 
 ## Project Location
 
-`C:\Source\Birko.Data.SQL.View.Migrations.Tests\`
+`tests/Birko.Data.SQL.View.Migrations.Tests/`
 
 ## Scope
 

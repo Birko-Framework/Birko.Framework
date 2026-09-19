@@ -4,7 +4,7 @@
 Unit tests for Birko.Random — providers, distributions, sequences, and noise generators.
 
 ## Project Location
-`C:\Source\Birko.Random.Tests\`
+`tests/Birko.Random.Tests/`
 
 ## Test Framework
 xUnit + FluentAssertions

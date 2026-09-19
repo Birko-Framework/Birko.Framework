@@ -8,7 +8,7 @@ xUnit + FluentAssertions test project for the cross-provider SQL store-factory +
 
 ## Project Location
 
-`C:\Source\Birko.Data.SQL.Providers.Tests\`
+`tests/Birko.Data.SQL.Providers.Tests/`
 
 ## Scope
 

@@ -8,7 +8,7 @@ view-models, and `MirrorDataSource`).
 
 ## Project Location
 
-`C:\Source\Birko.Xaml.Core.Tests\`
+`tests/Birko.Xaml.Core.Tests/`
 
 ## Scope
 

@@ -4,7 +4,7 @@
 Unit tests for Birko.Communication.Modbus protocol implementation.
 
 ## Project Location
-`C:\Source\Birko.Communication.Modbus.Tests\`
+`tests/Birko.Communication.Modbus.Tests/`
 
 ## Components
 

@@ -4,7 +4,7 @@
 Base abstract models, ViewModels, and extensions for the Birko Framework. Provides reusable value-type abstractions that domain model projects (Product, Category, Accounting, etc.) build upon.
 
 ## Project Location
-`C:\Source\Birko.Models\`
+`Birko.Models/`
 
 ## Components
 

@@ -4,7 +4,7 @@
 Unit tests for the Birko.Structures project - data structure tests (trees).
 
 ## Project Location
-`C:\Source\Birko.Structures.Tests\`
+`tests/Birko.Structures.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

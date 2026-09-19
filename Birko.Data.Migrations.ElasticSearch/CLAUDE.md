@@ -4,7 +4,7 @@
 ElasticSearch migration backend using ElasticClient (NEST). Implements platform-agnostic IMigrationContext.
 
 ## Project Location
-`C:\Source\Birko.Data.Migrations.ElasticSearch\`
+`Birko.Data.Migrations.ElasticSearch/`
 
 ## Components
 

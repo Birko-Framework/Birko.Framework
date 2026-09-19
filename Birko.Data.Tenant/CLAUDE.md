@@ -4,7 +4,7 @@
 Multi-tenancy support for the Birko data layer. Provides tenant context management, automatic tenant filtering via store wrappers, tenant-aware filters, ASP.NET Core middleware for tenant resolution, and DI extensions.
 
 ## Project Location
-`C:\Source\Birko.Data.Tenant\`
+`Birko.Data.Tenant/`
 
 ## Components
 

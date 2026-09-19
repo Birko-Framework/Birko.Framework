@@ -4,7 +4,7 @@
 Unit tests for Birko.Telemetry — verifies metrics, tracing, store wrappers, and middleware.
 
 ## Project Location
-`C:\Source\Birko.Telemetry.Tests\` — .csproj (net10.0, xUnit + FluentAssertions)
+`tests/Birko.Telemetry.Tests/` — .csproj (net10.0, xUnit + FluentAssertions)
 
 ## Components
 - **ConventionsTests.cs** — Convention constant validation

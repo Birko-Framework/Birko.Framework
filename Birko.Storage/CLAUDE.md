@@ -4,7 +4,7 @@
 File and blob storage abstraction for the Birko Framework. Provides a unified `IFileStorage` interface with a built-in local filesystem implementation. Cloud providers (Azure Blob, AWS S3, GCS, MinIO) are separate projects.
 
 ## Location
-`C:\Source\Birko.Storage\`
+`Birko.Storage/`
 
 ## Structure
 ```

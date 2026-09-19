@@ -4,7 +4,7 @@
 Unit tests for the Birko.MessageQueue ecosystem covering core interfaces, InMemory backend, MQTT topic utilities, and serialization.
 
 ## Project Location
-`C:\Source\Birko.MessageQueue.Tests\`
+`tests/Birko.MessageQueue.Tests/`
 
 ## Components
 

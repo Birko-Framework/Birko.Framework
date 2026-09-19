@@ -4,7 +4,7 @@
 Time zone conversion and business calendar with holiday/working hours support. Imports Birko.Time.Abstractions for the clock abstraction (IDateTimeProvider and its implementations).
 
 ## Project Location
-`C:\Source\Birko.Time\` (shared project, .shproj/.projitems)
+`Birko.Time/` (shared project, .shproj/.projitems)
 
 ## Components
 
@@ -32,7 +32,7 @@ All types in `Birko.Time` (flat namespace, no sub-namespaces).
 - `IDateTimeProvider`, `SystemDateTimeProvider`, and `TestDateTimeProvider` were extracted to Birko.Time.Abstractions so lightweight consumers can depend on the clock abstraction without pulling in calendars/time zones.
 
 ## Tests
-`C:\Source\Birko.Time.Tests\` — xUnit + FluentAssertions, 80 tests covering all components.
+`tests/Birko.Time.Tests/` — xUnit + FluentAssertions, 80 tests covering all components.
 
 ## Maintenance
 - When adding new types, update `Birko.Time.projitems` ItemGroup

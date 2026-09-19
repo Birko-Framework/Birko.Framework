@@ -4,7 +4,7 @@
 ViewModel repository implementations for MongoDB stores.
 
 ## Project Location
-`C:\Source\Birko.Data.MongoDB.ViewModel\`
+`Birko.Data.MongoDB.ViewModel/`
 
 ## Components
 

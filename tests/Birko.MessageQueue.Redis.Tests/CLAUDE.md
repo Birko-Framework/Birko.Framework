@@ -4,7 +4,7 @@
 Unit tests for Birko.MessageQueue.Redis — Redis Streams message queue implementation.
 
 ## Project Location
-`C:\Source\Birko.MessageQueue.Redis.Tests\` (.csproj test project)
+`tests/Birko.MessageQueue.Redis.Tests/` (.csproj test project)
 
 ## Components
 

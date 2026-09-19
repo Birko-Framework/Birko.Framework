@@ -4,7 +4,7 @@
 Cross-cutting data patterns including Unit of Work, soft delete, audit tracking, and paging.
 
 ## Project Location
-`C:\Source\Birko.Data.Patterns\`
+`Birko.Data.Patterns/`
 
 ## Components
 

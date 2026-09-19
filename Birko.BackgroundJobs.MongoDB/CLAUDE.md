@@ -4,7 +4,7 @@
 MongoDB-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncMongoDBStore` from Birko.Data.MongoDB.
 
 ## Project Location
-`C:\Source\Birko.BackgroundJobs.MongoDB\`
+`Birko.BackgroundJobs.MongoDB/`
 
 ## Components
 

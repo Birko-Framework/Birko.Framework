@@ -4,7 +4,7 @@
 Elasticsearch implementation for the Birko data layer providing full-text search and document storage.
 
 ## Project Location
-`C:\Source\Birko.Data.ElasticSearch\`
+`Birko.Data.ElasticSearch/`
 
 ## Purpose
 - Full-text search capabilities

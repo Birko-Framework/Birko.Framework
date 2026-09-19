@@ -4,7 +4,7 @@
 Unit tests for Birko.Communication.IR infrared communication protocols and models.
 
 ## Project Location
-`C:\Source\Birko.Communication.IR.Tests\`
+`tests/Birko.Communication.IR.Tests/`
 
 ## Components
 - **NecProtocolTests.cs** — NEC encode/decode round-trip (standard + extended), leader timing, repeat codes, complement validation, null/short input

@@ -4,7 +4,7 @@
 MongoDB workflow instance persistence using AsyncMongoDBStore. Collection: `WorkflowInstances`.
 
 ## Project Location
-`C:\Source\Birko.Workflow.MongoDB\` (shared project via `.projitems`)
+`Birko.Workflow.MongoDB/` (shared project via `.projitems`)
 
 ## Components
 - **Models/MongoWorkflowInstanceModel.cs** — AbstractModel + BSON attributes

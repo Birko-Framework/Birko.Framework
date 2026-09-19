@@ -4,7 +4,7 @@
 Microsoft.Extensions.Configuration integration for secret providers. Contains two layers: a provider-agnostic layer (`Birko.Security.Configuration`) that works with any `ISecretProvider`, and a Vault-specific layer (`Birko.Security.Vault.Configuration`) with LocalVault hierarchical-path conventions. Recursively loads KV secrets into IConfiguration, rewriting `--` separators to `:` for clean POCO binding.
 
 ## Project Location
-`C:\Source\Birko.Security.Vault.Configuration\` — Shared project (.shproj + .projitems)
+`Birko.Security.Vault.Configuration/` — Shared project (.shproj + .projitems)
 
 ## Components
 

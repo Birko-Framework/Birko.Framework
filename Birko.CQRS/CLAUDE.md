@@ -4,7 +4,7 @@
 Command Query Responsibility Segregation (CQRS) pattern implementation with mediator, pipeline behaviors, and DI integration.
 
 ## Project Location
-`C:\Source\Birko.CQRS\` (shared project: `.shproj` + `.projitems`)
+`Birko.CQRS/` (shared project: `.shproj` + `.projitems`)
 
 ## Components
 

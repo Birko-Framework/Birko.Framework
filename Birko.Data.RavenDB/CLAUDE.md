@@ -4,7 +4,7 @@
 RavenDB implementation for the Birko data layer providing document-based storage with advanced features.
 
 ## Project Location
-`C:\Source\Birko.Data.RavenDB\`
+`Birko.Data.RavenDB/`
 
 ## Purpose
 - Document-based storage

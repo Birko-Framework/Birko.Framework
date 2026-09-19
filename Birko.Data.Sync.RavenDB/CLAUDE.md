@@ -4,7 +4,7 @@
 RavenDB-specific sync knowledge item and store implementations for the Birko.Data.Sync framework.
 
 ## Project Location
-`C:\Source\Birko.Data.Sync.RavenDB\`
+`Birko.Data.Sync.RavenDB/`
 
 ## Components
 

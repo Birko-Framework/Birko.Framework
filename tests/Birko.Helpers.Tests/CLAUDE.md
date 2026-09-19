@@ -4,7 +4,7 @@
 Unit tests for the Birko.Helpers project - utility and helper method tests.
 
 ## Project Location
-`C:\Source\Birko.Helpers.Tests\`
+`tests/Birko.Helpers.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

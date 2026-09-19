@@ -4,7 +4,7 @@
 Unit tests for the Birko.Workflow.SQL project - SQL-based workflow engine persistence tests.
 
 ## Project Location
-`C:\Source\Birko.Workflow.SQL.Tests\`
+`tests/Birko.Workflow.SQL.Tests/`
 
 ## Test Framework
 - xUnit 2.9.3

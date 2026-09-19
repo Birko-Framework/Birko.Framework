@@ -4,7 +4,7 @@
 REST API server implementation using HttpListener for hosting RESTful APIs.
 
 ## Project Location
-`C:\Source\Birko.Communication.REST.Server\`
+`Birko.Communication.REST.Server/`
 
 ## Purpose
 - HTTP/HTTPS server hosting

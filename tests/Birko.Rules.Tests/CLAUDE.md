@@ -4,7 +4,7 @@
 Unit tests for the Birko.Rules project — data-driven rule engine.
 
 ## Project Location
-- `C:\Source\Birko.Rules.Tests\`
+- `tests/Birko.Rules.Tests/`
 
 ## Dependencies
 - **Birko.Rules** (shared project via .projitems)

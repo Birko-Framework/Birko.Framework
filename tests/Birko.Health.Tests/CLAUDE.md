@@ -6,7 +6,7 @@ Unit tests for Birko.Health, Birko.Health.Data, and Birko.Health.Redis.
 
 ## Project Location
 
-- **Path:** `C:\Source\Birko.Health.Tests\`
+- **Path:** `tests/Birko.Health.Tests/`
 - **Type:** Test project (`.csproj`, xUnit)
 - **Target:** net10.0
 
