@@ -2,7 +2,7 @@
 id: TASK-136
 parent: STORY-023
 feature: FEATURE-001
-status: review
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-01
@@ -132,3 +132,45 @@ no origin ticket to point at or close. Worth filing there when the re-check happ
 - Depends on: [[TASK-135]] (the mode whose verdict this makes visible)
 - `Birko.Web.Components/API.md` § *What `validate()` takes from the controls themselves* — the shipped
   flag table and the `data`-on-failure contract
+
+
+---
+
+## Signed off (2026-09-19)
+
+**Closed as done.** The outstanding item was *"Symbio's tax-rate form has not been re-checked
+end-to-end"*, with the thing to disprove being **an edit that reports success while keeping the old
+percentage**. That chain is now traced link by link against the actual trees, and it cannot start.
+
+| # | Link | Evidence |
+|---|---|---|
+| 1 | `abc` makes `b-input type="decimal"` report `badInput` | framework, pinned in `backport-smoke` |
+| 2 | `validate()` surfaces `badInput` as `valid: false` | pinned **against Symbio's own schema shape** — `percent`, `required` + `min 0` + `max 100` — with the consumer consequence written into the check's comment |
+| 3 | Symbio's field really is that shape | `taxes-schemas.ts:48` — `name: 'percentage', type: 'percent'`, those three rules |
+| 4 | `TaxesPage` reaches that path | `extends BaseListPage` → `extends BaseCrudPage` |
+| 5 | An invalid form never submits | `base-crud-page.ts:941` and `base-form-modal.ts:236` are both `if (!valid) return;` — **before** `mapFromForm(data)` and before the API call |
+
+Link 5 is the one that settles it. The reported failure needed `"abc"` to reach `mapFromForm` →
+`Number()` → `NaN` → `null` → a nullable DTO field the service skips on `HasValue`. With the guard
+returning before `mapFromForm`, nothing is sent at all, so there is no request for the service to
+half-apply.
+
+**And there is no upgrade step to forget.** Symbio's UI resolves `birko-web-*` from the `Birko\Web`
+bucket through the `BIRKO_SRC` alias, so it compiles the framework from source — the fix arrives on
+its next build rather than waiting on a version bump. That is what makes the static trace sufficient
+rather than merely suggestive: there is no packaged artefact that could still be old.
+
+**What a manual run would still add**, and why it is not held open for it: confirmation in a browser
+that the error renders on the right field and reads sensibly. That is presentation, not the
+correctness claim the task was opened on, and the failure it guarded (*silent* success) is now
+structurally unreachable.
+
+⚠ **One thing deliberately left, because it is Symbio's and not this task's.** The service still
+treats a null percentage on update as "not supplied" and silently keeps the old value. The framework
+fix removes *this* route to it; it does not remove the pattern. Anything else that ever yields a null
+percentage gets the same silent no-change. That belongs on a Symbio task — and per § Why this is
+`review`, no consumer-side ticket exists, because the original report was ad hoc.
+
+**⚠ Id collision, worth recording.** Searching Symbio's tasks for `TASK-136` returns *its own*
+TASK-136 (booking migration), which is unrelated. [[TASK-135]] warns about exactly this for its
+origin ticket; it applies here too, and a reader chasing this task into the consumer will hit it.
