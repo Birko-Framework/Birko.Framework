@@ -2,7 +2,7 @@
 id: TASK-091
 feature: FEATURE-001
 parent: STORY-050
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-07-29
@@ -162,3 +162,61 @@ reading the diff.
 Reps `Reps.Web/src/pages/progress-page.ts`: move `<span class="hint">${goalHint}</span>` onto the steps
 `b-input` as `description` and delete the local `.hint` rule. Reps' other `.hint`, in
 `workout-exercise-edit-page.ts`, is a navigation **link** and stays page markup.
+
+
+---
+
+## Signed off (2026-09-19)
+
+**Closed as done.** Both human-plan items turned out to be measurable, and the more interesting one
+was the screen-reader item.
+
+### The screen-reader item, moved from "the attribute points somewhere" to "the browser computed this"
+
+`description-smoke` asserted the **wiring**: the help id is in `aria-describedby`, it resolves to a
+real element, both ids appear with the error first. That is the DOM. It cannot say what an assistive
+technology is *handed* — the browser computes a description from those IDREFs, and an IDREF an engine
+declines to resolve across a shadow boundary gives perfect markup and a silent reader.
+
+`a11y-description-check.mjs` asks the browser for the computed node, which is the same thing it hands
+NVDA or VoiceOver. Chromium reports:
+
+```
+Too low Weight in kilograms, one decimal
+```
+
+Error first, description second — exactly what this task specified. **Mutating the single line that
+pushes `${uid}-help` onto `describedBy` reds those three checks and leaves the layout check green**,
+so it measures the wiring rather than its own fixture.
+
+**It is still not a screen reader**, and the file says so: announcement order *as spoken*, verbosity
+and the AT's own heuristics are not covered. The remaining value of hearing one is real but much
+smaller than when the plan was written.
+
+⚠ The a11y half is **Chromium-only, and not by choice** — `page.accessibility.snapshot()` goes over
+CDP and Firefox speaks BiDi, which exposes no accessibility tree. The check reports that split rather
+than running in Chromium twice and calling it cross-engine.
+
+### The wrapping item
+
+Measured in **both** engines: a deliberately long description inside a 120px column gives
+`container=120px field=120px scroll=120px` — it wraps, and nothing widens.
+
+### Cross-engine, now possible
+
+`description-smoke` is **90/90 in Chromium and 90/90 in Firefox** (grown from the 55 recorded here).
+Worth running for this feature in particular, since ARIA computation is exactly where engines differ.
+
+### The contrast finding has a home
+
+*"`.field .error` fails WCAG AA in three of five themes"* is tracked by [[TASK-130]] (P1, `todo`),
+which already names `--b-color-danger-text` as the mechanism — so it is filed rather than floating in
+this task's prose. `finstat`'s 3.77:1 for `.help` is a property of that theme's `--b-text-secondary`,
+shared with the label, and belongs to the same task.
+
+### Left for the consumer
+
+Reps' `progress-page.ts` still renders its own `<span class="hint">`. That is the migration this
+attribute exists to enable and it is Reps-side work, recorded in § Consumer follow-up. Not a blocker
+here: the framework half is what this task owns, and the inaccessible-by-construction workaround it
+was written to remove is now removable.
