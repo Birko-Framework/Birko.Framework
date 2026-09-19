@@ -93,7 +93,7 @@ If the new store is a SQL dialect: subclass `AbstractConnector` in `C:\Source\Bi
 
 Per `CLAUDE-maintenance.md` § "Test Requirements" — every new public method needs xUnit + FluentAssertions coverage.
 
-In `C:\Source\Birko\Framework	ests\Birko.Data.X.Tests\`:
+In `C:\Source\Birko\Framework\tests\Birko.Data.X.Tests\`:
 
 - `XStoreTests.cs` — CRUD round-trip, filter-based bulk Update/Delete, lazy-init (calling CRUD without explicit `Init()`), edge cases (null filter, empty result, concurrent access if relevant).
 - `AsyncXStoreTests.cs` — same as above, async variant. Include cancellation tests (`CancellationTokenSource.CancelAfter(…)`).
@@ -136,5 +136,5 @@ If `family = BackgroundJobs`:
 ## After implementing
 
 1. **Build** — `dotnet build C:\Source\Birko\Framework\Birko.Framework\Birko.Framework.slnx`.
-2. **Run tests** — `dotnet test C:\Source\Birko\Framework	ests\Birko.Data.X.Tests\Birko.Data.X.Tests.csproj`.
+2. **Run tests** — `dotnet test C:\Source\Birko\Framework\tests\Birko.Data.X.Tests\Birko.Data.X.Tests.csproj`.
 3. **Run [[verify-birko-conventions]]** to catch nullable warnings, missed `*Core` overrides, missing tests, hard-coded paths.

@@ -110,7 +110,7 @@ Per the user's [[feedback_update_docs]] preference, **always update `README.md` 
 
 ## Companion test project (if selected)
 
-Create `C:\Source\Birko\Framework	ests\Birko.X.Tests\` as a regular `.csproj` (NOT shared):
+Create `C:\Source\Birko\Framework\tests\Birko.X.Tests\` as a regular `.csproj` (NOT shared):
 
 - `Microsoft.NET.Sdk` target framework matching the rest of the framework (`net10.0` currently).
 - `<PackageReference>` for **xUnit**, **xUnit.runner.visualstudio**, **Microsoft.NET.Test.Sdk**, **FluentAssertions**.
