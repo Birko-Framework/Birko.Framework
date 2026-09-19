@@ -2,7 +2,7 @@
 id: TASK-135
 parent: STORY-052
 feature: FEATURE-016
-status: review
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-01
@@ -125,3 +125,54 @@ Two outstanding items, neither of which is paperwork:
 - Origin: Reps (`Consumers/WorkoutTracker`) `TASK-104` — *consumer* id; `ec69529` is its own fix
 - Consumed by: [[TASK-136]] (`b-form.validate()` surfacing the validity this mode reports)
 - Siblings from the same consumer: [[TASK-104]] (`b-chart`), [[TASK-105]] (`b-card`), [[TASK-107]] (`b-button`)
+
+
+---
+
+## Signed off (2026-09-19)
+
+**Closed as done.** Both outstanding items were re-measured rather than taken from the task's own
+account, and both have moved.
+
+**The framework side is present and pinned.** `b-input`'s `isDecimal`, `DECIMAL_SUPPRESSED`,
+`parseDecimal` in `Birko.Web.Core/src/i18n/parse.ts`, `b-form`'s `case 'decimal'` and the shared
+`COMMA_TYPED_TYPES` set are all in the tree, and the playground suite is green.
+
+### Item 1 — the consumer fork is **substantially gone**, and the residue is not a fork
+
+Reps' `Reps.Web/src/decimal.ts` now reads `export { parseDecimal } from 'birko-web-core'` — the
+parsing half moved into the framework and the consumer re-exports it, so there is **one
+implementation, not two drifting copies**. The Progress card's two decimal fields are
+`b-input type="decimal"`.
+
+What remains is `DECIMAL_INPUT_ATTRS` (`type="text" inputmode="decimal"`) serving **three** controls:
+the session set-weight stepper, the inline set edit and the history set edit. Those are **raw
+`<input>` elements, not `b-input`**, because a page cannot style a shadow-DOM control — and they share
+the framework's parser. So STORY-052's bar (*"the fix lives in the component or it is not a fix"*)
+holds for every control that uses the component; these three do not use it and cannot yet.
+
+⚠ **And I nearly recorded that their blocker had lifted, wrongly.** Reps' comment cites
+*"TASK-090's `::part(control)` gap is still open"*, and TASK-090 is `status: done` — which reads like
+a stale comment. It is not: TASK-090's own outcome says *"The task's still-open note about
+`::part(control)` is unchanged and stays open — it is a separate gap"*, and `part="control"` appears
+**nowhere** in `Birko.Web.Components`. **A `done` task that names a gap has not closed that gap**, and
+the status alone was about to mislead me. The gap's tracked home is [[TASK-106]] (`todo`, P3).
+
+### Item 2 — "the only proof" was too strong, and the claim decomposes
+
+The task says a device run is *"the only proof the mode works — the headless suite structurally cannot
+reproduce the bug it fixes"*. True of the **bug**, not of the **fix**, which splits into two claims
+that are each already evidenced:
+
+1. *`type="text" inputmode="decimal"` accepts a comma on a WebKit comma keypad* — **device-proven by
+   Reps on 2026-07-31**, on a Slovak keypad. That is precisely the pair Reps' own fix shipped.
+2. *`b-input type="decimal"` renders that exact pair* — pinned headlessly in three places:
+   `decimal renders a TEXT inner input (type=number cannot accept a comma)`,
+   `decimal defaults inputmode="decimal"`, and through a `b-form` schema
+   (`innerOf('rate')?.getAttribute('type') === 'text'`).
+
+1 and 2 compose. A device run would confirm the composition end-to-end, which is worth doing once if
+an iPhone is to hand, but it is no longer the *only* proof and the task should not stay open on it.
+
+**Not closed silently:** the human test plan stays in the file, unticked, as a standing invitation
+rather than a blocker.
