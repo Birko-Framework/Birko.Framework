@@ -294,8 +294,9 @@ The gate is now wired the other way round: the generic `verify-conventions` **gl
 on its report header — reporting a **blocker** if it finds one it did not run. So the Birko checks are
 reachable through either door, and a run that skipped them says so instead of reporting a clean pass; the
 consumer-facing ones (birko-new-project, new-birko-web-page, new-birko-web-component,
-design-agent) are shared user-level via [install-skills.ps1](install-skills.ps1) (junctions —
-edit here, live immediately).
+design-agent) are shared user-level via [install-skills.cs](install-skills.cs)
+(`dotnet run install-skills.cs` — a junction on Windows, a symlink on Linux; edit here, live
+immediately).
 
 ## Code Style
 - **Guard clauses:** Use early returns instead of wrapping entire method bodies in if blocks. Prefer `if (x == null) return;` over `if (x != null) { ... }`.
@@ -315,6 +316,47 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### The four root helper scripts were PowerShell, and none of them ran on Linux (2026-09-19)
+
+[[TASK-476]]. `audit-declarations`, `audit-dependencies`, `audit-consumer-versions` and
+`install-skills` are now **.NET 10 file-based apps** (`dotnet run audit-dependencies.cs`); the `.ps1`
+originals are deleted. PowerShell 7 is itself cross-platform, so the language was never the blocker —
+every one of the four was written with Windows path assumptions. Six things worth carrying:
+
+- **⚠ Three of the four failed in the SILENT-WRONG-ANSWER direction, which is why nobody noticed.**
+  `audit-consumer-versions` was the worst: consumer imports are written `$(BirkoSrc)\Birko.Helpers\…`
+  — the MSBuild file format, backslash-separated on *every* platform, across all 173 projitems — so on
+  Linux the substituted path could not be opened, the transitive import graph came back empty, and
+  **every consumer reported 0 imports**. The script's own header names that exact state: *"a consumer
+  you know imports Birko and that shows 0 is a defect in this script, not a clean result."*
+- **⚠ And one of them was [[TASK-474]] arriving a second time, from a different direction.** That task
+  fixed a literal tab in `'Framework\tests'` that had silently dropped the entire `tests/` bucket,
+  leaving the sweep reporting **81 of 248** projects as a whole-tree result. On Linux the *correctly
+  typed* same expression fails the same way, and defeats the same `if (-not $buckets) { throw }` guard,
+  because `Consumers` still resolves. The port closes it: **every declared bucket must resolve, each
+  missing one is named, and the run stops.** *A guard for "none" is not a guard for "fewer than asked for."*
+- **The shape was chosen on a measurement, and the runtime cost went the other way from expectation.**
+  `.cs` file-based app: ~1.0s after an edit, 0.6s unchanged — against the PowerShell's 4.2s. So the port
+  is **4–7× faster** than what it replaces. `.csx` (dotnet-script) was rejected on its
+  `dotnet tool install -g` dependency, not on speed; the `csharp-script` skill's *"~15–20s cold start"*
+  did not hold here, because that figure assumes a `#r "nuget:"` restore and these are BCL-only.
+- **⚠ Porting to C# fixes none of the path bugs by itself, and that was the decisive point in choosing
+  what to change.** `Path.Combine(root, "Framework\\tests")` is exactly as wrong on Linux as the
+  PowerShell was. All ten path expressions were fixed by hand; the language change only removes the
+  pwsh dependency. **Do not let a rewrite launder a bug into looking fixed.**
+- **⚠ A rewritten checker is a NEW checker.** Each original carries *"verify the check can fail before
+  believing it"*, and between them they encode four measured defects — the magenta-over-green bug,
+  the dropped `tests/` bucket, the CPM blind spot found the day Symbio adopted it, and the
+  floors-vs-`PINNED` verdict that *changed a result*. Reproducing the baselines byte-for-byte was
+  necessary and **not sufficient**: each was re-proven against its own fixture, mutating a real
+  declaration and asserting the exact row.
+- **⚠ `install-skills` does NOT use the portable API on Windows, deliberately.** A directory *symlink*
+  there needs Developer Mode or elevation; a *junction* needs neither, which is why the original used
+  one. `Directory.CreateSymbolicLink` would have been a portability fix that broke the platform the
+  script already worked on. .NET has no junction API, so Windows shells out to `mklink /J` and Linux
+  takes the symlink. Path handling itself has **one producer**, `tools/AuditCommon/Paths.cs` — it is
+  what broke, so it does not get copied into four files.
 
 ### A consumer can ship a package older than the framework, and NuGet's own guard cannot see it (2026-09-19)
 

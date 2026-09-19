@@ -82,7 +82,7 @@ Every project directory must contain:
   project: `NU1504`, a warning, about duplication, saying nothing about which is lower. Measured 2026-09-19:
   Symbio carried `Npgsql 9.*` against the framework's `10.*` and restore reported only a duplicate. **This is
   a named cost of the deferral two bullets down** — shipping as real packages deletes the problem. Until then
-  the rule is enforced by [`audit-consumer-versions.ps1`](audit-consumer-versions.ps1), not by restore.
+  the rule is enforced by [`audit-consumer-versions.cs`](audit-consumer-versions.cs), not by restore.
 - **⚠ A CPM consumer writes its version somewhere else, and the rule follows it there.** Under central
   package management the framework's declaration is the *bare* half of its conditioned pair and the version
   comes from the consumer's `Directory.Packages.props` — so the consumer's project files declare nothing,
@@ -127,9 +127,9 @@ affected project. **Do not add these properties to a props file; it is a no-op.*
 What the build cannot do is notice an advisory published against code nobody is building. That is a
 time-based gap, not a build-configuration one, so it is covered by a **periodic sweep**:
 
-```powershell
-.\audit-dependencies.ps1                 # report
-.\audit-dependencies.ps1 -FailOnFinding  # exit 1 — for a scheduled job
+```bash
+dotnet run audit-dependencies.cs                        # report
+dotnet run audit-dependencies.cs -- --fail-on-finding   # exit 1 — for a scheduled job
 ```
 
 Run it on a schedule, before a release, and after any dependency bump. Two rules it enforces by construction
@@ -149,11 +149,31 @@ with floating versions, could break any build at any time from an upstream publi
 
 They are siblings on purpose; a zero from one says nothing about the others.
 
-```powershell
-.\audit-declarations.ps1        # does every shared project ACCOUNT for the packages it uses?
-.\audit-dependencies.ps1        # is any RESOLVED package vulnerable?  (sweeps tests/ + Consumers/)
-.\audit-consumer-versions.ps1   # does any consumer DECLARE a version below the framework's?
+```bash
+dotnet run audit-declarations.cs        # does every shared project ACCOUNT for the packages it uses?
+dotnet run audit-dependencies.cs        # is any RESOLVED package vulnerable?  (sweeps tests/ + Consumers/)
+dotnet run audit-consumer-versions.cs   # does any consumer DECLARE a version below the framework's?
 ```
+
+They are **.NET 10 file-based apps**, not PowerShell, and that is deliberate: they need nothing a Birko
+build does not already need — no pwsh, no `dotnet tool install`. The four originals were `.ps1` and
+**none of them ran on Linux**; three failed by silently answering the wrong question rather than by
+erroring. See [`ADR-002`](docs/adr/ADR-002-audit-scripts-as-dotnet-file-based-apps.md) and TASK-476.
+Shared path handling has ONE producer, [`tools/AuditCommon/Paths.cs`](tools/AuditCommon/Paths.cs) —
+no separator literal belongs anywhere else.
+
+> **Rule — repo tooling is a .NET file-based app, not a shell script.** Anything committed at the
+> aggregator root that a maintainer runs by hand (an audit, a sweep, an installer) is a `.cs` file
+> run with `dotnet run`. Reasons, in order: it needs no runtime the repo does not already require,
+> so it works on every machine in the family; it is ONE implementation rather than a `.ps1`/`.sh`
+> pair that drifts; and its helpers are testable — `tests/AuditCommon.Tests` is registered in the
+> `.slnx`, so CI builds it and the `tests/*/` loop **runs it on Linux**, which is the only place
+> the path assumptions it guards can actually be proved. A shell one-liner is still a shell
+> one-liner; this is about tooling that gets committed and relied on.
+>
+> ⚠ **Path handling inside such a tool has one producer.** Every separator literal lives in
+> `tools/AuditCommon/Paths.cs`. Four scripts each carrying their own path expressions is exactly
+> how TASK-476 happened, and three of the four failed by silently answering the wrong question.
 
 The third exists because `NU1605` cannot see a shared-project boundary — see the ⚠ bullet under § External
 dependencies. It is also the one that finds the *cause* where the second finds the *symptom*: a consumer

@@ -353,6 +353,11 @@
     <Project Path="../tests/Birko.Data.JSON.ViewModel.Tests/Birko.Data.JSON.ViewModel.Tests.csproj" />
     <Project Path="../tests/Birko.Data.MongoDB.ViewModel.Tests/Birko.Data.MongoDB.ViewModel.Tests.csproj" />
     <Project Path="../tests/Birko.Data.RavenDB.ViewModel.Tests/Birko.Data.RavenDB.ViewModel.Tests.csproj" />
+    <!-- Tests for the root audit scripts' shared helpers. Not Birko.*-named, matching the
+         project under test (see Birko.Framework/tools/AuditCommon and TASK-476). Registered
+         here so build-and-test.yml builds it and its tests/*/ loop RUNS IT ON LINUX, which is
+         the only place the path assumptions it guards can actually be proved. -->
+    <Project Path="../tests/AuditCommon.Tests/AuditCommon.Tests.csproj" />
   </Folder>
   <Folder Name="/Xaml/">
     <Project Path="../Birko.DesignTokens/Birko.DesignTokens.csproj" />

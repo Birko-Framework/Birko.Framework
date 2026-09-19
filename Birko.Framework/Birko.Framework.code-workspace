@@ -649,6 +649,10 @@
 			"path": "../Birko.Telemetry.OpenTelemetry"
 		},
 		{
+			"name": "Tests / AuditCommon.Tests",
+			"path": "../tests/AuditCommon.Tests"
+		},
+		{
 			"name": "Tests / Birko.BackgroundJobs.SQL.Tests",
 			"path": "../tests/Birko.BackgroundJobs.SQL.Tests"
 		},

@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests for the root audit scripts' shared helpers (Birko.Framework/tools/AuditCommon).
+
+       Not named Birko.* on purpose, matching the project under test: audit-declarations enumerates
+       `Birko.*` directories at the repo root, so a Birko-named helper would be swept by the audit it
+       serves. Reached by a ProjectReference rather than a .projitems Import because AuditCommon is a
+       real (tiny) library, not a shared project. See TASK-476 and docs/adr/ADR-002.
+
+       ⚠ THE POINT OF THIS PROJECT IS THAT CI RUNS IT ON LINUX. TASK-476 ported four scripts off
+       PowerShell because all four carried Windows path assumptions, and three failed by silently
+       answering the wrong question. Those defects are unreproducible on a Windows dev box, so the
+       assertions below are written to be separator- and case-explicit and are proved for real by
+       build-and-test.yml on ubuntu-latest. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentAssertions" Version="7.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Birko.Framework\tools\AuditCommon\AuditCommon.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Shared helpers for the root audit scripts (audit-*.cs), which reference this via `#:project`.
+
+       NOT a framework project, and deliberately not named Birko.* — audit-declarations enumerates
+       `Birko.*` directories at the repo root, so a helper called Birko.Audit.Common would be swept
+       by the audit it exists to serve. It is also not registered in Birko.Framework.slnx for the
+       same reason: it is tooling, not a shipped shared project, and the New Project Checklist in
+       CLAUDE-maintenance.md applies to the latter. See tasks/.../TASK-476 and docs/adr/ADR-002. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>
