@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia.Headless.XUnit" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="11.*" />
     <PackageReference Include="FluentAssertions" Version="7.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -24,8 +24,8 @@
     <ProjectReference Include="..\..\Birko.Xaml.Avalonia\Birko.Xaml.Avalonia.csproj" />
     <!-- Referenced so the parity-screenshot test can render the real GalleryView. -->
     <ProjectReference Include="..\..\Birko.Xaml.Shell\Birko.Xaml.Shell.csproj" />
-    <PackageReference Include="Avalonia.Skia" Version="11.2.3" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Skia" Version="11.*" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.*" />
   </ItemGroup>
 
 </Project>

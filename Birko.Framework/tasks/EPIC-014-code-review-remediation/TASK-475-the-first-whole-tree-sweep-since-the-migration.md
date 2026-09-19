@@ -62,7 +62,40 @@ date and nothing in the type system says so.** Re-measured today:
 A fixed version exists. The reason for accepting the exposure no longer holds, so the acceptance has
 to be re-decided rather than inherited.
 
-Two routes, and they are not equivalent:
+### ✅ RESOLVED 2026-09-19 — a MINOR bump was enough
+
+Measured on throwaway probe projects rather than read off version numbers, which is the whole point
+of the rule this was about:
+
+| Avalonia | Tmds.DBus.Protocol | `--vulnerable` |
+|---|---|---|
+| 11.2.3 (was) | 0.20.0 | **High** |
+| **11.3.22** (`11.*`) | 0.21.3 | **clean** |
+| 12.1.2 | 0.94.1 | clean |
+
+So the major was never needed. Avalonia floated to `11.*` in **6 places**: the framework's
+`Birko.Xaml.Avalonia`, `Birko.Xaml.Shell` and `Birko.Xaml.Avalonia.Tests`, and the three consumers
+that build them — `Birko.Xaml.Gallery`, `BardStudio` and `Latent`. All resolve 11.3.22 → 0.21.3, all
+report **no vulnerable packages**, all build, and `Birko.Xaml.Avalonia.Tests` is **196/196**.
+
+**⚠ Latent had already fixed it, and nobody noticed.** `Latent/Directory.Packages.props` carried a
+transitive pin `Tmds.DBus.Protocol 0.21.3` with a comment naming this exact advisory. So the same
+Avalonia 11.2.3 resolved **0.21.3** there and **0.20.0** in the other two — identical top-level
+version, different resolved transitive, which is precisely the trap. **The framework's family-wide
+record said "accepted, none available" while one of its own consumers had shipped the remedy.** A
+finding recorded as accepted is not re-checked by anyone; that is what makes rule 30 expensive.
+
+**⚠ The bump had to be all-or-nothing across four repos.** `Birko.Xaml.Avalonia` is a real `.csproj`
+referenced by `ProjectReference`, not a `.projitems` — so it *does* create a package dependency edge.
+Moving the framework to `11.*` while any consumer pinned `11.2.3` would have fired `NU1605` there,
+the identical shape that broke `DraCode.KoboldLair` the same day. Latent needed changing even though
+it was already clean, purely for that reason.
+
+Avalonia **12** remains a separate, deliberate migration — a major, across three projects' AXAML,
+with `LiveChartsCore.SkiaSharpView.Avalonia 2.0.5` alongside it. Both restore cleanly against 12
+(probed), but restore is not compilation. Nothing security-related requires it now.
+
+Two routes were considered, and they are not equivalent:
 
 1. **Bump Avalonia.** `11.2.3 → 12.1.2` is available. A major, so it is a real piece of work in both
    `BardStudio.UI` and `Birko.Xaml.Gallery`, and it may or may not carry a fixed `Tmds.DBus.Protocol`
