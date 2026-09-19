@@ -3,7 +3,7 @@ id: TASK-201
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-11
@@ -58,13 +58,13 @@ documented in `deleteMissingIsApplied`, but Reps should decide it is acceptable 
 
 ## Acceptance criteria
 
-- [ ] Every queued `POST` classified: `idPinned` set, or explicitly reasoned as not eligible
-- [ ] The slot-uniqueness POST (or any endpoint whose 409 is overloaded) is **not** pinned, with a comment
+- [x] Every queued `POST` classified: `idPinned` set, or explicitly reasoned as not eligible
+- [x] The slot-uniqueness POST (or any endpoint whose 409 is overloaded) is **not** pinned, with a comment
       saying why so it is not "fixed" later by someone reasoning from symmetry
-- [ ] A replayed pinned create drains with no conflict raised to the user
-- [ ] A replayed queued delete of an already-gone row drains
-- [ ] Regression coverage in Reps' own suite, red-verified
-- [ ] The foreign-row 404 drain is confirmed acceptable, or `deleteMissingIsApplied: false` is set with a
+- [x] A replayed pinned create drains with no conflict raised to the user
+- [x] A replayed queued delete of an already-gone row drains
+- [x] Regression coverage in Reps' own suite, red-verified
+- [x] The foreign-row 404 drain is confirmed acceptable, or `deleteMissingIsApplied: false` is set with a
       reason
 
 ## Out of scope
@@ -123,3 +123,60 @@ to go — the other half of this defect; now `blocked`, since TASK-167 made the 
       real observable and only the automated specs can read it.)
 - [ ] Delete a set offline, delete the same set from another device, sync → confirm the entry drains
       instead of retrying every 30s.
+
+
+---
+
+## Signed off (2026-09-19)
+
+**Closed as done.** The criteria were all left unticked while the `## Outcome` said the work had
+landed — so each was checked against the two trees rather than against that narrative. All six hold.
+
+### Verified in Reps
+
+- **Exactly two endpoints are pinned**, as the outcome claims: `POST /exercises` (`api.ts:288`) and
+  `POST /body-measurements` (`api.ts:2047`), both through a `pinned()` helper whose doc carries the
+  **whole classification** — which endpoints are pinned, which would be inert because their handler
+  upserts and never answers 409, and why the plan tree is absent from both lists. The excluded case is
+  documented where someone re-enabling it will read it, which is what criterion 2 asked for.
+- **`deleteMissingIsApplied` is left at the framework default**, deliberately and in writing, with the
+  four queued deletes named. Criterion 6's foreign-row consequence is **signed off rather than
+  inherited**, with the caveat that multi-user (STORY-007) changes the honest reading of "someone
+  else's row".
+- Reps' own tracking tasks: **TASK-166 done, TASK-167 done, TASK-169 done, TASK-170 done**;
+  **TASK-168 blocked**, which is the other half of this defect (a *genuine* conflict has nowhere to
+  go) and correctly not this task's.
+
+### The human plan
+
+**Item 1 — a body measurement logged offline appears once and the chip reaches zero.** Covered by
+Reps' own e2e `offline-metrics.spec.ts`, which queues offline, reconnects, and asserts **against the
+API** that the server has the records, plus the chip's pending count. That is the right instrument:
+this task itself records that *"there is no conflict prompt to look for — Reps renders nothing on a
+conflict. The outbox is the real observable and only the automated specs can read it."*
+
+**Item 2 — an already-gone delete drains instead of retrying every 30 s.** The *mechanism* is pinned
+in the framework suite, along with every neighbour that must not change:
+
+```
+PASS SyncManager: a DELETE whose row is already gone DRAINS from the outbox
+PASS SyncManager: an id-pinned POST whose id already exists DRAINS (the create landed)
+PASS SyncManager: an unpinned POST 409 is still a CONFLICT, not drained (back-compat)
+PASS SyncManager: a PUT 409 stays a conflict even when idPinned is set
+PASS SyncManager: a DELETE 500 is still a failure to retry (back-compat)
+PASS SyncManager: deleteMissingIsApplied false restores the previous behaviour
+```
+
+⚠ **Stated rather than glossed: there is no Reps-side e2e for the cross-device already-gone delete.**
+The behaviour belongs to the framework, Reps takes the default and documents that it does, so the
+claim follows — but it follows by composition, not by observation, and that is a weaker thing than
+item 1 has. Not worth holding a five-week-old task open for, given the mechanism is pinned on both
+sides of the seam.
+
+### Worth carrying past this task
+
+The outcome's four corrections are the valuable part and are already written up there. The one with
+reach beyond Reps is the last: **a write that must never queue is protected by withholding `meta`,
+never by `navigator.onLine`**, because `ApiClient` also queues when the fetch itself fails. Reps held
+a documented no-queue decision and queued anyway. That belongs in `ActionMetadata.idPinned`'s own doc
+and should be asked of Symbio before it adopts the flag ([[TASK-200]]).
