@@ -114,3 +114,16 @@ than approximated.
 - **Whether PostgreSQL's 60 is still the right count.** Its header argues the number deliberately
   (*"the question here is whether the CLASS of defect exists at all"*); this task preserved it exactly
   and did not reopen it.
+
+## Human test plan
+
+⚠ **Absent when this was closed to `review` on 2026-09-19** — same defect as [[TASK-476]], resolved
+the same way on 2026-09-20. The outstanding step is a Linux run, which is the platform the task exists
+for and the one it has never been executed on.
+
+- [ ] On Linux, run the generator for both profiles. Expected: both `PgColdTableProbeModels.g.cs` and
+      the SQLite target are written, **no** file is created whose name contains a literal backslash,
+      and a failure exits non-zero.
+- [ ] Regenerate over the committed outputs and `git diff`. Expected: byte-identical but for the
+      provenance line — **including the blank line PostgreSQL has and SQLite does not**, which is the
+      detail a naive regeneration gets wrong.

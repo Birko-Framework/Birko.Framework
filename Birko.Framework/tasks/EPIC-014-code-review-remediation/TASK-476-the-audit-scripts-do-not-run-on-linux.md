@@ -178,3 +178,26 @@ none of its 85 warnings come from the new projects.
 - **Verifying the shebang path on Linux.** .NET 10 file-based apps support `#!/usr/bin/env dotnet`,
   which would make these directly executable. Added, but untestable from Windows — needs confirming
   on a Linux box.
+
+## Human test plan
+
+⚠ **This section was absent, and an absent plan is not an `N/A` one.** The task was closed to
+`review` on 2026-09-19 with no section at all, which parks it on a step that may not exist and is
+afterwards indistinguishable from one that was written and never run. Resolved 2026-09-20 by writing
+the step that is genuinely outstanding rather than back-dating an `N/A` the work does not support:
+**this task is about Linux, and it has only ever been exercised on Windows.** § Out of scope above
+already says as much about the shebang.
+
+- [ ] On a Linux box (or the `ubuntu-latest` runner), from the repo root, run all four:
+      `dotnet run audit-declarations.cs`, `audit-dependencies.cs`, `audit-consumer-versions.cs`,
+      `install-skills.cs`. Expected: each completes and none reports a path it could not open.
+- [ ] `audit-dependencies` reports **248** projects, not 81 — the [[TASK-474]] bucket regression is what
+      this port was most likely to reintroduce, and it is invisible on Windows, where a backslash
+      resolves either way.
+- [ ] `audit-consumer-versions` reports a **non-zero** import count for a consumer known to import
+      Birko. Its own header names the alternative as a defect in the script: *"a consumer you know
+      imports Birko and that shows 0 is a defect in this script, not a clean result."*
+- [ ] `install-skills` creates a working **symlink** on Linux (the junction path is Windows-only), and
+      an edit to a skill here is visible through it immediately.
+- [ ] `#!/usr/bin/env dotnet` makes each of the four directly executable — the one item § Out of scope
+      explicitly left unverified.

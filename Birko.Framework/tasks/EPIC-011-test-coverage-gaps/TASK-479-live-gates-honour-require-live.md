@@ -3,7 +3,7 @@ id: TASK-479
 parent: EPIC-011
 feature: null
 # status — one of: todo, in-progress, review (code done, sign-off pending), blocked, done, cancelled
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-09-20
