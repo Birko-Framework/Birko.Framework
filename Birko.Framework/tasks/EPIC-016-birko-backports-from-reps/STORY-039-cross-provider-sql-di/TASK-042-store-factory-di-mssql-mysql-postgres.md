@@ -66,9 +66,10 @@ bespoke `BIRKO_{PROV}_TEST` env gate with the shared fixture, run the round-trip
 
 ## Human test plan
 
-- [ ] **(pending — needs a live server)** Set `BIRKO_MSSQL_TEST=host;db;user;pass`, run
+- [x] Set `BIRKO_MSSQL_HOST` (plus optional `_PORT` / `_USER` / `_PASSWORD` / `_DB`), run
       `Birko.Data.SQL.Providers.Tests`, and confirm the gated MSSql round-trip connects + does a create/read.
-- [ ] Repeat against MySQL / PostgreSQL via their env vars.
+      — done at sign-off against SQL Server 2022; the gate was renamed onto the house convention below.
+- [x] Repeat against MySQL / PostgreSQL via `BIRKO_MYSQL_HOST` / `BIRKO_PG_HOST`. — MySQL 8.4 + PostgreSQL 16.
 - [x] Confirm no `Directory.CreateDirectory` / content-root path code is present in the three new extensions. — verified: server options carry no path logic.
 
 ## Implementation plan
@@ -135,3 +136,58 @@ criterion asks for a round-trip against a live server, and one has now happened 
 Adopting the shared fixture when it lands remains worth doing — it replaces three bespoke env vars —
 but it is **tidying an answered question**, not the answer. Recorded so the dependency is not read as
 still blocking.
+
+
+---
+
+## Follow-up (2026-09-20) — the round-trips were red in CI from the day they were written
+
+The sign-off above is accurate about what it measured and wrong about one word. It closes with
+*"rather than inventing a third one"* — but the **gate** was an invention, even though the
+require-live promotion on top of it was not.
+
+### What happened
+
+The three round-trips gated on `BIRKO_{PROVIDER}_TEST=host;db;user;pass`, a packed variable used by
+this suite and nothing else. Every other live suite in the tree — eleven of them in the same CI job —
+reads a per-field group: `BIRKO_PG_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_DB`, and siblings.
+`.github/workflows/live-tests.yml` sets the group, because it was written for those eleven. It has
+never set a `*_TEST` variable, and `BIRKO_REQUIRE_LIVE: '1'` is declared at workflow level.
+
+So on every `live-tests` run since the suite landed, the gate found nothing, the promotion did its
+job, and the job went red: **3 failed, 7 passed, 134 ms** — the duration being the tell, since all
+three threw before touching a socket. Run
+[35458738975](https://github.com/Birko-Framework/Birko.Framework/actions/runs/35458738975) is the
+one that prompted this. The other eleven suites passed against those same containers, so the servers
+were never the problem.
+
+### Why the local verification could not see it
+
+The sign-off's 10/10 was real, measured with the `*_TEST` variables exported by hand. **A gate
+verified only by the person who invented it is verified against their shell, not against the
+fixture.** The mutation table above even includes *"env var absent with `BIRKO_REQUIRE_LIVE=1`
+→ 1 failed"* — which is precisely the state CI was in, recorded as a passing mutation test rather
+than recognised as the CI configuration.
+
+### The fix
+
+`RunLiveAsync(envVar, body)` → `Resolve(prefix, defaultPort, defaultUser, defaultPassword)`, reading
+`BIRKO_{prefix}_HOST` + the optional companions, with defaults matching the workflow's containers
+exactly as the sibling suites' defaults do. `_HOST` alone opts a run in. Nothing in the workflow
+changes — the suite now reads what the fixture has been setting all along.
+
+Option (2), teaching `live-tests.yml` the packed variables, was rejected: it is the smaller diff but
+leaves two gating vocabularies in one job, which is the thing that produced the defect.
+
+### Measured
+
+- No env: **10/10 green**, three skip lines naming the variable to set.
+- `BIRKO_REQUIRE_LIVE=1`, no host: **3 failed / 7 passed, 156 ms** — reproduces the CI failure exactly,
+  so the promotion still fires and this is not a fix by silencing.
+- `BIRKO_REQUIRE_LIVE=1 BIRKO_PG_HOST=127.0.0.1 BIRKO_PG_PORT=59999`: fails with
+  `NpgsqlException: Failed to connect to 127.0.0.1:59999` after **4 s** — proving the gate now opts
+  the test *in* and honours host **and** port, rather than skipping past the driver.
+- ⚠ **Not re-run against real servers.** No Docker on this machine, so the three round-trips
+  themselves are unexercised here; the sign-off's live 10/10 stands as their last real measurement,
+  and CI is what will prove the renamed gate reaches the containers. **If the next `live-tests` run
+  is still red, the cause is a product defect the old gate was hiding, not this rename.**

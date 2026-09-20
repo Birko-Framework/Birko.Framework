@@ -17,7 +17,10 @@ store-factory + DI backport (EPIC-016 / TASK-042).
     connector; `AddMySqlStores` registers a resolvable `IMySQLStoreFactory` singleton.
   - PostgreSQL: `PostgreSQLStoreFactory` builds settings, carries `UseBinaryImport`, yields a store +
     connector; `AddPostgreSqlStores` registers a resolvable `IPostgreSQLStoreFactory` singleton.
-  - Live CRUD round-trips are opt-in via env vars (e.g. `BIRKO_MSSQL_TEST`) and skipped when absent.
+  - Live CRUD round-trips are opt-in per provider via `BIRKO_MSSQL_HOST` / `BIRKO_MYSQL_HOST` /
+    `BIRKO_PG_HOST` (with optional `_PORT` / `_USER` / `_PASSWORD` / `_DB`), and skipped when absent
+    — the same gate the rest of the SQL suites use. `BIRKO_REQUIRE_LIVE` makes an absent server a
+    failure instead of a skip.
 
 ## Test framework
 

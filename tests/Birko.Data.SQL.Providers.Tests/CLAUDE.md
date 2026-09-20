@@ -24,9 +24,17 @@ xUnit + FluentAssertions test project for the cross-provider SQL store-factory +
     an async store + connector; `AddPostgreSqlStores` registers a resolvable
     `IPostgreSQLStoreFactory` singleton.
 - The above construction / settings / connection-string / DI-registration checks all run offline
-  (no server). The live CRUD round-trips (`MSSql_live_crud_round_trip` and the `RunLiveCrud` helper)
-  are opt-in via env vars (e.g. `BIRKO_MSSQL_TEST` = `"host;db;user;pass"`) and are skipped when the
-  env var is absent.
+  (no server). The three live CRUD round-trips (`{MSSql,MySql,PostgreSql}_live_crud_round_trip`, via
+  the `Resolve` helper) are opt-in per provider on the **same env-var group every other SQL suite in
+  the tree reads** — `BIRKO_MSSQL_HOST`, `BIRKO_MYSQL_HOST`, `BIRKO_PG_HOST`, each with optional
+  `_PORT` / `_USER` / `_PASSWORD` / `_DB` companions defaulting to the `live-tests.yml` containers.
+  `_HOST` alone opts a run in; absent, the test writes a skip line and returns. Setting
+  `BIRKO_REQUIRE_LIVE` turns that skip into a failure, which is how CI refuses to go green on a
+  fixture that never came up.
+- ⚠ **Do not invent a gate of this suite's own.** It originally read a
+  `BIRKO_{PROVIDER}_TEST=host;db;user;pass` variable nobody else used, so CI — which sets the group
+  above — never opted the round-trips in, and `BIRKO_REQUIRE_LIVE` turned all three red on every
+  live-tests run. A second convention for one suite is not a smaller change than reading the first.
 
 ## Conventions
 
