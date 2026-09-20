@@ -54,11 +54,6 @@ outstanding step, because an absent plan and an unrun one are indistinguishable 
 [[TASK-473]] and [[TASK-474]] left this list the same day: their plans read `N/A — mechanical`, so per
 § Lifecycle they should have gone straight to `done` and were parked in `review` by mistake.
 
-## In progress
-
-| Task | Title |
-|---|---|
-| [[TASK-479]] | 19 live gates return silently instead of honouring BIRKO_REQUIRE_LIVE |
 
 ## Counts
 
@@ -66,10 +61,10 @@ outstanding step, because an absent plan and an unrun one are indistinguishable 
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
 | todo         | —     | —       | 160   |
-| in-progress  | 7     | 9       | 1     |
+| in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 2     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 171   |
+| done         | 1     | 23      | 172   |
 | cancelled    | 0     | 0       | 4     |
 
 `todo` by priority: 32× P1 · 102× P2 · 26× P3.  

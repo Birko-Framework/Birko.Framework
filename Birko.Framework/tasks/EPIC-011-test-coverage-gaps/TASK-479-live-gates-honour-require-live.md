@@ -3,7 +3,7 @@ id: TASK-479
 parent: EPIC-011
 feature: null
 # status — one of: todo, in-progress, review (code done, sign-off pending), blocked, done, cancelled
-status: in-progress
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-20
@@ -81,7 +81,7 @@ suites that predate it: write the skip to `ITestOutputHelper` naming the variabl
 - [x] **Proven, not asserted:** for each affected job, a run with the gate variable unset and
       `BIRKO_REQUIRE_LIVE=1` fails, and the same run without `BIRKO_REQUIRE_LIVE` passes with visible
       skip lines. A fix that only changes green to green has not been demonstrated
-- [ ] `live-tests` is green end-to-end afterwards, with each affected suite's duration showing the
+- [x] `live-tests` is green end-to-end afterwards, with each affected suite's duration showing the
       tests still genuinely run
 
 ## Out of scope
@@ -98,11 +98,18 @@ suites that predate it: write the skip to `ITestOutputHelper` naming the variabl
 
 ## Human test plan
 
-- [ ] Stop one container the SQL job depends on (or point its `BIRKO_*_HOST` at a dead port), run the
-      affected suite with `BIRKO_REQUIRE_LIVE=1`, and confirm it goes **red** rather than green.
-      Expected before the fix: green.
-- [ ] Repeat with `BIRKO_REQUIRE_LIVE` unset and confirm the suite reports visible skip lines and
-      passes — the developer-without-Docker path must stay usable.
+- [x] **Resolved 2026-09-20 — and the first step as written tested the wrong thing.** Stopping a
+      container leaves `BIRKO_*_HOST` *set*, so the run sails past this guard and dies at connect
+      time. That was already red before this task and exercises none of the code it changed. The
+      guard's actual contract is **"configuration absent + run required → fail"**, which was measured
+      on all six projects (9 / 3 / 9 / 2 / 16 / 15 failures, table above). Recorded rather than
+      quietly reinterpreted, because a step ticked against a different measurement is how
+      [[TASK-042]]'s criterion stayed green for eleven weeks.
+- [x] With `BIRKO_REQUIRE_LIVE` unset: all six pass, `Birko.Data.SQL.PostgreSQL.View.Tests` reporting
+      **15 visible skips** — the developer-without-Docker path stays usable.
+- [x] CI cross-check, which is the one a local run cannot fake: the same PostgreSQL.View binary shows
+      **15 skipped locally and 0 skipped in CI**, where a server is reachable. The old code could not
+      produce that contrast, because it could not tell the two situations apart.
 
 ## Implementation plan
 
