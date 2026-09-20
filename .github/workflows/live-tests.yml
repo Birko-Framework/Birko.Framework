@@ -119,6 +119,50 @@ jobs:
           done
           exit $fail
 
+  # COSMOS: the vnext-preview image, in HTTP mode, chosen on measurement (TASK-480).
+  #
+  # The documented `:latest` Linux emulator does NOT work here and was tried first: 4.94 GB, and
+  # although ReadAccountAsync answered in 0.6 s, CreateDatabaseIfNotExistsAsync hung past 60 s every
+  # time. Reads worked while the first WRITE did not - which is why the readiness note below matters
+  # and why "the endpoint answers" is not the same claim as "the emulator works".
+  #
+  # vnext-preview: 2.31 GB, ready in ~15 s, full suite 61/61 in 3 s. PROTOCOL=http removes TLS
+  # altogether, so there is no self-signed certificate to install - the `:latest` image's cert failed
+  # with UntrustedRoot and Birko's Settings.GetCosmosClientOptions() exposes no HttpClientFactory or
+  # validation callback to work around it, deliberately (a product API must not grow a
+  # trust-anything switch to make a test pass).
+  #
+  # READINESS, stated honestly: `Gateway=OK` is the emulator's own composite self-check - it gates on
+  # PostgreSQL, the pgcosmos extension AND the gateway, so it is stronger than an HTTP 200. It is
+  # still a PROBE, not a real query, which this file's header warns against; issuing a real one from
+  # bash needs an HMAC-signed REST call. The suite itself is the real query, and it runs immediately
+  # after. If Cosmos ever goes flaky here, this comment is where to look first.
+  cosmos:
+    name: CosmosDB
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Start the Cosmos emulator
+        run: |
+          docker run -d --name cosmos -p 8081:8081 -e PROTOCOL=http             mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview
+          for i in $(seq 1 60); do
+            docker logs cosmos 2>&1 | grep -q 'Gateway=OK' && { echo "cosmos ready"; exit 0; }
+            sleep 5
+          done
+          echo "::error::cosmos never became ready"; docker logs cosmos 2>&1 | tail -30; exit 1
+
+      - name: Run CosmosDB suites
+        env:
+          # The emulator's publicly documented key - not a secret, and the same constant the offline
+          # suite already carries in source.
+          BIRKO_COSMOS_CONNECTION: 'AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=='
+          BIRKO_COSMOS_CONNECTION_MODE: Gateway
+        run: dotnet test tests/Birko.Data.CosmosDB.Tests --nologo -v q
+
   # UNVERIFIED FIXTURES (2026-09-18)
   # The three jobs below were written from the suites' env vars, NOT from a measured local run the
   # way sql/ and mongo/ were. Expect each to need one round of fixture debugging on its first

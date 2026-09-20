@@ -9,6 +9,7 @@ using Birko.Data.Models;
 using FluentAssertions;
 using Microsoft.Azure.Cosmos;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Birko.Data.CosmosDB.Tests;
 
@@ -23,11 +24,46 @@ namespace Birko.Data.CosmosDB.Tests;
 /// round-trips are neutralised and only genuine translation divergences surface. Shapes the provider rejects
 /// are caught and reported.
 ///
-/// Gated on <c>BIRKO_COSMOS_CONNECTION</c>; no-op pass when absent so CI stays green.
+/// Gated on <c>BIRKO_COSMOS_CONNECTION</c> (+ <c>BIRKO_COSMOS_CONNECTION_MODE=Gateway</c> for the
+/// emulator). Absent, it reports a skip to the test output; with <c>BIRKO_REQUIRE_LIVE</c> set, an
+/// absent server is a FAILURE.
+///
+/// ⚠ TASK-480: this line used to read "no-op pass when absent so CI stays green", and it was accurate
+/// — no workflow set the variable, there was no Cosmos job at all, and so this test had <b>never run
+/// in CI</b>. 27 filter shapes against the one provider with no hand-rolled parser, and zero of them
+/// were ever exercised. <see cref="CosmosSpanContainsTests"/> records the consequence: its defect went
+/// unnoticed precisely because the suite that would have caught it never ran. A comment that states
+/// the failure mode as the intent is how that survives review.
 /// </summary>
 public class CosmosFilterMatrixLiveTests
 {
     private const string ConnEnv = "BIRKO_COSMOS_CONNECTION";
+
+    private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
+
+    private readonly ITestOutputHelper _output;
+
+    public CosmosFilterMatrixLiveTests(ITestOutputHelper output) => _output = output;
+
+    /// <summary>The configured Cosmos connection string, or <c>null</c> after reporting a skip.</summary>
+    private string? ResolveConnection()
+    {
+        var conn = Environment.GetEnvironmentVariable(ConnEnv);
+        if (!string.IsNullOrWhiteSpace(conn))
+        {
+            return conn;
+        }
+
+        const string message = "SKIPPED: no live Cosmos. Set " + ConnEnv + " (and "
+                             + ModeEnv + "=Gateway for the emulator) to exercise this test; "
+                             + "set BIRKO_REQUIRE_LIVE to make its absence a failure.";
+        _output.WriteLine(message);
+        if (RequireLive)
+        {
+            throw new InvalidOperationException(message);
+        }
+        return null;
+    }
     private const string ModeEnv = "BIRKO_COSMOS_CONNECTION_MODE";
     private static readonly DateTime Base = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -106,9 +142,9 @@ public class CosmosFilterMatrixLiveTests
     [Fact]
     public async Task FilterShapes_MatchCompiledDelegateOracle()
     {
-        var conn = Environment.GetEnvironmentVariable(ConnEnv);
-        if (string.IsNullOrWhiteSpace(conn))
-            return; // opt-in live test — set BIRKO_COSMOS_CONNECTION to run it
+        var conn = ResolveConnection();
+        if (conn == null)
+            return;
 
         var dbName = "birko_matrixtest_" + Guid.NewGuid().ToString("N");
         // BIRKO_COSMOS_CONNECTION_MODE=Gateway is what makes the Docker emulator reachable — it serves
