@@ -29,21 +29,40 @@
 > it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays `in-progress`
 > with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-19 (`/tasks triage`, chained from `/tasks new TASK-471`/`TASK-472`). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-20 (`/tasks new TASK-479`/`TASK-480`). **Statuses and the priority breakdown were
+recounted from the files; the feature-drift block above was NOT re-measured in this pass** and carries
+its own 2026-09-19 dating. Run `/tasks triage` for a full refresh. **Do not hand-edit** — changes will
+be overwritten._
+
+> ⚠ **The previous refresh reported `review: 0` while four tasks were sitting in it**, and `todo: 157`
+> against an actual 159 before this pass added two. Both are the dashboard being older than the tree
+> rather than a miscount at the time — [[TASK-473]], [[TASK-474]], [[TASK-476]] and [[TASK-477]] all
+> closed to `review` on 2026-09-19 after it was generated. Verification debt that the snapshot is
+> supposed to surface is exactly what goes missing when a dashboard is not refreshed on close, so it is
+> recorded here rather than quietly corrected.
+
+## In review (verification debt — code done, human sign-off pending)
+
+| Task | Title |
+|---|---|
+| [[TASK-473]] | A consumer can declare a package OLDER than the framework, and nothing says so |
+| [[TASK-474]] | The vulnerability sweep has been skipping two thirds of the tree since the monorepo migration |
+| [[TASK-476]] | The four root helper scripts are PowerShell, and they do not run on Linux |
+| [[TASK-477]] | The cold-table probe generator did not run on Linux, and never produced one of its two outputs |
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 157   |
+| todo         | —     | —       | 161   |
 | in-progress  | 7     | 9       | 0     |
-| review       | —     | —       | 0     |
+| review       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 169   |
 | cancelled    | 0     | 0       | 4     |
 
-`todo` by priority: 32× P1 · 100× P2 · 25× P3.  
+`todo` by priority: 32× P1 · 103× P2 · 26× P3.  
 > ℹ Recounted from the files on each refresh rather than incremented — a breakdown that sums correctly
 > is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
 > one P3 short, while still totalling right). No P0 is open.
@@ -133,7 +152,7 @@ _None_
     - [ ] TASK-025 AwsSqsHealthCheck · FEATURE-008
 - **EPIC-010** Birko.Data.RavenDB — Index ergonomics — planned (0/1 tasks done)
   - [ ] TASK-028 Attribute-driven RavenDB index definitions (Option B) · FEATURE-010
-- **EPIC-011** Birko.Framework — Test coverage gaps — planned (0/7 tasks done)
+- **EPIC-011** Birko.Framework — Test coverage gaps — planned (0/9 tasks done)
   - [ ] TASK-052 Adopt a web unit-test runner for Birko.Web.* (migrate backport-smoke) · FEATURE-011
   - STORY-021 Redis-dependent tests — planned (0/2 done)
     - [ ] TASK-029 Birko.BackgroundJobs.Redis.Tests · FEATURE-011
