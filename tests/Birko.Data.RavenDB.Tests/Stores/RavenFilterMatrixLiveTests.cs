@@ -8,6 +8,7 @@ using Birko.Data.Models;
 using Birko.Data.RavenDB.Stores;
 using FluentAssertions;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Birko.Data.RavenDB.Tests.Stores;
 
@@ -21,11 +22,39 @@ namespace Birko.Data.RavenDB.Tests.Stores;
 /// eventually consistent (auto-index lag), so each shape query is retried until its result count reaches the
 /// oracle's or a timeout elapses, before comparing. Shapes the provider rejects are caught and reported.
 ///
-/// Gated on <c>BIRKO_RAVEN_URL</c> (e.g. <c>http://localhost:8080</c>); no-op pass when absent so CI stays green.
+/// Gated on <c>BIRKO_RAVEN_URL</c> (e.g. <c>http://localhost:8080</c>). Absent, it reports a skip to
+/// the test output; with <c>BIRKO_REQUIRE_LIVE</c> set, an absent server is a FAILURE. ⚠ TASK-479: this
+/// line used to read "no-op pass when absent so CI stays green", which described the defect as the
+/// design — a matrix suite that silently passes proves nothing about a single translation shape.
 /// </summary>
 public class RavenFilterMatrixLiveTests
 {
     private const string UrlEnv = "BIRKO_RAVEN_URL";
+
+    private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
+
+    private readonly ITestOutputHelper _output;
+
+    public RavenFilterMatrixLiveTests(ITestOutputHelper output) => _output = output;
+
+    /// <summary>The configured RavenDB endpoint, or <c>null</c> after reporting a skip.</summary>
+    private string? ResolveEndpoint()
+    {
+        var value = Environment.GetEnvironmentVariable(UrlEnv);
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        const string message = "SKIPPED: no live RavenDB. Set " + UrlEnv + " to exercise this test; "
+                             + "set BIRKO_REQUIRE_LIVE to make its absence a failure.";
+        _output.WriteLine(message);
+        if (RequireLive)
+        {
+            throw new InvalidOperationException(message);
+        }
+        return null;
+    }
     private static readonly DateTime Base = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     public enum Status { New, Active, Closed }
@@ -127,9 +156,9 @@ public class RavenFilterMatrixLiveTests
     [Fact]
     public async Task FilterShapes_MatchCompiledDelegateOracle()
     {
-        var url = Environment.GetEnvironmentVariable(UrlEnv);
-        if (string.IsNullOrWhiteSpace(url))
-            return; // opt-in live test — set BIRKO_RAVEN_URL (e.g. http://localhost:8080) to run it
+        var url = ResolveEndpoint();
+        if (url == null)
+            return;
 
         var dbName = "birko_matrixtest_" + Guid.NewGuid().ToString("N");
         var store = new AsyncRavenDBStore<FilterModel>(url, dbName);

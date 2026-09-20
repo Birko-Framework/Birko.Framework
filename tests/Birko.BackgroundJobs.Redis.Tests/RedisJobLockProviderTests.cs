@@ -5,6 +5,7 @@ using Birko.BackgroundJobs.Redis;
 using Birko.Redis;
 using FluentAssertions;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Birko.BackgroundJobs.Redis.Tests;
 
@@ -28,10 +29,38 @@ public class RedisJobLockProviderTests
 {
     private const string HostEnv = "BIRKO_REDIS_HOST";
 
-    private static RedisSettings? LiveSettings()
+    private readonly ITestOutputHelper _output;
+
+    public RedisJobLockProviderTests(ITestOutputHelper output) => _output = output;
+
+    private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
+
+    /// <summary>
+    /// The live settings, or <c>null</c> after reporting a skip.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ TASK-479: this used to return <c>null</c> in silence, and every caller answered it with a bare
+    /// <c>return;</c> — so with no server the suite reported <b>Passed</b>, not Skipped, and
+    /// <c>BIRKO_REQUIRE_LIVE</c> never saw it. That is the state <c>live-tests.yml</c>'s own header
+    /// forbids: <i>"a suite whose server never came up reports 'skipped' and the job goes green — a
+    /// broken fixture and a passing run then look identical."</i> The remark above about green meaning
+    /// nothing here was already true of this file in a second way.
+    /// </remarks>
+    private RedisSettings? LiveSettings()
     {
         var host = Environment.GetEnvironmentVariable(HostEnv);
-        if (string.IsNullOrWhiteSpace(host)) return null;
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            var message = $"SKIPPED: no live Redis. Set {HostEnv} to exercise this test; "
+                        + "set BIRKO_REQUIRE_LIVE to make its absence a failure.";
+            _output.WriteLine(message);
+            if (RequireLive)
+            {
+                throw new InvalidOperationException(message);
+            }
+            return null;
+        }
+
         return new RedisSettings(host, 6379, string.Empty, 0, false)
         {
             KeyPrefix = "birko:task232:" + Guid.NewGuid().ToString("N"),

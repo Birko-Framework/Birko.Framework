@@ -9,6 +9,7 @@ using Birko.Data.MongoDB.Stores;
 using FluentAssertions;
 using MongoDB.Driver;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Birko.Data.MongoDB.Tests.Stores;
 
@@ -22,11 +23,39 @@ namespace Birko.Data.MongoDB.Tests.Stores;
 /// serialization round-trip (DateTime/decimal/enum) is neutralised and only genuine translation divergences
 /// surface. Any shape the translator rejects is caught and reported (not silently swallowed).
 ///
-/// Gated on <c>BIRKO_MONGO_HOST</c> (e.g. <c>localhost</c>); no-op pass when absent so CI stays green.
+/// Gated on <c>BIRKO_MONGO_HOST</c> (e.g. <c>localhost</c>). Absent, it reports a skip to the test
+/// output; with <c>BIRKO_REQUIRE_LIVE</c> set, an absent server is a FAILURE. ⚠ TASK-479: this line
+/// used to read "no-op pass when absent so CI stays green", which described the defect as the design —
+/// a matrix suite that silently passes proves nothing about a single translation shape.
 /// </summary>
 public class MongoFilterMatrixLiveTests
 {
     private const string HostEnv = "BIRKO_MONGO_HOST";
+
+    private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
+
+    private readonly ITestOutputHelper _output;
+
+    public MongoFilterMatrixLiveTests(ITestOutputHelper output) => _output = output;
+
+    /// <summary>The configured MongoDB endpoint, or <c>null</c> after reporting a skip.</summary>
+    private string? ResolveEndpoint()
+    {
+        var value = Environment.GetEnvironmentVariable(HostEnv);
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        const string message = "SKIPPED: no live MongoDB. Set " + HostEnv + " to exercise this test; "
+                             + "set BIRKO_REQUIRE_LIVE to make its absence a failure.";
+        _output.WriteLine(message);
+        if (RequireLive)
+        {
+            throw new InvalidOperationException(message);
+        }
+        return null;
+    }
     private static readonly DateTime Base = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     public enum Status { New, Active, Closed }
@@ -105,9 +134,9 @@ public class MongoFilterMatrixLiveTests
     [Fact]
     public async Task FilterShapes_MatchCompiledDelegateOracle()
     {
-        var host = Environment.GetEnvironmentVariable(HostEnv);
-        if (string.IsNullOrWhiteSpace(host))
-            return; // opt-in live test — set BIRKO_MONGO_HOST (e.g. localhost) to run it
+        var host = ResolveEndpoint();
+        if (host == null)
+            return;
 
         var dbName = "birko_matrixtest_" + Guid.NewGuid().ToString("N");
         var store = new AsyncMongoDBStore<FilterModel>();

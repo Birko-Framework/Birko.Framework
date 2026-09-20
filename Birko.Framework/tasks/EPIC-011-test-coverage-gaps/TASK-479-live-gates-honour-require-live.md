@@ -72,13 +72,13 @@ suites that predate it: write the skip to `ITestOutputHelper` naming the variabl
 
 ## Acceptance criteria
 
-- [ ] Each of the 8 files above reports its skip to test output naming the variable that would opt it
+- [x] Each of the 8 files above reports its skip to test output naming the variable that would opt it
       in, instead of returning silently
-- [ ] Each honours `BIRKO_REQUIRE_LIVE`: a non-blank value turns an absent server into a failure
-- [ ] The 3 `Birko.Data.SQL.PostgreSQL.View.Tests` files honour it too — `Skip.IfNot` is kept for the
+- [x] Each honours `BIRKO_REQUIRE_LIVE`: a non-blank value turns an absent server into a failure
+- [x] The 3 `Birko.Data.SQL.PostgreSQL.View.Tests` files honour it too — `Skip.IfNot` is kept for the
       opt-out case, but a required run fails rather than skipping
-- [ ] `PostgreSqlViewRoundTripTests.cs:62` names `BIRKO_PG_HOST`, not `BIRKO_PG_TEST`
-- [ ] **Proven, not asserted:** for each affected job, a run with the gate variable unset and
+- [x] `PostgreSqlViewRoundTripTests.cs:62` names `BIRKO_PG_HOST`, not `BIRKO_PG_TEST`
+- [x] **Proven, not asserted:** for each affected job, a run with the gate variable unset and
       `BIRKO_REQUIRE_LIVE=1` fails, and the same run without `BIRKO_REQUIRE_LIVE` passes with visible
       skip lines. A fix that only changes green to green has not been demonstrated
 - [ ] `live-tests` is green end-to-end afterwards, with each affected suite's duration showing the
@@ -106,4 +106,86 @@ suites that predate it: write the skip to `ITestOutputHelper` naming the variabl
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-479` — leave empty until then._
+Drafted 2026-09-20 at `/tasks pick`. The gate shapes were surveyed first — there are **three**, not
+one, which is why this is a plan rather than a single sed:
+
+| shape | files | absent-server path |
+|---|---|---|
+| `LiveSettings()` returns `null`, callers `if (settings == null) return;` | BackgroundJobs.Redis ×2 | silent |
+| `static bool Server` / inline `IsNullOrWhiteSpace(host)`, callers `return;` | BackgroundJobs.SQL, MongoDB ×3, MongoDB.Views, RavenDB | silent |
+| `[SkippableFact]` + `Skip.IfNot(Server, …)` | PostgreSQL.View ×3 | visible skip |
+
+1. **Per suite, make the resolver report and refuse.** Add `RequireLive` (non-blank
+   `BIRKO_REQUIRE_LIVE`), write the skip line to `ITestOutputHelper` naming the variable that would opt
+   the run in, and throw `InvalidOperationException` when `RequireLive`. Several of these classes have
+   **no constructor at all** (`RedisJobLockProviderTests`, `MongoFilterMatrixLiveTests`,
+   `RavenFilterMatrixLiveTests`) — they need one to reach the output helper. Shape copied from
+   `Birko.Data.SQL.Providers.Tests/ProviderStoreFactoryTests.Resolve` and the twelve SQL suites.
+2. **The `[SkippableFact]` trio keeps `Skip.IfNot`** — an opt-out run must still skip visibly — with
+   the `RequireLive` throw placed *before* it, so a required run fails and an optional one skips.
+3. **Correct the comments that describe the defect as the design.** Three sit in the blast radius:
+   `MongoFilterMatrixLiveTests.cs:25` and `RavenFilterMatrixLiveTests.cs:24` both read *"no-op pass when
+   absent so CI stays green"*, and `PostgreSqlViewRoundTripTests.cs:62` still says `BIRKO_PG_TEST`.
+   (Cosmos carries the same sentence and belongs to [[TASK-480]] — do not touch it.)
+4. **Prove each guard can fail, per test project, before believing any of it.** With the gate variable
+   unset and `BIRKO_REQUIRE_LIVE=1` the suite must go **red**; with neither set it must pass and print
+   skip lines. A pass-to-pass diff demonstrates nothing, which is the whole lesson of [[TASK-042]].
+5. **CI.** `live-tests` green, with each affected suite'"'"'s duration showing the tests still ran.
+
+**Not doing: a shared test-helper project.** One producer would be the instinct, but the twelve SQL
+suites each carry their own copy today, so a shared helper is a different and larger change (new
+`.shproj`/`.projitems` plus registrations) than this task asks for, and it would leave the tree with
+two conventions mid-flight. Worth its own task if the duplication grows again.
+
+---
+
+## Outcome — 2026-09-20
+
+**11 files across 6 test projects.** Every affected project was measured **both ways**, because a
+pass-to-pass diff demonstrates nothing — the lesson [[TASK-042]] paid for:
+
+| project | no env | `BIRKO_REQUIRE_LIVE=1` |
+|---|---|---|
+| `Birko.BackgroundJobs.Redis.Tests` | 20 passed | **9 failed** / 11 passed |
+| `Birko.BackgroundJobs.SQL.Tests` | 25 passed | **3 failed** / 22 passed |
+| `Birko.Data.MongoDB.Tests` | 97 passed | **9 failed** / 88 passed |
+| `Birko.Data.MongoDB.Views.Tests` | 12 passed | **2 failed** / 10 passed |
+| `Birko.Data.RavenDB.Tests` | 67 passed | **16 failed** / 51 passed |
+| `Birko.Data.SQL.PostgreSQL.View.Tests` | 7 passed, **15 skipped** | **15 failed** / 7 passed |
+
+The Mongo and Raven "on" counts exceed this task's own gate counts because those projects already had
+files honouring `BIRKO_REQUIRE_LIVE` (Raven 2 of 3, Mongo 1 of 5) — they were already failing and are
+included here rather than subtracted, since the column is the project's behaviour, not this task's
+diff. 0 nullable warnings across all six.
+
+### Three gate shapes, not one — which is why this was planned rather than swept
+
+Surveyed before editing: `LiveSettings() → null` (Redis ×2), a bare `bool Server` or an inline host
+read answered by `return;` (BackgroundJobs.SQL, MongoDB ×3, MongoDB.Views, RavenDB), and
+`[SkippableFact]` + `Skip.IfNot` (PostgreSQL.View ×3). **Three of the classes had no constructor at
+all** — `RedisJobLockProviderTests`, `MongoFilterMatrixLiveTests`, `RavenFilterMatrixLiveTests` — so
+they could not reach `ITestOutputHelper` to report a skip and had to be given one.
+
+### ⚠ The `SkippableFact` trio was the interesting case, and it is not the same defect
+
+Those three reported **Skipped**, visibly — honest, unlike the silent returns. They are still fixed,
+because the workflow's claim is about the **job**, not the line: `live-tests.yml` sets
+`BIRKO_REQUIRE_LIVE=1` so *"a broken fixture and a passing run"* cannot look identical, and a green job
+built on 15 skips is exactly that. The ordering is deliberate — the throw fires first for a required
+run, `Skip.IfNot` still works for a developer without a server, and the `no env` column above proves
+both halves.
+
+### ⚠ The defect was written down as the design in three places, not one
+
+`MongoFilterMatrixLiveTests.cs:25` and `RavenFilterMatrixLiveTests.cs:24` both carried
+*"no-op pass when absent so CI stays green"* — the same sentence [[TASK-480]]'s Cosmos suite carries.
+A comment that states the failure mode as the intent is what stops the next reader treating it as one.
+All three lines are corrected here except Cosmos's, which belongs to that task.
+`PostgreSqlViewRoundTripTests.cs:62`'s `BIRKO_PG_TEST` fossil is fixed too.
+
+### Still open
+
+The last criterion — `live-tests` green end-to-end with each suite's duration showing the tests still
+run — needs the CI run. **A suite that now throws when its server is missing is exactly the suite that
+turns a fixture problem into a red job**, which is the point, so the run is the proof rather than a
+formality.

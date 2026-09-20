@@ -37,7 +37,36 @@ public class PostgreSqlFilteredWriteTests : IDisposable
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres";
     private static string Database => Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview";
 
-    private static bool Server => !string.IsNullOrWhiteSpace(Host);
+    private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
+
+    /// <summary>
+    /// Whether a live PostgreSQL is configured — throwing instead when the run REQUIRES one.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ TASK-479: <c>Skip.IfNot(Server, …)</c> alone reports <b>Skipped</b>, which is honest and
+    /// visible — unlike the silent <c>return;</c> gates that task found elsewhere — but it still leaves
+    /// the JOB green. <c>live-tests.yml</c> declares <c>BIRKO_REQUIRE_LIVE=1</c> precisely so a container
+    /// that never came up cannot be mistaken for a clean run, and a skip is exactly that mistake.
+    /// Ordering matters: the throw fires first for a required run, and the skip still works for a
+    /// developer without a server.
+    /// </remarks>
+    private static bool Server
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Host))
+            {
+                return true;
+            }
+            if (RequireLive)
+            {
+                throw new InvalidOperationException(
+                    "SKIPPED: no live PostgreSQL. Set BIRKO_PG_HOST to exercise this test; "
+                    + "BIRKO_REQUIRE_LIVE is set, so its absence is a failure.");
+            }
+            return false;
+        }
+    }
 
     private static PostgreSqlSettings Settings() => new(Host!, Database, User, Password) { Port = Port };
 

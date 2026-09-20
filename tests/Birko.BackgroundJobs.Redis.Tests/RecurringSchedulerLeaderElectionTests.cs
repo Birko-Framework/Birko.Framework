@@ -9,6 +9,7 @@ using Birko.Redis;
 using Birko.Time;
 using FluentAssertions;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Birko.BackgroundJobs.Redis.Tests;
 
@@ -35,10 +36,36 @@ public class RecurringSchedulerLeaderElectionTests
 
     private readonly IDateTimeProvider _clock = new SystemDateTimeProvider();
 
-    private static RedisSettings? LiveSettings()
+    private readonly ITestOutputHelper _output;
+
+    public RecurringSchedulerLeaderElectionTests(ITestOutputHelper output) => _output = output;
+
+    private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
+
+    /// <summary>
+    /// The live settings, or <c>null</c> after reporting a skip.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ TASK-479: the remark above says there is <i>"nothing here that could honestly run offline"</i> —
+    /// and yet with no server this returned <c>null</c> in silence and all three tests reported
+    /// <b>Passed</b>. A suite that cannot honestly run offline must not report success offline, which is
+    /// what <c>BIRKO_REQUIRE_LIVE</c> now enforces.
+    /// </remarks>
+    private RedisSettings? LiveSettings()
     {
         var host = Environment.GetEnvironmentVariable(HostEnv);
-        if (string.IsNullOrWhiteSpace(host)) return null;
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            var message = $"SKIPPED: no live Redis. Set {HostEnv} to exercise this test; "
+                        + "set BIRKO_REQUIRE_LIVE to make its absence a failure.";
+            _output.WriteLine(message);
+            if (RequireLive)
+            {
+                throw new InvalidOperationException(message);
+            }
+            return null;
+        }
+
         return new RedisSettings(host, 6379, string.Empty, 0, false)
         {
             KeyPrefix = "birko:task237:" + Guid.NewGuid().ToString("N"),

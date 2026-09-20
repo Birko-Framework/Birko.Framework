@@ -58,8 +58,12 @@ namespace Birko.Data.SQL.PostgreSQL.View.Tests;
 /// </para>
 ///
 /// <para>
-/// <b>Gated on a live server, deliberately not skipped silently.</b> Set <c>BIRKO_PG_TEST</c> to a
-/// connection-ish descriptor (see <see cref="Server"/>) to run these. The reproduction that closed the task
+/// <b>Gated on a live server, deliberately not skipped silently.</b> Set <c>BIRKO_PG_HOST</c> (plus
+/// optional <c>_PORT</c> / <c>_USER</c> / <c>_PASSWORD</c> / <c>_DB</c>, see <see cref="Server"/>) to
+/// run these. ⚠ TASK-479: this line named <c>BIRKO_PG_TEST</c> until 2026-09-20 — a fossil of the
+/// packed <c>host;db;user;pass</c> convention TASK-042 removed. The code below has read the per-field
+/// group all along, so the prose was the only thing wrong, and it was wrong in the direction that
+/// sends a reader to export a variable nothing consults. The reproduction that closed the task
 /// used EDB's portable binaries — no Docker, no admin, no service:
 /// <code>
 /// initdb -D data -U birko -A md5 --pwfile=pw.txt -E UTF8
@@ -77,7 +81,36 @@ public class PostgreSqlViewRoundTripTests : IDisposable
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres";
     private static string Database => Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview";
 
-    private static bool Server => !string.IsNullOrWhiteSpace(Host);
+    private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
+
+    /// <summary>
+    /// Whether a live PostgreSQL is configured — throwing instead when the run REQUIRES one.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ TASK-479: <c>Skip.IfNot(Server, …)</c> alone reports <b>Skipped</b>, which is honest and
+    /// visible — unlike the silent <c>return;</c> gates that task found elsewhere — but it still leaves
+    /// the JOB green. <c>live-tests.yml</c> declares <c>BIRKO_REQUIRE_LIVE=1</c> precisely so a container
+    /// that never came up cannot be mistaken for a clean run, and a skip is exactly that mistake.
+    /// Ordering matters: the throw fires first for a required run, and the skip still works for a
+    /// developer without a server.
+    /// </remarks>
+    private static bool Server
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Host))
+            {
+                return true;
+            }
+            if (RequireLive)
+            {
+                throw new InvalidOperationException(
+                    "SKIPPED: no live PostgreSQL. Set BIRKO_PG_HOST to exercise this test; "
+                    + "BIRKO_REQUIRE_LIVE is set, so its absence is a failure.");
+            }
+            return false;
+        }
+    }
 
     private static PostgreSqlSettings Settings() => new(Host!, Database, User, Password) { Port = Port };
 

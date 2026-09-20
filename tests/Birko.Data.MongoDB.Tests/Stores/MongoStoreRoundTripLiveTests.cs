@@ -7,6 +7,7 @@ using Birko.Data.MongoDB.Models;
 using Birko.Data.MongoDB.Stores;
 using FluentAssertions;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Birko.Data.MongoDB.Tests.Stores;
 
@@ -28,6 +29,39 @@ public class MongoStoreRoundTripLiveTests
 {
     private const string HostEnv = "BIRKO_MONGO_HOST";
 
+    private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
+
+    private readonly ITestOutputHelper _output;
+
+    public MongoStoreRoundTripLiveTests(ITestOutputHelper output) => _output = output;
+
+    /// <summary>
+    /// The configured MongoDB host, or <c>null</c> after reporting a skip.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ TASK-479: each test used to read the variable inline and answer an absent one with a bare
+    /// <c>return;</c>, so with no server this file reported <b>Passed</b> rather than Skipped and
+    /// <c>BIRKO_REQUIRE_LIVE</c> never saw it — the state <c>live-tests.yml</c>'s header forbids,
+    /// because it makes a broken fixture and a real run look identical.
+    /// </remarks>
+    private string? ResolveHost()
+    {
+        var host = Environment.GetEnvironmentVariable(HostEnv);
+        if (!string.IsNullOrWhiteSpace(host))
+        {
+            return host;
+        }
+
+        const string message = "SKIPPED: no live MongoDB. Set " + HostEnv + " to exercise this test; "
+                             + "set BIRKO_REQUIRE_LIVE to make its absence a failure.";
+        _output.WriteLine(message);
+        if (RequireLive)
+        {
+            throw new InvalidOperationException(message);
+        }
+        return null;
+    }
+
     public class SyncDoc : MongoDBModel { public string? Name { get; set; } }
 
     public class AsyncDoc : AbstractModel { public string? Name { get; set; } }
@@ -35,8 +69,8 @@ public class MongoStoreRoundTripLiveTests
     [Fact]
     public void Sync_store_round_trips_a_MongoDBModel()
     {
-        var host = Environment.GetEnvironmentVariable(HostEnv);
-        if (string.IsNullOrWhiteSpace(host)) return;
+        var host = ResolveHost();
+        if (host == null) return;
 
         var store = new MongoDBStore<SyncDoc>();
         store.SetSettings(new Settings(host, "birko_task214_sync_" + Guid.NewGuid().ToString("N")));
@@ -62,8 +96,8 @@ public class MongoStoreRoundTripLiveTests
     [Fact]
     public async Task Async_store_round_trips_an_AbstractModel()
     {
-        var host = Environment.GetEnvironmentVariable(HostEnv);
-        if (string.IsNullOrWhiteSpace(host)) return;
+        var host = ResolveHost();
+        if (host == null) return;
 
         var store = new AsyncMongoDBStore<AsyncDoc>();
         store.SetSettings(new Settings(host, "birko_task214_async_" + Guid.NewGuid().ToString("N")));

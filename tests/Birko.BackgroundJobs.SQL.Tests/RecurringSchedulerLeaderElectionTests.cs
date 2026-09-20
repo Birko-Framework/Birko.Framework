@@ -11,6 +11,7 @@ using Birko.Data.SQL.PostgreSQL.Stores;
 using Birko.Time;
 using FluentAssertions;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Birko.BackgroundJobs.SQL.Tests;
 
@@ -43,7 +44,40 @@ public class RecurringSchedulerLeaderElectionTests
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres";
     private static string Database => Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview";
 
-    private static bool Server => !string.IsNullOrWhiteSpace(Host);
+    private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
+
+    private readonly ITestOutputHelper _output;
+
+    public RecurringSchedulerLeaderElectionTests(ITestOutputHelper output) => _output = output;
+
+    /// <summary>
+    /// Whether a live PostgreSQL was configured; reports a skip when not.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ TASK-479: this was a bare <c>bool</c> and every caller answered it with <c>if (!Server)
+    /// return;</c>, so with no server all three tests reported <b>Passed</b> rather than Skipped and
+    /// <c>BIRKO_REQUIRE_LIVE</c> never saw them. The remark above turns on leader election being
+    /// genuinely contended on a real server — a claim that offline silence cannot support.
+    /// </remarks>
+    private bool Server
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Host))
+            {
+                return true;
+            }
+
+            const string message = "SKIPPED: no live PostgreSQL. Set BIRKO_PG_HOST to exercise this test; "
+                                 + "set BIRKO_REQUIRE_LIVE to make its absence a failure.";
+            _output.WriteLine(message);
+            if (RequireLive)
+            {
+                throw new InvalidOperationException(message);
+            }
+            return false;
+        }
+    }
 
     private static PasswordSettings Settings() =>
         new PostgreSqlSettings(Host!, Database, User, Password) { Port = Port };
