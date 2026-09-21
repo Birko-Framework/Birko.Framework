@@ -222,4 +222,15 @@ jobs:
           if grep -q "COULD NOT BE AUDITED" out.txt; then
             echo "::error::some projects could not be audited - unknown is not clean"; exit 1
           fi
-          echo "whole tree swept"
+          # FINDINGS WARN, THEY DO NOT FAIL - and that is an ownership decision, not leniency.
+          # This sweep deliberately covers consumers (TASK-230: a framework-only sweep "produced a
+          # fix that looked complete and was not"), so most rows are a consumer's package to bump,
+          # not the framework's. Failing this job on them would make a repo red for something it
+          # cannot fix, which is how a job gets ignored. But passing in silence is the
+          # green-while-broken shape this workflow exists to remove, so they become an annotation on
+          # the run summary. Known consumer-owned rows are tracked in TASK-475.
+          found=$(grep -oE "^[0-9]+ finding\(s\)" out.txt | grep -oE "[0-9]+" | head -1)
+          if [ -n "$found" ] && [ "$found" -gt 0 ]; then
+            echo "::warning::audit-dependencies: $found vulnerable package(s) across the family - see the step log"
+          fi
+          echo "whole tree swept: $got projects, ${found:-0} finding(s)"

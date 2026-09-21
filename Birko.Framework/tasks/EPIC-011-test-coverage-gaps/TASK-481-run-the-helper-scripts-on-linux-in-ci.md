@@ -235,3 +235,34 @@ exactly **6** are inherited by Birko.Sandbox: `Microsoft.Data.SqlClient`, `Micro
 
 **The consumer checkout was restored** after each local experiment and verified clean
 (`grep -c Npgsql` → 0) — `Birko.Sandbox` is a real repo on this machine, not a fixture.
+
+---
+
+## The local sweep finished: 16m41s, 249 projects, 4 findings (2026-09-21)
+
+Two things came out of it, and one of them changed the workflow.
+
+### ⚠ "248" was already wrong, two days after it was measured
+
+The tree has **249** `.csproj` files under the declared buckets, not the 248 [[TASK-474]] recorded on
+2026-09-19. One project was added in between. **A hard-coded 248 would have failed on this task's
+first nightly run** — and a constant that fails for a legitimate reason gets deleted, not corrected,
+which is how an assertion quietly becomes a comment. The step computes the expected count from the
+tree with the script's own selection rule (`*.csproj` per bucket, excluding `bin`/`obj`), so the
+number is never written down anywhere.
+
+### ⚠ Findings WARN, they do not fail — an ownership decision, not leniency
+
+The sweep found **4, two of them High**: `MessagePack 2.5.192` in `DraCode.AppHost` and
+`Symbio.AppHost`, and `Microsoft.OpenApi 2.0.0` in `DraCode.KoboldLair.Server`/`.Tests`. All four are
+already on file in [[TASK-475]] and **all four are consumer-owned** — the framework declares
+`MessagePack 3.*`, which is unaffected.
+
+The job as first written passed in silence with two High advisories present, which is the
+green-while-broken shape this whole workflow exists to remove. But failing it would make the
+framework repo red for packages it cannot bump, and a job that is red for someone else's reason gets
+ignored. So findings raise a `::warning::` on the run summary and the job stays green. Both halves
+are deliberate and the reasoning is in the file.
+
+`16m41s` also confirms the split was right: on push this would have added ~17 minutes to every
+change touching a script.
