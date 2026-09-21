@@ -7,7 +7,7 @@ status: review
 priority: P2
 assignee: ai
 created: 2026-09-19
-depends-on: []
+depends-on: [TASK-481]
 blocks: []
 related: [TASK-267, TASK-457, TASK-473, TASK-474, TASK-475]
 findings: []

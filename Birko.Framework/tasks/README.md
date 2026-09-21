@@ -48,7 +48,9 @@ be overwritten._
 | [[TASK-476]] | The four root helper scripts are PowerShell, and they do not run on Linux |
 | [[TASK-477]] | The cold-table probe generator did not run on Linux, and never produced one of its two outputs |
 
-Both are **blocked on a Linux run**, not on anyone's attention. Their `## Human test plan` was
+Both are **blocked on a Linux run**, not on anyone's attention — now tracked as [[TASK-481]], which
+puts all five helper scripts on `ubuntu-latest` so the sign-off stops needing a human who owns the
+right OS. Their `## Human test plan` was
 **missing entirely** when they were closed to `review` on 2026-09-19 — written 2026-09-20, naming the
 outstanding step, because an absent plan and an unrun one are indistinguishable afterwards.
 [[TASK-473]] and [[TASK-474]] left this list the same day: their plans read `N/A — mechanical`, so per
@@ -60,14 +62,14 @@ outstanding step, because an absent plan and an unrun one are indistinguishable 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 159   |
+| todo         | —     | —       | 160   |
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 2     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 173   |
 | cancelled    | 0     | 0       | 4     |
 
-`todo` by priority: 32× P1 · 101× P2 · 26× P3.  
+`todo` by priority: 32× P1 · 102× P2 · 26× P3.  
 > ℹ Recounted from the files on each refresh rather than incremented — a breakdown that sums correctly
 > is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
 > one P3 short, while still totalling right). No P0 is open.
