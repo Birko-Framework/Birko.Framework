@@ -316,3 +316,30 @@ a failure.
 
 `audit-declarations` still carries the weakest assertion in the file — [[TASK-482]] — and the
 whole-family vulnerability audit still needs every consumer and stays human-run.
+
+---
+
+## ⚠ A FOURTH one, found by the workflow failing on itself (2026-09-21)
+
+Run 35603346855 went red at the generator step, and the generator was **perfect** — both profiles,
+200 and 60 types, unchanged, on Linux. The failure was my own workflow interfering with itself:
+
+```
+##[error]regeneration changed the committed output:
+ Birko.Framework/audit-declarations.cs | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+```
+
+**Zero insertions, zero deletions** — a **file mode** change, `100644 → 100755`, left by the
+`chmod +x audit-declarations.cs` in the *shebang* step **four steps earlier**. The bare
+`git diff --quiet` swept the whole tree and reported a sibling step's side effect as this step's
+failure.
+
+That is [[CLAUDE-conventions]] rule 61 — *"A test teardown that reaches process-wide state damages a
+PARALLEL sibling, and the victim is never the file that caused it"* — arriving in a workflow instead
+of a test suite. The diff is now scoped to the two generated paths, because **an assertion should
+look only at what it is asserting about**.
+
+Note the shape: this one WAS caught by something going red, unlike the three above — but it pointed
+at the wrong file, and taking the red at face value would have sent someone into the generator,
+which was faultless.

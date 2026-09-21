@@ -157,8 +157,22 @@ jobs:
             echo "::error::files created with a literal backslash in the name:"; echo "$junk"; exit 1
           fi
           # Byte-identical regeneration, including the blank line PostgreSQL has and SQLite does not.
-          if ! git diff --quiet; then
-            echo "::error::regeneration changed the committed output:"; git diff --stat; exit 1
+          #
+          # SCOPED TO THE GENERATED FILES, and that is not tidiness. A bare `git diff --quiet` here
+          # failed on `audit-declarations.cs | 0` - zero insertions, zero deletions, i.e. a FILE MODE
+          # change (100644 -> 100755) left behind by the `chmod +x` in the shebang step four steps
+          # earlier. The generator was perfect; a sibling step's side effect was being reported as
+          # this step's failure. CLAUDE-conventions.md rule 61, in a workflow instead of a test:
+          # "the victim is never the file that caused it." An assertion should look only at what it
+          # is asserting about.
+          if ! git diff --quiet -- \
+               tests/Birko.Data.SQL.SqLite.Tests/ColdTableProbeModels.g.cs \
+               tests/Birko.Data.SQL.PostgreSQL.Tests/PgColdTableProbeModels.g.cs; then
+            echo "::error::regeneration changed the committed output:"
+            git diff --stat -- \
+              tests/Birko.Data.SQL.SqLite.Tests/ColdTableProbeModels.g.cs \
+              tests/Birko.Data.SQL.PostgreSQL.Tests/PgColdTableProbeModels.g.cs
+            exit 1
           fi
           echo "both profiles written, no backslash names, regeneration byte-identical"
 
