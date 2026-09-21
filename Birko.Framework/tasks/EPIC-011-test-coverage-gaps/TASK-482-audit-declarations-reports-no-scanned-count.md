@@ -3,7 +3,7 @@ id: TASK-482
 parent: EPIC-011
 feature: null
 # status — one of: todo, in-progress, review (code done, sign-off pending), blocked, done, cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-21
@@ -52,14 +52,14 @@ precisely so a zero is legible. This one is the odd sibling out.
 
 ## Acceptance criteria
 
-- [ ] The summary reports the number of projects **scanned** and the number of `.projitems` read,
+- [x] The summary reports the number of projects **scanned** and the number of `.projitems` read,
       distinctly from the count of offending projects
-- [ ] The run **refuses** rather than reports clean when it scanned nothing — the same shape as
+- [x] The run **refuses** rather than reports clean when it scanned nothing — the same shape as
       `audit-dependencies`' bucket guard, whose message is *"A partial sweep is not a clean sweep"*
-- [ ] Verified by pointing `--root` at an empty directory: it must fail, not print a clean summary
-- [ ] Re-proven against the real tree: the scanned count matches the `Birko.*` project directories
+- [x] Verified by pointing `--root` at an empty directory: it must fail, not print a clean summary
+- [x] Re-proven against the real tree: the scanned count matches the `Birko.*` project directories
       actually present, and the existing clean verdict is unchanged
-- [ ] [[TASK-481]]'s `helper-scripts.yml` step for this script replaces its placeholder assertion
+- [x] [[TASK-481]]'s `helper-scripts.yml` step for this script replaces its placeholder assertion
       (currently only "a summary line was printed") with the scanned count, and the comment naming
       this task is removed
 
@@ -76,3 +76,40 @@ N/A — fully covered by the empty-root check in the acceptance criteria.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-482` — leave empty until then._
+
+---
+
+## Outcome — 2026-09-21
+
+`audit-declarations.cs` now reports its denominator and refuses an empty sweep.
+
+```
+=== Scanned: 173 projects, 1421 source files, 1706 using-declarations
+=== Undeclared: 0 (project,package) pairs across 0 projects
+```
+
+| state | before | after |
+|---|---|---|
+| real tree | `0 pairs across 0 projects` — indistinguishable from nothing | denominator + **unchanged** clean verdict |
+| a `Birko.*` dir with no projitems and no sources | **exit 0, reported clean** | **exit 1**, refuses |
+| empty root | unhandled exception, exit 127, stack trace | exit 1, clean message |
+
+### ⚠ The existing guard was real but aimed one level too high
+
+The script already threw when it found **no `Birko.*` directories** (`:104`). That is not the
+dangerous case. The dangerous one is directories that *do* resolve while the **file** enumeration
+inside them comes back empty — which is exactly what a wrong path expression produces, because
+`Paths.EnumerateFiles` answers a missing directory with an empty sequence **by design**, its own
+comment saying *"callers that need absence to be loud check first."* This caller did not. Measured:
+a hollow root sailed past the directory guard and printed a clean summary.
+
+So the new guard is on what was actually **read**, not on what was found, and the old throw became a
+`Report.Unknown` + `return 1` matching `audit-dependencies`' wording — *"A partial sweep is not a
+clean sweep"* — rather than a stack trace.
+
+### The CI assertion is now real
+
+[[TASK-481]]'s step no longer just checks that a summary line appeared. It asserts
+`scanned == (count of .projitems in the tree)` — **computed, not frozen**, independently confirmed at
+**173** by `find` — and that at least 100 source files were read, so a *shrinking* scan is visible
+before it ever reaches zero. The comment naming this task is gone.

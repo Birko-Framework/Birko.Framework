@@ -102,24 +102,42 @@ var rows = new List<(string Project, string Package, string Via)>();
 
 var projectDirectories = Directory.EnumerateDirectories(root, "Birko.*").OrderBy(d => d, StringComparer.Ordinal).ToArray();
 if (projectDirectories.Length == 0)
-    throw new InvalidOperationException($"No Birko.* project directories under {root} — wrong root, not a clean result.");
+{
+    Report.Unknown($"No Birko.* project directories under {root} — wrong root, not a clean result.");
+    Report.Unknown("    A partial sweep is not a clean sweep. Fix the root and re-run.");
+    return 1;
+}
+
+// THE DENOMINATOR (TASK-482). Until this existed the summary reported only the count of OFFENDING
+// projects, so "0 pairs across 0 projects" was what BOTH a clean sweep and a sweep of nothing
+// printed — and the sweep-of-nothing is exactly what a wrong path expression produces here, because
+// Paths.EnumerateFiles answers a missing directory with an empty sequence by design ("callers that
+// need absence to be loud check first" — this caller did not). TASK-476 hand-fixed ten path
+// expressions for Linux; this is the check that would have noticed if one were still wrong.
+var scannedProjects = 0;
+var sourceFilesRead = 0;
+var namespacesSeen = 0;
 
 foreach (var directory in projectDirectories)
 {
     var projitems = Directory.EnumerateFiles(directory, "*.projitems").OrderBy(f => f, StringComparer.Ordinal).FirstOrDefault();
     if (projitems is null) continue;
 
+    scannedProjects++;
     var declared = File.ReadAllText(projitems);
 
     var usings = new HashSet<string>(StringComparer.Ordinal);
     foreach (var source in Paths.EnumerateFiles(directory, "*.cs"))
     {
+        sourceFilesRead++;
         foreach (var line in File.ReadLines(source))
         {
             var match = usingPattern.Match(line);
             if (match.Success) usings.Add(match.Groups[3].Value);
         }
     }
+
+    namespacesSeen += usings.Count;
 
     foreach (var ns in usings.OrderBy(u => u, StringComparer.Ordinal))
     {
@@ -154,6 +172,17 @@ var distinct = rows
 
 var projectCount = distinct.Select(r => r.Project).Distinct().Count();
 
+// A sweep that read nothing is not a clean sweep. The directory guard above cannot catch this:
+// the directories resolve, and it is the FILE enumeration inside them that comes back empty.
+if (scannedProjects == 0 || sourceFilesRead == 0)
+{
+    Report.Unknown($"Swept {projectDirectories.Length} Birko.* directories under {root} and read "
+                 + $"{scannedProjects} projitems / {sourceFilesRead} source files.");
+    Report.Unknown("    A partial sweep is not a clean sweep — 0 here means the paths are wrong, not that the tree is clean.");
+    return 1;
+}
+
+Report.Heading($"=== Scanned: {scannedProjects} projects, {sourceFilesRead} source files, {namespacesSeen} using-declarations");
 Report.Say($"=== Undeclared: {distinct.Length} (project,package) pairs across {projectCount} projects");
 foreach (var group in distinct.GroupBy(r => r.Package).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal))
     Report.Say($"{group.Key,-45} {group.Count()}");

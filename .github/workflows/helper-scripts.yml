@@ -70,13 +70,24 @@ jobs:
         working-directory: birko/Framework/Birko.Framework
         run: |
           dotnet run audit-declarations.cs | tee out.txt
-          # WEAKEST ASSERTION HERE, DELIBERATELY. This script reports the count of OFFENDING
-          # projects, never of SCANNED ones, so "0 pairs across 0 projects" is what both a clean
-          # sweep and a sweep of nothing print. That is this repo's own recurring defect living
-          # inside one of its checkers; TASK-482 adds the scanned count, and this step gets a real
-          # assertion then. Until then: the summary line must at least be produced.
-          grep -qE "^=== Undeclared: [0-9]+ .project,package. pairs" out.txt || {
-            echo "::error::audit-declarations printed no summary"; exit 1; }
+          # Assert the DENOMINATOR, added by TASK-482. Before it, the summary reported only the
+          # count of OFFENDING projects, so "0 pairs across 0 projects" was what both a clean sweep
+          # and a sweep of nothing printed - and a sweep of nothing is exactly what a wrong path
+          # expression produces on Linux, where Paths.EnumerateFiles answers a missing directory
+          # with an empty sequence. The script now also refuses outright on an empty sweep; this
+          # asserts the number it reports, so a shrinking scan is visible before it reaches zero.
+          scanned=$(grep -oE "^=== Scanned: [0-9]+ projects" out.txt | grep -oE "[0-9]+" | head -1)
+          sources=$(grep -oE "[0-9]+ source files" out.txt | grep -oE "[0-9]+" | head -1)
+          echo "scanned: ${scanned:-<none>} projects, ${sources:-<none>} source files"
+          # Computed, not frozen - the tree grows. Every Birko.* directory holding a .projitems.
+          expected=$(find "$GITHUB_WORKSPACE/birko/Framework" -maxdepth 2 -name '*.projitems' \
+                     -not -path '*/bin/*' -not -path '*/obj/*' | wc -l)
+          if [ "${scanned:-0}" != "$expected" ]; then
+            echo "::error::scanned ${scanned:-0} projects, tree has $expected with a .projitems"; exit 1
+          fi
+          if [ "${sources:-0}" -lt 100 ]; then
+            echo "::error::only ${sources:-0} source files read - the path handling is wrong"; exit 1
+          fi
 
       - name: audit-consumer-versions finds a real consumer
         working-directory: birko/Framework/Birko.Framework
