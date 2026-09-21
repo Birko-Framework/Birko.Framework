@@ -183,8 +183,15 @@ jobs:
   # SEPARATE JOB, AND NOT ON PUSH. Measured locally: still running past 12 minutes, because it
   # restores every swept project to ask NuGet for vulnerability rows. Its own header calls it "a
   # PERIODIC check, not a build setting", so it runs on the schedule and on demand.
+  # ⚠ THE NAME IS NARROW ON PURPOSE. This job checks out ONE consumer (Birko.Sandbox), so it sweeps
+  # the framework's tests plus that one - measured 170 projects, against 249 for the real
+  # whole-family sweep on a developer machine with all 8 consumers checked out. On 2026-09-21 this
+  # job reported 0 findings while the family had 4, two of them High, in DraCode and Symbio
+  # (tracked in TASK-475). A job called "Dependency sweep" going green would say the family is
+  # clean, and it is not: what this proves is that the SCRIPT works on Linux and sweeps everything
+  # it is given. The whole-family audit needs every consumer and stays periodic and human-run.
   sweep:
-    name: Dependency sweep (nightly)
+    name: Dependency sweep (framework + Sandbox only)
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -233,4 +240,8 @@ jobs:
           if [ -n "$found" ] && [ "$found" -gt 0 ]; then
             echo "::warning::audit-dependencies: $found vulnerable package(s) across the family - see the step log"
           fi
-          echo "whole tree swept: $got projects, ${found:-0} finding(s)"
+          # Say the SCOPE in the success line, not just the verdict - this sweep covers the
+          # framework plus one consumer, and a bare "clean" would be read as family-wide.
+          consumers=$(find "$root/Consumers" -maxdepth 1 -mindepth 1 -type d | wc -l)
+          echo "swept $got projects across the framework + $consumers consumer(s): ${found:-0} finding(s)"
+          echo "NOT the whole-family audit - that needs every consumer checked out (see TASK-475)"

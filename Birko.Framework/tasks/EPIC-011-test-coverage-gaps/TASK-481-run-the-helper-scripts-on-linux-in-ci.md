@@ -3,7 +3,7 @@ id: TASK-481
 parent: EPIC-011
 feature: null
 # status — one of: todo, in-progress, review (code done, sign-off pending), blocked, done, cancelled
-status: in-progress
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-21
@@ -62,20 +62,20 @@ task exists to stop a script reporting a clean result it did not earn.
 
 ## Acceptance criteria
 
-- [ ] A CI workflow runs all five scripts on `ubuntu-latest`, on push and on a schedule
-- [ ] `audit-dependencies` asserts **248** projects (or whatever the count is *then*, read from the
+- [x] A CI workflow runs all five scripts on `ubuntu-latest`, on push and on a schedule
+- [x] `audit-dependencies` asserts **248** projects (or whatever the count is *then*, read from the
       tree rather than hard-coded — a frozen number becomes wrong the day a project is added, and
       then gets deleted rather than fixed)
-- [ ] `install-skills` is verified to produce a working symlink whose target is readable
-- [ ] `gen-cold-table-probes` regenerates and the job asserts a clean `git diff` but for the
+- [x] `install-skills` is verified to produce a working symlink whose target is readable
+- [x] `gen-cold-table-probes` regenerates and the job asserts a clean `git diff` but for the
       provenance line
-- [ ] **`audit-consumer-versions` either gets consumers to look at, or is explicitly excluded with
+- [x] **`audit-consumer-versions` either gets consumers to look at, or is explicitly excluded with
       the reason recorded in the workflow.** A run that reports 0 imports and passes is worse than
       not running it — decide which, in the open
-- [ ] **Proven it can fail:** each assertion is demonstrated red before being believed (mutate the
+- [x] **Proven it can fail:** each assertion is demonstrated red before being believed (mutate the
       tree, or point a script at a deliberately broken fixture). The `audit-*` scripts each carry
       *"verify the check can fail before believing it"* in their own headers
-- [ ] [[TASK-476]] and [[TASK-477]] close to `done` on the strength of the green run, and their
+- [x] [[TASK-476]] and [[TASK-477]] close to `done` on the strength of the green run, and their
       `## Human test plan` sections record that CI now owns those steps
 
 ## Out of scope
@@ -266,3 +266,53 @@ are deliberate and the reasoning is in the file.
 
 `16m41s` also confirms the split was right: on push this would have added ~17 minutes to every
 change touching a script.
+
+---
+
+## Closed — 2026-09-21. Both jobs green; and the sweep's NAME was the last defect
+
+Run [35602525346](https://github.com/Birko-Framework/Birko.Framework/actions/runs/35602525346):
+`Helper scripts on Linux` **31s**, `Dependency sweep` **5m38s**. Every assertion produced real
+output rather than an exit code:
+
+```
+shebang OK
+Sandbox imports: 207
+=== 1 finding(s): 1 BELOW, 0 PINNED, 0 EQUAL, ...
+mutation caught - the check can fail
+symlinks created: 4
+every symlink resolves
+expecting 170 projects / script swept 170 / whole tree swept
+```
+
+### ⚠ The sweep job found 0 while the family had 4, and its name hid that
+
+CI checks out **one** consumer, so it swept **170** projects. The same script on a developer machine
+with all 8 checked out sweeps **249** and reports **4 findings, 2 High** (`MessagePack 2.5.192`,
+`Microsoft.OpenApi 2.0.0` — [[TASK-475]]). A nightly job called **"Dependency sweep"** going green
+says the family is clean. It is not.
+
+So the job is now **`Dependency sweep (framework + Sandbox only)`**, and its success line prints the
+consumer count and states outright that this is not the whole-family audit. **Nothing about the
+checking changed — only the claim.** That is the same defect as the three this session started
+with, in its purest form: the check was honest, the label was not.
+
+### Three times in one task, a green step was not testing what it claimed
+
+Worth listing together, because none was caught by anything going red:
+
+1. **The mutation aimed at a package the consumer does not inherit.** The step went red and my first
+   reading blamed the script; the script was correct. A mutation at the wrong target tests nothing
+   and looks exactly like a broken checker.
+2. **The mutation's assertion matched the package NAME**, which appears in a clean run too. Tightened
+   to the verdict (`Npgsql.*BELOW`) — it could have passed with no finding at all.
+3. **`--check` never writes**, so it could not see [[TASK-477]]'s defect, which was the write path.
+   A check-only step would have gone green against the exact bug it stood in for.
+
+Each was found by asking *"what would this step have done against the original defect?"* — never by
+a failure.
+
+### What this did NOT prove
+
+`audit-declarations` still carries the weakest assertion in the file — [[TASK-482]] — and the
+whole-family vulnerability audit still needs every consumer and stays human-run.

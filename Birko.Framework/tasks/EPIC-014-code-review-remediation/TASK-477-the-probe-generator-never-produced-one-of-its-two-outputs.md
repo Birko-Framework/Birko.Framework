@@ -3,7 +3,7 @@ id: TASK-477
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-19
@@ -121,9 +121,23 @@ than approximated.
 the same way on 2026-09-20. The outstanding step is a Linux run, which is the platform the task exists
 for and the one it has never been executed on.
 
-- [ ] On Linux, run the generator for both profiles. Expected: both `PgColdTableProbeModels.g.cs` and
+- [x] On Linux, run the generator for both profiles. Expected: both `PgColdTableProbeModels.g.cs` and
       the SQLite target are written, **no** file is created whose name contains a literal backslash,
       and a failure exits non-zero.
-- [ ] Regenerate over the committed outputs and `git diff`. Expected: byte-identical but for the
+- [x] Regenerate over the committed outputs and `git diff`. Expected: byte-identical but for the
       provenance line — **including the blank line PostgreSQL has and SQLite does not**, which is the
       detail a naive regeneration gets wrong.
+
+### Signed off by CI — 2026-09-21 ([[TASK-481]])
+
+`helper-scripts.yml` now runs the generator on `ubuntu-latest` on every change and nightly, so this
+no longer needs a human with a Linux box.
+
+⚠ **The first version of that step could not have signed this off.** It ran only
+`--check`, which regenerates to memory and never calls `File.WriteAllText` — while this task's defect
+*was* the write path. It would have gone green against the exact bug. The step now runs the real
+generator too and asserts: both outputs non-empty (this task's second defect was
+`PgColdTableProbeModels.g.cs` never being produced at all), **no file anywhere with a literal
+backslash in its name** (legal on Linux, which is why the original failed silently), and `git diff`
+clean so regeneration is byte-identical — including the blank line PostgreSQL has and SQLite does
+not. Green on run 35602525346.

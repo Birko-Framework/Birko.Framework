@@ -3,7 +3,7 @@ id: TASK-476
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-19
@@ -188,16 +188,31 @@ the step that is genuinely outstanding rather than back-dating an `N/A` the work
 **this task is about Linux, and it has only ever been exercised on Windows.** § Out of scope above
 already says as much about the shebang.
 
-- [ ] On a Linux box (or the `ubuntu-latest` runner), from the repo root, run all four:
+- [x] On a Linux box (or the `ubuntu-latest` runner), from the repo root, run all four:
       `dotnet run audit-declarations.cs`, `audit-dependencies.cs`, `audit-consumer-versions.cs`,
       `install-skills.cs`. Expected: each completes and none reports a path it could not open.
-- [ ] `audit-dependencies` reports **248** projects, not 81 — the [[TASK-474]] bucket regression is what
+- [x] `audit-dependencies` reports **248** projects, not 81 — the [[TASK-474]] bucket regression is what
       this port was most likely to reintroduce, and it is invisible on Windows, where a backslash
       resolves either way.
-- [ ] `audit-consumer-versions` reports a **non-zero** import count for a consumer known to import
+- [x] `audit-consumer-versions` reports a **non-zero** import count for a consumer known to import
       Birko. Its own header names the alternative as a defect in the script: *"a consumer you know
       imports Birko and that shows 0 is a defect in this script, not a clean result."*
-- [ ] `install-skills` creates a working **symlink** on Linux (the junction path is Windows-only), and
+- [x] `install-skills` creates a working **symlink** on Linux (the junction path is Windows-only), and
       an edit to a skill here is visible through it immediately.
-- [ ] `#!/usr/bin/env dotnet` makes each of the four directly executable — the one item § Out of scope
+- [x] `#!/usr/bin/env dotnet` makes each of the four directly executable — the one item § Out of scope
       explicitly left unverified.
+
+### Signed off by CI — 2026-09-21 ([[TASK-481]])
+
+All five run on `ubuntu-latest` (run 35602525346). The shebang executes, `audit-consumer-versions`
+reports **207** projitems for a real consumer rather than the 0 the unported version produced on
+Linux, `install-skills` creates **4 symlinks** that each resolve to a readable `SKILL.md` (the
+junction path is Windows-only and had never run), and `gen-cold-table-probes` writes both profiles
+with no backslash-named file.
+
+⚠ **The "248, not 81" step was superseded by something stronger, and the number was already wrong.**
+The tree is **249** today — one project added since [[TASK-474]] measured 248 on 2026-09-19 — and CI,
+which checks out one consumer rather than eight, legitimately sweeps **170**. A constant would have
+failed on the first nightly run for an entirely correct reason, and a constant that fails for a
+correct reason gets deleted rather than fixed. CI instead asserts **swept == computed-from-the-tree**,
+which catches the bucket-drop this step was written for at any tree size: 170 expected, 170 swept.
