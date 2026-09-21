@@ -130,12 +130,37 @@ jobs:
             exit 1; }
           echo "mutation caught - the check can fail"
 
-      - name: gen-cold-table-probes --check
+      # TWO INVOCATIONS, AND THE SECOND IS THE ONE THAT MATTERS.
+      #
+      # `--check` compares in memory and never calls File.WriteAllText - so it cannot see TASK-477's
+      # actual defect, which was the WRITE PATH: the PowerShell original built the output path with a
+      # literal backslash, wrote a junk file named `..\ColdTableProbeModels.g.cs` into the wrong
+      # directory, left the real output untouched, and exited 0. A check-only step would have gone
+      # green against exactly that. So the real generator runs too, and the tree is inspected after.
+      - name: gen-cold-table-probes (staleness, then the real write path)
         working-directory: birko/Framework/Birko.Framework
-        # --check regenerates to memory and fails if the committed output is stale, so this needs no
-        # git diff. TASK-477: on Linux the unported version wrote a file with a literal backslash in
-        # its name, left the real output untouched, and exited 0.
-        run: dotnet run tools/gen-cold-table-probes.cs -- --check
+        run: |
+          dotnet run tools/gen-cold-table-probes.cs -- --check
+          dotnet run tools/gen-cold-table-probes.cs
+          cd "$GITHUB_WORKSPACE/birko/Framework"
+          for f in tests/Birko.Data.SQL.SqLite.Tests/ColdTableProbeModels.g.cs \
+                   tests/Birko.Data.SQL.PostgreSQL.Tests/PgColdTableProbeModels.g.cs; do
+            if [ ! -s "$f" ]; then
+              echo "::error::$f was not written - PgColdTableProbeModels.g.cs is the one the original never produced at all"
+              exit 1
+            fi
+          done
+          # The junk file has a backslash IN ITS NAME, which is legal on Linux and is why the
+          # original failed silently rather than erroring.
+          junk=$(find . -name '*\\*' -not -path './.git/*' | head -5)
+          if [ -n "$junk" ]; then
+            echo "::error::files created with a literal backslash in the name:"; echo "$junk"; exit 1
+          fi
+          # Byte-identical regeneration, including the blank line PostgreSQL has and SQLite does not.
+          if ! git diff --quiet; then
+            echo "::error::regeneration changed the committed output:"; git diff --stat; exit 1
+          fi
+          echo "both profiles written, no backslash names, regeneration byte-identical"
 
       - name: install-skills creates a working symlink
         working-directory: birko/Framework/Birko.Framework
