@@ -196,3 +196,42 @@ All seven `run:` blocks extracted from the YAML and checked with `bash -n`; the 
 dedents to column 0 correctly under the block scalar. `--help` confirmed to print `Usage:`.
 `audit-declarations` defaults `--root` to one level above the script and `audit-consumer-versions` to
 two, which the CI layout satisfies without a flag — passed explicitly anyway where it matters.
+
+---
+
+## ⚠ First CI run was RED, and the mutation step was wrong — not the script (2026-09-21)
+
+Run [35601971967](https://github.com/Birko-Framework/Birko.Framework/actions/runs/35601971967). Four
+steps passed, including both that carry TASK-476's actual Linux claim: the shebang executed, and
+`audit-consumer-versions` found `Birko.Sandbox` with **207 projitems** rather than the 0 the unported
+version produced on Linux. The mutation step failed.
+
+**My first reading was that the script had a defect. It does not.** Reproduced locally: the planted
+`Microsoft.Azure.Cosmos 2.0.0` really was in the file, the audit really did report
+*"No consumer declares a framework-owned package"*, and that answer is **correct** — `Birko.Sandbox`
+does not import `Birko.Data.CosmosDB.projitems`, and the ownership rule only applies to a package a
+consumer **inherits**. A consumer declaring a package it does not inherit is its own business.
+
+**A mutation aimed at the wrong target tests nothing, and looks exactly like a broken checker.** The
+step now asserts its precondition first — the probe csproj must import the owning projitems — and
+fails with an instruction to pick another package if that stops being true.
+
+The package is now **`Npgsql 9.0.0` against the framework's `10.*`**, which is the real shape
+[[TASK-473]] found sitting in Symbio's build for weeks. Verified locally before pushing, which is
+what should have happened the first time:
+
+```
+=== 1 finding(s): 1 BELOW, 0 PINNED, 0 EQUAL, ...
+Birko.Sandbox  Birko.Sandbox.csproj  Npgsql  Include=9.0.0  10.* (Birko.Data.SQL.PostgreSQL)  BELOW
+```
+
+The assertion also tightened from the package NAME to the **verdict** (`Npgsql.*BELOW`): "Npgsql"
+appears in a clean run's output too, so the original grep could have passed without a finding.
+
+**The intersection was computed, not guessed** — of the framework's 24 versioned declarations,
+exactly **6** are inherited by Birko.Sandbox: `Microsoft.Data.SqlClient`, `Microsoft.Data.Sqlite`,
+`Microsoft.Extensions.DependencyInjection.Abstractions`, `MySqlConnector`, `Newtonsoft.Json`,
+`Npgsql`. Any of the six would work; the precondition names the one in use.
+
+**The consumer checkout was restored** after each local experiment and verified clean
+(`grep -c Npgsql` → 0) — `Birko.Sandbox` is a real repo on this machine, not a fixture.

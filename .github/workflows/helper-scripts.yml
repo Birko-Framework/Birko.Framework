@@ -102,20 +102,32 @@ jobs:
           if [ -z "$probe" ]; then
             echo "::error::no BirkoSrc-importing csproj to mutate"; exit 1
           fi
+          # PRECONDITION, and it is not ceremony. The rule only applies to a package the consumer
+          # INHERITS - it must import the projitems that OWNS the declaration. The first version of
+          # this step planted Microsoft.Azure.Cosmos, which Birko.Sandbox does not import, so the
+          # audit correctly reported nothing and the step failed while both the script and the tree
+          # were fine. A mutation aimed at the wrong target tests nothing; assert the target first.
+          grep -q 'Birko.Data.SQL.PostgreSQL.projitems' "$probe" || {
+            echo "::error::$probe no longer imports Birko.Data.SQL.PostgreSQL - pick another package"
+            echo "::error::(it must be one the consumer INHERITS, or the rule does not apply to it)"
+            exit 1; }
           echo "mutating $probe"
           cp "$probe" "$probe.bak"
-          # Microsoft.Azure.Cosmos is declared 3.* by Birko.Data.CosmosDB.projitems; 2.0.0 is below.
+          # Npgsql is declared 10.* by Birko.Data.SQL.PostgreSQL.projitems; 9.0.0 is below it - and
+          # is the real shape TASK-473 found in Symbio, sitting in the build for weeks.
           python3 - "$probe" <<'PY'
           import sys
           p = sys.argv[1]
           s = open(p, encoding='utf-8').read()
-          s = s.replace('</Project>', '  <ItemGroup><PackageReference Include="Microsoft.Azure.Cosmos" Version="2.0.0" /></ItemGroup>\n</Project>', 1)
+          s = s.replace('</Project>', '  <ItemGroup><PackageReference Include="Npgsql" Version="9.0.0" /></ItemGroup>\n</Project>', 1)
           open(p, 'w', encoding='utf-8').write(s)
           PY
           dotnet run audit-consumer-versions.cs -- --root "$GITHUB_WORKSPACE/birko" | tee mutated.txt || true
           mv "$probe.bak" "$probe"
-          grep -qi "Microsoft.Azure.Cosmos" mutated.txt || {
-            echo "::error::planted a BELOW declaration and the audit did not report it"; exit 1; }
+          # Assert the VERDICT, not just the package name: "Npgsql" appears in a clean run too.
+          grep -qE "Npgsql.*BELOW" mutated.txt || {
+            echo "::error::planted Npgsql 9.0.0 below the framework's 10.* and the audit did not report BELOW"
+            exit 1; }
           echo "mutation caught - the check can fail"
 
       - name: gen-cold-table-probes --check
