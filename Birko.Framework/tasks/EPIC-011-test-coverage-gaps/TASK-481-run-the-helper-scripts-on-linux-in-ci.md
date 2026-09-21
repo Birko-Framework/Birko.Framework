@@ -3,7 +3,7 @@ id: TASK-481
 parent: EPIC-011
 feature: null
 # status — one of: todo, in-progress, review (code done, sign-off pending), blocked, done, cancelled
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-09-21
@@ -97,4 +97,102 @@ human step to verify, it has failed its own premise.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-481` — leave empty until then._
+Drafted 2026-09-21 at `/tasks pick`, after reading all five scripts and running three of them
+locally. **The open question resolved a third way, which neither branch of the acceptance criterion
+anticipated** — see step 2.
+
+1. **A new `helper-scripts.yml`**, not a job bolted onto `live-tests.yml`. These need no server, and
+   the live workflow's path filter is about `Birko.Data.*`; this one triggers on the scripts,
+   `tools/AuditCommon/**` and itself, plus a schedule.
+
+2. **⚠ The consumers problem: a FIXTURE consumer, not "clone them" and not "exclude it".** The
+   acceptance criterion offered two branches and both are wrong:
+   - *Exclude it* reproduces the exact narrowing [[TASK-230]] measured as harmful — a sweep scoped to
+     one tree *"produced a fix that looked complete and was not"* — and `audit-dependencies` would
+     not run at all, because it **declares** `{root}/Consumers` and stops when a declared bucket is
+     missing. That guard is [[TASK-474]]'s fix; CI must satisfy it, never weaken it.
+   - *Clone the consumers* needs credentials for private repos and makes this job fail whenever an
+     unrelated repo moves.
+
+   So CI builds the layout the scripts contract for: the checkout at `<root>/Framework`, and
+   `<root>/Consumers/` holding **one committed fixture consumer** — a csproj that imports a real
+   `.projitems` through `$(BirkoSrc)` and declares one package **deliberately below** the framework's.
+   That gives `audit-consumer-versions` something it must find, so a zero is a **failure** rather than
+   a shrug, which is what its own header demands. **This does not make the CI job "the audit"**: the
+   real vulnerability sweep is whole-family and stays periodic and human-run. The workflow says so.
+
+3. **Assert counts, not exit codes**, because every recorded Linux defect here is a silent-wrong-
+   answer: a backslash that does not resolve, a bucket that vanishes, a `bin|obj` filter that never
+   matches. Exit 0 is what all of them produced.
+   - `audit-dependencies` — assert the swept project count against the tree, **computed, not frozen**.
+   - `audit-consumer-versions` — assert the fixture consumer is found with a **non-zero** projitems
+     count and its planted BELOW row is reported.
+   - `gen-cold-table-probes --check` — already fails on stale output; no git diff needed.
+   - `install-skills` — assert a **symlink** whose target is readable (the junction path is
+     Windows-only and is the half that has never run).
+   - `audit-declarations` — see step 5.
+
+4. **Prove each assertion red before believing it.** Each `audit-*` header carries *"verify the check
+   can fail before believing it"*. Done by mutation against the fixture, not the real tree.
+
+5. **⚠ `audit-declarations` cannot be asserted as written, and that is a finding about the checker.**
+   Its summary is `Undeclared: 0 (project,package) pairs across 0 projects`, where the count is of
+   **offending** projects — it never reports how many it **scanned**. So a run that swept nothing
+   prints exactly what a clean run prints. That is this repo's own recurring defect living inside one
+   of its checkers. **Spawn it** — adding a scanned count changes the script's output, and this task's
+   § Out of scope forbids absorbing it. Until then, assert this one by mutation only.
+
+---
+
+## Outcome — 2026-09-21
+
+`.github/workflows/helper-scripts.yml`: a `scripts` job (the four fast ones, on push + schedule) and
+a separate `sweep` job (`audit-dependencies`, **not** on push).
+
+### ⚠ The open question resolved a THIRD way, and better than the plan's answer
+
+The acceptance criterion offered "get consumers to look at" or "exclude it, with the reason". The
+plan chose a third — a synthetic fixture consumer — and that was also wrong, because
+**`build-and-test.yml` already checks out a real consumer into exactly this layout**: the framework
+at `birko/Framework` and `Birko.Sandbox` at `birko/Consumers/Birko.Sandbox`, with
+`token: ${{ secrets.BIRKO_CI_TOKEN || github.token }}`. The shape the scripts contract for was
+already an established CI pattern in this repo. Reused rather than reinvented, and a **real**
+consumer means a zero import count is a genuine failure signal instead of a fixture's tautology.
+
+**Three answers were considered and the one that shipped was in none of the task's branches.** Worth
+recording: the acceptance criteria were written before reading `build-and-test.yml`.
+
+### What each step asserts, and why it is a COUNT
+
+Every Linux defect these scripts carried exited 0 — `set -e` would have caught none of them:
+
+| step | assertion |
+|---|---|
+| shebang | `./audit-declarations.cs --help` prints `Usage:` — the `#!/usr/bin/env dotnet` line has never executed |
+| `audit-consumer-versions` | `Birko.Sandbox` reports a **non-zero** projitems count (207 locally) |
+| ↳ mutation | a `Microsoft.Azure.Cosmos 2.0.0` planted below the framework's `3.*` **is reported**, then reverted |
+| `gen-cold-table-probes --check` | regenerates to memory, fails on stale output — no `git diff` needed |
+| `install-skills` | a **symlink** is created and every one resolves to a readable `SKILL.md` |
+| `audit-dependencies` | swept count **equals** a count computed from the tree, and nothing is `COULD NOT BE AUDITED` |
+
+### ⚠ audit-dependencies is not on push, on measurement
+
+Started locally and **still running past 25 minutes** — it restores every swept project to ask NuGet
+for vulnerability rows. Its own header already says it is *"a PERIODIC check, not a build setting"*,
+so it runs nightly and on demand, with a 45-minute timeout. Putting it on push would have added ~25
+minutes to every push that touches a script.
+
+### ⚠ One script could not be asserted, and that is now [[TASK-482]]
+
+`audit-declarations` reports the count of **offending** projects and never of **scanned** ones, so a
+clean sweep and a sweep of nothing print the same line. Its CI step carries the weakest assertion in
+the file — "a summary line was printed" — with a comment naming the task and the line to replace.
+**Spawned rather than absorbed:** adding a scanned count changes the script's output, which § Out of
+scope forbids here.
+
+### Pre-flight before pushing
+
+All seven `run:` blocks extracted from the YAML and checked with `bash -n`; the embedded heredoc
+dedents to column 0 correctly under the block scalar. `--help` confirmed to print `Usage:`.
+`audit-declarations` defaults `--root` to one level above the script and `audit-consumer-versions` to
+two, which the CI layout satisfies without a flag — passed explicitly anyway where it matters.

@@ -63,7 +63,7 @@ outstanding step, because an absent plan and an unrun one are indistinguishable 
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
 | todo         | —     | —       | 160   |
-| in-progress  | 7     | 9       | 0     |
+| in-progress  | 7     | 9       | 1     |
 | review       | —     | —       | 2     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 173   |
