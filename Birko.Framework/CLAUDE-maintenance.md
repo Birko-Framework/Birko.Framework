@@ -15,6 +15,34 @@ When making major changes to a project, update its CLAUDE.md to reflect:
 - Updated interfaces or abstract class signatures
 - New conventions or important notes
 
+## Breaking changes in a shared project
+
+⚠ **A `.projitems` shared project has no package identity, so a breaking change in one reaches
+consumers with NO signal at all** — nothing to bump, no `NU1605`, no restore warning. The first a
+consumer learns of it is a compile error, whenever they next happen to build. [[TASK-473]] measured
+this property from the security side; this is the same property from the API side.
+
+So the signal has to be written by hand. **A breaking change to a shared project's public or
+abstract surface requires a `CHANGELOG.md` entry** naming:
+
+- the type and member,
+- the **old and new signatures**, spelled out,
+- the migration — what an implementer must edit, and whether the compiler will point at it.
+
+Updating the project's `README.md` is *not* sufficient and never was: it is a file inside the
+framework, and the people who need the warning are outside it.
+
+**Measured, [[TASK-483]]:** `6b4e374b` (2026-07-09) changed `Tool.ExecuteAsync`'s abstract signature
+to take a `CancellationToken`. The framework migrated its own 10 implementers the same day. It
+appeared in no changelog. **DraCode's 41 tool classes have not compiled since**, and nobody noticed
+for 2½ months — the framework's CI builds one consumer, `Birko.Sandbox`, which implements no `Tool`.
+BardStudio, the other implementer, migrated fine. One of two followed; the other was never told.
+
+⚠ **Do not "fix" this by softening the break.** The rejected alternative was a virtual overload
+forwarding to the old abstract, which compiles everywhere and **discards the token** — rule 51's
+"silent no-op wearing a parameter's name". A compile error naming every file is the cheapest failure
+mode available; the defect was the silence, not the breakage.
+
 ## Integration model — commit to `main`, one commit per repo
 
 

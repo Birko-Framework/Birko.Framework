@@ -51,7 +51,7 @@ be overwritten._
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 178   |
+| done         | 1     | 23      | 179   |
 | cancelled    | 0     | 0       | 4     |
 
 `todo` by priority: 32× P1 · 99× P2 · 26× P3.  

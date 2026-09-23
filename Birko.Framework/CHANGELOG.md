@@ -4,6 +4,40 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-07-09 — BREAKING: `Tool.ExecuteAsync` and `ILlmProvider` take a `CancellationToken`
+
+*Recorded 2026-09-23 by [[TASK-483]]. This entry is late by 2½ months — `6b4e374b` shipped the change
+with no changelog entry, and a shared project carries no package version to signal it, so consumers
+learned about it only by failing to compile. The protocol that should have caught this is now in
+[CLAUDE-maintenance.md](CLAUDE-maintenance.md) § Breaking changes in a shared project.*
+
+`Birko.AI.Contracts/Tools/Tool.cs`:
+
+```csharp
+// before
+public abstract Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input);
+// after
+public abstract Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input,
+    CancellationToken cancellationToken = default);
+```
+
+**The default value does not make this optional.** An override of an abstract method must match the
+full signature, so **every** `Tool` subclass must change, and the compiler reports it as
+`CS0534` + `CS0115` naming each file.
+
+**Migration** — add the parameter to each `override`, and pass the token to anything awaited inside:
+
+```csharp
+public override async Task<string> ExecuteAsync(string workingDirectory,
+    Dictionary<string, object> input, CancellationToken cancellationToken = default)
+```
+
+Ignoring the token compiles and is a legitimate first step for a tool that does no cancellable work;
+threading it is the point for anything doing file, network or database I/O. `Birko.AI`'s own 9 tools
+(`47955695`) and BardStudio's `DJTools.cs` are worked examples.
+
+**Known unmigrated:** DraCode, 41 classes (its TASK-077 § Out of scope).
+
 ## 2026-09-19 — A consumer can ship a package older than the framework, and NuGet's own guard cannot see it
 
 [[TASK-473]] + [[TASK-474]], both from one Symbio build failure on a Linux box. The reported errors were

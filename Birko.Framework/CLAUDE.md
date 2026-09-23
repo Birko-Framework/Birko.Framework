@@ -238,6 +238,31 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A shared project cannot announce a breaking change, so someone has to (2026-09-23)
+
+[[TASK-483]]. `Tool.ExecuteAsync` gained a `CancellationToken` on its **abstract** signature in
+`6b4e374b` (2026-07-09). The framework migrated its own 10 implementers the same day and told nobody
+else. DraCode's **41 tool classes have not compiled since** — `41 × CS0534 + 41 × CS0115` — and it
+took 2½ months and an unrelated advisory hunt to notice. Three things worth carrying:
+
+- **⚠ The break was RIGHT; keep the abstract signature.** The tempting fix — a virtual
+  three-argument overload forwarding to the old two-argument abstract — compiles everywhere and
+  **discards the token**. The run loop would pass a token believing execution could be cancelled
+  while tools did uncancellable file, network and database I/O. That is rule 51's *"silent no-op
+  wearing a parameter's name"*. **A compile error naming all 41 files is the cheapest failure mode
+  available**, and keeping consumers compiling is not worth a parameter that does nothing.
+- **⚠ A `.projitems` shared project has NO package identity, so a breaking change carries no
+  signal** — nothing to bump, no `NU1605`, no restore warning. [[TASK-473]] measured that property
+  from the security side; this is the same property from the API side, and it means the warning must
+  be written by hand or it does not exist. The protocol is now in
+  [CLAUDE-maintenance.md](CLAUDE-maintenance.md) § Breaking changes in a shared project: a
+  `CHANGELOG.md` entry naming the member, both signatures, and the migration. A README update is not
+  a substitute — it is a file inside the framework, and the people who need the warning are outside
+  it.
+- **The migration was never hard, which is the point.** BardStudio — the other consumer implementing
+  `Tool` — did it without difficulty. One of two followed; the other was simply never told.
+
+
 
 ### A live suite that invents its own server gate never runs in CI (2026-09-20)
 
