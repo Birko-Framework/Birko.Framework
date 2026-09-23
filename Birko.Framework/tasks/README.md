@@ -47,14 +47,14 @@ be overwritten._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 158   |
+| todo         | —     | —       | 157   |
 | in-progress  | 7     | 9       | 0     |
 | review       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 177   |
+| done         | 1     | 23      | 178   |
 | cancelled    | 0     | 0       | 4     |
 
-`todo` by priority: 32× P1 · 100× P2 · 26× P3.  
+`todo` by priority: 32× P1 · 99× P2 · 26× P3.  
 > ℹ Recounted from the files on each refresh rather than incremented — a breakdown that sums correctly
 > is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
 > one P3 short, while still totalling right). No P0 is open.

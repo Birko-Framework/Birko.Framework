@@ -3,7 +3,7 @@ id: TASK-475
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-19
@@ -139,3 +139,56 @@ that wants judgement.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-475` — leave empty until then._
+
+---
+
+## Closed — 2026-09-23. Re-measured, and one claim above was wrong
+
+**The deliverable of this task is the report, and § Scope says so explicitly** — *"the framework's
+part is to surface them… this task therefore ends at the report plus the three routes above"*, with
+`## Out of scope` naming *"Fixing any of the 6"*. That is done, and the `Tmds.DBus.Protocol` third
+was resolved on 2026-09-19 by floating Avalonia to `11.*`. Closing it rather than leaving a finished
+report open as `todo`.
+
+### Re-measured 2026-09-23 — all four remaining findings are still live
+
+Checked directly per project rather than by re-running the 17-minute sweep:
+
+| Project | Advisory | Still present |
+|---|---|---|
+| `Symbio.AppHost` | `MessagePack` 2.5.192 High | yes |
+| `DraCode.AppHost` | `MessagePack` 2.5.192 High | yes |
+| `DraCode.KoboldLair.Server` | `Microsoft.OpenApi` 2.0.0 High | yes |
+| `DraCode.KoboldLair.Tests` | `Microsoft.OpenApi` 2.0.0 High | yes |
+
+### ⚠ "A **direct** declaration" was wrong, and it was the basis of a cost estimate
+
+§ The other two calls `Microsoft.OpenApi` *"a **direct** declaration in `DraCode.KoboldLair.Server`…
+the cheapest of the three to fix and the only one nobody has an excuse for."* **No csproj or props in
+DraCode declares it.** `dotnet list --include-transitive` resolves it through
+**`Microsoft.AspNetCore.OpenApi 10.0.0`**. So it is not a one-line version bump and the "no excuse"
+framing does not hold — it is the same shape as the other two, a transitive nobody chose.
+
+Corrected rather than quietly dropped, because the error was load-bearing: it ranked this finding as
+the cheap one, which is how a remedy gets planned without being priced.
+
+### The chains, measured
+
+```
+Aspire.Hosting.AppHost 13.2.4 -> Aspire.Hosting 13.2.4 -> StreamJsonRpc 2.22.23 -> MessagePack 2.5.192
+Microsoft.AspNetCore.OpenApi 10.0.0 -> Microsoft.OpenApi 2.0.0
+```
+
+`Aspire 13.2.4` is already recent, so **a top-level bump may not clear MessagePack** — which has to
+be probed, not assumed: the framework's own remediation note says *"check the RESOLVED transitive,
+not the top-level number"*, and [[TASK-230]] recorded `Microsoft.Data.Sqlite 10.0.0` being newer and
+**worse** than `9.0.19`. If no bump clears it, a transitive pin is the fallback, exactly as the
+`Tmds.DBus.Protocol` third was solved in `Latent` before anyone noticed.
+
+### What is still owed, and by whom
+
+All four are **consumer-owned**, in `Consumers/DraCode` and `Consumers/Symbio` — separate repos with
+their own task trees. Neither is reachable from this repo's CI: [[TASK-481]]'s nightly sweep checks
+out **one** consumer (`Birko.Sandbox`) and therefore reports 0 findings while these 4 are live, which
+is why that job is named *"framework + Sandbox only"*. **Nothing in this repo will notice if they go
+unfixed**, which is the argument for filing them where they will be worked.
