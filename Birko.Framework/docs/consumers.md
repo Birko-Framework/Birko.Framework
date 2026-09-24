@@ -3,11 +3,12 @@
 Birko Framework is consumed by several projects via `.projitems` shared project imports. This document tracks which Birko components each consumer uses.
 
 > ℹ **Lifecycle, recorded 2026-09-19.** **Symbio is the successor product to FisData.Stock.** The
-> five `dev.azure.com/FisData/Stock` repositories are being retired, and **Affiliate** is being
-> transformed to use Symbio as its backend rather than continuing as an independent stack. Both are
-> therefore **out of scope for workspace hygiene** — their uncommitted and unpushed state is expected
-> and should not be reported as debt — and neither needs cloning on a new machine. They are the only
-> Azure DevOps remotes in the family, so a checkout that skips them needs GitHub auth only.
+> five `dev.azure.com/FisData/Stock` repositories are being retired, so they are **out of scope for
+> workspace hygiene** — their uncommitted and unpushed state is expected and should not be reported as
+> debt — and they need no cloning on a new machine. They are the only Azure DevOps remotes in the
+> family, so a checkout that skips them needs GitHub auth only. **Affiliate** is *planned* to move onto
+> Symbio as its backend **after Symbio v1** (see § Affiliate); until then it is an active, independent
+> stack on GitHub (`BirkoWorks/Affiliate`) and is in scope like any other consumer.
 >
 > Provisional: no retirement date is set, and the sections below are left intact rather than deleted
 > so the component inventory survives the wind-down.
@@ -186,9 +187,11 @@ Standalone WebSocket client library.
 
 ## Affiliate
 
-> ⚠ **Being re-platformed onto Symbio (2026-09-19)** — Affiliate is not retired, but will consume
-> Symbio as its backend instead of running its own stack. Its `$(BirkoSrc)` wiring is expected to
-> survive; the Birko component list below will not.
+> ℹ **Planned: re-platforming onto Symbio, after Symbio v1** (decided 2026-09-19, scheduled
+> 2026-09-24) — not started. Affiliate still runs its own stack (ElasticSearch, importer, MVC web) and
+> the component list below is current. Once moved, it will consume Symbio as its backend; its
+> `$(BirkoSrc)` wiring is expected to survive, this component list is not. Symbio-side work is tracked
+> in Symbio EPIC-033.
 
 **Location:** `C:\Source\Birko\Consumers\Affiliate`
 **Description:** Product/category aggregation platform using Elasticsearch and InfluxDB

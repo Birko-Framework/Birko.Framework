@@ -60,9 +60,9 @@ task at P3 rather than an `EPIC-0NN` with an `Implement Birko.Data.Meilisearch` 
 ## ⚠ And the demand signal currently points the wrong way
 
 ElasticSearch's consumers are **Affiliate** (2 projects) and **Symbio**; `Birko.Sandbox` imports it as
-part of importing everything, so it is not evidence of demand. **Affiliate is being retired onto Symbio
-as a backend** (see `docs/consumers.md` § Lifecycle), so the live ES consumer base is shrinking toward
-one. A second search backend is harder to justify while the first has one real consumer — unless the
+part of importing everything, so it is not evidence of demand. **Affiliate is planned to move onto
+Symbio as its backend after Symbio v1** (see `docs/consumers.md` § Affiliate) — it still runs its own
+ElasticSearch stack today, but once moved the live ES consumer base shrinks toward one. A second search backend is harder to justify while the first has one real consumer — unless the
 argument is *replacement* rather than *addition*, which is a different and much bigger question.
 
 ## To verify before deciding — do NOT take these from memory
