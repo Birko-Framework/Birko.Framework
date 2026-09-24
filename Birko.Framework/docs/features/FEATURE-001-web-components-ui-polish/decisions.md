@@ -19,6 +19,7 @@ created: 2026-05-28
 | D6 | Visible help text on form controls ([[STORY-050]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-29 | ai | [[TASK-091]] |
 | D7 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-05-28 | ai | [[TASK-053]] |
 | D8 | Whether `b-form.validate()` adopts the remaining native validity flags (`typeMismatch` first) beyond the shipped whitelist | proposed | **Needs `/feature decide`.** Adopting a flag changes which inputs a form rejects, so it is a stakeholder-visible behaviour change, not a refactor — and the one flag already measured (`stepMismatch` on `type="number"`, implicit `step=1`) would have newly rejected fractional input in four shipped Symbio fields. [[TASK-134]] delivers the per-flag consumer sweep and a recommendation; it must not switch a flag on before this row is decided. | 2026-08-01 | ai | [[TASK-134]] |
+| D9 | Input adornments: `prefix` / `suffix` slots + `clearable` on text-like controls ([[STORY-057]]) | approved | Requested by the owner from a real consumer need: Presenter's landing Clear button shifts the row, and the owner chose "× inside the field" over a disabled or fade-in button beside it. `b-input` can't host one today (no slot, inner padding unreachable), and `b-search-input` already hand-rolls the same overlay with a per-size padding workaround. `b-input` first ([[TASK-484]]); other controls are a per-control verdict, not a blanket rollout ([[TASK-485]]). | 2026-09-24 | owner | [[TASK-484]], [[TASK-485]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -56,3 +57,4 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   narrow, and widening it is a behaviour change a stakeholder would notice (a form starts rejecting input it
   accepted), so it does **not** ride along inside D4. [[TASK-134]] gathers the per-flag evidence; the row
   returns through `/feature decide` before any flag is adopted.
+- 2026-09-24 — **D9 approved** by the owner while picking a design for Presenter TASK-006's Clear button. Filed as STORY-057; Presenter TASK-012 is blocked on [[TASK-484]].

@@ -18,3 +18,4 @@ Remaining ergonomic improvements to the Shadow DOM web component catalogue: a `b
 - `b-editable-table` migration decision is made (with benchmark data either way)
 - `b-pagination` / `b-dropdown-menu` / `b-breadcrumb` each ship a `size` variant when a concrete consumer use case appears
 - Display & disclosure components closed (STORY-028): `b-chart` unitless-height fix, a framework-native `b-accordion`
+- Text-like controls take `prefix` / `suffix` adornments and `clearable` without layout shift (STORY-057)
