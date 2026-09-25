@@ -2,7 +2,7 @@
 id: TASK-488
 parent: EPIC-001
 feature: FEATURE-001
-status: in-progress
+status: review
 priority: P1
 assignee: ai
 created: 2026-09-25
@@ -71,18 +71,18 @@ where Escape and clicking away cancel. Mapping one to the other would have made 
 
 ## Acceptance criteria
 
-- [ ] In a `b-form`, a `type: 'select'` field with `searchable: true, creatable: true` accepts a typed new
+- [x] In a `b-form`, a `type: 'select'` field with `searchable: true, creatable: true` accepts a typed new
       value. The value is submitted with the form, and it shows as selected when the form is reopened with
       that value.
-- [ ] The same works for a standalone `<b-select searchable creatable>`.
-- [ ] Existing selects without `creatable` behave exactly as before: no create option, no free text.
-- [ ] Keyboard: type, then Enter (or choose the create option) commits it; Escape cancels. The accessible
+- [x] The same works for a standalone `<b-select searchable creatable>`.
+- [x] Existing selects without `creatable` behave exactly as before: no create option, no free text.
+- [x] Keyboard: type, then Enter (or choose the create option) commits it; Escape cancels. The accessible
       name and the announcement are OK.
-- [ ] Tests cover `b-select` alone and the `b-form` → `b-select` wiring (the wiring is what was broken), and
+- [x] Tests cover `b-select` alone and the `b-form` → `b-select` wiring (the wiring is what was broken), and
       the suite is proven able to fail against the pre-fix `b-select`.
-- [ ] Other `creatable: true` single-select fields across consumers are listed (below), so they can be
+- [x] Other `creatable: true` single-select fields across consumers are listed (below), so they can be
       re-checked.
-- [ ] i18n: every new label is a key.
+- [x] i18n: every new label is a key.
 
 ### Consumer sweep (2026-09-25, `creatable` across `C:\Source\Birko`, `node_modules` excluded)
 
@@ -103,14 +103,18 @@ where Escape and clicking away cancel. Mapping one to the other would have made 
 
 ## Human test plan
 
-- [ ] On Symbio, Presentation → Navigation → pick a site → "Add navigation item". Type `footer-2` into
+- [x] On Symbio, Presentation → Navigation → pick a site → "Add navigation item". Type `footer-2` into
       *Menu group*. The "+ Create “footer-2”" row sits sensibly under any partial matches. Enter commits
       it, save succeeds, and reopening the item shows `footer-2`.
-- [ ] Same form, press Escape mid-typing: the previous group is restored and nothing is created.
+- [x] Same form, press Escape mid-typing: the previous group is restored and nothing is created.
 - [ ] With a screen reader (NVDA or Narrator), typing a new value announces the create row, and committing
       it announces "Created “…”". Whether it reads well is a judgement the smoke suite cannot make.
-- [ ] The menu-group **filter** on the same page (`navigation-page.ts:54`): creating a new group there
+- [x] The menu-group **filter** on the same page (`navigation-page.ts:54`): creating a new group there
       behaves in a way the owner finds acceptable.
+
+✅ **Steps 1, 2 and 4 were run by the user on Symbio on 2026-09-25 and passed** ("checked the creatable on
+b-select and worked"). **The screen-reader step has not been run**, so the task is parked at `review`, not
+`done`. Closing it needs only that pass.
 
 ## Progress log
 
@@ -121,3 +125,7 @@ where Escape and clicking away cancel. Mapping one to the other would have made 
   `tsc --noEmit` clean. Mutation check: with `b-select.ts` stashed, the suite scores 14/29. The `b-form`
   emits-`creatable` check passes and the create-row / commit / reopen checks fail, which reproduces the
   report.
+- 2026-09-25 — Committed: Web `26bf8e3` (fix), Playground `c7b1e68` (suite), Framework `11b8cdc3` (task).
+- 2026-09-25 — Acceptance criteria ticked against the committed diff, with the evidence in the entries above.
+  The owner ran human test steps 1, 2 and 4 on Symbio and they passed. → `review`; the screen-reader step
+  is still pending.
