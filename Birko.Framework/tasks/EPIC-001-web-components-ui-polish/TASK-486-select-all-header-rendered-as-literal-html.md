@@ -84,8 +84,11 @@ repo**, and it commits and diffs normally.)*
 - **`Birko-Framework/Birko.Web` `7e26fba`** — the fix, in `b-table.ts` (`TableColumn.headerRender` +
   the escaped-by-default render path), `b-data-table.ts` (selection column switched to it; the
   interpolated `id` / label values now go through `escapeAttr` too), plus `README.md` / `API.md`.
+- **`Birko-Framework/Birko.Web` `0e88d87`** — review-gate cleanup: comments the commit already carried
+  were trimmed, and `Birko.Web.Components/CLAUDE.md` gained the rule (register-on-introduce).
 - **`Birko-Framework/Birko.Web.Playground` `7b605ad`** — `table-header-smoke` (16 checks) and its
   wiring into `?smoke=1` / `verify.mjs`.
+- **`Birko-Framework/Birko.Web.Playground` `726a9e4`** — the smoke header trimmed to a TASK pointer.
 
 ## Acceptance criteria
 
@@ -106,13 +109,44 @@ repo**, and it commits and diffs normally.)*
 - The row-level checkboxes; they always worked. (Their interpolated values were escaped as a
   drive-by hardening, not a fix.)
 - `b-data-table` paging / sorting behaviour.
-- Pinning the component library by version instead of by path. A real, larger gap: Symbio aliases
-  `birko-web-components` to `${BIRKO_SRC}/Birko.Web.Components/src/index.ts`, so a local edit reaches
-  its bundle before either commit is pushed and nothing records which build carries which commit.
+- Pinning the component library by version instead of by path — deferred to **TASK-487**. A real,
+  larger gap: Symbio aliases `birko-web-components` to
+  `${BIRKO_SRC}/Birko.Web.Components/src/index.ts`, so a local edit reaches its bundle before either
+  commit is pushed and nothing records which build carries which commit. Found while doing this task;
+  spawned rather than widened into it.
 
 ## Human test plan
 
-- [ ] On `#/products/list`, select all rows, clear them, then select one row by hand and confirm the
+- [x] On `#/products/list`, select all rows, clear them, then select one row by hand and confirm the
       header reflects the **mixed** state sensibly. The header checkbox is a three-state affordance in
       practice (none / some / all); `indeterminate` is asserted, but whether it *reads* right is a
       judgement, not an assertion.
+
+✅ **Run by the user on Symbio, 2026-09-25 — OK.** Closes the task: code and automation were
+already green (`table-header-smoke` 16/16, full `verify.mjs` exit 0), and this visual judgement was the
+one step left.
+
+## Review gate (2026-09-24)
+
+Verdicts, one per pass that ran — never merged or reranked:
+
+- **Standards ([[verify-conventions]])** — rulebook `Birko.Web.Components/CLAUDE.md`. 1 ⚠
+  register-on-introduce: `headerRender` introduced a header-side HTML opt-in with no rule recorded.
+  **Fixed in `0e88d87`** (§ *Header content is escaped by default*). No other findings.
+- **Intent ([[verify-intent]])** — all four acceptance criteria met against the diff; none ticked from
+  a summary. ✅
+- **Correctness ([[code-review]])** — ✅ no correctness issues. Read the callers: `label` is used only
+  in the header, the select column is not `sortable`, and the render path is otherwise unchanged.
+- **Security ([[security-review]])** — ran, because the diff inserts HTML and handles consumer-supplied
+  labels. ✅ No exploitable path: the raw sink is a **function** (code, not data), `label` stays
+  escaped, and `escapeAttr` closed the pre-existing unescaped `data-id` / `aria-label` interpolations.
+- **Comments ([[review-comments]])** — rule: none recorded in `Birko.Web.Components`, so the universal
+  floor (rung 3). 4 ⚠ findings — an inline comment restating its own JSDoc, a defect-history paragraph
+  whose destination is this task and `7e26fba`, the same in `b-data-table.ts`, and the smoke header.
+  **Fixed in `0e88d87` / `726a9e4`**; the comments that carry only what the code cannot (“why the node
+  is re-queried”, “off-screen so layout runs”) were left alone.
+- **Out-of-scope sweep** — 2 boundaries, 1 spawned (**TASK-487**), 0 declined.
+
+**Conventions extension:** `.claude/skills/verify-birko-conventions/SKILL.md` examined — it lints the
+.NET `Birko.Framework` rulebook, and this diff is TypeScript in the `Birko.Web` repo, so its checks
+1–10 are N/A. The applicable rulebook is `Birko.Web.Components/CLAUDE.md` (the TS project's own).
