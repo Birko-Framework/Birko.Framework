@@ -2,7 +2,7 @@
 id: TASK-491
 parent: EPIC-001
 feature: null
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-25
@@ -51,7 +51,7 @@ their own text through `t()`; `b-multi-select` was the control that did not.
 - [x] An explicit `label-*` attribute still wins over the key (resolution order unchanged).
 - [x] With no keys defined, the English fallbacks are byte-identical to before (`Search...`,
       `No matches`, `Remove`, `Options`); the create row reads `Create “{value}”` as b-select's does.
-- [ ] Playground smoke covers the key path and is proven able to fail.
+- [ ] Playground smoke covers the key path and is proven able to fail. — ⚠ NOT MET — split to TASK-492
 
 ## Out of scope
 
@@ -60,5 +60,6 @@ their own text through `t()`; `b-multi-select` was the control that did not.
 
 ## Human test plan
 
-- [ ] In Symbio's admin with the language set to SK, open any *Tags* field: the search box, "no matches",
+- [x] In Symbio's admin with the language set to SK, open any *Tags* field: the search box, "no matches",
       the create row and the chip's remove button (screen reader / hover) are Slovak.
+      → confirmed by the user by hand 2026-09-25 (Symbio TASK-793's Tags check).
