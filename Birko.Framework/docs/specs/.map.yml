@@ -164,6 +164,14 @@ areas:
       # holds: its pair arrives via store-crud-contract's Stores/*.cs glob.
       - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs
       - ../Birko.Data.ElasticSearch/Stores/AsyncElasticSearchStore.cs
+      # PropertyUpdate's assignment kinds and the three native translators each backend's
+      # Update(filter, PropertyUpdate) delegates to. TASK-498 added the first three; the ES script
+      # builder had lived in the helper since CR-L113. All four were reachable by no glob — the fifth
+      # instance of the under-coverage above, found at the TASK-498 regen.
+      - ../Birko.Data.Stores/PropertyAssignment.cs
+      - ../Birko.Data.SQL/Stores/PropertyUpdateSqlTranslator.cs
+      - ../Birko.Data.MongoDB/Stores/MongoPropertyUpdateTranslator.cs
+      - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStoreHelper.cs
 
   - name: filter-expression-translation
     title: LINQ filter expression translation to backend queries

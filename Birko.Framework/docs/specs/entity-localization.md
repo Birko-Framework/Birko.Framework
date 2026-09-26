@@ -1,11 +1,12 @@
 ---
 area: entity-localization
-generated-at: 0c63a0bc1ba5ed2a9e66045b5fd0c9c7167844ca
-generated-on: 2026-09-17
+generated-at: 8f370b6efeb7a6e489f011b490724767c85e746b
+generated-on: 2026-09-26
 sources:
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/LocalizedBulkStoreWrapper.cs
+  - ../Birko.Data.Localization/Decorators/LocalizedEntityFields.cs
   - ../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs
   - ../Birko.Data.Localization/Expressions/LocalizedExpressionVisitor.cs
   - ../Birko.Data.Localization/Expressions/LocalizedFilterHelper.cs
@@ -15,12 +16,16 @@ sources:
   - ../Birko.Data.Localization/Models/EntityTranslationModel.cs
   - ../Birko.Data.Localization/Models/IEntityLocalizationContext.cs
   - ../Birko.Data.Localization/Models/ILocalizable.cs
-source-commits:   # sibling HEAD when this spec was written. TASK-313's production fix was
-                  # uncommitted at harvest time, so this names the commit that carries it.
-  ../Birko.Data.Localization: e4e208b
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling sha no longer resolves here.
 shaped-by: []
+# The evidence pass RAN at this regen, over 311 feature-linked tasks. 274 unresolved: 115 carry a
+# polyrepo-era `pr:` sha the history import rewrote (dangling, so no evidence under step 5a) — among
+# them TASK-313 (FEATURE-014), whose `pr: e4e208b…` is the pre-import sha of 8b43813d, the commit that
+# carries its fix to these sources; the rest have no commit whose subject leads with their id, and 8
+# are refused by the state gate (todo/cancelled). The 37 that resolved touch none of these sources.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 274
 ---
 
 # Entity-level localization via store decoration
@@ -694,6 +699,12 @@ and at least one assignment targets a localizable field, convert the update to a
 `PropertyUpdate.ApplyTo` and route it through the read-modify-write path; otherwise it SHALL delegate the
 native `PropertyUpdate` straight to the inner store.
 
+Before choosing a path it SHALL refuse, with `NotSupportedException` and on **every** culture, an update
+whose increment targets a field named by `GetLocalizableFields()`; and on the read-modify-write path it
+SHALL refuse, with `NotSupportedException`, an update that carries any increment at all, because replaying
+it there would silently drop the increment's atomicity. Both refusals throw before the inner store or the
+translation store is called.
+
 #### Scenario: PropertyUpdate on a non-localizable field stays native
 
 - **Given** the update assigns only `x => x.Active`
@@ -708,9 +719,27 @@ native `PropertyUpdate` straight to the inner store.
 
 #### Scenario: Default culture always uses the native path
 
-- **Given** `CurrentCulture.Name == DefaultCulture.Name` and the update assigns a localizable field
+- **Given** `CurrentCulture.Name == DefaultCulture.Name` and the update `Set`s a localizable field
 - **When** `Update(filter, updates)` runs
 - **Then** the `IsNonDefaultCulture()` guard short-circuits and the native `PropertyUpdate` is delegated unchanged
+
+#### Scenario: An increment on a localizable field is refused on every culture
+
+- **Given** `Price` is named by `GetLocalizableFields()` and the update is `Increment(x => x.Price, 1m)`
+- **When** `Update(filter, updates)` / `UpdateAsync(filter, updates)` runs on the default culture or on a non-default one
+- **Then** `LocalizedPropertyUpdateHelper.RefuseIncrementOnLocalizableField` — called first, before the culture decides the path — throws `NotSupportedException` naming `T.Price`, and neither store is called. The test is by field *name* only: `Increment` accepts only numeric properties, so this refuses a numeric field listed as localizable even though translation reads and writes skip non-string fields
+
+#### Scenario: An increment beside a localizable Set is refused on a non-default culture
+
+- **Given** `CurrentCulture = "sk"`, `Label` is localizable and `Stock` is not, and the update is `Set(x => x.Label, "x").Increment(x => x.Stock, 1)`
+- **When** `Update(filter, updates)` runs
+- **Then** `TouchesLocalizableField` selects the read-modify-write fallback and `RefuseIncrementOnReadModifyWriteFallback` throws `NotSupportedException` naming `T.Stock` before the update is converted to an action; on the default culture the same update is delegated natively and both assignments apply
+
+#### Scenario: An increment on a non-localizable field stays native
+
+- **Given** `Stock` is not localizable and the update is `Increment(x => x.Stock, 2)` with no other assignment
+- **When** `Update(filter, updates)` runs on either culture
+- **Then** neither refusal fires and the native `PropertyUpdate` is delegated — with the rewritten filter on a non-default culture — so the increment keeps the backend's atomic form
 
 #### Scenario: Boxing conversions in the assignment selector are unwrapped
 

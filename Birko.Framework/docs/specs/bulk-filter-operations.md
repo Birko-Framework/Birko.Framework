@@ -1,10 +1,14 @@
 ---
 area: bulk-filter-operations
-generated-at: 58cd3bf
-generated-on: 2026-09-09
+generated-at: 2b8663c1404a6eaac3ee64da2b2c6fa5630bca90
+generated-on: 2026-09-26
 sources:
   - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
   - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
+  - ../Birko.Data.MongoDB/Stores/MongoPropertyUpdateTranslator.cs
+  - ../Birko.Data.ElasticSearch/Stores/AsyncElasticSearchStore.cs
+  - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs
+  - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStoreHelper.cs
   - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
   - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Delete.cs
@@ -16,26 +20,25 @@ sources:
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/Stores/AsyncDataBaseBulkStore.cs
   - ../Birko.Data.SQL/Stores/DataBaseBulkStore.cs
+  - ../Birko.Data.SQL/Stores/PropertyUpdateSqlTranslator.cs
   - ../Birko.Data.Stores/AbstractAsyncBulkStore.cs
   - ../Birko.Data.Stores/AbstractBulkStore.cs
   - ../Birko.Data.Stores/IAsyncBulkStore.cs
   - ../Birko.Data.Stores/IBulkStore.cs
   - ../Birko.Data.Stores/OrderBy.cs
+  - ../Birko.Data.Stores/PropertyAssignment.cs
   - ../Birko.Data.Stores/PropertyUpdate.cs
-source-commits:   # recorded at this regen (TASK-329) for the three siblings it touched;
-                  # the rest still carry the 2026-08-16 reconstruction -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Core: fd3103c
-  ../Birko.Data.MongoDB: 77d9aba
-  ../Birko.Data.SQL: adedea7
-  ../Birko.Data.Stores: c1af713
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
-# false, and NOT because nobody tried: the evidence pass cannot run from this aggregator at all.
-# Every source glob above points into a sibling repo, so no task's `pr:` sha resolves under `git show`
-# here (verified: TASK-109's d8c2f40 is "unknown revision" in this checkout). FEATURE-014 above comes
-# from the regenerating task's own `feature:` field — the --story/--feature input to the union — not
-# from evidence. True of every area in this repo's spec tree, not just this one.
+# The evidence pass RAN at this regen (the monorepo made sibling commits reachable), over 311
+# feature-linked tasks. 274 unresolved: 115 carry a polyrepo-era `pr:` sha the history import rewrote
+# (dangling, so no evidence under step 5a), the rest have no commit whose subject leads with their id,
+# and 8 are refused by the state gate (todo/cancelled). The 37 that resolved touch none of these
+# sources. FEATURE-014 is kept append-only; a subject-rule read of the dangling tasks also gives only
+# FEATURE-014 (TASK-212/218/240), so the list is not thin in practice, only in proof.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 274
 ---
 
 # Bulk filter-based Update/Delete and Read semantics
@@ -47,8 +50,8 @@ ordered, paged collection; create/update/delete a whole collection; and — the 
 exists for — **update or delete every entity matching a LINQ predicate without the caller ever
 materialising those entities**. Two update flavours are offered: `Update(filter, Action<T>)`, a
 portable read-modify-save loop, and `Update(filter, PropertyUpdate<T>)`, a declarative set of
-property assignments that a backend is free to translate into one native statement (`UPDATE … SET …
-WHERE …`, MongoDB `$set`, ElasticSearch `UpdateByQuery`).
+property assignments — constant sets and numeric increments — that a backend is free to translate into
+one native statement (`UPDATE … SET … WHERE …`, MongoDB `$set` / `$inc`, ElasticSearch `UpdateByQuery`).
 
 The abstract bases (`AbstractBulkStore<T>` / `AbstractAsyncBulkStore<T>`) supply portable fallbacks
 that work on any backend; the SQL bulk stores (`DataBaseBulkStore<DB,T>` /
@@ -123,6 +126,17 @@ what stops a partially-overriding backend presenting a refusing `Delete` beside 
 ElasticSearch's four overrides were reachable by no glob in this area, so a regen could not have seen their
 behaviour change at all; both store files are now sources. The `AbstractConnectorBase.cs` gap is unchanged
 and still waiting on TASK-208.
+
+Scoped regen at `2b8663c1` for **TASK-498** — `PropertyUpdate<T>` gains an atomic `Increment` / `Decrement`.
+`Assignments` stopped being a `(Property, Value)` tuple list and became a closed `SetAssignment` |
+`IncrementAssignment` hierarchy reached only through `Match`; the SQL bulk stores now always build their SET
+fragments in `PropertyUpdateSqlTranslator` and hand them to the connector's expression path; MongoDB and
+ElasticSearch render increments as `$inc` / painless `+=`. **`.map.yml` was edited** — the fifth instance of
+the under-coverage the notes above describe: the three new translator/assignment files and
+`ElasticSearchStoreHelper.cs` (where the painless script has always been built) were reachable by no glob in
+any area. The resolved `sources:` list also lacked the two ElasticSearch stores the map had listed since
+TASK-215; both are now in it. The MongoDB and ElasticSearch native translations had no requirement here until
+this regen, and now have one.
 
 ## Requirements
 
@@ -410,12 +424,27 @@ reflection and re-saving the **whole entity**.
 - **Then** it returns the task from `UpdateAsync(filter, entity => updates.ApplyTo(entity), ct)`
   directly, without an intermediate `await`
 
+#### Scenario: An increment in the fallback is read-add-save and not atomic
+
+- **Given** an `AbstractBulkStore<T>` with no native translation and
+  `new PropertyUpdate<T>().Increment(x => x.Count, 5)` over an entity whose `Count` is 10
+- **When** `Update(filter, updates)` is called
+- **Then** the entity is read, `ApplyTo` sets `Count` to 15 and the whole entity is saved — so a
+  concurrent writer between the read and the save can lose one of the two increments; only the native
+  translations below apply an increment atomically
+
 ### Requirement: PropertyUpdate assignment collection and reflection application
 
-The system SHALL let callers accumulate property assignments fluently via
-`PropertyUpdate<T>.Set(property, value)`, SHALL preserve insertion order in the internal
-`Assignments` list, and SHALL apply them in that order in `ApplyTo` by unwrapping a `UnaryExpression`
-body to its operand, casting to `MemberExpression`, and calling `PropertyInfo.SetValue`.
+The system SHALL let callers accumulate assignments fluently via `PropertyUpdate<T>.Set(property, value)`,
+`Increment(property, delta)` and `Decrement(property, delta)`, SHALL preserve insertion order in the
+internal `Assignments` list, and SHALL store each entry as one of a **closed** set of kinds —
+`SetAssignment` (carrying `Value`) or `IncrementAssignment` (carrying `Delta`) — with no shared value
+member, so that a translator can reach an operand only through `PropertyAssignment.Match(set, increment)`
+and must name the increment branch to read a delta. `ApplyTo` SHALL apply the entries in order, resolving
+each target by unwrapping a `Convert` / `ConvertChecked` body to its operand and taking the
+`MemberExpression`'s `PropertyInfo`: a set assigns its value, an increment reads the current value and
+assigns `checked(current + delta)` in the property's own type. A selector that does not resolve to a
+property SHALL throw rather than be skipped.
 
 #### Scenario: Set returns the same instance for chaining
 
@@ -423,26 +452,55 @@ body to its operand, casting to `MemberExpression`, and calling `PropertyInfo.Se
 - **When** `.Set(x => x.Name, "a").Set(x => x.Count, 5)` is chained
 - **Then** both calls return the same instance and `Assignments` holds two entries in that order
 
+#### Scenario: Set and Increment chain into one update
+
+- **Given** a fresh `PropertyUpdate<T>`
+- **When** `.Set(x => x.Name, "a").Increment(x => x.Count, 1)` is chained
+- **Then** both calls return the same instance and `Assignments` holds a `SetAssignment` then an
+  `IncrementAssignment`
+
 #### Scenario: A boxed/converted property selector is unwrapped
 
-- **Given** an assignment whose lambda body is a `UnaryExpression` (e.g. a `Convert` inserted for a
-  value-type-to-object selector)
+- **Given** an assignment whose lambda body is a `Convert` / `ConvertChecked` `UnaryExpression` (e.g. one
+  inserted for a value-type-to-object selector)
 - **When** `ApplyTo(entity)` runs
-- **Then** the operand is cast to `MemberExpression` and the underlying property is set
+- **Then** the operand is taken as the `MemberExpression` and the underlying property is set
+- **And** any other unary node (a negation, say) is not unwrapped, so its selector does not resolve
 
-#### Scenario: A non-property member is silently skipped
+#### Scenario: A non-property member is refused
 
 - **Given** an assignment whose resolved member is not a `PropertyInfo` (for example a public field)
 - **When** `ApplyTo(entity)` runs
-- **Then** `memberExpr.Member as PropertyInfo` is null and the null-conditional `prop?.SetValue(...)`
-  performs no assignment — no exception is raised and the caller receives no signal
+- **Then** it throws `ArgumentException("Unable to resolve property from expression: …")` and no
+  further assignment is applied
 
-#### Scenario: A non-member selector throws InvalidCastException
+#### Scenario: A non-member selector throws ArgumentException
 
-- **Given** an assignment whose lambda body is neither a `MemberExpression` nor a `UnaryExpression`
-  over one (for example `x => x.Compute()`)
+- **Given** an assignment whose lambda body is neither a `MemberExpression` nor a convert over one (for
+  example `x => x.Compute()`)
 - **When** `ApplyTo(entity)` runs
-- **Then** the unconditional `(MemberExpression)property.Body` cast throws `InvalidCastException`
+- **Then** it throws `ArgumentException("Unable to resolve property from expression: …")`
+
+#### Scenario: An increment adds to the current value
+
+- **Given** an entity whose `Count` is 10 and `new PropertyUpdate<T>().Increment(x => x.Count, 5)`
+- **When** `ApplyTo(entity)` runs
+- **Then** `Count` is 15
+
+#### Scenario: A fallback increment that overflows throws
+
+- **Given** an entity whose `int Count` is `int.MaxValue` and `Increment(x => x.Count, 1)`
+- **When** `ApplyTo(entity)` runs
+- **Then** the checked addition throws `OverflowException` and the property is not assigned
+
+#### Scenario: Decrement is a negated increment
+
+- **Given** `new PropertyUpdate<T>().Decrement(x => x.Count, 3)`
+- **When** the update is built
+- **Then** `Assignments` holds one `IncrementAssignment` whose `Delta` is `-3` — there is no separate
+  decrement kind
+- **And** `Decrement(x => x.Count, int.MinValue)` throws `OverflowException`, because the delta has no
+  negation, and an unsigned property does not compile against `Decrement` (`ISignedNumber<T>`)
 
 #### Scenario: Duplicate assignments to one property are both applied in order
 
@@ -450,13 +508,50 @@ body to its operand, casting to `MemberExpression`, and calling `PropertyInfo.Se
 - **When** `ApplyTo(entity)` runs
 - **Then** both `SetValue` calls execute in order and the entity ends up with `"b"` (last wins)
 
+### Requirement: An increment names one direct numeric property and is its only assignment
+
+The system SHALL refuse, when `Increment` / `Decrement` is **declared** (not when it is translated), any
+selector that is not a direct access to a top-level property of exactly `TProperty`, any `TProperty`
+outside `short`, `int`, `long`, `float`, `double` and `decimal`, and any combination of an increment with
+another assignment to the same member path. A `Set` beside another `Set` on the same member SHALL remain
+allowed.
+
+#### Scenario: A cast or nested selector is refused
+
+- **Given** `Increment(x => (int)x.NullableCount, 1)`, `Increment(x => (long)x.IntCount, 1)` or
+  `Increment(x => x.Address.Number, 1)`
+- **When** the call is made
+- **Then** it throws `ArgumentException` for the `property` parameter — a cast hides the property's real
+  (possibly nullable) type and a nested member would be resolved as its leaf by the providers
+- **And** a nullable property selected directly (`x => x.NullableCount`) does not compile, because
+  `int?` does not satisfy `INumber<T>`
+
+#### Scenario: A numeric type not every provider stores as a number is refused
+
+- **Given** a direct selector on a `byte`, `uint`, `ulong`, `sbyte`, `Half` or `Int128` property
+- **When** `Increment` is called
+- **Then** it throws `ArgumentException` naming the supported types, although the type satisfies
+  `INumber<T>`
+
+#### Scenario: An increment cannot share its member with another assignment
+
+- **Given** a `PropertyUpdate<T>` that already sets or increments `Count`, including through a converted
+  selector such as `x => (object)x.Count`
+- **When** `Increment(x => x.Count, 1)` is added, or `Set(x => x.Count, 5)` is added after an increment
+  of it
+- **Then** it throws `InvalidOperationException` naming `Count` and the assignment is not recorded
+
 ### Requirement: SQL PropertyUpdate translates to a single UPDATE … SET … WHERE
 
 The system SHALL override `Update(filter, PropertyUpdate<T>)` in `DataBaseBulkStore<DB,T>` and
-`AsyncDataBaseBulkStore<DB,T>` to resolve each assignment's column through
-`DataBase.GetFieldFromLambda`, translate the filter through `DataBase.ParseConditionExpression`, and
-issue one connector `Update(tableName, fields, values, conditions)` — reading no entities and
-invoking no per-entity update path.
+`AsyncDataBaseBulkStore<DB,T>` to render the assignments through the shared
+`PropertyUpdateSqlTranslator` — each column resolved through `DataBase.GetFieldFromLambda` and emitted
+bare, a set as `col = @SETcol` and an increment as `col = col + @SETcol` — translate the filter through
+`DataBase.ParseConditionExpression`, and issue one connector
+`Update(tableName, fields, values, conditions, isExpressionValues: true, allowAllRows)` — reading no
+entities and invoking no per-entity update path. The `@SET…` parameter name SHALL have one producer,
+`AbstractConnector.SetParameterName(column)` (`"@SET"` + the column with `.` removed), used both by these
+fragments and by the connector's own non-expression SET rendering.
 
 #### Scenario: Two assignments become one statement with two SET columns
 
@@ -464,15 +559,24 @@ invoking no per-entity update path.
   `new PropertyUpdate<T>().Set(x => x.Name, "n").Set(x => x.Count, 5)`
 - **When** `Update(filter, updates)` is called
 - **Then** `EnsureInitialized()` runs, the table is loaded via `DataBase.LoadTable(typeof(T))`,
-  `fields` is populated as index → column name for both assignments, `values` as column name → value,
-  the filter is parsed into conditions, and `Connector.Update(table.Name, fields, values, conditions)`
-  is invoked exactly once
+  `fields` is populated as index → SET fragment (`Name = @SETName`, `Count = @SETCount`), `values` as
+  parameter name → value, the filter is parsed into conditions, and
+  `Connector.Update(table.Name, fields, values, conditions, true, allowAllRows)` is invoked exactly once
+
+#### Scenario: A set and an increment share one UPDATE
+
+- **Given** a SQL bulk store and `new PropertyUpdate<T>().Set(x => x.Name, "n").Increment(x => x.Count, 1)`
+- **When** `Update(filter, updates)` is called
+- **Then** one statement is issued, `UPDATE <quoted table> SET Name = @SETName, Count = Count + @SETCount
+  WHERE …`, with the column names unquoted and the delta bound as `@SETCount`
+- **And** the addition happens on the server, so N concurrent `Increment(x => x.Count, 1)` calls on one
+  row leave it exactly N higher
 
 #### Scenario: A null assignment value becomes DBNull
 
 - **Given** an assignment `Set(x => x.Name, null)`
 - **When** the SQL override builds its value map
-- **Then** it stores `DBNull.Value` for that column (`value ?? DBNull.Value`), so the statement sets
+- **Then** it stores `DBNull.Value` for that parameter (`value ?? DBNull.Value`), so the statement sets
   the column to SQL NULL
 
 #### Scenario: An empty PropertyUpdate short-circuits before touching the database
@@ -493,21 +597,22 @@ invoking no per-entity update path.
 
 - **Given** `new PropertyUpdate<T>().Set(x => x.Name, "a").Set(x => x.Name, "b")` on a SQL bulk store
 - **When** `Update(filter, updates)` is called
-- **Then** the second `values.Add(field.Name, value)` throws `ArgumentException` for the duplicate
-  dictionary key and no statement is issued
+- **Then** the translator's second `values.Add(parameter, value)` throws `ArgumentException` for the
+  duplicate dictionary key and no statement is issued — only two sets can reach this, because an
+  increment beside another assignment to its member is refused when the update is declared
 
 #### Scenario: The async override prefers the async connector
 
 - **Given** an `AsyncDataBaseBulkStore<DB,T>` whose `AsyncConnector` is non-null
 - **When** `UpdateAsync(filter, updates, ct)` is called
-- **Then** it awaits `AsyncConnector.UpdateAsync(table.Name, fields, values, conditions, false, ct)`
-  with `isExpressionValues` explicitly false
+- **Then** it awaits `AsyncConnector.UpdateAsync(table.Name, fields, values, conditions, true, ct, allowAllRows)`
+  with `isExpressionValues` explicitly true
 
 #### Scenario: The async override falls back to the sync connector on a thread-pool thread
 
 - **Given** an `AsyncDataBaseBulkStore<DB,T>` with a non-null `Connector` but a null `AsyncConnector`
 - **When** `UpdateAsync(filter, updates, ct)` is called
-- **Then** it awaits `Task.Run(() => Connector!.Update(table.Name, fields, values, conditions), ct)`
+- **Then** it awaits `Task.Run(() => Connector!.Update(table.Name, fields, values, conditions, true, allowAllRows), ct)`
 
 #### Scenario: No connector means the update is silently dropped
 
@@ -517,6 +622,76 @@ invoking no per-entity update path.
 - **Then** the method returns without error, without translating the filter and without writing anything
 - **And** with a null filter it instead throws, because `RequireFilter` precedes the `Connector == null`
   early return — a missing store does not excuse a missing filter
+
+### Requirement: Document-store PropertyUpdate translations render sets and increments natively
+
+The system SHALL, in `MongoDBStore<T>` / `AsyncMongoDBStore<T>`, render a non-empty `PropertyUpdate<T>`
+through the shared `MongoPropertyUpdateTranslator.Build` as one combined update definition — a set as
+`$set` and an increment as `$inc`, each under the target property's C# name — and issue one
+`UpdateMany`, inside `TransactionContext` when one is set. It SHALL refuse an increment whose member is
+serialized with a string representation before anything is sent. The system SHALL, in
+`ElasticSearchStore<T>` / `AsyncElasticSearchStore<T>`, render the assignments through the shared
+`ElasticSearchStoreHelper.BuildUpdateScript` as one inline painless script run by `UpdateByQuery`. Both
+backends run their filter guards first and return without writing when the collection / connector is
+missing or the update has no assignments.
+
+#### Scenario: MongoDB renders a set and an increment in one UpdateMany
+
+- **Given** a `MongoDBStore<T>` with a collection and
+  `new PropertyUpdate<T>().Set(x => x.Name, "n").Increment(x => x.Count, 1)`
+- **When** `Update(filter, updates)` is called with a bounded filter
+- **Then** one `UpdateMany` is issued whose update combines `{ $set: { Name: "n" } }` and
+  `{ $inc: { Count: 1 } }`, and the server applies the increment atomically
+
+#### Scenario: MongoDB refuses $inc on a string-stored member
+
+- **Given** an entity whose `decimal Amount` uses the driver's default (string) representation
+- **When** `Update(filter, new PropertyUpdate<T>().Increment(x => x.Amount, 1m))` is called
+- **Then** it throws `NotSupportedException` naming `T.Amount` and suggesting
+  `[BsonRepresentation(BsonType.Decimal128)]`, and nothing is sent to the server
+- **And** the same member stored as `Decimal128` is incremented normally
+
+#### Scenario: MongoDB writes under the C# property name
+
+- **Given** a property mapped to a different element name (for example with `[BsonElement("n")]`)
+- **When** it is set or incremented through a `PropertyUpdate<T>`
+- **Then** the update names the C# property, not the mapped element name (TASK-503)
+
+#### Scenario: MongoDB refuses a selector that is not a property
+
+- **Given** an assignment whose selector resolves to no `PropertyInfo`
+- **When** the update is translated
+- **Then** it throws `ArgumentException("Unable to resolve property from expression: …")`
+
+#### Scenario: ElasticSearch renders `=` for a set and `+=` for an increment
+
+- **Given** an `ElasticSearchStore<T>` and `new PropertyUpdate<T>().Set(x => x.Name, "n").Increment(x => x.Count, 1)`
+- **When** `Update(filter, updates)` is called
+- **Then** the script is `ctx._source.name = params.p_Name; ctx._source.count += params.p_Count` — each
+  field name is the property name with its first letter lower-cased, each parameter `p_<PropertyName>`
+
+#### Scenario: ElasticSearch sends a null value as an empty string
+
+- **Given** `Set(x => x.Name, null)` on an ElasticSearch store
+- **When** the script parameters are built
+- **Then** `p_Name` is `string.Empty`, so the field is written as `""` rather than null (TASK-501)
+
+#### Scenario: ElasticSearch does not report an UpdateByQuery that lost documents
+
+- **Given** a contended document on which `UpdateByQuery` hits a version conflict
+- **When** the store's `Update(filter, updates)` runs
+- **Then** the store (sync and async) does not inspect the `UpdateByQuery` response, so the conflict is not
+  reported and an increment on that document can be lost silently — the painless `+=` is per document, not
+  a server-side atomic counter (TASK-502)
+
+#### Scenario: ElasticSearch resolves the selector with an unchecked cast
+
+- **Given** an assignment whose selector is neither a member access nor a unary node over one (for example
+  `x => x.Compute()`), or one that names a public field
+- **When** `BuildUpdateScript` runs
+- **Then** the `(MemberExpression)` cast throws `InvalidCastException` for the first, and the field's name is
+  used as if it were a property for the second — unlike `ApplyTo` and the MongoDB translator, which both
+  refuse with `ArgumentException`
 
 ### Requirement: Filter-based delete — portable read-then-delete versus native DELETE
 
