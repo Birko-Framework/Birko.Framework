@@ -2,7 +2,7 @@
 id: TASK-490
 parent: EPIC-001
 feature: FEATURE-001
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-25
@@ -71,7 +71,7 @@ Two things need a decision, not just code:
 
 ## Human test plan
 
-- [ ] On Symbio products/list, create a new tag from the form's *Tags* field. It is created once, appears
+- [x] On Symbio products/list, create a new tag from the form's *Tags* field. It is created once, appears
       as a chip with its server colour, and saves.
 
 ## Progress log
@@ -95,3 +95,7 @@ Two things need a decision, not just code:
   three listeners, migrated in a Symbio worktree on `main` (`e.detail.name === 'tags'` filter,
   `preventDefault()` before the first `await`, read `value`). Symbio UI `tsc --noEmit` clean. The manual
   Symbio tag step is pending → `review`.
+- 2026-09-26 — Owner's Symbio check passed on `task/TASK-802`, which contains `645f3481`: on Products, a new tag
+  created from the form's *Tags* field appears once, as a chip, and survives save and reopen; the same on
+  Buildings. The "no leak between forms" step was not run by hand; `multi-select-create-smoke` covers it
+  ("creating does not mutate the array passed to setOptions"). → `done`.
