@@ -1,494 +1,475 @@
 # Tasks — Birko.Framework
 
-> ⚠ **Feature drift (3 groups, 111 items)** — **all three re-measured 2026-09-19**, and two grew
-> since the 2026-09-16 pass.
-> **DV9 ×74** — 199 tasks carry `feature: FEATURE-014` and its `decisions.md` names 128 TASK ids, so
-> the ledger does not know about **74** of its own tasks (×64 on 2026-09-16, ×63 on 2026-09-09, ×62
-> and ×59 earlier that week, ×31 on 2026-09-04). Measured rather than incremented, per § TASK-283.
-> The reverse gap is unchanged: **3** ids in the ledger are not FEATURE-014 tasks ·
-> **DV5 ×33** (every task in `_loose/` has no epic *and* no feature, so none appears in a feature row
-> — was ×19; the 14 added are the `_loose` intake since 2026-09-16, TASK-468, TASK-469 and TASK-470 among them) ·
-> **DV3 ×4** (TASK-285/286/287/288 sit under EPIC-014 with `feature: null` while every sibling links
-> to FEATURE-014 — a broken back-link; unchanged).
-> Run `/roadmap --check` for the full audit, or `/tasks audit --fix` for the safe ones.
->
-> ⚠ **DV7 was NOT recomputed in this pass and is not being reported as clean.** Spec staleness needs a
-> `git diff` per area against `generated-at` — a cost this dashboard refresh did not pay. Note the
-> reason has changed since the last pass, which cited areas globbing *sibling repos*: [[TASK-457]]
-> consolidated the framework into one repo on 2026-09-18, so `generated-at` can now observe a source
-> change for the first time and the measurement is newly *worth* taking. The last measured value was
-> **DV7 ×3** (`filter-expression-translation`, `bulk-filter-operations`,
-> `unit-of-work-and-transactions`), owned by [[TASK-251]]. Do not carry the previous pass's "very
-> likely ×1" forward as a number — it was arithmetic on a stale total then, and the monorepo has since
-> moved the baseline underneath it.
-> DV8/DV10/DV11 were clean at the last measurement: all 25 mapped areas exist on disk and carry
-> `shaped-by-derived: true`.
->
-> ℹ **Known false positive, left as-is:** EPIC-018 reads `in-progress` with all 4 tasks `done`. It is
-> an area-of-concern epic giving `Birko.Web.Core` an owner, and closing it would recreate the orphaning
-> it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays `in-progress`
-> with no open tasks*), which is why this dashboard no longer restates it.
+_Generated 2026-09-26 12:31. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
-_Generated 2026-09-20 (`/tasks new TASK-479`/`TASK-480`). **Statuses and the priority breakdown were
-recounted from the files; the feature-drift block above was NOT re-measured in this pass** and carries
-its own 2026-09-19 dating. Run `/tasks triage` for a full refresh. **Do not hand-edit** — changes will
-be overwritten._
+_Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
+which this regeneration never touches._
 
-> ⚠ **The previous refresh reported `review: 0` while four tasks were sitting in it**, and `todo: 157`
-> against an actual 159 before this pass added two. Both are the dashboard being older than the tree
-> rather than a miscount at the time — [[TASK-473]], [[TASK-474]], [[TASK-476]] and [[TASK-477]] all
-> closed to `review` on 2026-09-19 after it was generated. Verification debt that the snapshot is
-> supposed to surface is exactly what goes missing when a dashboard is not refreshed on close, so it is
-> recorded here rather than quietly corrected.
-
+> ℹ **Feature drift was not re-measured by this refresh** (triage step 8b needs the roadmap cross-tree
+> pass). This is not a clean result: the last measured figures are in NOTES.md, and `/roadmap --check` re-measures them.
 
 ## Counts
 
-| Status       | Epics | Stories | Tasks |
-|--------------|-------|---------|-------|
-| planned      | 10    | 24      | —     |
-| todo         | —     | —       | 157   |
-| in-progress  | 7     | 9       | 0     |
-| review       | —     | —       | 0     |
-| blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 179   |
-| cancelled    | 0     | 0       | 4     |
+| Status       | Epics              | Stories            | Tasks               |
+|--------------|--------------------|--------------------|---------------------|
+| planned      | 10     | 25     | —                   |
+| todo         | —                  | —                  | 161         |
+| in-progress  | 7  | 9  | 0   |
+| review       | —                  | —                  | 0       |
+| blocked      | —                  | —                  | 1      |
+| done         | 1        | 23        | 187         |
+| cancelled    | 0   | 0   | 4    |
 
-`todo` by priority: 32× P1 · 99× P2 · 26× P3.  
-> ℹ Recounted from the files on each refresh rather than incremented — a breakdown that sums correctly
-> is not thereby correct (before TASK-315 this line carried a P0 that had just been closed, and was
-> one P3 short, while still totalling right). No P0 is open.
->
-> ⚠ **The review queue is empty for the first time since it was introduced** — the 11 tasks this
-> dashboard listed on 2026-09-17 were all signed off on 2026-09-19 (TASK-035, TASK-038, TASK-091,
-> TASK-118, TASK-201 and the rest). That is a drained queue, not a dropped section: `review` is
-> rendered in the counts table at 0 rather than omitted, so the distinction stays visible.
->
-> ⚠ **[[TASK-235]] was cancelled 2026-09-19, not completed** — its subject is
-> `FisData.Stock.Angular.Server`, and Symbio is FisData's successor, so the net10 migration it was
-> `blocked` on will never land. That is the only `blocked` task gone; **TASK-148 remains the single
-> blocked entry**. The file is kept, per the tree's never-delete rule, because the process lesson in
-> its § Context (sweep consumers by ownership, not by path glob) outlives the consumer.
+`todo` by priority: 32× P1 · 100× P2 · 29× P3.
 
 ## In progress now
 
 _None_
 
+## Blocked
+
+- [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) — `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3, ai)
+
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (9/13 tasks done)
-  - [x] TASK-053 b-range: vertical orientation (equalizer-style slider) · FEATURE-001
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (18/25 tasks done)
+  - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
+  - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
+  - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
+  - [x] [TASK-489](EPIC-001-web-components-ui-polish/TASK-489-b-select-combobox-aria-and-arrow-keys.md) `b-select`'s searchable combo has no combobox semantics and no arrow-key navigation (P2) · FEATURE-001
+  - [x] [TASK-490](EPIC-001-web-components-ui-polish/TASK-490-b-form-multi-select-create-is-a-no-op.md) A `creatable` multi-select in `b-form` shows a create row that does nothing unless the page wires it (P2) · FEATURE-001
+  - [x] [TASK-491](EPIC-001-web-components-ui-polish/TASK-491-b-multi-select-labels-bypass-i18n.md) `b-multi-select` hard-coded its English labels, so no consumer could translate a `b-form` multi-select (P2)
+  - [ ] [TASK-492](EPIC-001-web-components-ui-polish/TASK-492-playground-smoke-for-multi-select-i18n.md) Playground smoke: `b-multi-select` renders its labels from `bwc.multiSelect.*`, and the smoke can fail (P3)
+  - [x] [TASK-494](EPIC-001-web-components-ui-polish/TASK-494-labelled-controls-have-no-accessible-name.md) A labelled `b-*` control has no accessible name: its `<label>` labels nothing (P1) · FEATURE-001
+  - [x] [TASK-495](EPIC-001-web-components-ui-polish/TASK-495-file-upload-and-date-range-drop-the-field-label.md) `b-file-upload` and `b-date-range-picker` drop the field's label from their accessible names (P2) · FEATURE-001
+  - [x] [TASK-496](EPIC-001-web-components-ui-polish/TASK-496-picker-triggers-announce-no-popup-and-clear-button-unnamed.md) Picker inputs don't announce their popup, and `b-select`'s clear button has no name (P2) · FEATURE-001
+  - [x] [TASK-497](EPIC-001-web-components-ui-polish/TASK-497-b-range-dual-thumbs-sit-below-the-track.md) `b-range` in range mode draws its thumbs below the track (P2) · FEATURE-001
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
-    - [x] TASK-001 Add `bare` attribute to all form controls · FEATURE-001
+    - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
-    - [x] TASK-002 Benchmark + migrate b-editable-table to bare components · FEATURE-001
+    - [x] [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) Benchmark + migrate b-editable-table to bare components (P2) · FEATURE-001
   - STORY-003 size attribute coverage — planned (0/1 done)
-    - [ ] TASK-003 size attribute on b-pagination, b-dropdown-menu, b-breadcrumb · FEATURE-001
+    - [ ] [TASK-003](EPIC-001-web-components-ui-polish/STORY-003-size-attribute-coverage/TASK-003-size-on-pagination-dropdown-breadcrumb.md) size attribute on b-pagination, b-dropdown-menu, b-breadcrumb (P2) · FEATURE-001
   - STORY-023 Form-associated custom elements (ElementInternals) — in-progress (2/5 done)
-    - [x] TASK-035 Make form controls form-associated via ElementInternals · FEATURE-001
-    - [ ] TASK-132 `b-form`: `required` on a checkbox / switch is inert — an unchecked toggle counts as filled · FEATURE-001
-    - [ ] TASK-133 `b-form`: a `radio` field's value is never collected, and a `required` radio group can never validate · FEATURE-001
-    - [ ] TASK-134 Decide whether `b-form.validate()` adopts the remaining validity flags, starting with `typeMismatch` · FEATURE-001
-    - [x] TASK-136 `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()` · FEATURE-001
-  - STORY-028 Display & disclosure components — done (3/3 done)
-    - [x] TASK-039 b-chart: coerce/validate a unitless `height` (avoid endless SVG stretch) · FEATURE-001
-    - [x] TASK-040 Add a `b-accordion` (collapsible / disclosure group) component · FEATURE-001
-    - [x] TASK-041 Extract a shared `coerceCssLength` helper and fix the unitless-length bug across components · FEATURE-001
+    - [x] [TASK-035](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-035-element-internals-form-association.md) Make form controls form-associated via ElementInternals (P3) · FEATURE-001
+    - [ ] [TASK-132](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-132-bform-required-inert-on-unchecked-toggle.md) `b-form`: `required` on a checkbox / switch is inert — an unchecked toggle counts as filled (P2) · FEATURE-001
+    - [ ] [TASK-133](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-133-bform-radio-value-never-collected.md) `b-form`: a `radio` field's value is never collected, and a `required` radio group can never validate (P2) · FEATURE-001
+    - [ ] [TASK-134](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-134-bform-remaining-validity-flags-decision.md) Decide whether `b-form.validate()` adopts the remaining validity flags, starting with `typeMismatch` (P2) · FEATURE-001
+    - [x] [TASK-136](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-136-bform-validate-surfaces-control-validity.md) `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()` (P1) · FEATURE-001
+  - STORY-028 Display & disclosure components — done (3/3 done) (done)
+    - [x] [TASK-039](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-039-b-chart-coerce-unitless-height.md) b-chart: coerce/validate a unitless `height` (avoid endless SVG stretch) (P3) · FEATURE-001
+    - [x] [TASK-040](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-040-b-accordion-component.md) Add a `b-accordion` (collapsible / disclosure group) component (P2) · FEATURE-001
+    - [x] [TASK-041](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-041-shared-coerce-css-length.md) Extract a shared `coerceCssLength` helper and fix the unitless-length bug across components (P2) · FEATURE-001
   - STORY-050 Visible help text on form controls — in-progress (1/1 done)
-    - [x] TASK-091 `description` — a persistent help-text row on the form controls · FEATURE-001
+    - [x] [TASK-091](EPIC-001-web-components-ui-polish/STORY-050-help-text-row/TASK-091-description-help-text-row.md) `description` — a persistent help-text row on the form controls (P2) · FEATURE-001
+  - STORY-057 Input adornments — prefix / suffix slots on text-like controls — planned (0/2 done)
+    - [ ] [TASK-484](EPIC-001-web-components-ui-polish/STORY-057-input-adornments/TASK-484-b-input-prefix-suffix-slots-clearable.md) b-input: `prefix` / `suffix` slots + `clearable` (P2) · FEATURE-001
+    - [ ] [TASK-485](EPIC-001-web-components-ui-polish/STORY-057-input-adornments/TASK-485-adornment-slots-other-text-controls.md) Extend adornment slots to the other text-like controls; move `b-search-input` onto them (P3) · FEATURE-001
 - **EPIC-002** Birko.Data.Redis — planned (0/1 tasks done)
-  - [ ] TASK-004 Implement Birko.Data.Redis · FEATURE-002
+  - [ ] [TASK-004](EPIC-002-birko-data-redis/TASK-004-implement-birko-data-redis.md) Implement Birko.Data.Redis (P2) · FEATURE-002
 - **EPIC-003** Birko.Caching.NCache — planned (0/1 tasks done)
-  - [ ] TASK-005 Implement Birko.Caching.NCache · FEATURE-003
+  - [ ] [TASK-005](EPIC-003-birko-caching-ncache/TASK-005-implement-birko-caching-ncache.md) Implement Birko.Caching.NCache (P2) · FEATURE-003
 - **EPIC-004** Birko.Storage — Cloud providers — planned (0/3 tasks done)
   - STORY-004 AWS S3 storage — planned (0/1 done)
-    - [ ] TASK-006 Implement Birko.Storage.Aws · FEATURE-004
+    - [ ] [TASK-006](EPIC-004-storage-cloud-providers/STORY-004-aws-s3/TASK-006-birko-storage-aws.md) Implement Birko.Storage.Aws (P1) · FEATURE-004
   - STORY-005 Google Cloud Storage — planned (0/1 done)
-    - [ ] TASK-007 Implement Birko.Storage.Google · FEATURE-004
+    - [ ] [TASK-007](EPIC-004-storage-cloud-providers/STORY-005-google-cloud-storage/TASK-007-birko-storage-google.md) Implement Birko.Storage.Google (P2) · FEATURE-004
   - STORY-006 MinIO (S3-compatible) — planned (0/1 done)
-    - [ ] TASK-008 Implement Birko.Storage.Minio · FEATURE-004
+    - [ ] [TASK-008](EPIC-004-storage-cloud-providers/STORY-006-minio/TASK-008-birko-storage-minio.md) Implement Birko.Storage.Minio (P2) · FEATURE-004
 - **EPIC-005** Birko.Messaging — Provider expansion — planned (0/7 tasks done)
-  - [ ] TASK-471 Implement Birko.Messaging.Brevo · FEATURE-005 _(epic-direct — dual-channel)_
-  - [ ] TASK-472 Implement Birko.Messaging.Mailjet · FEATURE-005 _(epic-direct — dual-channel)_
+  - [ ] [TASK-471](EPIC-005-messaging-provider-expansion/TASK-471-birko-messaging-brevo.md) Implement Birko.Messaging.Brevo (P2) · FEATURE-005
+  - [ ] [TASK-472](EPIC-005-messaging-provider-expansion/TASK-472-birko-messaging-mailjet.md) Implement Birko.Messaging.Mailjet (P2) · FEATURE-005
   - STORY-007 Email providers (SendGrid + Mailgun) — planned (0/2 done)
-    - [ ] TASK-009 Implement Birko.Messaging.SendGrid · FEATURE-005
-    - [ ] TASK-010 Implement Birko.Messaging.Mailgun · FEATURE-005
+    - [ ] [TASK-009](EPIC-005-messaging-provider-expansion/STORY-007-email-providers/TASK-009-birko-messaging-sendgrid.md) Implement Birko.Messaging.SendGrid (P1) · FEATURE-005
+    - [ ] [TASK-010](EPIC-005-messaging-provider-expansion/STORY-007-email-providers/TASK-010-birko-messaging-mailgun.md) Implement Birko.Messaging.Mailgun (P2) · FEATURE-005
   - STORY-008 SMS via Twilio — planned (0/1 done)
-    - [ ] TASK-011 Implement Birko.Messaging.Twilio · FEATURE-005
+    - [ ] [TASK-011](EPIC-005-messaging-provider-expansion/STORY-008-sms-twilio/TASK-011-birko-messaging-twilio.md) Implement Birko.Messaging.Twilio (P1) · FEATURE-005
   - STORY-009 Push notifications (Firebase + APNs) — planned (0/2 done)
-    - [ ] TASK-012 Implement Birko.Messaging.Firebase · FEATURE-005
-    - [ ] TASK-013 Implement Birko.Messaging.Apple · FEATURE-005
+    - [ ] [TASK-012](EPIC-005-messaging-provider-expansion/STORY-009-push-notifications/TASK-012-birko-messaging-firebase.md) Implement Birko.Messaging.Firebase (P2) · FEATURE-005
+    - [ ] [TASK-013](EPIC-005-messaging-provider-expansion/STORY-009-push-notifications/TASK-013-birko-messaging-apple.md) Implement Birko.Messaging.Apple (P2) · FEATURE-005
 - **EPIC-006** Birko.MessageQueue — Provider expansion — planned (0/5 tasks done)
   - STORY-010 RabbitMQ (AMQP) — planned (0/1 done)
-    - [ ] TASK-014 Implement Birko.MessageQueue.RabbitMQ · FEATURE-006
+    - [ ] [TASK-014](EPIC-006-messagequeue-provider-expansion/STORY-010-rabbitmq/TASK-014-birko-messagequeue-rabbitmq.md) Implement Birko.MessageQueue.RabbitMQ (P1) · FEATURE-006
   - STORY-011 Kafka — planned (0/1 done)
-    - [ ] TASK-015 Implement Birko.MessageQueue.Kafka · FEATURE-006
+    - [ ] [TASK-015](EPIC-006-messagequeue-provider-expansion/STORY-011-kafka/TASK-015-birko-messagequeue-kafka.md) Implement Birko.MessageQueue.Kafka (P1) · FEATURE-006
   - STORY-012 Cloud queue providers (Azure Service Bus + AWS SQS) — planned (0/2 done)
-    - [ ] TASK-016 Implement Birko.MessageQueue.Azure · FEATURE-006
-    - [ ] TASK-017 Implement Birko.MessageQueue.Aws · FEATURE-006
+    - [ ] [TASK-016](EPIC-006-messagequeue-provider-expansion/STORY-012-cloud-mq/TASK-016-birko-messagequeue-azure.md) Implement Birko.MessageQueue.Azure (P2) · FEATURE-006
+    - [ ] [TASK-017](EPIC-006-messagequeue-provider-expansion/STORY-012-cloud-mq/TASK-017-birko-messagequeue-aws.md) Implement Birko.MessageQueue.Aws (P2) · FEATURE-006
   - STORY-013 MassTransit adapter — planned (0/1 done)
-    - [ ] TASK-018 Implement Birko.MessageQueue.MassTransit · FEATURE-006
+    - [ ] [TASK-018](EPIC-006-messagequeue-provider-expansion/STORY-013-masstransit/TASK-018-birko-messagequeue-masstransit.md) Implement Birko.MessageQueue.MassTransit (P2) · FEATURE-006
 - **EPIC-007** Birko.Telemetry — Additional exporters — planned (0/3 tasks done)
   - STORY-014 Prometheus exporter — planned (0/1 done)
-    - [ ] TASK-019 Implement Birko.Telemetry.Prometheus · FEATURE-007
+    - [ ] [TASK-019](EPIC-007-telemetry-exporters/STORY-014-prometheus/TASK-019-birko-telemetry-prometheus.md) Implement Birko.Telemetry.Prometheus (P2) · FEATURE-007
   - STORY-015 Seq log exporter — planned (0/1 done)
-    - [ ] TASK-020 Implement Birko.Telemetry.Seq · FEATURE-007
+    - [ ] [TASK-020](EPIC-007-telemetry-exporters/STORY-015-seq/TASK-020-birko-telemetry-seq.md) Implement Birko.Telemetry.Seq (P2) · FEATURE-007
   - STORY-016 Grafana LGTM stack exporter — planned (0/1 done)
-    - [ ] TASK-021 Implement Birko.Telemetry.Grafana · FEATURE-007
+    - [ ] [TASK-021](EPIC-007-telemetry-exporters/STORY-016-grafana-lgtm/TASK-021-birko-telemetry-grafana.md) Implement Birko.Telemetry.Grafana (P2) · FEATURE-007
 - **EPIC-008** Birko.Health — Queue + cloud health checks — planned (0/4 tasks done)
   - STORY-017 Message queue health checks — planned (0/2 done)
-    - [ ] TASK-022 RabbitMqHealthCheck · FEATURE-008
-    - [ ] TASK-023 KafkaHealthCheck · FEATURE-008
+    - [ ] [TASK-022](EPIC-008-health-mq-cloud-checks/STORY-017-mq-health-checks/TASK-022-rabbitmq-health-check.md) RabbitMqHealthCheck (P2) · FEATURE-008
+    - [ ] [TASK-023](EPIC-008-health-mq-cloud-checks/STORY-017-mq-health-checks/TASK-023-kafka-health-check.md) KafkaHealthCheck (P2) · FEATURE-008
   - STORY-018 Cloud queue health checks — planned (0/2 done)
-    - [ ] TASK-024 AzureServiceBusHealthCheck · FEATURE-008
-    - [ ] TASK-025 AwsSqsHealthCheck · FEATURE-008
+    - [ ] [TASK-024](EPIC-008-health-mq-cloud-checks/STORY-018-cloud-health-checks/TASK-024-azure-service-bus-health-check.md) AzureServiceBusHealthCheck (P2) · FEATURE-008
+    - [ ] [TASK-025](EPIC-008-health-mq-cloud-checks/STORY-018-cloud-health-checks/TASK-025-aws-sqs-health-check.md) AwsSqsHealthCheck (P2) · FEATURE-008
 - **EPIC-010** Birko.Data.RavenDB — Index ergonomics — planned (0/1 tasks done)
-  - [ ] TASK-028 Attribute-driven RavenDB index definitions (Option B) · FEATURE-010
-- **EPIC-011** Birko.Framework — Test coverage gaps — planned (0/9 tasks done)
-  - [ ] TASK-052 Adopt a web unit-test runner for Birko.Web.* (migrate backport-smoke) · FEATURE-011
+  - [ ] [TASK-028](EPIC-010-ravendb-index-ergonomics/TASK-028-attribute-driven-raven-indexes.md) Attribute-driven RavenDB index definitions (Option B) (P2) · FEATURE-010
+- **EPIC-011** Birko.Framework — Test coverage gaps — planned (4/11 tasks done)
+  - [ ] [TASK-052](EPIC-011-test-coverage-gaps/TASK-052-birko-web-unit-test-runner.md) Adopt a web unit-test runner for Birko.Web.* (migrate backport-smoke) (P2) · FEATURE-011
+  - [x] [TASK-479](EPIC-011-test-coverage-gaps/TASK-479-live-gates-honour-require-live.md) 19 live gates return silently instead of honouring BIRKO_REQUIRE_LIVE (P2)
+  - [x] [TASK-480](EPIC-011-test-coverage-gaps/TASK-480-cosmosdb-live-tests-never-run.md) CosmosDB live tests have never run in CI — there is no Cosmos job (P2)
+  - [x] [TASK-481](EPIC-011-test-coverage-gaps/TASK-481-run-the-helper-scripts-on-linux-in-ci.md) Run the five helper scripts on Linux in CI, so their sign-off stops needing a human with a Linux box (P2)
+  - [x] [TASK-482](EPIC-011-test-coverage-gaps/TASK-482-audit-declarations-reports-no-scanned-count.md) audit-declarations cannot tell a clean sweep from a sweep of nothing (P2)
   - STORY-021 Redis-dependent tests — planned (0/2 done)
-    - [ ] TASK-029 Birko.BackgroundJobs.Redis.Tests · FEATURE-011
-    - [ ] TASK-030 Birko.Caching.Redis.Tests · FEATURE-011
+    - [ ] [TASK-029](EPIC-011-test-coverage-gaps/STORY-021-redis-dependent-tests/TASK-029-backgroundjobs-redis-tests.md) Birko.BackgroundJobs.Redis.Tests (P2) · FEATURE-011
+    - [ ] [TASK-030](EPIC-011-test-coverage-gaps/STORY-021-redis-dependent-tests/TASK-030-caching-redis-tests.md) Birko.Caching.Redis.Tests (P2) · FEATURE-011
   - STORY-022 Phase 4 lower-priority tests — planned (0/3 done)
-    - [ ] TASK-031 Birko.Models.* validation tests · FEATURE-011
-    - [ ] TASK-032 Birko.Data.*.ViewModel CRUD tests · FEATURE-011
-    - [ ] TASK-033 Birko.Configuration + Birko.Contracts DTO tests · FEATURE-011
+    - [ ] [TASK-031](EPIC-011-test-coverage-gaps/STORY-022-phase-4-tests/TASK-031-models-validation-tests.md) Birko.Models.* validation tests (P2) · FEATURE-011
+    - [ ] [TASK-032](EPIC-011-test-coverage-gaps/STORY-022-phase-4-tests/TASK-032-viewmodel-crud-tests.md) Birko.Data.*.ViewModel CRUD tests (P2) · FEATURE-011
+    - [ ] [TASK-033](EPIC-011-test-coverage-gaps/STORY-022-phase-4-tests/TASK-033-configuration-contracts-tests.md) Birko.Configuration + Birko.Contracts DTO tests (P2) · FEATURE-011
   - STORY-047 Review filter-parser behaviour on live document databases — planned (0/1 done)
-    - [ ] TASK-060 Run & review the live null-filter parser tests · FEATURE-011
+    - [ ] [TASK-060](EPIC-011-test-coverage-gaps/STORY-047-null-filter-live-parser-review/TASK-060-run-and-review-live-null-tests.md) Run & review the live null-filter parser tests (P2) · FEATURE-011
 - **EPIC-012** Birko.MessageQueue.MQTT — v5 features — planned (0/1 tasks done)
-  - [ ] TASK-034 MQTT v5 topic aliases + user properties · FEATURE-012
-- **EPIC-013** Reference consumers — integration smoke harness + Web playground — in-progress (3/4 tasks done)
-  - [x] TASK-037 Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
-  - [x] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export · FEATURE-013
-  - [x] TASK-228 `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk · FEATURE-013
-  - [ ] TASK-307 The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (116/203 tasks done)
-  - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) · FEATURE-014
-  - [x] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire · FEATURE-014
-  - [ ] TASK-144 `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model · FEATURE-014
-  - [ ] TASK-146 Nothing pins that the async repository has no connector-bypassing read · FEATURE-014
-  - [ ] TASK-150 `char?`, `TimeSpan` and `DateTimeOffset` have no column mapping — they now fail loudly instead of quietly · FEATURE-014
-  - [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day · FEATURE-014
-  - [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down · FEATURE-014
-  - [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently · FEATURE-014
-  - ~~TASK-205 A qualified `Table.Column` is emitted unquoted while `FROM "Table"` is quoted — PostgreSQL folds them apart~~ · FEATURE-014
-  - [ ] TASK-208 DECISION: which of `Birko.Data.SQL.View` the spec map should cover — two fixes have now landed in the excluded part · FEATURE-014
-  - [x] TASK-210 `MongoDB.Driver 3.2.0` pulls two vulnerable transitive packages, and nothing reports it · FEATURE-014
-  - [x] TASK-211 On-the-fly views are broken on PostgreSQL — and the error is swallowed, so they return an empty result · FEATURE-014
-  - [x] TASK-216 A filtered DELETE / UPDATE qualifies its `WHERE` with a bare table name, so every filtered write fails on PostgreSQL · FEATURE-014
-  - [ ] TASK-217 `Update(Table, values, conditions)` builds its SET list from every column, so a partial update cannot work · FEATURE-014
-  - [ ] TASK-226 Per-sub-repo `docs/specs/` trees for the 4 single-repo areas (and the 64 unspecced projects) · FEATURE-014
-  - [x] TASK-227 `generated-at` always names the commit *before* the spec it stamps, so staleness is measured from too early · FEATURE-014
-  - [x] TASK-229 Two shared projects `using` a driver they do not declare — and three sources disagree about whose job it is · FEATURE-014
-  - [x] TASK-230 The remaining vulnerable transitives — 7 advisories across 37 of 246 projects · FEATURE-014
-  - [x] TASK-231 `Birko.EventBus.Outbox.SQL` shipped complete but registered nowhere — unbuilt, untested, invisible · FEATURE-014
-  - [x] TASK-232 DECISION: the lock contract meant three different things — split the durations, keep session semantics · FEATURE-014
-  - [ ] TASK-233 DECISION: the CosmosDB span-`Contains` rewrite may now be redundant — the SDK fixed it upstream · FEATURE-014
-  - [x] TASK-234 38 more shared projects use an external package they never declare · FEATURE-014
-  - [x] TASK-236 A per-backend verdict on locking for the six job backends without a provider · FEATURE-014
-  - [x] TASK-237 `RecurringJobScheduler` duplicates every job per worker — wire leader election · FEATURE-014
-  - [x] TASK-238 Seven `Birko.Data.Sync.*` projitems carry a `ProjectReference` to another `.projitems` · FEATURE-014
-  - [ ] TASK-239 Packages declared that .NET 10 already provides — `NU1510`, the mirror image of TASK-234 · FEATURE-014
-  - [x] TASK-240 A transaction boundary that async writes actually honour, stated per provider · FEATURE-014
-  - [x] TASK-241 RavenDB never sets the document id from the entity Guid — delete is a silent no-op and update duplicates · FEATURE-014
-  - [x] TASK-242 Every bulk write escaped the transaction boundary, and on three providers it did so silently · FEATURE-014
-  - [x] TASK-243 On MySQL, a store's first operation inside a boundary silently commits that boundary · FEATURE-014
-  - [x] TASK-244 Lazy schema-ensure runs before the store publishes its transaction boundary · FEATURE-014
-  - [x] TASK-245 Index DDL every provider accepts — MySQL rejected the clause, PostgreSQL could not resolve the columns · FEATURE-014
-  - [x] TASK-246 A migration's `.Unique()` silently builds a NON-unique index on every SQL provider · FEATURE-014
-  - [x] TASK-247 `SqlSchemaBuilder`'s raw-SQL fallbacks emit index DDL that two providers reject · FEATURE-014
-  - [x] TASK-248 MySQL cannot index an unbounded `string` column — and that is the canonical documented pattern · FEATURE-014
-  - [x] TASK-249 Four close-gate findings on TASK-245 — including a second injection sink its own rule pointed at · FEATURE-014
-  - [x] TASK-250 A spec source glob is not a git pathspec, so the staleness check never saw 124 files · FEATURE-014
-  - [ ] TASK-251 Regen the three wide-surface spec areas DV7 still reports · FEATURE-014
-  - [x] TASK-252 Six latent per-provider gaps found while closing the index-DDL thread · FEATURE-014
-  - [x] TASK-253 The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel · FEATURE-014
-  - [x] TASK-254 A hypertable conversion that cannot succeed now bricks the store instead of degrading · FEATURE-014
-  - [x] TASK-255 `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door · FEATURE-014
-  - [x] TASK-256 PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it · FEATURE-014
-  - [x] TASK-257 On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works** · FEATURE-014
-  - [x] TASK-258 `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does · FEATURE-014
-  - [x] TASK-259 `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it · FEATURE-014
-  - [x] TASK-260 `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained · FEATURE-014
-  - [x] TASK-261 `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0 · FEATURE-014
-  - [x] TASK-262 The migration emitters' identifier rules assume this framework created the object — twice over · FEATURE-014
-  - [x] TASK-263 There is no way to persist an instant with its offset — the timezone-aware column type is mapped but unreachable · FEATURE-014
-  - [x] TASK-264 A migration's declared column metadata is dropped on the way to the connector · FEATURE-014
-  - [x] TASK-265 On MySQL a `[UniqueField]` or `[PrimaryField]` unlengthed string emitted `LONGTEXT`, so the table could not be created · FEATURE-014
-  - [x] TASK-266 Index keys that are still wrong after TASK-257: a `byte[]` column, and a composite too wide for the key limit · FEATURE-014
-  - [x] TASK-267 The project-local `verify-conventions` did not run at the close gate, again · FEATURE-014
-  - [ ] TASK-268 Two small SQL field-mapping gaps found while typing MSSql's string columns · FEATURE-014
-  - [x] TASK-269 Nothing reports a column whose stored type no longer matches what the model declares · FEATURE-014
-  - [x] TASK-270 `DataBase.GetConnector` shares one connector process-wide, and three separate features have put per-caller state on it · FEATURE-014
-  - [ ] TASK-271 The TimescaleDB migration emitters bypass the connector for a reason that no longer exists · FEATURE-014
-  - [ ] TASK-272 An entity cannot say which schema it lives in · FEATURE-014
-  - [x] TASK-273 `CompositeIndex` cannot express a filter predicate, so a unique index over a NULLABLE column is unusable on MSSql · FEATURE-014
-  - [x] TASK-274 The second index lane dropped `Sparse` in all six builders — and three of them created no index at all · FEATURE-014
-  - [x] TASK-275 `[UniqueField]` on a nullable column is an inline constraint, so on MSSql it rejects the second ordinary row — and no predicate can be attached to it · FEATURE-014
-  - [ ] TASK-276 One test in `Birko.Data.SQL.Tests` fails about 10% of full-suite runs, and its identity was never captured · FEATURE-014
-  - [x] TASK-277 A write to a missing table reports SUCCESS on EVERY provider — `OnException` swallows it and `DoInit` does nothing · FEATURE-014
-  - [x] TASK-278 On SQL Server every limited read emits invalid T-SQL — `ReadFirstAsync` and paging both fail · FEATURE-014
-  - [x] TASK-279 `BuildCompressionPolicySql` keeps CR-H070's `orderByColumn = "time"` — the half of the remedy that was a compatibility artefact · FEATURE-014
-  - [x] TASK-280 `IsHypertable` and `GetChunkInterval` ignore the schema half of the qualified name TASK-262 taught them to accept · FEATURE-014
-  - [x] TASK-281 A continuous aggregate cannot be created or refreshed inside a transaction — so it may never have worked through the runner at all · FEATURE-014
-  - ~~TASK-282 The TimescaleDB migration emitters bypass the connector — an option TASK-259 reopened and nobody owns~~ · FEATURE-014
-  - [x] TASK-283 A throwing `OnIndexCreationFailed` subscriber defeats TASK-204's degrade and bricks the entity · FEATURE-014
-  - [x] TASK-284 An empty `startOffset` silently widens a refresh policy to all of history — and the escape hatch that relies on it is untested · FEATURE-014
-  - [x] TASK-285 A `COUNT` of a missing table throws while a `SELECT` of the same table returns empty — the one read that answers 500
-  - [x] TASK-286 Date every `CREATE TABLE`, so "created and then missing" stops being unprovable
-  - [x] TASK-287 The count path swallows TASK-286's escape annotation, so the instrument is blind where it is needed
-  - [x] TASK-288 A table that vanishes under an initialised store never comes back — every write 500s until restart
-  - [x] TASK-289 A throwing `OnSchemaEscapeDetected` subscriber reopens TASK-285 and destroys TASK-286's annotation · FEATURE-014
-  - [x] TASK-290 Name the mechanism behind the schema-ensure escape · FEATURE-014
-  - [x] TASK-291 `EnsureSchemaAndReport` rewraps a cancellation as a bare `Exception`, so a client that hung up becomes a 500 · FEATURE-014
-  - [x] TASK-292 The per-store transaction door remembers a schema-ensure that was rolled back · FEATURE-014
-  - [x] TASK-293 The escape "anomaly" is decided by a substring of the statement, so it fabricates anomalies · FEATURE-014
-  - [x] TASK-294 A count that hits lock contention is a 500, while a count of a missing table is `0` · FEATURE-014
-  - [x] TASK-295 The escape and heal apparatus is SQLite-only: three providers record no created tables · FEATURE-014
-  - [x] TASK-296 SQLite connection pooling serves a stale schema image, so a freshly created table reads as missing · FEATURE-014
-  - [ ] TASK-298 A migration can declare a column default, and no connector emits one · FEATURE-014
-  - [ ] TASK-299 `FieldDescriptor`'s three index properties are read by nothing, in any backend · FEATURE-014
-  - [ ] TASK-300 A skill instruction is not an enforcement mechanism — only a hook cannot be skipped · FEATURE-014
-  - [ ] TASK-301 `Birko.EventBus.Outbox.SQL` is in the build and in no documentation index · FEATURE-014
-  - [ ] TASK-302 The SQL test suites have leaked ~90,000 temp directories, and every teardown swallows the failure · FEATURE-014
-  - [x] TASK-303 A composite `PRIMARY KEY (a, b)` cannot be declared at all, and TimescaleDB needs one · FEATURE-014
-  - [ ] TASK-304 `AbstractDatabaseModel`'s `[UniqueField]` on `Guid` forbids the composite key TASK-303 just enabled · FEATURE-014
-  - [ ] TASK-305 The default `RetryPolicy` is `None`, so every retry path in the SQL layer is inert — decide whether it should be · FEATURE-014
-  - [ ] TASK-306 Every live provider suite runs ~19 parallel classes against ONE database, and two different failures follow · FEATURE-014
-  - [ ] TASK-328 Decide: should the event↔tenant bridge REFUSE to widen when it cannot establish a tenant? · FEATURE-014
-  - [x] TASK-329 The SQL bulk stores never apply `RequireBoundedFilter`, so a filter that reduces to every row rewrites the table · FEATURE-014
-  - [ ] TASK-330 Decide whether the `Action<T>` destructive overloads need an all-rows door of their own shape · FEATURE-014
-  - [ ] TASK-331 An expression-valued UPDATE that binds no parameter issues no statement at all, silently · FEATURE-014
-  - [x] TASK-332 The migration runner's own bookkeeping table could not be created on MySQL or SQL Server · FEATURE-014
-  - [ ] TASK-446 All seven workflow instance stores have zero store-level tests, and that is where two high findings lived · FEATURE-014
-  - [x] TASK-447 A Cosmos view filter's string value breaks out of its own quotes · FEATURE-014
-  - [ ] TASK-448 Two § Conventions entries disagree about what a rendered expression tree leaks, and one sink acts on the wrong one · FEATURE-014
-  - [x] TASK-450 The Cosmos migrator escapes filter values with SQL-standard doubling, which Cosmos does not use · FEATURE-014
-  - [ ] TASK-451 `StoreDataDelegate<T>` declares a return value that 96 call sites discard · FEATURE-014
-  - [ ] TASK-452 The "detach before writing to a store-owned object" rule now has three implementations · FEATURE-014
-  - [ ] TASK-453 Decide whether an unchanged ViewModel save should skip the write · FEATURE-014
-  - [ ] TASK-454 A decorator-hidden row reads as absent, and updating it resurrects it with its columns blanked · FEATURE-014
-  - [ ] TASK-456 `AsyncMongoDBStore.CountIn` dereferences a nullable `Collection` — two CS8602 warnings · FEATURE-014
-  - STORY-024 Critical findings — done (0/0 done)
-  - STORY-025 High findings — done (0/0 done)
+  - [ ] [TASK-034](EPIC-012-mqtt-v5-features/TASK-034-mqtt-v5-topic-aliases-user-properties.md) MQTT v5 topic aliases + user properties (P2) · FEATURE-012
+- **EPIC-013** Reference consumers — integration smoke harness + Web playground — in-progress (2/4 tasks done)
+  - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer (P2) · FEATURE-013
+  - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
+  - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
+  - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
+- **EPIC-014** Code review — audit remediation — in-progress (120/209 tasks done)
+  - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
+  - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
+  - [ ] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
+  - [ ] [TASK-146](EPIC-014-code-review-remediation/TASK-146-async-ordered-readone-parity.md) Nothing pins that the async repository has no connector-bypassing read (P3) · FEATURE-014
+  - [ ] [TASK-150](EPIC-014-code-review-remediation/TASK-150-char-nullable-and-the-remaining-unmapped-types.md) `char?`, `TimeSpan` and `DateTimeOffset` have no column mapping — they now fail loudly instead of quietly (P2) · FEATURE-014
+  - [x] [TASK-196](EPIC-014-code-review-remediation/TASK-196-date-truncated-comparison-matched-zero-rows.md) `x.Col.Date == value` matched zero rows on every input, every column, every day (P0) · FEATURE-014
+  - [x] [TASK-197](EPIC-014-code-review-remediation/TASK-197-timeonly-has-no-column-mapping.md) `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down (P0) · FEATURE-014
+  - [x] [TASK-204](EPIC-014-code-review-remediation/TASK-204-an-unbuildable-index-took-down-the-whole-entity.md) An index that could not be built took the entity's whole read surface with it — permanently (P0) · FEATURE-014
+  - ~~[TASK-205](EPIC-014-code-review-remediation/TASK-205-qualified-identifiers-are-unquoted-while-from-is-quoted.md) A qualified `Table.Column` is emitted unquoted while `FROM "Table"` is quoted — PostgreSQL folds them apart~~ (P2) · FEATURE-014
+  - [ ] [TASK-208](EPIC-014-code-review-remediation/TASK-208-decide-spec-coverage-for-view-ddl-emitters.md) DECISION: which of `Birko.Data.SQL.View` the spec map should cover — two fixes have now landed in the excluded part (P2) · FEATURE-014
+  - [x] [TASK-210](EPIC-014-code-review-remediation/TASK-210-mongodb-driver-transitive-vulnerability-advisories.md) `MongoDB.Driver 3.2.0` pulls two vulnerable transitive packages, and nothing reports it (P2) · FEATURE-014
+  - [x] [TASK-211](EPIC-014-code-review-remediation/TASK-211-on-the-fly-views-broken-on-postgresql-and-the-error-is-swallowed.md) On-the-fly views are broken on PostgreSQL — and the error is swallowed, so they return an empty result (P1) · FEATURE-014
+  - [x] [TASK-216](EPIC-014-code-review-remediation/TASK-216-filtered-writes-qualify-the-where-and-break-on-postgresql.md) A filtered DELETE / UPDATE qualifies its `WHERE` with a bare table name, so every filtered write fails on PostgreSQL (P1) · FEATURE-014
+  - [ ] [TASK-217](EPIC-014-code-review-remediation/TASK-217-update-overload-builds-its-set-list-from-every-column.md) `Update(Table, values, conditions)` builds its SET list from every column, so a partial update cannot work (P2) · FEATURE-014
+  - [ ] [TASK-226](EPIC-014-code-review-remediation/TASK-226-per-sub-repo-spec-trees-for-single-repo-areas.md) Per-sub-repo `docs/specs/` trees for the 4 single-repo areas (and the 64 unspecced projects) (P3) · FEATURE-014
+  - [x] [TASK-227](EPIC-014-code-review-remediation/TASK-227-generated-at-always-precedes-the-spec-it-stamps.md) `generated-at` always names the commit *before* the spec it stamps, so staleness is measured from too early (P2) · FEATURE-014
+  - [x] [TASK-229](EPIC-014-code-review-remediation/TASK-229-shared-projects-declare-their-own-driver-packages.md) Two shared projects `using` a driver they do not declare — and three sources disagree about whose job it is (P2) · FEATURE-014
+  - [x] [TASK-230](EPIC-014-code-review-remediation/TASK-230-remaining-vulnerable-transitives-across-the-family.md) The remaining vulnerable transitives — 7 advisories across 37 of 246 projects (P2) · FEATURE-014
+  - [x] [TASK-231](EPIC-014-code-review-remediation/TASK-231-outbox-sql-shipped-unregistered-and-untested.md) `Birko.EventBus.Outbox.SQL` shipped complete but registered nowhere — unbuilt, untested, invisible (P1) · FEATURE-014
+  - [x] [TASK-232](EPIC-014-code-review-remediation/TASK-232-six-of-eight-job-backends-cannot-supply-a-lock.md) DECISION: the lock contract meant three different things — split the durations, keep session semantics (P2) · FEATURE-014
+  - [ ] [TASK-233](EPIC-014-code-review-remediation/TASK-233-cosmos-span-rewrite-may-be-redundant.md) DECISION: the CosmosDB span-`Contains` rewrite may now be redundant — the SDK fixed it upstream (P3) · FEATURE-014
+  - [x] [TASK-234](EPIC-014-code-review-remediation/TASK-234-thirty-eight-shared-projects-declare-no-dependency.md) 38 more shared projects use an external package they never declare (P2) · FEATURE-014
+  - [x] [TASK-236](EPIC-014-code-review-remediation/TASK-236-lock-providers-for-the-six-remaining-job-backends.md) A per-backend verdict on locking for the six job backends without a provider (P3) · FEATURE-014
+  - [x] [TASK-237](EPIC-014-code-review-remediation/TASK-237-leader-election-for-the-recurring-scheduler.md) `RecurringJobScheduler` duplicates every job per worker — wire leader election (P2) · FEATURE-014
+  - [x] [TASK-238](EPIC-014-code-review-remediation/TASK-238-sync-projitems-reference-a-projitems.md) Seven `Birko.Data.Sync.*` projitems carry a `ProjectReference` to another `.projitems` (P3) · FEATURE-014
+  - [ ] [TASK-239](EPIC-014-code-review-remediation/TASK-239-over-declared-packages-net10-provides.md) Packages declared that .NET 10 already provides — `NU1510`, the mirror image of TASK-234 (P3) · FEATURE-014
+  - [x] [TASK-240](EPIC-014-code-review-remediation/TASK-240-a-transaction-boundary-async-writes-honour.md) A transaction boundary that async writes actually honour, stated per provider (P1) · FEATURE-014
+  - [x] [TASK-241](EPIC-014-code-review-remediation/TASK-241-ravendb-never-sets-the-document-id-from-the-entity-guid.md) RavenDB never sets the document id from the entity Guid — delete is a silent no-op and update duplicates (P1) · FEATURE-014
+  - [x] [TASK-242](EPIC-014-code-review-remediation/TASK-242-bulk-writes-escape-the-transaction-boundary.md) Every bulk write escaped the transaction boundary, and on three providers it did so silently (P1) · FEATURE-014
+  - [x] [TASK-243](EPIC-014-code-review-remediation/TASK-243-mysql-ddl-implicitly-commits-an-open-boundary.md) On MySQL, a store's first operation inside a boundary silently commits that boundary (P2) · FEATURE-014
+  - [x] [TASK-244](EPIC-014-code-review-remediation/TASK-244-schema-ensure-runs-before-the-boundary-is-published.md) Lazy schema-ensure runs before the store publishes its transaction boundary (P1) · FEATURE-014
+  - [x] [TASK-245](EPIC-014-code-review-remediation/TASK-245-mysql-cannot-create-any-declared-index.md) Index DDL every provider accepts — MySQL rejected the clause, PostgreSQL could not resolve the columns (P2) · FEATURE-014
+  - [x] [TASK-246](EPIC-014-code-review-remediation/TASK-246-migration-unique-index-is-silently-not-unique.md) A migration's `.Unique()` silently builds a NON-unique index on every SQL provider (P1) · FEATURE-014
+  - [x] [TASK-247](EPIC-014-code-review-remediation/TASK-247-schema-builder-fallback-emits-broken-index-ddl.md) `SqlSchemaBuilder`'s raw-SQL fallbacks emit index DDL that two providers reject (P2) · FEATURE-014
+  - [x] [TASK-248](EPIC-014-code-review-remediation/TASK-248-mysql-cannot-index-an-unbounded-string-column.md) MySQL cannot index an unbounded `string` column — and that is the canonical documented pattern (P1) · FEATURE-014
+  - [x] [TASK-249](EPIC-014-code-review-remediation/TASK-249-close-gate-findings-on-the-index-ddl-fix.md) Four close-gate findings on TASK-245 — including a second injection sink its own rule pointed at (P1) · FEATURE-014
+  - [x] [TASK-250](EPIC-014-code-review-remediation/TASK-250-spec-source-globs-are-not-git-pathspecs.md) A spec source glob is not a git pathspec, so the staleness check never saw 124 files (P2) · FEATURE-014
+  - [ ] [TASK-251](EPIC-014-code-review-remediation/TASK-251-regen-the-three-wide-surface-spec-areas.md) Regen the three wide-surface spec areas DV7 still reports (P2) · FEATURE-014
+  - [x] [TASK-252](EPIC-014-code-review-remediation/TASK-252-latent-per-provider-gaps-from-the-index-ddl-thread.md) Six latent per-provider gaps found while closing the index-DDL thread (P2) · FEATURE-014
+  - [x] [TASK-253](EPIC-014-code-review-remediation/TASK-253-migration-hypertable-emitters-carry-the-same-folding-defect.md) The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel (P2) · FEATURE-014
+  - [x] [TASK-254](EPIC-014-code-review-remediation/TASK-254-a-failed-hypertable-conversion-bricks-the-store.md) A hypertable conversion that cannot succeed now bricks the store instead of degrading (P2) · FEATURE-014
+  - [x] [TASK-255](EPIC-014-code-review-remediation/TASK-255-continuous-aggregate-hardcodes-its-time-column.md) `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door (P2) · FEATURE-014
+  - [x] [TASK-256](EPIC-014-code-review-remediation/TASK-256-postgres-copy-cannot-bind-a-utc-datetime.md) PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it (P1) · FEATURE-014
+  - [x] [TASK-257](EPIC-014-code-review-remediation/TASK-257-mssql-maps-unlengthed-strings-to-text.md) On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works** (P1) · FEATURE-014
+  - [ ] [TASK-258](EPIC-014-code-review-remediation/TASK-258-retrywhenowned-preserves-nothing-that-is-asserted.md) `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does (P2) · FEATURE-014
+  - [x] [TASK-259](EPIC-014-code-review-remediation/TASK-259-schema-builder-publishes-its-connection-onto-a-cached-connector.md) `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it (P1) · FEATURE-014
+  - [x] [TASK-260](EPIC-014-code-review-remediation/TASK-260-continuous-aggregate-takes-raw-sql-fragments.md) `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained (P2) · FEATURE-014
+  - [x] [TASK-261](EPIC-014-code-review-remediation/TASK-261-getchunkinterval-reads-a-column-timescaledb-2-removed.md) `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0 (P2) · FEATURE-014
+  - [x] [TASK-262](EPIC-014-code-review-remediation/TASK-262-migration-emitters-assume-framework-created-objects.md) The migration emitters' identifier rules assume this framework created the object — twice over (P2) · FEATURE-014
+  - [x] [TASK-263](EPIC-014-code-review-remediation/TASK-263-no-way-to-persist-an-instant-with-its-offset.md) There is no way to persist an instant with its offset — the timezone-aware column type is mapped but unreachable (P2) · FEATURE-014
+  - [x] [TASK-264](EPIC-014-code-review-remediation/TASK-264-migrations-lose-declared-column-metadata.md) A migration's declared column metadata is dropped on the way to the connector (P1) · FEATURE-014
+  - [x] [TASK-265](EPIC-014-code-review-remediation/TASK-265-mysql-unique-primary-unlengthed-string.md) On MySQL a `[UniqueField]` or `[PrimaryField]` unlengthed string emitted `LONGTEXT`, so the table could not be created (P1) · FEATURE-014
+  - [x] [TASK-266](EPIC-014-code-review-remediation/TASK-266-binary-and-wide-composite-index-keys.md) Index keys that are still wrong after TASK-257: a `byte[]` column, and a composite too wide for the key limit (P1) · FEATURE-014
+  - [x] [TASK-267](EPIC-014-code-review-remediation/TASK-267-verify-conventions-shadow-does-not-shadow.md) The project-local `verify-conventions` did not run at the close gate, again (P1) · FEATURE-014
+  - [ ] [TASK-268](EPIC-014-code-review-remediation/TASK-268-field-type-mapping-polish.md) Two small SQL field-mapping gaps found while typing MSSql's string columns (P2) · FEATURE-014
+  - [x] [TASK-269](EPIC-014-code-review-remediation/TASK-269-nothing-reports-a-stale-declared-column-type.md) Nothing reports a column whose stored type no longer matches what the model declares (P2) · FEATURE-014
+  - [x] [TASK-270](EPIC-014-code-review-remediation/TASK-270-connector-cache-invites-per-caller-state.md) `DataBase.GetConnector` shares one connector process-wide, and three separate features have put per-caller state on it (P2) · FEATURE-014
+  - [ ] [TASK-271](EPIC-014-code-review-remediation/TASK-271-timescaledb-emitters-can-now-use-the-connector.md) The TimescaleDB migration emitters bypass the connector for a reason that no longer exists (P3) · FEATURE-014
+  - [ ] [TASK-272](EPIC-014-code-review-remediation/TASK-272-first-class-schema-support.md) An entity cannot say which schema it lives in (P2) · FEATURE-014
+  - [x] [TASK-273](EPIC-014-code-review-remediation/TASK-273-compositeindex-cannot-express-a-filter-predicate.md) `CompositeIndex` cannot express a filter predicate, so a unique index over a NULLABLE column is unusable on MSSql (P1) · FEATURE-014
+  - [x] [TASK-274](EPIC-014-code-review-remediation/TASK-274-second-index-lane-drops-sparse.md) The second index lane dropped `Sparse` in all six builders — and three of them created no index at all (P2) · FEATURE-014
+  - [x] [TASK-275](EPIC-014-code-review-remediation/TASK-275-uniquefield-inline-constraint-nullable-column.md) `[UniqueField]` on a nullable column is an inline constraint, so on MSSql it rejects the second ordinary row — and no predicate can be attached to it (P1) · FEATURE-014
+  - [ ] [TASK-276](EPIC-014-code-review-remediation/TASK-276-unidentified-flake-in-the-sql-offline-suite.md) One test in `Birko.Data.SQL.Tests` fails about 10% of full-suite runs, and its identity was never captured (P2) · FEATURE-014
+  - [x] [TASK-277](EPIC-014-code-review-remediation/TASK-277-sqlite-swallows-a-write-to-a-missing-table.md) A write to a missing table reports SUCCESS on EVERY provider — `OnException` swallows it and `DoInit` does nothing (P1) · FEATURE-014
+  - [x] [TASK-278](EPIC-014-code-review-remediation/TASK-278-mssql-limited-reads-emit-invalid-tsql.md) On SQL Server every limited read emits invalid T-SQL — `ReadFirstAsync` and paging both fail (P1) · FEATURE-014
+  - [x] [TASK-279](EPIC-014-code-review-remediation/TASK-279-compression-policy-keeps-the-unusable-time-default.md) `BuildCompressionPolicySql` keeps CR-H070's `orderByColumn = "time"` — the half of the remedy that was a compatibility artefact (P2) · FEATURE-014
+  - [x] [TASK-280](EPIC-014-code-review-remediation/TASK-280-catalogue-lookups-ignore-the-schema-they-now-accept.md) `IsHypertable` and `GetChunkInterval` ignore the schema half of the qualified name TASK-262 taught them to accept (P2) · FEATURE-014
+  - [x] [TASK-281](EPIC-014-code-review-remediation/TASK-281-continuous-aggregate-may-never-have-worked-through-the-runner.md) A continuous aggregate cannot be created or refreshed inside a transaction — so it may never have worked through the runner at all (P1) · FEATURE-014
+  - ~~[TASK-282](EPIC-014-code-review-remediation/TASK-282-route-the-timescaledb-emitters-through-the-connector.md) The TimescaleDB migration emitters bypass the connector — an option TASK-259 reopened and nobody owns~~ (P3) · FEATURE-014
+  - [x] [TASK-283](EPIC-014-code-review-remediation/TASK-283-a-throwing-index-failure-subscriber-bricks-the-store.md) A throwing `OnIndexCreationFailed` subscriber defeats TASK-204's degrade and bricks the entity (P2) · FEATURE-014
+  - [x] [TASK-284](EPIC-014-code-review-remediation/TASK-284-an-empty-start-offset-silently-widens-a-refresh-policy.md) An empty `startOffset` silently widens a refresh policy to all of history — and the escape hatch that relies on it is untested (P2) · FEATURE-014
+  - [x] [TASK-285](EPIC-014-code-review-remediation/TASK-285-a-count-of-a-missing-table-is-a-500-while-a-select-is-an-empty-list.md) A `COUNT` of a missing table throws while a `SELECT` of the same table returns empty — the one read that answers 500 (P1)
+  - [x] [TASK-286](EPIC-014-code-review-remediation/TASK-286-date-every-create-table-so-created-then-missing-is-provable.md) Date every `CREATE TABLE`, so "created and then missing" stops being unprovable (P2)
+  - [x] [TASK-287](EPIC-014-code-review-remediation/TASK-287-the-count-path-swallows-the-schema-escape-annotation.md) The count path swallows TASK-286's escape annotation, so the instrument is blind where it is needed (P2)
+  - [x] [TASK-288](EPIC-014-code-review-remediation/TASK-288-a-vanished-table-never-heals-and-writes-500-until-restart.md) A table that vanishes under an initialised store never comes back — every write 500s until restart (P2)
+  - [x] [TASK-289](EPIC-014-code-review-remediation/TASK-289-a-throwing-escape-subscriber-reopens-task-285-and-eats-task-286.md) A throwing `OnSchemaEscapeDetected` subscriber reopens TASK-285 and destroys TASK-286's annotation (P1) · FEATURE-014
+  - [x] [TASK-290](EPIC-014-code-review-remediation/TASK-290-name-the-mechanism-behind-the-schema-ensure-escape.md) Name the mechanism behind the schema-ensure escape (P1) · FEATURE-014
+  - [x] [TASK-291](EPIC-014-code-review-remediation/TASK-291-ensureschemaandreport-rewraps-a-cancellation-as-a-500.md) `EnsureSchemaAndReport` rewraps a cancellation as a bare `Exception`, so a client that hung up becomes a 500 (P3) · FEATURE-014
+  - [x] [TASK-292](EPIC-014-code-review-remediation/TASK-292-the-per-store-transaction-door-remembers-a-rolled-back-init.md) The per-store transaction door remembers a schema-ensure that was rolled back (P1) · FEATURE-014
+  - [x] [TASK-293](EPIC-014-code-review-remediation/TASK-293-the-anomaly-is-decided-by-a-substring-of-the-statement.md) The escape "anomaly" is decided by a substring of the statement, so it fabricates anomalies (P1) · FEATURE-014
+  - [x] [TASK-294](EPIC-014-code-review-remediation/TASK-294-a-count-under-lock-contention-is-a-500.md) A count that hits lock contention is a 500, while a count of a missing table is `0` (P2) · FEATURE-014
+  - [x] [TASK-295](EPIC-014-code-review-remediation/TASK-295-three-providers-record-no-created-tables.md) The escape and heal apparatus is SQLite-only: three providers record no created tables (P1) · FEATURE-014
+  - [x] [TASK-296](EPIC-014-code-review-remediation/TASK-296-sqlite-connection-pooling-serves-a-stale-schema-image.md) SQLite connection pooling serves a stale schema image, so a freshly created table reads as missing (P1) · FEATURE-014
+  - [ ] [TASK-298](EPIC-014-code-review-remediation/TASK-298-migration-defaultvalue-is-a-knob-nothing-delivers.md) A migration can declare a column default, and no connector emits one (P2) · FEATURE-014
+  - [ ] [TASK-299](EPIC-014-code-review-remediation/TASK-299-fielddescriptor-index-properties-are-inert.md) `FieldDescriptor`'s three index properties are read by nothing, in any backend (P3) · FEATURE-014
+  - [ ] [TASK-300](EPIC-014-code-review-remediation/TASK-300-precommit-hook-for-the-convention-gate.md) A skill instruction is not an enforcement mechanism — only a hook cannot be skipped (P3) · FEATURE-014
+  - [ ] [TASK-301](EPIC-014-code-review-remediation/TASK-301-eventbus-outbox-sql-undocumented.md) `Birko.EventBus.Outbox.SQL` is in the build and in no documentation index (P3) · FEATURE-014
+  - [ ] [TASK-302](EPIC-014-code-review-remediation/TASK-302-test-suites-leak-temp-directories.md) The SQL test suites have leaked ~90,000 temp directories, and every teardown swallows the failure (P3) · FEATURE-014
+  - [x] [TASK-303](EPIC-014-code-review-remediation/TASK-303-a-composite-primary-key-cannot-be-declared.md) A composite `PRIMARY KEY (a, b)` cannot be declared at all, and TimescaleDB needs one (P2) · FEATURE-014
+  - [ ] [TASK-304](EPIC-014-code-review-remediation/TASK-304-abstractdatabasemodel-forbids-a-composite-key.md) `AbstractDatabaseModel`'s `[UniqueField]` on `Guid` forbids the composite key TASK-303 just enabled (P2) · FEATURE-014
+  - [ ] [TASK-305](EPIC-014-code-review-remediation/TASK-305-default-retrypolicy-is-none-so-every-retry-path-is-inert.md) The default `RetryPolicy` is `None`, so every retry path in the SQL layer is inert — decide whether it should be (P2) · FEATURE-014
+  - [ ] [TASK-306](EPIC-014-code-review-remediation/TASK-306-live-provider-suites-share-one-database-across-parallel-classes.md) Every live provider suite runs ~19 parallel classes against ONE database, and two different failures follow (P2) · FEATURE-014
+  - [ ] [TASK-328](EPIC-014-code-review-remediation/TASK-328-should-the-event-tenant-bridge-refuse-to-widen.md) Decide: should the event↔tenant bridge REFUSE to widen when it cannot establish a tenant? (P1) · FEATURE-014
+  - [x] [TASK-329](EPIC-014-code-review-remediation/TASK-329-sql-bulk-stores-never-apply-the-bounded-filter-guard.md) The SQL bulk stores never apply `RequireBoundedFilter`, so a filter that reduces to every row rewrites the table (P0) · FEATURE-014
+  - [ ] [TASK-330](EPIC-014-code-review-remediation/TASK-330-the-action-overloads-all-rows-door-is-a-different-shape.md) Decide whether the `Action<T>` destructive overloads need an all-rows door of their own shape (P3) · FEATURE-014
+  - [ ] [TASK-331](EPIC-014-code-review-remediation/TASK-331-an-expression-set-that-binds-no-parameter-is-a-silent-no-op.md) An expression-valued UPDATE that binds no parameter issues no statement at all, silently (P1) · FEATURE-014
+  - [x] [TASK-332](EPIC-014-code-review-remediation/TASK-332-migrations-state-table-is-not-dialect-portable.md) The migration runner's own bookkeeping table could not be created on MySQL or SQL Server (P0) · FEATURE-014
+  - [ ] [TASK-446](EPIC-014-code-review-remediation/TASK-446-workflow-instance-stores-have-no-store-level-tests.md) All seven workflow instance stores have zero store-level tests, and that is where two high findings lived (P2) · FEATURE-014
+  - [x] [TASK-447](EPIC-014-code-review-remediation/TASK-447-cosmos-view-filter-values-are-a-sql-injection-sink.md) A Cosmos view filter's string value breaks out of its own quotes (P0) · FEATURE-014
+  - [ ] [TASK-448](EPIC-014-code-review-remediation/TASK-448-two-records-disagree-about-what-a-rendered-expression-leaks.md) Two § Conventions entries disagree about what a rendered expression tree leaks, and one sink acts on the wrong one (P3) · FEATURE-014
+  - [x] [TASK-450](EPIC-014-code-review-remediation/TASK-450-cosmos-migrator-escapes-with-the-wrong-dialect.md) The Cosmos migrator escapes filter values with SQL-standard doubling, which Cosmos does not use (P1) · FEATURE-014
+  - [ ] [TASK-451](EPIC-014-code-review-remediation/TASK-451-storedatadelegate-declares-a-return-value-96-sites-discard.md) `StoreDataDelegate<T>` declares a return value that 96 call sites discard (P2) · FEATURE-014
+  - [ ] [TASK-452](EPIC-014-code-review-remediation/TASK-452-three-copies-of-the-detach-helper.md) The "detach before writing to a store-owned object" rule now has three implementations (P3) · FEATURE-014
+  - [ ] [TASK-453](EPIC-014-code-review-remediation/TASK-453-should-an-unchanged-viewmodel-save-skip-the-write.md) Decide whether an unchanged ViewModel save should skip the write (P2) · FEATURE-014
+  - [ ] [TASK-454](EPIC-014-code-review-remediation/TASK-454-a-hidden-row-is-not-an-absent-row.md) A decorator-hidden row reads as absent, and updating it resurrects it with its columns blanked (P2) · FEATURE-014
+  - [ ] [TASK-456](EPIC-014-code-review-remediation/TASK-456-asyncmongodbstore-countin-has-two-nullable-warnings.md) `AsyncMongoDBStore.CountIn` dereferences a nullable `Collection` — two CS8602 warnings (P3) · FEATURE-014
+  - [x] [TASK-473](EPIC-014-code-review-remediation/TASK-473-a-consumer-may-declare-a-package-older-than-the-framework.md) A consumer can declare a package OLDER than the framework, and nothing says so (P2) · FEATURE-014
+  - [x] [TASK-474](EPIC-014-code-review-remediation/TASK-474-the-vulnerability-sweep-has-been-skipping-two-thirds-of-the-tree.md) The vulnerability sweep has been skipping two thirds of the tree since the monorepo migration (P2) · FEATURE-014
+  - [x] [TASK-475](EPIC-014-code-review-remediation/TASK-475-the-first-whole-tree-sweep-since-the-migration.md) The first whole-tree vulnerability sweep since the monorepo migration (P2) · FEATURE-014
+  - [x] [TASK-476](EPIC-014-code-review-remediation/TASK-476-the-audit-scripts-do-not-run-on-linux.md) The four root helper scripts are PowerShell, and they do not run on Linux (P2) · FEATURE-014
+  - [x] [TASK-477](EPIC-014-code-review-remediation/TASK-477-the-probe-generator-never-produced-one-of-its-two-outputs.md) The cold-table probe generator did not run on Linux, and never produced one of its two outputs (P2) · FEATURE-014
+  - [ ] [TASK-478](EPIC-014-code-review-remediation/TASK-478-wire-the-generated-file-drift-check-into-ci.md) Decide whether the generated-file drift check belongs in CI (P3) · FEATURE-014
+  - STORY-024 Critical findings — done (0/0 done) (done)
+  - STORY-025 High findings — done (0/0 done) (done)
   - STORY-026 Medium findings — in-progress (0/0 done)
-  - STORY-027 Low findings — done (0/0 done)
+  - STORY-027 Low findings — done (0/0 done) (done)
   - STORY-042 Integration-test tier — the Docker-gated remediation findings — planned (0/0 done)
-  - STORY-043 Workflow backends — unify the serialization seam (ISerializer everywhere) — done (0/0 done)
+  - STORY-043 Workflow backends — unify the serialization seam (ISerializer everywhere) — done (0/0 done) (done)
   - STORY-051 Spec-harvest — high findings — in-progress (42/47 done)
-    - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash · FEATURE-014
-    - [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table · FEATURE-014
-    - [x] TASK-110 ORDER BY identifiers reach SQL text unresolved and unquoted · FEATURE-014
-    - [x] TASK-111 `rule.Field` reaches the WHERE clause unresolved and unquoted · FEATURE-014
-    - [x] TASK-112 `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist · FEATURE-014
-    - [x] TASK-113 `TenantSyncProvider` scopes only saves — reads, previews and deletes span every tenant · FEATURE-014
-    - [x] TASK-114 The item-level tenant write guard trusts the caller-supplied `TenantGuid` · FEATURE-014
-    - [x] TASK-115 A nested `WithTenant` does not narrow reads inside an all-tenants scope · FEATURE-014
-    - [x] TASK-116 `RuleSpecification` leaves degrade to match-all — on the destructive paths · FEATURE-014
-    - [x] TASK-117 `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set · FEATURE-014
-    - [x] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` · FEATURE-014
-    - [x] TASK-125 `ReadOne` queries the connector directly, bypassing every store decorator · FEATURE-014
-    - [x] TASK-126 `TagServiceBase` states its tenant contract in a comment and enforces nothing · FEATURE-014
-    - [x] TASK-128 The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover · FEATURE-014
-    - [x] TASK-129 An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created · FEATURE-014
-    - [x] TASK-137 An empty `NOT IN` renders `1 = 1` — indistinguishable from `' OR 1=1--` in a query log · FEATURE-014
-    - [x] TASK-141 MongoDB's four null-filter guards have no regression test · FEATURE-014
-    - [x] TASK-207 `View.AddField` still drops a duplicate field key silently — the general case behind TASK-129's second defect · FEATURE-014
-    - [x] TASK-209 A persistent view's non-aggregate columns are created unquoted and read back quoted — every such view is unqueryable on PostgreSQL · FEATURE-014
-    - [x] TASK-212 A MongoDB `Delete(filter)` guards only a NULL filter — a filter that *reduces* to everything is not refused · FEATURE-014
-    - [x] TASK-213 A COMPUTED operand inside `Contains` is silently discarded and replaced by a different predicate · FEATURE-014
-    - [x] TASK-214 A model deriving `MongoDBModel` cannot be serialized by the driver at all · FEATURE-014
-    - [x] TASK-215 Wire `RequireBoundedFilter` into the base wrappers, InMemory and ElasticSearch · FEATURE-014
-    - [x] TASK-218 An `IN` filter over a C# **array** does not translate on MongoDB — `NotSupportedException` · FEATURE-014
-    - [x] TASK-219 `Birko.Data.MongoDB` has two contradictory answers for what `_id` is · FEATURE-014
-    - [x] TASK-220 CosmosDB has the same array-`Contains` defect as MongoDB — audit the rest of the family · FEATURE-014
-    - [x] TASK-221 RavenDB cannot translate **any** set-membership filter — `Contains` is unsupported in every spelling · FEATURE-014
-    - [x] TASK-222 RavenDB diverges on 6 filter shapes — and one of them is a **silent wrong answer** · FEATURE-014
-    - [x] TASK-223 CosmosDB's connection mode cannot be selected — Gateway is unreachable, so the emulator is too · FEATURE-014
-    - [x] TASK-224 `DateTime.Date` in a CosmosDB filter renders as a JSON sub-property and silently matches nothing · FEATURE-014
-    - [x] TASK-225 MongoDB's connection string is composed with no escape hatch — no driver option can be set · FEATURE-014
-    - [x] TASK-308 Triage the 7 remaining high spec-harvest findings in `filter-expression-translation` · FEATURE-014
-    - [x] TASK-309 Triage the 7 remaining high spec-harvest findings in `data-sync` · FEATURE-014
-    - [x] TASK-310 Triage the 3 remaining high spec-harvest findings in `caching` · FEATURE-014
-    - [x] TASK-311 Triage the 2 remaining high spec-harvest findings in `tenant-isolation` · FEATURE-014
-    - [x] TASK-312 Triage the 1 remaining high spec-harvest finding in `security-and-authorization` · FEATURE-014
-    - [x] TASK-313 Triage the 4 remaining high spec-harvest findings in `entity-localization` · FEATURE-014
-    - [x] TASK-314 Triage the 5 remaining high spec-harvest findings in `migrations` · FEATURE-014
-    - [x] TASK-315 Triage the 2 remaining high spec-harvest findings in `workflow-state-machine` · FEATURE-014
-    - [x] TASK-316 Triage the 2 remaining high spec-harvest findings in `repository-contract` · FEATURE-014
-    - [ ] TASK-317 Triage the 1 remaining high spec-harvest finding in `background-jobs` · FEATURE-014
-    - [ ] TASK-318 Triage the 1 remaining high spec-harvest finding in `event-bus-and-messaging` · FEATURE-014
-    - [ ] TASK-319 Triage the 1 remaining high spec-harvest finding in `schema-index-and-ddl` · FEATURE-014
-    - [ ] TASK-320 Triage the 1 remaining high spec-harvest finding in `specifications-and-paging` · FEATURE-014
-    - [x] TASK-321 Triage the 1 remaining high spec-harvest finding in `store-crud-contract` · FEATURE-014
-    - [x] TASK-322 Triage the 1 remaining high spec-harvest finding in `views-and-aggregation` · FEATURE-014
-    - [ ] TASK-445 `ConflictResolution.Merge` is a silent no-op, and the enum advertises it as supported · FEATURE-014
+    - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0) · FEATURE-014
+    - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0) · FEATURE-014
+    - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0) · FEATURE-014
+    - [x] [TASK-111](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-111-rule-field-unresolved-in-where-clause.md) `rule.Field` reaches the WHERE clause unresolved and unquoted (P1) · FEATURE-014
+    - [x] [TASK-112](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-112-unmapped-primitive-types-never-persist.md) `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist (P0) · FEATURE-014
+    - [x] [TASK-113](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-113-tenantsyncprovider-scopes-only-saves.md) `TenantSyncProvider` scopes only saves — reads, previews and deletes span every tenant (P0) · FEATURE-014
+    - [x] [TASK-114](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-114-tenant-write-guard-trusts-caller-supplied-tenantguid.md) The item-level tenant write guard trusts the caller-supplied `TenantGuid` (P0) · FEATURE-014
+    - [x] [TASK-115](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-115-nested-withtenant-does-not-narrow-reads.md) A nested `WithTenant` does not narrow reads inside an all-tenants scope (P1) · FEATURE-014
+    - [x] [TASK-116](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-116-rulespecification-leaves-degrade-to-match-all.md) `RuleSpecification` leaves degrade to match-all — on the destructive paths (P0) · FEATURE-014
+    - [x] [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1) · FEATURE-014
+    - [x] [TASK-118](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-118-tenant-header-guard-covers-only-x-tenant-id.md) The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` (P1) · FEATURE-014
+    - [x] [TASK-125](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-125-readone-bypasses-store-decorators.md) `ReadOne` queries the connector directly, bypassing every store decorator (P1) · FEATURE-014
+    - [x] [TASK-126](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-126-tagging-has-no-tenant-assertion.md) `TagServiceBase` states its tenant contract in a comment and enforces nothing (P1) · FEATURE-014
+    - [x] [TASK-128](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-128-view-order-by-identifier-unresolved.md) The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover (P0) · FEATURE-014
+    - [x] [TASK-129](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-129-aggregate-view-ddl-double-alias.md) An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created (P1) · FEATURE-014
+    - [x] [TASK-137](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-137-empty-not-in-renders-injection-lookalike.md) An empty `NOT IN` renders `1 = 1` — indistinguishable from `' OR 1=1--` in a query log (P2) · FEATURE-014
+    - [x] [TASK-141](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-141-mongodb-null-filter-guards-are-untested.md) MongoDB's four null-filter guards have no regression test (P2) · FEATURE-014
+    - [x] [TASK-207](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-207-viewaddfield-drops-duplicate-keys-silently.md) `View.AddField` still drops a duplicate field key silently — the general case behind TASK-129's second defect (P2) · FEATURE-014
+    - [x] [TASK-209](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-209-persistent-view-nonaggregate-columns-quoting-mismatch.md) A persistent view's non-aggregate columns are created unquoted and read back quoted — every such view is unqueryable on PostgreSQL (P1) · FEATURE-014
+    - [x] [TASK-212](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-212-mongodb-filter-that-reduces-to-everything.md) A MongoDB `Delete(filter)` guards only a NULL filter — a filter that *reduces* to everything is not refused (P1) · FEATURE-014
+    - [x] [TASK-213](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-213-computed-operand-inside-contains-is-silently-rewritten.md) A COMPUTED operand inside `Contains` is silently discarded and replaced by a different predicate (P1) · FEATURE-014
+    - [x] [TASK-214](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-214-mongodbmodel-cannot-be-class-mapped.md) A model deriving `MongoDBModel` cannot be serialized by the driver at all (P1) · FEATURE-014
+    - [x] [TASK-215](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-215-wire-bounded-filter-guard-into-remaining-backends.md) Wire `RequireBoundedFilter` into the base wrappers, InMemory and ElasticSearch (P2) · FEATURE-014
+    - [x] [TASK-218](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-218-array-contains-in-a-filter-does-not-translate-on-mongodb.md) An `IN` filter over a C# **array** does not translate on MongoDB — `NotSupportedException` (P1) · FEATURE-014
+    - [x] [TASK-219](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-219-mongodb-has-two-contradictory-answers-for-what-id-is.md) `Birko.Data.MongoDB` has two contradictory answers for what `_id` is (P1) · FEATURE-014
+    - [x] [TASK-220](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-220-cosmosdb-has-the-same-array-contains-defect.md) CosmosDB has the same array-`Contains` defect as MongoDB — audit the rest of the family (P1) · FEATURE-014
+    - [x] [TASK-221](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-221-ravendb-cannot-translate-a-set-membership-filter.md) RavenDB cannot translate **any** set-membership filter — `Contains` is unsupported in every spelling (P1) · FEATURE-014
+    - [x] [TASK-222](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-222-ravendb-diverges-on-six-filter-shapes.md) RavenDB diverges on 6 filter shapes — and one of them is a **silent wrong answer** (P1) · FEATURE-014
+    - [x] [TASK-223](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-223-cosmos-connection-mode-cannot-be-selected.md) CosmosDB's connection mode cannot be selected — Gateway is unreachable, so the emulator is too (P1) · FEATURE-014
+    - [x] [TASK-224](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-224-cosmos-date-renders-as-a-subproperty.md) `DateTime.Date` in a CosmosDB filter renders as a JSON sub-property and silently matches nothing (P1) · FEATURE-014
+    - [x] [TASK-225](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-225-mongodb-connection-string-has-no-escape-hatch.md) MongoDB's connection string is composed with no escape hatch — no driver option can be set (P2) · FEATURE-014
+    - [x] [TASK-308](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-308-triage-high-filter-expression-translation.md) Triage the 7 remaining high spec-harvest findings in `filter-expression-translation` (P0) · FEATURE-014
+    - [x] [TASK-309](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-309-triage-high-data-sync.md) Triage the 7 remaining high spec-harvest findings in `data-sync` (P0) · FEATURE-014
+    - [x] [TASK-310](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-310-triage-high-caching.md) Triage the 3 remaining high spec-harvest findings in `caching` (P0) · FEATURE-014
+    - [x] [TASK-311](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-311-triage-high-tenant-isolation.md) Triage the 2 remaining high spec-harvest findings in `tenant-isolation` (P0) · FEATURE-014
+    - [x] [TASK-312](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-312-triage-high-security-and-authorization.md) Triage the 1 remaining high spec-harvest finding in `security-and-authorization` (P0) · FEATURE-014
+    - [x] [TASK-313](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-313-triage-high-entity-localization.md) Triage the 4 remaining high spec-harvest findings in `entity-localization` (P1) · FEATURE-014
+    - [x] [TASK-314](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-314-triage-high-migrations.md) Triage the 5 remaining high spec-harvest findings in `migrations` (P1) · FEATURE-014
+    - [x] [TASK-315](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-315-triage-high-workflow-state-machine.md) Triage the 2 remaining high spec-harvest findings in `workflow-state-machine` (P1) · FEATURE-014
+    - [x] [TASK-316](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-316-triage-high-repository-contract.md) Triage the 2 remaining high spec-harvest findings in `repository-contract` (P1) · FEATURE-014
+    - [ ] [TASK-317](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-317-triage-high-background-jobs.md) Triage the 1 remaining high spec-harvest finding in `background-jobs` (P1) · FEATURE-014
+    - [ ] [TASK-318](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-318-triage-high-event-bus-and-messaging.md) Triage the 1 remaining high spec-harvest finding in `event-bus-and-messaging` (P1) · FEATURE-014
+    - [ ] [TASK-319](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-319-triage-high-schema-index-and-ddl.md) Triage the 1 remaining high spec-harvest finding in `schema-index-and-ddl` (P1) · FEATURE-014
+    - [ ] [TASK-320](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-320-triage-high-specifications-and-paging.md) Triage the 1 remaining high spec-harvest finding in `specifications-and-paging` (P1) · FEATURE-014
+    - [x] [TASK-321](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-321-triage-high-store-crud-contract.md) Triage the 1 remaining high spec-harvest finding in `store-crud-contract` (P1) · FEATURE-014
+    - [x] [TASK-322](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-322-triage-high-views-and-aggregation.md) Triage the 1 remaining high spec-harvest finding in `views-and-aggregation` (P1) · FEATURE-014
+    - [ ] [TASK-445](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-445-conflictresolution-merge-is-a-silent-no-op.md) `ConflictResolution.Merge` is a silent no-op, and the enum advertises it as supported (P3) · FEATURE-014
   - STORY-053 Spec-harvest — medium findings — planned (0/25 done)
-    - [ ] TASK-151 Triage the 36 medium spec-harvest findings in `views-and-aggregation` · FEATURE-014
-    - [ ] TASK-152 Triage the 33 medium spec-harvest findings in `migrations` · FEATURE-014
-    - [ ] TASK-153 Triage the 29 medium spec-harvest findings in `filter-expression-translation` · FEATURE-014
-    - [ ] TASK-154 Triage the 25 medium spec-harvest findings in `schema-index-and-ddl` · FEATURE-014
-    - [ ] TASK-155 Triage the 24 medium spec-harvest findings in `event-bus-and-messaging` · FEATURE-014
-    - [ ] TASK-156 Triage the 22 medium spec-harvest findings in `validation-and-rules` · FEATURE-014
-    - [ ] TASK-157 Triage the 21 medium spec-harvest findings in `data-sync` · FEATURE-014
-    - [ ] TASK-158 Triage the 21 medium spec-harvest findings in `background-jobs` · FEATURE-014
-    - [ ] TASK-159 Triage the 20 medium spec-harvest findings in `store-decorator-composition` · FEATURE-014
-    - [ ] TASK-160 Triage the 20 medium spec-harvest findings in `llm-provider-and-agents` · FEATURE-014
-    - [ ] TASK-161 Triage the 18 medium spec-harvest findings in `tenant-isolation` · FEATURE-014
-    - [ ] TASK-162 Triage the 16 medium spec-harvest findings in `repository-contract` · FEATURE-014
-    - [ ] TASK-163 Triage the 15 medium spec-harvest findings in `store-crud-contract` · FEATURE-014
-    - [ ] TASK-164 Triage the 15 medium spec-harvest findings in `settings-configuration-chain` · FEATURE-014
-    - [ ] TASK-165 Triage the 15 medium spec-harvest findings in `security-and-authorization` · FEATURE-014
-    - [ ] TASK-166 Triage the 15 medium spec-harvest findings in `entity-tagging` · FEATURE-014
-    - [ ] TASK-167 Triage the 14 medium spec-harvest findings in `serialization` · FEATURE-014
-    - [ ] TASK-168 Triage the 14 medium spec-harvest findings in `entity-localization` · FEATURE-014
-    - [ ] TASK-169 Triage the 14 medium spec-harvest findings in `caching` · FEATURE-014
-    - [ ] TASK-170 Triage the 13 medium spec-harvest findings in `bulk-filter-operations` · FEATURE-014
-    - [ ] TASK-171 Triage the 12 medium spec-harvest findings in `specifications-and-paging` · FEATURE-014
-    - [ ] TASK-172 Triage the 9 medium spec-harvest findings in `workflow-state-machine` · FEATURE-014
-    - [ ] TASK-323 Fix the 3 verified medium findings in `core-model-contracts` · FEATURE-014
-    - [ ] TASK-324 Fix the 1 verified medium finding in `store-lazy-initialization` · FEATURE-014
-    - [ ] TASK-325 Fix the 3 verified medium findings in `unit-of-work-and-transactions` · FEATURE-014
+    - [ ] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
+    - [ ] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
+    - [ ] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
+    - [ ] [TASK-154](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-154-triage-medium-schema-index-and-ddl.md) Triage the 25 medium spec-harvest findings in `schema-index-and-ddl` (P1) · FEATURE-014
+    - [ ] [TASK-155](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-155-triage-medium-event-bus-and-messaging.md) Triage the 24 medium spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014
+    - [ ] [TASK-156](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-156-triage-medium-validation-and-rules.md) Triage the 22 medium spec-harvest findings in `validation-and-rules` (P1) · FEATURE-014
+    - [ ] [TASK-157](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-157-triage-medium-data-sync.md) Triage the 21 medium spec-harvest findings in `data-sync` (P1) · FEATURE-014
+    - [ ] [TASK-158](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-158-triage-medium-background-jobs.md) Triage the 21 medium spec-harvest findings in `background-jobs` (P2) · FEATURE-014
+    - [ ] [TASK-159](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-159-triage-medium-store-decorator-composition.md) Triage the 20 medium spec-harvest findings in `store-decorator-composition` (P1) · FEATURE-014
+    - [ ] [TASK-160](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-160-triage-medium-llm-provider-and-agents.md) Triage the 20 medium spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
+    - [ ] [TASK-161](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-161-triage-medium-tenant-isolation.md) Triage the 18 medium spec-harvest findings in `tenant-isolation` (P1) · FEATURE-014
+    - [ ] [TASK-162](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-162-triage-medium-repository-contract.md) Triage the 16 medium spec-harvest findings in `repository-contract` (P1) · FEATURE-014
+    - [ ] [TASK-163](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-163-triage-medium-store-crud-contract.md) Triage the 15 medium spec-harvest findings in `store-crud-contract` (P1) · FEATURE-014
+    - [ ] [TASK-164](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-164-triage-medium-settings-configuration-chain.md) Triage the 15 medium spec-harvest findings in `settings-configuration-chain` (P2) · FEATURE-014
+    - [ ] [TASK-165](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-165-triage-medium-security-and-authorization.md) Triage the 15 medium spec-harvest findings in `security-and-authorization` (P1) · FEATURE-014
+    - [ ] [TASK-166](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-166-triage-medium-entity-tagging.md) Triage the 15 medium spec-harvest findings in `entity-tagging` (P2) · FEATURE-014
+    - [ ] [TASK-167](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-167-triage-medium-serialization.md) Triage the 14 medium spec-harvest findings in `serialization` (P2) · FEATURE-014
+    - [ ] [TASK-168](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-168-triage-medium-entity-localization.md) Triage the 14 medium spec-harvest findings in `entity-localization` (P2) · FEATURE-014
+    - [ ] [TASK-169](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-169-triage-medium-caching.md) Triage the 14 medium spec-harvest findings in `caching` (P2) · FEATURE-014
+    - [ ] [TASK-170](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-170-triage-medium-bulk-filter-operations.md) Triage the 13 medium spec-harvest findings in `bulk-filter-operations` (P1) · FEATURE-014
+    - [ ] [TASK-171](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-171-triage-medium-specifications-and-paging.md) Triage the 12 medium spec-harvest findings in `specifications-and-paging` (P1) · FEATURE-014
+    - [ ] [TASK-172](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-172-triage-medium-workflow-state-machine.md) Triage the 9 medium spec-harvest findings in `workflow-state-machine` (P2) · FEATURE-014
+    - [ ] [TASK-323](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-323-fix-medium-core-model-contracts.md) Fix the 3 verified medium findings in `core-model-contracts` (P2) · FEATURE-014
+    - [ ] [TASK-324](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-324-fix-medium-store-lazy-initialization.md) Fix the 1 verified medium finding in `store-lazy-initialization` (P1) · FEATURE-014
+    - [ ] [TASK-325](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-325-fix-medium-unit-of-work-and-transactions.md) Fix the 3 verified medium findings in `unit-of-work-and-transactions` (P1) · FEATURE-014
   - STORY-054 Spec-harvest — low findings — planned (0/24 done)
-    - [ ] TASK-173 Triage the 31 low spec-harvest findings in `llm-provider-and-agents` · FEATURE-014
-    - [ ] TASK-174 Triage the 29 low spec-harvest findings in `event-bus-and-messaging` · FEATURE-014
-    - [ ] TASK-175 Triage the 24 low spec-harvest findings in `background-jobs` · FEATURE-014
-    - [ ] TASK-176 Triage the 23 low spec-harvest findings in `security-and-authorization` · FEATURE-014
-    - [ ] TASK-177 Triage the 23 low spec-harvest findings in `data-sync` · FEATURE-014
-    - [ ] TASK-178 Triage the 22 low spec-harvest findings in `migrations` · FEATURE-014
-    - [ ] TASK-179 Triage the 21 low spec-harvest findings in `workflow-state-machine` · FEATURE-014
-    - [ ] TASK-180 Triage the 20 low spec-harvest findings in `views-and-aggregation` · FEATURE-014
-    - [ ] TASK-181 Triage the 19 low spec-harvest findings in `validation-and-rules` · FEATURE-014
-    - [ ] TASK-182 Triage the 19 low spec-harvest findings in `store-crud-contract` · FEATURE-014
-    - [ ] TASK-183 Triage the 18 low spec-harvest findings in `settings-configuration-chain` · FEATURE-014
-    - [ ] TASK-184 Triage the 17 low spec-harvest findings in `caching` · FEATURE-014
-    - [ ] TASK-185 Triage the 15 low spec-harvest findings in `tenant-isolation` · FEATURE-014
-    - [ ] TASK-186 Triage the 14 low spec-harvest findings in `entity-tagging` · FEATURE-014
-    - [ ] TASK-187 Triage the 13 low spec-harvest findings in `store-decorator-composition` · FEATURE-014
-    - [ ] TASK-188 Triage the 13 low spec-harvest findings in `specifications-and-paging` · FEATURE-014
-    - [ ] TASK-189 Triage the 13 low spec-harvest findings in `filter-expression-translation` · FEATURE-014
-    - [ ] TASK-190 Triage the 13 low spec-harvest findings in `bulk-filter-operations` · FEATURE-014
-    - [ ] TASK-191 Triage the 10 low spec-harvest findings in `serialization` · FEATURE-014
-    - [ ] TASK-192 Triage the 10 low spec-harvest findings in `schema-index-and-ddl` · FEATURE-014
-    - [ ] TASK-193 Triage the 10 low spec-harvest findings in `repository-contract` · FEATURE-014
-    - [ ] TASK-194 Triage the 10 low spec-harvest findings in `entity-localization` · FEATURE-014
-    - [ ] TASK-326 Fix the 1 verified low finding in `core-model-contracts` · FEATURE-014
-    - [ ] TASK-327 Fix the 3 verified low findings in `unit-of-work-and-transactions` · FEATURE-014
-  - STORY-055 Spec-harvest — the three unrated areas — done (1/1 done)
-    - [x] TASK-195 Rate, ID and fold the 16 recovered findings into the severity backlog · FEATURE-014
+    - [ ] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
+    - [ ] [TASK-174](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-174-triage-low-event-bus-and-messaging.md) Triage the 29 low spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014
+    - [ ] [TASK-175](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-175-triage-low-background-jobs.md) Triage the 24 low spec-harvest findings in `background-jobs` (P2) · FEATURE-014
+    - [ ] [TASK-176](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-176-triage-low-security-and-authorization.md) Triage the 23 low spec-harvest findings in `security-and-authorization` (P2) · FEATURE-014
+    - [ ] [TASK-177](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-177-triage-low-data-sync.md) Triage the 23 low spec-harvest findings in `data-sync` (P2) · FEATURE-014
+    - [ ] [TASK-178](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-178-triage-low-migrations.md) Triage the 22 low spec-harvest findings in `migrations` (P2) · FEATURE-014
+    - [ ] [TASK-179](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-179-triage-low-workflow-state-machine.md) Triage the 21 low spec-harvest findings in `workflow-state-machine` (P2) · FEATURE-014
+    - [ ] [TASK-180](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-180-triage-low-views-and-aggregation.md) Triage the 20 low spec-harvest findings in `views-and-aggregation` (P2) · FEATURE-014
+    - [ ] [TASK-181](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-181-triage-low-validation-and-rules.md) Triage the 19 low spec-harvest findings in `validation-and-rules` (P2) · FEATURE-014
+    - [ ] [TASK-182](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-182-triage-low-store-crud-contract.md) Triage the 19 low spec-harvest findings in `store-crud-contract` (P2) · FEATURE-014
+    - [ ] [TASK-183](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-183-triage-low-settings-configuration-chain.md) Triage the 18 low spec-harvest findings in `settings-configuration-chain` (P2) · FEATURE-014
+    - [ ] [TASK-184](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-184-triage-low-caching.md) Triage the 17 low spec-harvest findings in `caching` (P2) · FEATURE-014
+    - [ ] [TASK-185](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-185-triage-low-tenant-isolation.md) Triage the 15 low spec-harvest findings in `tenant-isolation` (P2) · FEATURE-014
+    - [ ] [TASK-186](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-186-triage-low-entity-tagging.md) Triage the 14 low spec-harvest findings in `entity-tagging` (P2) · FEATURE-014
+    - [ ] [TASK-187](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-187-triage-low-store-decorator-composition.md) Triage the 13 low spec-harvest findings in `store-decorator-composition` (P2) · FEATURE-014
+    - [ ] [TASK-188](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-188-triage-low-specifications-and-paging.md) Triage the 13 low spec-harvest findings in `specifications-and-paging` (P2) · FEATURE-014
+    - [ ] [TASK-189](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-189-triage-low-filter-expression-translation.md) Triage the 13 low spec-harvest findings in `filter-expression-translation` (P2) · FEATURE-014
+    - [ ] [TASK-190](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-190-triage-low-bulk-filter-operations.md) Triage the 13 low spec-harvest findings in `bulk-filter-operations` (P2) · FEATURE-014
+    - [ ] [TASK-191](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-191-triage-low-serialization.md) Triage the 10 low spec-harvest findings in `serialization` (P2) · FEATURE-014
+    - [ ] [TASK-192](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-192-triage-low-schema-index-and-ddl.md) Triage the 10 low spec-harvest findings in `schema-index-and-ddl` (P2) · FEATURE-014
+    - [ ] [TASK-193](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-193-triage-low-repository-contract.md) Triage the 10 low spec-harvest findings in `repository-contract` (P2) · FEATURE-014
+    - [ ] [TASK-194](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-194-triage-low-entity-localization.md) Triage the 10 low spec-harvest findings in `entity-localization` (P2) · FEATURE-014
+    - [ ] [TASK-326](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-326-fix-low-core-model-contracts.md) Fix the 1 verified low finding in `core-model-contracts` (P2) · FEATURE-014
+    - [ ] [TASK-327](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-327-fix-low-unit-of-work-and-transactions.md) Fix the 3 verified low findings in `unit-of-work-and-transactions` (P2) · FEATURE-014
+  - STORY-055 Spec-harvest — the three unrated areas — done (1/1 done) (done)
+    - [x] [TASK-195](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/TASK-195-rate-id-and-fold-the-16-recovered-findings.md) Rate, ID and fold the 16 recovered findings into the severity backlog (P1) · FEATURE-014
 - **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (10/22 tasks done)
-  - [x] TASK-054 Xaml restyled Slider (Tier-1 gap) + `Range` Form field type · FEATURE-015
-  - [x] TASK-055 Xaml Form field-type parity with b-form (wire existing controls + FormField props) · FEATURE-015
-  - [x] TASK-056 Xaml date & time picker controls + field types · FEATURE-015
-  - [x] TASK-057 Xaml Form field types: MultiSelect / Tags / File · FEATURE-015
-  - [x] TASK-101 Avalonia `Ribbon`: pinned vs temporary-reveal collapse, to match `b-ribbon` and Office · FEATURE-015
-  - [x] TASK-102 Avalonia `Ribbon`: a narrow fallback, mirroring `b-ribbon`'s hamburger · FEATURE-015
-  - [ ] TASK-103 Every Avalonia control needs a focus visual — `Buttons.axaml` has none · FEATURE-015
-  - STORY-029 Tier 0 — single-source design tokens + multi-target generator — done (0/0 done)
-  - STORY-030 Tier 0 — Avalonia theme system + runtime ThemeVariant swap — done (0/0 done)
-  - STORY-031 Tier 0 validation — Avalonia gallery app + first restyled controls — done (0/0 done)
-  - STORY-032 Birko.Xaml.Core — i18n ({l:Tr}) + base ViewModels (Avalonia-free) — done (0/0 done)
-  - STORY-033 Building blocks — schema-driven Form, Drawer, SplitPanel — done (0/0 done)
-  - STORY-034 Tier 1 — restyled native controls (~20) — done (0/0 done)
-  - STORY-035 Tier 2 — composite controls with no native peer — done (0/0 done)
-  - STORY-036 Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation — done (0/0 done)
+  - [x] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Xaml restyled Slider (Tier-1 gap) + `Range` Form field type (P3) · FEATURE-015
+  - [x] [TASK-055](EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md) Xaml Form field-type parity with b-form (wire existing controls + FormField props) (P2) · FEATURE-015
+  - [x] [TASK-056](EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md) Xaml date & time picker controls + field types (P2) · FEATURE-015
+  - [x] [TASK-057](EPIC-015-birko-xaml-ui-framework/TASK-057-xaml-form-multiselect-tags-file.md) Xaml Form field types: MultiSelect / Tags / File (P2) · FEATURE-015
+  - [x] [TASK-101](EPIC-015-birko-xaml-ui-framework/TASK-101-avalonia-ribbon-pinned-temporary-reveal.md) Avalonia `Ribbon`: pinned vs temporary-reveal collapse, to match `b-ribbon` and Office (P2) · FEATURE-015
+  - [x] [TASK-102](EPIC-015-birko-xaml-ui-framework/TASK-102-avalonia-ribbon-narrow-fallback.md) Avalonia `Ribbon`: a narrow fallback, mirroring `b-ribbon`'s hamburger (P2) · FEATURE-015
+  - [ ] [TASK-103](EPIC-015-birko-xaml-ui-framework/TASK-103-focus-visual-for-all-avalonia-buttons.md) Every Avalonia control needs a focus visual — `Buttons.axaml` has none (P2) · FEATURE-015
+  - STORY-029 Tier 0 — single-source design tokens + multi-target generator — done (0/0 done) (done)
+  - STORY-030 Tier 0 — Avalonia theme system + runtime ThemeVariant swap — done (0/0 done) (done)
+  - STORY-031 Tier 0 validation — Avalonia gallery app + first restyled controls — done (0/0 done) (done)
+  - STORY-032 Birko.Xaml.Core — i18n ({l:Tr}) + base ViewModels (Avalonia-free) — done (0/0 done) (done)
+  - STORY-033 Building blocks — schema-driven Form, Drawer, SplitPanel — done (0/0 done) (done)
+  - STORY-034 Tier 1 — restyled native controls (~20) — done (0/0 done) (done)
+  - STORY-035 Tier 2 — composite controls with no native peer — done (0/0 done) (done)
+  - STORY-036 Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation — done (0/0 done) (done)
   - STORY-048 Avalonia 12 / .NET 10 upgrade for the Birko.Xaml stack — planned (0/5 done)
-    - [ ] TASK-092 Bump Birko.Xaml to Avalonia 12.1.0 / `net10.0` + xunit v3 (Kanban DataTransfer, focus event) · FEATURE-015
-    - [ ] TASK-093 Decide the LiveCharts story for Avalonia 12 (the only blocker on the bump) · FEATURE-015
-    - [ ] TASK-094 Clear the 28 Avalonia 12 obsolete warnings (`Watermark`, `Bitmap.Save`) · FEATURE-015
-    - [ ] TASK-095 Screenshot baseline gate for the Avalonia suite (build it *before* the Av12 bump) · FEATURE-015
-    - [ ] TASK-096 Roll Avalonia 12 out to consumer repos in lockstep · FEATURE-015
-  - STORY-049 Office-style ribbon overflow — progressive group scaling + group-to-popup collapse — done (4/4 done)
-    - [x] TASK-097 Make the existing ribbon overflow reachable (interim fix, both skins) · FEATURE-015
-    - [x] TASK-098 Ribbon model + tokens: size variant, scaling priority, group icon (XAML **and** web together) · FEATURE-015
-    - [x] TASK-099 The degrade pass — measure and scale groups Large → Medium → Small in priority order · FEATURE-015
-    - [x] TASK-100 Group-collapse-to-popup — the chunk button and its flyout · FEATURE-015
+    - [ ] [TASK-092](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-092-bump-avalonia-12-net10-xunit-v3.md) Bump Birko.Xaml to Avalonia 12.1.0 / `net10.0` + xunit v3 (Kanban DataTransfer, focus event) (P2) · FEATURE-015
+    - [ ] [TASK-093](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-093-livecharts-avalonia-12-story.md) Decide the LiveCharts story for Avalonia 12 (the only blocker on the bump) (P2) · FEATURE-015
+    - [ ] [TASK-094](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-094-avalonia-12-obsolete-warning-sweep.md) Clear the 28 Avalonia 12 obsolete warnings (`Watermark`, `Bitmap.Save`) (P3) · FEATURE-015
+    - [ ] [TASK-095](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-095-avalonia-screenshot-baseline-gate.md) Screenshot baseline gate for the Avalonia suite (build it *before* the Av12 bump) (P2) · FEATURE-015
+    - [ ] [TASK-096](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-096-consumer-repo-avalonia-12-rollout.md) Roll Avalonia 12 out to consumer repos in lockstep (P2) · FEATURE-015
+  - STORY-049 Office-style ribbon overflow — progressive group scaling + group-to-popup collapse — done (4/4 done) (done)
+    - [x] [TASK-097](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-097-make-ribbon-overflow-reachable.md) Make the existing ribbon overflow reachable (interim fix, both skins) (P1) · FEATURE-015
+    - [x] [TASK-098](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-098-ribbon-size-variant-scaling-priority-model.md) Ribbon model + tokens: size variant, scaling priority, group icon (XAML **and** web together) (P2) · FEATURE-015
+    - [x] [TASK-099](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-099-progressive-group-scaling-degrade-pass.md) The degrade pass — measure and scale groups Large → Medium → Small in priority order (P2) · FEATURE-015
+    - [x] [TASK-100](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-100-group-collapse-to-popup.md) Group-collapse-to-popup — the chunk button and its flyout (P2) · FEATURE-015
   - STORY-056 Mixed per-item size variants within one ribbon group — planned (0/6 done)
-    - [ ] TASK-119 Decide the mixed-size model: per-item degrade order, or fixed group templates · FEATURE-015
-    - [ ] TASK-120 The mixed-size model, in both skins, with its tokens · FEATURE-015
-    - [ ] TASK-121 Reformulate the degrade ladder for mixed-size groups · FEATURE-015
-    - [ ] TASK-122 Render mixed columns — the CSS grid and the Avalonia panel · FEATURE-015
-    - [ ] TASK-123 Panel height under mixed sizes, and extending the clipping guard · FEATURE-015
-    - [ ] TASK-124 The `RibbonGroupSize` doc comment describes a parity gap that no longer exists · FEATURE-015
+    - [ ] [TASK-119](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-119-decide-mixed-size-model.md) Decide the mixed-size model: per-item degrade order, or fixed group templates (P1) · FEATURE-015
+    - [ ] [TASK-120](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-120-mixed-size-model-both-skins.md) The mixed-size model, in both skins, with its tokens (P1) · FEATURE-015
+    - [ ] [TASK-121](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-121-reformulate-scaling-ladder-for-mixed-groups.md) Reformulate the degrade ladder for mixed-size groups (P1) · FEATURE-015
+    - [ ] [TASK-122](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-122-render-mixed-columns-both-skins.md) Render mixed columns — the CSS grid and the Avalonia panel (P2) · FEATURE-015
+    - [ ] [TASK-123](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-123-panel-height-under-mixed-sizes.md) Panel height under mixed sizes, and extending the clipping guard (P2) · FEATURE-015
+    - [ ] [TASK-124](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-124-stale-ribbongroupsize-parity-comment.md) The `RibbonGroupSize` doc comment describes a parity gap that no longer exists (P3) · FEATURE-015
 - **EPIC-016** Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) — in-progress (14/14 tasks done)
-  - STORY-037 Backend / SQL framework backports (shipped) — done (0/0 done)
-  - STORY-038 Frontend Birko.Web backports (shipped) — done (0/0 done)
+  - STORY-037 Backend / SQL framework backports (shipped) — done (0/0 done) (done)
+  - STORY-038 Frontend Birko.Web backports (shipped) — done (0/0 done) (done)
   - STORY-039 Cross-provider SQL store-factory + DI backport — in-progress (2/2 done)
-    - [x] TASK-042 Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL · FEATURE-016
-    - [x] TASK-051 FIX: MSSqlStore.SetSettings drops connection fields (lossy) · FEATURE-016
-  - STORY-040 Web → Xaml UI / offline / device backports — done (6/6 done)
-    - [x] TASK-043 Xaml mobile app-shell (BMobileAppShell equivalent) · FEATURE-016
-    - [x] TASK-044 Formatter for Birko.Xaml.Core (duration + culture-aware) · FEATURE-016
-    - [x] TASK-045 Xaml wake-lock device abstraction (IWakeLock) · FEATURE-016
-    - [x] TASK-046 Xaml offline read-through mirror (MirrorStore / readThrough concept) · FEATURE-016
-    - [x] TASK-047 Xaml sync-status indicator (offline / syncing / synced) · FEATURE-016
-    - [x] TASK-048 Xaml audio-cue device util (beep + vibrate) · FEATURE-016
-  - STORY-041 BMobileAppShell showcase / placement — done (2/2 done)
-    - [x] TASK-049 BMobileAppShell — better placement / demo in Birko.Web.Playground · FEATURE-016
-    - [x] TASK-050 BMobileAppShell (Xaml) — showcase in Birko.Xaml.Gallery · FEATURE-016
+    - [x] [TASK-042](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-042-store-factory-di-mssql-mysql-postgres.md) Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL (P2) · FEATURE-016
+    - [x] [TASK-051](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-051-fix-mssqlstore-setsettings-lossy.md) FIX: MSSqlStore.SetSettings drops connection fields (lossy) (P2) · FEATURE-016
+  - STORY-040 Web → Xaml UI / offline / device backports — done (6/6 done) (done)
+    - [x] [TASK-043](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-043-xaml-mobile-app-shell.md) Xaml mobile app-shell (BMobileAppShell equivalent) (P2) · FEATURE-016
+    - [x] [TASK-044](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-044-xaml-formatter.md) Formatter for Birko.Xaml.Core (duration + culture-aware) (P2) · FEATURE-016
+    - [x] [TASK-045](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-045-xaml-wake-lock.md) Xaml wake-lock device abstraction (IWakeLock) (P3) · FEATURE-016
+    - [x] [TASK-046](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-046-xaml-offline-mirror.md) Xaml offline read-through mirror (MirrorStore / readThrough concept) (P3) · FEATURE-016
+    - [x] [TASK-047](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-047-xaml-sync-status-indicator.md) Xaml sync-status indicator (offline / syncing / synced) (P3) · FEATURE-016
+    - [x] [TASK-048](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-048-xaml-audio-cue.md) Xaml audio-cue device util (beep + vibrate) (P3) · FEATURE-016
+  - STORY-041 BMobileAppShell showcase / placement — done (2/2 done) (done)
+    - [x] [TASK-049](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-049-bmobileappshell-playground-placement.md) BMobileAppShell — better placement / demo in Birko.Web.Playground (P2) · FEATURE-016
+    - [x] [TASK-050](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-050-bmobileappshell-xaml-gallery.md) BMobileAppShell (Xaml) — showcase in Birko.Xaml.Gallery (P3) · FEATURE-016
   - STORY-052 Component gaps found by consumers adopting the `b-*` catalogue — in-progress (4/4 done)
-    - [x] TASK-104 `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels) · FEATURE-016
-    - [x] TASK-105 `b-card`: the missing `md` padding rung, and elevation as a token · FEATURE-016
-    - [x] TASK-107 `b-button`: a reachable tap target, and form participation · FEATURE-016
-    - [x] TASK-135 `b-input type="decimal"`: comma-locale decimal entry, owned by the component · FEATURE-016
+    - [x] [TASK-104](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-104-b-chart-small-chart-axis-polish.md) `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels) (P3) · FEATURE-016
+    - [x] [TASK-105](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-105-b-card-padding-md-and-shadow-token.md) `b-card`: the missing `md` padding rung, and elevation as a token (P3) · FEATURE-016
+    - [x] [TASK-107](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-107-b-button-tap-target-and-form-participation.md) `b-button`: a reachable tap target, and form participation (P2) · FEATURE-016
+    - [x] [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1) · FEATURE-016
 - **EPIC-017** Tenant isolation hardening — in-progress (0/1 tasks done)
-  - STORY-044 Opt-in strict (fail-closed) tenancy mode — done (0/0 done)
-  - STORY-045 Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped — done (0/0 done)
+  - STORY-044 Opt-in strict (fail-closed) tenancy mode — done (0/0 done) (done)
+  - STORY-045 Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped — done (0/0 done) (done)
   - STORY-046 Restore ambient (tenant) scope for background event dispatch — in-progress (0/1 done)
-    - [ ] TASK-148 `ScopeRestorationBehavior` for the distributed-consumer dispatch path ⚠ blocked · FEATURE-017
-- **EPIC-018** Birko.Web.Core — the browser-side runtime — in-progress (4/4 tasks done)
-  - [x] TASK-198 `fetch` has no timeout, so a dead connection hung the app forever — and a stalled body reported success · FEATURE-018
-  - [x] TASK-199 `SyncManager` had no name for a write that had already landed · FEATURE-018
-  - [x] TASK-202 `ApiClient.get` corrupted any endpoint that already carried a query string · FEATURE-018
-  - [x] TASK-203 "nothing recorded" and "never synced" both read as `[]` · FEATURE-018
+    - [ ] [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3) · FEATURE-017 ⚠ blocked
+- **EPIC-018** Birko.Web.Core — the browser-side runtime — in-progress (5/5 tasks done)
+  - [x] [TASK-198](EPIC-018-birko-web-core-runtime/TASK-198-fetch-has-no-timeout-so-a-dead-connection-hangs-forever.md) `fetch` has no timeout, so a dead connection hung the app forever — and a stalled body reported success (P0) · FEATURE-018
+  - [x] [TASK-199](EPIC-018-birko-web-core-runtime/TASK-199-syncmanager-misreads-a-write-that-already-landed.md) `SyncManager` had no name for a write that had already landed (P1) · FEATURE-018
+  - [x] [TASK-202](EPIC-018-birko-web-core-runtime/TASK-202-apiclient-get-corrupted-an-inline-query-string.md) `ApiClient.get` corrupted any endpoint that already carried a query string (P1) · FEATURE-018
+  - [x] [TASK-203](EPIC-018-birko-web-core-runtime/TASK-203-nothing-recorded-and-never-synced-both-read-as-empty.md) "nothing recorded" and "never synced" both read as `[]` (P2) · FEATURE-018
+  - [x] [TASK-493](EPIC-018-birko-web-core-runtime/TASK-493-apiclient-getheaders-and-patch.md) `ApiClient` had no generic request-header hook and no `patch()` (P1) · FEATURE-018
 
 ## Loose tasks
 
-- [x] TASK-036 Reorganize C:\Source into Birko/{Framework,Framework.Tests,Consumers} + aicode bucket (P1, ai)
-- [ ] TASK-130 Scan every shipped theme for colour contrast, and gate it like the drift check (P1, ai)
-- [ ] TASK-140 `resolveModuleFromHash` derives the module positionally and never consults the route table (P1, ai)
-- [ ] TASK-200 Symbio: an outbox replay duplicates a create, and TASK-151 scoped the cause out of itself (P1, ai)
-- [x] TASK-457 Consolidate the 349-repo framework polyrepo into one repo under a GitHub org (P1, ai)
-- [ ] TASK-127 Decide what `WithAllTenants` means when a tenant is also in scope (P2, human)
-- [ ] TASK-138 `ReadAsync()` with no arguments does not compile — CS0121 between the read-all and filtered overloads (P2, ai)
-- [ ] TASK-139 Decide whether a `pointer: coarse` rule inside a `b-*` component is policy or a knob (P2, human)
-- [ ] TASK-142 The spec map silently under-covers, and nothing detects it (P2, human)
-- [ ] TASK-143 Stores that override public CRUD instead of `*Core` defeat every base-class guard (P2, human)
-- [ ] TASK-145 Nothing at the `GetUnwrappedStore` call sites says they strip every decorator (P2, ai)
-- [ ] TASK-147 `AttachTagAsync` validates neither a tag's existence nor its ownership (P2, human)
-- [ ] TASK-149 A story that tracks work without task files is invisible to every scheduler (P2, human)
-- [x] TASK-201 Reps: declare `idPinned` on the client-minted creates — and not on the one that must not have it (P2, ai)
-- [ ] TASK-206 `HybridCache`'s L2 fallback filter cannot tell a misconfiguration from an outage (P2, human)
-- [ ] TASK-297 `.vscode/tasks.json` and `launch.json` target a project this repo does not contain (P2, ai)
-- [x] TASK-449 `PerlinNoise` and `SimplexNoise` take a seed but are not reproducible across .NET versions (P2, ai)
-- [x] TASK-459 Five tests fail on Linux that pass on Windows (P2, ai)
-- [x] TASK-461 Sandbox covers every reachable area, and reports it readably (P2, ai)
-- ~~TASK-463 `TagServiceBase` is documented in three places and exists in none — CANCELLED, the premise was false~~ (P2, ai)
-- [ ] TASK-466 Firefox shows no validation bubble for an invalid `b-*` control, and logs an error instead (P2, ai)
-- [ ] TASK-468 `BIRKO_SRC` names the Framework checkout to MSBuild and the Web checkout to esbuild (P2, ai)
-- [ ] TASK-059 Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3, ai)
-- [ ] TASK-106 Decide whether `::part` is a catalogue convention or stays a one-off (P3, human)
-- ~~TASK-235 `FisData.Stock.Angular.Server` will fail `NETSDK1087` when its net10 migration lands~~ (P3, ai)
-- [x] TASK-444 `Birko.Models.Inventory` had no stock-balance model, and `IBatchable` had no implementors (P3, unassigned)
-- [x] TASK-455 `Udp` cannot receive multicast, and binds exclusively — LAN device discovery is not expressible (P3, ai)
-- [x] TASK-458 Turn `PREZENTACIA.md` into published framework documentation (P3, ai)
-- [ ] TASK-460 Move the 350 archived repos into an attic org (P3, ai)
-- [x] TASK-462 Two warnings a consumer sees on every build (P3, ai)
-- [x] TASK-464 ~~An unconfigured sync file store throws where its async twin returns empty~~ (P3, ai)
-- [ ] TASK-465 Every `pr:` SHA recorded before the monorepo resolves to nothing (P3, ai)
-- [ ] TASK-467 Borrowed validity enforces nothing, silently, where the engine lacks the input type (P3, ai)
-- [ ] TASK-469 Decide whether Birko gets a Meilisearch backend — and if so, at which layer (P3, human)
-- [ ] TASK-470 Three lessons never reached the rulebook, and one entry claims a promotion that never happened (P3, ai)
+- [x] [TASK-036](_loose/TASK-036-workspace-reorg-birko-framework-consumers-buckets.md) Reorganize C:\Source into Birko/{Framework,Framework.Tests,Consumers} + aicode bucket (P1)
+- [ ] [TASK-059](_loose/TASK-059-nested-projitems-import-convention-decision.md) Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3)
+- [ ] [TASK-106](_loose/TASK-106-css-part-as-a-catalogue-convention-decision.md) Decide whether `::part` is a catalogue convention or stays a one-off (P3)
+- [ ] [TASK-127](_loose/TASK-127-all-tenants-scope-and-ambient-tenant-decision.md) Decide what `WithAllTenants` means when a tenant is also in scope (P2)
+- [ ] [TASK-130](_loose/TASK-130-theme-contrast-scanner-gate.md) Scan every shipped theme for colour contrast, and gate it like the drift check (P1)
+- [ ] [TASK-138](_loose/TASK-138-readasync-zero-arg-overload-ambiguity.md) `ReadAsync()` with no arguments does not compile — CS0121 between the read-all and filtered overloads (P2)
+- [ ] [TASK-139](_loose/TASK-139-coarse-pointer-policy-vs-knob-in-the-component-catalogue.md) Decide whether a `pointer: coarse` rule inside a `b-*` component is policy or a knob (P2)
+- [ ] [TASK-140](_loose/TASK-140-resolve-module-from-hash-ignores-the-route-table.md) `resolveModuleFromHash` derives the module positionally and never consults the route table (P1)
+- [ ] [TASK-142](_loose/TASK-142-spec-map-coverage-audit.md) The spec map silently under-covers, and nothing detects it (P2)
+- [ ] [TASK-143](_loose/TASK-143-public-crud-overrides-defeat-base-guards.md) Stores that override public CRUD instead of `*Core` defeat every base-class guard (P2)
+- [ ] [TASK-145](_loose/TASK-145-document-the-decorator-stripping-escape-hatch.md) Nothing at the `GetUnwrappedStore` call sites says they strip every decorator (P2)
+- [ ] [TASK-147](_loose/TASK-147-attachtag-does-not-validate-tag-ownership.md) `AttachTagAsync` validates neither a tag's existence nor its ownership (P2)
+- [ ] [TASK-149](_loose/TASK-149-story-level-tracking-is-invisible-to-every-scheduler.md) A story that tracks work without task files is invisible to every scheduler (P2)
+- [ ] [TASK-200](_loose/TASK-200-symbio-outbox-replay-duplicates-a-create.md) Symbio: an outbox replay duplicates a create, and TASK-151 scoped the cause out of itself (P1)
+- [x] [TASK-201](_loose/TASK-201-reps-declare-idpinned-on-client-minted-creates.md) Reps: declare `idPinned` on the client-minted creates — and not on the one that must not have it (P2)
+- [ ] [TASK-206](_loose/TASK-206-hybrid-l2-fallback-cannot-tell-misconfiguration-from-outage.md) `HybridCache`'s L2 fallback filter cannot tell a misconfiguration from an outage (P2)
+- ~~[TASK-235](_loose/TASK-235-fisdata-angular-will-hit-netsdk1087-on-migration.md) `FisData.Stock.Angular.Server` will fail `NETSDK1087` when its net10 migration lands~~ (P3)
+- [ ] [TASK-297](_loose/TASK-297-vscode-configs-target-nonexistent-project.md) `.vscode/tasks.json` and `launch.json` target a project this repo does not contain (P2)
+- [x] [TASK-444](_loose/TASK-444-inventory-stock-balance-and-batchable.md) `Birko.Models.Inventory` had no stock-balance model, and `IBatchable` had no implementors (P3)
+- [x] [TASK-449](_loose/TASK-449-perlin-simplex-noise-not-reproducible-across-dotnet-versions.md) `PerlinNoise` and `SimplexNoise` take a seed but are not reproducible across .NET versions (P2)
+- [x] [TASK-455](_loose/TASK-455.md) `Udp` cannot receive multicast, and binds exclusively — LAN device discovery is not expressible (P3)
+- [x] [TASK-457](_loose/TASK-457-consolidate-the-framework-polyrepo-into-one-repo.md) Consolidate the 349-repo framework polyrepo into one repo under a GitHub org (P1)
+- [x] [TASK-458](_loose/TASK-458-turn-prezentacia-into-framework-documentation.md) Turn `PREZENTACIA.md` into published framework documentation (P3)
+- [x] [TASK-459](_loose/TASK-459-five-suites-fail-on-linux.md) Five tests fail on Linux that pass on Windows (P2)
+- [ ] [TASK-460](_loose/TASK-460-move-the-350-archived-repos-to-an-attic-org.md) Move the 350 archived repos into an attic org (P3)
+- [x] [TASK-461](_loose/TASK-461-sandbox-covers-all-areas-with-a-readable-report.md) Sandbox covers every reachable area, and reports it readably (P2)
+- [x] [TASK-462](_loose/TASK-462-xml-store-nullable-warning.md) Two warnings a consumer sees on every build (P3)
+- ~~[TASK-463](_loose/TASK-463-tagservicebase-is-documented-but-does-not-exist.md) ~~`TagServiceBase` is documented in three places and exists in none~~ — CANCELLED, the premise was false~~ (P2  # rating stands as filed; the premise, not the rating, was wrong)
+- [x] [TASK-464](_loose/TASK-464-sync-file-stores-throw-where-async-degrades.md) ~~An unconfigured sync file store throws where its async twin returns empty~~ (P3)
+- [ ] [TASK-465](_loose/TASK-465-pre-monorepo-commit-shas-are-dangling.md) Every `pr:` SHA recorded before the monorepo resolves to nothing (P3)
+- [ ] [TASK-466](_loose/TASK-466-firefox-shows-no-validation-bubble-for-b-controls.md) Firefox shows no validation bubble for an invalid `b-*` control, and logs an error instead (P2) · FEATURE-001
+- [ ] [TASK-467](_loose/TASK-467-borrowed-validity-is-silent-where-the-engine-lacks-the-input-type.md) Borrowed validity enforces nothing, silently, where the engine lacks the input type (P3) · FEATURE-001
+- [ ] [TASK-468](_loose/TASK-468-birko-src-names-two-different-checkouts.md) `BIRKO_SRC` names the Framework checkout to MSBuild and the Web checkout to esbuild (P2)
+- [ ] [TASK-469](_loose/TASK-469-decide-whether-birko-gets-a-meilisearch-backend.md) Decide whether Birko gets a Meilisearch backend — and if so, at which layer (P3)
+- [ ] [TASK-470](_loose/TASK-470-three-lessons-never-reached-the-rulebook.md) Three lessons never reached the rulebook, and one entry claims a promotion that never happened (P3)
+- [x] [TASK-483](_loose/TASK-483-tool-executeasync-keeps-its-abstract-signature.md) `Tool.ExecuteAsync` keeps its abstract signature — the break was right, the silence was not (P2)
+- [ ] [TASK-487](_loose/TASK-487-birko-web-consumed-by-source-path.md) `Birko.Web.*` is consumed by source path, so no build records which commit it carries (P3)
 
 ## Completed
 
-<details>
-<summary>1 completed epic(s)</summary>
+<details><summary>1 closed epic(s)</summary>
 
 - **EPIC-009** Birko.Communication — Remaining protocols — done (2/2 tasks done)
-  - STORY-019 gRPC support — done (1/1 done)
-    - [x] TASK-026 gRPC client + server support · FEATURE-009
-  - STORY-020 OAuth2 authorization server — done (1/1 done)
-    - [x] TASK-027 Implement Birko.Security.OAuth.Server · FEATURE-009
+  - STORY-019 gRPC support — done (1/1 done) (done)
+    - [x] [TASK-026](EPIC-009-communication-protocols/STORY-019-grpc/TASK-026-grpc-client-server.md) gRPC client + server support (P2) · FEATURE-009
+  - STORY-020 OAuth2 authorization server — done (1/1 done) (done)
+    - [x] [TASK-027](EPIC-009-communication-protocols/STORY-020-oauth2-server/TASK-027-birko-security-oauth-server.md) Implement Birko.Security.OAuth.Server (P2) · FEATURE-009
 
 </details>
