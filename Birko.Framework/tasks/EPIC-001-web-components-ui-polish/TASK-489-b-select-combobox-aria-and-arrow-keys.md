@@ -2,7 +2,7 @@
 id: TASK-489
 parent: EPIC-001
 feature: FEATURE-001
-status: todo
+status: review
 priority: P2
 assignee: ai
 created: 2026-09-25
@@ -40,24 +40,45 @@ not the pattern.
 `aria-controls`, and its dropdown has `role="group"`. It has no arrow-key navigation either. Keep this
 task to `b-select`, and note the multi-select gap in the verdict.
 
+## Implementation plan
+
+1. Input: `role="combobox"`, `aria-autocomplete="list"`, `aria-controls` → `${uid}-listbox`,
+   `aria-expanded` kept in sync on every open and close path (`_openDropdown`, the input-opens path,
+   `_closeDropdown`, `_selectValue`).
+2. Dropdown: `role="listbox"`. Rows: `role="option"`, a stable `id`, `aria-selected`. The create row is an
+   option. "No matches" is an `aria-disabled` option, never navigable. Grouped options are wrapped in
+   `role="group"` labelled by their (`aria-hidden`) group header.
+3. Keys: ArrowDown/ArrowUp open the list if closed, then move `.active` and `aria-activedescendant`
+   (starting from the selected option, clamped at the ends, scrolled into view). Enter with an active row
+   selects it, or creates it for the create row. With no active row, the existing Enter behaviour is kept
+   (create / free text / fall through to `b-form` submit). Filtering resets the highlight.
+4. **Focus stays in the field.** The Enter and Escape paths called `input.blur()`, which drops keyboard
+   focus onto `<body>`: after picking a value, a keyboard or screen-reader user was nowhere. That is this
+   task's subject (keyboard use), so it is fixed here.
+5. Playground `select-combobox-smoke` (roles, IDREFs, keys, focus) plus a role case in
+   `a11y-name-check.mjs` (Chromium computes `combobox`). Prove both can fail.
+
 ## Acceptance criteria
 
-- [ ] The searchable input exposes the ARIA 1.2 combobox pattern: `role="combobox"`,
+- [x] The searchable input exposes the ARIA 1.2 combobox pattern: `role="combobox"`,
       `aria-expanded`, `aria-controls` → the listbox, `aria-autocomplete="list"`.
-- [ ] The dropdown is `role="listbox"`, each option `role="option"` with `aria-selected`, and group labels
+- [x] The dropdown is `role="listbox"`, each option `role="option"` with `aria-selected`, and group labels
       are exposed as groups (or are presentational), never as options.
-- [ ] ArrowDown/ArrowUp open the list and move a highlighted option (`.active`), tracked through
+- [x] ArrowDown/ArrowUp open the list and move a highlighted option (`.active`), tracked through
       `aria-activedescendant`. Enter selects the highlighted option. Home/End are optional.
-- [ ] The `creatable` create row takes part in the same navigation as a final option.
-- [ ] Enter with no highlighted option and an empty query still falls through to `b-form`'s
+- [x] The `creatable` create row takes part in the same navigation as a final option.
+- [x] Enter with no highlighted option and an empty query still falls through to `b-form`'s
       submit-on-Enter. That is the behaviour [[TASK-488]] pinned.
-- [ ] Playground smoke asserts the roles, the arrow-key movement, and that `aria-activedescendant` follows
+- [x] Playground smoke asserts the roles, the arrow-key movement, and that `aria-activedescendant` follows
       it. It is proven able to fail.
-- [ ] Nothing changes in native (non-searchable) mode, which is already a real `<select>`.
+- [x] Nothing changes in native (non-searchable) mode, which is already a real `<select>`.
 
 ## Out of scope
 
-- `b-multi-select`'s keyboard navigation. Record a verdict on it here; if it is warranted, spawn it.
+- `b-multi-select`'s keyboard navigation. **Verdict (2026-09-26):** operable. Its rows are real checkboxes in
+  DOM order right after the container, so Tab reaches them and Space toggles them. Arrow keys would be nicer
+  but are not needed for access, so there is no task. Its `aria-haspopup="true"` announces a *menu*, which the
+  popup is not → an acceptance line on [[TASK-490]], which edits that control anyway.
 - Restyling the dropdown.
 
 ## Human test plan
@@ -65,3 +86,16 @@ task to `b-select`, and note the multi-select gap in the verdict.
 - [ ] NVDA or Narrator on a searchable `b-select` in the Playground: the field is announced as a combobox,
       the match count or the highlighted option is read while arrowing, and selecting announces the
       value.
+
+## Progress log
+
+- 2026-09-26 — `b-select` searchable mode: `role="combobox"` + `aria-autocomplete` / `aria-expanded` /
+  `aria-controls` / `aria-activedescendant`; the dropdown is a `listbox` of `option`s (with ids and
+  `aria-selected`), groups are `role="group"` labelled by an `aria-hidden` header, "No matches" is an
+  `aria-disabled` option, and the create row is an option. ArrowDown/ArrowUp open the list and move the
+  highlight (starting at the selected option, clamped); Enter activates it. The `blur()` calls on Enter and
+  Escape are removed, so focus stays in the field.
+- 2026-09-26 — `Birko.Web.Playground` `select-combobox-smoke` 31/31 (7/31 against the pre-change `b-select`),
+  plus a role case in `a11y-name-check.mjs` (Chromium computes `combobox "Picker combobox"`; before, a
+  `textbox`). `verify.mjs` 0 failing, `device-fix-check` 68/68, `a11y-description-check` PASS, `tsc` clean.
+  The screen-reader step is pending → `review`.

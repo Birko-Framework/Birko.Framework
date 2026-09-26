@@ -51,6 +51,8 @@ Two things need a decision, not just code:
       that page code migrated if the API changes).
 - [ ] If `create`'s detail shape changes, a `CHANGELOG.md` breaking-change entry covers it, and Symbio's
       three listeners are migrated or filed.
+- [ ] `b-multi-select`'s container stops announcing a menu: `aria-haspopup="true"` is a menu, and its popup is a
+      group of checkboxes (verdict recorded on [[TASK-489]]).
 - [ ] Playground smoke covers `b-form` → `b-multi-select` create, both with and without a page listener,
       and is proven able to fail.
 
