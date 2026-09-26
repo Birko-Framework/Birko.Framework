@@ -137,6 +137,5 @@ with no `aria-label`. Chromium computes its name as "×", and NVDA reads "times,
   "sound good"; the field says **"collapsed"** (the state the first pass lost). NVDA's word for the role is "combo
   edit", and TASK-489's Menu group, which the owner accepted, says the same, so it is NVDA's term for an
   editable combobox, not a defect. After Enter NVDA reads the focused day button rather than "expanded": focus
-  has moved into the panel by design, and Escape returns it with "collapsed". **Not confirmed by ear:** that
-  the day is read with its date ("10 September 2026") at that moment. It is verified in Chromium's tree
-  (`a11y-name-check`). Reopen if NVDA reads a bare "button". → `done`.
+  has moved into the panel by design, and Escape returns it with "collapsed". Confirmed by ear right after:
+  NVDA reads **"Start date 10 September 2026 button"** (the dialog's name, the day, the role). → `done`.
