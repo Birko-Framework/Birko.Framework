@@ -4,6 +4,45 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-09-26 — BREAKING: `b-multi-select`'s `create` event carries `{ name: <field>, value }` and commits unless vetoed
+
+[[TASK-490]]. `Birko.Web.Components/src/inputs/b-multi-select.ts`, the `create` event fired by a
+`creatable` multi-select's "+ Create …" row:
+
+```ts
+// before: detail.name was the TYPED TEXT; the control added nothing itself
+{ name: 'Green' }
+// after: detail.name is the FIELD name, like every other b-* event; the event is cancelable,
+// and unless a listener calls preventDefault() the typed value is added as an option and selected
+{ name: 'tags', value: 'Green' }
+```
+
+**Why:** in a `b-form` with no page code the create row was a visible, clickable no-op, and `name` meant
+the field on every b-* event except this one.
+
+**No compiler will point at this.** `CustomEvent.detail` is untyped at every consumer, so an unmigrated
+listener keeps compiling and now reads the **field name** as the typed text. Symbio's would have created
+a tag called "tags". Find listeners by searching for `addEventListener('create'`.
+
+**Migration.** A listener that supplies its own option (a server-minted id) must filter on the field and
+veto the local commit, **synchronously, before its first `await`**:
+
+```ts
+el.addEventListener('create', async (e) => {
+  if (e.detail?.name !== 'tags') return;
+  e.preventDefault();
+  const typed = e.detail.value;          // was: e.detail.name
+  const tag = await createTag({ name: typed });
+  form.addFieldOption('tags', { value: tag.id, label: tag.name }, true);
+});
+```
+
+A listener that only wants to know is migrated by reading `value` and is otherwise unaffected. Without
+`preventDefault()` a server-minting listener gets **two** chips: the typed text and its own option.
+
+**Migrated:** Symbio's three tag listeners (`modules/{building,products,tasks}/list/list-page.ts`), in the
+same change. A search of every checkout under `C:\Source\Birko` found no other listener.
+
 ## 2026-07-09 — BREAKING: `Tool.ExecuteAsync` and `ILlmProvider` take a `CancellationToken`
 
 *Recorded 2026-09-23 by [[TASK-483]]. This entry is late by 2½ months — `6b4e374b` shipped the change
