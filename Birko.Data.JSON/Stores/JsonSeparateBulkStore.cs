@@ -66,7 +66,7 @@ namespace Birko.Data.JSON.Stores
                     File.Delete(file);
                 }
             }
-            Directory.Delete(Path!);
+            Directory.Delete(PathDirectory!);
         }
 
         #endregion

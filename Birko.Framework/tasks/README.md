@@ -17,7 +17,7 @@ which this regeneration never touches._
 | in-progress  | 7  | 9  | 0   |
 | review       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 191         |
+| done         | 1        | 23        | 192         |
 | cancelled    | 0   | 0   | 4    |
 
 `todo` by priority: 32× P1 · 104× P2 · 30× P3.
@@ -467,6 +467,7 @@ _None_
 - [ ] [TASK-487](_loose/TASK-487-birko-web-consumed-by-source-path.md) `Birko.Web.*` is consumed by source path, so no build records which commit it carries (P3)
 - [x] [TASK-498](_loose/TASK-498-propertyupdate-increment.md) `PropertyUpdate<T>` can only SET a constant — add an atomic `Increment` (P1)
 - [x] [TASK-499](_loose/TASK-499-storelocator-leaves-remote-stores-unconfigured.md) StoreLocator hands out ElasticSearch, CosmosDB, InfluxDB, MongoDB and RavenDB stores unconfigured (P1)
+- [x] [TASK-504](_loose/TASK-504-json-separate-bulk-destroy-deletes-wrong-path.md) Destroying a populated JsonSeparateBulkStore / JsonBatchBulkStore throws (P1)
 
 ## Completed
 
