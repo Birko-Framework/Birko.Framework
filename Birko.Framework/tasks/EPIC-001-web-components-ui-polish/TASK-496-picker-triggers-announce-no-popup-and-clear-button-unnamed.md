@@ -2,7 +2,7 @@
 id: TASK-496
 parent: EPIC-001
 feature: FEATURE-001
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-26
@@ -87,7 +87,7 @@ with no `aria-label`. Chromium computes its name as "×", and NVDA reads "times,
 
 ## Human test plan
 
-- [ ] Screen reader: Tab to a date range, a date and a time picker. Each announces a popup and its state;
+- [x] Screen reader: Tab to a date range, a date and a time picker. Each announces a popup and its state;
       Enter opens it, you can pick a date without the mouse, and Escape returns you to the field. The ×
       after a filled Menu group reads "Clear, button".
 
@@ -133,3 +133,10 @@ with no `aria-label`. Chromium computes its name as "×", and NVDA reads "times,
   time controls); `picker-popup-smoke` 67/67 (55/67 before: not readonly, typing refused, stray text restored).
   `verify.mjs` 0 failing twice, `device-fix-check` 68/68, `a11y-description-check` PASS. The human test plan is
   unticked again → `review`, pending the owner's second NVDA pass.
+- 2026-09-26 — Owner's second NVDA pass: "Previous month" / "Next month" are read correctly; `b-time`'s spinners
+  "sound good"; the field says **"collapsed"** (the state the first pass lost). NVDA's word for the role is "combo
+  edit", and TASK-489's Menu group, which the owner accepted, says the same, so it is NVDA's term for an
+  editable combobox, not a defect. After Enter NVDA reads the focused day button rather than "expanded": focus
+  has moved into the panel by design, and Escape returns it with "collapsed". **Not confirmed by ear:** that
+  the day is read with its date ("10 September 2026") at that moment. It is verified in Chromium's tree
+  (`a11y-name-check`). Reopen if NVDA reads a bare "button". → `done`.
