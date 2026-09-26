@@ -2,7 +2,7 @@
 id: TASK-497
 parent: EPIC-001
 feature: FEATURE-001
-status: in-progress
+status: review
 priority: P2
 assignee: ai
 created: 2026-09-26
@@ -34,6 +34,15 @@ single-thumb mode centred on the track, while in `mode="range"` both thumbs sit 
 why the fix must centre the inputs, not assume a height. Shrinking them (`min-height: 0`) was rejected: it
 would give up the touch-target floor the shared sheet exists to provide.
 
+### Second offset, found while fixing (2026-09-26)
+
+With the thumbs centred, the screenshot showed `sm` and `lg` thumbs stopping **short of both ends**. The
+same shared sheet's size variants (`:host([size="sm"|"lg"]) input { padding: … }`) pad every input by
+7px / 14px across and outrank `b-range`'s `padding: 0`. The thumb travels the padded content box while the
+track and fill are drawn at full width, so it stopped short at the ends and drifted off the fill between
+them. Single mode at `sm`/`lg` too. It is the same defect shape (a shared input rule that does not fit a
+range slider), so it is fixed here: `:host([size]) input[type="range"] { padding: 0 }`.
+
 ## Implementation plan
 
 1. `.range-slider--dual input[type=range]`: `top: 50%; transform: translateY(-50%)` instead of `top: 0`.
@@ -44,10 +53,10 @@ would give up the touch-target floor the shared sheet exists to provide.
 
 ## Acceptance criteria
 
-- [ ] In range mode, both thumbs are centred on the track at every `size`, like single mode.
-- [ ] The inputs keep their shared min-height (touch target unchanged).
-- [ ] Vertical orientation is checked and, if affected, fixed the same way.
-- [ ] Smoke proven able to fail; `verify.mjs` and `device-fix-check.mjs` stay green.
+- [x] In range mode, both thumbs are centred on the track at every `size`, like single mode.
+- [x] The inputs keep their shared min-height (touch target unchanged).
+- [x] Vertical orientation is checked and, if affected, fixed the same way.
+- [x] Smoke proven able to fail; `verify.mjs` and `device-fix-check.mjs` stay green.
 
 ## Out of scope
 
@@ -57,3 +66,15 @@ would give up the touch-target floor the shared sheet exists to provide.
 
 - [ ] Look at a range-mode `b-range` in the Playground (light and dark): the dots sit on the line. Drag each
       thumb to check it still grabs.
+
+## Progress log
+
+- 2026-09-26 — `.range-slider--dual input[type=range]`: `top: 50%; transform: translateY(-50%)` (was `top: 0`),
+  plus `:host([size]) input[type=range] { padding: 0 }`. Vertical orientation measured unaffected: its own,
+  more specific rules already centre with `left: 50%; translateX(-50%)`.
+- 2026-09-26 — `Birko.Web.Playground` `range-geometry-smoke` 26/26; 19/26 on the pre-fix `b-range`
+  (thumbs 1.8 / 6.1 / 8.8px low at sm / md / lg; travel 14px / 28px short at sm / lg). `verify.mjs` 0 failing,
+  `device-fix-check` 68/68, `a11y-name-check` 23/23; a mouse drag still grabs a range thumb (to → 50).
+  ⚠ The first "after" screenshot still showed the offset. It came from the throwaway `sr-creatable.js`
+  bundle, which embeds its own copy of the components and had not been rebuilt, so it was a stale picture.
+  The measured smoke was right. Screenshots now come from `app.js`. The owner's visual check is pending → `review`.
