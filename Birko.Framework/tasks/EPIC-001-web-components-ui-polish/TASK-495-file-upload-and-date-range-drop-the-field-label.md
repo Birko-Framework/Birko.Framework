@@ -2,7 +2,7 @@
 id: TASK-495
 parent: EPIC-001
 feature: FEATURE-001
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-26
@@ -69,7 +69,7 @@ labelled) `aria-labelledby="${uid}-label <part id>"`, which references the eleme
 
 ## Human test plan
 
-- [ ] Screen reader: Tab into a labelled date range and a labelled file upload. Each announces the field
+- [x] Screen reader: Tab into a labelled date range and a labelled file upload. Each announces the field
       label.
 
 ## Progress log
@@ -83,3 +83,6 @@ labelled) `aria-labelledby="${uid}-label <part id>"`, which references the eleme
   controls in the dangling-IDREF sweep. Before the fix: 5 of 22 failed, including both TASK-494 regressions
   (native range "Stay dates" ×2, `b-range` "Volume" ×2). After: 22/22. `verify.mjs` 0 failing,
   `a11y-description-check` PASS, `device-fix-check` 68/68, `tsc` clean. The screen-reader step is pending → `review`.
+- 2026-09-26 — The owner ran the screen-reader step and it passed: "Stay dates Start date", "Billing period Start date", "Volume
+  From/To" (sliders and number boxes), "Invoice file Choose files". → `done`. Found in the same pass: the custom picker
+  inputs announce "edit, read-only" with no hint that Enter opens a calendar → [[TASK-496]].

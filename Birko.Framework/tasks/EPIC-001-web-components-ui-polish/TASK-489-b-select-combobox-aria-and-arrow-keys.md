@@ -2,7 +2,7 @@
 id: TASK-489
 parent: EPIC-001
 feature: FEATURE-001
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-25
@@ -83,7 +83,7 @@ task to `b-select`, and note the multi-select gap in the verdict.
 
 ## Human test plan
 
-- [ ] NVDA or Narrator on a searchable `b-select` in the Playground: the field is announced as a combobox,
+- [x] NVDA or Narrator on a searchable `b-select` in the Playground: the field is announced as a combobox,
       the match count or the highlighted option is read while arrowing, and selecting announces the
       value.
 
@@ -99,3 +99,6 @@ task to `b-select`, and note the multi-select gap in the verdict.
   plus a role case in `a11y-name-check.mjs` (Chromium computes `combobox "Picker combobox"`; before, a
   `textbox`). `verify.mjs` 0 failing, `device-fix-check` 68/68, `a11y-description-check` PASS, `tsc` clean.
   The screen-reader step is pending → `review`.
+- 2026-09-26 — The owner ran the screen-reader step and it passed: "Menu group, combo box, collapsed, required, header"; ArrowDown
+  expands and reads the options from the selected one; Enter collapses with focus kept; the create row is reachable;
+  Escape keeps focus. → `done`. Found in the same pass: the × clear button has no name → [[TASK-496]].
