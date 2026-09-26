@@ -2,7 +2,7 @@
 id: TASK-497
 parent: EPIC-001
 feature: FEATURE-001
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-26
@@ -64,7 +64,7 @@ range slider), so it is fixed here: `:host([size]) input[type="range"] { padding
 
 ## Human test plan
 
-- [ ] Look at a range-mode `b-range` in the Playground (light and dark): the dots sit on the line. Drag each
+- [x] Look at a range-mode `b-range` in the Playground (light and dark): the dots sit on the line. Drag each
       thumb to check it still grabs.
 
 ## Progress log
@@ -78,3 +78,4 @@ range slider), so it is fixed here: `:host([size]) input[type="range"] { padding
   ⚠ The first "after" screenshot still showed the offset. It came from the throwaway `sr-creatable.js`
   bundle, which embeds its own copy of the components and had not been rebuilt, so it was a stale picture.
   The measured smoke was right. Screenshots now come from `app.js`. The owner's visual check is pending → `review`.
+- 2026-09-26 — Owner's visual check passed ("slider looks correct") → `done`.
