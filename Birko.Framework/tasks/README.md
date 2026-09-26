@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-09-26 12:31. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-26 16:59. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,14 +13,14 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10     | 25     | —                   |
-| todo         | —                  | —                  | 161         |
+| todo         | —                  | —                  | 166         |
 | in-progress  | 7  | 9  | 0   |
 | review       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 188         |
+| done         | 1        | 23        | 191         |
 | cancelled    | 0   | 0   | 4    |
 
-`todo` by priority: 32× P1 · 100× P2 · 29× P3.
+`todo` by priority: 32× P1 · 104× P2 · 30× P3.
 
 ## In progress now
 
@@ -130,12 +130,12 @@ _None_
     - [ ] [TASK-060](EPIC-011-test-coverage-gaps/STORY-047-null-filter-live-parser-review/TASK-060-run-and-review-live-null-tests.md) Run & review the live null-filter parser tests (P2) · FEATURE-011
 - **EPIC-012** Birko.MessageQueue.MQTT — v5 features — planned (0/1 tasks done)
   - [ ] [TASK-034](EPIC-012-mqtt-v5-features/TASK-034-mqtt-v5-topic-aliases-user-properties.md) MQTT v5 topic aliases + user properties (P2) · FEATURE-012
-- **EPIC-013** Reference consumers — integration smoke harness + Web playground — in-progress (2/4 tasks done)
+- **EPIC-013** Reference consumers — integration smoke harness + Web playground — in-progress (3/4 tasks done)
   - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer (P2) · FEATURE-013
-  - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
+  - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (120/209 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (121/213 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [ ] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -180,7 +180,7 @@ _None_
   - [x] [TASK-255](EPIC-014-code-review-remediation/TASK-255-continuous-aggregate-hardcodes-its-time-column.md) `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door (P2) · FEATURE-014
   - [x] [TASK-256](EPIC-014-code-review-remediation/TASK-256-postgres-copy-cannot-bind-a-utc-datetime.md) PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it (P1) · FEATURE-014
   - [x] [TASK-257](EPIC-014-code-review-remediation/TASK-257-mssql-maps-unlengthed-strings-to-text.md) On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works** (P1) · FEATURE-014
-  - [ ] [TASK-258](EPIC-014-code-review-remediation/TASK-258-retrywhenowned-preserves-nothing-that-is-asserted.md) `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does (P2) · FEATURE-014
+  - [x] [TASK-258](EPIC-014-code-review-remediation/TASK-258-retrywhenowned-preserves-nothing-that-is-asserted.md) `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does (P2) · FEATURE-014
   - [x] [TASK-259](EPIC-014-code-review-remediation/TASK-259-schema-builder-publishes-its-connection-onto-a-cached-connector.md) `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it (P1) · FEATURE-014
   - [x] [TASK-260](EPIC-014-code-review-remediation/TASK-260-continuous-aggregate-takes-raw-sql-fragments.md) `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained (P2) · FEATURE-014
   - [x] [TASK-261](EPIC-014-code-review-remediation/TASK-261-getchunkinterval-reads-a-column-timescaledb-2-removed.md) `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0 (P2) · FEATURE-014
@@ -248,6 +248,10 @@ _None_
   - [x] [TASK-476](EPIC-014-code-review-remediation/TASK-476-the-audit-scripts-do-not-run-on-linux.md) The four root helper scripts are PowerShell, and they do not run on Linux (P2) · FEATURE-014
   - [x] [TASK-477](EPIC-014-code-review-remediation/TASK-477-the-probe-generator-never-produced-one-of-its-two-outputs.md) The cold-table probe generator did not run on Linux, and never produced one of its two outputs (P2) · FEATURE-014
   - [ ] [TASK-478](EPIC-014-code-review-remediation/TASK-478-wire-the-generated-file-drift-check-into-ci.md) Decide whether the generated-file drift check belongs in CI (P3) · FEATURE-014
+  - [ ] [TASK-500](EPIC-014-code-review-remediation/TASK-500-timestamp-audit-decorators-mutate-the-callers-propertyupdate.md) The Timestamp and Audit bulk decorators write into the caller's `PropertyUpdate` (P3)
+  - [ ] [TASK-501](EPIC-014-code-review-remediation/TASK-501-elasticsearch-update-script-writes-null-as-empty-string.md) Elasticsearch's native `PropertyUpdate` writes a null Set as `""` (P2)
+  - [ ] [TASK-502](EPIC-014-code-review-remediation/TASK-502-elasticsearch-update-by-query-discards-conflicts.md) Elasticsearch's native `PropertyUpdate` discards the UpdateByQuery response, so a version conflict is silent (P2)
+  - [ ] [TASK-503](EPIC-014-code-review-remediation/TASK-503-mongodb-native-update-ignores-bson-element-names.md) MongoDB's native `PropertyUpdate` writes under the C# name, ignoring `[BsonElement]` / `_id` mapping (P2)
   - STORY-024 Critical findings — done (0/0 done) (done)
   - STORY-025 High findings — done (0/0 done) (done)
   - STORY-026 Medium findings — in-progress (0/0 done)
@@ -451,7 +455,7 @@ _None_
 - [ ] [TASK-460](_loose/TASK-460-move-the-350-archived-repos-to-an-attic-org.md) Move the 350 archived repos into an attic org (P3)
 - [x] [TASK-461](_loose/TASK-461-sandbox-covers-all-areas-with-a-readable-report.md) Sandbox covers every reachable area, and reports it readably (P2)
 - [x] [TASK-462](_loose/TASK-462-xml-store-nullable-warning.md) Two warnings a consumer sees on every build (P3)
-- ~~[TASK-463](_loose/TASK-463-tagservicebase-is-documented-but-does-not-exist.md) ~~`TagServiceBase` is documented in three places and exists in none~~ — CANCELLED, the premise was false~~ (P2  # rating stands as filed; the premise, not the rating, was wrong)
+- ~~[TASK-463](_loose/TASK-463-tagservicebase-is-documented-but-does-not-exist.md) ~~`TagServiceBase` is documented in three places and exists in none~~ — CANCELLED, the premise was false~~ (P2)
 - [x] [TASK-464](_loose/TASK-464-sync-file-stores-throw-where-async-degrades.md) ~~An unconfigured sync file store throws where its async twin returns empty~~ (P3)
 - [ ] [TASK-465](_loose/TASK-465-pre-monorepo-commit-shas-are-dangling.md) Every `pr:` SHA recorded before the monorepo resolves to nothing (P3)
 - [ ] [TASK-466](_loose/TASK-466-firefox-shows-no-validation-bubble-for-b-controls.md) Firefox shows no validation bubble for an invalid `b-*` control, and logs an error instead (P2) · FEATURE-001
@@ -461,6 +465,7 @@ _None_
 - [ ] [TASK-470](_loose/TASK-470-three-lessons-never-reached-the-rulebook.md) Three lessons never reached the rulebook, and one entry claims a promotion that never happened (P3)
 - [x] [TASK-483](_loose/TASK-483-tool-executeasync-keeps-its-abstract-signature.md) `Tool.ExecuteAsync` keeps its abstract signature — the break was right, the silence was not (P2)
 - [ ] [TASK-487](_loose/TASK-487-birko-web-consumed-by-source-path.md) `Birko.Web.*` is consumed by source path, so no build records which commit it carries (P3)
+- [x] [TASK-498](_loose/TASK-498-propertyupdate-increment.md) `PropertyUpdate<T>` can only SET a constant — add an atomic `Increment` (P1)
 - [x] [TASK-499](_loose/TASK-499-storelocator-leaves-remote-stores-unconfigured.md) StoreLocator hands out ElasticSearch, CosmosDB, InfluxDB, MongoDB and RavenDB stores unconfigured (P1)
 
 ## Completed
