@@ -2,11 +2,11 @@
 id: TASK-488
 parent: EPIC-001
 feature: FEATURE-001
-status: review
+status: done
 priority: P1
 assignee: ai
 created: 2026-09-25
-depends-on: []
+depends-on: [TASK-494]
 blocks: []
 findings: []
 pr: null
@@ -77,7 +77,10 @@ where Escape and clicking away cancel. Mapping one to the other would have made 
 - [x] The same works for a standalone `<b-select searchable creatable>`.
 - [x] Existing selects without `creatable` behave exactly as before: no create option, no free text.
 - [x] Keyboard: type, then Enter (or choose the create option) commits it; Escape cancels. The accessible
-      name and the announcement are OK.
+      name and the announcement are OK. **Re-ticked 2026-09-26 after [[TASK-494]]**, which the owner's
+      screen-reader pass confirmed. Before that, it was **unticked on 2026-09-26:** keyboard and announcement hold, but the
+      screen-reader step showed the field has no accessible name (it was read as "header"). Wrongly ticked
+      on 2026-09-25 from the DOM, not from the accessibility tree. Framework-wide cause → [[TASK-494]].
 - [x] Tests cover `b-select` alone and the `b-form` → `b-select` wiring (the wiring is what was broken), and
       the suite is proven able to fail against the pre-fix `b-select`.
 - [x] Other `creatable: true` single-select fields across consumers are listed (below), so they can be
@@ -107,7 +110,7 @@ where Escape and clicking away cancel. Mapping one to the other would have made 
       *Menu group*. The "+ Create “footer-2”" row sits sensibly under any partial matches. Enter commits
       it, save succeeds, and reopening the item shows `footer-2`.
 - [x] Same form, press Escape mid-typing: the previous group is restored and nothing is created.
-- [ ] With a screen reader (NVDA or Narrator), typing a new value announces the create row, and committing
+- [x] With a screen reader (NVDA or Narrator), typing a new value announces the create row, and committing
       it announces "Created “…”". Whether it reads well is a judgement the smoke suite cannot make.
 - [x] The menu-group **filter** on the same page (`navigation-page.ts:54`): creating a new group there
       behaves in a way the owner finds acceptable.
@@ -129,3 +132,8 @@ b-select and worked"). **The screen-reader step has not been run**, so the task 
 - 2026-09-25 — Acceptance criteria ticked against the committed diff, with the evidence in the entries above.
   The owner ran human test steps 1, 2 and 4 on Symbio and they passed. → `review`; the screen-reader step
   is still pending.
+- 2026-09-26 — Owner's screen-reader run: Menu group was announced as "header", not by its label. Every
+  labelled b-* control is nameless ([[TASK-494]]). The accessible-name criterion is unticked; 488 now depends on 491.
+- 2026-09-26 — Screen-reader step run by the owner on the Playground test page after [[TASK-494]]: the field is
+  announced as "Menu group", and "Create “…”" / "Created “…”" are announced. All criteria and all four human
+  steps are met → `done`.
