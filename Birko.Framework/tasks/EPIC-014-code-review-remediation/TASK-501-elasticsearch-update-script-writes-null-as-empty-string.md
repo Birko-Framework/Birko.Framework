@@ -37,6 +37,10 @@ The substitution presumably exists because the script-params dictionary is `Dict
 - [ ] A null Set through the native Elasticsearch update stores null, for a string and for a nullable value type.
 - [ ] Shape test in `tests/Birko.Data.ElasticSearch.Tests/BuildUpdateScriptTests.cs` asserts no `""` substitution.
 - [ ] Measured against a live server if one is available; otherwise say so, per the family's live-suite rule.
+- [ ] `BuildUpdateScript` resolves the selector like `ApplyTo` and the MongoDB translator: a selector that is not a
+      property throws `ArgumentException` (today a non-member selector throws `InvalidCastException` from a hard
+      `(MemberExpression)` cast, and a public field is written as if it were a property). Grouped here because it is
+      the same function; found by the `bulk-filter-operations` spec regen after TASK-498 (2026-09-26).
 
 ## Out of scope
 
