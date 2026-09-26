@@ -73,8 +73,9 @@ non-default culture (that update is replayed as read-modify-save). Caveats, meas
   integer that overflows becomes a `REAL` instead of raising, where the other providers and the fallback throw.
 - **MySQL / MSSql:** a `decimal` without declared precision is `DECIMAL(10,0)` / `DECIMAL(18,0)` and loses its
   fraction on every write, increment or not — declare `[PrecisionField]` / `[ScaleField]`.
-- **MongoDB:** the driver stores `decimal` as a string by default, and `$inc` on a string fails at the server, so
-  the store refuses such an increment up front — mark the property `[BsonRepresentation(BsonType.Decimal128)]`.
+- **MongoDB:** a `decimal` is stored as Decimal128 by default (measured, MongoDB.Bson 3.12) and increments exactly.
+  A member opted into string storage (`[BsonRepresentation(BsonType.String)]`) is refused up front, since `$inc` on
+  a string fails at the server.
 - **ElasticSearch:** AutoMap maps `decimal` to `double`, so a decimal increment runs in double arithmetic.
 
 ## Aggregation

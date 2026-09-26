@@ -645,7 +645,8 @@ missing or the update has no assignments.
 
 #### Scenario: MongoDB refuses $inc on a string-stored member
 
-- **Given** an entity whose `decimal Amount` uses the driver's default (string) representation
+- **Given** an entity whose `decimal Amount` is configured with a string representation
+  (`[BsonRepresentation(BsonType.String)]`; the driver's default for `decimal` is Decimal128)
 - **When** `Update(filter, new PropertyUpdate<T>().Increment(x => x.Amount, 1m))` is called
 - **Then** it throws `NotSupportedException` naming `T.Amount` and suggesting
   `[BsonRepresentation(BsonType.Decimal128)]`, and nothing is sent to the server

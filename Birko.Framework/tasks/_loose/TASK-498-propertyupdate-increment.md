@@ -98,6 +98,12 @@ The live PostgreSQL/MySQL/MSSql/MongoDB twins are automated too; what they still
   non-default culture (refused); the ES "atomic" claim (corrected, TASK-502); an untested `float` (tested); a false
   doc pointer; the pattern registered in CLAUDE.md § Conventions. Spawned: TASK-500, 501, 502, 503. Security: pass.
 - Recent Updates rolled: the 2026-09-19 entry moved to CHANGELOG.md; entries now 6.5 KB.
+- 2026-09-26, after close — live suites run on local Docker (the workflow's images): PostgreSQL 4/4, MySQL 4/4,
+  MSSql 4/4 green, proving the bare-column fold and exact declared-precision decimals. MongoDB went red on one test,
+  and that **falsified the addendum's premise** (rule 54): MongoDB.Bson 3.12 stores `decimal` as **Decimal128** by
+  default, not String — measured with a probe. The refusal stays (it is right for an explicit string
+  representation); the live test, translator doc, README, CHANGELOG and spec wording were corrected, and the twin
+  now also proves a plain `decimal` increments exactly.
 
 ## Out of scope
 

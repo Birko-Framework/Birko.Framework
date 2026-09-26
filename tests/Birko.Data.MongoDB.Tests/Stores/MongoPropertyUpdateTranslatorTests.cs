@@ -14,7 +14,8 @@ namespace Birko.Data.MongoDB.Tests.Stores;
 /// <summary>
 /// TASK-498 — a <see cref="PropertyUpdate{T}"/> renders to one update document carrying <c>$set</c> and
 /// <c>$inc</c>, and an increment on a field the driver stores as a string is refused before anything is sent
-/// (<c>$inc</c> would fail at the server; the driver's default <c>decimal</c> representation is a string).
+/// (<c>$inc</c> would fail at the server). The driver's default <c>decimal</c> representation is Decimal128, so only an
+/// explicit string representation reaches the refusal.
 /// </summary>
 public class MongoPropertyUpdateTranslatorTests
 {

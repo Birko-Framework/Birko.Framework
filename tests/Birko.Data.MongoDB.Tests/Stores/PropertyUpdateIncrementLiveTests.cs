@@ -56,7 +56,11 @@ public class PropertyUpdateIncrementLiveTests
         [BsonRepresentation(BsonType.Decimal128)]
         public decimal Price { get; set; }
 
-        /// <summary>No attribute: the driver's default decimal representation is a string.</summary>
+        /// <summary>No attribute. Measured 2026-09-26: MongoDB.Bson 3.12 stores a decimal as Decimal128 by default.</summary>
+        public decimal PlainPrice { get; set; }
+
+        /// <summary>Opted into string storage — the only way a decimal reaches the $inc refusal.</summary>
+        [BsonRepresentation(BsonType.String)]
         public decimal PriceAsText { get; set; }
     }
 
@@ -69,7 +73,7 @@ public class PropertyUpdateIncrementLiveTests
 
     private static async Task<CounterDoc> SeedAsync(AsyncMongoDBStore<CounterDoc> store)
     {
-        var doc = new CounterDoc { Name = "target", Hits = 10, Ratio = 1.5, Price = 10.10m, PriceAsText = 10.10m };
+        var doc = new CounterDoc { Name = "target", Hits = 10, Ratio = 1.5, Price = 10.10m, PlainPrice = 10.10m, PriceAsText = 10.10m };
         await store.CreateAsync(doc);
         return doc;
     }
@@ -104,7 +108,7 @@ public class PropertyUpdateIncrementLiveTests
     }
 
     [Fact]
-    public async Task A_Decimal128_Decimal_Increments_Exactly()
+    public async Task A_Decimal_Increments_Exactly_With_And_Without_The_Attribute()
     {
         var host = ResolveHost();
         if (host == null) return;
@@ -114,9 +118,12 @@ public class PropertyUpdateIncrementLiveTests
         {
             var guid = (await SeedAsync(store)).Guid!.Value;
 
-            await store.UpdateAsync(x => x.Guid == guid, new PropertyUpdate<CounterDoc>().Increment(x => x.Price, 0.20m));
+            await store.UpdateAsync(x => x.Guid == guid,
+                new PropertyUpdate<CounterDoc>().Increment(x => x.Price, 0.20m).Increment(x => x.PlainPrice, 0.20m));
 
-            (await ReadAsync(store, guid)).Price.Should().Be(10.30m);
+            var after = await ReadAsync(store, guid);
+            after.Price.Should().Be(10.30m, "explicit Decimal128");
+            after.PlainPrice.Should().Be(10.30m, "the driver default is Decimal128 too, so no attribute is needed");
         }
         finally
         {

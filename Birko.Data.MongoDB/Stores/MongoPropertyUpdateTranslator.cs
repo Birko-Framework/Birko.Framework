@@ -34,8 +34,10 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <summary>
-        /// <c>$inc</c> on a field stored as a string fails at the server — and the driver stores <c>decimal</c> as a
-        /// string unless told otherwise. Refused here, before anything is sent, naming the fix.
+        /// <c>$inc</c> on a field stored as a string fails at the server, so a member configured with a string
+        /// representation (e.g. <c>[BsonRepresentation(BsonType.String)]</c> on a <c>decimal</c>) is refused here, before
+        /// anything is sent, naming the fix. The driver's own default for <c>decimal</c> is Decimal128 (measured on
+        /// MongoDB.Bson 3.12), which increments normally.
         /// </summary>
         private static void RefuseStringRepresentation<T>(string name)
         {

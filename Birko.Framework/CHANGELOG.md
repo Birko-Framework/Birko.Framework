@@ -48,7 +48,7 @@ atomic**, `checked`).
 public field) now throws `ArgumentException` from `ApplyTo` and from MongoDB's native update, where `ApplyTo` used to
 skip it and MongoDB used to `$set` it — SQL already refused it. And the SQL bulk stores render every `PropertyUpdate`
 through the connector's expression path, so the SET text changes from `col= @SETcol` to `col = @SETcol`; the bound
-parameter names are unchanged. Precision caveats per provider (SQLite decimals drift, MongoDB's default string decimal is refused,
+parameter names are unchanged. Precision caveats per provider (SQLite decimals drift, a string-represented MongoDB decimal is refused,
 undeclared-precision `DECIMAL` truncates on MySQL/MSSql) are in `Birko.Data.Stores/README.md`.
 
 ---
