@@ -113,3 +113,23 @@ with no `aria-label`. Chromium computes its name as "×", and NVDA reads "times,
 - 2026-09-26 — Checked in passing: `b-time`'s `_refreshPanel` re-runs `_wirePanel`, which looked as if it
   would stack click listeners. Measured: each hour-up press adds exactly one hour. Not a defect.
 - The screen-reader step is pending → `review`.
+- 2026-09-26 — **Screen-reader step FAILED (owner, NVDA).** (1) The pickers are read as "combo edit" with no
+  expanded/collapsed. Chrome does hand over `combobox, expanded=false, hasPopup=dialog`, but as
+  `editable` and **not settable**, because the input is `readonly`. TASK-489's Menu group is the same
+  combobox but settable, and NVDA reads it correctly ("combo box, collapsed"). NVDA evidently treats a
+  read-only editable combo as an edit field. (2) The time picker's ▲/▼ read only "button". (3) The calendar's
+  ◀/▶ read as "reverse play button" / "play button". Both are unnamed glyph buttons, and the hour/minute boxes
+  and day buttons ("10") are unnamed or context-free too. The smoke and name check passed because they asserted the
+  trigger's attributes and the × buttons, and never the panel's own controls or the settable state.
+  → Back to `in-progress`: drop `readonly` for a typing guard (`beforeinput` + `inputmode="none"`), the one
+  configuration measured to work in NVDA; name every glyph button, the time boxes and each day
+  ("10 September 2026", `aria-current="date"` on today); extend both checks to cover them.
+- 2026-09-26 — Fixed after the failed pass. The triggers drop `readonly` for `TYPING_GUARD_ATTRS` + `guardTyping`
+  (`beforeinput` cancelled; IME text that lands is restored), which makes Chrome report `settable: true`, the
+  shape NVDA read correctly on Menu group. `navAria` names ◀/▶ ("Previous month" … `bwc.date.*`, which also
+  replaces the range picker's hard-coded English), `dayAria` names each day "10 September 2026" (today gets
+  `aria-current="date"`), and `b-time`'s spinners and boxes are named ("Increase hours", "Hours" … `bwc.time.*`).
+  `a11y-name-check` 43/43 (9 failing on the previous commit: not settable, glyph buttons, bare days, unnamed
+  time controls); `picker-popup-smoke` 67/67 (55/67 before: not readonly, typing refused, stray text restored).
+  `verify.mjs` 0 failing twice, `device-fix-check` 68/68, `a11y-description-check` PASS. The human test plan is
+  unticked again → `review`, pending the owner's second NVDA pass.
