@@ -23,7 +23,7 @@ namespace Birko.Data.InfluxDB.Stores
     /// translating an arbitrary expression tree into an InfluxDB delete predicate and can only be verified
     /// against a live server — deferred as an enhancement; the base fallback is correct meanwhile.
     /// </remarks>
-    public class AsyncInfluxDBStore<T> : Data.Stores.AbstractAsyncBulkStore<T>, Data.Stores.ISettingsStore<Settings>, Data.Stores.IAsyncAggregatableStore<T>, System.IDisposable
+    public class AsyncInfluxDBStore<T> : Data.Stores.AbstractAsyncBulkStore<T>, Data.Stores.ISettingsStore<Settings>, Data.Stores.ISettingsStore<Birko.Configuration.ISettings>, Data.Stores.IAsyncAggregatableStore<T>, System.IDisposable
         where T : Data.Models.AbstractModel
     {
         /// <summary>

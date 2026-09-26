@@ -23,7 +23,7 @@ namespace Birko.Data.RavenDB.Stores;
 /// </summary>
 public class AsyncRavenDBStore<T>
     : AbstractAsyncBulkStore<T>
-    , ISettingsStore<Settings>
+    , ISettingsStore<Settings>, ISettingsStore<Birko.Configuration.ISettings>
     , IAsyncTransactionalStore<T, Raven.Client.Documents.Session.IAsyncDocumentSession>
     , IAsyncAggregatableStore<T>
     , IDisposable

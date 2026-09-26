@@ -20,7 +20,7 @@ namespace Birko.Data.CosmosDB.Stores;
 /// </summary>
 public class AsyncCosmosDBStore<T>
     : AbstractAsyncBulkStore<T>
-    , ISettingsStore<Settings>
+    , ISettingsStore<Settings>, ISettingsStore<Birko.Configuration.ISettings>
     , IAsyncTransactionalStore<T, TransactionalBatch>
     , IAsyncAggregatableStore<T>
     where T : AbstractModel

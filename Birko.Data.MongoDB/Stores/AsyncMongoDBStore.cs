@@ -20,7 +20,7 @@ namespace Birko.Data.MongoDB.Stores
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
     public class AsyncMongoDBStore<T>
         : Data.Stores.AbstractAsyncBulkStore<T>
-        , Data.Stores.ISettingsStore<Settings>
+        , Data.Stores.ISettingsStore<Settings>, Data.Stores.ISettingsStore<Birko.Configuration.ISettings>
         , Data.Stores.IAsyncTransactionalStore<T, IClientSessionHandle>
         , Data.Stores.IAsyncAggregatableStore<T>
         where T : Data.Models.AbstractModel

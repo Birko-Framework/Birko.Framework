@@ -18,7 +18,7 @@ namespace Birko.Data.CosmosDB.Stores;
 /// </summary>
 public class CosmosDBStore<T>
     : AbstractBulkStore<T>
-    , ISettingsStore<Settings>
+    , ISettingsStore<Settings>, ISettingsStore<Birko.Configuration.ISettings>
     , IAggregatableStore<T>
     where T : AbstractModel
 {

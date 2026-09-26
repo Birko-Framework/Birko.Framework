@@ -16,7 +16,7 @@ namespace Birko.Data.MongoDB.Stores
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
     public class MongoDBStore<T>
         : Data.Stores.AbstractBulkStore<T>
-        , Data.Stores.ISettingsStore<Settings>
+        , Data.Stores.ISettingsStore<Settings>, Data.Stores.ISettingsStore<Birko.Configuration.ISettings>
         , Data.Stores.ITransactionalStore<T, IClientSessionHandle>
         , Data.Stores.IAggregatableStore<T>
         where T : Models.MongoDBModel

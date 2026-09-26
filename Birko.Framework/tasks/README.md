@@ -17,7 +17,7 @@ which this regeneration never touches._
 | in-progress  | 7  | 9  | 0   |
 | review       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 187         |
+| done         | 1        | 23        | 188         |
 | cancelled    | 0   | 0   | 4    |
 
 `todo` by priority: 32× P1 · 100× P2 · 29× P3.
@@ -461,6 +461,7 @@ _None_
 - [ ] [TASK-470](_loose/TASK-470-three-lessons-never-reached-the-rulebook.md) Three lessons never reached the rulebook, and one entry claims a promotion that never happened (P3)
 - [x] [TASK-483](_loose/TASK-483-tool-executeasync-keeps-its-abstract-signature.md) `Tool.ExecuteAsync` keeps its abstract signature — the break was right, the silence was not (P2)
 - [ ] [TASK-487](_loose/TASK-487-birko-web-consumed-by-source-path.md) `Birko.Web.*` is consumed by source path, so no build records which commit it carries (P3)
+- [x] [TASK-499](_loose/TASK-499-storelocator-leaves-remote-stores-unconfigured.md) StoreLocator hands out ElasticSearch, CosmosDB, InfluxDB, MongoDB and RavenDB stores unconfigured (P1)
 
 ## Completed
 

@@ -18,7 +18,7 @@ namespace Birko.Data.ElasticSearch.Stores
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
     public class ElasticSearchStore<T>
         : AbstractBulkStore<T>
-        , ISettingsStore<Settings>
+        , ISettingsStore<Settings>, ISettingsStore<Birko.Configuration.ISettings>
         , IAggregatableStore<T>
          where T : Models.AbstractModel
     {

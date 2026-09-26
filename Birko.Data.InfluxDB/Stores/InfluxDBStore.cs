@@ -13,7 +13,7 @@ namespace Birko.Data.InfluxDB.Stores
     /// Synchronous InfluxDB data store for CRUD and bulk operations.
     /// </summary>
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
-    public class InfluxDBStore<T> : Data.Stores.AbstractBulkStore<T>, Data.Stores.ISettingsStore<Settings>, Data.Stores.IAggregatableStore<T>, System.IDisposable
+    public class InfluxDBStore<T> : Data.Stores.AbstractBulkStore<T>, Data.Stores.ISettingsStore<Settings>, Data.Stores.ISettingsStore<Birko.Configuration.ISettings>, Data.Stores.IAggregatableStore<T>, System.IDisposable
         where T : Models.AbstractModel
     {
         /// <summary>

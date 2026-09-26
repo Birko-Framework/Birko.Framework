@@ -21,7 +21,7 @@ namespace Birko.Data.RavenDB.Stores;
 /// </summary>
 public class RavenDBStore<T>
     : AbstractBulkStore<T>
-    , ISettingsStore<Settings>
+    , ISettingsStore<Settings>, ISettingsStore<Birko.Configuration.ISettings>
     , ITransactionalStore<T, Raven.Client.Documents.Session.IDocumentSession>
     , IAggregatableStore<T>
     , IDisposable
