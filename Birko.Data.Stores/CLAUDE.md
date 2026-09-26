@@ -29,7 +29,8 @@ Settings classes have been extracted to **Birko.Settings (namespace `Birko.Confi
 - **RemoteSettings** — Extends PasswordSettings with UserName, Port, UseSecure
 
 ### Filter-Based Bulk Operations
-- **PropertyUpdate\<T\>** — Fluent builder for expressing partial property updates (`Set<TProperty>(expr, value)`). Platforms translate to native operations (SQL SET, MongoDB $set, ES Painless scripts). Has `ApplyTo(entity)` reflection fallback.
+- **PropertyUpdate\<T\>** — Fluent builder for expressing partial property updates: `Set<TProperty>(expr, value)`, `Increment<TProperty>(expr, delta)` (`short`/`int`/`long`/`float`/`double`/`decimal`, top-level non-nullable properties), `Decrement` (alias). Platforms translate to native operations (SQL SET, MongoDB $set/$inc, ES Painless scripts). Has `ApplyTo(entity)` reflection fallback — read-modify-save, **not atomic** for an increment.
+  - Assignments are a closed hierarchy (`PropertyAssignment` → `SetAssignment` | `IncrementAssignment`, `PropertyAssignment.cs`) with **no shared `Value`**: a translator reaches an operand only through `Match(set, increment)`, so it cannot write an increment's delta as a constant without naming the increment branch, and a new kind breaks every translator at compile time (TASK-498).
 - **IBulkUpdateStore\<T\>** adds: `Update(filter, Action<T>)` (read-modify-save), `Update(filter, PropertyUpdate<T>)` (native)
 - **IBulkDeleteStore\<T\>** adds: `Delete(filter)` (native on SQL/MongoDB/ES, fallback on others)
 

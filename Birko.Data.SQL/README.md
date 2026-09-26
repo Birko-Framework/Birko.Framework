@@ -191,7 +191,7 @@ await store.DeleteAsync(x => x.IsExpired);
 await store.UpdateAsync(x => x.Price > 100, item => { item.Price *= 0.9m; });
 ```
 
-`PropertyUpdate<T>` assignments are translated to SQL SET clauses via the connector's field resolution. The filter expression is converted to a WHERE clause via `DataBase.ParseConditionExpression()`.
+`PropertyUpdate<T>` assignments are translated to SQL SET clauses by `Stores/PropertyUpdateSqlTranslator.cs` (shared by the sync and async bulk stores): a Set renders `col = @SETcol`, an `Increment` / `Decrement` renders `col = col + @SETcol`, all in one UPDATE. Column names come from table metadata and are emitted bare (rule 17 — framework DDL creates them unquoted); the connector quotes the table. The filter expression is converted to a WHERE clause via `DataBase.ParseConditionExpression()`.
 
 ### Filter translation notes
 

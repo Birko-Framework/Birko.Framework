@@ -23,6 +23,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)OrderBy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OrderByHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)TimeIntervalParser.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)PropertyAssignment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PropertyUpdate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreLocator.cs" />

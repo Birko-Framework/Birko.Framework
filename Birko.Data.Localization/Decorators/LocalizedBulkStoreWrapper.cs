@@ -223,6 +223,9 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
     {
+        // TASK-498: refused on every culture, before the culture decides the path.
+        LocalizedPropertyUpdateHelper.RefuseIncrementOnLocalizableField(updates, GetLocalizableFieldsFromInstance());
+
         // CR-L135: a native PropertyUpdate mutates the base column directly. When it targets a localizable
         // field on a non-default culture, that diverges from the value the Action<T> overload would persist
         // (a translation row). Detect that case and fall back to the read-modify-write path so the
@@ -230,6 +233,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
         if (IsNonDefaultCulture() &&
             LocalizedPropertyUpdateHelper.TouchesLocalizableField(updates, GetLocalizableFieldsFromInstance()))
         {
+            LocalizedPropertyUpdateHelper.RefuseIncrementOnReadModifyWriteFallback(updates);
             // The raw filter is handed on: the Action<T> overload rewrites it itself, and rewriting here
             // as well would resolve an already-resolved GUID membership test a second time.
             Update(filter, LocalizedPropertyUpdateHelper.ToAction(updates));

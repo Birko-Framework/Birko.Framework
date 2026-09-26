@@ -91,8 +91,8 @@ it describes shipped, and several because it shipped twice.
 - All stores implement: `IStore`, `IAsyncStore`, `IBulkStore`, `IAsyncBulkStore`
 - All repositories implement: `IRepository`, `IAsyncRepository`, `IBulkRepository`, `IAsyncBulkRepository`
 - Bulk stores support filter-based Update/Delete: `Update(filter, PropertyUpdate<T>)`, `Update(filter, Action<T>)`, `Delete(filter)`
-- Use `PropertyUpdate<T>` for native platform operations (SQL SET, MongoDB $set, ES UpdateByQuery); use `Action<T>` for complex mutations
-- New platform stores should override `Update(filter, PropertyUpdate<T>)` and `Delete(filter)` for native performance
+- Use `PropertyUpdate<T>` for native platform operations (SQL SET, MongoDB $set/$inc, ES UpdateByQuery); use `Action<T>` for complex mutations. A counter is `Increment` / `Decrement`, never a read-modify-write `Action<T>`
+- New platform stores should override `Update(filter, PropertyUpdate<T>)` and `Delete(filter)` for native performance — translating every `PropertyAssignment` through `Match(set, increment)`: an increment is `col = col + delta`, never a Set of the delta. A kind that must not be mishandled is a closed hierarchy reached through `Match`, not an enum beside a shared `Value` (TASK-498)
 - On a bulk store, `Read(filter)` returns the **collection** (`IEnumerable<T>`), not a single entity: the bulk `Read(filter, orderBy, limit, offset)` overload hides the inherited single-result `Read(filter)` from member lookup (C# only considers the most-derived type that declares the method name). Use `ReadFirst(filter)` / `ReadFirstAsync(filter)` (on `IBulkReadStore<T>` / `IAsyncBulkReadStore<T>`) for a single result, or cast to `IReadStore<T>` / `IAsyncReadStore<T>`
 - Concrete stores override `protected *Core` methods (e.g., `CreateCoreAsync`, `ReadCore`), **NOT** the public CRUD methods. The base class handles lazy-init in the public wrapper
 - Use protected setters for properties that derived classes need to modify
@@ -238,6 +238,23 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### An atomic counter needs a shape a translator cannot misread (2026-09-26)
+
+[[TASK-498]]. `PropertyUpdate<T>` gained `Increment` / `Decrement` (SQL `col = col + @p`, Mongo `$inc`,
+painless `+=`), requested by Symbio for a hit counter on an anonymous GET. Three things worth carrying:
+
+- **⚠ The one failure that must not ship is `+1` written as `= 1`, so the assignment list lost its `Value`.**
+  `Assignments` is now `SetAssignment | IncrementAssignment` reached only through `Match(set, increment)` —
+  every old `foreach (var (p, v) …)` stops compiling, and an enum-plus-`Value` fix is impossible because there
+  is no `Value` to reach. Proven by mutation: with the SQL translator emitting `col = @p`, **50 parallel
+  `Increment(1)` calls end at 1**, and all seven SQLite end-to-end tests go red. CHANGELOG carries the migration.
+- **⚠ The task said "quote the identifiers"; rule 17 won.** Framework DDL writes columns unquoted, so a quoted
+  `"HitCount"` misses PostgreSQL's folded `hitcount`. Columns go out bare from table metadata, the table quoted.
+  *A requirement quoting a consumer's rulebook is not evidence about the framework's DDL.*
+- **⚠ Measured, not assumed: a decimal counter DRIFTS on SQLite.** `10.10m + 0.20m` reads back
+  `10.299999999999999m` under both `REAL` and `NUMERIC(18,2)` — SQLite keeps both as a float — while a Set of
+  `10.30m` round-trips exactly. The plan had predicted `NUMERIC` would be exact; the test pins what came back.
+
 ### A shared project cannot announce a breaking change, so someone has to (2026-09-23)
 
 [[TASK-483]]. `Tool.ExecuteAsync` gained a `CancellationToken` on its **abstract** signature in
@@ -295,55 +312,3 @@ awk '/^## Recent Updates/{s=1} s&&/^### /{f=1} f' CLAUDE.md | wc -c
 The project-local `/roll-birko-changelog` skill performs the roll; mind the name, because the generic `/roll-changelog` resolves user-level first (§ Skills) and does not know this file. Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 ⚠ **The budget counts BYTES OF ENTRIES, and both halves of that were earned.** The rule it replaces said "past ~5–8 entries" — measured 2026-09-19, **7 entries, inside that limit, were 31 KB: 52% of this file**, because an entry had grown from a paragraph to a 36–59 line essay since the rule was written. A file *just* cut from 408 KB to 50 KB (`68b26b5b`, the rulebook split) was back to 59.6 KB four commits later, reporting itself compliant the whole way — and the monorepo migration, which got the blame, had changed it by **24 bytes**. Then the first byte budget written here measured the whole **section**, counted this very paragraph as log content, and tripped on itself the moment it was saved. **A threshold counts the thing that grows — not the thing that is easy to count, and not itself.**
-
-### The four root helper scripts were PowerShell, and none of them ran on Linux (2026-09-19)
-
-[[TASK-476]]. `audit-declarations`, `audit-dependencies`, `audit-consumer-versions` and
-`install-skills` are now **.NET 10 file-based apps** (`dotnet run audit-dependencies.cs`); the `.ps1`
-originals are deleted. PowerShell 7 is itself cross-platform, so the language was never the blocker —
-every one of the four was written with Windows path assumptions. Six things worth carrying:
-
-- **⚠ Three of the four failed in the SILENT-WRONG-ANSWER direction, which is why nobody noticed.**
-  `audit-consumer-versions` was the worst: consumer imports are written `$(BirkoSrc)\Birko.Helpers\…`
-  — the MSBuild file format, backslash-separated on *every* platform, across all 173 projitems — so on
-  Linux the substituted path could not be opened, the transitive import graph came back empty, and
-  **every consumer reported 0 imports**. The script's own header names that exact state: *"a consumer
-  you know imports Birko and that shows 0 is a defect in this script, not a clean result."*
-- **⚠ And one of them was [[TASK-474]] arriving a second time, from a different direction.** That task
-  fixed a literal tab in `'Framework\tests'` that had silently dropped the entire `tests/` bucket,
-  leaving the sweep reporting **81 of 248** projects as a whole-tree result. On Linux the *correctly
-  typed* same expression fails the same way, and defeats the same `if (-not $buckets) { throw }` guard,
-  because `Consumers` still resolves. The port closes it: **every declared bucket must resolve, each
-  missing one is named, and the run stops.** *A guard for "none" is not a guard for "fewer than asked for."*
-- **The shape was chosen on a measurement, and the runtime cost went the other way from expectation.**
-  `.cs` file-based app: ~1.0s after an edit, 0.6s unchanged — against the PowerShell's 4.2s. So the port
-  is **4–7× faster** than what it replaces. `.csx` (dotnet-script) was rejected on its
-  `dotnet tool install -g` dependency, not on speed; the `csharp-script` skill's *"~15–20s cold start"*
-  did not hold here, because that figure assumes a `#r "nuget:"` restore and these are BCL-only.
-- **⚠ Porting to C# fixes none of the path bugs by itself, and that was the decisive point in choosing
-  what to change.** `Path.Combine(root, "Framework\\tests")` is exactly as wrong on Linux as the
-  PowerShell was. All ten path expressions were fixed by hand; the language change only removes the
-  pwsh dependency. **Do not let a rewrite launder a bug into looking fixed.**
-- **⚠ A rewritten checker is a NEW checker.** Each original carries *"verify the check can fail before
-  believing it"*, and between them they encode four measured defects — the magenta-over-green bug,
-  the dropped `tests/` bucket, the CPM blind spot found the day Symbio adopted it, and the
-  floors-vs-`PINNED` verdict that *changed a result*. Reproducing the baselines byte-for-byte was
-  necessary and **not sufficient**: each was re-proven against its own fixture, mutating a real
-  declaration and asserting the exact row.
-- **⚠ `install-skills` does NOT use the portable API on Windows, deliberately.** A directory *symlink*
-  there needs Developer Mode or elevation; a *junction* needs neither, which is why the original used
-  one. `Directory.CreateSymbolicLink` would have been a portability fix that broke the platform the
-  script already worked on. .NET has no junction API, so Windows shells out to `mklink /J` and Linux
-  takes the symlink. Path handling itself has **one producer**, `tools/AuditCommon/Paths.cs` — it is
-  what broke, so it does not get copied into four files.
-- **⚠ There was a FIFTH script, and the survey that missed it was rooted in the wrong place.**
-  [[TASK-477]]: the sweep ran from `Birko.Framework/` while `tests/` is a *sibling* at the repo root,
-  so `tests/Birko.Data.SQL.SqLite.Tests/tools/gen-cold-table-probes.ps1` was never in the search
-  path — a search rooted where you happen to be standing answers a narrower question than the one
-  asked, and reports it in the wide question's words. It had the same Linux defect (it wrote a junk
-  file with a backslash in its name, left the real output untouched, and exited 0) **and a worse
-  one: it never produced `PgColdTableProbeModels.g.cs` at all**, which nonetheless carried its
-  `// GENERATED by … do not hand-edit` header. A hand-maintained file wearing a generated file's
-  warning is the worst of both — nobody dared edit it and nothing could regenerate it. Both targets
-  are now profiles in one generator, and regeneration is byte-identical to what was committed but
-  for the provenance line, **including the blank line PostgreSQL has and SQLite does not**.

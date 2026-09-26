@@ -306,17 +306,7 @@ namespace Birko.Data.MongoDB.Stores
             RequireBoundedFilter(filter, "update");
             if (Collection == null || updates.Assignments.Count == 0) return;
 
-            var updateDefs = new List<UpdateDefinition<T>>();
-            foreach (var (property, value) in updates.Assignments)
-            {
-                var memberExpr = property.Body is UnaryExpression unary
-                    ? (MemberExpression)unary.Operand
-                    : (MemberExpression)property.Body;
-
-                updateDefs.Add(Builders<T>.Update.Set(memberExpr.Member.Name, BsonValue.Create(value)));
-            }
-
-            var combined = Builders<T>.Update.Combine(updateDefs);
+            var combined = MongoPropertyUpdateTranslator.Build(updates);
             if (TransactionContext != null)
                 Collection.UpdateMany(TransactionContext, filter, combined);
             else

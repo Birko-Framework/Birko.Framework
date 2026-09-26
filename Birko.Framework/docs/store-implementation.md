@@ -94,7 +94,13 @@ var updates = new PropertyUpdate<Product>()
     .Set(x => x.Category, "archived");
 
 store.Update(x => x.Price > 100, updates);
+
+// Atomic counter: UPDATE ... SET HitCount = HitCount + 1 WHERE ... ($inc on MongoDB, += in painless)
+store.Update(x => x.Guid == id, new PropertyUpdate<Redirect>().Increment(x => x.HitCount, 1));
 ```
+
+`Increment` / `Decrement` are atomic only where the store translates natively; the reflection fallback
+(`ApplyTo`, used by stores without a native translation) is read-modify-save and can lose concurrent increments.
 
 ## Lazy-Init (Template Method Pattern)
 
@@ -300,20 +306,15 @@ public class MyAsyncSqlBulkStore<T> : AsyncDataBaseBulkStore<MyConnector, T> whe
 Platform stores should override these for single-command execution:
 
 ```csharp
-// SQL: single UPDATE ... SET ... WHERE
+// A native translation handles EVERY assignment kind — reach each operand only through Match,
+// so an increment can never be written as a constant (TASK-498). MongoDB, in outline — the real
+// MongoPropertyUpdateTranslator also refuses $inc on a string-stored field before sending (rule 41):
 public override void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
 {
-    var table = SQL.DataBase.LoadTable(typeof(T));
-    var fields = new Dictionary<int, string>();
-    var values = new Dictionary<string, object>();
-    foreach (var (property, value) in updates.Assignments)
-    {
-        var field = SQL.DataBase.GetField(property);
-        fields.Add(fields.Count, field.Name);
-        values.Add(field.Name, value ?? DBNull.Value);
-    }
-    var conditions = SQL.DataBase.ParseConditionExpression(filter as LambdaExpression);
-    Connector.Update(table.Name, fields, values, conditions);
+    var defs = updates.Assignments.Select(a => a.Match(
+        set => Builders<T>.Update.Set(a.PropertyInfo!.Name, BsonValue.Create(set.Value)),
+        increment => Builders<T>.Update.Inc(a.PropertyInfo!.Name, BsonValue.Create(increment.Delta))));
+    Collection.UpdateMany(filter, Builders<T>.Update.Combine(defs));
 }
 
 // SQL: single DELETE FROM ... WHERE

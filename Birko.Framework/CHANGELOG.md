@@ -4,6 +4,55 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-09-26 — BREAKING: `PropertyUpdate<T>.Assignments` is a closed hierarchy; `Increment` / `Decrement` added
+
+[[TASK-498]]. `Birko.Data.Stores/PropertyUpdate.cs` gained a counter — `Increment(x => x.Prop, delta)` on a
+top-level `short`/`int`/`long`/`float`/`double`/`decimal` property, and its alias `Decrement` — translated natively as
+SQL `col = col + @p` (one statement with any Sets) and MongoDB `$inc`, both atomic, and painless `+=` (not yet safe
+under contention, TASK-502).
+To make that safe, the assignment list changed shape:
+
+```csharp
+// before
+internal List<(LambdaExpression Property, object? Value)> Assignments { get; }
+// after
+internal IReadOnlyList<PropertyAssignment> Assignments { get; }
+//   PropertyAssignment { LambdaExpression Property; TResult Match<TResult>(Func<SetAssignment,TResult>, Func<IncrementAssignment,TResult>) }
+//   SetAssignment : PropertyAssignment { object? Value }
+//   IncrementAssignment : PropertyAssignment { object Delta }
+```
+
+**Who is affected.** `Assignments` is `internal`, but a `.projitems` compiles into the consumer's own assembly, so
+any consumer code that translates a `PropertyUpdate` itself — a custom native store — reads it. Code that only
+*builds* updates with `.Set(...)` is unaffected. None of the known consumers reads it (checked 2026-09-26).
+
+**The compiler points at every reader**, by design: `foreach (var (property, value) in updates.Assignments)` no
+longer compiles. There is deliberately no shared `Value` — a translator "fixed" as `a.Property, a.Value` would
+write `+1` as `= 1`, the one failure this change must not ship.
+
+**Migration.** Handle both kinds through `Match`:
+
+```csharp
+foreach (var a in updates.Assignments)
+{
+    var fragment = a.Match(
+        set       => $"{col} = @p",           // set.Value
+        increment => $"{col} = {col} + @p");  // increment.Delta — never assign it
+}
+```
+
+A store with no native translation needs nothing: `ApplyTo` now adds for an increment (read-modify-save, **not
+atomic**, `checked`).
+
+**Two quieter behaviour changes, both refusals that used to be silent:** a `Set` whose selector is not a property (a
+public field) now throws `ArgumentException` from `ApplyTo` and from MongoDB's native update, where `ApplyTo` used to
+skip it and MongoDB used to `$set` it — SQL already refused it. And the SQL bulk stores render every `PropertyUpdate`
+through the connector's expression path, so the SET text changes from `col= @SETcol` to `col = @SETcol`; the bound
+parameter names are unchanged. Precision caveats per provider (SQLite decimals drift, MongoDB's default string decimal is refused,
+undeclared-precision `DECIMAL` truncates on MySQL/MSSql) are in `Birko.Data.Stores/README.md`.
+
+---
+
 ## 2026-09-26 — BREAKING: `b-multi-select`'s `create` event carries `{ name: <field>, value }` and commits unless vetoed
 
 [[TASK-490]]. `Birko.Web.Components/src/inputs/b-multi-select.ts`, the `create` event fired by a
@@ -42,6 +91,60 @@ A listener that only wants to know is migrated by reading `value` and is otherwi
 
 **Migrated:** Symbio's three tag listeners (`modules/{building,products,tasks}/list/list-page.ts`), in the
 same change. A search of every checkout under `C:\Source\Birko` found no other listener.
+
+## 2026-09-19 — The four root helper scripts were PowerShell, and none of them ran on Linux
+
+[[TASK-476]]. `audit-declarations`, `audit-dependencies`, `audit-consumer-versions` and
+`install-skills` are now **.NET 10 file-based apps** (`dotnet run audit-dependencies.cs`); the `.ps1`
+originals are deleted. PowerShell 7 is itself cross-platform, so the language was never the blocker —
+every one of the four was written with Windows path assumptions. Six things worth carrying:
+
+- **⚠ Three of the four failed in the SILENT-WRONG-ANSWER direction, which is why nobody noticed.**
+  `audit-consumer-versions` was the worst: consumer imports are written `$(BirkoSrc)\Birko.Helpers\…`
+  — the MSBuild file format, backslash-separated on *every* platform, across all 173 projitems — so on
+  Linux the substituted path could not be opened, the transitive import graph came back empty, and
+  **every consumer reported 0 imports**. The script's own header names that exact state: *"a consumer
+  you know imports Birko and that shows 0 is a defect in this script, not a clean result."*
+- **⚠ And one of them was [[TASK-474]] arriving a second time, from a different direction.** That task
+  fixed a literal tab in `'Framework\tests'` that had silently dropped the entire `tests/` bucket,
+  leaving the sweep reporting **81 of 248** projects as a whole-tree result. On Linux the *correctly
+  typed* same expression fails the same way, and defeats the same `if (-not $buckets) { throw }` guard,
+  because `Consumers` still resolves. The port closes it: **every declared bucket must resolve, each
+  missing one is named, and the run stops.** *A guard for "none" is not a guard for "fewer than asked for."*
+- **The shape was chosen on a measurement, and the runtime cost went the other way from expectation.**
+  `.cs` file-based app: ~1.0s after an edit, 0.6s unchanged — against the PowerShell's 4.2s. So the port
+  is **4–7× faster** than what it replaces. `.csx` (dotnet-script) was rejected on its
+  `dotnet tool install -g` dependency, not on speed; the `csharp-script` skill's *"~15–20s cold start"*
+  did not hold here, because that figure assumes a `#r "nuget:"` restore and these are BCL-only.
+- **⚠ Porting to C# fixes none of the path bugs by itself, and that was the decisive point in choosing
+  what to change.** `Path.Combine(root, "Framework\\tests")` is exactly as wrong on Linux as the
+  PowerShell was. All ten path expressions were fixed by hand; the language change only removes the
+  pwsh dependency. **Do not let a rewrite launder a bug into looking fixed.**
+- **⚠ A rewritten checker is a NEW checker.** Each original carries *"verify the check can fail before
+  believing it"*, and between them they encode four measured defects — the magenta-over-green bug,
+  the dropped `tests/` bucket, the CPM blind spot found the day Symbio adopted it, and the
+  floors-vs-`PINNED` verdict that *changed a result*. Reproducing the baselines byte-for-byte was
+  necessary and **not sufficient**: each was re-proven against its own fixture, mutating a real
+  declaration and asserting the exact row.
+- **⚠ `install-skills` does NOT use the portable API on Windows, deliberately.** A directory *symlink*
+  there needs Developer Mode or elevation; a *junction* needs neither, which is why the original used
+  one. `Directory.CreateSymbolicLink` would have been a portability fix that broke the platform the
+  script already worked on. .NET has no junction API, so Windows shells out to `mklink /J` and Linux
+  takes the symlink. Path handling itself has **one producer**, `tools/AuditCommon/Paths.cs` — it is
+  what broke, so it does not get copied into four files.
+- **⚠ There was a FIFTH script, and the survey that missed it was rooted in the wrong place.**
+  [[TASK-477]]: the sweep ran from `Birko.Framework/` while `tests/` is a *sibling* at the repo root,
+  so `tests/Birko.Data.SQL.SqLite.Tests/tools/gen-cold-table-probes.ps1` was never in the search
+  path — a search rooted where you happen to be standing answers a narrower question than the one
+  asked, and reports it in the wide question's words. It had the same Linux defect (it wrote a junk
+  file with a backslash in its name, left the real output untouched, and exited 0) **and a worse
+  one: it never produced `PgColdTableProbeModels.g.cs` at all**, which nonetheless carried its
+  `// GENERATED by … do not hand-edit` header. A hand-maintained file wearing a generated file's
+  warning is the worst of both — nobody dared edit it and nothing could regenerate it. Both targets
+  are now profiles in one generator, and regeneration is byte-identical to what was committed but
+  for the provenance line, **including the blank line PostgreSQL has and SQLite does not**.
+
+---
 
 ## 2026-07-09 — BREAKING: `Tool.ExecuteAsync` and `ILlmProvider` take a `CancellationToken`
 

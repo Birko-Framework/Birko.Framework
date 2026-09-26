@@ -40,6 +40,12 @@ store.Update(
     new PropertyUpdate<Product>().Set(x => x.Active, false).Set(x => x.Category, "archived")
 );
 
+// 1b. Increment / Decrement — counter in the same statement (col = col + delta); atomic on SQL and MongoDB
+store.Update(
+    x => x.Guid == id,
+    new PropertyUpdate<Redirect>().Increment(x => x.HitCount, 1).Set(x => x.LastHitAt, now)
+);
+
 // 2. Action<T> — read-modify-save (for complex mutations)
 store.Update(x => x.Price > 100, item => { item.Price *= 0.9m; });
 
@@ -47,12 +53,29 @@ store.Update(x => x.Price > 100, item => { item.Price *= 0.9m; });
 store.Delete(x => x.IsExpired);
 ```
 
-| Platform | PropertyUpdate | Delete(filter) |
-|----------|---------------|----------------|
-| SQL | Native `UPDATE SET WHERE` | Native `DELETE WHERE` |
-| MongoDB | `UpdateMany` with `$set` | `DeleteMany` |
-| ElasticSearch | `UpdateByQuery` (Painless) | `DeleteByQuery` |
-| Others | Fallback read-modify-save | Fallback read-then-delete |
+| Platform | PropertyUpdate | Increment | Delete(filter) |
+|----------|---------------|-----------|----------------|
+| SQL | Native `UPDATE SET WHERE` | `col = col + @p`, same statement | Native `DELETE WHERE` |
+| MongoDB | `UpdateMany` with `$set` | `$inc` | `DeleteMany` |
+| ElasticSearch | `UpdateByQuery` (Painless) | `ctx._source.f += params.p` — a version conflict aborts and is not yet reported (TASK-502) | `DeleteByQuery` |
+| Others | Fallback read-modify-save | Fallback — **not atomic** | Fallback read-then-delete |
+
+**Increment / Decrement** (`short`, `int`, `long`, `float`, `double`, `decimal` properties — the types every provider
+stores as a number; `Decrement` is `Increment` with a negated delta). Nullable properties do not compile; a cast in
+the selector (`x => (int)x.MaybeCount`) or a nested member (`x => x.Stats.Count`) is refused — `NULL + 1` means
+something different on every backend, and providers resolve only the leaf of a nested path. An increment cannot share
+a `PropertyUpdate` with another assignment to the same property. Behind the localization wrappers an increment on a
+localizable field is refused, and so is any increment in an update that also sets a localizable field on a
+non-default culture (that update is replayed as read-modify-save). Caveats, measured or read from the providers:
+
+- **SQLite:** a `decimal` is stored as an 8-byte float under both `REAL` and `NUMERIC(p,s)`, so `10.10m + 0.20m`
+  reads back as `10.299999999999999m` (a Set of `10.30m` round-trips exactly). A decimal counter drifts there. An
+  integer that overflows becomes a `REAL` instead of raising, where the other providers and the fallback throw.
+- **MySQL / MSSql:** a `decimal` without declared precision is `DECIMAL(10,0)` / `DECIMAL(18,0)` and loses its
+  fraction on every write, increment or not — declare `[PrecisionField]` / `[ScaleField]`.
+- **MongoDB:** the driver stores `decimal` as a string by default, and `$inc` on a string fails at the server, so
+  the store refuses such an increment up front — mark the property `[BsonRepresentation(BsonType.Decimal128)]`.
+- **ElasticSearch:** AutoMap maps `decimal` to `double`, so a decimal increment runs in double arithmetic.
 
 ## Aggregation
 

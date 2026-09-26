@@ -208,6 +208,9 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
     {
+        // TASK-498: refused on every culture, before the culture decides the path.
+        LocalizedPropertyUpdateHelper.RefuseIncrementOnLocalizableField(updates, GetLocalizableFieldsFromInstance());
+
         // CR-L135: a native PropertyUpdate mutates the base column directly. When it targets a localizable
         // field on a non-default culture, that diverges from the value the Action<T> overload would persist
         // (a translation row). Detect that case and fall back to the read-modify-write path so the
@@ -215,6 +218,7 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
         if (IsNonDefaultCulture() &&
             LocalizedPropertyUpdateHelper.TouchesLocalizableField(updates, GetLocalizableFieldsFromInstance()))
         {
+            LocalizedPropertyUpdateHelper.RefuseIncrementOnReadModifyWriteFallback(updates);
             // The raw filter is handed on: the Action<T> overload rewrites it itself.
             return UpdateAsync(filter, LocalizedPropertyUpdateHelper.ToAction(updates), ct);
         }

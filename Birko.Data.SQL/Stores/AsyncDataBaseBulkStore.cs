@@ -242,21 +242,12 @@ namespace Birko.Data.SQL.Stores
             using var _tx = EnterTransactionScope();
 
             var table = SQL.DataBase.LoadTable(typeof(T));
-            var fields = new Dictionary<int, string>();
-            var values = new Dictionary<string, object>();
-            int i = 0;
-            foreach (var (property, value) in updates.Assignments)
-            {
-                var field = SQL.DataBase.GetFieldFromLambda(property);
-                fields.Add(i, field.Name);
-                values.Add(field.Name, value ?? DBNull.Value);
-                i++;
-            }
+            var (fields, values) = PropertyUpdateSqlTranslator.Translate(updates);
             var conditions = SQL.DataBase.ParseConditionExpression(filter as LambdaExpression);
             if (AsyncConnector != null)
-                await AsyncConnector.UpdateAsync(table.Name, fields, values, conditions, false, ct, allowAllRows);
+                await AsyncConnector.UpdateAsync(table.Name, fields, values, conditions, true, ct, allowAllRows);
             else
-                await Task.Run(() => Connector!.Update(table.Name, fields, values, conditions, false, allowAllRows), ct);
+                await Task.Run(() => Connector!.Update(table.Name, fields, values, conditions, true, allowAllRows), ct);
         }
 
         /// <inheritdoc />

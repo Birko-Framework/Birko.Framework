@@ -114,6 +114,12 @@ namespace Birko.Data.SQL.Connectors
             Update(tableName, fields, values, conditions);
         }
 
+        /// <summary>
+        /// The parameter an UPDATE binds a column's new value to. The one producer of that name: the connector's
+        /// own SET rendering and <c>PropertyUpdateSqlTranslator</c>'s expression fragments both use it.
+        /// </summary>
+        internal static string SetParameterName(string column) => "@SET" + column.Replace(".", string.Empty);
+
         public void Update(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, bool allowAllRows = false)
         {
             if (values != null && values.Any())
@@ -128,7 +134,7 @@ namespace Birko.Data.SQL.Connectors
                     command.CommandText = "UPDATE " + QuoteIdentifier(tableName) + " SET ";
                     if (!isExpressionValues)
                     {
-                        command.CommandText += string.Join(", ", fields.Values.Select(x => x + "= @SET" + x.Replace(".", string.Empty)));
+                        command.CommandText += string.Join(", ", fields.Values.Select(x => x + "= " + SetParameterName(x)));
                     }
                     else
                     {
@@ -140,7 +146,7 @@ namespace Birko.Data.SQL.Connectors
                     {
                         if (!isExpressionValues)
                         {
-                            AddParameter(command, "@SET" + kvp.Key.Replace(".", string.Empty), kvp.Value);
+                            AddParameter(command, SetParameterName(kvp.Key), kvp.Value);
                         }
                         else
                         {

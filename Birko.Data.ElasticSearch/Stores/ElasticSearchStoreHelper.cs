@@ -86,15 +86,18 @@ namespace Birko.Data.ElasticSearch.Stores
             var scriptParts = new List<string>();
             var scriptParams = new Dictionary<string, object>();
 
-            foreach (var (property, value) in updates.Assignments)
+            foreach (var assignment in updates.Assignments)
             {
-                var memberExpr = property.Body is UnaryExpression unary
+                var memberExpr = assignment.Property.Body is UnaryExpression unary
                     ? (MemberExpression)unary.Operand
-                    : (MemberExpression)property.Body;
+                    : (MemberExpression)assignment.Property.Body;
 
                 var fieldName = char.ToLowerInvariant(memberExpr.Member.Name[0]) + memberExpr.Member.Name.Substring(1);
                 var paramName = "p_" + memberExpr.Member.Name;
-                scriptParts.Add($"ctx._source.{fieldName} = params.{paramName}");
+                var (op, value) = assignment.Match(
+                    set => ("=", set.Value),
+                    increment => ("+=", (object?)increment.Delta));
+                scriptParts.Add($"ctx._source.{fieldName} {op} params.{paramName}");
                 scriptParams[paramName] = value ?? string.Empty;
             }
 

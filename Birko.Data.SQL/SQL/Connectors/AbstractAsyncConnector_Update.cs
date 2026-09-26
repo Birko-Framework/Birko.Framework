@@ -135,7 +135,7 @@ namespace Birko.Data.SQL.Connectors
                     command.CommandText = "UPDATE " + QuoteIdentifier(tableName) + " SET ";
                     if (!isExpressionValues)
                     {
-                        command.CommandText += string.Join(", ", fields.Values.Select(x => x + "= @SET" + x.Replace(".", string.Empty)));
+                        command.CommandText += string.Join(", ", fields.Values.Select(x => x + "= " + SetParameterName(x)));
                     }
                     else
                     {
@@ -147,7 +147,7 @@ namespace Birko.Data.SQL.Connectors
                     {
                         if (!isExpressionValues)
                         {
-                            AddParameter(command, "@SET" + kvp.Key.Replace(".", string.Empty), kvp.Value);
+                            AddParameter(command, SetParameterName(kvp.Key), kvp.Value);
                         }
                         else
                         {
