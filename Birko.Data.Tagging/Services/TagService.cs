@@ -241,7 +241,7 @@ public abstract class TagServiceBase : ITagService
             // existing tag instead of inserting a duplicate (this layer has no unique-name constraint
             // to fall back on). Don't "optimize" this to CreateTagInternalAsync.
             var dto = await CreateTagAsync(tagName, color, ct: ct);
-            await AttachTagAsync(entityType, entityId, dto.Id, ct);
+            await AttachTagAsync(entityType, entityId, dto.Guid, ct);
             return dto;
         }
 

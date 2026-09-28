@@ -141,19 +141,19 @@ public class TagServiceTenantGuardTests
         var svc = new InMemoryTagService();
         var dto = await svc.CreateTagAsync("mine");
 
-        (await svc.GetTagAsync(dto.Id)).Should().NotBeNull();
+        (await svc.GetTagAsync(dto.Guid)).Should().NotBeNull();
         (await svc.ListTagsAsync()).Should().ContainSingle();
         (await svc.SearchTagsAsync("min")).Should().ContainSingle();
 
-        await svc.UpdateTagAsync(dto.Id, name: "renamed");
-        (await svc.GetTagAsync(dto.Id))!.Name.Should().Be("renamed");
+        await svc.UpdateTagAsync(dto.Guid, name: "renamed");
+        (await svc.GetTagAsync(dto.Guid))!.Name.Should().Be("renamed");
 
         var entity = Guid.NewGuid();
-        await svc.AttachTagAsync("Doc", entity, dto.Id);
+        await svc.AttachTagAsync("Doc", entity, dto.Guid);
         (await svc.GetEntityTagsAsync("Doc", entity)).Should().ContainSingle();
         (await svc.GetEntityTagsBatchAsync("Doc", new[] { entity }))[entity].Should().ContainSingle();
 
-        await svc.DeleteTagAsync(dto.Id);
+        await svc.DeleteTagAsync(dto.Guid);
         svc.TagCount.Should().Be(0);
     }
 }

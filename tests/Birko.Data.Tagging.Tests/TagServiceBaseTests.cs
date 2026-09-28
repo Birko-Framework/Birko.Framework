@@ -20,7 +20,7 @@ public class TagServiceBaseTests
         var first = await svc.CreateTagAsync("Urgent");
         var second = await svc.CreateTagAsync(" Urgent "); // trimmed → same name
 
-        second.Id.Should().Be(first.Id);
+        second.Guid.Should().Be(first.Guid);
         svc.CreateTagCalls.Should().Be(1, "the second call matches an existing tag by name");
         svc.TagCount.Should().Be(1);
     }
@@ -31,9 +31,9 @@ public class TagServiceBaseTests
         var svc = new InMemoryTagService();
         var tag = await svc.CreateTagAsync("T", color: "red", group: "g");
 
-        await svc.UpdateTagAsync(tag.Id, name: "  T2  ", color: "   ", group: "");
+        await svc.UpdateTagAsync(tag.Guid, name: "  T2  ", color: "   ", group: "");
 
-        var updated = await svc.GetTagAsync(tag.Id);
+        var updated = await svc.GetTagAsync(tag.Guid);
         updated!.Name.Should().Be("T2");        // trimmed
         updated.Color.Should().BeNull();        // whitespace → null
         updated.TagGroup.Should().BeNull();     // empty → null
@@ -60,10 +60,10 @@ public class TagServiceBaseTests
         var svc = new InMemoryTagService();
         var tag = await svc.CreateTagAsync("T");
         var entity = Guid.NewGuid();
-        await svc.AttachTagAsync("Doc", entity, tag.Id);
+        await svc.AttachTagAsync("Doc", entity, tag.Guid);
         svc.LinkCount.Should().Be(1);
 
-        await svc.DeleteTagAsync(tag.Id);
+        await svc.DeleteTagAsync(tag.Guid);
 
         svc.LinkCount.Should().Be(0, "deleting a tag removes its entity links");
         svc.TagCount.Should().Be(0);
@@ -76,8 +76,8 @@ public class TagServiceBaseTests
         var tag = await svc.CreateTagAsync("T");
         var entity = Guid.NewGuid();
 
-        await svc.AttachTagAsync("Doc", entity, tag.Id);
-        await svc.AttachTagAsync("Doc", entity, tag.Id);
+        await svc.AttachTagAsync("Doc", entity, tag.Guid);
+        await svc.AttachTagAsync("Doc", entity, tag.Guid);
 
         svc.LinkCount.Should().Be(1);
     }
@@ -91,11 +91,11 @@ public class TagServiceBaseTests
         var c = await svc.CreateTagAsync("C");
         var entity = Guid.NewGuid();
 
-        await svc.SetEntityTagsAsync("Doc", entity, new[] { a.Id, b.Id });
-        await svc.SetEntityTagsAsync("Doc", entity, new[] { b.Id, c.Id }); // drop A, keep B, add C
+        await svc.SetEntityTagsAsync("Doc", entity, new[] { a.Guid, b.Guid });
+        await svc.SetEntityTagsAsync("Doc", entity, new[] { b.Guid, c.Guid }); // drop A, keep B, add C
 
         var tags = await svc.GetEntityTagsAsync("Doc", entity);
-        tags.Select(t => t.Id).Should().BeEquivalentTo(new[] { b.Id, c.Id });
+        tags.Select(t => t.Guid).Should().BeEquivalentTo(new[] { b.Guid, c.Guid });
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class TagServiceBaseTests
         var c = await svc.CreateTagAsync("C");
         var entity = Guid.NewGuid();
 
-        await svc.SetEntityTagsAsync("Doc", entity, new[] { a.Id, b.Id, c.Id });
+        await svc.SetEntityTagsAsync("Doc", entity, new[] { a.Guid, b.Guid, c.Guid });
 
         // CR-M172: adding N tags must issue exactly ONE link query (the initial diff read), not
         // one more per added tag (the old AttachTagAsync route re-queried links each iteration).
@@ -125,7 +125,7 @@ public class TagServiceBaseTests
         svc.TagCount.Should().Be(1);
 
         var found = await svc.AttachTagByNameAsync("Doc", Guid.NewGuid(), "New");
-        found.Id.Should().Be(created.Id, "an existing tag name is reused, not recreated");
+        found.Guid.Should().Be(created.Guid, "an existing tag name is reused, not recreated");
         svc.TagCount.Should().Be(1);
     }
 
@@ -143,7 +143,7 @@ public class TagServiceBaseTests
 
         var dto = await svc.AttachTagByNameAsync("Doc", Guid.NewGuid(), "Race");
 
-        dto.Id.Should().Be(raced.Guid!.Value, "the concurrently-created tag is reused");
+        dto.Guid.Should().Be(raced.Guid!.Value, "the concurrently-created tag is reused");
         svc.CreateTagCalls.Should().Be(0, "no duplicate tag row is inserted");
         svc.TagCount.Should().Be(1);
         svc.LinkCount.Should().Be(1, "the attach itself still happens");
@@ -156,11 +156,11 @@ public class TagServiceBaseTests
         var tag = await svc.CreateTagAsync("T");
         var withTag = Guid.NewGuid();
         var withoutTag = Guid.NewGuid();
-        await svc.AttachTagAsync("Doc", withTag, tag.Id);
+        await svc.AttachTagAsync("Doc", withTag, tag.Guid);
 
         var batch = await svc.GetEntityTagsBatchAsync("Doc", new[] { withTag, withoutTag });
 
-        batch[withTag].Should().ContainSingle().Which.Id.Should().Be(tag.Id);
+        batch[withTag].Should().ContainSingle().Which.Guid.Should().Be(tag.Guid);
         batch[withoutTag].Should().BeEmpty("entities with no tags get an empty list");
     }
 
