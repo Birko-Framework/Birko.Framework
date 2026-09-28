@@ -15,7 +15,7 @@ which this regeneration never touches._
 | planned      | 10     | 25     | —                   |
 | todo         | —                  | —                  | 166         |
 | in-progress  | 7  | 9  | 0   |
-| review       | —                  | —                  | 0       |
+| review       | —                  | —                  | 1       |
 | blocked      | —                  | —                  | 1      |
 | done         | 1        | 23        | 193         |
 | cancelled    | 0   | 0   | 4    |
@@ -469,6 +469,7 @@ _None_
 - [x] [TASK-499](_loose/TASK-499-storelocator-leaves-remote-stores-unconfigured.md) StoreLocator hands out ElasticSearch, CosmosDB, InfluxDB, MongoDB and RavenDB stores unconfigured (P1)
 - [x] [TASK-504](_loose/TASK-504-json-separate-bulk-destroy-deletes-wrong-path.md) Destroying a populated JsonSeparateBulkStore / JsonBatchBulkStore throws (P1)
 - [x] [TASK-505](_loose/TASK-505-sluggable-reserved-slugs.md) `ISluggable` cannot reserve a slug that no row holds — a literal route beside `{slug}` shadows it (P3)
+- [ ] [TASK-506](_loose/TASK-506-guid-member-naming-sweep.md) Guid-typed members named `…Id` — one word with the model base (`Guid`) and with Symbio's wire (P2)
 
 ## Completed
 
