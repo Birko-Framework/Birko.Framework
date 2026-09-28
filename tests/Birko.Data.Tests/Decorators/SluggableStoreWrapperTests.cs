@@ -21,6 +21,8 @@ public class SluggableStoreWrapperTests
         public string Name { get; set; } = string.Empty;
         public string? Slug { get; set; }
         public string? GetSlugSource() => Name;
+        public HashSet<string> Reserved { get; init; } = new();
+        bool ISluggable.IsReservedSlug(string slug) => Reserved.Contains(slug);
     }
 
     private class TestStore : AbstractStore<TestModel>
@@ -113,6 +115,39 @@ public class SluggableStoreWrapperTests
         second.Slug.Should().Be("test-2");
     }
 
+    [Fact]
+    public void Create_ReservedSlug_IsDeduplicatedLikeATakenOne()
+    {
+        var wrapper = new SluggableStoreWrapper<TestStore, TestModel>(new TestStore());
+        var model = new TestModel { Name = "Facets", Reserved = ["facets"] };
+
+        wrapper.Create(model);
+
+        model.Slug.Should().Be("facets-2");
+    }
+
+    [Fact]
+    public void Create_ExplicitReservedSlug_IsDeduplicatedToo()
+    {
+        var wrapper = new SluggableStoreWrapper<TestStore, TestModel>(new TestStore());
+        var model = new TestModel { Name = "Anything", Slug = "Facets", Reserved = ["facets"] };
+
+        wrapper.Create(model);
+
+        model.Slug.Should().Be("facets-2");
+    }
+
+    [Fact]
+    public void Create_ModelReservingNothing_KeepsItsSlug()
+    {
+        var wrapper = new SluggableStoreWrapper<TestStore, TestModel>(new TestStore());
+        var model = new TestModel { Name = "Facets" };
+
+        wrapper.Create(model);
+
+        model.Slug.Should().Be("facets");
+    }
+
     #endregion
 
     #region Update
@@ -130,6 +165,20 @@ public class SluggableStoreWrapperTests
         wrapper.Update(model);
 
         model.Slug.Should().Be("updated");
+    }
+
+    [Fact]
+    public void Update_OntoAReservedSlug_IsDeduplicated()
+    {
+        var store = new TestStore();
+        var wrapper = new SluggableStoreWrapper<TestStore, TestModel>(store);
+        var model = new TestModel { Name = "Mouse", Reserved = ["facets"] };
+        wrapper.Create(model);
+
+        model.Slug = "facets";
+        wrapper.Update(model);
+
+        model.Slug.Should().Be("facets-2");
     }
 
     #endregion

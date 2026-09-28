@@ -48,7 +48,7 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 - `AsyncPagedRepositoryWrapper<T>` - Wraps `IAsyncBulkRepository<T>`, runs Read and Count in parallel
 
 ### Sluggable
-- `ISluggable` - Interface with `Slug` property (string?) and `GetSlugSource()` method
+- `ISluggable` - Interface with `Slug` property (string?), `GetSlugSource()` method and `IsReservedSlug(slug)` (default `false`; a reserved slug is de-duplicated like a taken one — e.g. a literal route segment beside `{slug}`, TASK-505)
 - `SlugGenerator` - Static utility for slug normalization (lowercase, diacritics removal, hyphen delimiters) and uniqueness checking with numeric suffixes (-1, -2, etc.)
 - `SluggableStoreWrapper<T>` - Wraps `IStore<T>`, auto-generates slug from `GetSlugSource()` on create/update, ensures uniqueness
 - `SluggableBulkStoreWrapper<T>` - Bulk store variant with internal collision tracking within batch creates

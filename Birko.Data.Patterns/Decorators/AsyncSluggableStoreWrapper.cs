@@ -75,6 +75,8 @@ public class AsyncSluggableStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
             {
                 if (batchSlugs?.Contains(slug) == true)
                     return true;
+                if (data.IsReservedSlug(slug))
+                    return true;
                 var existing = await _innerStore.ReadAsync(BuildSlugFilter(slug), ct);
                 return existing is not null && existing.Guid != excludeId;
             },

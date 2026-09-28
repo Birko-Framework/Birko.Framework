@@ -69,6 +69,8 @@ public class SluggableStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
             {
                 if (batchSlugs?.Contains(slug) == true)
                     return true;
+                if (data.IsReservedSlug(slug))
+                    return true;
                 var existing = _innerStore.Read(BuildSlugFilter(slug));
                 return existing is not null && existing.Guid != excludeId;
             },

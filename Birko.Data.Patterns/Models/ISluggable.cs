@@ -17,4 +17,14 @@ public interface ISluggable
     /// Called by the wrapper when Slug is null or empty.
     /// </summary>
     string? GetSlugSource();
+
+    /// <summary>
+    /// Returns true when <paramref name="slug"/> may not be used even though no other row holds it —
+    /// typically a literal route segment that shares the URL position the slug is served from
+    /// (e.g. <c>/products/{slug}</c> next to <c>/products/facets</c>): routing ranks the literal above the
+    /// parameter, so an entity slugged <c>facets</c> could never be fetched by slug.
+    /// The wrapper treats a reserved slug exactly like a taken one and de-duplicates it (<c>facets-2</c>).
+    /// Receives the NORMALIZED slug. Defaults to reserving nothing.
+    /// </summary>
+    bool IsReservedSlug(string slug) => false;
 }
