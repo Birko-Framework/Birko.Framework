@@ -12,7 +12,7 @@ public class NfcAuthResultTests
         var result = NfcAuthResult.Success(userId, "04A1B2C3", userName: "John", email: "john@test.com");
 
         result.IsAuthenticated.Should().BeTrue();
-        result.UserId.Should().Be(userId);
+        result.UserGuid.Should().Be(userId);
         result.TagUid.Should().Be("04A1B2C3");
         result.UserName.Should().Be("John");
         result.Email.Should().Be("john@test.com");
@@ -25,7 +25,7 @@ public class NfcAuthResultTests
         var result = NfcAuthResult.Failure("DEADBEEF", "Tag not registered");
 
         result.IsAuthenticated.Should().BeFalse();
-        result.UserId.Should().BeNull();
+        result.UserGuid.Should().BeNull();
         result.TagUid.Should().Be("DEADBEEF");
         result.Error.Should().Be("Tag not registered");
     }

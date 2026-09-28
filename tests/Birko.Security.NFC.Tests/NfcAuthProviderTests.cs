@@ -32,7 +32,7 @@ public class NfcAuthProviderTests
 
         mapping.Should().NotBeNull();
         mapping.TagUid.Should().Be("04A1B2C3");
-        mapping.UserId.Should().Be(_userId);
+        mapping.UserGuid.Should().Be(_userId);
         mapping.Label.Should().Be("Office badge");
         mapping.UserName.Should().Be("John");
         mapping.Email.Should().Be("john@test.com");
@@ -64,7 +64,7 @@ public class NfcAuthProviderTests
         // Should succeed because the old mapping is inactive
         var newUserId = Guid.NewGuid();
         var mapping = await _auth.EnrollAsync(newUserId, "04A1B2C3");
-        mapping.UserId.Should().Be(newUserId);
+        mapping.UserGuid.Should().Be(newUserId);
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public class NfcAuthProviderTests
         var result = await _auth.AuthenticateAsync("04A1B2C3");
 
         result.IsAuthenticated.Should().BeTrue();
-        result.UserId.Should().Be(_userId);
+        result.UserGuid.Should().Be(_userId);
         result.UserName.Should().Be("John");
         result.Email.Should().Be("john@test.com");
         result.TagUid.Should().Be("04A1B2C3");
@@ -118,7 +118,7 @@ public class NfcAuthProviderTests
         var result = await _auth.AuthenticateAsync("DEADBEEF");
 
         result.IsAuthenticated.Should().BeFalse();
-        result.UserId.Should().BeNull();
+        result.UserGuid.Should().BeNull();
         result.Error.Should().Contain("not registered");
     }
 

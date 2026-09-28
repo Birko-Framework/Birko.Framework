@@ -119,7 +119,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
             await executor.ExecuteAsync(descriptor);
 
             ContextCapturingJob.LastContext.Should().NotBeNull();
-            ContextCapturingJob.LastContext!.JobId.Should().Be(descriptor.Id);
+            ContextCapturingJob.LastContext!.JobGuid.Should().Be(descriptor.Guid);
             ContextCapturingJob.LastContext.AttemptNumber.Should().Be(2);
             ContextCapturingJob.LastContext.Metadata.Should().ContainKey("trace-id");
         }

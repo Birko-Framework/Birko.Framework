@@ -9,7 +9,7 @@ namespace Birko.Data.Tagging;
 public class EntityTag : AbstractLogModel
 {
     public Guid TenantGuid { get; set; }
-    public Guid TagId { get; set; }
-    public Guid EntityId { get; set; }
+    public Guid TagGuid { get; set; }
+    public Guid EntityGuid { get; set; }
     public string EntityType { get; set; } = string.Empty;
 }

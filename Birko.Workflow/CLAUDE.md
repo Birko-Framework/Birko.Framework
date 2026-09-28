@@ -12,7 +12,7 @@ State machine engine for business process automation. Trigger-based transitions 
 - **WorkflowStatus.cs** — Enum: NotStarted, Active, Completed, Faulted
 - **StateChangeRecord.cs** — Immutable record of a transition (FromState, ToState, Trigger, OccurredAt)
 - **IWorkflowDefinition.cs** — Immutable workflow blueprint interface (Name, InitialState, States, Transitions, GetPermittedTriggers)
-- **IWorkflowInstance.cs** — Read-only view of instance state (InstanceId, CurrentState, Status, Data, History)
+- **IWorkflowInstance.cs** — Read-only view of instance state (InstanceGuid, CurrentState, Status, Data, History)
 - **IWorkflowEngine.cs** — Stateless engine interface (FireAsync, GetPermittedTriggers)
 - **IWorkflowInstanceStore.cs** — Persistence contract for workflow instances (Save, Load, Delete, FindByState/Status/WorkflowName)
 

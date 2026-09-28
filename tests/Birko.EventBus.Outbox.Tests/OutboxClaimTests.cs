@@ -66,7 +66,7 @@ public class OutboxClaimTests
         var results = await Task.WhenAll(
             Enumerable.Range(0, 8).Select(_ => Task.Run(() => store.GetPendingAsync(50))));
 
-        var allIds = results.SelectMany(r => r.Select(e => e.Id)).ToList();
+        var allIds = results.SelectMany(r => r.Select(e => e.Guid)).ToList();
         allIds.Should().OnlyHaveUniqueItems("no entry may be claimed by two concurrent processors");
     }
 }

@@ -63,7 +63,7 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
 
     private static OutboxEntry Entry(string type = "OrderPlaced", string payload = "{}") => new()
     {
-        EventId   = Guid.NewGuid(),
+        EventGuid   = Guid.NewGuid(),
         EventType = type,
         Payload   = payload,
         Source    = "tests",
@@ -79,9 +79,9 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
         var pending = await store.GetPendingAsync(10);
 
         pending.Should().HaveCount(1);
-        pending[0].Id.Should().Be(entry.Id);
+        pending[0].Guid.Should().Be(entry.Guid);
         pending[0].EventType.Should().Be("OrderPlaced");
-        pending[0].EventId.Should().Be(entry.EventId);
+        pending[0].EventGuid.Should().Be(entry.EventGuid);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
         // that a single process can stage, and the property the class doc exists for.
         var pending = await NewStore().GetPendingAsync(10);
 
-        pending.Should().ContainSingle(e => e.Id == entry.Id && e.EventType == "Persisted");
+        pending.Should().ContainSingle(e => e.Guid == entry.Guid && e.EventType == "Persisted");
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
         await store.SaveAsync(entry);
         await store.GetPendingAsync(10);
 
-        await store.MarkPublishedAsync(entry.Id);
+        await store.MarkPublishedAsync(entry.Guid);
 
         (await store.GetPendingAsync(10)).Should().BeEmpty();
     }
@@ -133,10 +133,10 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
         await store.SaveAsync(entry);
         await store.GetPendingAsync(10);
 
-        await store.MarkFailedAsync(entry.Id, "transport down", maxAttempts: 3);
+        await store.MarkFailedAsync(entry.Guid, "transport down", maxAttempts: 3);
 
         var pending = await store.GetPendingAsync(10);
-        pending.Should().ContainSingle(e => e.Id == entry.Id);
+        pending.Should().ContainSingle(e => e.Guid == entry.Guid);
         pending[0].Attempts.Should().Be(1);
         pending[0].LastError.Should().Be("transport down");
     }
@@ -151,7 +151,7 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
         for (var i = 0; i < 3; i++)
         {
             await store.GetPendingAsync(10);
-            await store.MarkFailedAsync(entry.Id, "still down", maxAttempts: 3);
+            await store.MarkFailedAsync(entry.Guid, "still down", maxAttempts: 3);
         }
 
         (await store.GetPendingAsync(10)).Should().BeEmpty(
@@ -186,7 +186,7 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
 
         await store.CleanupAsync(DateTime.UtcNow.AddDays(1));
 
-        (await store.GetPendingAsync(10)).Should().ContainSingle(e => e.Id == entry.Id,
+        (await store.GetPendingAsync(10)).Should().ContainSingle(e => e.Guid == entry.Guid,
             "cleanup retires PUBLISHED history — deleting unpublished work would lose events, which is " +
             "the exact failure the outbox pattern exists to prevent");
     }

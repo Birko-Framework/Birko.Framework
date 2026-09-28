@@ -10,12 +10,12 @@ namespace Birko.Data.EventSourcing.Events
         /// <summary>
         /// Unique identifier for the event.
         /// </summary>
-        Guid EventId { get; set; }
+        Guid EventGuid { get; set; }
 
         /// <summary>
         /// The aggregate ID that this event relates to.
         /// </summary>
-        Guid AggregateId { get; set; }
+        Guid AggregateGuid { get; set; }
 
         /// <summary>
         /// The expected version of the aggregate after this event is applied.
@@ -45,6 +45,6 @@ namespace Birko.Data.EventSourcing.Events
         /// <summary>
         /// Optional user ID who caused the event.
         /// </summary>
-        Guid? UserId { get; set; }
+        Guid? UserGuid { get; set; }
     }
 }

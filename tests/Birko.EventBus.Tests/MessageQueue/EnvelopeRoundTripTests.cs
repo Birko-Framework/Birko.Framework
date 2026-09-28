@@ -20,7 +20,7 @@ namespace Birko.EventBus.Tests.MessageQueue
 
             var envelope = new EventEnvelope
             {
-                EventId = evt.EventId,
+                EventGuid = evt.EventGuid,
                 EventType = evt.GetType().AssemblyQualifiedName!,
                 Source = evt.Source,
                 OccurredAt = evt.OccurredAt,
@@ -31,7 +31,7 @@ namespace Birko.EventBus.Tests.MessageQueue
             var deserialized = serializer.Deserialize<EventEnvelope>(json);
 
             deserialized.Should().NotBeNull();
-            deserialized!.EventId.Should().Be(evt.EventId);
+            deserialized!.EventGuid.Should().Be(evt.EventGuid);
             deserialized.EventType.Should().Contain("OrderPlaced");
         }
 
@@ -69,7 +69,7 @@ namespace Birko.EventBus.Tests.MessageQueue
             // Step 1: Build envelope (what PublishAsync does)
             var envelope = new EventEnvelope
             {
-                EventId = evt.EventId,
+                EventGuid = evt.EventGuid,
                 EventType = evt.GetType().AssemblyQualifiedName!,
                 Source = evt.Source,
                 OccurredAt = evt.OccurredAt,
@@ -97,7 +97,7 @@ namespace Birko.EventBus.Tests.MessageQueue
             var handler = new OrderPlacedHandler();
             var context = new EventContext
             {
-                EventId = receivedEnvelope.EventId,
+                EventGuid = receivedEnvelope.EventGuid,
                 Source = receivedEnvelope.Source
             };
 

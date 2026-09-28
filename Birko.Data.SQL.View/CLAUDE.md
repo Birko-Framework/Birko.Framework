@@ -136,7 +136,7 @@ For PostgreSQL:
 public class UserStatsView
 {
     [ViewColumn("UserId")]
-    public Guid UserId { get; set; }
+    public Guid UserGuid { get; set; }
 
     [ViewColumn("LoginCount")]
     public int LoginCount { get; set; }

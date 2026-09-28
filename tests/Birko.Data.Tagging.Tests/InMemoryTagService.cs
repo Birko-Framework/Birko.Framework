@@ -97,7 +97,7 @@ public sealed class InMemoryTagService : TagServiceBase
     {
         GetEntityTagLinksCalls++;
         return Task.FromResult<IReadOnlyList<EntityTag>>(
-            _links.Where(l => l.EntityType == entityType && l.EntityId == entityId).ToList());
+            _links.Where(l => l.EntityType == entityType && l.EntityGuid == entityId).ToList());
     }
 
     protected override Task CreateEntityTagAsync(EntityTag link, CancellationToken ct)
@@ -123,13 +123,13 @@ public sealed class InMemoryTagService : TagServiceBase
     protected override Task DeleteAllEntityTagsForTagAsync(Guid tagId, CancellationToken ct)
     {
         DeleteAllEntityTagsCalls++;
-        _links.RemoveAll(l => l.TagId == tagId);
+        _links.RemoveAll(l => l.TagGuid == tagId);
         return Task.CompletedTask;
     }
 
     protected override Task<IReadOnlyList<EntityTag>> GetEntityTagLinksBatchAsync(string entityType, IReadOnlyList<Guid> entityIds, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<EntityTag>>(
-            _links.Where(l => l.EntityType == entityType && entityIds.Contains(l.EntityId)).ToList());
+            _links.Where(l => l.EntityType == entityType && entityIds.Contains(l.EntityGuid)).ToList());
 
     protected override Guid GetCurrentTenantId() => _tenant;
 

@@ -30,7 +30,7 @@ namespace Birko.Data.EventSourcing.Stores
         /// <summary>
         /// Gets the current user ID for event tracking.
         /// </summary>
-        public Guid? CurrentUserId { get; set; }
+        public Guid? CurrentUserGuid { get; set; }
 
         /// <summary>
         /// Creates a new event sourcing store wrapper.
@@ -69,7 +69,7 @@ namespace Birko.Data.EventSourcing.Stores
                 newVersion,
                 "Created",
                 _serializer.Serialize(item),
-                CurrentUserId,
+                CurrentUserGuid,
                 _clock
             );
 
@@ -131,7 +131,7 @@ namespace Birko.Data.EventSourcing.Stores
                 newVersion,
                 "Updated",
                 _serializer.Serialize(data),
-                CurrentUserId,
+                CurrentUserGuid,
                 _clock
             );
 
@@ -167,7 +167,7 @@ namespace Birko.Data.EventSourcing.Stores
                 newVersion,
                 "Deleted",
                 _serializer.Serialize(item),
-                CurrentUserId,
+                CurrentUserGuid,
                 _clock
             );
 

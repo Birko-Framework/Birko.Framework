@@ -13,7 +13,7 @@ namespace Birko.BackgroundJobs.SQL.Models
     public class JobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     {
         [Birko.Data.SQL.Attributes.PrimaryField]
-        [Birko.Data.SQL.Attributes.NamedField("Id")]
+        [Birko.Data.SQL.Attributes.NamedField("Guid")]
         public override Guid? Guid { get; set; }
 
         [Birko.Data.SQL.Attributes.NamedField("JobType")]
@@ -72,7 +72,7 @@ namespace Birko.BackgroundJobs.SQL.Models
         {
             var descriptor = new JobDescriptor
             {
-                Id = Guid ?? System.Guid.NewGuid(),
+                Guid = Guid ?? System.Guid.NewGuid(),
                 JobType = JobType,
                 InputType = InputType,
                 SerializedInput = SerializedInput,
@@ -112,7 +112,7 @@ namespace Birko.BackgroundJobs.SQL.Models
 
         public void LoadFrom(JobDescriptor data)
         {
-            Guid = data.Id;
+            Guid = data.Guid;
             JobType = data.JobType;
             InputType = data.InputType;
             SerializedInput = data.SerializedInput;

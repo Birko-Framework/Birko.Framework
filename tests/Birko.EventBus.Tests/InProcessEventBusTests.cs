@@ -108,13 +108,13 @@ namespace Birko.EventBus.Tests
             using var bus = new InProcessEventBus();
             bus.Subscribe(handler);
 
-            var evt = new OrderPlaced(Guid.NewGuid(), 25m) { CorrelationId = Guid.NewGuid() };
+            var evt = new OrderPlaced(Guid.NewGuid(), 25m) { CorrelationGuid = Guid.NewGuid() };
             await bus.PublishAsync(evt);
 
             handler.CapturedContext.Should().NotBeNull();
-            handler.CapturedContext!.EventId.Should().Be(evt.EventId);
+            handler.CapturedContext!.EventGuid.Should().Be(evt.EventGuid);
             handler.CapturedContext.Source.Should().Be("orders");
-            handler.CapturedContext.CorrelationId.Should().Be(evt.CorrelationId);
+            handler.CapturedContext.CorrelationGuid.Should().Be(evt.CorrelationGuid);
             handler.CapturedContext.DeliveryCount.Should().Be(1);
         }
 

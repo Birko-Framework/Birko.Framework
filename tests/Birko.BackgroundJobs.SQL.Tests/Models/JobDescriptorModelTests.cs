@@ -13,7 +13,7 @@ public class JobDescriptorModelTests
     {
         return new JobDescriptor
         {
-            Id = Guid.NewGuid(),
+            Guid = Guid.NewGuid(),
             JobType = "TestApp.Jobs.SendEmailJob, TestApp",
             InputType = "TestApp.Models.EmailInput, TestApp",
             SerializedInput = "{\"to\":\"user@example.com\"}",
@@ -40,7 +40,7 @@ public class JobDescriptorModelTests
 
         var model = JobDescriptorModel.FromDescriptor(descriptor);
 
-        model.Guid.Should().Be(descriptor.Id);
+        model.Guid.Should().Be(descriptor.Guid);
         model.JobType.Should().Be(descriptor.JobType);
         model.InputType.Should().Be(descriptor.InputType);
         model.SerializedInput.Should().Be(descriptor.SerializedInput);
@@ -91,7 +91,7 @@ public class JobDescriptorModelTests
 
         var result = model.ToDescriptor();
 
-        result.Id.Should().Be(original.Id);
+        result.Guid.Should().Be(original.Guid);
         result.JobType.Should().Be(original.JobType);
         result.InputType.Should().Be(original.InputType);
         result.SerializedInput.Should().Be(original.SerializedInput);
@@ -142,7 +142,7 @@ public class JobDescriptorModelTests
 
         var result = model.ToDescriptor();
 
-        result.Id.Should().NotBe(Guid.Empty);
+        result.Guid.Should().NotBe(Guid.Empty);
     }
 
     #endregion

@@ -10,7 +10,7 @@ namespace Birko.MessageQueue.Tests.Core
         {
             var message = new QueueMessage();
 
-            message.Id.Should().NotBeEmpty();
+            message.Guid.Should().NotBeEmpty();
             message.Body.Should().BeEmpty();
             message.PayloadType.Should().BeNull();
             message.Headers.Should().NotBeNull();
@@ -25,7 +25,7 @@ namespace Birko.MessageQueue.Tests.Core
             var m1 = new QueueMessage();
             var m2 = new QueueMessage();
 
-            m1.Id.Should().NotBe(m2.Id);
+            m1.Guid.Should().NotBe(m2.Guid);
         }
 
         [Fact]

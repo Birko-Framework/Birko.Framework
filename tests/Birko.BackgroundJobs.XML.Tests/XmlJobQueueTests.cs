@@ -44,7 +44,7 @@ public class XmlJobQueueTests : IDisposable
         var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
 
         var dequeued = await queue.DequeueAsync();
-        dequeued!.Id.Should().Be(id);
+        dequeued!.Guid.Should().Be(id);
         dequeued.Status.Should().Be(JobStatus.Processing);
 
         await queue.CompleteAsync(id);
@@ -105,7 +105,7 @@ public class XmlJobQueueTests : IDisposable
         (await queue.DequeueAsync()).Should().BeNull("the retry is scheduled in the future");
 
         _clock.Advance(TimeSpan.FromHours(1)); // let the backoff elapse
-        (await queue.DequeueAsync())!.Id.Should().Be(id);
+        (await queue.DequeueAsync())!.Guid.Should().Be(id);
     }
 
     [Fact]
@@ -116,8 +116,8 @@ public class XmlJobQueueTests : IDisposable
         _clock.Advance(TimeSpan.FromSeconds(1));
         var high = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", Priority = 10 });
 
-        (await queue.DequeueAsync())!.Id.Should().Be(high, "higher priority first");
-        (await queue.DequeueAsync())!.Id.Should().Be(low);
+        (await queue.DequeueAsync())!.Guid.Should().Be(high, "higher priority first");
+        (await queue.DequeueAsync())!.Guid.Should().Be(low);
     }
 
     [Fact]

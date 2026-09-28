@@ -109,7 +109,7 @@ public class StoreWrapperBuilderTests
 
     private sealed class FakeAuditContext : IAuditContext
     {
-        public Guid? CurrentUserId => Guid.NewGuid();
+        public Guid? CurrentUserGuid => Guid.NewGuid();
     }
 
     private sealed class FakeAsyncEventStore : IAsyncEventStore

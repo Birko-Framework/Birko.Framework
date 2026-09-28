@@ -13,7 +13,7 @@ namespace Birko.BackgroundJobs.Tests.Core
         {
             var descriptor = new JobDescriptor();
 
-            descriptor.Id.Should().NotBe(Guid.Empty);
+            descriptor.Guid.Should().NotBe(Guid.Empty);
             descriptor.JobType.Should().BeEmpty();
             descriptor.SerializedInput.Should().BeNull();
             descriptor.InputType.Should().BeNull();
@@ -46,7 +46,7 @@ namespace Birko.BackgroundJobs.Tests.Core
             var d1 = new JobDescriptor();
             var d2 = new JobDescriptor();
 
-            d1.Id.Should().NotBe(d2.Id);
+            d1.Guid.Should().NotBe(d2.Guid);
         }
 
         [Fact]
@@ -73,7 +73,7 @@ namespace Birko.BackgroundJobs.Tests.Core
 
             var descriptor = new JobDescriptor
             {
-                Id = id,
+                Guid = id,
                 JobType = "MyApp.Jobs.CleanupJob, MyApp",
                 SerializedInput = "{\"days\":30}",
                 InputType = "MyApp.Jobs.CleanupInput, MyApp",
@@ -89,7 +89,7 @@ namespace Birko.BackgroundJobs.Tests.Core
                 LastError = "Timeout"
             };
 
-            descriptor.Id.Should().Be(id);
+            descriptor.Guid.Should().Be(id);
             descriptor.JobType.Should().Be("MyApp.Jobs.CleanupJob, MyApp");
             descriptor.Priority.Should().Be(5);
             descriptor.Status.Should().Be(JobStatus.Scheduled);

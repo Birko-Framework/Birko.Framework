@@ -40,7 +40,7 @@ public class ClaimsCurrentUserTests
         var user = CreateUser(principal);
 
         user.IsAuthenticated.Should().BeTrue();
-        user.UserId.Should().Be(userId);
+        user.UserGuid.Should().Be(userId);
         user.Email.Should().Be("user@example.com");
         user.TenantGuid.Should().Be(tenantGuid);
         user.Roles.Should().Contain("Admin").And.Contain("User");
@@ -56,7 +56,7 @@ public class ClaimsCurrentUserTests
         var user = CreateUser(principal);
 
         user.IsAuthenticated.Should().BeFalse();
-        user.UserId.Should().BeNull();
+        user.UserGuid.Should().BeNull();
         user.Email.Should().BeNull();
         user.TenantGuid.Should().BeNull();
         user.Roles.Should().BeEmpty();
@@ -70,7 +70,7 @@ public class ClaimsCurrentUserTests
         var user = new ClaimsCurrentUser(accessor, new ClaimMappingOptions());
 
         user.IsAuthenticated.Should().BeFalse();
-        user.UserId.Should().BeNull();
+        user.UserGuid.Should().BeNull();
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class ClaimsCurrentUserTests
 
         var user = CreateUser(principal, options);
 
-        user.UserId.Should().Be(userId);
+        user.UserGuid.Should().Be(userId);
         user.Email.Should().Be("custom@example.com");
     }
 
@@ -162,7 +162,7 @@ public class ClaimsCurrentUserTests
 
         var user = CreateUser(principal);
 
-        user.UserId.Should().BeNull();
+        user.UserGuid.Should().BeNull();
     }
 
     private class TestHttpContextAccessor : IHttpContextAccessor

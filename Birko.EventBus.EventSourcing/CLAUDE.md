@@ -12,7 +12,7 @@ Integration layer between Birko.EventBus and Birko.Data.EventSourcing. Publishes
 
 | File | Description |
 |------|-------------|
-| DomainEventPublished.cs | EventBase record wrapping domain event data (AggregateId, Version, DomainEventType, EventData, Metadata, UserId) |
+| DomainEventPublished.cs | EventBase record wrapping domain event data (AggregateGuid, Version, DomainEventType, EventData, Metadata, UserGuid) |
 | EventStoreEventBus.cs | IAsyncEventStore decorator — delegates all operations to inner store, publishes DomainEventPublished after Append/AppendRange |
 | EventReplayService.cs | Replays events from store through bus: ReplayAggregateAsync, ReplayFromVersionAsync, ReplayAllFromAsync |
 

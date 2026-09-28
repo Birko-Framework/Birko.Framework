@@ -10,9 +10,9 @@ public class NfcTagMappingTests
     {
         var mapping = new NfcTagMapping();
 
-        mapping.Id.Should().NotBe(Guid.Empty);
+        mapping.Guid.Should().NotBe(Guid.Empty);
         mapping.TagUid.Should().BeEmpty();
-        mapping.UserId.Should().Be(Guid.Empty);
+        mapping.UserGuid.Should().Be(Guid.Empty);
         mapping.IsActive.Should().BeTrue();
         mapping.LastUsedAt.Should().BeNull();
         mapping.Label.Should().BeNull();

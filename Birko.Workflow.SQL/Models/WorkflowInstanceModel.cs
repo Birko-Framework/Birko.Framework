@@ -12,7 +12,7 @@ namespace Birko.Workflow.SQL.Models
     public class WorkflowInstanceModel : AbstractModel
     {
         [Birko.Data.SQL.Attributes.PrimaryField]
-        [Birko.Data.SQL.Attributes.NamedField("Id")]
+        [Birko.Data.SQL.Attributes.NamedField("Guid")]
         public override Guid? Guid { get; set; }
 
         [Birko.Data.SQL.Attributes.NamedField("WorkflowName")]
@@ -88,7 +88,7 @@ namespace Birko.Workflow.SQL.Models
             var s = serializer ?? DefaultSerializer;
             return new WorkflowInstanceModel
             {
-                Guid = instance.InstanceId,
+                Guid = instance.InstanceGuid,
                 WorkflowName = workflowName,
                 CurrentState = instance.CurrentState,
                 Status = (int)instance.Status,

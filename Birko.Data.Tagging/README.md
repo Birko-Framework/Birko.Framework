@@ -19,7 +19,7 @@ Entity tagging system for the Birko Framework. Provides tenant-scoped tags that 
 |------|-------------|
 | `ITaggable` | Marker interface — entities implement `static abstract string TagEntityType` |
 | `Tag` | Tag entity with TenantGuid, Name, Color, Group |
-| `EntityTag` | Junction record: TenantGuid, TagId, EntityId, EntityType |
+| `EntityTag` | Junction record: TenantGuid, TagGuid, EntityGuid, EntityType |
 | `TagDto` | Immutable record for API responses |
 
 ## Service

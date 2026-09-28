@@ -30,14 +30,14 @@ public class AsyncAuditStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<T
 
     public Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
-        data.CreatedBy = _auditContext.CurrentUserId;
-        data.UpdatedBy = _auditContext.CurrentUserId;
+        data.CreatedBy = _auditContext.CurrentUserGuid;
+        data.UpdatedBy = _auditContext.CurrentUserGuid;
         return _innerStore.CreateAsync(data, processDelegate, ct);
     }
 
     public Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
-        data.UpdatedBy = _auditContext.CurrentUserId;
+        data.UpdatedBy = _auditContext.CurrentUserGuid;
         return _innerStore.UpdateAsync(data, processDelegate, ct);
     }
 

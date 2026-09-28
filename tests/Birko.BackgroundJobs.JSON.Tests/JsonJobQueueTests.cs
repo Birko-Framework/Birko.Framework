@@ -46,7 +46,7 @@ public class JsonJobQueueTests : IDisposable
         var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
 
         var dequeued = await queue.DequeueAsync();
-        dequeued!.Id.Should().Be(id);
+        dequeued!.Guid.Should().Be(id);
         dequeued.Status.Should().Be(JobStatus.Processing);
         dequeued.AttemptCount.Should().Be(1);
 
@@ -142,7 +142,7 @@ public class JsonJobQueueTests : IDisposable
             {
                 var job = await queue.DequeueAsync();
                 if (job == null) break;
-                claimed.Add(job.Id);
+                claimed.Add(job.Guid);
             }
         });
         await Task.WhenAll(workers);

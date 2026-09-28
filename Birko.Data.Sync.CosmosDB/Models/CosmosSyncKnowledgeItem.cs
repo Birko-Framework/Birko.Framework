@@ -25,7 +25,7 @@ public class CosmosSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     /// read/delete/last-sync operations so one tenant's sync knowledge is never returned, deleted, or
     /// overwritten by another (CR-H100).
     /// </summary>
-    public Guid? TenantId { get; set; }
+    public Guid? TenantGuid { get; set; }
 
     private string _scope = string.Empty;
 
@@ -76,7 +76,7 @@ public class CosmosSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     /// <summary>
     /// Builds a <see cref="CosmosSyncKnowledgeItem"/> from any <see cref="ISyncKnowledgeItem"/>, stamping
     /// the tenant. Shared by the sync and async stores so the 14-line mapping can't drift between them
-    /// (CR-L211) — this is the mapper that changes whenever the model gains a field (e.g. TenantId).
+    /// (CR-L211) — this is the mapper that changes whenever the model gains a field (e.g. TenantGuid).
     /// </summary>
     /// <remarks>
     /// If <paramref name="item"/> is already a <see cref="CosmosSyncKnowledgeItem"/> it is returned as-is
@@ -91,7 +91,7 @@ public class CosmosSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
         {
             if (tenantId.HasValue)
             {
-                cosmosItem.TenantId = tenantId;
+                cosmosItem.TenantGuid = tenantId;
             }
             // System.Guid is fully qualified: the inherited instance property `Guid` shadows the type
             // name in this static method's expression context.
@@ -103,7 +103,7 @@ public class CosmosSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
         {
             Guid = item.Guid ?? System.Guid.NewGuid(),
             EntityGuid = item.EntityGuid,
-            TenantId = tenantId,
+            TenantGuid = tenantId,
             Scope = item.Scope,
             LastSyncedAt = item.LastSyncedAt,
             LocalVersion = item.LocalVersion,

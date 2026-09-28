@@ -47,10 +47,10 @@ public class PropertyUpdateIncrementEventSourcingTests
 
         public void Append(IEvent @event) => _events.Add(@event);
         public void AppendRange(IEnumerable<IEvent> events) => _events.AddRange(events);
-        public IEnumerable<IEvent> Read(Guid aggregateId) => _events.Where(e => e.AggregateId == aggregateId).OrderBy(e => e.Version).ToList();
+        public IEnumerable<IEvent> Read(Guid aggregateId) => _events.Where(e => e.AggregateGuid == aggregateId).OrderBy(e => e.Version).ToList();
         public IEnumerable<IEvent> ReadUpToVersion(Guid aggregateId, long maxVersion) => Read(aggregateId).Where(e => e.Version <= maxVersion);
         public IEnumerable<IEvent> ReadFromVersion(Guid aggregateId, long fromVersion) => Read(aggregateId).Where(e => e.Version >= fromVersion);
-        public long GetVersion(Guid aggregateId) => _events.Where(e => e.AggregateId == aggregateId).Select(e => e.Version).DefaultIfEmpty(0).Max();
+        public long GetVersion(Guid aggregateId) => _events.Where(e => e.AggregateGuid == aggregateId).Select(e => e.Version).DefaultIfEmpty(0).Max();
         public IEnumerable<IEvent> ReadAllFrom(DateTime from) => _events.Where(e => e.OccurredAt >= from);
 
         public Task AppendAsync(IEvent @event, CancellationToken ct = default) { Append(@event); return Task.CompletedTask; }

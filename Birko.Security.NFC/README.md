@@ -143,7 +143,7 @@ bool enrolled = await auth.IsEnrolledAsync("04A1B2C3D4E5F6");
 |-------|-------------|
 | `NfcAuthProvider` | Default auth provider with in-memory or custom store |
 | `InMemoryNfcTagMappingStore` | In-memory store for testing/development |
-| `NfcTagMapping` | Tag-to-user mapping model (UID, UserId, label, expiration) |
+| `NfcTagMapping` | Tag-to-user mapping model (UID, UserGuid, label, expiration) |
 | `NfcAuthResult` | Authentication result (success/failure, token, claims) |
 | `NfcAuthSettings` | Configuration (token issuance, max tags, expiration, normalization) |
 

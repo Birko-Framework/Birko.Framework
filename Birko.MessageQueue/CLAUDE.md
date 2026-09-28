@@ -19,7 +19,7 @@ Core message queue abstractions for the Birko Framework. Provides interfaces for
 | IMessageHandler.cs | Typed message handler interface |
 | ISubscription.cs | Active subscription handle (dispose to unsubscribe) |
 | QueueMessage.cs | Message wrapper (Id, Body, PayloadType, Headers, Priority, TTL, Delay) |
-| MessageHeaders.cs | Metadata (CorrelationId, ReplyTo, ContentType, GroupId, Custom dictionary) |
+| MessageHeaders.cs | Metadata (CorrelationGuid, ReplyTo, ContentType, GroupId, Custom dictionary) |
 | MessageContext.cs | Runtime context for handlers (Message, Destination, Consumer, DeliveryCount) |
 | ConsumerOptions.cs | Subscription config (AckMode, PrefetchCount, GroupId, FromBeginning) |
 | MessageAckMode.cs | Enum: AutoAck, ManualAck |

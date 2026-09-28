@@ -182,7 +182,7 @@ public class JsonWorkflowInstanceStoreOwnershipTests : IDisposable
 
         seen.Should().ContainSingle("both rows are in state 'Submitted' and share one file, so an "
                                     + "unscoped query hands back the InvoiceApproval row too");
-        seen[0].InstanceId.Should().Be(orderId);
+        seen[0].InstanceGuid.Should().Be(orderId);
         seen[0].Data.OrderId.Should().Be("ORD-9",
             "the foreign row used to arrive here as a DEFAULTED OrderData — no exception, every member "
             + "empty — which is exactly why this was silent");
@@ -204,7 +204,7 @@ public class JsonWorkflowInstanceStoreOwnershipTests : IDisposable
         var seen = (await orderStore.FindByStatusAsync("OrderApproval", WorkflowStatus.Active)).ToList();
 
         seen.Should().ContainSingle("both rows are Active, so an unscoped query returns both");
-        seen[0].InstanceId.Should().Be(orderId);
+        seen[0].InstanceGuid.Should().Be(orderId);
         seen[0].Data.OrderId.Should().Be("ORD-8");
     }
 

@@ -10,12 +10,12 @@ public class InMemoryNfcTagMappingStoreTests
     [Fact]
     public async Task AddAsync_And_GetByTagUidAsync_RoundTrip()
     {
-        var mapping = new NfcTagMapping { TagUid = "AABB", UserId = Guid.NewGuid() };
+        var mapping = new NfcTagMapping { TagUid = "AABB", UserGuid = Guid.NewGuid() };
         await _store.AddAsync(mapping);
 
         var retrieved = await _store.GetByTagUidAsync("AABB");
         retrieved.Should().NotBeNull();
-        retrieved!.UserId.Should().Be(mapping.UserId);
+        retrieved!.UserGuid.Should().Be(mapping.UserGuid);
     }
 
     [Fact]
@@ -37,9 +37,9 @@ public class InMemoryNfcTagMappingStoreTests
     public async Task GetByUserIdAsync_ReturnsAllForUser()
     {
         var userId = Guid.NewGuid();
-        await _store.AddAsync(new NfcTagMapping { TagUid = "A1", UserId = userId });
-        await _store.AddAsync(new NfcTagMapping { TagUid = "A2", UserId = userId });
-        await _store.AddAsync(new NfcTagMapping { TagUid = "B1", UserId = Guid.NewGuid() });
+        await _store.AddAsync(new NfcTagMapping { TagUid = "A1", UserGuid = userId });
+        await _store.AddAsync(new NfcTagMapping { TagUid = "A2", UserGuid = userId });
+        await _store.AddAsync(new NfcTagMapping { TagUid = "B1", UserGuid = Guid.NewGuid() });
 
         var results = await _store.GetByUserIdAsync(userId);
         results.Should().HaveCount(2);

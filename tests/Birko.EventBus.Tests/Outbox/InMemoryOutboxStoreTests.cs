@@ -17,7 +17,7 @@ namespace Birko.EventBus.Tests.Outbox
 
             await store.SaveAsync(entry);
 
-            store.GetAll().Should().ContainSingle().Which.EventId.Should().Be(entry.EventId);
+            store.GetAll().Should().ContainSingle().Which.EventGuid.Should().Be(entry.EventGuid);
         }
 
         [Fact]
@@ -32,7 +32,7 @@ namespace Birko.EventBus.Tests.Outbox
             await store.SaveAsync(published);
 
             var result = await store.GetPendingAsync(10);
-            result.Should().ContainSingle().Which.Id.Should().Be(pending.Id);
+            result.Should().ContainSingle().Which.Guid.Should().Be(pending.Guid);
         }
 
         [Fact]
@@ -55,7 +55,7 @@ namespace Birko.EventBus.Tests.Outbox
             var entry = CreateEntry();
             await store.SaveAsync(entry);
 
-            await store.MarkPublishedAsync(entry.Id);
+            await store.MarkPublishedAsync(entry.Guid);
 
             var all = store.GetAll();
             all.Should().ContainSingle()
@@ -70,7 +70,7 @@ namespace Birko.EventBus.Tests.Outbox
             var entry = CreateEntry();
             await store.SaveAsync(entry);
 
-            await store.MarkFailedAsync(entry.Id, "Connection refused", maxAttempts: 5);
+            await store.MarkFailedAsync(entry.Guid, "Connection refused", maxAttempts: 5);
 
             var all = store.GetAll();
             all[0].Attempts.Should().Be(1);
@@ -88,7 +88,7 @@ namespace Birko.EventBus.Tests.Outbox
             // Fail 5 times (default max in InMemoryOutboxStore)
             for (int i = 0; i < 5; i++)
             {
-                await store.MarkFailedAsync(entry.Id, $"Attempt {i + 1}", maxAttempts: 5);
+                await store.MarkFailedAsync(entry.Guid, $"Attempt {i + 1}", maxAttempts: 5);
             }
 
             store.GetAll()[0].Status.Should().Be(OutboxStatus.Failed);
@@ -108,14 +108,14 @@ namespace Birko.EventBus.Tests.Outbox
 
             await store.CleanupAsync(DateTime.UtcNow.AddDays(-7));
 
-            store.GetAll().Should().ContainSingle().Which.Id.Should().Be(recent.Id);
+            store.GetAll().Should().ContainSingle().Which.Guid.Should().Be(recent.Guid);
         }
 
         private static OutboxEntry CreateEntry()
         {
             return new OutboxEntry
             {
-                EventId = Guid.NewGuid(),
+                EventGuid = Guid.NewGuid(),
                 EventType = "Test.OrderPlaced, TestAssembly",
                 Payload = "{\"orderId\":\"123\"}",
                 Source = "test"

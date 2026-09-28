@@ -44,7 +44,7 @@ public class MismatchedTenantContextWidensToAllTenantsTests
 {
     private sealed class Probe : IEvent
     {
-        public Guid EventId { get; } = Guid.NewGuid();
+        public Guid EventGuid { get; } = Guid.NewGuid();
         public DateTime OccurredAt { get; } = DateTime.UtcNow;
         public string Source { get; } = nameof(MismatchedTenantContextWidensToAllTenantsTests);
     }

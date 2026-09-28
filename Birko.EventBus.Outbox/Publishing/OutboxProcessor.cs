@@ -78,7 +78,7 @@ namespace Birko.EventBus.Outbox.Publishing
                     var eventType = Type.GetType(entry.EventType);
                     if (eventType == null)
                     {
-                        await _store.MarkFailedAsync(entry.Id, $"Cannot resolve type: {entry.EventType}", _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
+                        await _store.MarkFailedAsync(entry.Guid, $"Cannot resolve type: {entry.EventType}", _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
                         processed++;
                         continue;
                     }
@@ -86,7 +86,7 @@ namespace Birko.EventBus.Outbox.Publishing
                     var @event = _serializer.Deserialize(entry.Payload, eventType) as IEvent;
                     if (@event == null)
                     {
-                        await _store.MarkFailedAsync(entry.Id, $"Cannot deserialize payload for type: {entry.EventType}", _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
+                        await _store.MarkFailedAsync(entry.Guid, $"Cannot deserialize payload for type: {entry.EventType}", _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
                         processed++;
                         continue;
                     }
@@ -97,13 +97,13 @@ namespace Birko.EventBus.Outbox.Publishing
                     // handlers observe no tenant — which throws under TenantIsolationMode.Strict. No-op unless
                     // a scope bridge is registered.
                     var scopeContext = EventContext.From(@event, entry.TenantGuid, metadata: entry.Headers);
-                    scopeContext.CorrelationId = entry.CorrelationId;
+                    scopeContext.CorrelationGuid = entry.CorrelationGuid;
 
                     // Publish via the inner bus (which sends to MessageQueue or dispatches in-process)
                     await _scopeAccessor
                         .RunWithScopeAsync(scopeContext, () => PublishEventAsync(@event, cancellationToken), cancellationToken)
                         .ConfigureAwait(false);
-                    await _store.MarkPublishedAsync(entry.Id, cancellationToken).ConfigureAwait(false);
+                    await _store.MarkPublishedAsync(entry.Guid, cancellationToken).ConfigureAwait(false);
                     processed++;
                 }
                 catch (Exception ex)
@@ -111,7 +111,7 @@ namespace Birko.EventBus.Outbox.Publishing
                     // CR-M189: record the underlying cause, not the opaque reflection wrapper
                     // ("Exception has been thrown by the target of an invocation.").
                     var cause = Unwrap(ex);
-                    await _store.MarkFailedAsync(entry.Id, cause.Message, _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
+                    await _store.MarkFailedAsync(entry.Guid, cause.Message, _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
                     processed++;
                 }
             }

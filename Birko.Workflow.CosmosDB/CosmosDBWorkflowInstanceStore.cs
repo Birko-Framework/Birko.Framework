@@ -45,17 +45,17 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     /// <inheritdoc />
     public async Task<Guid> SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken ct = default)
     {
-        var existing = await _store.ReadAsync(m => m.Guid == instance.InstanceId, ct).ConfigureAwait(false);
+        var existing = await _store.ReadAsync(m => m.Guid == instance.InstanceGuid, ct).ConfigureAwait(false);
 
         if (existing != null)
         {
             // SH-H057: the row is keyed by InstanceId alone and every workflow shares one
             // table/collection, so an id identifies a row, not a workflow. Refuse before
             // UpdateFromInstance relabels and overwrites another workflow's instance.
-            WorkflowInstanceOwnership.RequireSameWorkflow(existing.WorkflowName, workflowName, instance.InstanceId);
+            WorkflowInstanceOwnership.RequireSameWorkflow(existing.WorkflowName, workflowName, instance.InstanceGuid);
             existing.UpdateFromInstance(instance);
             await _store.UpdateAsync(existing, ct: ct).ConfigureAwait(false);
-            return existing.Guid ?? instance.InstanceId;
+            return existing.Guid ?? instance.InstanceGuid;
         }
         else
         {

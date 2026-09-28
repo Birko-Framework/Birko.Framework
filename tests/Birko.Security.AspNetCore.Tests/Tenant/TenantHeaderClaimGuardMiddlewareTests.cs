@@ -394,7 +394,7 @@ public class TenantHeaderClaimGuardMiddlewareTests
             Permissions = (permissions ?? new HashSet<string>()).AsReadOnly();
         }
 
-        public Guid? UserId => IsAuthenticated ? Guid.Parse("33333333-3333-3333-3333-333333333333") : null;
+        public Guid? UserGuid => IsAuthenticated ? Guid.Parse("33333333-3333-3333-3333-333333333333") : null;
         public string? Email => null;
         public Guid? TenantGuid { get; }
         public IReadOnlySet<string> Roles => new HashSet<string>().AsReadOnly();

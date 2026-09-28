@@ -24,7 +24,7 @@ namespace Birko.EventBus.Tests.Outbox
 
             var entries = store.GetAll();
             entries.Should().ContainSingle();
-            entries[0].EventId.Should().Be(evt.EventId);
+            entries[0].EventGuid.Should().Be(evt.EventGuid);
             entries[0].EventType.Should().Contain("OrderPlaced");
             entries[0].Source.Should().Be("orders");
             entries[0].Status.Should().Be(OutboxStatus.Pending);

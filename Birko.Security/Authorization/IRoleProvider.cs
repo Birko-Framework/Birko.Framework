@@ -29,7 +29,7 @@ public interface IPermissionChecker
 /// </summary>
 public class AuthorizationContext
 {
-    public Guid UserId { get; set; }
+    public Guid UserGuid { get; set; }
     public Guid? TenantGuid { get; set; }
     public IReadOnlyList<string> Roles { get; set; } = [];
     public IReadOnlyList<string> Permissions { get; set; } = [];

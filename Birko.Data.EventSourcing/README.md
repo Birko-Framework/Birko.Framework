@@ -13,7 +13,7 @@ implementation (typically backed by another Birko store, e.g. SQL / Mongo / JSON
 - Record every state change as an immutable `DomainEvent` alongside the normal write
 - Rebuild (`Replay`) an aggregate's state by folding its event stream
 - Full event history per aggregate (`GetHistory`)
-- Optional `CurrentUserId` stamping on emitted events
+- Optional `CurrentUserGuid` stamping on emitted events
 - Composes into the `StoreWrapperBuilder` decorator chain (innermost)
 
 ## Dependencies
@@ -58,8 +58,8 @@ var history = await wrapper.GetHistoryAsync(aggregateId);
 ## API Reference
 
 ### Events (`Events/`)
-- **`IEvent`** — domain-event contract: `EventId`, `AggregateId`, `Version`, `EventType`
-  (`"Created"` / `"Updated"` / `"Deleted"`), `OccurredAt`, `EventData` (serialized entity), `Metadata?`, `UserId?`.
+- **`IEvent`** — domain-event contract: `EventGuid`, `AggregateGuid`, `Version`, `EventType`
+  (`"Created"` / `"Updated"` / `"Deleted"`), `OccurredAt`, `EventData` (serialized entity), `Metadata?`, `UserGuid?`.
 - **`DomainEvent`** — default `IEvent` implementation.
 - **`IEventStore` / `IAsyncEventStore`** — the backend contract the wrappers consume:
   `Append`/`AppendRange`, `Read(aggregateId)`, `ReadUpToVersion` / `ReadFromVersion`, `GetVersion`,

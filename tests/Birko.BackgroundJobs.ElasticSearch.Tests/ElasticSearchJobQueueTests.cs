@@ -36,7 +36,7 @@ public class ElasticSearchJobQueueTests
         var dequeued = await queue.DequeueAsync();
 
         dequeued.Should().NotBeNull();
-        dequeued!.Id.Should().Be(id);
+        dequeued!.Guid.Should().Be(id);
         dequeued.Status.Should().Be(JobStatus.Processing);
         dequeued.AttemptCount.Should().Be(1);
 
@@ -133,8 +133,8 @@ public class ElasticSearchJobQueueTests
             claimed.Add(job);
         }
 
-        claimed.Select(j => j.Id).Distinct().Should().HaveCount(3, "each dequeue must claim a distinct job");
-        claimed.Select(j => j.Id).Should().BeEquivalentTo(enqueued, "all three enqueued jobs are claimed exactly once");
+        claimed.Select(j => j.Guid).Distinct().Should().HaveCount(3, "each dequeue must claim a distinct job");
+        claimed.Select(j => j.Guid).Should().BeEquivalentTo(enqueued, "all three enqueued jobs are claimed exactly once");
 
         // Queue now drained.
         (await queue.DequeueAsync()).Should().BeNull();

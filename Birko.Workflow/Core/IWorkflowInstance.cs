@@ -2,7 +2,7 @@ namespace Birko.Workflow.Core;
 
 public interface IWorkflowInstance<TData>
 {
-    Guid InstanceId { get; }
+    Guid InstanceGuid { get; }
     string CurrentState { get; }
     WorkflowStatus Status { get; }
     TData Data { get; }

@@ -36,7 +36,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
 
             var id = await _queue.EnqueueAsync(descriptor);
 
-            id.Should().Be(descriptor.Id);
+            id.Should().Be(descriptor.Guid);
         }
 
         [Fact]
@@ -50,7 +50,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
             var descriptor = new JobDescriptor { JobType = "t", EnqueuedAt = DateTime.UtcNow };
 
             await queue.EnqueueAsync(descriptor);
-            var stored = await queue.GetAsync(descriptor.Id);
+            var stored = await queue.GetAsync(descriptor.Guid);
 
             stored!.EnqueuedAt.Should().Be(fixedTime.UtcDateTime);
         }
@@ -64,7 +64,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
             var result = await _queue.DequeueAsync();
 
             result.Should().NotBeNull();
-            result!.Id.Should().Be(descriptor.Id);
+            result!.Guid.Should().Be(descriptor.Guid);
             result.Status.Should().Be(JobStatus.Processing);
             result.AttemptCount.Should().Be(1);
             result.LastAttemptAt.Should().NotBeNull();
@@ -90,7 +90,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
             var first = await _queue.DequeueAsync();
 
             first.Should().NotBeNull();
-            first!.Id.Should().Be(high.Id);
+            first!.Guid.Should().Be(high.Guid);
         }
 
         [Fact]
@@ -107,7 +107,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
             var dequeued = await _queue.DequeueAsync();
 
             dequeued.Should().NotBeNull();
-            dequeued!.Id.Should().Be(first.Id);
+            dequeued!.Guid.Should().Be(first.Guid);
         }
 
         [Fact]
@@ -148,7 +148,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
             var result = await _queue.DequeueAsync();
 
             result.Should().NotBeNull();
-            result!.Id.Should().Be(descriptor.Id);
+            result!.Guid.Should().Be(descriptor.Guid);
         }
 
         [Fact]
@@ -163,7 +163,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
             var result = await _queue.DequeueAsync("high");
 
             result.Should().NotBeNull();
-            result!.Id.Should().Be(highPri.Id);
+            result!.Guid.Should().Be(highPri.Guid);
         }
 
         [Fact]
@@ -173,9 +173,9 @@ namespace Birko.BackgroundJobs.Tests.Processing
             await _queue.EnqueueAsync(descriptor);
             await _queue.DequeueAsync();
 
-            await _queue.CompleteAsync(descriptor.Id);
+            await _queue.CompleteAsync(descriptor.Guid);
 
-            var job = await _queue.GetAsync(descriptor.Id);
+            var job = await _queue.GetAsync(descriptor.Guid);
             job.Should().NotBeNull();
             job!.Status.Should().Be(JobStatus.Completed);
             job.CompletedAt.Should().NotBeNull();
@@ -189,9 +189,9 @@ namespace Birko.BackgroundJobs.Tests.Processing
             await _queue.EnqueueAsync(descriptor);
             await _queue.DequeueAsync(); // AttemptCount = 1
 
-            await _queue.FailAsync(descriptor.Id, "Connection timeout");
+            await _queue.FailAsync(descriptor.Guid, "Connection timeout");
 
-            var job = await _queue.GetAsync(descriptor.Id);
+            var job = await _queue.GetAsync(descriptor.Guid);
             job.Should().NotBeNull();
             job!.Status.Should().Be(JobStatus.Scheduled);
             job.ScheduledAt.Should().NotBeNull();
@@ -207,9 +207,9 @@ namespace Birko.BackgroundJobs.Tests.Processing
             await queue.EnqueueAsync(descriptor);
             await queue.DequeueAsync(); // AttemptCount = 1
 
-            await queue.FailAsync(descriptor.Id, "Permanent failure");
+            await queue.FailAsync(descriptor.Guid, "Permanent failure");
 
-            var job = await queue.GetAsync(descriptor.Id);
+            var job = await queue.GetAsync(descriptor.Guid);
             job.Should().NotBeNull();
             job!.Status.Should().Be(JobStatus.Dead);
             job.CompletedAt.Should().NotBeNull();
@@ -221,10 +221,10 @@ namespace Birko.BackgroundJobs.Tests.Processing
             var descriptor = CreateDescriptor();
             await _queue.EnqueueAsync(descriptor);
 
-            var result = await _queue.CancelAsync(descriptor.Id);
+            var result = await _queue.CancelAsync(descriptor.Guid);
 
             result.Should().BeTrue();
-            var job = await _queue.GetAsync(descriptor.Id);
+            var job = await _queue.GetAsync(descriptor.Guid);
             job!.Status.Should().Be(JobStatus.Cancelled);
             job.CompletedAt.Should().NotBeNull();
         }
@@ -236,7 +236,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
             await _queue.EnqueueAsync(descriptor);
             await _queue.DequeueAsync(); // now Processing
 
-            var result = await _queue.CancelAsync(descriptor.Id);
+            var result = await _queue.CancelAsync(descriptor.Guid);
 
             result.Should().BeFalse();
         }
@@ -255,10 +255,10 @@ namespace Birko.BackgroundJobs.Tests.Processing
             var descriptor = CreateDescriptor();
             await _queue.EnqueueAsync(descriptor);
 
-            var result = await _queue.GetAsync(descriptor.Id);
+            var result = await _queue.GetAsync(descriptor.Guid);
 
             result.Should().NotBeNull();
-            result!.Id.Should().Be(descriptor.Id);
+            result!.Guid.Should().Be(descriptor.Guid);
         }
 
         [Fact]
@@ -315,8 +315,8 @@ namespace Birko.BackgroundJobs.Tests.Processing
             var purged = await _queue.PurgeAsync(TimeSpan.FromDays(7));
 
             purged.Should().Be(1);
-            (await _queue.GetAsync(old.Id)).Should().BeNull();
-            (await _queue.GetAsync(recent.Id)).Should().NotBeNull();
+            (await _queue.GetAsync(old.Guid)).Should().BeNull();
+            (await _queue.GetAsync(recent.Guid)).Should().NotBeNull();
         }
 
         [Fact]

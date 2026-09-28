@@ -62,7 +62,7 @@ public class RuleFilterBehavior : IEventPipelineBehavior
     {
         var dict = new System.Collections.Generic.Dictionary<string, object?>
         {
-            ["EventId"] = @event.EventId,
+            ["EventGuid"] = @event.EventGuid,
             ["OccurredAt"] = @event.OccurredAt,
             ["Source"] = @event.Source,
             ["DeliveryCount"] = context.DeliveryCount
@@ -71,8 +71,8 @@ public class RuleFilterBehavior : IEventPipelineBehavior
         if (context.TenantGuid.HasValue)
             dict["TenantGuid"] = context.TenantGuid.Value;
 
-        if (context.CorrelationId.HasValue)
-            dict["CorrelationId"] = context.CorrelationId.Value;
+        if (context.CorrelationGuid.HasValue)
+            dict["CorrelationGuid"] = context.CorrelationGuid.Value;
 
         // Add event-specific properties via reflection.
         foreach (var prop in @event.GetType().GetProperties(

@@ -9,7 +9,7 @@ namespace Birko.Security.AspNetCore;
 /// </summary>
 public interface ICurrentUser
 {
-    Guid? UserId { get; }
+    Guid? UserGuid { get; }
     string? Email { get; }
     Guid? TenantGuid { get; }
     IReadOnlySet<string> Roles { get; }

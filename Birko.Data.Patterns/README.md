@@ -98,7 +98,7 @@ await uow.CommitAsync(); // or RollbackAsync()
 ### Audit
 
 - **IAuditable** - Interface with `CreatedBy`, `UpdatedBy` (Guid?)
-- **IAuditContext** - Provides `CurrentUserId`
+- **IAuditContext** - Provides `CurrentUserGuid`
 - **AuditStoreWrapper\<T\>** / async/bulk variants
 
 ### Timestamp

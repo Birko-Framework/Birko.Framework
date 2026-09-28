@@ -159,13 +159,13 @@ public sealed class AddOutboxStoreFactoryTests : IDisposable
         var store = sp.GetRequiredService<IOutboxStore>();
         var entry = new OutboxEntry
         {
-            EventId = Guid.NewGuid(), EventType = "ViaDi", Payload = "{}", Source = "tests",
+            EventGuid = Guid.NewGuid(), EventType = "ViaDi", Payload = "{}", Source = "tests",
         };
 
         await store.SaveAsync(entry);
         var pending = await store.GetPendingAsync(10);
 
-        pending.Should().ContainSingle(e => e.Id == entry.Id,
+        pending.Should().ContainSingle(e => e.Guid == entry.Guid,
             "resolving the type is not the same as the wiring producing a working store");
     }
 }

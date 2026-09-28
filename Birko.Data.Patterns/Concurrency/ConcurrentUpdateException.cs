@@ -16,7 +16,7 @@ public class ConcurrentUpdateException : Exception
     /// <summary>
     /// The identifier of the entity that had a concurrency conflict.
     /// </summary>
-    public Guid? EntityId { get; }
+    public Guid? EntityGuid { get; }
 
     /// <summary>
     /// The version the caller expected.
@@ -36,7 +36,7 @@ public class ConcurrentUpdateException : Exception
         : base($"Concurrency conflict on {entityType.Name} (Id: {entityId}). Expected version {expectedVersion} but the entity has been modified.")
     {
         EntityType = entityType;
-        EntityId = entityId;
+        EntityGuid = entityId;
         ExpectedVersion = expectedVersion;
     }
 }

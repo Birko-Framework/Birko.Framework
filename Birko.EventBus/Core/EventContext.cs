@@ -12,7 +12,7 @@ namespace Birko.EventBus
         /// <summary>
         /// The event's unique identifier.
         /// </summary>
-        public Guid EventId { get; init; }
+        public Guid EventGuid { get; init; }
 
         /// <summary>
         /// Source module or component that raised the event.
@@ -22,7 +22,7 @@ namespace Birko.EventBus
         /// <summary>
         /// Correlation ID for tracing related operations.
         /// </summary>
-        public Guid? CorrelationId { get; set; }
+        public Guid? CorrelationGuid { get; set; }
 
         /// <summary>
         /// Tenant identifier, if multi-tenancy is enabled.
@@ -46,9 +46,9 @@ namespace Birko.EventBus
         {
             return new EventContext
             {
-                EventId = @event.EventId,
+                EventGuid = @event.EventGuid,
                 Source = @event.Source,
-                CorrelationId = @event is EventBase eb ? eb.CorrelationId : null,
+                CorrelationGuid = @event is EventBase eb ? eb.CorrelationGuid : null,
                 TenantGuid = tenantGuid,
                 DeliveryCount = deliveryCount,
                 Metadata = metadata ?? new Dictionary<string, string>()

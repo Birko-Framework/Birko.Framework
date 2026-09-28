@@ -12,9 +12,9 @@ Strongly-typed event bus for modular monolith architectures. In-process pub/sub 
 
 | File | Description |
 |------|-------------|
-| Core/IEvent.cs | Marker interface (EventId, OccurredAt, Source) |
-| Core/EventBase.cs | Abstract record base class (adds CorrelationId) |
-| Core/EventContext.cs | Handler context (EventId, Source, CorrelationId, TenantGuid, DeliveryCount, Metadata) |
+| Core/IEvent.cs | Marker interface (EventGuid, OccurredAt, Source) |
+| Core/EventBase.cs | Abstract record base class (adds CorrelationGuid) |
+| Core/EventContext.cs | Handler context (EventGuid, Source, CorrelationGuid, TenantGuid, DeliveryCount, Metadata) |
 | Core/IEventHandler.cs | IEventHandler&lt;TEvent&gt; — HandleAsync(event, context, ct) |
 | Core/IEventBus.cs | PublishAsync&lt;T&gt;, Subscribe&lt;T&gt;, IDisposable |
 | Core/IEventSubscription.cs | Subscription handle (Dispose to unsubscribe) |
@@ -27,7 +27,7 @@ Strongly-typed event bus for modular monolith architectures. In-process pub/sub 
 | Routing/DefaultTopicConvention.cs | Kebab-case convention: "events.order-placed" |
 | Routing/AttributeTopicConvention.cs | Attribute-based with fallback to default |
 | Enrichment/IEventEnricher.cs | Pre-publish enrichment interface |
-| Enrichment/CorrelationEventEnricher.cs | Ensures CorrelationId is set |
+| Enrichment/CorrelationEventEnricher.cs | Ensures CorrelationGuid is set |
 | Deduplication/IDeduplicationStore.cs | Check/record processed event IDs |
 | Deduplication/InMemoryDeduplicationStore.cs | ConcurrentDictionary with TTL cleanup |
 | Deduplication/DeduplicationBehavior.cs | Pipeline behavior that skips duplicates |
@@ -37,7 +37,7 @@ Strongly-typed event bus for modular monolith architectures. In-process pub/sub 
 
 ```
 PublishAsync<T>(event)
-  → Enrichers (CorrelationId, TenantGuid, custom)
+  → Enrichers (CorrelationGuid, TenantGuid, custom)
   → Pipeline (behaviors in registration order, Russian doll)
     → Dispatch to handlers (DI-resolved + manual subscriptions)
       Sequential (MaxConcurrency=1) or Parallel (semaphore)
@@ -49,7 +49,7 @@ PublishAsync<T>(event)
 
 ## Important Notes
 - Consuming project must reference `Microsoft.Extensions.DependencyInjection.Abstractions` (or use ASP.NET Core which includes it)
-- EventContext uses mutable setters for CorrelationId/TenantGuid/Metadata so enrichers can modify them
+- EventContext uses mutable setters for CorrelationGuid/TenantGuid/Metadata so enrichers can modify them
 - EventBase is an abstract record — concrete events should be `sealed record`
 - ITopicConvention is used by Birko.EventBus.MessageQueue (not this project) for distributed routing
 

@@ -12,7 +12,7 @@ namespace Birko.EventBus.Tests
         {
             var evt = new OrderPlaced(Guid.NewGuid(), 1m);
 
-            evt.EventId.Should().NotBe(Guid.Empty);
+            evt.EventGuid.Should().NotBe(Guid.Empty);
         }
 
         [Fact]
@@ -30,16 +30,16 @@ namespace Birko.EventBus.Tests
         {
             var evt = new OrderPlaced(Guid.NewGuid(), 1m);
 
-            evt.CorrelationId.Should().BeNull();
+            evt.CorrelationGuid.Should().BeNull();
         }
 
         [Fact]
         public void EventBase_CorrelationIdCanBeSet()
         {
             var correlationId = Guid.NewGuid();
-            var evt = new OrderPlaced(Guid.NewGuid(), 1m) { CorrelationId = correlationId };
+            var evt = new OrderPlaced(Guid.NewGuid(), 1m) { CorrelationGuid = correlationId };
 
-            evt.CorrelationId.Should().Be(correlationId);
+            evt.CorrelationGuid.Should().Be(correlationId);
         }
 
         [Fact]
@@ -54,14 +54,14 @@ namespace Birko.EventBus.Tests
         public void EventContext_From_MapsCorrectly()
         {
             var correlationId = Guid.NewGuid();
-            var evt = new OrderPlaced(Guid.NewGuid(), 1m) { CorrelationId = correlationId };
+            var evt = new OrderPlaced(Guid.NewGuid(), 1m) { CorrelationGuid = correlationId };
             var tenantGuid = Guid.NewGuid();
 
             var ctx = EventContext.From(evt, tenantGuid: tenantGuid, deliveryCount: 3);
 
-            ctx.EventId.Should().Be(evt.EventId);
+            ctx.EventGuid.Should().Be(evt.EventGuid);
             ctx.Source.Should().Be("orders");
-            ctx.CorrelationId.Should().Be(correlationId);
+            ctx.CorrelationGuid.Should().Be(correlationId);
             ctx.TenantGuid.Should().Be(tenantGuid);
             ctx.DeliveryCount.Should().Be(3);
         }
@@ -72,7 +72,7 @@ namespace Birko.EventBus.Tests
             var evt1 = new OrderPlaced(Guid.NewGuid(), 1m);
             var evt2 = new OrderPlaced(Guid.NewGuid(), 2m);
 
-            evt1.EventId.Should().NotBe(evt2.EventId);
+            evt1.EventGuid.Should().NotBe(evt2.EventGuid);
         }
     }
 }

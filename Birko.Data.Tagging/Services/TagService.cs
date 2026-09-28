@@ -178,7 +178,7 @@ public abstract class TagServiceBase : ITagService
         {
             // By-identity, so it throws: a link that survived the tenant filter yet points at another
             // tenant's tag is corrupt data, not a row to skip quietly.
-            var tag = await LoadOwnedTagAsync(link.TagId, ct);
+            var tag = await LoadOwnedTagAsync(link.TagGuid, ct);
             if (tag is not null) tags.Add(ToDto(tag));
         }
         return tags;
@@ -187,13 +187,13 @@ public abstract class TagServiceBase : ITagService
     public async Task AttachTagAsync(string entityType, Guid entityId, Guid tagId, CancellationToken ct = default)
     {
         var links = OwnedOnly(await GetEntityTagLinksAsync(entityType, entityId, ct), l => l.TenantGuid);
-        if (links.Any(l => l.TagId == tagId)) return; // already attached
+        if (links.Any(l => l.TagGuid == tagId)) return; // already attached
 
         await CreateEntityTagAsync(new EntityTag
         {
             TenantGuid = GetCurrentTenantId(),
-            TagId = tagId,
-            EntityId = entityId,
+            TagGuid = tagId,
+            EntityGuid = entityId,
             EntityType = entityType,
         }, ct);
     }
@@ -201,18 +201,18 @@ public abstract class TagServiceBase : ITagService
     public async Task DetachTagAsync(string entityType, Guid entityId, Guid tagId, CancellationToken ct = default)
     {
         var links = OwnedOnly(await GetEntityTagLinksAsync(entityType, entityId, ct), l => l.TenantGuid);
-        var link = links.FirstOrDefault(l => l.TagId == tagId);
+        var link = links.FirstOrDefault(l => l.TagGuid == tagId);
         if (link is not null) await DeleteEntityTagAsync(link, ct);
     }
 
     public async Task SetEntityTagsAsync(string entityType, Guid entityId, IReadOnlyList<Guid> tagIds, CancellationToken ct = default)
     {
         var links = OwnedOnly(await GetEntityTagLinksAsync(entityType, entityId, ct), l => l.TenantGuid);
-        var currentTagIds = links.Select(l => l.TagId).ToHashSet();
+        var currentTagIds = links.Select(l => l.TagGuid).ToHashSet();
         var desiredTagIds = tagIds.ToHashSet();
 
         // Remove extra
-        foreach (var link in links.Where(l => !desiredTagIds.Contains(l.TagId)))
+        foreach (var link in links.Where(l => !desiredTagIds.Contains(l.TagGuid)))
             await DeleteEntityTagAsync(link, ct);
 
         // Add missing. CR-M172: create the link directly rather than routing through
@@ -224,8 +224,8 @@ public abstract class TagServiceBase : ITagService
             await CreateEntityTagAsync(new EntityTag
             {
                 TenantGuid = tenantId,
-                TagId = tagId,
-                EntityId = entityId,
+                TagGuid = tagId,
+                EntityGuid = entityId,
                 EntityType = entityType,
             }, ct);
     }
@@ -260,7 +260,7 @@ public abstract class TagServiceBase : ITagService
         var links = OwnedOnly(await GetEntityTagLinksBatchAsync(entityType, entityIds, ct), l => l.TenantGuid);
 
         // Collect unique tag IDs and load all at once
-        var tagIds = links.Select(l => l.TagId).Distinct().ToList();
+        var tagIds = links.Select(l => l.TagGuid).Distinct().ToList();
         var tagMap = new Dictionary<Guid, Tag>();
         foreach (var tagId in tagIds)
         {
@@ -274,12 +274,12 @@ public abstract class TagServiceBase : ITagService
 
         // Group by entity
         var result = new Dictionary<Guid, IReadOnlyList<TagDto>>();
-        var grouped = links.GroupBy(l => l.EntityId);
+        var grouped = links.GroupBy(l => l.EntityGuid);
         foreach (var group in grouped)
         {
             result[group.Key] = group
-                .Where(l => tagMap.ContainsKey(l.TagId))
-                .Select(l => ToDto(tagMap[l.TagId]))
+                .Where(l => tagMap.ContainsKey(l.TagGuid))
+                .Select(l => ToDto(tagMap[l.TagGuid]))
                 .ToList();
         }
 

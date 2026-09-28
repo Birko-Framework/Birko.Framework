@@ -13,7 +13,7 @@ namespace Birko.EventBus.EventSourcing
         /// <summary>
         /// The aggregate ID this domain event relates to.
         /// </summary>
-        public Guid AggregateId { get; init; }
+        public Guid AggregateGuid { get; init; }
 
         /// <summary>
         /// The aggregate version after this event.
@@ -38,7 +38,7 @@ namespace Birko.EventBus.EventSourcing
         /// <summary>
         /// The user who caused the domain event, if tracked.
         /// </summary>
-        public Guid? UserId { get; init; }
+        public Guid? UserGuid { get; init; }
 
         public override string Source => "event-sourcing";
 
@@ -49,19 +49,19 @@ namespace Birko.EventBus.EventSourcing
         {
             if (domainEvent is null) throw new ArgumentNullException(nameof(domainEvent));
 
-            AggregateId = domainEvent.AggregateId;
+            AggregateGuid = domainEvent.AggregateGuid;
             Version = domainEvent.Version;
             DomainEventType = domainEvent.EventType;
             EventData = domainEvent.EventData;
             Metadata = domainEvent.Metadata;
-            UserId = domainEvent.UserId;
+            UserGuid = domainEvent.UserGuid;
 
             // CR-M186: preserve the domain event's original timestamp and identity instead of letting
             // EventBase stamp the current wall-clock time and a fresh Guid. During replay
             // (EventReplayService) this keeps projections/read models seeing the historical event time
             // and the stable EventId, so time-ordered and idempotent (dedup-by-EventId) rebuilds work.
             OccurredAt = domainEvent.OccurredAt;
-            EventId = domainEvent.EventId;
+            EventGuid = domainEvent.EventGuid;
         }
 
         /// <summary>

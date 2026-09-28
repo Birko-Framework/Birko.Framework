@@ -18,5 +18,5 @@ xUnit + FluentAssertions
 
 ## Coverage
 - `EventSourcingStoreWrapperTests` — regression tests for CR-C05 / CR-C06: the Created-event
-  `AggregateId` must equal the Guid the inner store persists the row under (single, bulk sync, bulk
+  `AggregateGuid` must equal the Guid the inner store persists the row under (single, bulk sync, bulk
   async), so `Replay` / `GetHistory` by the persisted Guid find the event.

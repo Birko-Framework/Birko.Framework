@@ -45,10 +45,10 @@ public class EventSourcingStoreWrapperTests
 
         public void Append(IEvent @event) => _events.Add(@event);
         public void AppendRange(IEnumerable<IEvent> events) => _events.AddRange(events);
-        public IEnumerable<IEvent> Read(Guid aggregateId) => _events.Where(e => e.AggregateId == aggregateId).OrderBy(e => e.Version).ToList();
+        public IEnumerable<IEvent> Read(Guid aggregateId) => _events.Where(e => e.AggregateGuid == aggregateId).OrderBy(e => e.Version).ToList();
         public IEnumerable<IEvent> ReadUpToVersion(Guid aggregateId, long maxVersion) => Read(aggregateId).Where(e => e.Version <= maxVersion);
         public IEnumerable<IEvent> ReadFromVersion(Guid aggregateId, long fromVersion) => Read(aggregateId).Where(e => e.Version >= fromVersion);
-        public long GetVersion(Guid aggregateId) => _events.Where(e => e.AggregateId == aggregateId).Select(e => e.Version).DefaultIfEmpty(0).Max();
+        public long GetVersion(Guid aggregateId) => _events.Where(e => e.AggregateGuid == aggregateId).Select(e => e.Version).DefaultIfEmpty(0).Max();
         public IEnumerable<IEvent> ReadAllFrom(DateTime from) => _events.Where(e => e.OccurredAt >= from);
 
         public Task AppendAsync(IEvent @event, CancellationToken ct = default) { Append(@event); return Task.CompletedTask; }
@@ -78,7 +78,7 @@ public class EventSourcingStoreWrapperTests
         var history = wrapper.GetHistory(persistedGuid).ToList();
         history.Should().ContainSingle();
         history[0].EventType.Should().Be("Created");
-        history[0].AggregateId.Should().Be(persistedGuid);
+        history[0].AggregateGuid.Should().Be(persistedGuid);
 
         // The row is actually in the inner store under that Guid.
         inner.Read(persistedGuid).Should().NotBeNull();
@@ -100,7 +100,7 @@ public class EventSourcingStoreWrapperTests
             m.Guid.Should().NotBeNull();
             var history = wrapper.GetHistory(m.Guid!.Value).ToList();
             history.Should().ContainSingle("each created row must have its Created event under its own Guid");
-            history[0].AggregateId.Should().Be(m.Guid.Value);
+            history[0].AggregateGuid.Should().Be(m.Guid.Value);
             inner.Read(m.Guid.Value).Should().NotBeNull();
         }
     }
@@ -123,7 +123,7 @@ public class EventSourcingStoreWrapperTests
 
         history.Select(e => e.EventType).Should().Equal("Created", "Updated", "Updated", "Deleted");
         history.Select(e => e.Version).Should().Equal(1, 2, 3, 4);
-        history.Should().OnlyContain(e => e.AggregateId == guid);
+        history.Should().OnlyContain(e => e.AggregateGuid == guid);
     }
 
     // CR-H048 — Replay reconstructs the aggregate to its latest version
@@ -159,7 +159,7 @@ public class EventSourcingStoreWrapperTests
             m.Guid.Should().NotBeNull();
             var history = (await wrapper.GetHistoryAsync(m.Guid!.Value)).ToList();
             history.Should().ContainSingle();
-            history[0].AggregateId.Should().Be(m.Guid.Value);
+            history[0].AggregateGuid.Should().Be(m.Guid.Value);
         }
     }
 }

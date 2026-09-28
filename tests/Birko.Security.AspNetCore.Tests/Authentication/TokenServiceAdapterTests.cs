@@ -60,7 +60,7 @@ public class TokenServiceAdapterTests
         var info = adapter.ValidateToken(tokenResult.Token);
 
         info.IsValid.Should().BeTrue();
-        info.UserId.Should().Be(userId);
+        info.UserGuid.Should().Be(userId);
         info.Email.Should().Be("user@example.com");
         info.TenantGuid.Should().Be(tenantGuid);
         info.Roles.Should().Contain("Admin").And.Contain("User");
@@ -78,7 +78,7 @@ public class TokenServiceAdapterTests
         var info = adapter.ValidateToken(tokenResult.Token);
 
         info.IsValid.Should().BeTrue();
-        info.UserId.Should().Be(userId);
+        info.UserGuid.Should().Be(userId);
         info.Email.Should().Be("user@example.com");
         info.TenantGuid.Should().BeNull();
     }

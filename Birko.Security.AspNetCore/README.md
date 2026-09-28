@@ -44,7 +44,7 @@ public class OrderService(ICurrentUser currentUser)
 {
     public void CreateOrder()
     {
-        var userId = currentUser.UserId;
+        var userId = currentUser.UserGuid;
         var tenantGuid = currentUser.TenantGuid;
         var roles = currentUser.Roles;
         var permissions = currentUser.Permissions;
@@ -115,7 +115,7 @@ tenant anyway).
 var adapter = new TokenServiceAdapter(jwtProvider, options);
 
 var token = adapter.GenerateAccessToken(new TokenRequest(
-    UserId: userId, Email: "user@example.com",
+    UserGuid: userId, Email: "user@example.com",
     TenantGuid: tenantGuid, Roles: ["Admin"], Permissions: ["users.read"]));
 
 var info = adapter.ValidateToken(token.Token);

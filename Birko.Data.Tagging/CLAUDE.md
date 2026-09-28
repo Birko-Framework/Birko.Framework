@@ -7,7 +7,7 @@ Entity tagging system with tenant-scoped tags, polymorphic entity-tag junction, 
 ### Models
 - **ITaggable** — Marker interface with `static abstract string TagEntityType` discriminator for entities that support tagging
 - **Tag** — Reusable tag entity (AbstractLogModel) with TenantGuid, Name, Color, TagGroup
-- **EntityTag** — Junction entity linking Tag to any entity via EntityType string discriminator + EntityId
+- **EntityTag** — Junction entity linking Tag to any entity via EntityType string discriminator + EntityGuid
 
 ### Services
 - **TagDto** — Sealed record DTO (Id, Name, Color, TagGroup)

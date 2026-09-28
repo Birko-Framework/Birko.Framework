@@ -26,7 +26,7 @@ public class AuditBulkStoreWrapper<TStore, T> : AuditStoreWrapper<TStore, T>, IB
 
     public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        var userId = _auditContext.CurrentUserId;
+        var userId = _auditContext.CurrentUserGuid;
         _innerStore.Create(data.Select(item =>
         {
             item.CreatedBy = userId;
@@ -37,7 +37,7 @@ public class AuditBulkStoreWrapper<TStore, T> : AuditStoreWrapper<TStore, T>, IB
 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        var userId = _auditContext.CurrentUserId;
+        var userId = _auditContext.CurrentUserGuid;
         _innerStore.Update(data.Select(item =>
         {
             item.UpdatedBy = userId;
@@ -47,7 +47,7 @@ public class AuditBulkStoreWrapper<TStore, T> : AuditStoreWrapper<TStore, T>, IB
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
     {
-        var userId = _auditContext.CurrentUserId;
+        var userId = _auditContext.CurrentUserGuid;
         _innerStore.Update(filter, item =>
         {
             updateAction(item);
@@ -57,7 +57,7 @@ public class AuditBulkStoreWrapper<TStore, T> : AuditStoreWrapper<TStore, T>, IB
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
     {
-        updates.Set(x => x.UpdatedBy, _auditContext.CurrentUserId);
+        updates.Set(x => x.UpdatedBy, _auditContext.CurrentUserGuid);
         _innerStore.Update(filter, updates);
     }
 

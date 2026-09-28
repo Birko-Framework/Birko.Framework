@@ -11,8 +11,8 @@ NFC-based authentication — maps NFC tag UIDs to user identities and optionally
 - **NfcAuthProvider.cs** — Default implementation with INfcTagMappingStore + optional ITokenProvider. UID normalization, expiration enforcement, usage tracking, max tags per user
 - **INfcTagMappingStore** — Persistence interface (defined in NfcAuthProvider.cs): GetByTagUidAsync, GetByUserIdAsync, AddAsync, UpdateAsync, DeleteAsync
 - **InMemoryNfcTagMappingStore** — ConcurrentDictionary-based in-memory store (defined in NfcAuthProvider.cs)
-- **NfcTagMapping.cs** — Model: Id, TagUid, UserId, UserName, Email, IsActive, EnrolledAt, LastUsedAt, Label, ExpiresAt
-- **NfcAuthResult.cs** — Auth result: IsAuthenticated, UserId, UserName, Email, Token (TokenResult), Error, Claims, TagUid, Timestamp
+- **NfcTagMapping.cs** — Model: Id, TagUid, UserGuid, UserName, Email, IsActive, EnrolledAt, LastUsedAt, Label, ExpiresAt
+- **NfcAuthResult.cs** — Auth result: IsAuthenticated, UserGuid, UserName, Email, Token (TokenResult), Error, Claims, TagUid, Timestamp
 - **NfcAuthSettings.cs** — Config: IssueTokens, TrackUsage, EnforceExpiration, MaxTagsPerUser, NormalizeUids
 
 ## Dependencies

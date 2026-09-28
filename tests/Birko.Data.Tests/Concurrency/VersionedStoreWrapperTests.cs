@@ -149,7 +149,7 @@ public class VersionedStoreWrapperTests
         var ex = new ConcurrentUpdateException(typeof(TestModel), Guid.NewGuid(), 5);
 
         ex.EntityType.Should().Be(typeof(TestModel));
-        ex.EntityId.Should().NotBeEmpty();
+        ex.EntityGuid.Should().NotBeEmpty();
         ex.ExpectedVersion.Should().Be(5);
         ex.Message.Should().Contain("TestModel");
         ex.Message.Should().Contain("5");

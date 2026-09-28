@@ -30,9 +30,9 @@ Stores/
 ## Components
 
 ### `IEvent` / `DomainEvent` (`Events/`)
-`IEvent` fields: `EventId`, `AggregateId`, `Version`, `EventType` (string — `"Created"` / `"Updated"` / `"Deleted"` by default), `OccurredAt`, `EventData` (serialized entity, JSON), `Metadata?`, `UserId?`.
+`IEvent` fields: `EventGuid`, `AggregateGuid`, `Version`, `EventType` (string — `"Created"` / `"Updated"` / `"Deleted"` by default), `OccurredAt`, `EventData` (serialized entity, JSON), `Metadata?`, `UserGuid?`.
 
-`DomainEvent` is the default `IEvent` implementation. Two constructors: parameterless (auto-assigns `EventId` + `OccurredAt`) and a fully-specified one used by the wrappers.
+`DomainEvent` is the default `IEvent` implementation. Two constructors: parameterless (auto-assigns `EventGuid` + `OccurredAt`) and a fully-specified one used by the wrappers.
 
 ### `IEventStore` / `IAsyncEventStore` (`Events/IEventStore.cs`)
 The event-store contract consumed by the wrappers. Members:
@@ -58,7 +58,7 @@ All four implement the same store interface as the inner store **and** `IStoreWr
 
 Write-side behavior is uniform across the four:
 1. Compute `newVersion = eventStore.GetVersion(aggregateId) + 1`
-2. Build a `DomainEvent("Created" | "Updated" | "Deleted", serializer.Serialize(item), CurrentUserId, clock)`
+2. Build a `DomainEvent("Created" | "Updated" | "Deleted", serializer.Serialize(item), CurrentUserGuid, clock)`
 3. **Append to event store first**, then delegate to the inner store
 4. Set `item.Version = newVersion` on the entity before persisting
 
@@ -68,7 +68,7 @@ Replay APIs (sync + async):
 - `Replay(aggregateId)` — `CreateInstance()` + `IEventSourced.LoadFromEvents(events)`
 - `GetHistory(aggregateId)` — raw event list for the aggregate
 
-Optional `CurrentUserId` setter on the wrapper instance stamps `IEvent.UserId` on every emitted event.
+Optional `CurrentUserGuid` setter on the wrapper instance stamps `IEvent.UserGuid` on every emitted event.
 
 ### `.WithEventSourcing(...)` extensions (`Stores/EventSourcingStoreExtensions.cs`)
 One overload per store interface (`IStore<T>`, `IAsyncStore<T>`, `IBulkStore<T>`, `IAsyncBulkStore<T>`). Returns the same interface. The `IStore<T>` / `IAsyncStore<T>` overloads upcast to the bulk wrapper automatically if the store is already bulk.
@@ -97,7 +97,7 @@ var rebuilt = await ((AsyncEventSourcingBulkStoreWrapper<IAsyncBulkStore<Custome
     .ReplayAsync(aggregateId);
 ```
 
-To set the user on emitted events, cast to the wrapper type and set `CurrentUserId`.
+To set the user on emitted events, cast to the wrapper type and set `CurrentUserGuid`.
 
 ## Composition
 `Birko.Data.Composition.StoreWrapperBuilder.Build<T>` wires event sourcing into the decorator chain automatically — pass an `IAsyncEventStore` and any `T : IEventSourced` gets the wrapper applied innermost:

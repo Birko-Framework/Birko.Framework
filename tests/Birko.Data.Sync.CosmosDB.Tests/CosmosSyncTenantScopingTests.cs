@@ -45,8 +45,8 @@ public class CosmosSyncTenantScopingTests
     public void Model_CarriesTenantId()
     {
         var tenant = Guid.NewGuid();
-        var item = new CosmosSyncKnowledgeItem { TenantId = tenant };
-        item.TenantId.Should().Be(tenant);
+        var item = new CosmosSyncKnowledgeItem { TenantGuid = tenant };
+        item.TenantGuid.Should().Be(tenant);
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public class CosmosSyncTenantScopingTests
 
         var result = CosmosSyncKnowledgeItem.FromInterface(src, tenant);
 
-        result.TenantId.Should().Be(tenant);
+        result.TenantGuid.Should().Be(tenant);
         result.Scope.Should().Be("Products");
     }
 
@@ -68,7 +68,7 @@ public class CosmosSyncTenantScopingTests
 
         var result = CosmosSyncKnowledgeItem.FromInterface(src, null);
 
-        result.TenantId.Should().BeNull();
+        result.TenantGuid.Should().BeNull();
     }
 
     [Fact]
@@ -76,11 +76,11 @@ public class CosmosSyncTenantScopingTests
     {
         var original = Guid.NewGuid();
         var newTenant = Guid.NewGuid();
-        var existing = new CosmosSyncKnowledgeItem { Guid = Guid.NewGuid(), TenantId = original };
+        var existing = new CosmosSyncKnowledgeItem { Guid = Guid.NewGuid(), TenantGuid = original };
 
         var result = CosmosSyncKnowledgeItem.FromInterface(existing, newTenant);
 
-        result.TenantId.Should().Be(newTenant);
+        result.TenantGuid.Should().Be(newTenant);
     }
 
     // ── CR-M158: the pass-through (already-CosmosSyncKnowledgeItem) branch must populate a null Guid

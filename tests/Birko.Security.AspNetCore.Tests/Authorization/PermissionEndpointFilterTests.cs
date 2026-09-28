@@ -100,7 +100,7 @@ public class PermissionEndpointFilterTests
             Permissions = (IReadOnlySet<string>?)(permissions?.AsReadOnly()) ?? new HashSet<string>().AsReadOnly();
         }
 
-        public Guid? UserId => _isAuthenticated ? Guid.NewGuid() : null;
+        public Guid? UserGuid => _isAuthenticated ? Guid.NewGuid() : null;
         public string? Email => null;
         public Guid? TenantGuid => null;
         public IReadOnlySet<string> Roles => new HashSet<string>().AsReadOnly();

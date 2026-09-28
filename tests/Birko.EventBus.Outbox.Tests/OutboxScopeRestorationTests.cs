@@ -83,7 +83,7 @@ public class OutboxScopeRestorationTests
         var store = new InMemoryOutboxStore();
         await store.SaveAsync(new OutboxEntry
         {
-            EventId = evt.EventId,
+            EventGuid = evt.EventGuid,
             EventType = typeof(TenantThing).AssemblyQualifiedName!,
             Payload = serializer.Serialize(evt),
             Source = evt.Source,

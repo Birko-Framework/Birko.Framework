@@ -71,7 +71,7 @@ namespace Birko.Security.NFC
             // branch and never surfaced to the caller, leaving Claims permanently empty).
             var claims = new Dictionary<string, string>
             {
-                ["sub"] = mapping.UserId.ToString(),
+                ["sub"] = mapping.UserGuid.ToString(),
                 ["nfc_uid"] = normalizedUid,
                 ["auth_method"] = "nfc"
             };
@@ -92,7 +92,7 @@ namespace Birko.Security.NFC
                 token = _tokenProvider.GenerateToken(claims, _tokenOptions);
             }
 
-            return NfcAuthResult.Success(mapping.UserId, normalizedUid, token, mapping.UserName, mapping.Email, claims);
+            return NfcAuthResult.Success(mapping.UserGuid, normalizedUid, token, mapping.UserName, mapping.Email, claims);
         }
 
         public async Task<NfcTagMapping> EnrollAsync(Guid userId, string tagUid, string? label = null, string? userName = null, string? email = null, CancellationToken cancellationToken = default)
@@ -108,7 +108,7 @@ namespace Birko.Security.NFC
             var existing = await _store.GetByTagUidAsync(normalizedUid, cancellationToken).ConfigureAwait(false);
             if (existing != null && existing.IsActive)
             {
-                throw new InvalidOperationException($"Tag {normalizedUid} is already enrolled for user {existing.UserId}.");
+                throw new InvalidOperationException($"Tag {normalizedUid} is already enrolled for user {existing.UserGuid}.");
             }
 
             // Remove old inactive mapping so we can re-enroll
@@ -131,7 +131,7 @@ namespace Birko.Security.NFC
             var mapping = new NfcTagMapping
             {
                 TagUid = normalizedUid,
-                UserId = userId,
+                UserGuid = userId,
                 UserName = userName,
                 Email = email,
                 Label = label,
@@ -236,7 +236,7 @@ namespace Birko.Security.NFC
 
         public Task<IReadOnlyList<NfcTagMapping>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
         {
-            var result = _byUid.Values.Where(m => m.UserId == userId).ToList();
+            var result = _byUid.Values.Where(m => m.UserGuid == userId).ToList();
             return Task.FromResult<IReadOnlyList<NfcTagMapping>>(result);
         }
 

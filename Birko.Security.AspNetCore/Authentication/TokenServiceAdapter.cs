@@ -9,7 +9,7 @@ namespace Birko.Security.AspNetCore;
 /// Result of structured token generation.
 /// </summary>
 public sealed record TokenRequest(
-    Guid UserId,
+    Guid UserGuid,
     string Email,
     Guid? TenantGuid = null,
     IReadOnlySet<string>? Roles = null,
@@ -20,7 +20,7 @@ public sealed record TokenRequest(
 /// </summary>
 public sealed record TokenValidationInfo(
     bool IsValid,
-    Guid? UserId = null,
+    Guid? UserGuid = null,
     string? Email = null,
     Guid? TenantGuid = null,
     IReadOnlySet<string>? Roles = null,
@@ -48,7 +48,7 @@ public sealed class TokenServiceAdapter
     {
         var claims = new Dictionary<string, string>
         {
-            [ClaimTypes.NameIdentifier] = request.UserId.ToString(),
+            [ClaimTypes.NameIdentifier] = request.UserGuid.ToString(),
             [ClaimTypes.Email] = request.Email,
         };
 
