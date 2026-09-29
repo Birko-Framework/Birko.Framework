@@ -40,7 +40,7 @@ public class RedisJobQueueSerializationTests
         var queue = NewQueue();
         var original = new JobDescriptor
         {
-            Id = Guid.NewGuid(),
+            Guid = Guid.NewGuid(),
             JobType = "App.Jobs.Email",
             InputType = "App.Email",
             SerializedInput = "{\"to\":\"x@y.z\"}",
@@ -58,7 +58,7 @@ public class RedisJobQueueSerializationTests
 
         var result = RoundTrip(queue, original);
 
-        result.Id.Should().Be(original.Id);
+        result.Guid.Should().Be(original.Guid);
         result.JobType.Should().Be(original.JobType);
         result.InputType.Should().Be(original.InputType);
         result.SerializedInput.Should().Be(original.SerializedInput);
@@ -78,7 +78,7 @@ public class RedisJobQueueSerializationTests
     public void SerializeDeserialize_OmitsOptionalNullFields()
     {
         var queue = NewQueue();
-        var minimal = new JobDescriptor { Id = Guid.NewGuid(), JobType = "t" };
+        var minimal = new JobDescriptor { Guid = Guid.NewGuid(), JobType = "t" };
 
         var result = RoundTrip(queue, minimal);
 

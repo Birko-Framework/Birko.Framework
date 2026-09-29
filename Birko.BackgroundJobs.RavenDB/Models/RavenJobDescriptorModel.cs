@@ -45,7 +45,7 @@ public class RavenJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     {
         var descriptor = new JobDescriptor
         {
-            Id = Guid ?? System.Guid.NewGuid(),
+            Guid = Guid ?? System.Guid.NewGuid(),
             JobType = JobType,
             InputType = InputType,
             SerializedInput = SerializedInput,
@@ -82,7 +82,7 @@ public class RavenJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
 
     public void LoadFrom(JobDescriptor data)
     {
-        Guid = data.Id;
+        Guid = data.Guid;
         JobType = data.JobType;
         InputType = data.InputType;
         SerializedInput = data.SerializedInput;

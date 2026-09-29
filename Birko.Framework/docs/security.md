@@ -200,7 +200,7 @@ public class MyService(ICurrentUser currentUser)
 {
     public void DoWork()
     {
-        var userId = currentUser.UserId;
+        var userId = currentUser.UserGuid;
         var email = currentUser.Email;
         var tenantId = currentUser.TenantId;
         var roles = currentUser.Roles;
@@ -320,11 +320,11 @@ Wraps `ITokenProvider` with structured request/response:
 var adapter = new TokenServiceAdapter(jwtProvider, options);
 
 var token = adapter.GenerateAccessToken(new TokenRequest(
-    UserId: userId, Email: "user@example.com",
+    UserGuid: userId, Email: "user@example.com",
     TenantId: tenantId, Roles: ["Admin"], Permissions: ["users.read"]));
 
 var info = adapter.ValidateToken(token.Token);
-// info.UserId, info.Email, info.TenantId, info.Roles, info.Permissions
+// info.UserGuid, info.Email, info.TenantId, info.Roles, info.Permissions
 ```
 
 ## Secret Management

@@ -28,7 +28,7 @@ public class AsyncAuditBulkStoreWrapper<TStore, T> : AsyncAuditStoreWrapper<TSto
 
     public Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
-        var userId = _auditContext.CurrentUserId;
+        var userId = _auditContext.CurrentUserGuid;
         return _innerStore.CreateAsync(data.Select(item =>
         {
             item.CreatedBy = userId;
@@ -39,7 +39,7 @@ public class AsyncAuditBulkStoreWrapper<TStore, T> : AsyncAuditStoreWrapper<TSto
 
     public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
-        var userId = _auditContext.CurrentUserId;
+        var userId = _auditContext.CurrentUserGuid;
         return _innerStore.UpdateAsync(data.Select(item =>
         {
             item.UpdatedBy = userId;
@@ -49,7 +49,7 @@ public class AsyncAuditBulkStoreWrapper<TStore, T> : AsyncAuditStoreWrapper<TSto
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
     {
-        var userId = _auditContext.CurrentUserId;
+        var userId = _auditContext.CurrentUserGuid;
         return _innerStore.UpdateAsync(filter, item =>
         {
             updateAction(item);
@@ -59,7 +59,7 @@ public class AsyncAuditBulkStoreWrapper<TStore, T> : AsyncAuditStoreWrapper<TSto
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
     {
-        updates.Set(x => x.UpdatedBy, _auditContext.CurrentUserId);
+        updates.Set(x => x.UpdatedBy, _auditContext.CurrentUserGuid);
         return _innerStore.UpdateAsync(filter, updates, ct);
     }
 

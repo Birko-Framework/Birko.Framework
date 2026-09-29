@@ -43,7 +43,7 @@ public class WorkflowInstanceModelTests
 
         var model = WorkflowInstanceModel.FromInstance("OrderWorkflow", instance);
 
-        model.Guid.Should().Be(instance.InstanceId);
+        model.Guid.Should().Be(instance.InstanceGuid);
         model.WorkflowName.Should().Be("OrderWorkflow");
         model.CurrentState.Should().Be("Submitted");
         model.Status.Should().Be((int)WorkflowStatus.Active);
@@ -64,7 +64,7 @@ public class WorkflowInstanceModelTests
 
         var restored = model.ToInstance<TestData>();
 
-        restored.InstanceId.Should().Be(original.InstanceId);
+        restored.InstanceGuid.Should().Be(original.InstanceGuid);
         restored.CurrentState.Should().Be("Submitted");
         restored.Status.Should().Be(WorkflowStatus.Active);
         restored.Data.OrderId.Should().Be("ORD-001");
@@ -110,7 +110,7 @@ public class WorkflowInstanceModelTests
             new("Submitted", "Approved", "Approve", DateTime.UtcNow)
         };
         var updatedInstance = WorkflowInstance<TestData>.Restore(
-            instance.InstanceId, "Approved", WorkflowStatus.Active, updatedData, updatedHistory);
+            instance.InstanceGuid, "Approved", WorkflowStatus.Active, updatedData, updatedHistory);
 
         model.UpdateFromInstance(updatedInstance);
 

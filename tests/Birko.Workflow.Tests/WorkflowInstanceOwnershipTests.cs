@@ -53,7 +53,7 @@ public class WorkflowInstanceOwnershipTests
         var ex = act.Should().Throw<WorkflowInstanceOwnershipException>().Which;
         ex.PersistedWorkflowName.Should().Be("InvoiceApproval", "the caller has to be able to tell WHOSE row it nearly overwrote");
         ex.WorkflowName.Should().Be("OrderApproval");
-        ex.InstanceId.Should().Be(instanceId);
+        ex.InstanceGuid.Should().Be(instanceId);
         ex.Message.Should().Contain("InvoiceApproval").And.Contain("OrderApproval");
     }
 

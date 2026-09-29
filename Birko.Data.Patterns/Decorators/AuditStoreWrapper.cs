@@ -28,14 +28,14 @@ public class AuditStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 
     public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        data.CreatedBy = _auditContext.CurrentUserId;
-        data.UpdatedBy = _auditContext.CurrentUserId;
+        data.CreatedBy = _auditContext.CurrentUserGuid;
+        data.UpdatedBy = _auditContext.CurrentUserGuid;
         return _innerStore.Create(data, storeDelegate);
     }
 
     public void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        data.UpdatedBy = _auditContext.CurrentUserId;
+        data.UpdatedBy = _auditContext.CurrentUserGuid;
         _innerStore.Update(data, storeDelegate);
     }
 

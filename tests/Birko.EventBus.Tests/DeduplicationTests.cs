@@ -43,7 +43,7 @@ namespace Birko.EventBus.Tests
             // the handler throws, the event stays marked and a republish is skipped (not reprocessed).
             await behavior.Invoking(b => b.HandleAsync(evt, EventContext.From(evt), throwingNext))
                 .Should().ThrowAsync<InvalidOperationException>();
-            (await store.ExistsAsync(evt.EventId)).Should().BeTrue("mark happens before the handler");
+            (await store.ExistsAsync(evt.EventGuid)).Should().BeTrue("mark happens before the handler");
 
             await behavior.HandleAsync(evt, EventContext.From(evt), throwingNext); // duplicate → skipped
             handlerCalls.Should().Be(1, "the duplicate must not re-invoke the handler");

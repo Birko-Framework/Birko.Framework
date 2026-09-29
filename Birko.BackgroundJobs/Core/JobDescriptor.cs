@@ -11,7 +11,7 @@ namespace Birko.BackgroundJobs
         /// <summary>
         /// Unique identifier for this job.
         /// </summary>
-        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid Guid { get; set; } = Guid.NewGuid();
 
         /// <summary>
         /// Assembly-qualified type name of the job class.

@@ -11,7 +11,7 @@ namespace Birko.BackgroundJobs
         /// <summary>
         /// The unique identifier of the job execution.
         /// </summary>
-        public Guid JobId { get; }
+        public Guid JobGuid { get; }
 
         /// <summary>
         /// The number of times this job has been attempted (1-based).
@@ -30,7 +30,7 @@ namespace Birko.BackgroundJobs
 
         public JobContext(Guid jobId, int attemptNumber, DateTime enqueuedAt, IReadOnlyDictionary<string, string>? metadata = null)
         {
-            JobId = jobId;
+            JobGuid = jobId;
             AttemptNumber = attemptNumber;
             EnqueuedAt = enqueuedAt;
             Metadata = metadata ?? new Dictionary<string, string>();

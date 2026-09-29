@@ -45,16 +45,16 @@ namespace Birko.Workflow.SQL
         /// </summary>
         public async Task<Guid> SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken cancellationToken = default)
         {
-            var existing = await _store.ReadFirstAsync(m => m.Guid == instance.InstanceId, cancellationToken).ConfigureAwait(false);
+            var existing = await _store.ReadFirstAsync(m => m.Guid == instance.InstanceGuid, cancellationToken).ConfigureAwait(false);
             if (existing != null)
             {
                 // SH-H057: the row is keyed by InstanceId alone and every workflow shares one
                 // table/collection, so an id identifies a row, not a workflow. Refuse before
                 // UpdateFromInstance relabels and overwrites another workflow's instance.
-                WorkflowInstanceOwnership.RequireSameWorkflow(existing.WorkflowName, workflowName, instance.InstanceId);
+                WorkflowInstanceOwnership.RequireSameWorkflow(existing.WorkflowName, workflowName, instance.InstanceGuid);
                 existing.UpdateFromInstance(instance);
                 await _store.UpdateAsync(existing, ct: cancellationToken).ConfigureAwait(false);
-                return instance.InstanceId;
+                return instance.InstanceGuid;
             }
 
             var model = WorkflowInstanceModel.FromInstance(workflowName, instance);

@@ -12,7 +12,7 @@ Birko.BackgroundJobs/
 │   ├── IJob.cs                    - IJob (parameterless) and IJob<TInput> (typed) interfaces
 │   ├── IJobExecutor.cs            - Resolves and executes job instances from descriptors
 │   ├── IJobQueue.cs               - Job storage: enqueue, dequeue, complete, fail, cancel, purge
-│   ├── JobContext.cs              - Runtime context (JobId, AttemptNumber, EnqueuedAt, Metadata)
+│   ├── JobContext.cs              - Runtime context (JobGuid, AttemptNumber, EnqueuedAt, Metadata)
 │   ├── JobDescriptor.cs          - Full job description (type, input, status, retries, priority)
 │   ├── JobQueueOptions.cs        - Processor config (concurrency, polling, timeout, retention); overrides RetryPolicy defaults to 30s base / 1h max
 │   ├── JobResult.cs              - Execution result (Success/Failed, Duration, Error)

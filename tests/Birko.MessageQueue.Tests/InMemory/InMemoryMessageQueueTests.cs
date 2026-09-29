@@ -275,7 +275,7 @@ namespace Birko.MessageQueue.Tests.InMemory
             await queue.Producer.SendAsync("ack-topic", new QueueMessage { Body = "needs-ack" }, CancellationToken.None);
 
             var received = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
-            await queue.Consumer.AcknowledgeAsync(received.Id);
+            await queue.Consumer.AcknowledgeAsync(received.Guid);
             // Should not throw
         }
     }

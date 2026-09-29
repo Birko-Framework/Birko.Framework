@@ -17,7 +17,7 @@ namespace Birko.BackgroundJobs.Tests.Core
 
             var context = new JobContext(id, 3, enqueuedAt, metadata);
 
-            context.JobId.Should().Be(id);
+            context.JobGuid.Should().Be(id);
             context.AttemptNumber.Should().Be(3);
             context.EnqueuedAt.Should().Be(enqueuedAt);
             context.Metadata.Should().ContainKey("key").WhoseValue.Should().Be("value");

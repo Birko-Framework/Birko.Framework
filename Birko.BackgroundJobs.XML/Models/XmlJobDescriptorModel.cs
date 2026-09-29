@@ -62,7 +62,7 @@ public class XmlJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
         var s = serializer ?? DefaultSerializer;
         var descriptor = new JobDescriptor
         {
-            Id = Guid ?? System.Guid.NewGuid(),
+            Guid = Guid ?? System.Guid.NewGuid(),
             JobType = JobType,
             InputType = InputType,
             SerializedInput = SerializedInput,
@@ -112,7 +112,7 @@ public class XmlJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     public void LoadFrom(JobDescriptor data, ISerializer? serializer)
     {
         var s = serializer ?? DefaultSerializer;
-        Guid = data.Id;
+        Guid = data.Guid;
         JobType = data.JobType;
         InputType = data.InputType;
         SerializedInput = data.SerializedInput;

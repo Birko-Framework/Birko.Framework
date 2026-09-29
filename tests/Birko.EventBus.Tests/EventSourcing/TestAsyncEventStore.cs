@@ -31,24 +31,24 @@ namespace Birko.EventBus.Tests.EventSourcing
         public Task<IEnumerable<DomainEvent>> ReadAsync(Guid aggregateId, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IEnumerable<DomainEvent>>(
-                _events.Where(e => e.AggregateId == aggregateId).OrderBy(e => e.Version).ToList());
+                _events.Where(e => e.AggregateGuid == aggregateId).OrderBy(e => e.Version).ToList());
         }
 
         public Task<IEnumerable<DomainEvent>> ReadUpToVersionAsync(Guid aggregateId, long maxVersion, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IEnumerable<DomainEvent>>(
-                _events.Where(e => e.AggregateId == aggregateId && e.Version <= maxVersion).OrderBy(e => e.Version).ToList());
+                _events.Where(e => e.AggregateGuid == aggregateId && e.Version <= maxVersion).OrderBy(e => e.Version).ToList());
         }
 
         public Task<IEnumerable<DomainEvent>> ReadFromVersionAsync(Guid aggregateId, long fromVersion, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IEnumerable<DomainEvent>>(
-                _events.Where(e => e.AggregateId == aggregateId && e.Version >= fromVersion).OrderBy(e => e.Version).ToList());
+                _events.Where(e => e.AggregateGuid == aggregateId && e.Version >= fromVersion).OrderBy(e => e.Version).ToList());
         }
 
         public Task<long> GetVersionAsync(Guid aggregateId, CancellationToken cancellationToken = default)
         {
-            var max = _events.Where(e => e.AggregateId == aggregateId).Select(e => e.Version).DefaultIfEmpty(0).Max();
+            var max = _events.Where(e => e.AggregateGuid == aggregateId).Select(e => e.Version).DefaultIfEmpty(0).Max();
             return Task.FromResult(max);
         }
 

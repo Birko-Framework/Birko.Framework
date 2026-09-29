@@ -60,7 +60,7 @@ namespace Birko.Data.EventSourcing.Stores
                     newVersion,
                     "Created",
                     _serializer.Serialize(item),
-                    CurrentUserId,
+                    CurrentUserGuid,
                     _clock
                 );
 
@@ -115,7 +115,7 @@ namespace Birko.Data.EventSourcing.Stores
                     newVersion,
                     "Updated",
                     _serializer.Serialize(item),
-                    CurrentUserId,
+                    CurrentUserGuid,
                     _clock
                 );
 
@@ -152,7 +152,7 @@ namespace Birko.Data.EventSourcing.Stores
                     newVersion,
                     "Deleted",
                     _serializer.Serialize(item),
-                    CurrentUserId,
+                    CurrentUserGuid,
                     _clock
                 );
 
@@ -199,7 +199,7 @@ namespace Birko.Data.EventSourcing.Stores
                     newVersion,
                     "Updated",
                     _serializer.Serialize(item),
-                    CurrentUserId,
+                    CurrentUserGuid,
                     _clock
                 );
 
@@ -232,7 +232,7 @@ namespace Birko.Data.EventSourcing.Stores
                     newVersion,
                     "Deleted",
                     _serializer.Serialize(item),
-                    CurrentUserId,
+                    CurrentUserGuid,
                     _clock
                 );
 

@@ -100,11 +100,11 @@ namespace Birko.BackgroundJobs.Processing
 
                 if (result.Success)
                 {
-                    await _queue.CompleteAsync(descriptor.Id, cancellationToken).ConfigureAwait(false);
+                    await _queue.CompleteAsync(descriptor.Guid, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
-                    await _queue.FailAsync(descriptor.Id, result.Error ?? "Unknown error", cancellationToken).ConfigureAwait(false);
+                    await _queue.FailAsync(descriptor.Guid, result.Error ?? "Unknown error", cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -113,11 +113,11 @@ namespace Birko.BackgroundJobs.Processing
                 // last-attempt job goes to Dead). A true no-retry requeue would need a dedicated
                 // IJobQueue.RequeueAsync — the current EnqueueAsync is an insert (CreateAsync) across the
                 // backends, so re-enqueuing the same descriptor id would PK-conflict; deferred (CR-L016).
-                await _queue.FailAsync(descriptor.Id, "Job cancelled due to processor shutdown", CancellationToken.None).ConfigureAwait(false);
+                await _queue.FailAsync(descriptor.Guid, "Job cancelled due to processor shutdown", CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                await _queue.FailAsync(descriptor.Id, ex.Message, CancellationToken.None).ConfigureAwait(false);
+                await _queue.FailAsync(descriptor.Guid, ex.Message, CancellationToken.None).ConfigureAwait(false);
             }
             finally
             {

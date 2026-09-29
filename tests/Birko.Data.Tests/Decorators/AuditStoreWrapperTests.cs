@@ -61,7 +61,7 @@ public class AuditStoreWrapperTests
 
     private class TestAuditContext : IAuditContext
     {
-        public Guid? CurrentUserId { get; set; }
+        public Guid? CurrentUserGuid { get; set; }
     }
 
     private static readonly Guid UserId = Guid.NewGuid();
@@ -73,7 +73,7 @@ public class AuditStoreWrapperTests
     [Fact]
     public void Constructor_NullStore_Throws()
     {
-        var context = new TestAuditContext { CurrentUserId = UserId };
+        var context = new TestAuditContext { CurrentUserGuid = UserId };
         var act = () => new AuditStoreWrapper<TestStore, TestModel>(null!, context);
         act.Should().Throw<ArgumentNullException>().WithParameterName("innerStore");
     }
@@ -93,7 +93,7 @@ public class AuditStoreWrapperTests
     [Fact]
     public void Create_SetsBothCreatedByAndUpdatedBy()
     {
-        var context = new TestAuditContext { CurrentUserId = UserId };
+        var context = new TestAuditContext { CurrentUserGuid = UserId };
         var store = new TestStore();
         var wrapper = new AuditStoreWrapper<TestStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
@@ -107,7 +107,7 @@ public class AuditStoreWrapperTests
     [Fact]
     public void Create_NullUser_SetsNullAuditFields()
     {
-        var context = new TestAuditContext { CurrentUserId = null };
+        var context = new TestAuditContext { CurrentUserGuid = null };
         var store = new TestStore();
         var wrapper = new AuditStoreWrapper<TestStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
@@ -127,14 +127,14 @@ public class AuditStoreWrapperTests
     {
         var originalUser = Guid.NewGuid();
         var updatingUser = Guid.NewGuid();
-        var context = new TestAuditContext { CurrentUserId = originalUser };
+        var context = new TestAuditContext { CurrentUserGuid = originalUser };
         var store = new TestStore();
         var wrapper = new AuditStoreWrapper<TestStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
 
         wrapper.Create(model);
 
-        context.CurrentUserId = updatingUser;
+        context.CurrentUserGuid = updatingUser;
         wrapper.Update(model);
 
         model.CreatedBy.Should().Be(originalUser);
@@ -148,7 +148,7 @@ public class AuditStoreWrapperTests
     [Fact]
     public void Save_NewEntity_SetsBothFields()
     {
-        var context = new TestAuditContext { CurrentUserId = UserId };
+        var context = new TestAuditContext { CurrentUserGuid = UserId };
         var store = new TestStore();
         var wrapper = new AuditStoreWrapper<TestStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
@@ -164,14 +164,14 @@ public class AuditStoreWrapperTests
     {
         var originalUser = Guid.NewGuid();
         var updatingUser = Guid.NewGuid();
-        var context = new TestAuditContext { CurrentUserId = originalUser };
+        var context = new TestAuditContext { CurrentUserGuid = originalUser };
         var store = new TestStore();
         var wrapper = new AuditStoreWrapper<TestStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
 
         wrapper.Create(model);
 
-        context.CurrentUserId = updatingUser;
+        context.CurrentUserGuid = updatingUser;
         wrapper.Save(model);
 
         model.CreatedBy.Should().Be(originalUser);
@@ -185,7 +185,7 @@ public class AuditStoreWrapperTests
     [Fact]
     public void Read_DelegatesToInnerStore()
     {
-        var context = new TestAuditContext { CurrentUserId = UserId };
+        var context = new TestAuditContext { CurrentUserGuid = UserId };
         var store = new TestStore();
         var wrapper = new AuditStoreWrapper<TestStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
@@ -200,7 +200,7 @@ public class AuditStoreWrapperTests
     [Fact]
     public void Delete_DelegatesToInnerStore()
     {
-        var context = new TestAuditContext { CurrentUserId = UserId };
+        var context = new TestAuditContext { CurrentUserGuid = UserId };
         var store = new TestStore();
         var wrapper = new AuditStoreWrapper<TestStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
@@ -214,7 +214,7 @@ public class AuditStoreWrapperTests
     [Fact]
     public void GetInnerStore_ReturnsInnerStore()
     {
-        var context = new TestAuditContext { CurrentUserId = UserId };
+        var context = new TestAuditContext { CurrentUserGuid = UserId };
         var store = new TestStore();
         var wrapper = new AuditStoreWrapper<TestStore, TestModel>(store, context);
 

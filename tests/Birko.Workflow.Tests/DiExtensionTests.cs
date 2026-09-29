@@ -82,6 +82,6 @@ public class DiExtensionTests
         captured.ToState.Should().Be("B");
         captured.Trigger.Should().Be("go");
         capturedName.Should().Be("DiFlow");
-        capturedId.Should().Be(instance.InstanceId);
+        capturedId.Should().Be(instance.InstanceGuid);
     }
 }

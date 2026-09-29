@@ -10,7 +10,7 @@ namespace Birko.EventBus
         /// <summary>
         /// Unique identifier for this event instance.
         /// </summary>
-        Guid EventId { get; }
+        Guid EventGuid { get; }
 
         /// <summary>
         /// When the event occurred (UTC).

@@ -66,7 +66,7 @@ public class CosmosWorkflowInstanceModel : AbstractModel
         var s = serializer ?? DefaultSerializer;
         return new CosmosWorkflowInstanceModel
         {
-            Guid = instance.InstanceId,
+            Guid = instance.InstanceGuid,
             WorkflowName = workflowName,
             CurrentState = instance.CurrentState,
             Status = (int)instance.Status,

@@ -26,12 +26,12 @@ public class CrossTenantTagAccessException : InvalidOperationException
              + "the TENANT-SCOPING CONTRACT on TagServiceBase. This is an implementation defect, not a "
              + "recoverable condition: do not catch it to return an empty result.")
     {
-        TagId = tagId;
+        TagGuid = tagId;
         RecordTenant = recordTenant;
         CurrentTenant = currentTenant;
     }
 
-    public Guid TagId { get; }
+    public Guid TagGuid { get; }
     public Guid RecordTenant { get; }
     public Guid CurrentTenant { get; }
 }

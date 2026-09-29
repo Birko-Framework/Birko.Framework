@@ -34,7 +34,7 @@ var instance = new WorkflowInstance<MyData>(initialData);
 await store.SaveAsync("OrderProcessing", instance);
 
 // Load workflow instance
-var loaded = await store.LoadAsync(instance.InstanceId);
+var loaded = await store.LoadAsync(instance.InstanceGuid);
 
 // Query workflows
 var running = await store.FindByStatusAsync(WorkflowStatus.Running);

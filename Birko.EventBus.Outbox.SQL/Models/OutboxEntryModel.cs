@@ -17,11 +17,11 @@ namespace Birko.EventBus.Outbox.SQL.Models
     public class OutboxEntryModel : AbstractModel, ILoadable<OutboxEntry>
     {
         [Birko.Data.SQL.Attributes.PrimaryField]
-        [Birko.Data.SQL.Attributes.NamedField("Id")]
+        [Birko.Data.SQL.Attributes.NamedField("Guid")]
         public override Guid? Guid { get; set; }
 
-        [Birko.Data.SQL.Attributes.NamedField("EventId")]
-        public Guid EventId { get; set; }
+        [Birko.Data.SQL.Attributes.NamedField("EventGuid")]
+        public Guid EventGuid { get; set; }
 
         [Birko.Data.SQL.Attributes.NamedField("EventType")]
         public string EventType { get; set; } = string.Empty;
@@ -32,8 +32,8 @@ namespace Birko.EventBus.Outbox.SQL.Models
         [Birko.Data.SQL.Attributes.NamedField("Source")]
         public string Source { get; set; } = string.Empty;
 
-        [Birko.Data.SQL.Attributes.NamedField("CorrelationId")]
-        public Guid? CorrelationId { get; set; }
+        [Birko.Data.SQL.Attributes.NamedField("CorrelationGuid")]
+        public Guid? CorrelationGuid { get; set; }
 
         [Birko.Data.SQL.Attributes.NamedField("TenantGuid")]
         public Guid? TenantGuid { get; set; }
@@ -71,12 +71,12 @@ namespace Birko.EventBus.Outbox.SQL.Models
         {
             var entry = new OutboxEntry
             {
-                Id = Guid ?? System.Guid.NewGuid(),
-                EventId = EventId,
+                Guid = Guid ?? System.Guid.NewGuid(),
+                EventGuid = EventGuid,
                 EventType = EventType,
                 Payload = Payload,
                 Source = Source,
-                CorrelationId = CorrelationId,
+                CorrelationGuid = CorrelationGuid,
                 TenantGuid = TenantGuid,
                 Status = (OutboxStatus)Status,
                 CreatedAt = CreatedAt,
@@ -113,12 +113,12 @@ namespace Birko.EventBus.Outbox.SQL.Models
 
         public void LoadFrom(OutboxEntry data)
         {
-            Guid = data.Id;
-            EventId = data.EventId;
+            Guid = data.Guid;
+            EventGuid = data.EventGuid;
             EventType = data.EventType;
             Payload = data.Payload;
             Source = data.Source;
-            CorrelationId = data.CorrelationId;
+            CorrelationGuid = data.CorrelationGuid;
             TenantGuid = data.TenantGuid;
             HeadersJson = data.Headers is { Count: > 0 } ? JsonSerializer.Serialize(data.Headers) : null;
             Status = (int)data.Status;

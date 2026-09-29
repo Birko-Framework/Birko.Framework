@@ -29,7 +29,7 @@ namespace Birko.EventBus.Outbox.Stores
 
         public Task SaveAsync(OutboxEntry entry, CancellationToken cancellationToken = default)
         {
-            _entries[entry.Id] = entry;
+            _entries[entry.Guid] = entry;
             return Task.CompletedTask;
         }
 
@@ -98,7 +98,7 @@ namespace Birko.EventBus.Outbox.Stores
             var toRemove = _entries.Values
                 .Where(e => (e.Status == OutboxStatus.Published || e.Status == OutboxStatus.Failed)
                     && e.CreatedAt < cutoffDate)
-                .Select(e => e.Id)
+                .Select(e => e.Guid)
                 .ToList();
 
             foreach (var id in toRemove)

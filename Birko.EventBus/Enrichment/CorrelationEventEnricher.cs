@@ -12,10 +12,10 @@ namespace Birko.EventBus.Enrichment
     {
         public Task EnrichAsync(IEvent @event, EventContext context, CancellationToken cancellationToken = default)
         {
-            if (context.CorrelationId == null)
+            if (context.CorrelationGuid == null)
             {
-                context.CorrelationId = @event is EventBase eb && eb.CorrelationId.HasValue
-                    ? eb.CorrelationId
+                context.CorrelationGuid = @event is EventBase eb && eb.CorrelationGuid.HasValue
+                    ? eb.CorrelationGuid
                     : Guid.NewGuid();
             }
 

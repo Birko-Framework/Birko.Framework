@@ -11,12 +11,12 @@ namespace Birko.EventBus.Outbox
         /// <summary>
         /// Unique identifier for this outbox entry.
         /// </summary>
-        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid Guid { get; set; } = Guid.NewGuid();
 
         /// <summary>
         /// The event's unique identifier (from IEvent.EventId).
         /// </summary>
-        public Guid EventId { get; set; }
+        public Guid EventGuid { get; set; }
 
         /// <summary>
         /// Assembly-qualified type name of the event (for deserialization).
@@ -36,7 +36,7 @@ namespace Birko.EventBus.Outbox
         /// <summary>
         /// Correlation ID for distributed tracing.
         /// </summary>
-        public Guid? CorrelationId { get; set; }
+        public Guid? CorrelationGuid { get; set; }
 
         /// <summary>
         /// Tenant identifier, if multi-tenancy is enabled.

@@ -26,21 +26,21 @@ namespace Birko.EventBus.Tests.MessageQueue
 
             var envelope = new EventEnvelope
             {
-                EventId = eventId,
+                EventGuid = eventId,
                 EventType = "TestType",
                 Source = "test",
                 OccurredAt = now,
-                CorrelationId = correlationId,
+                CorrelationGuid = correlationId,
                 TenantGuid = tenantGuid,
                 Payload = "{\"value\":1}",
                 Headers = new() { ["key"] = "value" }
             };
 
-            envelope.EventId.Should().Be(eventId);
+            envelope.EventGuid.Should().Be(eventId);
             envelope.EventType.Should().Be("TestType");
             envelope.Source.Should().Be("test");
             envelope.OccurredAt.Should().Be(now);
-            envelope.CorrelationId.Should().Be(correlationId);
+            envelope.CorrelationGuid.Should().Be(correlationId);
             envelope.TenantGuid.Should().Be(tenantGuid);
             envelope.Payload.Should().Be("{\"value\":1}");
             envelope.Headers["key"].Should().Be("value");

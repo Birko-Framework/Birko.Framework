@@ -54,7 +54,7 @@ public class SqlJobQueueClaimTests : IDisposable
         var dequeued = await queue.DequeueAsync();
 
         dequeued.Should().NotBeNull();
-        dequeued!.Id.Should().Be(id);
+        dequeued!.Guid.Should().Be(id);
         dequeued.Status.Should().Be(JobStatus.Processing);
         dequeued.AttemptCount.Should().Be(1);
     }
@@ -74,7 +74,7 @@ public class SqlJobQueueClaimTests : IDisposable
             {
                 var job = await queue.DequeueAsync();
                 if (job == null) break;
-                claimed.Add(job.Id);
+                claimed.Add(job.Guid);
             }
         }));
         await Task.WhenAll(workers);

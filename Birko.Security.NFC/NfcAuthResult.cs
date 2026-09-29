@@ -16,7 +16,7 @@ namespace Birko.Security.NFC
         /// <summary>
         /// Authenticated user ID (null if authentication failed).
         /// </summary>
-        public Guid? UserId { get; init; }
+        public Guid? UserGuid { get; init; }
 
         /// <summary>
         /// User display name (optional).
@@ -58,7 +58,7 @@ namespace Birko.Security.NFC
             return new NfcAuthResult
             {
                 IsAuthenticated = true,
-                UserId = userId,
+                UserGuid = userId,
                 TagUid = tagUid,
                 Token = token,
                 UserName = userName,

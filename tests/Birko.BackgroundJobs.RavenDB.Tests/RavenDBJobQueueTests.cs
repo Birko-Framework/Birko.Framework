@@ -36,7 +36,7 @@ public class RavenDBJobQueueTests
 
         var dequeued = await queue.DequeueAsync();
         dequeued.Should().NotBeNull();
-        dequeued!.Id.Should().Be(id);
+        dequeued!.Guid.Should().Be(id);
         dequeued.Status.Should().Be(JobStatus.Processing);
         dequeued.AttemptCount.Should().Be(1);
 
@@ -144,7 +144,7 @@ public class RavenDBJobQueueTests
             var job = await queue.DequeueAsync();
             job.Should().NotBeNull("three enqueued jobs must each be claimable");
             job!.Status.Should().Be(JobStatus.Processing);
-            claimed.Add(job.Id);
+            claimed.Add(job.Guid);
         }
 
         claimed.Should().OnlyHaveUniqueItems("each claim must hand out a distinct job (CR-M021)");

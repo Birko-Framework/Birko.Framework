@@ -3,20 +3,20 @@ namespace Birko.Workflow.Execution;
 public class WorkflowException : Exception
 {
     public string WorkflowName { get; }
-    public Guid InstanceId { get; }
+    public Guid InstanceGuid { get; }
 
     public WorkflowException(string workflowName, Guid instanceId, string message)
         : base(message)
     {
         WorkflowName = workflowName;
-        InstanceId = instanceId;
+        InstanceGuid = instanceId;
     }
 
     public WorkflowException(string workflowName, Guid instanceId, string message, Exception innerException)
         : base(message, innerException)
     {
         WorkflowName = workflowName;
-        InstanceId = instanceId;
+        InstanceGuid = instanceId;
     }
 }
 

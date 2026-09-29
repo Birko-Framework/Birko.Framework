@@ -38,7 +38,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
             await processor.RunAsync(cts.Token);
 
-            var job = await _queue.GetAsync(descriptor.Id);
+            var job = await _queue.GetAsync(descriptor.Guid);
             job.Should().NotBeNull();
             job!.Status.Should().Be(JobStatus.Completed);
         }
@@ -62,7 +62,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
             await processor.RunAsync(cts.Token);
 
-            var job = await _queue.GetAsync(descriptor.Id);
+            var job = await _queue.GetAsync(descriptor.Guid);
             job.Should().NotBeNull();
             // After first attempt it should be scheduled for retry (status = Scheduled)
             // or if enough time passed, it could have been retried again

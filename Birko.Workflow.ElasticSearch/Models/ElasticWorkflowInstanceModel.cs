@@ -80,7 +80,7 @@ public class ElasticWorkflowInstanceModel : AbstractModel
         var s = serializer ?? DefaultSerializer;
         return new ElasticWorkflowInstanceModel
         {
-            Guid = instance.InstanceId,
+            Guid = instance.InstanceGuid,
             WorkflowName = workflowName,
             CurrentState = instance.CurrentState,
             Status = (int)instance.Status,

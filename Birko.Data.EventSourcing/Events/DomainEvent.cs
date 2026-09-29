@@ -9,10 +9,10 @@ namespace Birko.Data.EventSourcing.Events
     public class DomainEvent : IEvent
     {
         /// <inheritdoc />
-        public Guid EventId { get; set; }
+        public Guid EventGuid { get; set; }
 
         /// <inheritdoc />
-        public Guid AggregateId { get; set; }
+        public Guid AggregateGuid { get; set; }
 
         /// <inheritdoc />
         public long Version { get; set; }
@@ -30,7 +30,7 @@ namespace Birko.Data.EventSourcing.Events
         public string? Metadata { get; set; }
 
         /// <inheritdoc />
-        public Guid? UserId { get; set; }
+        public Guid? UserGuid { get; set; }
 
         /// <summary>
         /// Creates a new domain event for an aggregate.
@@ -38,7 +38,7 @@ namespace Birko.Data.EventSourcing.Events
         /// <param name="clock">Optional clock provider. Defaults to SystemDateTimeProvider.</param>
         public DomainEvent(IDateTimeProvider? clock = null)
         {
-            EventId = Guid.NewGuid();
+            EventGuid = Guid.NewGuid();
             OccurredAt = (clock ?? new SystemDateTimeProvider()).UtcNow;
         }
 
@@ -53,13 +53,13 @@ namespace Birko.Data.EventSourcing.Events
         /// <param name="clock">Optional clock provider. Defaults to SystemDateTimeProvider.</param>
         public DomainEvent(Guid aggregateId, long version, string eventType, string eventData, Guid? userId = null, IDateTimeProvider? clock = null)
         {
-            EventId = Guid.NewGuid();
-            AggregateId = aggregateId;
+            EventGuid = Guid.NewGuid();
+            AggregateGuid = aggregateId;
             Version = version;
             EventType = eventType;
             EventData = eventData;
             OccurredAt = (clock ?? new SystemDateTimeProvider()).UtcNow;
-            UserId = userId;
+            UserGuid = userId;
         }
     }
 }

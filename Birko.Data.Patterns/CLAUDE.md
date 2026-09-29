@@ -25,7 +25,7 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 
 ### Audit
 - `IAuditable` - Interface with `CreatedBy`, `UpdatedBy` properties (Guid?)
-- `IAuditContext` - Interface providing `CurrentUserId`
+- `IAuditContext` - Interface providing `CurrentUserGuid`
 - `AuditStoreWrapper<T>` - Wraps `IStore<T>`, sets `CreatedBy`/`UpdatedBy` from `IAuditContext`
 - `AuditBulkStoreWrapper<T>` - Bulk store variant
 - `AsyncAuditStoreWrapper<T>` - Async store variant
@@ -78,7 +78,7 @@ Provider-agnostic field and schema abstractions. Used by both the migration syst
 
 ### Concurrency
 - `IVersioned` - Interface with `Version` property (long) for optimistic concurrency
-- `ConcurrentUpdateException` - Thrown on version mismatch, includes `EntityType`, `EntityId`, `ExpectedVersion`
+- `ConcurrentUpdateException` - Thrown on version mismatch, includes `EntityType`, `EntityGuid`, `ExpectedVersion`
 - `VersionedStoreWrapper<T>` - Wraps `IStore<T>`, sets Version=1 on create, increments+checks on update
 - `AsyncVersionedStoreWrapper<T>` - Async variant wrapping `IAsyncStore<T>`
 

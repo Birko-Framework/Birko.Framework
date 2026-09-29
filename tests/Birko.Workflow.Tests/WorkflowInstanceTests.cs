@@ -23,7 +23,7 @@ public class WorkflowInstanceTests
         instance.CurrentState.Should().Be("Start");
         instance.Status.Should().Be(WorkflowStatus.Active);
         instance.Data.Should().Be("data");
-        instance.InstanceId.Should().NotBeEmpty();
+        instance.InstanceGuid.Should().NotBeEmpty();
         instance.History.Should().BeEmpty();
     }
 
@@ -39,7 +39,7 @@ public class WorkflowInstanceTests
 
         var instance = WorkflowInstance<string>.Restore(id, "C", WorkflowStatus.Active, "data", history);
 
-        instance.InstanceId.Should().Be(id);
+        instance.InstanceGuid.Should().Be(id);
         instance.CurrentState.Should().Be("C");
         instance.Status.Should().Be(WorkflowStatus.Active);
         instance.Data.Should().Be("data");

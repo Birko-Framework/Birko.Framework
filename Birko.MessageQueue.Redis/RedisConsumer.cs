@@ -322,7 +322,7 @@ namespace Birko.MessageQueue.Redis
 
             if (state.Options.AckMode == MessageAckMode.ManualAck && useConsumerGroup)
             {
-                _pendingAck[message.Id] = new PendingMessage
+                _pendingAck[message.Guid] = new PendingMessage
                 {
                     StreamKey = state.StreamKey,
                     ConsumerGroup = state.ConsumerGroup,
@@ -344,7 +344,7 @@ namespace Birko.MessageQueue.Redis
             {
                 if (state.Options.AckMode == MessageAckMode.ManualAck)
                 {
-                    _pendingAck.TryRemove(message.Id, out _);
+                    _pendingAck.TryRemove(message.Guid, out _);
                 }
                 // Entry stays in the Pending Entries List; the reclaim pass will redeliver it.
             }
@@ -455,7 +455,7 @@ namespace Birko.MessageQueue.Redis
 
             if (values.TryGetValue("id", out var id) && Guid.TryParse(id.ToString(), out var messageId))
             {
-                queueMessage.Id = messageId;
+                queueMessage.Guid = messageId;
             }
 
             if (values.TryGetValue("payload_type", out var payloadType) && payloadType.HasValue && payloadType.ToString().Length > 0)

@@ -41,7 +41,7 @@ namespace Birko.BackgroundJobs.Processing
 
                 var job = _jobFactory(jobType);
                 var context = new JobContext(
-                    descriptor.Id,
+                    descriptor.Guid,
                     descriptor.AttemptCount,
                     descriptor.EnqueuedAt,
                     descriptor.Metadata

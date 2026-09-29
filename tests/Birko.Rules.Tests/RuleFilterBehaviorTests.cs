@@ -13,7 +13,7 @@ public class RuleFilterBehaviorTests
 {
     private record TestEvent(string Source, string Category, int Priority) : IEvent
     {
-        public Guid EventId { get; } = Guid.NewGuid();
+        public Guid EventGuid { get; } = Guid.NewGuid();
         public DateTime OccurredAt { get; } = DateTime.UtcNow;
     }
 

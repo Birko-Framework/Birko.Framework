@@ -21,7 +21,7 @@ All events implement `IEvent`:
 ```csharp
 public interface IEvent
 {
-    Guid EventId { get; }
+    Guid EventGuid { get; }
     DateTime OccurredAt { get; }
     string Source { get; }
 }
@@ -45,9 +45,9 @@ public sealed record OrderPlaced : EventBase
 ```csharp
 public class EventContext
 {
-    public Guid EventId { get; init; }
+    public Guid EventGuid { get; init; }
     public string Source { get; init; }
-    public Guid? CorrelationId { get; set; }
+    public Guid? CorrelationGuid { get; set; }
     public Guid? TenantId { get; set; }
     public int DeliveryCount { get; set; }
     public IDictionary<string, string> Metadata { get; set; }
@@ -136,7 +136,7 @@ Behaviors execute in registration order (first registered = outermost).
 Enrichers populate `EventContext` before dispatch:
 
 ```csharp
-// Built-in: ensures CorrelationId is set
+// Built-in: ensures CorrelationGuid is set
 services.AddEventEnricher<CorrelationEventEnricher>();
 ```
 
@@ -157,7 +157,7 @@ services.AddEventEnricher<TenantEnricher>();
 
 ## Deduplication
 
-Prevents duplicate event processing based on `EventId`:
+Prevents duplicate event processing based on `EventGuid`:
 
 ```csharp
 services.AddEventDeduplication(ttl: TimeSpan.FromHours(2));
@@ -217,10 +217,10 @@ The transport wrapper for distributed events:
 ```csharp
 public class EventEnvelope
 {
-    public Guid EventId { get; set; }
+    public Guid EventGuid { get; set; }
     public string EventType { get; set; }    // AssemblyQualifiedName
     public string Payload { get; set; }       // JSON
-    public Guid? CorrelationId { get; set; }
+    public Guid? CorrelationGuid { get; set; }
     public Guid? TenantId { get; set; }
     public Dictionary<string, string> Headers { get; set; }
 }
@@ -289,7 +289,7 @@ await decoratedStore.AppendAsync(domainEvent);
 ```csharp
 public sealed record DomainEventPublished : EventBase
 {
-    public Guid AggregateId { get; init; }
+    public Guid AggregateGuid { get; init; }
     public long Version { get; init; }
     public string DomainEventType { get; init; }
     public string EventData { get; init; }

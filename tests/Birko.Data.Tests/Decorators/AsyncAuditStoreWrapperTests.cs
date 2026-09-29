@@ -67,7 +67,7 @@ public class AsyncAuditStoreWrapperTests
 
     private class TestAuditContext : IAuditContext
     {
-        public Guid? CurrentUserId { get; set; }
+        public Guid? CurrentUserGuid { get; set; }
     }
 
     private static readonly Guid UserId = Guid.NewGuid();
@@ -98,7 +98,7 @@ public class AsyncAuditStoreWrapperTests
     public async Task CreateAsync_SetsBothCreatedByAndUpdatedBy()
     {
         var store = new TestAsyncStore();
-        var context = new TestAuditContext { CurrentUserId = UserId };
+        var context = new TestAuditContext { CurrentUserGuid = UserId };
         var wrapper = new AsyncAuditStoreWrapper<TestAsyncStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
 
@@ -112,7 +112,7 @@ public class AsyncAuditStoreWrapperTests
     public async Task CreateAsync_NullUser_SetsNullAuditFields()
     {
         var store = new TestAsyncStore();
-        var context = new TestAuditContext { CurrentUserId = null };
+        var context = new TestAuditContext { CurrentUserGuid = null };
         var wrapper = new AsyncAuditStoreWrapper<TestAsyncStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
 
@@ -132,12 +132,12 @@ public class AsyncAuditStoreWrapperTests
         var store = new TestAsyncStore();
         var creatorId = Guid.NewGuid();
         var updaterId = Guid.NewGuid();
-        var context = new TestAuditContext { CurrentUserId = creatorId };
+        var context = new TestAuditContext { CurrentUserGuid = creatorId };
         var wrapper = new AsyncAuditStoreWrapper<TestAsyncStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
 
         await wrapper.CreateAsync(model);
-        context.CurrentUserId = updaterId;
+        context.CurrentUserGuid = updaterId;
         await wrapper.UpdateAsync(model);
 
         model.CreatedBy.Should().Be(creatorId);
@@ -152,7 +152,7 @@ public class AsyncAuditStoreWrapperTests
     public async Task SaveAsync_NewEntity_SetsBothFields()
     {
         var store = new TestAsyncStore();
-        var context = new TestAuditContext { CurrentUserId = UserId };
+        var context = new TestAuditContext { CurrentUserGuid = UserId };
         var wrapper = new AsyncAuditStoreWrapper<TestAsyncStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
 
@@ -168,12 +168,12 @@ public class AsyncAuditStoreWrapperTests
         var store = new TestAsyncStore();
         var creatorId = Guid.NewGuid();
         var updaterId = Guid.NewGuid();
-        var context = new TestAuditContext { CurrentUserId = creatorId };
+        var context = new TestAuditContext { CurrentUserGuid = creatorId };
         var wrapper = new AsyncAuditStoreWrapper<TestAsyncStore, TestModel>(store, context);
         var model = new TestModel { Name = "Test" };
 
         await wrapper.SaveAsync(model); // new entity
-        context.CurrentUserId = updaterId;
+        context.CurrentUserGuid = updaterId;
         await wrapper.SaveAsync(model); // existing entity
 
         model.CreatedBy.Should().Be(creatorId);
@@ -188,7 +188,7 @@ public class AsyncAuditStoreWrapperTests
     public async Task ReadAsync_DelegatesToInnerStore()
     {
         var store = new TestAsyncStore();
-        var wrapper = new AsyncAuditStoreWrapper<TestAsyncStore, TestModel>(store, new TestAuditContext { CurrentUserId = UserId });
+        var wrapper = new AsyncAuditStoreWrapper<TestAsyncStore, TestModel>(store, new TestAuditContext { CurrentUserGuid = UserId });
         var model = new TestModel { Name = "Test" };
         await wrapper.CreateAsync(model);
 
@@ -199,7 +199,7 @@ public class AsyncAuditStoreWrapperTests
     public async Task DeleteAsync_DelegatesToInnerStore()
     {
         var store = new TestAsyncStore();
-        var wrapper = new AsyncAuditStoreWrapper<TestAsyncStore, TestModel>(store, new TestAuditContext { CurrentUserId = UserId });
+        var wrapper = new AsyncAuditStoreWrapper<TestAsyncStore, TestModel>(store, new TestAuditContext { CurrentUserGuid = UserId });
         var model = new TestModel { Name = "Test" };
         await wrapper.CreateAsync(model);
 

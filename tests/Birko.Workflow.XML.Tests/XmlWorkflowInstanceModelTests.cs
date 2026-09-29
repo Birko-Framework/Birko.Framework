@@ -35,7 +35,7 @@ public class XmlWorkflowInstanceModelTests
         var instance = CreateInstance();
         var model = XmlWorkflowInstanceModel.FromInstance("OrderWorkflow", instance);
 
-        model.Guid.Should().Be(instance.InstanceId);
+        model.Guid.Should().Be(instance.InstanceGuid);
         model.WorkflowName.Should().Be("OrderWorkflow");
         model.CurrentState.Should().Be("Submitted");
         model.Status.Should().Be((int)WorkflowStatus.Active);
@@ -49,7 +49,7 @@ public class XmlWorkflowInstanceModelTests
 
         var restored = model.ToInstance<TestData>();
 
-        restored.InstanceId.Should().Be(original.InstanceId);
+        restored.InstanceGuid.Should().Be(original.InstanceGuid);
         restored.CurrentState.Should().Be("Submitted");
         restored.Status.Should().Be(WorkflowStatus.Active);
         restored.Data.OrderId.Should().Be("ORD-001");

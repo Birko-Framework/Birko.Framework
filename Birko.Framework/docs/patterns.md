@@ -90,7 +90,7 @@ public interface IAuditable
 ```csharp
 public interface IAuditContext
 {
-    Guid? CurrentUserId { get; }
+    Guid? CurrentUserGuid { get; }
 }
 ```
 
@@ -366,7 +366,7 @@ try
 }
 catch (ConcurrentUpdateException ex)
 {
-    // ex.EntityType, ex.EntityId, ex.ExpectedVersion
+    // ex.EntityType, ex.EntityGuid, ex.ExpectedVersion
     // Reload and retry
 }
 ```

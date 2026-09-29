@@ -19,7 +19,7 @@ public class HandlerFailurePropagationTests
 {
     private class TestEvent : IEvent
     {
-        public Guid EventId { get; set; } = Guid.NewGuid();
+        public Guid EventGuid { get; set; } = Guid.NewGuid();
         public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
         public string Source { get; set; } = "test";
     }
@@ -86,7 +86,7 @@ public class HandlerFailurePropagationTests
     {
         var envelope = new EventEnvelope
         {
-            EventId = evt.EventId,
+            EventGuid = evt.EventGuid,
             EventType = typeof(TestEvent).AssemblyQualifiedName!,
             Source = evt.Source,
             OccurredAt = evt.OccurredAt,

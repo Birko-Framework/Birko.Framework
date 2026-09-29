@@ -152,7 +152,7 @@ Tenant-aware data access and filtering via `ITenant` interface and `TenantContex
 
 #### Event Sourcing (Birko.Data.EventSourcing)
 Event pattern implementation with:
-- `IEvent` - Domain event with EventId, AggregateId, Version, EventType, OccurredAt, EventData, Metadata, UserId
+- `IEvent` - Domain event with EventGuid, AggregateGuid, Version, EventType, OccurredAt, EventData, Metadata, UserGuid
 - Event store and aggregate root patterns
 
 #### Patterns (Birko.Data.Patterns)
@@ -214,7 +214,7 @@ Asynchronous messaging abstractions for pub/sub and point-to-point patterns:
 - `IMessageHandler<T>` - Typed message handler
 - `ISubscription` - Active subscription handle (dispose to unsubscribe)
 - `QueueMessage` - Message wrapper (Id, Body, Headers, Priority, TTL, Delay)
-- `MessageHeaders` - Metadata (CorrelationId, ReplyTo, ContentType, GroupId)
+- `MessageHeaders` - Metadata (CorrelationGuid, ReplyTo, ContentType, GroupId)
 
 Messaging patterns:
 - **IPublisher / ISubscriber** - Pub/Sub (one-to-many)
@@ -232,7 +232,7 @@ Queue backends:
 
 ### 9. Event Bus Layer (Birko.EventBus)
 In-process and distributed event-driven architecture:
-- `IEvent` - Marker interface for domain events (EventId, OccurredAt, CorrelationId)
+- `IEvent` - Marker interface for domain events (EventGuid, OccurredAt, CorrelationGuid)
 - `IEventBus` - Publish events, register handlers
 - `IEventHandler<T>` - Typed event handler
 - `IPipelineBehavior<T>` - Cross-cutting pipeline (logging, validation, enrichment)
@@ -285,7 +285,7 @@ Unified interfaces for email, SMS, and push notifications:
 ### 13. Security Layer — ASP.NET Core Integration (Birko.Security.AspNetCore)
 Bridges Birko.Security into ASP.NET Core:
 - `AddBirkoSecurity()` - One-line DI registration (JWT Bearer auth, ICurrentUser, IPermissionChecker, ITenantResolver, ITenantContext)
-- `ICurrentUser` / `ClaimsCurrentUser` - Access authenticated user (UserId, Email, TenantId, Roles, Permissions)
+- `ICurrentUser` / `ClaimsCurrentUser` - Access authenticated user (UserGuid, Email, TenantId, Roles, Permissions)
 - `ClaimsPermissionChecker` - Permission checking from JWT claims (supports wildcard `"*"`)
 - `RequirePermission()` - Minimal API endpoint filter
 - **Tenant Resolution** - Header (`X-Tenant-Id`), Subdomain, or Custom via `ITenantResolver`

@@ -45,7 +45,7 @@ public class PropertyUpdateIncrementDecoratorTests
     private sealed class FixedUser : IAuditContext
     {
         public static readonly Guid Id = Guid.NewGuid();
-        public Guid? CurrentUserId => Id;
+        public Guid? CurrentUserGuid => Id;
     }
 
     private static async Task<(AsyncInMemoryStore<Post> Store, Guid Live, Guid Deleted)> SeedAsync()

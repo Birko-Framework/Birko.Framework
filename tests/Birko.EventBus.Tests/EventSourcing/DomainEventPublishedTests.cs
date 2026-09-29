@@ -24,21 +24,21 @@ namespace Birko.EventBus.Tests.EventSourcing
             var domainEvent = new DomainEvent(aggregateId, 7, "Updated", "{\"x\":1}")
             {
                 OccurredAt = originalTime,
-                EventId = originalId,
+                EventGuid = originalId,
                 Metadata = "{\"m\":true}",
-                UserId = Guid.NewGuid(),
+                UserGuid = Guid.NewGuid(),
             };
 
             var wrapper = new DomainEventPublished(domainEvent);
 
             wrapper.OccurredAt.Should().Be(originalTime, "the historical event time must survive wrapping (CR-M186)");
-            wrapper.EventId.Should().Be(originalId, "the source event identity must be carried for dedup-by-EventId (CR-M186)");
-            wrapper.AggregateId.Should().Be(aggregateId);
+            wrapper.EventGuid.Should().Be(originalId, "the source event identity must be carried for dedup-by-EventId (CR-M186)");
+            wrapper.AggregateGuid.Should().Be(aggregateId);
             wrapper.Version.Should().Be(7);
             wrapper.DomainEventType.Should().Be("Updated");
             wrapper.EventData.Should().Be("{\"x\":1}");
             wrapper.Metadata.Should().Be("{\"m\":true}");
-            wrapper.UserId.Should().Be(domainEvent.UserId);
+            wrapper.UserGuid.Should().Be(domainEvent.UserGuid);
             wrapper.Source.Should().Be("event-sourcing", "the wrapper is stamped with the event-sourcing source (CR-L255)");
         }
 

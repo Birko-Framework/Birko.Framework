@@ -57,11 +57,11 @@ namespace Birko.EventBus.Outbox.Publishing
 
             var entry = new OutboxEntry
             {
-                EventId = @event.EventId,
+                EventGuid = @event.EventGuid,
                 EventType = @event.GetType().AssemblyQualifiedName!,
                 Payload = _serializer.Serialize(@event),
                 Source = @event.Source,
-                CorrelationId = context.CorrelationId,
+                CorrelationGuid = context.CorrelationGuid,
                 TenantGuid = context.TenantGuid,
                 Headers = new Dictionary<string, string>(context.Metadata)
             };

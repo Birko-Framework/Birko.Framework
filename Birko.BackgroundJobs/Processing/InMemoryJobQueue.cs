@@ -32,8 +32,8 @@ namespace Birko.BackgroundJobs.Processing
             // (the descriptor default is DateTime.UtcNow, set before it reaches the clock-aware queue) —
             // this makes enqueue time and the ThenBy(EnqueuedAt) dequeue ordering test-deterministic (CR-L017).
             descriptor.EnqueuedAt = _clock.UtcNow;
-            _jobs[descriptor.Id] = descriptor;
-            return Task.FromResult(descriptor.Id);
+            _jobs[descriptor.Guid] = descriptor;
+            return Task.FromResult(descriptor.Guid);
         }
 
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
@@ -152,7 +152,7 @@ namespace Birko.BackgroundJobs.Processing
             var toPurge = _jobs.Values
                 .Where(j => (j.Status == JobStatus.Completed || j.Status == JobStatus.Dead || j.Status == JobStatus.Cancelled)
                          && j.CompletedAt.HasValue && j.CompletedAt.Value < cutoff)
-                .Select(j => j.Id)
+                .Select(j => j.Guid)
                 .ToList();
 
             foreach (var id in toPurge)

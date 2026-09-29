@@ -10,7 +10,7 @@ namespace Birko.MessageQueue
         /// <summary>
         /// Unique message identifier.
         /// </summary>
-        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid Guid { get; set; } = Guid.NewGuid();
 
         /// <summary>
         /// The serialized message body.

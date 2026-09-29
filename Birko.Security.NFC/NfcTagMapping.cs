@@ -11,7 +11,7 @@ namespace Birko.Security.NFC
         /// <summary>
         /// Unique identifier for this mapping record.
         /// </summary>
-        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid Guid { get; set; } = Guid.NewGuid();
 
         /// <summary>
         /// NFC tag UID (hex string, e.g., "04A1B2C3D4E5F6").
@@ -21,7 +21,7 @@ namespace Birko.Security.NFC
         /// <summary>
         /// User ID this tag is mapped to.
         /// </summary>
-        public Guid UserId { get; set; }
+        public Guid UserGuid { get; set; }
 
         /// <summary>
         /// User display name (denormalized for convenience).

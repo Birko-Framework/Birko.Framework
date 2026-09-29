@@ -12,7 +12,7 @@ Birko.Data.EventSourcing implements the event sourcing pattern where state chang
 public class Event
 {
     public Guid Id { get; }
-    public Guid EntityId { get; }     // Aggregate ID
+    public Guid EntityGuid { get; }     // Aggregate ID
     public string EventType { get; }   // Discriminator
     public DateTime Timestamp { get; }
     public long Version { get; }       // Ordering within a stream
@@ -89,7 +89,7 @@ var store = new AsyncEventStore<Customer>(underlyingStore);
 
 var @event = new CustomerCreatedEvent
 {
-    EntityId = customerId,
+    EntityGuid = customerId,
     Name = "John Doe",
     Email = "john@example.com"
 };

@@ -29,7 +29,7 @@ Runtime context available during execution:
 ```csharp
 public class JobContext
 {
-    public Guid JobId { get; }
+    public Guid JobGuid { get; }
     public int AttemptNumber { get; }
     public DateTime EnqueuedAt { get; }
     public IDictionary<string, string> Metadata { get; }
@@ -86,7 +86,7 @@ public class GenerateReportJob : IJob<ReportRequest>
     public async Task ExecuteAsync(ReportRequest input, JobContext context, CancellationToken ct)
     {
         var report = await reportService.GenerateAsync(input.ReportType, input.DateRange, ct);
-        await storageService.SaveAsync($"reports/{context.JobId}.pdf", report, ct);
+        await storageService.SaveAsync($"reports/{context.JobGuid}.pdf", report, ct);
     }
 }
 ```

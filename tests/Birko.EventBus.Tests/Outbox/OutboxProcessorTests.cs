@@ -93,7 +93,7 @@ namespace Birko.EventBus.Tests.Outbox
             // Manually insert an entry with bad type
             await store.SaveAsync(new OutboxEntry
             {
-                EventId = Guid.NewGuid(),
+                EventGuid = Guid.NewGuid(),
                 EventType = "NonExistent.Type, NoAssembly",
                 Payload = "{}",
                 Source = "test"
@@ -114,7 +114,7 @@ namespace Birko.EventBus.Tests.Outbox
 
             var old = new OutboxEntry
             {
-                EventId = Guid.NewGuid(),
+                EventGuid = Guid.NewGuid(),
                 EventType = "Test",
                 Payload = "{}",
                 Source = "test",
@@ -141,7 +141,7 @@ namespace Birko.EventBus.Tests.Outbox
             using var outboxBus = new OutboxEventBus(innerBus, store);
 
             var correlationId = Guid.NewGuid();
-            var evt = new OrderPlaced(Guid.NewGuid(), 100m) { CorrelationId = correlationId };
+            var evt = new OrderPlaced(Guid.NewGuid(), 100m) { CorrelationGuid = correlationId };
 
             // Step 1: Publish (goes to outbox, not inner bus)
             await outboxBus.PublishAsync(evt);
@@ -153,7 +153,7 @@ namespace Birko.EventBus.Tests.Outbox
 
             // Step 3: Verify handler received the event
             handler.CapturedContext.Should().NotBeNull();
-            handler.CapturedContext!.EventId.Should().Be(evt.EventId);
+            handler.CapturedContext!.EventGuid.Should().Be(evt.EventGuid);
         }
     }
 }

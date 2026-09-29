@@ -98,7 +98,7 @@ namespace Birko.BackgroundJobs.Redis
             cancellationToken.ThrowIfCancellationRequested();
 
             var db = _connectionManager.GetDatabase();
-            var jobKey = GetJobKey(descriptor.Id);
+            var jobKey = GetJobKey(descriptor.Guid);
 
             var fields = SerializeDescriptor(descriptor);
             await db.HashSetAsync(jobKey, fields).ConfigureAwait(false);
@@ -107,12 +107,12 @@ namespace Birko.BackgroundJobs.Redis
             // Score: negative priority * 1e13 + enqueued ticks (lower score = higher priority, older first)
             var score = GetQueueScore(descriptor.Priority, descriptor.ScheduledAt ?? descriptor.EnqueuedAt);
             var queueKey = GetQueueKey(descriptor.QueueName);
-            await db.SortedSetAddAsync(queueKey, descriptor.Id.ToString(), score).ConfigureAwait(false);
+            await db.SortedSetAddAsync(queueKey, descriptor.Guid.ToString(), score).ConfigureAwait(false);
 
             // Track in status set
-            await db.SetAddAsync(GetStatusKey(descriptor.Status), descriptor.Id.ToString()).ConfigureAwait(false);
+            await db.SetAddAsync(GetStatusKey(descriptor.Status), descriptor.Guid.ToString()).ConfigureAwait(false);
 
-            return descriptor.Id;
+            return descriptor.Guid;
         }
 
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
@@ -414,7 +414,7 @@ namespace Birko.BackgroundJobs.Redis
         {
             var entries = new List<HashEntry>
             {
-                new("Id", descriptor.Id.ToString()),
+                new("Id", descriptor.Guid.ToString()),
                 new("JobType", descriptor.JobType),
                 new("Status", (int)descriptor.Status),
                 new("Priority", descriptor.Priority),
@@ -449,7 +449,7 @@ namespace Birko.BackgroundJobs.Redis
 
             var descriptor = new JobDescriptor
             {
-                Id = Guid.Parse(dict["Id"].ToString()),
+                Guid = Guid.Parse(dict["Id"].ToString()),
                 JobType = dict["JobType"]!,
                 Status = (JobStatus)(int)dict["Status"],
                 Priority = (int)dict["Priority"],

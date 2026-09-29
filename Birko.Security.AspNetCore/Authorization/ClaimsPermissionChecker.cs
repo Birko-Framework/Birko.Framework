@@ -23,7 +23,7 @@ public sealed class ClaimsPermissionChecker : IPermissionChecker
 
     public Task<bool> HasPermissionAsync(Guid userId, string permission, CancellationToken ct = default)
     {
-        if (_currentUser.UserId != userId)
+        if (_currentUser.UserGuid != userId)
             return Task.FromResult(false);
 
         var has = _currentUser.Permissions.Contains(permission)
@@ -34,7 +34,7 @@ public sealed class ClaimsPermissionChecker : IPermissionChecker
 
     public Task<IReadOnlyList<string>> GetPermissionsAsync(Guid userId, CancellationToken ct = default)
     {
-        if (_currentUser.UserId != userId)
+        if (_currentUser.UserGuid != userId)
             return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
 
         return Task.FromResult<IReadOnlyList<string>>(_currentUser.Permissions.ToList());

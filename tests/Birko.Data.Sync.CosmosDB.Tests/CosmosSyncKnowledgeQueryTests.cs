@@ -12,10 +12,10 @@ namespace Birko.Data.Sync.CosmosDB.Tests;
 
 /// <summary>
 /// SH-H013 (TASK-309): every Cosmos sync-knowledge query filtered with an unconditional
-/// <c>x.TenantId == tenantId</c>. For a <b>null</b> tenant the provider renders that as
-/// <c>root["TenantId"] = null</c>, and in the Cosmos SQL dialect a comparison against null is
+/// <c>x.TenantGuid == tenantId</c>. For a <b>null</b> tenant the provider renders that as
+/// <c>root["TenantGuid"] = null</c>, and in the Cosmos SQL dialect a comparison against null is
 /// <b>Undefined</b>, not true — so the query matched <b>nothing</b>, including documents whose
-/// <c>TenantId</c> genuinely is null. Knowledge was never found, never updated and never deleted, and every
+/// <c>TenantGuid</c> genuinely is null. Knowledge was never found, never updated and never deleted, and every
 /// run looked like an initial sync.
 /// <para>A null tenant means "do not filter by tenant": <c>TenantSyncProvider.ResolveTenantScope</c> returns
 /// null only for an explicit all-tenants scope or for an entity with no tenant property, and both mean every
@@ -48,13 +48,13 @@ public class CosmosSyncKnowledgeQueryTests
     }
 
     [Fact]
-    public void A_null_tenant_emits_no_TenantId_term_at_all()
+    public void A_null_tenant_emits_no_TenantGuid_term_at_all()
     {
         var sql = RenderedSql(null);
 
-        // The defect rendered `(root["TenantId"] = null)`. Asserting the absence of the *column* is what
+        // The defect rendered `(root["TenantGuid"] = null)`. Asserting the absence of the *column* is what
         // catches it however the provider chooses to spell the comparison.
-        sql.Should().NotContain("TenantId");
+        sql.Should().NotContain("TenantGuid");
         sql.Should().Contain("Scope");
     }
 
@@ -74,7 +74,7 @@ public class CosmosSyncKnowledgeQueryTests
 
         var sql = RenderedSql(tenant);
 
-        sql.Should().Contain("TenantId");
+        sql.Should().Contain("TenantGuid");
         sql.Should().Contain(tenant.ToString());
         sql.Should().Contain("Scope");
     }
@@ -86,10 +86,10 @@ public class CosmosSyncKnowledgeQueryTests
 
     private static List<CosmosSyncKnowledgeItem> Rows() =>
     [
-        new() { Scope = "Default", TenantId = TenantA, EntityGuid = Guid.NewGuid() },
-        new() { Scope = "Default", TenantId = TenantB, EntityGuid = Guid.NewGuid() },
-        new() { Scope = "Default", TenantId = null, EntityGuid = Guid.NewGuid() },
-        new() { Scope = "Other", TenantId = TenantA, EntityGuid = Guid.NewGuid() },
+        new() { Scope = "Default", TenantGuid = TenantA, EntityGuid = Guid.NewGuid() },
+        new() { Scope = "Default", TenantGuid = TenantB, EntityGuid = Guid.NewGuid() },
+        new() { Scope = "Default", TenantGuid = null, EntityGuid = Guid.NewGuid() },
+        new() { Scope = "Other", TenantGuid = TenantA, EntityGuid = Guid.NewGuid() },
     ];
 
     [Fact]
@@ -113,7 +113,7 @@ public class CosmosSyncKnowledgeQueryTests
             .ApplyScope(Rows().AsQueryable(), "Default", TenantA)
             .ToList();
 
-        selected.Should().ContainSingle().Which.TenantId.Should().Be(TenantA);
+        selected.Should().ContainSingle().Which.TenantGuid.Should().Be(TenantA);
     }
 
     [Fact]

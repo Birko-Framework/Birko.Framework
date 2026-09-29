@@ -25,7 +25,7 @@ namespace Birko.EventBus.Tests.EventSourcing
             await decorator.AppendAsync(domainEvent);
 
             handler.ReceivedEvents.Should().ContainSingle();
-            handler.ReceivedEvents[0].AggregateId.Should().Be(domainEvent.AggregateId);
+            handler.ReceivedEvents[0].AggregateGuid.Should().Be(domainEvent.AggregateGuid);
             handler.ReceivedEvents[0].Version.Should().Be(1);
             handler.ReceivedEvents[0].DomainEventType.Should().Be("Created");
             handler.ReceivedEvents[0].EventData.Should().Be("{\"name\":\"test\"}");

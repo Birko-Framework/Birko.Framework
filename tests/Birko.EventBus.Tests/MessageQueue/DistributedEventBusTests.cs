@@ -92,15 +92,15 @@ namespace Birko.EventBus.Tests.MessageQueue
             await bus.SubscribeToTransportAsync<OrderPlaced>();
 
             var correlationId = Guid.NewGuid();
-            var evt = new OrderPlaced(Guid.NewGuid(), 1m) { CorrelationId = correlationId };
+            var evt = new OrderPlaced(Guid.NewGuid(), 1m) { CorrelationGuid = correlationId };
             await bus.PublishAsync(evt);
 
             await WaitUntilAsync(() => handler.CapturedContext != null);
 
             handler.CapturedContext.Should().NotBeNull();
-            handler.CapturedContext!.EventId.Should().Be(evt.EventId);
+            handler.CapturedContext!.EventGuid.Should().Be(evt.EventGuid);
             handler.CapturedContext.Source.Should().Be("orders");
-            handler.CapturedContext.CorrelationId.Should().Be(correlationId);
+            handler.CapturedContext.CorrelationGuid.Should().Be(correlationId);
         }
 
         [Fact]

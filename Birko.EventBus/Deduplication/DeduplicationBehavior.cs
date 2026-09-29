@@ -28,7 +28,7 @@ namespace Birko.EventBus.Deduplication
             // it will not be reprocessed on a later republish. A caller needing at-least-once semantics
             // (reprocess on handler failure) should mark only after successful handling with a different
             // behavior rather than this dedup guard.
-            if (!await _store.TryMarkProcessedAsync(@event.EventId, cancellationToken).ConfigureAwait(false))
+            if (!await _store.TryMarkProcessedAsync(@event.EventGuid, cancellationToken).ConfigureAwait(false))
             {
                 return; // Duplicate — skip
             }

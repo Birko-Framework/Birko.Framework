@@ -11,5 +11,5 @@ public interface IAuditContext
     /// <summary>
     /// The current authenticated user's ID. Null if no user is authenticated.
     /// </summary>
-    Guid? CurrentUserId { get; }
+    Guid? CurrentUserGuid { get; }
 }

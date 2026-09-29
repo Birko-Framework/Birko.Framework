@@ -25,7 +25,7 @@ public sealed class ClaimsCurrentUser : ICurrentUser
 
     public bool IsAuthenticated => Principal?.Identity?.IsAuthenticated ?? false;
 
-    public Guid? UserId
+    public Guid? UserGuid
     {
         get
         {

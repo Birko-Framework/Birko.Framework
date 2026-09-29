@@ -33,7 +33,7 @@ namespace Birko.MessageQueue.InMemory
             {
                 if (opts.AckMode == MessageAckMode.ManualAck)
                 {
-                    _pendingAck.TryAdd(message.Id, (destination, message));
+                    _pendingAck.TryAdd(message.Guid, (destination, message));
                 }
 
                 try
@@ -49,7 +49,7 @@ namespace Birko.MessageQueue.InMemory
                 {
                     if (opts.AckMode == MessageAckMode.ManualAck)
                     {
-                        _pendingAck.TryRemove(message.Id, out _);
+                        _pendingAck.TryRemove(message.Guid, out _);
                     }
                     throw;
                 }

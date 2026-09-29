@@ -16,7 +16,7 @@ namespace Birko.EventBus
         public static IDateTimeProvider DefaultClock { get; set; } = new SystemDateTimeProvider();
 
         /// <inheritdoc />
-        public Guid EventId { get; init; } = Guid.NewGuid();
+        public Guid EventGuid { get; init; } = Guid.NewGuid();
 
         /// <inheritdoc />
         public DateTime OccurredAt { get; init; } = DefaultClock.UtcNow;
@@ -24,7 +24,7 @@ namespace Birko.EventBus
         /// <summary>
         /// Correlation ID for tracing related events across handlers and services.
         /// </summary>
-        public Guid? CorrelationId { get; init; }
+        public Guid? CorrelationGuid { get; init; }
 
         /// <inheritdoc />
         public abstract string Source { get; }

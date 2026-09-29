@@ -36,7 +36,7 @@ public class MongoDBJobQueueTests
 
         var dequeued = await queue.DequeueAsync();
         dequeued.Should().NotBeNull();
-        dequeued!.Id.Should().Be(id);
+        dequeued!.Guid.Should().Be(id);
         dequeued.Status.Should().Be(JobStatus.Processing);
         dequeued.AttemptCount.Should().Be(1);
 
@@ -130,7 +130,7 @@ public class MongoDBJobQueueTests
         d2!.Status.Should().Be(JobStatus.Processing);
         d3!.Status.Should().Be(JobStatus.Processing);
 
-        var claimed = new[] { d1.Id, d2.Id, d3.Id };
+        var claimed = new[] { d1.Guid, d2.Guid, d3.Guid };
         claimed.Should().OnlyHaveUniqueItems("the atomic claim must hand each job to exactly one dequeue");
         claimed.Should().BeEquivalentTo(new[] { id1, id2, id3 });
     }

@@ -30,11 +30,11 @@ public sealed class WorkflowEngine : IWorkflowEngine
 
         if (instance.Status == WorkflowStatus.Completed)
         {
-            throw new WorkflowCompletedException(definition.Name, instance.InstanceId);
+            throw new WorkflowCompletedException(definition.Name, instance.InstanceGuid);
         }
         if (instance.Status == WorkflowStatus.Faulted)
         {
-            throw new WorkflowFaultedException(definition.Name, instance.InstanceId);
+            throw new WorkflowFaultedException(definition.Name, instance.InstanceGuid);
         }
 
         var transition = definition.Transitions
@@ -102,7 +102,7 @@ public sealed class WorkflowEngine : IWorkflowEngine
             var record = new StateChangeRecord(fromState, transition.ToState, trigger, DateTime.UtcNow);
             mutableInstance.AddHistoryRecord(record);
 
-            _onStateChanged?.Invoke(record, definition.Name, instance.InstanceId);
+            _onStateChanged?.Invoke(record, definition.Name, instance.InstanceGuid);
 
             return TransitionResult.Success(fromState, transition.ToState, trigger);
         }
@@ -116,7 +116,7 @@ public sealed class WorkflowEngine : IWorkflowEngine
             mutableInstance.Status = WorkflowStatus.Faulted;
             throw new WorkflowActionException(
                 definition.Name,
-                instance.InstanceId,
+                instance.InstanceGuid,
                 actionState,
                 trigger,
                 ex);

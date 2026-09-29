@@ -70,7 +70,7 @@ public class RavenWorkflowInstanceModel : AbstractModel
         var s = serializer ?? DefaultSerializer;
         return new RavenWorkflowInstanceModel
         {
-            Guid = instance.InstanceId,
+            Guid = instance.InstanceGuid,
             WorkflowName = workflowName,
             CurrentState = instance.CurrentState,
             Status = (int)instance.Status,

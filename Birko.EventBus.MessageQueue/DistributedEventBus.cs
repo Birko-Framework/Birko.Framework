@@ -67,11 +67,11 @@ namespace Birko.EventBus.MessageQueue
             // Build envelope
             var envelope = new EventEnvelope
             {
-                EventId = @event.EventId,
+                EventGuid = @event.EventGuid,
                 EventType = @event.GetType().AssemblyQualifiedName!,
                 Source = @event.Source,
                 OccurredAt = @event.OccurredAt,
-                CorrelationId = context.CorrelationId,
+                CorrelationGuid = context.CorrelationGuid,
                 TenantGuid = context.TenantGuid,
                 Payload = _serializer.Serialize(@event),
                 Headers = new(context.Metadata)
@@ -83,7 +83,7 @@ namespace Birko.EventBus.MessageQueue
 
             var headers = new MessageHeaders
             {
-                CorrelationId = context.CorrelationId?.ToString(),
+                CorrelationId = context.CorrelationGuid?.ToString(),
                 ContentType = _serializer.ContentType
             };
 
@@ -164,9 +164,9 @@ namespace Birko.EventBus.MessageQueue
 
                 var context = new EventContext
                 {
-                    EventId = envelope.EventId,
+                    EventGuid = envelope.EventGuid,
                     Source = envelope.Source,
-                    CorrelationId = envelope.CorrelationId,
+                    CorrelationGuid = envelope.CorrelationGuid,
                     TenantGuid = envelope.TenantGuid,
                     DeliveryCount = message.Headers?.Custom.ContainsKey("x-delivery-count") == true
                         ? int.TryParse(message.Headers.Custom["x-delivery-count"], out var dc) ? dc : 1

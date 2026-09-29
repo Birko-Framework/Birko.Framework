@@ -34,11 +34,11 @@ public class ElasticWorkflowInstanceModelTests
     {
         var original = CreateTestInstance();
         var model = ElasticWorkflowInstanceModel.FromInstance("OrderWorkflow", original);
-        model.Guid.Should().Be(original.InstanceId);
+        model.Guid.Should().Be(original.InstanceGuid);
         model.WorkflowName.Should().Be("OrderWorkflow");
 
         var restored = model.ToInstance<TestData>();
-        restored.InstanceId.Should().Be(original.InstanceId);
+        restored.InstanceGuid.Should().Be(original.InstanceGuid);
         restored.CurrentState.Should().Be("Submitted");
         restored.Status.Should().Be(WorkflowStatus.Active);
         restored.Data.OrderId.Should().Be("ORD-001");

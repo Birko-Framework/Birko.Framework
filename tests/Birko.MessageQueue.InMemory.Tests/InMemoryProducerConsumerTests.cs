@@ -44,14 +44,14 @@ public class InMemoryProducerConsumerTests
         var deliveries = new ConcurrentBag<Guid>();
 
         await consumer.SubscribeAsync("q",
-            (msg, ct) => { deliveries.Add(msg.Id); return Task.CompletedTask; },
+            (msg, ct) => { deliveries.Add(msg.Guid); return Task.CompletedTask; },
             new ConsumerOptions { AckMode = MessageAckMode.ManualAck });
 
         var message = new QueueMessage { Body = "x" };
         await producer.SendAsync("q", message, CancellationToken.None);
         (await WaitForAsync(() => deliveries.Count >= 1)).Should().BeTrue();
 
-        await consumer.RejectAsync(message.Id, requeue: true);
+        await consumer.RejectAsync(message.Guid, requeue: true);
 
         (await WaitForAsync(() => deliveries.Count >= 2)).Should().BeTrue("requeue must redeliver, not discard (CR-M202)");
     }
@@ -63,14 +63,14 @@ public class InMemoryProducerConsumerTests
         var deliveries = new ConcurrentBag<Guid>();
 
         await consumer.SubscribeAsync("q",
-            (msg, ct) => { deliveries.Add(msg.Id); return Task.CompletedTask; },
+            (msg, ct) => { deliveries.Add(msg.Guid); return Task.CompletedTask; },
             new ConsumerOptions { AckMode = MessageAckMode.ManualAck });
 
         var message = new QueueMessage { Body = "x" };
         await producer.SendAsync("q", message, CancellationToken.None);
         (await WaitForAsync(() => deliveries.Count >= 1)).Should().BeTrue();
 
-        await consumer.RejectAsync(message.Id, requeue: false);
+        await consumer.RejectAsync(message.Guid, requeue: false);
         await Task.Delay(100);
 
         deliveries.Count.Should().Be(1);

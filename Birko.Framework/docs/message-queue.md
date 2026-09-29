@@ -107,7 +107,7 @@ Message metadata:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| CorrelationId | string? | Tracks related messages across services |
+| CorrelationGuid | string? | Tracks related messages across services |
 | ReplyTo | string? | Reply destination (request-reply pattern) |
 | ContentType | string | Body format (default: "application/json") |
 | GroupId | string? | Session/group ID for ordered delivery |
@@ -345,7 +345,7 @@ public class OrderCreatedHandler : IMessageHandler<OrderCreated>
 ```csharp
 var headers = new MessageHeaders
 {
-    CorrelationId = Guid.NewGuid().ToString(),
+    CorrelationGuid = Guid.NewGuid().ToString(),
     ReplyTo = "orders.replies",
     GroupId = "customer-123"
 };

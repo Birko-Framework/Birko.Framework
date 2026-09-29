@@ -4,7 +4,7 @@ namespace Birko.Workflow.Execution;
 
 public sealed class WorkflowInstance<TData> : IWorkflowInstance<TData>
 {
-    public Guid InstanceId { get; }
+    public Guid InstanceGuid { get; }
     public string CurrentState { get; internal set; }
     public WorkflowStatus Status { get; internal set; }
     public TData Data { get; }
@@ -14,7 +14,7 @@ public sealed class WorkflowInstance<TData> : IWorkflowInstance<TData>
 
     private WorkflowInstance(Guid instanceId, string currentState, WorkflowStatus status, TData data)
     {
-        InstanceId = instanceId;
+        InstanceGuid = instanceId;
         CurrentState = currentState;
         Status = status;
         Data = data;

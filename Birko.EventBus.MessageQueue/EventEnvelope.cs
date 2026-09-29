@@ -12,7 +12,7 @@ namespace Birko.EventBus.MessageQueue
         /// <summary>
         /// The event's unique identifier.
         /// </summary>
-        public Guid EventId { get; set; }
+        public Guid EventGuid { get; set; }
 
         /// <summary>
         /// Assembly-qualified type name of the event (for deserialization).
@@ -32,7 +32,7 @@ namespace Birko.EventBus.MessageQueue
         /// <summary>
         /// Correlation ID for distributed tracing.
         /// </summary>
-        public Guid? CorrelationId { get; set; }
+        public Guid? CorrelationGuid { get; set; }
 
         /// <summary>
         /// Tenant identifier, if multi-tenancy is enabled.
