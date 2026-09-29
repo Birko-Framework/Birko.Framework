@@ -15,9 +15,9 @@ which this regeneration never touches._
 | planned      | 10     | 25     | —                   |
 | todo         | —                  | —                  | 166         |
 | in-progress  | 7  | 9  | 0   |
-| review       | —                  | —                  | 2       |
+| review       | —                  | —                  | 1       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 193         |
+| done         | 1        | 23        | 194         |
 | cancelled    | 0   | 0   | 4    |
 
 `todo` by priority: 32× P1 · 104× P2 · 30× P3.
@@ -470,7 +470,7 @@ _None_
 - [x] [TASK-504](_loose/TASK-504-json-separate-bulk-destroy-deletes-wrong-path.md) Destroying a populated JsonSeparateBulkStore / JsonBatchBulkStore throws (P1)
 - [x] [TASK-505](_loose/TASK-505-sluggable-reserved-slugs.md) `ISluggable` cannot reserve a slug that no row holds — a literal route beside `{slug}` shadows it (P3)
 - [ ] [TASK-506](_loose/TASK-506-guid-member-naming-sweep.md) Guid-typed members named `…Id` — one word with the model base (`Guid`) and with Symbio's wire (P2)
-- [ ] [TASK-507](_loose/TASK-507-form-level-errors-and-quoted-placeholders.md) `b-form` silently drops every non-field server error, and `b-input`/`b-textarea` truncate a placeholder at its first `"` (P1)
+- [x] [TASK-507](_loose/TASK-507-form-level-errors-and-quoted-placeholders.md) `b-form` silently drops every non-field server error, and `b-input`/`b-textarea` truncate a placeholder at its first `"` (P1)
 
 ## Completed
 

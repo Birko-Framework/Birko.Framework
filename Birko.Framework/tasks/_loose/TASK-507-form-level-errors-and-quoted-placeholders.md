@@ -2,7 +2,7 @@
 id: TASK-507
 parent: null
 feature: null
-status: review  # 2026-09-29: Web 0d0e960; Symbio browser gate PASS (461 tests, 0 failed); awaiting the human check
+status: done  # 2026-09-29: human check passed; Web 0d0e960
 priority: P1
 assignee: ai
 created: 2026-09-29
@@ -51,4 +51,4 @@ Both are framework defects that apply to EVERY create/edit form in every consume
 
 ## Human test plan
 
-- [ ] On any create modal, trigger a server-side business-rule refusal: the message appears above the fields.
+- [x] On any create modal, trigger a server-side business-rule refusal: the message appears above the fields (user, 2026-09-29, IoT automation).
