@@ -2,7 +2,7 @@
 id: TASK-506
 parent: null
 feature: null
-status: review  # 2026-09-28: done on branch symbio/TASK-819; merges together with Symbio TASK-819/820
+status: done  # 2026-09-29: merged to main (7c1bdc82) together with Symbio TASK-819/820
 priority: P2
 assignee: ai
 created: 2026-09-28
@@ -66,7 +66,7 @@ was moved to `TenantGuid` with the rest (a guard that stops being able to fail i
 
 - [x] Every Guid-typed `…Id` member renamed; all 168 framework test projects build and pass.
 - [x] Pinned column names and Cosmos document keys follow; docs (CLAUDE.md/README/docs, not CHANGELOG/audits) updated.
-- [ ] Merged to `main` together with Symbio TASK-819/820 (Symbio compiles this working tree).
+- [x] Merged to `main` together with Symbio TASK-819/820 (Symbio compiles this working tree): framework `7c1bdc82`, Symbio `9ab222f1`; Symbio unit suite on the merged mains 3392 passed.
 
 ## Human test plan
 
