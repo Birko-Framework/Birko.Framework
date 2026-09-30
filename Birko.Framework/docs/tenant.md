@@ -213,6 +213,6 @@ CREATE POLICY customer_tenant_policy ON customers
 
 ## See Also
 
-- [Birko.Data.Tenant](https://github.com/birko/Birko.Data.Tenant)
-- [Birko.Data.Sync.Tenant](https://github.com/birko/Birko.Data.Sync.Tenant)
+- [Birko.Data.Tenant](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Data.Tenant)
+- [Birko.Data.Sync.Tenant](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Data.Sync.Tenant)
 - [Security Guide](security.md) — ASP.NET Core tenant resolution via Birko.Security.AspNetCore

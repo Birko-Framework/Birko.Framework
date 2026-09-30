@@ -98,5 +98,5 @@ sync.OnConflict += (sender, conflict) =>
 
 ## See Also
 
-- [Birko.Data.Sync](https://github.com/birko/Birko.Data.Sync)
-- [Birko.Data.Sync.Tenant](https://github.com/birko/Birko.Data.Sync.Tenant)
+- [Birko.Data.Sync](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Data.Sync)
+- [Birko.Data.Sync.Tenant](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Data.Sync.Tenant)

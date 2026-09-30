@@ -244,5 +244,5 @@ All paths are validated against traversal attacks:
 
 ## See Also
 
-- [Birko.Storage](https://github.com/birko/Birko.Storage)
-- [Birko.Storage.AzureBlob](https://github.com/birko/Birko.Storage.AzureBlob)
+- [Birko.Storage](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Storage)
+- [Birko.Storage.AzureBlob](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Storage.AzureBlob)

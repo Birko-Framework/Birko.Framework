@@ -409,4 +409,4 @@ var store = StoreWrapperBuilder.Build<Order>(rawStore, tenantContext, auditConte
 ## See Also
 
 - [Tagging Guide](tagging.md)
-- [Birko.Data.Patterns](https://github.com/birko/Birko.Data.Patterns)
+- [Birko.Data.Patterns](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Data.Patterns)

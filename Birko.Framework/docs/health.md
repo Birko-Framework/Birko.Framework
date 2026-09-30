@@ -427,7 +427,7 @@ app.MapGet("/health/live", async () =>
 
 ## See Also
 
-- [Birko.Health](https://github.com/birko/Birko.Health)
-- [Birko.Health.Data](https://github.com/birko/Birko.Health.Data)
-- [Birko.Health.Redis](https://github.com/birko/Birko.Health.Redis)
-- [Birko.Health.Azure](https://github.com/birko/Birko.Health.Azure)
+- [Birko.Health](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Health)
+- [Birko.Health.Data](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Health.Data)
+- [Birko.Health.Redis](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Health.Redis)
+- [Birko.Health.Azure](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Health.Azure)

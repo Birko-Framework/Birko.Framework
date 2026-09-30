@@ -559,13 +559,13 @@ The plaintext secret is shown only at registration; subsequent `GetAsync` calls 
 
 ## See Also
 
-- [Birko.Security](https://github.com/birko/Birko.Security)
-- [Birko.Security.Jwt](https://github.com/birko/Birko.Security.Jwt)
-- [Birko.Security.AspNetCore](https://github.com/birko/Birko.Security.AspNetCore)
-- [Birko.Security.BCrypt](https://github.com/birko/Birko.Security.BCrypt)
-- [Birko.Security.OAuth.Server](https://github.com/birko/Birko.Security.OAuth.Server)
-- [Birko.Security.Vault](https://github.com/birko/Birko.Security.Vault)
-- [Birko.Security.Vault.Configuration](https://github.com/birko/Birko.Security.Vault.Configuration)
-- [Birko.Communication.OAuth](https://github.com/birko/Birko.Communication.OAuth) — client-side flows (companion to the server)
-- [Birko.Security.AzureKeyVault](https://github.com/birko/Birko.Security.AzureKeyVault)
-- [Birko.Security.NFC](https://github.com/birko/Birko.Security.NFC)
+- [Birko.Security](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security)
+- [Birko.Security.Jwt](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.Jwt)
+- [Birko.Security.AspNetCore](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.AspNetCore)
+- [Birko.Security.BCrypt](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.BCrypt)
+- [Birko.Security.OAuth.Server](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.OAuth.Server)
+- [Birko.Security.Vault](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.Vault)
+- [Birko.Security.Vault.Configuration](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.Vault.Configuration)
+- [Birko.Communication.OAuth](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Communication.OAuth) — client-side flows (companion to the server)
+- [Birko.Security.AzureKeyVault](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.AzureKeyVault)
+- [Birko.Security.NFC](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.NFC)

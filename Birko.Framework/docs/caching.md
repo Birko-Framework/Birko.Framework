@@ -211,7 +211,7 @@ Write operations (`CreateAsync`, `UpdateAsync`, `DeleteAsync`) automatically inv
 
 ## See Also
 
-- [Birko.Caching](https://github.com/birko/Birko.Caching)
-- [Birko.Caching.Redis](https://github.com/birko/Birko.Caching.Redis)
-- [Birko.Caching.Hybrid](https://github.com/birko/Birko.Caching.Hybrid)
-- [Birko.Redis](https://github.com/birko/Birko.Redis)
+- [Birko.Caching](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Caching)
+- [Birko.Caching.Redis](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Caching.Redis)
+- [Birko.Caching.Hybrid](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Caching.Hybrid)
+- [Birko.Redis](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Redis)

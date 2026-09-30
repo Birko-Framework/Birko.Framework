@@ -3,7 +3,7 @@ id: TASK-460
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-09-18
@@ -17,6 +17,25 @@ jira-key: null
 ---
 
 # Move the 350 archived repos into an attic org
+
+> **Superseded 2026-09-30 — decision changed to DELETION, by the owner.** The attic was declined: the
+> framework was used only by the owner and their own projects, so the fork (`denli8`, last pushed
+> 2021-01-06) and the stars are not a readership worth redirecting, and the two `Birko.Data.ElasticSearch`
+> tags (`1.7.10`, `1.0`) were judged not worth migrating. The "21 files would 404" objection was removed
+> first by repointing every live link before deleting:
+>
+> - `Birko.Framework/docs/` — 13 files, 50 links → `Birko-Framework/Birko.Framework/tree/main/Birko.X`
+> - `ClientApi.CSharp` (finstat) — `DEV_README.md` links + clone block, and the About-modal URLs in
+>   `src/shell/about-modal.ts` (repointed to the two monorepos)
+> - `Consumers/gameshow-app/docs/installation.md` — the clone section, rewritten for the monorepo layout
+> - Left as-is: `Consumers/Affiliate/azure-pipelines.yml` (already dead, retired by Affiliate TASK-012)
+>   and historical mentions in Symbio task files.
+>
+> **Outcome (2026-09-30):** all 350 archived repos deleted (349 in the scripted pass with per-repo log, `Birko.Models`
+> retried by hand after a network timeout). `github.com/birko` now holds **29** repos, 0 archived — one more than the
+> 28 measured on 2026-09-18, all live, so no stray remainder.
+>
+> The body below is the original attic proposal, kept for the record.
 
 ## Context
 

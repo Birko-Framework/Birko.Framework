@@ -290,7 +290,7 @@ Uses SET NX with expiry and Lua-based safe release (checks lock token before DEL
 
 ## See Also
 
-- [Birko.BackgroundJobs](https://github.com/birko/Birko.BackgroundJobs)
-- [Birko.BackgroundJobs.SQL](https://github.com/birko/Birko.BackgroundJobs.SQL)
-- [Birko.BackgroundJobs.Redis](https://github.com/birko/Birko.BackgroundJobs.Redis)
-- [Birko.Redis](https://github.com/birko/Birko.Redis)
+- [Birko.BackgroundJobs](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.BackgroundJobs)
+- [Birko.BackgroundJobs.SQL](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.BackgroundJobs.SQL)
+- [Birko.BackgroundJobs.Redis](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.BackgroundJobs.Redis)
+- [Birko.Redis](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Redis)
