@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-09-26 16:59. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-30 16:49. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -17,7 +17,7 @@ which this regeneration never touches._
 | in-progress  | 7  | 9  | 0   |
 | review       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 195         |
+| done         | 1        | 23        | 197         |
 | cancelled    | 0   | 0   | 4    |
 
 `todo` by priority: 32× P1 · 104× P2 · 30× P3.
@@ -453,7 +453,7 @@ _None_
 - [x] [TASK-457](_loose/TASK-457-consolidate-the-framework-polyrepo-into-one-repo.md) Consolidate the 349-repo framework polyrepo into one repo under a GitHub org (P1)
 - [x] [TASK-458](_loose/TASK-458-turn-prezentacia-into-framework-documentation.md) Turn `PREZENTACIA.md` into published framework documentation (P3)
 - [x] [TASK-459](_loose/TASK-459-five-suites-fail-on-linux.md) Five tests fail on Linux that pass on Windows (P2)
-- [ ] [TASK-460](_loose/TASK-460-move-the-350-archived-repos-to-an-attic-org.md) Move the 350 archived repos into an attic org (P3)
+- [x] [TASK-460](_loose/TASK-460-move-the-350-archived-repos-to-an-attic-org.md) Move the 350 archived repos into an attic org (P3)
 - [x] [TASK-461](_loose/TASK-461-sandbox-covers-all-areas-with-a-readable-report.md) Sandbox covers every reachable area, and reports it readably (P2)
 - [x] [TASK-462](_loose/TASK-462-xml-store-nullable-warning.md) Two warnings a consumer sees on every build (P3)
 - ~~[TASK-463](_loose/TASK-463-tagservicebase-is-documented-but-does-not-exist.md) ~~`TagServiceBase` is documented in three places and exists in none~~ — CANCELLED, the premise was false~~ (P2)
@@ -472,6 +472,7 @@ _None_
 - [x] [TASK-505](_loose/TASK-505-sluggable-reserved-slugs.md) `ISluggable` cannot reserve a slug that no row holds — a literal route beside `{slug}` shadows it (P3)
 - [x] [TASK-506](_loose/TASK-506-guid-member-naming-sweep.md) Guid-typed members named `…Id` — one word with the model base (`Guid`) and with Symbio's wire (P2)
 - [x] [TASK-507](_loose/TASK-507-form-level-errors-and-quoted-placeholders.md) `b-form` silently drops every non-field server error, and `b-input`/`b-textarea` truncate a placeholder at its first `"` (P1)
+- [ ] [TASK-509](_loose/TASK-509-split-domain-models-into-own-repo.md) Split the Birko.Models domain models out of the framework into their own repo (P3)
 
 ## Completed
 
