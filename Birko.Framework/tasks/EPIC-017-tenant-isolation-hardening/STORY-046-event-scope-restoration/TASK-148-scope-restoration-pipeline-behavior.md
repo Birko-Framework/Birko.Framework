@@ -3,7 +3,8 @@ id: TASK-148
 parent: STORY-046
 feature: FEATURE-017
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: blocked
+status: todo
+blocked: on an external condition, not on another task
 priority: P3
 assignee: ai
 created: 2026-08-08
