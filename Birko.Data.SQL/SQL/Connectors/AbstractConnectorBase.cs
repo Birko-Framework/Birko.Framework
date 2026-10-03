@@ -394,6 +394,44 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         public abstract string ConvertType(DbType type, Fields.AbstractField field);
 
+        /// <summary>Precision a decimal column gets when the model declares none (TASK-512).</summary>
+        /// <remarks>Equal to <c>Birko.Models.ValueData.StoreDecimalPrecision</c>, the pair every framework mapping uses; a test pins the two together.</remarks>
+        public const int DefaultDecimalPrecision = 22;
+
+        /// <summary>Scale a decimal column gets when the model declares none (TASK-512).</summary>
+        public const int DefaultDecimalScale = 6;
+
+        /// <summary>
+        /// <c>DECIMAL(p,s)</c> for <paramref name="field"/>, with the canonical default standing in for whichever
+        /// half the model did not declare. For providers where a bare <c>DECIMAL</c> means scale 0.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-512. A bare <c>DECIMAL</c> is <c>decimal(10,0)</c> on MySQL and <c>DECIMAL(18,0)</c> on SQL Server,
+        /// so an unprecisioned <c>decimal</c> property stored <c>7.5</c> as <c>8</c> — measured on 8.4 and 2022, no
+        /// error. <c>ConvertType</c> previously emitted the bare form unless BOTH halves were declared, so a lone
+        /// <c>[PrecisionField]</c> was silently ignored as well (rule 55).
+        /// </para>
+        /// <para>
+        /// Not used by PostgreSQL (a bare <c>NUMERIC</c> is unbounded and lossless) or SQLite (<c>REAL</c> either
+        /// way): bounding them would add a ceiling and a drift report to columns that lose nothing.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="Exceptions.FieldAttributeException">The resulting scale exceeds the precision.</exception>
+        protected static string BoundedDecimalType(Fields.AbstractField? field)
+        {
+            var decimalField = field as Fields.DecimalField;
+            var precision = decimalField?.Precision ?? DefaultDecimalPrecision;
+            var scale = decimalField?.Scale ?? DefaultDecimalScale;
+            if (scale > precision)
+            {
+                throw new Exceptions.FieldAttributeException(
+                    $"{field?.Property?.DeclaringType?.FullName}.{field?.Name}: a decimal column of precision {precision} "
+                    + $"cannot have scale {scale}. Declare both [PrecisionField] and [ScaleField] (or HasPrecision(..).HasScale(..)).");
+            }
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture, "DECIMAL({0},{1})", precision, scale);
+        }
+
         /// <summary>
         /// Gets the field definition string for a specific field.
         /// </summary>

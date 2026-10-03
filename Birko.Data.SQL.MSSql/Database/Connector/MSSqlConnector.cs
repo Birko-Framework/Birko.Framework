@@ -230,12 +230,6 @@ namespace Birko.Data.SQL.Connectors
                 reader.IsDBNull(4) ? (int?)null : Convert.ToInt32(reader.GetValue(4)));
 
         /// <summary>
-        /// SQL Server stores a bare <c>DECIMAL</c> as <c>DECIMAL(18,0)</c> (TASK-511, measured on 2022).
-        /// </summary>
-        protected override string DeclaredAsStored(string declared)
-            => string.Equals(declared, "DECIMAL", StringComparison.OrdinalIgnoreCase) ? "DECIMAL(18,0)" : declared;
-
-        /// <summary>
         /// Renders a <c>sys.columns</c> row into <see cref="ConvertType"/>'s vocabulary.
         /// </summary>
         /// <remarks>
@@ -285,14 +279,8 @@ namespace Birko.Data.SQL.Connectors
             {
                 case DbType.VarNumeric:
                 case DbType.Decimal:
-                    if (field is DecimalField decimalField && decimalField.Precision != null && decimalField.Scale != null)
-                    {
-                        return string.Format("DECIMAL({0},{1})", decimalField.Precision, decimalField.Scale);
-                    }
-                    else
-                    {
-                        return "DECIMAL";
-                    }
+                    // TASK-512: a bare DECIMAL is DECIMAL(18,0) here — 7.5 was stored as 8.
+                    return BoundedDecimalType(field);
                 case DbType.Double:
                     return "FLOAT";
                 case DbType.Currency:

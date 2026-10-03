@@ -137,15 +137,18 @@ public class MigrationColumnMetadataTests
     ///   <item><b>MSSql</b> and <b>MySQL</b> answer a bare <c>DECIMAL</c>, whose default scale is
     ///   <b>0</b>, so money was truncated to whole units.</item>
     /// </list>
-    /// Both were silent. This asserts the provider default is still what an *undeclared* precision gets,
-    /// which is correct behaviour and the control for the test above.
+    /// Both were silent. This used to assert that an *undeclared* precision still got the provider default,
+    /// calling it correct. TASK-512 INVERTED it (rule 56): on MSSql and MySQL that default is the scale-0
+    /// truncation described above — measured, <c>7.5</c> stored as <c>8</c> — so an undeclared precision now
+    /// gets the canonical <c>DECIMAL(22,6)</c>. SQLite and PostgreSQL keep theirs: <c>REAL</c> is the same
+    /// either way there, and <c>NUMERIC</c> is unbounded and lossless.
     /// </summary>
     [Theory]
     [InlineData("SQLite", "C REAL")]
     [InlineData("PostgreSQL", "C NUMERIC")]
-    [InlineData("MSSql", "C DECIMAL")]
-    [InlineData("MySQL", "C DECIMAL")]
-    public void An_undeclared_precision_still_yields_the_providers_default(string provider, string expected)
+    [InlineData("MSSql", "C DECIMAL(22,6)")]
+    [InlineData("MySQL", "C DECIMAL(22,6)")]
+    public void An_undeclared_precision_gets_a_scale_wherever_the_provider_default_has_none(string provider, string expected)
     {
         var descriptor = new FieldDescriptor { Name = "C", Type = FieldType.Decimal };
 
@@ -153,15 +156,20 @@ public class MigrationColumnMetadataTests
     }
 
     /// <summary>
-    /// Precision without scale is not enough for either producer — <c>ConvertType</c> requires both, so
-    /// the factory requires both too rather than inventing a default scale.
+    /// Precision without scale used to yield a bare <c>DECIMAL</c> — the declared precision ignored, the
+    /// scale left at 0 — on the reasoning that the factory should not invent a scale. TASK-512 INVERTED it:
+    /// the declared half is honoured and the missing one is the canonical default, exactly as the
+    /// attribute path does it (<c>[PrecisionField(18)]</c> → <c>DECIMAL(18,6)</c>).
     /// </summary>
-    [Fact]
-    public void Precision_without_scale_does_not_fabricate_a_scale()
+    [Theory]
+    [InlineData("MSSql", "C DECIMAL(18,6)")]
+    [InlineData("MySQL", "C DECIMAL(18,6)")]
+    [InlineData("PostgreSQL", "C NUMERIC")]
+    public void Precision_without_scale_keeps_the_precision_and_takes_the_default_scale(string provider, string expected)
     {
         var descriptor = new FieldDescriptor { Name = "C", Type = FieldType.Decimal, Precision = 18 };
 
-        Definition(MSSql(), descriptor).Should().Be("C DECIMAL");
+        Definition(ConnectorNamed(provider), descriptor).Should().Be(expected);
     }
 
     // ──────────────────── ColumnName, and the flags that already arrived ────────────────

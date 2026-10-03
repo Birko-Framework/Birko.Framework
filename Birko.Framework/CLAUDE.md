@@ -238,6 +238,14 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### An unprecisioned `decimal` is `DECIMAL(22,6)`, not an integer (2026-10-03)
+
+[[TASK-512]]. On MySQL and SQL Server a bare `DECIMAL` has scale 0, so `7.5` was stored as `8`, measured. The
+missing half of precision/scale now takes the canonical 22 / 6 (`BoundedDecimalType`, one producer for both);
+PostgreSQL and SQLite are unchanged. Existing tables are reported by `DetectDrift`, not altered — migration in
+[CHANGELOG.md](CHANGELOG.md). **⚠ TASK-511's comparison hook was deleted the same day** (rule 53): it made a bare
+column look clean, and once nothing declares one it could only hide an old lossy table.
+
 ### A clean drift report is a statement about the schema, not about the data (2026-10-03)
 
 [[TASK-511]]. `DetectDrift` reported every unprecisioned `decimal` as drifted on a table the framework had just

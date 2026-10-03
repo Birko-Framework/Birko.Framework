@@ -19,9 +19,11 @@ namespace Birko.Models.Inventory.SQL.Mappings
     /// <c>Repositories</c> keep their legacy names precisely because their columns <i>did</i> survive.
     /// </para>
     /// <para>
-    /// <b>Why a mapping at all.</b> <c>Quantity</c> is a <c>decimal</c>, and an unmapped decimal takes
-    /// whatever the provider defaults to — for several that is 18,2, which silently truncates the
-    /// fractional quantities this domain exists to track. 22,6 matches <c>InventoryDocumentLineMapping</c>
+    /// <b>Why a mapping at all.</b> <c>Quantity</c> is a <c>decimal</c>, and before TASK-512 an unmapped
+    /// decimal took the provider's default — <b>scale 0</b> on MySQL (<c>decimal(10,0)</c>) and SQL Server
+    /// (<c>DECIMAL(18,0)</c>), measured, which rounds away every fractional quantity this domain exists to
+    /// track. An unmapped decimal now gets 22,6 too; the mapping keeps the declaration explicit.
+    /// 22,6 matches <c>InventoryDocumentLineMapping</c>
     /// and is the framework's canonical pair (<c>ValueData.StoreDecimalPrecision</c> /
     /// <c>StoreDecimalPlaces</c>), which the retired models applied through
     /// <c>[PrecisionField]</c>/<c>[ScaleField]</c>. Held as local constants here to match the sibling

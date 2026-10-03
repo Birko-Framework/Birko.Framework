@@ -237,26 +237,14 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         protected override string RenderStoredType(StoredColumn column) => column.TypeName;
 
-        /// <summary>
-        /// MySQL stores a bare <c>DECIMAL</c> as <c>decimal(10,0)</c> (TASK-511, measured on 8.4).
-        /// </summary>
-        protected override string DeclaredAsStored(string declared)
-            => string.Equals(declared, "DECIMAL", StringComparison.OrdinalIgnoreCase) ? "DECIMAL(10,0)" : declared;
-
         public override string ConvertType(DbType type, AbstractField field)
         {
             switch (type)
             {
                 case DbType.VarNumeric:
                 case DbType.Decimal:
-                    if (field is DecimalField decimalField && decimalField.Precision != null && decimalField.Scale != null)
-                    {
-                        return string.Format("DECIMAL({0},{1})", decimalField.Precision, decimalField.Scale);
-                    }
-                    else
-                    {
-                        return "DECIMAL";
-                    }
+                    // TASK-512: a bare DECIMAL is decimal(10,0) here — 7.5 was stored as 8.
+                    return BoundedDecimalType(field);
                 case DbType.Double:
                     return "DOUBLE";
                 case DbType.Currency:

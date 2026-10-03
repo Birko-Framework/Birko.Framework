@@ -65,8 +65,10 @@ namespace Birko.Data.Migrations.SQL.Context
                     return new SchemaCharField(descriptor, length);
                 }
             }
+            // TASK-512: either half is enough. The connector fills the missing one with the canonical 22 / 6
+            // (MySQL, SQL Server); requiring both here dropped a declared precision on the floor.
             else if (descriptor.Type == FieldType.Decimal
-                     && descriptor.Precision != null && descriptor.Scale != null)
+                     && (descriptor.Precision != null || descriptor.Scale != null))
             {
                 return new SchemaDecimalField(descriptor);
             }

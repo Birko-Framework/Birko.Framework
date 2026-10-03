@@ -172,12 +172,37 @@ public class SchemaDriftLiveTests
 
     private const string BareDecimalTable = "MsDriftBareDecimal";
 
+    private static decimal AmountOf(MSSqlConnector connector, Guid guid)
+        => connector.Select(typeof(BareDecimalRow), (System.Linq.Expressions.LambdaExpression?)null)
+                    .Cast<BareDecimalRow>().Single(x => x.Guid == guid).Amount;
+
     /// <summary>
-    /// TASK-511. SQL Server stores a bare <c>DECIMAL</c> as <c>DECIMAL(18,0)</c>, so a table this framework
-    /// had just created reported its unprecisioned decimal as drifted. The control above never had one.
+    /// TASK-512. SQL Server stores a bare <c>DECIMAL</c> as <c>DECIMAL(18,0)</c> — scale 0, so <c>7.5</c> was
+    /// stored as <c>8</c> with no error. An unprecisioned decimal is now <c>DECIMAL(22,6)</c>.
     /// </summary>
     [Fact]
-    public void A_bare_DECIMAL_the_framework_created_reports_clean()
+    public void An_unprecisioned_decimal_keeps_its_fraction()
+    {
+        if (!RequireServer()) return;
+
+        Exec($"DROP TABLE IF EXISTS [{BareDecimalTable}]");
+        var connector = new MSSqlConnector(Settings());
+        connector.CreateTable(new[] { typeof(BareDecimalRow) });
+        var half = Guid.NewGuid();
+        var six = Guid.NewGuid();
+        connector.Insert(new BareDecimalRow { Guid = half, Amount = 7.5m });
+        connector.Insert(new BareDecimalRow { Guid = six, Amount = 1234.567891m });
+
+        AmountOf(connector, half).Should().Be(7.5m, "DECIMAL(18,0) rounded this to 8");
+        AmountOf(connector, six).Should().Be(1234.567891m, "six places is the canonical scale");
+    }
+
+    /// <summary>
+    /// The column the framework now creates reports clean — TASK-511 made this pass by canonicalising the
+    /// bare declaration in the comparison; TASK-512 removed that, because nothing declares a bare one any more.
+    /// </summary>
+    [Fact]
+    public void An_unprecisioned_decimal_the_framework_created_reports_clean()
     {
         if (!RequireServer()) return;
 
@@ -188,26 +213,50 @@ public class SchemaDriftLiveTests
         var report = connector.DetectDrift(typeof(BareDecimalRow));
         foreach (var d in report.Drifts) _output.WriteLine(d.ToString());
 
-        report.IsClean.Should().BeTrue("DECIMAL(18,0) is exactly what SQL Server makes of the DECIMAL the DDL declared");
+        report.IsClean.Should().BeTrue();
     }
 
     /// <summary>
-    /// The guard on the fix: only the server's own default precision counts as the bare declaration.
+    /// TASK-511's "a bare column reports clean", INVERTED (rule 56): a table created before TASK-512 holds an
+    /// integer column, and that is exactly what an operator needs to be told — it is losing every fraction.
     /// </summary>
     [Fact]
-    public void A_bare_DECIMAL_declaration_against_a_stored_scale_is_still_reported()
+    public void A_table_created_before_TASK512_reports_its_integer_decimal_as_drift()
     {
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS [{BareDecimalTable}]");
-        Exec($"CREATE TABLE [{BareDecimalTable}] ([Guid] UNIQUEIDENTIFIER, [Amount] DECIMAL(18,2))");
+        Exec($"CREATE TABLE [{BareDecimalTable}] ([Guid] UNIQUEIDENTIFIER, [Amount] DECIMAL NOT NULL)");
 
-        var report = new MSSqlConnector(Settings()).DetectDrift(typeof(BareDecimalRow));
-
-        var drift = report.Drifts.Should().ContainSingle().Subject;
+        var drift = new MSSqlConnector(Settings()).DetectDrift(typeof(BareDecimalRow))
+            .Drifts.Should().ContainSingle().Subject;
         drift.Column.Should().Be("Amount");
         drift.Kind.Should().Be(ColumnDriftKind.TypeMismatch);
-        drift.Declared.Should().Be("DECIMAL", "the report shows what the DDL said, not the canonicalised form");
-        drift.Stored.Should().Be("DECIMAL(18,2)");
+        drift.Declared.Should().Be("DECIMAL(22,6)");
+        drift.Stored.Should().Be("DECIMAL(18,0)");
+    }
+
+    /// <summary>
+    /// The migration CHANGELOG.md gives for such a table, proven: it clears the drift and the column keeps a
+    /// fraction afterwards. Values written before it stay rounded — the fraction was never stored.
+    /// </summary>
+    [Fact]
+    public void The_documented_migration_widens_an_old_column()
+    {
+        if (!RequireServer()) return;
+
+        Exec($"DROP TABLE IF EXISTS [{BareDecimalTable}]");
+        Exec($"CREATE TABLE [{BareDecimalTable}] ([Guid] UNIQUEIDENTIFIER, [Amount] DECIMAL NOT NULL)");
+        var connector = new MSSqlConnector(Settings());
+        var old = Guid.NewGuid();
+        connector.Insert(new BareDecimalRow { Guid = old, Amount = 7.5m });
+
+        Exec($"ALTER TABLE [{BareDecimalTable}] ALTER COLUMN [Amount] DECIMAL(22,6) NOT NULL");
+
+        connector.DetectDrift(typeof(BareDecimalRow)).IsClean.Should().BeTrue();
+        AmountOf(connector, old).Should().Be(8m, "the fraction was rounded away on write and cannot come back");
+        var fresh = Guid.NewGuid();
+        connector.Insert(new BareDecimalRow { Guid = fresh, Amount = 7.5m });
+        AmountOf(connector, fresh).Should().Be(7.5m);
     }
 }

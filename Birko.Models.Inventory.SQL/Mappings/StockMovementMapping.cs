@@ -9,9 +9,9 @@ namespace Birko.Models.Inventory.SQL.Mappings
     /// <remarks>
     /// <para>
     /// This closed a real exposure rather than filling in a blank: <see cref="StockMovement.Quantity"/> and
-    /// <see cref="StockMovement.UnitPrice"/> are <c>decimal</c>, and an unmapped decimal takes the
-    /// provider's default — 18,2 on several — which silently truncates the fractional quantities and
-    /// unit prices this domain exists to track. It is the same 22,6 used by
+    /// <see cref="StockMovement.UnitPrice"/> are <c>decimal</c>, and before TASK-512 an unmapped decimal
+    /// took the provider's default — <b>scale 0</b> on MySQL and SQL Server, measured — which rounds away
+    /// the fractional quantities and unit prices this domain exists to track. It is the same 22,6 used by
     /// <c>InventoryDocumentLineMapping</c> and <c>StockBalanceMapping</c>, so a quantity survives a
     /// document line, a movement and a balance identically.
     /// </para>

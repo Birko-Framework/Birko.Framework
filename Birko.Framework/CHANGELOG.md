@@ -4,6 +4,50 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-03 — DDL change: an unprecisioned `decimal` is `DECIMAL(22,6)` on MySQL and SQL Server
+
+[[TASK-512]]. A `decimal` property with no `[PrecisionField]` + `[ScaleField]` (or `HasPrecision(..).HasScale(..)`)
+was created as a bare `DECIMAL`, which the server fills in with **scale 0** — `decimal(10,0)` on MySQL,
+`DECIMAL(18,0)` on SQL Server. Measured on 8.4 and 2022: `7.5` was stored as `8`, with no error. A lone
+`[PrecisionField]` or `[ScaleField]` on a decimal was ignored the same way.
+
+```text
+// before (MySQL / SQL Server ConvertType, DbType.Decimal)
+both declared  → DECIMAL(p,s)       otherwise → DECIMAL            (server: scale 0)
+// after
+both declared  → DECIMAL(p,s)       missing half → 22 / 6         e.g. bare → DECIMAL(22,6), [PrecisionField(10)] → DECIMAL(10,6)
+scale > precision after defaulting → FieldAttributeException naming the property
+```
+
+The migrations path (`FieldDescriptor` → `SchemaField.For`) follows the same rule: a descriptor with only `Precision`
+or only `Scale` used to drop both, and now keeps the declared half. Two TASK-264 tests that pinned the bare result
+were inverted, not deleted.
+
+No API changed and nothing fails to compile. PostgreSQL (`NUMERIC`, unbounded, lossless) and SQLite (`REAL`) are
+unchanged. 22,6 is the framework's canonical pair (`ValueData.StoreDecimalPrecision` / `StoreDecimalPlaces`);
+`AbstractConnectorBase.DefaultDecimalPrecision` / `DefaultDecimalScale` carry it to the SQL layer, and a test pins
+them together.
+
+**Who is affected.** New tables get the new type. **Existing tables are not altered** — and `DetectDrift` (and the
+`SchemaDriftHealthCheck` built on it) now reports their bare columns as `TypeMismatch`, declared `DECIMAL(22,6)`
+against stored `decimal(10,0)` / `DECIMAL(18,0)`. That report is correct: those columns lose every fraction.
+Measured exposure on 2026-10-03: no framework SQL table (every mapped framework decimal already declares 22,6);
+Symbio has ~240 unprecisioned decimals in SQL entities, exposed only on a module configured for MySQL or SQL Server.
+
+**Migration**, one statement per reported column — both proven by a live test that the drift clears and a fraction
+survives afterwards. Values written before it **stay rounded**: the fraction was never stored.
+
+```sql
+-- MySQL
+ALTER TABLE `T` MODIFY `Col` DECIMAL(22,6) NOT NULL;            -- NULL, not NOT NULL, for a `decimal?` property
+-- SQL Server
+ALTER TABLE [T] ALTER COLUMN [Col] DECIMAL(22,6) NOT NULL;       -- NULL, not NOT NULL, for a `decimal?` property
+```
+
+`EnsureColumns` does not do this — it adds missing columns and never retypes (TASK-510). TASK-511's
+`DeclaredAsStored` comparison hook was removed: it existed only to make a bare declaration compare clean, and
+nothing declares one any more (rule 53).
+
 ## 2026-09-26 — BREAKING: `PropertyUpdate<T>.Assignments` is a closed hierarchy; `Increment` / `Decrement` added
 
 [[TASK-498]]. `Birko.Data.Stores/PropertyUpdate.cs` gained a counter — `Increment(x => x.Prop, delta)` on a

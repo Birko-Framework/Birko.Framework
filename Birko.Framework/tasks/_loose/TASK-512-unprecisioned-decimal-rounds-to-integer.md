@@ -2,7 +2,7 @@
 id: TASK-512
 parent: null
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-03
@@ -44,16 +44,36 @@ understate the loss and should be corrected with this task.
 
 ## Acceptance criteria
 
-- [ ] Decide the declaration for an unprecisioned decimal, on measurement — the two candidates:
+- [x] Decide the declaration for an unprecisioned decimal, on measurement — the two candidates:
       (a) emit the canonical `DECIMAL(22,6)` on every provider that needs a precision; or
       (b) refuse an unprecisioned decimal at table load, naming the property (rule 41: a mapper that cannot
       express something refuses) — breaks every consumer that has one, loudly
-- [ ] Existing tables are not altered silently; after the change `DetectDrift` reports their bare columns as
+  — **(a), chosen by the owner 2026-10-03.** `AbstractConnectorBase.BoundedDecimalType` (MySQL, SQL Server):
+  the missing half takes 22 / 6, so a lone `[PrecisionField]`/`[ScaleField]` is now honoured instead of ignored
+  (rule 55); scale > precision after defaulting is a `FieldAttributeException` naming the property. Measured
+  first: precision-only decimals exist once across all consumers (Birko.Sandbox). PostgreSQL / SQLite unchanged
+  — lossless / `REAL` either way, and bounding them would add a ceiling and a drift report for nothing.
+  Consumer exposure measured: Symbio ~240 unprecisioned decimals in `[Table]` entities (money, tax, GPS,
+  quantities) — default SQLite, exposed on modules configured for MySQL/SQL Server; Symbio is in dev, so its
+  tables can be recreated. FisData is being retired into Symbio.
+- [x] Existing tables are not altered silently; after the change `DetectDrift` reports their bare columns as
       drift (correct: they are lossy), and the CHANGELOG says how to migrate one
-- [ ] TASK-511's `DeclaredAsStored` overrides are then unreachable for a bare `DECIMAL` — delete them with their
+  — `A_table_created_before_TASK512_reports_its_integer_decimal_as_drift` (both providers); the migration
+  statements in CHANGELOG.md are proven by `The_documented_migration_widens_an_old_column` (drift clears, a
+  fraction survives, the old row stays `8`).
+- [x] TASK-511's `DeclaredAsStored` overrides are then unreachable for a bare `DECIMAL` — delete them with their
       tests inverted, not left as a second implementation (rule 53)
-- [ ] Correct the `18,2` comments in the two Inventory mappings
-- [ ] Live tests: `7.5` round-trips on MySQL and SQL Server for an unprecisioned property
+  — hook, both overrides and the call site deleted; TASK-511's "bare column reports clean" test inverted into the
+  drift test above, its guard test replaced by it.
+- [x] Correct the `18,2` comments in the two Inventory mappings
+- [x] Live tests: `7.5` round-trips on MySQL and SQL Server for an unprecisioned property
+  — `An_unprecisioned_decimal_keeps_its_fraction` (`7.5` and `1234.567891`), plus offline
+  `UnprecisionedDecimalColumnTypeTests` (6 each) and `DefaultDecimalPrecisionTests` pinning 22/6 to `ValueData`.
+  Mutation: emitting the bare `DECIMAL` again fails the round trip, the inverted drift test and the migration
+  test on both providers.
+- [x] (found by the regression run) The migrations factory required BOTH halves before building a decimal
+  field, so `Precision = 18` alone produced `DECIMAL(22,6)` — the declaration dropped. `SchemaField.For` now
+  builds one for either half; TASK-264's two tests pinning the bare result were inverted (rule 56).
 
 ## Out of scope
 
