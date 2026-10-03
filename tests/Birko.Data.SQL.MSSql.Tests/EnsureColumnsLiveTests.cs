@@ -118,10 +118,10 @@ public class EnsureColumnsLiveTests
     }
 
     /// <summary>
-    /// The upgraded table must be indistinguishable from one <c>CREATE TABLE</c> made — asserted as "same
-    /// drift report", not "clean", because <c>DetectDrift</c> has its own false positive for an unprecisioned
-    /// <c>decimal</c> on MySQL and SQL Server (the server stores its default precision; TASK-511) and that
-    /// must not be mistaken for something this call did.
+    /// The upgraded table must be indistinguishable from one <c>CREATE TABLE</c> made, and both clean. The
+    /// comparison is what keeps the "clean" half honest: until TASK-511 a created table reported an
+    /// unprecisioned <c>decimal</c> as drifted on MySQL and SQL Server, and that must never be mistaken for
+    /// something this call did.
     /// </summary>
     [Fact]
     public void An_ensured_table_reports_exactly_what_a_table_created_whole_reports()
@@ -138,7 +138,7 @@ public class EnsureColumnsLiveTests
         foreach (var d in ensured) _output.WriteLine("ensured: " + d);
         foreach (var d in created) _output.WriteLine("created: " + d);
         ensured.Should().BeEquivalentTo(created);
-        ensured.Should().NotContain(d => d.Contains("not present"), "nothing the model declares may still be missing");
+        ensured.Should().BeEmpty("every added column comes from the same ConvertType CREATE TABLE uses");
     }
 
     [Fact]

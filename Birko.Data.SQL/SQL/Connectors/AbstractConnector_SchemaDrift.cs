@@ -87,6 +87,21 @@ namespace Birko.Data.SQL.Connectors
             new StoredColumn(reader.GetString(0), reader.IsDBNull(1) ? string.Empty : reader.GetString(1));
 
         /// <summary>
+        /// What the server stores for a declaration <see cref="AbstractConnectorBase.ConvertType"/> leaves
+        /// incomplete — the identity everywhere except where a server fills in a modifier itself.
+        /// </summary>
+        /// <remarks>
+        /// TASK-511. A bare <c>DECIMAL</c> (an unprecisioned <c>decimal</c> property) is stored by MySQL as
+        /// <c>decimal(10,0)</c> and by SQL Server as <c>DECIMAL(18,0)</c>, so a table <c>CREATE TABLE</c> had
+        /// just made reported that column as drifted — measured on 8.4 and 2022. Applied to the comparison only:
+        /// the report's <see cref="ColumnDrift.Declared"/> stays what the DDL said, and a stored type that differs
+        /// from the server's default (<c>DECIMAL(18,2)</c> against a bare declaration) is still drift (TASK-264).
+        /// Overridden per provider with the server's documented default, never inferred from the catalogue —
+        /// reading the default back from the table being judged would make every stored value agree.
+        /// </remarks>
+        protected virtual string DeclaredAsStored(string declared) => declared;
+
+        /// <summary>
         /// Renders a stored column into the vocabulary <see cref="AbstractConnectorBase.ConvertType"/>
         /// emits, so the comparison itself stays provider-independent.
         /// </summary>
@@ -161,7 +176,7 @@ namespace Birko.Data.SQL.Connectors
                 }
 
                 var rendered = RenderStoredType(actual);
-                if (!SameColumnType(declared, rendered))
+                if (!SameColumnType(DeclaredAsStored(declared), rendered))
                 {
                     drifts.Add(new ColumnDrift(table.Name, field.Name, ColumnDriftKind.TypeMismatch, declared, rendered));
                 }

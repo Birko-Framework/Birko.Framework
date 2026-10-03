@@ -160,4 +160,54 @@ public class SchemaDriftLiveTests
         drift.Stored.Should().Be("NVARCHAR(MAX)");
         drift.Declared.Should().Be("NVARCHAR(255)");
     }
+
+    /// <summary>TASK-511: an unprecisioned decimal, which <c>ConvertType</c> emits as a bare <c>DECIMAL</c>.</summary>
+    [Table(BareDecimalTable)]
+    public class BareDecimalRow
+    {
+        [PrimaryField]
+        public Guid? Guid { get; set; }
+        public decimal Amount { get; set; }
+    }
+
+    private const string BareDecimalTable = "MsDriftBareDecimal";
+
+    /// <summary>
+    /// TASK-511. SQL Server stores a bare <c>DECIMAL</c> as <c>DECIMAL(18,0)</c>, so a table this framework
+    /// had just created reported its unprecisioned decimal as drifted. The control above never had one.
+    /// </summary>
+    [Fact]
+    public void A_bare_DECIMAL_the_framework_created_reports_clean()
+    {
+        if (!RequireServer()) return;
+
+        Exec($"DROP TABLE IF EXISTS [{BareDecimalTable}]");
+        var connector = new MSSqlConnector(Settings());
+        connector.CreateTable(new[] { typeof(BareDecimalRow) });
+
+        var report = connector.DetectDrift(typeof(BareDecimalRow));
+        foreach (var d in report.Drifts) _output.WriteLine(d.ToString());
+
+        report.IsClean.Should().BeTrue("DECIMAL(18,0) is exactly what SQL Server makes of the DECIMAL the DDL declared");
+    }
+
+    /// <summary>
+    /// The guard on the fix: only the server's own default precision counts as the bare declaration.
+    /// </summary>
+    [Fact]
+    public void A_bare_DECIMAL_declaration_against_a_stored_scale_is_still_reported()
+    {
+        if (!RequireServer()) return;
+
+        Exec($"DROP TABLE IF EXISTS [{BareDecimalTable}]");
+        Exec($"CREATE TABLE [{BareDecimalTable}] ([Guid] UNIQUEIDENTIFIER, [Amount] DECIMAL(18,2))");
+
+        var report = new MSSqlConnector(Settings()).DetectDrift(typeof(BareDecimalRow));
+
+        var drift = report.Drifts.Should().ContainSingle().Subject;
+        drift.Column.Should().Be("Amount");
+        drift.Kind.Should().Be(ColumnDriftKind.TypeMismatch);
+        drift.Declared.Should().Be("DECIMAL", "the report shows what the DDL said, not the canonicalised form");
+        drift.Stored.Should().Be("DECIMAL(18,2)");
+    }
 }

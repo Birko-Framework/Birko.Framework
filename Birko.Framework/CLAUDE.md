@@ -238,6 +238,17 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A clean drift report is a statement about the schema, not about the data (2026-10-03)
+
+[[TASK-511]]. `DetectDrift` reported every unprecisioned `decimal` as drifted on a table the framework had just
+created — MySQL stores a bare `DECIMAL` as `decimal(10,0)`, SQL Server as `DECIMAL(18,0)`. Fixed on the comparison
+side: `DeclaredAsStored` states each server's documented default, the report's `Declared` stays the DDL's text,
+and `DECIMAL(18,2)` against a bare declaration is still drift. The TASK-269 control tables never had an
+unprecisioned decimal, which is how it went unseen. **⚠ The noise was hiding a real loss:** that column has
+**scale 0**, so `7.5` is stored as `8` on both servers, measured. Now the report is quiet about it, correctly,
+because the schema is what the DDL made. The declaration is [[TASK-512]]. The framework's own SQL-mapped decimals
+all carry `HasPrecision(22).HasScale(6)`; consumers' plain `decimal` properties do not.
+
 ### A table older than its mapping gets the column — on request, never on startup (2026-10-03)
 
 [[TASK-510]], from consumer DraCode (its TASK-082): a `double` column `CREATE TABLE` skipped before SH-H037

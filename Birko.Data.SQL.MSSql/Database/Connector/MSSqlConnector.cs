@@ -230,6 +230,12 @@ namespace Birko.Data.SQL.Connectors
                 reader.IsDBNull(4) ? (int?)null : Convert.ToInt32(reader.GetValue(4)));
 
         /// <summary>
+        /// SQL Server stores a bare <c>DECIMAL</c> as <c>DECIMAL(18,0)</c> (TASK-511, measured on 2022).
+        /// </summary>
+        protected override string DeclaredAsStored(string declared)
+            => string.Equals(declared, "DECIMAL", StringComparison.OrdinalIgnoreCase) ? "DECIMAL(18,0)" : declared;
+
+        /// <summary>
         /// Renders a <c>sys.columns</c> row into <see cref="ConvertType"/>'s vocabulary.
         /// </summary>
         /// <remarks>
