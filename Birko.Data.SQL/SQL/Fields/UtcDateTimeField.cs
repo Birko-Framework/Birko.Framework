@@ -55,9 +55,8 @@ namespace Birko.Data.SQL.Fields
         /// the property holds UTC — reading it as local would make the stored instant depend on the machine the
         /// write happened to run on. <c>Local</c> is converted.
         /// </remarks>
-        public override object? Write(object value)
+        protected override object? ToStorage(object? raw)
         {
-            var raw = base.Write(value);
             if (raw is not DateTime dateTime)
             {
                 return raw;

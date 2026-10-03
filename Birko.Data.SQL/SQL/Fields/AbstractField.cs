@@ -173,7 +173,41 @@ namespace Birko.Data.SQL.Fields
 
         public virtual object? Write(object value)
         {
-            return Property.GetValue(value, null);
+            return ToStorage(Property.GetValue(value, null));
+        }
+
+        /// <summary>
+        /// Converts a property value into the value this column stores. <see cref="Write"/> and
+        /// <see cref="DefaultStoredValue"/> both go through here, so a field that stores something other than
+        /// its CLR value (an enum as int, <c>TimeOnly</c> as text) overrides this, not <see cref="Write"/>.
+        /// </summary>
+        protected virtual object? ToStorage(object? raw) => raw;
+
+        /// <summary>
+        /// What this column holds for a property nobody assigned: <c>default(T)</c> of the property's
+        /// underlying type, in stored form. Null for a reference type, and for a field with no CLR property
+        /// (the migrations path).
+        /// </summary>
+        /// <remarks>
+        /// TASK-510. This is the value a NOT NULL column added to a populated table back-fills, so an old row
+        /// reads back exactly as an entity constructed and never assigned would. Taken from the field's own
+        /// writer rather than from a per-<see cref="DbType"/> table, because the stored form is not implied
+        /// by the DbType: <c>TimeOnly</c> is <c>DbType.String</c> and stores <c>'00:00:00'</c>, not
+        /// <c>''</c>. For <c>[Required]</c> on a nullable value type this is the underlying type's default,
+        /// since the column cannot hold null.
+        /// </remarks>
+        public object? DefaultStoredValue
+        {
+            get
+            {
+                var type = Property?.PropertyType;
+                if (type == null)
+                {
+                    return null;
+                }
+                type = Nullable.GetUnderlyingType(type) ?? type;
+                return type.IsValueType ? ToStorage(Activator.CreateInstance(type)) : null;
+            }
         }
 
         public virtual void Read(object value, DbDataReader reader, int index)

@@ -343,6 +343,34 @@ ones. Mutation-tested: unwiring the ambient from the async connector fails 7 of 
 207 on SQLite; making the ambient process-wide instead of flow-local fails **exactly the 3 concurrency
 tests** and no others — which is what a naive fix looks like from a single-threaded suite.
 
+### Adding columns a table predates (`EnsureColumns`, TASK-510)
+Schema-ensure is **create-only**: `CREATE TABLE IF NOT EXISTS` never revisits a table that exists, so a table
+created before one of its properties had a column mapping keeps lacking that column, and every INSERT names a
+column the table does not have (consumer DraCode lost two months of rows this way). `DetectDrift` reports it as
+`ColumnDriftKind.Missing`; **`AbstractConnector.EnsureColumns(Type)`** closes it.
+
+- **Explicit and opt-in — never called from schema-ensure**, for the same reason `DetectDrift` is not (TASK-204/254:
+  nothing on first use may stop a store starting). A host calls `store.Connector.EnsureColumns(typeof(T))` at
+  startup or from a migration, and it **throws** on a refusal (rule 49). Sync only, like the `DetectDrift` it is
+  built on.
+- **Additive and idempotent.** Adds `Missing` columns only; never drops, never retypes (`TypeMismatch` /
+  `Unexpected` stay reported). A second call returns empty. A table that does not exist yet is left for
+  `CREATE TABLE`.
+- **Old rows read back as `default(T)`.** A NOT NULL column is added with `DEFAULT <AbstractField.DefaultStoredValue>`
+  — the field's own writer applied to the underlying type's default, so `TimeOnly` back-fills `'00:00:00'`,
+  not `''`. `[RequiredField] int?` back-fills `0`, since the column cannot hold null.
+- **Refused before any DDL**, naming every offender: primary key, unique (one default on many rows violates it;
+  SQLite refuses both in `ADD COLUMN`), identity, and NOT NULL with no value-type default — a `[RequiredField]`
+  string or `byte[]`, where any back-fill would be a value the framework invented. Those need a migration.
+- **The DDL is `AddColumnSql` → `AddColumnClause` + `AddColumnDefinition`**, one producer for `AlterTableAdd`
+  and `AlterTableAddAsync`. `AddColumnClause` is `ADD` on SQL Server — `ADD COLUMN` was `Msg 156`, so
+  `AlterTableAdd` (and migrations' `AddColumn`) had never worked there. Literal rendering is
+  `DefaultValueLiteral`, overridden where measured: PostgreSQL `TRUE`/`FALSE` (`DEFAULT 0` on BOOLEAN is
+  refused), MySQL `DEFAULT (expr)` (a plain default on `LONGTEXT` is ERROR 1101) and offset-less
+  `DateTimeOffset`. CREATE TABLE does not emit defaults; only rows that predate a column ever see one.
+- A declared index over an added column is **not** created by this call; the next schema-ensure creates it,
+  because index creation is re-attempted on every run (below).
+
 ### Index creation during schema-ensure (`CreateTable(IEnumerable<Tables.Table>)`)
 Schema-ensure creates declared indexes **one statement per index**, and an index it cannot build is
 **recorded, not thrown** — on `AbstractConnector.IndexCreationFailures`, with the `OnIndexCreationFailed`

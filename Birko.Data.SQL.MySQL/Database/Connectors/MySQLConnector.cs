@@ -365,6 +365,20 @@ namespace Birko.Data.SQL.Connectors
             }
         }
 
+        /// <summary>
+        /// The expression form, <c>DEFAULT (literal)</c>. A plain literal default on <c>LONGTEXT</c> — every
+        /// unbounded string, and <c>TimeOnly</c> — is ERROR 1101; the parenthesised form is accepted on every
+        /// column type the framework emits (TASK-510, measured on 8.4 under strict mode).
+        /// </summary>
+        protected override string DefaultClause(string literal) => " DEFAULT (" + literal + ")";
+
+        /// <summary>
+        /// A <c>[UtcField]</c> column is <c>DATETIME</c> here, which has no offset, so the default is the UTC
+        /// wall clock — what the driver itself stores for a bound <see cref="DateTimeOffset"/>.
+        /// </summary>
+        public override string DefaultValueLiteral(object value)
+            => value is DateTimeOffset dto ? base.DefaultValueLiteral(dto.UtcDateTime) : base.DefaultValueLiteral(value);
+
         /// <inheritdoc />
         public override string FieldDefinition(AbstractField field)
         {

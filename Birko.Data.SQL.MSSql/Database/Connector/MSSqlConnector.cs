@@ -413,6 +413,11 @@ namespace Birko.Data.SQL.Connectors
             }
         }
 
+        /// <summary>
+        /// T-SQL is <c>ALTER TABLE t ADD col …</c>; <c>ADD COLUMN</c> is Msg 156 (TASK-510, measured on 2022).
+        /// </summary>
+        public override string AddColumnClause => "ADD";
+
         public override string FieldDefinition(AbstractField field)
         {
             var result = new StringBuilder();

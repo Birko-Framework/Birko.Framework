@@ -32,15 +32,12 @@ namespace Birko.Data.SQL.Connectors
                 {
                     await DoDdlCommandAsync(async (command) =>
                     {
-                        command.CommandText = "ALTER TABLE "
-                            + QuoteIdentifier(tableName)
-                            + " ADD COLUMN "
-                            + FieldDefinition(field);
+                        command.CommandText = AddColumnSql(tableName, field);
                         await Task.CompletedTask;
                     }, async (command) =>
                     {
                         await command.ExecuteNonQueryAsync(ct);
-                    }, true);
+                    }, true, ct);
                 }
             }
         }

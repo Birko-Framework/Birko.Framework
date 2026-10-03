@@ -53,9 +53,8 @@ namespace Birko.Data.SQL.Fields
         {
         }
 
-        public override object? Write(object value)
+        protected override object? ToStorage(object? raw)
         {
-            var raw = Property.GetValue(value, null);
             return raw is TimeOnly time
                 ? time.ToString(Format, CultureInfo.InvariantCulture)
                 : null;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -28,15 +28,18 @@ namespace Birko.Data.SQL.Connectors
                 foreach (var field in fields.Where(x => x != null))
                 {
                     DoDdlCommand((command) => {
-                        command.CommandText = "ALTER TABLE "
-                            + QuoteIdentifier(tableName)
-                            + " ADD COLUMN "
-                            + FieldDefinition(field);
+                        command.CommandText = AddColumnSql(tableName, field);
                     },  (command) => {
                         command.ExecuteNonQuery();
                     }, true);
                 }
             }
         }
+
+        /// <summary>
+        /// The one <c>ALTER TABLE … ADD</c> statement, shared by the sync and async paths (TASK-510).
+        /// </summary>
+        protected string AddColumnSql(string tableName, Fields.AbstractField field)
+            => "ALTER TABLE " + QuoteIdentifier(tableName) + " " + AddColumnClause + " " + AddColumnDefinition(field);
     }
 }

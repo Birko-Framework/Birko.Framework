@@ -137,6 +137,21 @@ await indexManager.DropAsync("idx_order_date", scope: "Orders");
 | MySQL | `information_schema.statistics` | `` `identifier` `` |
 | SQLite | `sqlite_master` + `PRAGMA index_info` | `"identifier"` |
 
+### Adding Missing Columns
+
+Schema-ensure creates a table that does not exist but never alters one that does, so a table created before a
+property had a column mapping keeps lacking that column. Close the gap explicitly — at startup or in a migration:
+
+```csharp
+var added = store.Connector.EnsureColumns(typeof(UsageRecord)); // the ColumnDrift entries it closed
+```
+
+- Adds only the columns `DetectDrift` reports as `Missing`; never drops or retypes. Running it again adds nothing.
+- Existing rows read back as `default(T)` for each new property (a NOT NULL column is added with that default).
+- Refuses, before changing anything, a missing column that is a primary key, unique, identity, or a
+  `[RequiredField]` string / `byte[]` — those need a migration that supplies the value.
+- Opt-in: it is never run by a store on its own.
+
 ### Query Caching
 
 - **CachedAsyncDataBaseBulkStore\<DB,T\>** - Caching decorator for async bulk stores with automatic invalidation

@@ -342,6 +342,13 @@ namespace Birko.Data.SQL.Connectors
             }
         }
 
+        /// <summary>
+        /// A <c>BOOLEAN</c> default must be <c>TRUE</c>/<c>FALSE</c>: <c>DEFAULT 0</c> is refused with
+        /// "column is of type boolean but default expression is of type integer" (TASK-510, measured on 16).
+        /// </summary>
+        public override string DefaultValueLiteral(object value)
+            => value is bool b ? (b ? "TRUE" : "FALSE") : base.DefaultValueLiteral(value);
+
         /// <inheritdoc />
         public override string FieldDefinition(AbstractField field)
         {

@@ -400,6 +400,93 @@ namespace Birko.Data.SQL.Connectors
         public abstract string FieldDefinition(Fields.AbstractField field);
 
         /// <summary>
+        /// The keyword between <c>ALTER TABLE t</c> and a column definition. <c>ADD COLUMN</c> everywhere
+        /// except SQL Server, whose grammar has no <c>COLUMN</c> there.
+        /// </summary>
+        /// <remarks>
+        /// TASK-510. Hard-coded as <c>ADD COLUMN</c> until then, so <c>AlterTableAdd</c> — and through it the
+        /// migrations' <c>AddColumn</c> — had never worked on SQL Server: measured on 2022 as
+        /// <c>Msg 156, Incorrect syntax near the keyword 'COLUMN'</c>.
+        /// </remarks>
+        public virtual string AddColumnClause => "ADD COLUMN";
+
+        /// <summary>
+        /// The column definition <c>ALTER TABLE … ADD</c> emits: <see cref="FieldDefinition"/>, plus a
+        /// <c>DEFAULT</c> of <see cref="Fields.AbstractField.DefaultStoredValue"/> when the column is NOT NULL.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-510. Without the default, a NOT NULL column cannot be added to a table that has rows: SQLite
+        /// refuses it outright ("Cannot add a NOT NULL column with default value NULL"), and PostgreSQL and SQL
+        /// Server refuse it because the existing rows would violate the constraint. With it, every existing
+        /// row reads back as an entity that never assigned the property would. CREATE TABLE does not use this,
+        /// so a table created whole carries no column defaults — inserts always name every column, so the
+        /// default only ever matters to rows that existed before the column did.
+        /// </para>
+        /// <para>
+        /// No default for an identity column (the server numbers it, and SQL Server refuses DEFAULT beside
+        /// IDENTITY), a primary key, or a field with no value-type default (a <c>[Required]</c> string, or the
+        /// migrations' property-less fields) — those render exactly as before.
+        /// </para>
+        /// </remarks>
+        public virtual string AddColumnDefinition(Fields.AbstractField field)
+        {
+            var definition = FieldDefinition(field);
+            if (field == null || !field.IsNotNull || field.IsAutoincrement || field.IsPrimary)
+            {
+                return definition;
+            }
+            var value = field.DefaultStoredValue;
+            return value == null ? definition : definition + DefaultClause(DefaultValueLiteral(value));
+        }
+
+        /// <summary>
+        /// Renders <c>DEFAULT &lt;literal&gt;</c>. Overridden by MySQL, which refuses a plain literal default on
+        /// a TEXT/BLOB column and needs the expression form.
+        /// </summary>
+        protected virtual string DefaultClause(string literal) => " DEFAULT " + literal;
+
+        /// <summary>
+        /// Renders a stored value as a SQL literal for a column <c>DEFAULT</c>, where a parameter cannot be bound.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Not <c>DataBase.InlineConstant</c>: that one is provider-blind by design (it renders predicate
+        /// fragments), so it emits a bool as <c>1</c>/<c>0</c> — refused by PostgreSQL as a BOOLEAN default —
+        /// and refuses DateTime and Guid outright. A default is DDL for a known provider, so it is rendered here
+        /// where the provider can override it. The escaping is still <see cref="SqlLiteral.EscapeLiteral"/>'s.
+        /// </para>
+        /// <para>
+        /// Throws for a type it does not know, rather than rendering something a server may accept with a
+        /// different meaning.
+        /// </para>
+        /// </remarks>
+        public virtual string DefaultValueLiteral(object value)
+        {
+            var culture = System.Globalization.CultureInfo.InvariantCulture;
+            switch (value)
+            {
+                case null:
+                    throw new ArgumentNullException(nameof(value));
+                case bool b:
+                    return b ? "1" : "0";
+                case string s:
+                    return "'" + SqlLiteral.EscapeLiteral(s) + "'";
+                case Guid g:
+                    return "'" + g.ToString("D") + "'";
+                case DateTime dt:
+                    return "'" + dt.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF", culture) + "'";
+                case DateTimeOffset dto:
+                    return "'" + dto.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFFzzz", culture) + "'";
+                case byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal:
+                    return System.Convert.ToString(value, culture)!;
+                default:
+                    throw new NotSupportedException(
+                        $"{GetType().Name} cannot render a {value.GetType().FullName} as a column default literal.");
+            }
+        }
+
+        /// <summary>
         /// Converts a DbType to its corresponding CLR type.
         /// Used for DataTable construction in bulk operations.
         /// Override in provider-specific connectors if the platform requires different mappings.

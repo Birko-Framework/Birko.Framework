@@ -238,6 +238,24 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A table older than its mapping gets the column — on request, never on startup (2026-10-03)
+
+[[TASK-510]], from consumer DraCode (its TASK-082): a `double` column `CREATE TABLE` skipped before SH-H037
+stayed missing after the mapping landed, every INSERT failed, two months of rows were lost.
+`AbstractConnector.EnsureColumns(Type)` now adds what `DetectDrift` reports `Missing`. Three things worth carrying:
+
+- **⚠ `AlterTableAdd` had never worked on SQL Server.** `ADD COLUMN` was hard-coded; T-SQL is `ADD` (measured:
+  `Msg 156`). So migrations' `AddColumn` was broken there too, unnoticed — nothing ran it against MSSQL.
+  `AddColumnClause` is now a provider hook, and `AddColumnSql` the one producer for sync and async.
+- **⚠ The back-fill is the field's writer applied to `default(T)`, not a DbType table.** `TimeOnly` is
+  `DbType.String` and stores `'00:00:00'`; a per-DbType `''` would read back wrong. Literals are rendered per
+  provider where measured (PG `FALSE`, MySQL `DEFAULT (expr)` for `LONGTEXT`). Proven by mutation: without the
+  `DEFAULT`, 3 of 8 SQLite tests fail with DraCode's own error. 16 column types round-trip on all four providers.
+- **Refuses rather than invents.** A missing unique / primary / identity / `[RequiredField]` string column is
+  refused before any DDL. Explicit call, so it throws (rule 49); never wired into schema-ensure (TASK-204/254).
+  Found on the way: `DetectDrift` reports an unprecisioned `decimal` as drifted on MySQL and SQL Server, on a
+  table `CREATE TABLE` made — [[TASK-511]].
+
 ### An atomic counter needs a shape a translator cannot misread (2026-09-26)
 
 [[TASK-498]]. `PropertyUpdate<T>` gained `Increment` / `Decrement` (SQL `col = col + @p`, Mongo `$inc`,

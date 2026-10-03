@@ -23,9 +23,8 @@ namespace Birko.Data.SQL.Fields
                 Property.SetValue(value, intVal, null);
         }
 
-        public override object? Write(object value)
+        protected override object? ToStorage(object? val)
         {
-            var val = Property.GetValue(value);
             if (val == null) return null;
             var targetType = Nullable.GetUnderlyingType(Property.PropertyType) ?? Property.PropertyType;
             if (targetType.IsEnum)
