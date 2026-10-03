@@ -178,7 +178,7 @@ namespace Birko.Data.SQL.Connectors
 
             try
             {
-                using var db = new SqliteConnection(settings.GetConnectionString());
+                using var db = NewConnection(settings.GetConnectionString());
                 db.Open();
                 using var command = db.CreateCommand();
                 command.CommandText = "PRAGMA journal_mode=" + mode;
@@ -201,26 +201,37 @@ namespace Birko.Data.SQL.Connectors
 
             bool init = !System.IO.File.Exists(Path);
 
+            string connectionString;
             if (settings is SqLiteSettings sqliteSettings)
             {
                 ApplyJournalMode(sqliteSettings);
-                var connection = new SqliteConnection(sqliteSettings.GetConnectionString());
-                if (init)
-                {
-                    DoInit();
-                }
-                return connection;
+                connectionString = sqliteSettings.GetConnectionString();
+            }
+            else
+            {
+                connectionString = $"Data Source={Path}";
+                if (!string.IsNullOrEmpty(settings.Password))
+                    connectionString += $";Password={settings.Password}";
             }
 
-            var connectionString = $"Data Source={Path}";
-            if (!string.IsNullOrEmpty(settings.Password))
-                connectionString += $";Password={settings.Password}";
-            var fallbackConnection = new SqliteConnection(connectionString);
+            var connection = NewConnection(connectionString);
             if (init)
             {
                 DoInit();
             }
-            return fallbackConnection;
+            return connection;
+        }
+
+        /// <summary>
+        /// The one producer of this connector's connections (TASK-513): every one carries the
+        /// <see cref="SqLiteDecimal"/> registrations, because a framework table's <c>decimal</c> column
+        /// cannot be ordered or written through a connection without them.
+        /// </summary>
+        private static SqliteConnection NewConnection(string connectionString)
+        {
+            var connection = new SqliteConnection(connectionString);
+            SqLiteDecimal.Register(connection);
+            return connection;
         }
 
         /// <summary>
