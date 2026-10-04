@@ -1,6 +1,6 @@
 # Birko Framework — Conventions
 
-The full rulebook: 63 rules, each carrying the measurement that earned it.
+The full rulebook: 64 rules, each carrying the measurement that earned it.
 
 Extracted from `CLAUDE.md` on 2026-09-19. That file is auto-loaded into every session and had reached
 4,359 lines, of which this section was 2,488 — so the reasoning moved here and the *statements* stayed
@@ -2555,3 +2555,24 @@ Rules are in their original order; `CLAUDE.md` indexes them 1—63.
     `.Azure`), because `Birko.Health.Data` is dependency-free by construction; TASK-234 refused exactly
     this edge for Redis, and the distinguishing measurement is that a Redis check is useful *without*
     Birko.Redis while a schema-drift check is meaningless without Birko.Data.SQL.
+
+- **DDL that names something only a registration provides makes every connection a participant — the
+  connector is its one producer, and any other connection must register or it fails.** TASK-513. SQLite
+  has no decimal storage class, so a `decimal` became `TEXT COLLATE BIRKO_DECIMAL`, and the collation (plus
+  `birko_decimal_add`, `_sum`, `_avg`) exists only on connections that called `SqLiteDecimal.Register`.
+  Three parts generalise:
+  - **⚠ The failure is not at the DDL, it is at the statement — and only some statements.** Measured: a
+    connection without the registration still `SELECT`s the column, so a quick look says it works; it
+    fails on `ORDER BY` of it and on **any write to a table with an index on it** (`no such collation
+    sequence`). So "the consumer's tool can read the database" is not evidence that it can use it.
+  - **The registration goes on the connector's one connection producer (`NewConnection`), not on the
+    call sites.** Everything in the framework — stores, unit of work, migrations, job locks, index
+    management — reaches SQLite through `CreateConnection`, so one funnel covers all of them; and it was
+    measured that a registration made before `Open` survives `Open`, `Close`/`Open` and pooling. A second
+    place that opens a raw `SqliteConnection` is a second producer, and it will be the one that forgets.
+  - **The cost lands outside the framework, so it is announced, not discovered.** Consumers' raw
+    connections, the `sqlite3` CLI and DB browsers are on the far side of this rule; the CHANGELOG entry
+    names `SqLiteDecimal.Register` as the remedy (the same reason § *A shared project cannot announce a
+    breaking change* exists). A provider-specific expression the translator needs — here the increment —
+    is likewise a connector hook (`IncrementExpression`) with a portable default, never a provider check
+    inside the translator.

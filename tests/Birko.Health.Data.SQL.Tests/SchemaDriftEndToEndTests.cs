@@ -149,9 +149,15 @@ public class SchemaDriftEndToEndTests : IDisposable
     /// reaches for, would report TASK-264's silent money truncation as a clean bill of health. This test
     /// is what stops someone "simplifying" the catalogue query away later.
     /// </para>
+    /// <para>
+    /// Until TASK-513 the declared side here was <c>NUMERIC(18,2)</c>, so the two differed only in scale. SQLite
+    /// now declares every decimal <c>TEXT COLLATE BIRKO_DECIMAL</c> (NUMERIC's precision is ignored there), so on
+    /// this provider the guard that survives is the stored half: <c>NUMERIC(18,0)</c> comes back with its
+    /// parameters, not as <c>NUMERIC</c>. The scale-only comparison itself is pinned by the next test.
+    /// </para>
     /// </summary>
     [Fact]
-    public void A_difference_only_in_SCALE_is_drift_and_is_reported()
+    public void The_stored_type_keeps_its_parameters_so_a_scale_difference_is_visible()
     {
         var settings = NewDatabase();
         CreateTableWithRawDdl(settings,
@@ -163,8 +169,20 @@ public class SchemaDriftEndToEndTests : IDisposable
         var drift = stored.Drifts.Should().ContainSingle(d => d.Column == "Amount").Subject;
         drift.Kind.Should().Be(ColumnDriftKind.TypeMismatch);
         drift.Stored.Should().Be("NUMERIC(18,0)");
-        drift.Declared.Should().Be("NUMERIC(18,2)");
+        drift.Declared.Should().Be("TEXT COLLATE BIRKO_DECIMAL");
     }
+
+    /// <summary>
+    /// The comparison half of the test above, provider-free since TASK-513 left SQLite with no parameterised
+    /// decimal to compare: a difference only in scale is drift; casing and spacing are not.
+    /// </summary>
+    [Theory]
+    [InlineData("DECIMAL(18,2)", "DECIMAL(18,0)", false)]
+    [InlineData("NUMERIC(18,2)", "NUMERIC", false)]
+    [InlineData("DECIMAL(22,6)", "decimal(22, 6)", true)]
+    [InlineData("TEXT COLLATE BIRKO_DECIMAL", "TEXT", false)]
+    public void Only_case_and_spacing_are_normalised_away(string declared, string stored, bool same)
+        => Birko.Data.SQL.Connectors.AbstractConnector.SameColumnType(declared, stored).Should().Be(same);
 
     [Fact]
     public void A_column_the_model_declares_and_the_table_lacks_is_reported_as_Missing()
@@ -367,7 +385,7 @@ public class SchemaDriftEndToEndTests : IDisposable
     }
 }
 
-/// <summary>Declared <c>NUMERIC(18,2)</c> by the SQLite connector — see the scale test.</summary>
+/// <summary>Precision 18, scale 2 — declared <c>TEXT COLLATE BIRKO_DECIMAL</c> by the SQLite connector since TASK-513.</summary>
 [Birko.Data.SQL.Attributes.Table("Money")]
 public class MoneyRow
 {

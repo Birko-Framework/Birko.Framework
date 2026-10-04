@@ -162,8 +162,8 @@ public class SchemaDriftOperatorViewTests : IDisposable
         // ---- 2. the case the task exists for -------------------------------------------------------
         // Written by hand, because a framework-created table cannot produce a column the framework
         // would never emit:
-        //   Total     -> model declares NUMERIC(18,2); the column is still REAL   (TASK-264's shape --
-        //                money as binary floating point, and the case a keyword-only check calls healthy)
+        //   Total     -> model declares TEXT COLLATE BIRKO_DECIMAL (NUMERIC(18,2) before TASK-513); the
+        //                column is still REAL (TASK-264's shape -- money as binary floating point)
         //   Reference -> model declares it; the column was never added            (a new property)
         //   Note, Legacy_Id -> present, declared by nothing                       (removed properties)
         var drifted = NewDatabase();
@@ -183,8 +183,8 @@ public class SchemaDriftOperatorViewTests : IDisposable
 
         var lines = driftResult.Data["drift"].Should().BeAssignableTo<IEnumerable<string>>().Subject.ToList();
         lines.Should().HaveCount(4);
-        lines.Should().ContainSingle(l => l.Contains("Invoice.Total") && l.Contains("NUMERIC(18,2)") && l.Contains("REAL"),
-            "the money case is the one a keyword-only check reports as healthy, so it must be legible here");
+        lines.Should().ContainSingle(l => l.Contains("Invoice.Total") && l.Contains("TEXT COLLATE BIRKO_DECIMAL") && l.Contains("REAL"),
+            "the money case must be legible here");
         lines.Should().ContainSingle(l => l.Contains("Invoice.Reference") && l.Contains("not present"));
         lines.Should().ContainSingle(l => l.Contains("Invoice.Note") && l.Contains("not declared"));
         lines.Should().ContainSingle(l => l.Contains("Invoice.Legacy_Id") && l.Contains("not declared"));

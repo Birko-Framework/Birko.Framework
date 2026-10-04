@@ -68,11 +68,13 @@ a `PropertyUpdate` with another assignment to the same property. Behind the loca
 localizable field is refused, and so is any increment in an update that also sets a localizable field on a
 non-default culture (that update is replayed as read-modify-save). Caveats, measured or read from the providers:
 
-- **SQLite:** a `decimal` is stored as an 8-byte float under both `REAL` and `NUMERIC(p,s)`, so `10.10m + 0.20m`
-  reads back as `10.299999999999999m` (a Set of `10.30m` round-trips exactly). A decimal counter drifts there. An
+- **SQLite:** a `decimal` is `TEXT COLLATE BIRKO_DECIMAL` and increments through `birko_decimal_add`, so
+  `10.10m + 0.20m` is exactly `10.30m` and an increment past `decimal.MaxValue` is refused (TASK-513; before it,
+  `REAL`/`NUMERIC` stored a float and the counter drifted to `10.299999999999999m`). A declared precision / scale
+  is not enforced there — `1.2345678` stays `1.2345678` where `DECIMAL(22,6)` elsewhere rounds it (TASK-515). An
   integer that overflows becomes a `REAL` instead of raising, where the other providers and the fallback throw.
-- **MySQL / MSSql:** a `decimal` without declared precision is `DECIMAL(10,0)` / `DECIMAL(18,0)` and loses its
-  fraction on every write, increment or not — declare `[PrecisionField]` / `[ScaleField]`.
+- **MySQL / MSSql:** a `decimal` without declared precision is `DECIMAL(22,6)` (TASK-512; it was an integer column
+  before) — declare `[PrecisionField]` / `[ScaleField]` where six decimal places are not enough.
 - **MongoDB:** a `decimal` is stored as Decimal128 by default (measured, MongoDB.Bson 3.12) and increments exactly.
   A member opted into string storage (`[BsonRepresentation(BsonType.String)]`) is refused up front, since `$inc` on
   a string fails at the server.

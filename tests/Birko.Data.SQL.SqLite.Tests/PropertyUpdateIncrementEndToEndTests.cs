@@ -45,10 +45,10 @@ public class PropertyUpdateIncrementEndToEndTests : IDisposable
         public double Ratio { get; set; }
         public float Weight { get; set; }
 
-        /// <summary>No declared precision → <c>REAL</c> on SQLite.</summary>
+        /// <summary>No declared precision. <c>REAL</c> on SQLite before TASK-513, <c>TEXT COLLATE BIRKO_DECIMAL</c> since.</summary>
         public decimal Amount { get; set; }
 
-        /// <summary>Declared precision → <c>NUMERIC(18,2)</c> on SQLite.</summary>
+        /// <summary>Declared precision. <c>NUMERIC(18,2)</c> on SQLite before TASK-513, <c>TEXT COLLATE BIRKO_DECIMAL</c> since.</summary>
         [PrecisionField(18)]
         [ScaleField(2)]
         public decimal Price { get; set; }
@@ -157,14 +157,14 @@ public class PropertyUpdateIncrementEndToEndTests : IDisposable
     }
 
     /// <summary>
-    /// Measured 2026-09-26 (rule 54): <c>10.10m + 0.20m</c> reads back as <c>10.299999999999999m</c> under
-    /// <b>both</b> SQLite mappings — <c>REAL</c> and <c>NUMERIC(18,2)</c> alike, because SQLite keeps a non-integer
-    /// NUMERIC as an 8-byte float and adds in binary floating point. A Set of <c>10.30m</c> round-trips exactly
-    /// (the control below), so an increment <b>does</b> expose this: a decimal counter on SQLite drifts. Documented
-    /// in Birko.Data.Stores/README.md; the assertions pin the measured value so a change in it is noticed.
+    /// TASK-513 — inverted from TASK-498's pin (rule 56). Measured 2026-09-26: <c>10.10m + 0.20m</c> read back
+    /// <c>10.299999999999999m</c> under both old SQLite mappings, <c>REAL</c> and <c>NUMERIC(18,2)</c>, because
+    /// SQLite kept both as an 8-byte float and added in binary floating point. A decimal column is now
+    /// <c>TEXT COLLATE BIRKO_DECIMAL</c> and an increment goes through <c>birko_decimal_add</c>, so the counter
+    /// lands where a Set of the same value does (the control below).
     /// </summary>
     [Fact]
-    public async Task DecimalIncrement_OnSqlite_AddsInBinaryFloatingPoint_UnderBothMappings()
+    public async Task DecimalIncrement_OnSqlite_IsExact_WithOrWithoutDeclaredPrecision()
     {
         var (store, target, bystander) = await SeedAsync();
 
@@ -176,8 +176,8 @@ public class PropertyUpdateIncrementEndToEndTests : IDisposable
             new PropertyUpdate<Counter>().Set(x => x.Amount, 10.30m).Set(x => x.Price, 10.30m));
 
         var after = await ReadAsync(store, target.Guid!.Value);
-        after.Amount.Should().Be(10.299999999999999m, "REAL column: binary floating-point addition, measured");
-        after.Price.Should().Be(10.299999999999999m, "NUMERIC(18,2) column: stored as a float too, measured");
+        after.Amount.Should().Be(10.30m, "no declared precision");
+        after.Price.Should().Be(10.30m, "declared precision and scale");
 
         var control = await ReadAsync(store, bystander.Guid!.Value);
         control.Amount.Should().Be(10.30m, "a Set round-trips exactly");

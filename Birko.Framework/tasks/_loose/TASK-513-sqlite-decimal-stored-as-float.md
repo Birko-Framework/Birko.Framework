@@ -2,7 +2,7 @@
 id: TASK-513
 parent: null
 feature: null
-status: in-progress
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-03
@@ -89,12 +89,20 @@ Findings beyond the table:
 ## Acceptance criteria
 
 - [x] The questions above answered with measurements against Microsoft.Data.Sqlite, recorded here
-- [ ] A choice among (a)/(b)/(c), made by the owner on those measurements
-- [ ] If (a) or (b): `10.10m + 0.20m` reads back `10.30m` through `Increment`, ordering and range predicates are
-      correct, and a value past the representable range is refused rather than rounded
-- [ ] `DetectDrift` on SQLite stays clean for a table the framework creates, and reports an old `REAL`/`NUMERIC`
+- [x] A choice among (a)/(b)/(c), made by the owner on those measurements — the owner chose **(d)**, a TEXT variant
+      the measurements added (TEXT + `BIRKO_DECIMAL` collation + registered functions), on 2026-10-03/04
+- [x] If (a) or (b): `10.10m + 0.20m` reads back `10.30m` through `Increment`, ordering and range predicates are
+      correct, and a value past the representable range is refused rather than rounded — applied to (d), the TEXT
+      variant: `SqLiteDecimalStorageEndToEndTests` + the inverted TASK-498 test
+- [x] `DetectDrift` on SQLite stays clean for a table the framework creates, and reports an old `REAL`/`NUMERIC`
       decimal column if the declaration changes
-- [ ] CHANGELOG entry (storage change on the default provider) with the migration, or the documented limit for (c)
+- [x] CHANGELOG entry (storage change on the default provider) with the migration, or the documented limit for (c)
+
+## Human test plan
+
+N/A — fully covered by automated tests: storage, ordering, ranges, equality, increments (single, concurrent,
+overflow), drift, back-fill and the CHANGELOG migration all run against a real on-disk SQLite file, and nothing
+here has a rendered surface a person would judge.
 
 ## Progress log
 
@@ -113,8 +121,32 @@ Findings beyond the table:
   `SqLiteConnector.NewConnection`. `SqLiteDecimalConnectionTests` 12/12; mutation (registration removed) → 10 fail;
   SQLite suite 408/408. **Not yet done:** `ConvertType` still emits `REAL`/`NUMERIC`, Increment still emits
   `col = col + @p`, views still emit `SUM`/`AVG` — nothing uses the registrations until those change.
+- 2026-10-04 — **storage switched.** `ConvertType`: decimal → `TEXT COLLATE BIRKO_DECIMAL`, double stays `REAL`.
+  New `AbstractConnectorBase.IncrementExpression` hook (SQLite: `birko_decimal_add`); translator takes the connector.
+  Drift's stored side reads the collation from `sqlite_master.sql` (measured: `pragma_table_info` reports `TEXT`).
+  Decimal default literal `'0.0'`. `SqLiteDecimalStorageEndToEndTests` 23/23 incl. the CHANGELOG migration (measured:
+  an already-drifted REAL migrates as `10.299999999999999`, not repaired). Mutations: column back to REAL → 9 fail;
+  increment via native `+` → 4 fail (incl. overflow no longer refused); collation not read → 3 fail; bare default →
+  1 fails. Inverted per rule 56: TASK-498 drift pin, migrations' SQLite expectations (4), Health drift (2) + a new
+  provider-free scale-only comparison test. Views → TASK-514. Suites: SQLite 431, SQL 700, Migrations 127, Health 20,
+  and the 9 other SQLite-importing suites green.
+- 2026-10-04 — **close gate** (conventions, intent, correctness, security, comments; run as parallel passes).
+  Fixed from it: **the CHANGELOG migration silently dropped every index and unique constraint and left child FKs
+  pointing at `T_old`** (correctness pass, High) — measured both, recipe now adds `legacy_alter_table` + `DROP INDEX`,
+  proven by a new test with each step mutated out (index gone / FK rewritten); collation parse narrowed (`'1,000'`
+  collated equal to `1000`); stored collation read anywhere in the column's definition; one producer for the
+  `type COLLATE x` text (rule 16); false/stale comments and docs (`health.md`, `BoundedDecimalType`, three tests);
+  rule 64 registered (connection-registered DDL). Spawned TASK-515 (declared scale never enforced on SQLite).
+  Accepted as-is: TEMP / attached-schema tables read no `CREATE` statement (the framework creates neither).
 
 ## Out of scope
 
 - MySQL / SQL Server / PostgreSQL decimals — exact since TASK-512 (PostgreSQL always was)
 - `double` / `float` properties — binary floats by declaration, correctly stored as such
+- View `SUM` / `AVG` over a decimal column — TASK-514
+- SQLite enforcing a declared precision / scale (it never has) — TASK-515, found by this close's conventions pass
+- TEMP / attached-schema tables in `DetectDrift`'s collation read — decided not to do: the framework creates neither,
+  and `StoredColumnsSql` already reads only the main schema's `pragma_table_info`
+- Symbio adopting the change — `SqLiteDecimal.Register` in `tools/sqlite-cli` and in its raw-connection tests,
+  recreating `symbio-dev.db` — owned by the Symbio session (prompt handed over 2026-10-04; it files the task itself,
+  Symbio id to be recorded here once filed)

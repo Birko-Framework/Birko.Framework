@@ -115,9 +115,14 @@ public class MigrationColumnMetadataTests
     /// <summary>
     /// <b>Not named in the task's criteria, and the more damaging half.</b> Same method, same cause: the
     /// field was not a <c>DecimalField</c>, so a declared precision and scale never reached the column.
+    /// <para>
+    /// The SQLite row was <c>NUMERIC(18,2)</c> until TASK-513 (rule 56): SQLite ignores NUMERIC's precision and
+    /// keeps a float, so every decimal is now the exact <c>TEXT COLLATE BIRKO_DECIMAL</c>, declared or not, and
+    /// this guard is carried by the other three rows.
+    /// </para>
     /// </summary>
     [Theory]
-    [InlineData("SQLite", "C NUMERIC(18,2)")]
+    [InlineData("SQLite", "C TEXT COLLATE BIRKO_DECIMAL")]
     [InlineData("PostgreSQL", "C NUMERIC(18,2)")]
     [InlineData("MSSql", "C DECIMAL(18,2)")]
     [InlineData("MySQL", "C DECIMAL(18,2)")]
@@ -132,7 +137,7 @@ public class MigrationColumnMetadataTests
     /// ⚠ <b>What a dropped scale actually produced, pinned per provider — the two failure modes differ and
     /// the worse one is on the default provider.</b>
     /// <list type="bullet">
-    ///   <item><b>SQLite</b> answers <c>REAL</c> — binary floating point, so a column declared
+    ///   <item><b>SQLite</b> answered <c>REAL</c> (until TASK-513) — binary floating point, so a column declared
     ///   <c>DECIMAL(18,2)</c> was stored as a float. SQLite is this framework's default provider.</item>
     ///   <item><b>MSSql</b> and <b>MySQL</b> answer a bare <c>DECIMAL</c>, whose default scale is
     ///   <b>0</b>, so money was truncated to whole units.</item>
@@ -140,11 +145,11 @@ public class MigrationColumnMetadataTests
     /// Both were silent. This used to assert that an *undeclared* precision still got the provider default,
     /// calling it correct. TASK-512 INVERTED it (rule 56): on MSSql and MySQL that default is the scale-0
     /// truncation described above — measured, <c>7.5</c> stored as <c>8</c> — so an undeclared precision now
-    /// gets the canonical <c>DECIMAL(22,6)</c>. SQLite and PostgreSQL keep theirs: <c>REAL</c> is the same
-    /// either way there, and <c>NUMERIC</c> is unbounded and lossless.
+    /// gets the canonical <c>DECIMAL(22,6)</c>. PostgreSQL keeps <c>NUMERIC</c>: unbounded and lossless.
+    /// SQLite's <c>REAL</c> was inverted by TASK-513 to the exact <c>TEXT COLLATE BIRKO_DECIMAL</c>.
     /// </summary>
     [Theory]
-    [InlineData("SQLite", "C REAL")]
+    [InlineData("SQLite", "C TEXT COLLATE BIRKO_DECIMAL")]
     [InlineData("PostgreSQL", "C NUMERIC")]
     [InlineData("MSSql", "C DECIMAL(22,6)")]
     [InlineData("MySQL", "C DECIMAL(22,6)")]

@@ -92,7 +92,12 @@ namespace Birko.Data.SQL.Connectors
             }
         }
 
+        /// <remarks>
+        /// Strict on purpose: <see cref="NumberStyles.Number"/> also takes thousands separators, padding and a
+        /// trailing sign, so <c>'1,000'</c> would collate equal to <c>1000.0</c> and collide in a unique index.
+        /// </remarks>
         private static bool TryParse(string? text, out decimal value)
-            => decimal.TryParse(text, NumberStyles.Number | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out value);
+            => decimal.TryParse(text, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent,
+                CultureInfo.InvariantCulture, out value);
     }
 }

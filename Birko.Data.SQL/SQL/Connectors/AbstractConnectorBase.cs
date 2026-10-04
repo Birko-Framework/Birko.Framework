@@ -413,8 +413,9 @@ namespace Birko.Data.SQL.Connectors
         /// <c>[PrecisionField]</c> was silently ignored as well (rule 55).
         /// </para>
         /// <para>
-        /// Not used by PostgreSQL (a bare <c>NUMERIC</c> is unbounded and lossless) or SQLite (<c>REAL</c> either
-        /// way): bounding them would add a ceiling and a drift report to columns that lose nothing.
+        /// Not used by PostgreSQL (a bare <c>NUMERIC</c> is unbounded and lossless) or SQLite (exact
+        /// <c>TEXT COLLATE BIRKO_DECIMAL</c> since TASK-513): bounding them would add a ceiling and a drift report to
+        /// columns that lose nothing.
         /// </para>
         /// </remarks>
         /// <exception cref="Exceptions.FieldAttributeException">The resulting scale exceeds the precision.</exception>
@@ -447,6 +448,16 @@ namespace Birko.Data.SQL.Connectors
         /// <c>Msg 156, Incorrect syntax near the keyword 'COLUMN'</c>.
         /// </remarks>
         public virtual string AddColumnClause => "ADD COLUMN";
+
+        /// <summary>
+        /// The right-hand side of <c>column = …</c> for a <c>PropertyUpdate</c> increment. By default
+        /// <c>column + parameter</c>, the native addition, exact wherever the column's type is.
+        /// </summary>
+        /// <remarks>
+        /// TASK-513. SQLite overrides it for a <c>decimal</c> column, whose native <c>+</c> goes through a double.
+        /// </remarks>
+        public virtual string IncrementExpression(Fields.AbstractField field, string column, string parameter)
+            => column + " + " + parameter;
 
         /// <summary>
         /// The column definition <c>ALTER TABLE … ADD</c> emits: <see cref="FieldDefinition"/>, plus a

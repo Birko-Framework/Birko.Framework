@@ -244,7 +244,7 @@ var check = new SchemaDriftHealthCheck(
 
 var result = await check.CheckAsync(ct);
 // Degraded — result.Data["drift"]:
-//   ["Invoice.Total: declared NUMERIC(18,2), stored REAL"]
+//   ["Invoice.Total: declared TEXT COLLATE BIRKO_DECIMAL, stored REAL"]   (a decimal created before TASK-513)
 ```
 
 It reports three kinds of disagreement — `TypeMismatch`, `Missing` (declared but absent) and `Unexpected`

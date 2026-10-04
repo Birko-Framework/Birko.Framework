@@ -96,9 +96,25 @@ public override IEnumerable<KeyValuePair<Customer, Guid>> CreateAll(IEnumerable<
 Common SQLite to .NET type mappings:
 - `TEXT` → `string`, `Guid` (stored as string)
 - `INTEGER` → `int`, `long`
-- `REAL` → `double`, `decimal`
+- `REAL` → `double`, `float`
 - `BLOB` → `byte[]`
-- `NUMERIC` → `decimal`
+- `TEXT COLLATE BIRKO_DECIMAL` → `decimal`, declared precision or not (TASK-513)
+
+### Decimal storage
+SQLite has no decimal storage class: `REAL` and `NUMERIC(p,s)` both keep an 8-byte float, which is what a
+`decimal` used to be stored as here. It is now the exact text Microsoft.Data.Sqlite binds a `decimal` parameter as,
+and `SqLiteDecimal` (`Database/Connectors/SqLiteDecimal.cs`) registers on **every** connection the connector creates:
+
+- `BIRKO_DECIMAL` collation — `ORDER BY`, `<`, `>`, `=`, `MIN`/`MAX` and indexes compare the text as a number
+  (`10.0` equals `10.00`; an unparseable text sorts after every number)
+- `birko_decimal_add` — what `PropertyUpdate.Increment` emits for a decimal column; refuses overflow
+- `birko_decimal_sum` / `birko_decimal_avg` — exact aggregates (views do not emit them yet: TASK-514)
+
+⚠ **A connection that did not register them** — a consumer's own `SqliteConnection`, the `sqlite3` CLI, DB
+Browser — can `SELECT` a decimal column but fails on `ORDER BY` of it, and on any write to a table with an index on
+it (`no such collation sequence: BIRKO_DECIMAL`). Call `SqLiteDecimal.Register(connection)` before or after `Open`.
+`DetectDrift` reports a decimal column created before TASK-513 (`REAL`, `NUMERIC(p,s)`, or `TEXT` without the
+collation); the migration is in the framework CHANGELOG.
 
 ### Guid Storage
 SQLite stores Guid as TEXT (default):

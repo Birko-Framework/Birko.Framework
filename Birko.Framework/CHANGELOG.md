@@ -4,6 +4,74 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-04 — Storage change on the default provider: a SQLite `decimal` is exact TEXT with a numeric collation
+
+[[TASK-513]]. SQLite has no decimal storage class. A `decimal` was declared `REAL` (unprecisioned) or `NUMERIC(p,s)`
+(declared), and SQLite keeps both as an 8-byte float — NUMERIC's precision and scale are ignored. Measured on
+Microsoft.Data.Sqlite 10 / SQLite 3.53.3: `1234567890123456.123456m` read back `1234567890123456`, `decimal.MaxValue`
+was a write that succeeded and a read that threw `OverflowException`, and `Increment` of `10.10m` by `0.20m` stored
+`10.299999999999999`.
+
+```text
+// before (SqLiteConnector.ConvertType, DbType.Decimal / VarNumeric / Currency)
+precision + scale declared → NUMERIC(p,s)        otherwise → REAL           (both an 8-byte float)
+// after
+always                     → TEXT COLLATE BIRKO_DECIMAL                     (double stays REAL)
+Increment on a decimal     → col = birko_decimal_add(col, @p)              (was col = col + @p)
+```
+
+The value stored is the text Microsoft.Data.Sqlite already binds a `decimal` parameter as (`10.1`, `10.0`), so
+parameter binding did not change. `SqLiteDecimal` registers four things on **every** connection
+`SqLiteConnector` creates (one producer, `NewConnection`): the `BIRKO_DECIMAL` collation (ordering, ranges, equality across
+trailing zeros, `MIN`/`MAX`, indexes), `birko_decimal_add`, and `birko_decimal_sum` / `_avg`. Overflow and
+unparseable values are refused, never rounded. Exact up to `decimal.MaxValue`; nothing is bounded at 22,6 here.
+
+**New hook:** `AbstractConnectorBase.IncrementExpression(field, column, parameter)`, default `column + parameter`.
+`PropertyUpdateSqlTranslator.Translate` (internal) now takes the connector. No public API was removed.
+
+**⚠ Raw connections.** A connection the connector did not create — a consumer's own `SqliteConnection`, the `sqlite3`
+CLI, DB Browser — can `SELECT` a decimal column but **fails** on `ORDER BY` of it and on any write to a table with an
+index on it: `no such collation sequence: BIRKO_DECIMAL` (measured). Call `SqLiteDecimal.Register(connection)`.
+
+**Not yet:** views still emit SQLite's built-in `SUM` / `AVG` over a decimal column — the same float arithmetic as
+before, not worse ([[TASK-514]]). `MIN` / `MAX` are already correct through the collation.
+
+**Who is affected.** New tables get the new type. **Existing tables are not altered.** `DetectDrift` (and
+`SchemaDriftHealthCheck`) now reports each old decimal column as `TypeMismatch`: declared `TEXT COLLATE BIRKO_DECIMAL`
+against stored `REAL`, `NUMERIC(p,s)`, or `TEXT` without the collation. The stored side reads the collation from the
+table's own `CREATE` statement, because `pragma_table_info` drops it. Until migrated, an old column keeps working
+exactly as before (float storage). Increments now go through `birko_decimal_add` and are stored back as a float.
+
+**Migration.** SQLite cannot retype a column, so the table is rebuilt. `SqLiteDecimalStorageEndToEndTests.Migrate`
+runs these statements, and two tests prove them: values (`…_keeps_every_value_a_float_held`) and indexes, unique
+constraints and foreign keys (`…_keeps_indexes_unique_constraints_and_foreign_keys`):
+
+```sql
+-- one connection: both PRAGMAs are per-connection
+PRAGMA foreign_keys = OFF;
+PRAGMA legacy_alter_table = ON;     -- otherwise RENAME rewrites other tables' REFERENCES "T" to "T_old"
+ALTER TABLE "T" RENAME TO "T_old";
+DROP INDEX "ix_…";                  -- each of: SELECT name FROM sqlite_master
+                                    --   WHERE type = 'index' AND tbl_name = 'T' AND sql IS NOT NULL   (run before the RENAME)
+-- let the framework create "T" (first use of its store, or connector.CreateTable(new[] { typeof(T) }))
+INSERT INTO "T" (col1, col2, …) SELECT col1, col2, … FROM "T_old";   -- name every column
+DROP TABLE "T_old";
+```
+
+**⚠ Both extra steps were measured, not added for safety.** Index names are schema-global and stay with the
+renamed table. Without the `DROP INDEX`, the framework's `CREATE INDEX IF NOT EXISTS` skips them and `DROP TABLE
+"T_old"` then removes them, so the new table ends up with no index and no unique constraint, silently. Without
+`legacy_alter_table`, a child's foreign key ends up referencing `"T_old"`. The first version of this entry had neither
+step; the close gate's review caught it.
+
+The `INSERT` converts each float to its shortest round-trip text, so **a value that already drifted keeps its drift**
+(`10.299999999999999` stays that, measured). The migration stops new loss; it does not repair old values. A
+database in development can simply be recreated.
+
+Tests inverted, not deleted (rule 56): TASK-498's pin of the drifted increment; migrations' SQLite `NUMERIC(18,2)` /
+`REAL` expectations; the Health drift tests' declared side. A provider-free scale-only comparison test now carries
+the guard the SQLite scale case used to.
+
 ## 2026-10-03 — DDL change: an unprecisioned `decimal` is `DECIMAL(22,6)` on MySQL and SQL Server
 
 [[TASK-512]]. A `decimal` property with no `[PrecisionField]` + `[ScaleField]` (or `HasPrecision(..).HasScale(..)`)
@@ -135,6 +203,27 @@ A listener that only wants to know is migrated by reading `value` and is otherwi
 
 **Migrated:** Symbio's three tag listeners (`modules/{building,products,tasks}/list/list-page.ts`), in the
 same change. A search of every checkout under `C:\Source\Birko` found no other listener.
+
+## 2026-09-20 — A live suite that invents its own server gate never runs in CI
+
+[[TASK-042]] follow-up, from a red `live-tests` run. `Birko.Data.SQL.Providers.Tests` gated its three
+CRUD round-trips on `BIRKO_{PROVIDER}_TEST=host;db;user;pass` — a packed variable used by that suite
+and nothing else, while the other eleven SQL suites in the same job read the per-field
+`BIRKO_*_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_DB` group the workflow actually sets. Three
+things worth carrying:
+
+- **⚠ `BIRKO_REQUIRE_LIVE` converted the mismatch into a red job, which is it working.** The gate
+  found nothing, the promotion refused to call that a skip, and the job went **3 failed / 7 passed in
+  134 ms** — the duration being the tell, since all three threw before opening a socket. Without the
+  promotion this would have been eleven weeks of green instead.
+- **⚠ A gate verified only by its author is verified against their shell, not against the fixture.**
+  The sign-off's live 10/10 was real, measured with the packed variables exported by hand. Its own
+  mutation table records *"env var absent with `BIRKO_REQUIRE_LIVE=1` → 1 failed"* — exactly the
+  state CI was in, filed as a passing mutation test rather than recognised as the CI configuration.
+- **The fix reads what the fixture already sets; the workflow is unchanged.** Teaching
+  `live-tests.yml` the packed names was the smaller diff and was rejected — it leaves two gating
+  vocabularies in one job, which is what produced the defect. **A live suite joins the family's gate;
+  it does not bring its own.**
 
 ## 2026-09-19 — The four root helper scripts were PowerShell, and none of them ran on Linux
 

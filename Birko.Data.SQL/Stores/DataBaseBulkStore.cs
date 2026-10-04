@@ -183,7 +183,7 @@ namespace Birko.Data.SQL.Stores
             using var _tx = EnterTransactionScope();
 
             var table = SQL.DataBase.LoadTable(typeof(T));
-            var (fields, values) = PropertyUpdateSqlTranslator.Translate(updates);
+            var (fields, values) = PropertyUpdateSqlTranslator.Translate(updates, Connector);
             var conditions = SQL.DataBase.ParseConditionExpression(filter as LambdaExpression);
             Connector.Update(table.Name, fields, values, conditions, true, allowAllRows);
         }

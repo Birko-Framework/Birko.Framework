@@ -209,6 +209,9 @@ public class SqLiteDecimalConnectionTests : IDisposable
         SqLiteDecimal.Compare("abc", "1e30").Should().BePositive();
         SqLiteDecimal.Compare("1", "abc").Should().BeNegative();
         SqLiteDecimal.Compare("abc", "abd").Should().BeNegative();
+        SqLiteDecimal.Compare("1,000", "1000.0").Should().BePositive("a thousands separator is not a number here");
+        SqLiteDecimal.Compare("5-", "-5").Should().BePositive("nor is a trailing sign");
+        SqLiteDecimal.Compare(" 5", "5").Should().NotBe(0, "nor is padding");
     }
 
     [Fact]

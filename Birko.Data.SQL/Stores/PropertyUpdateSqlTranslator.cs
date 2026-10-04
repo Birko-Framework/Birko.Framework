@@ -11,7 +11,8 @@ namespace Birko.Data.SQL.Stores
     /// </summary>
     internal static class PropertyUpdateSqlTranslator
     {
-        internal static (Dictionary<int, string> Fields, Dictionary<string, object> Values) Translate<T>(PropertyUpdate<T> updates)
+        internal static (Dictionary<int, string> Fields, Dictionary<string, object> Values) Translate<T>(
+            PropertyUpdate<T> updates, Connectors.AbstractConnectorBase connector)
             where T : Models.AbstractModel
         {
             var fields = new Dictionary<int, string>();
@@ -19,11 +20,12 @@ namespace Birko.Data.SQL.Stores
             int i = 0;
             foreach (var assignment in updates.Assignments)
             {
-                var column = SQL.DataBase.GetFieldFromLambda(assignment.Property).Name;
+                var field = SQL.DataBase.GetFieldFromLambda(assignment.Property);
+                var column = field.Name;
                 var parameter = Connectors.AbstractConnector.SetParameterName(column);
                 var (fragment, value) = assignment.Match(
                     set => ($"{column} = {parameter}", set.Value),
-                    increment => ($"{column} = {column} + {parameter}", (object?)increment.Delta));
+                    increment => ($"{column} = {connector.IncrementExpression(field, column, parameter)}", (object?)increment.Delta));
                 fields.Add(i, fragment);
                 values.Add(parameter, value ?? DBNull.Value);
                 i++;

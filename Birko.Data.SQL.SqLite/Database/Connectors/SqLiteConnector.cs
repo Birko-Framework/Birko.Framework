@@ -244,15 +244,83 @@ namespace Birko.Data.SQL.Connectors
         /// The table name reaches the statement as a quoted <i>literal</i>, not as an identifier, so it
         /// is escaped with <see cref="SqlLiteral.EscapeLiteral"/> — the sink family § Conventions records
         /// under TASK-253, where the tell is "a quoted literal, not a name".
+        /// <para>
+        /// TASK-513 — the table's <c>CREATE</c> statement rides along, because a column's collation is part
+        /// of what <see cref="ConvertType"/> declares for a decimal and <c>pragma_table_info</c> does not
+        /// report it (measured: <c>TEXT</c> for a <c>TEXT COLLATE BIRKO_DECIMAL</c> column). SQLite keeps
+        /// <c>sqlite_master.sql</c> current across <c>ALTER TABLE … ADD COLUMN</c>.
+        /// </para>
         /// </remarks>
         protected override string? StoredColumnsSql(string tableName)
-            => string.Format("SELECT name, type FROM pragma_table_info('{0}')", SqlLiteral.EscapeLiteral(tableName));
+        {
+            var literal = SqlLiteral.EscapeLiteral(tableName);
+            return string.Format(
+                "SELECT p.name, p.type, (SELECT m.sql FROM sqlite_master m WHERE m.type = 'table' AND m.name = '{0}' COLLATE NOCASE) "
+                + "FROM pragma_table_info('{0}') p", literal);
+        }
 
         /// <summary>
-        /// Identity: <c>pragma_table_info</c> already speaks <see cref="ConvertType"/>'s vocabulary,
+        /// The declared type, plus the column's <c>COLLATE</c> clause when its definition in the table's
+        /// <c>CREATE</c> statement carries one — anywhere among the column's own constraints, so a hand-written
+        /// <c>TEXT NOT NULL COLLATE …</c> reads the same as the framework's <c>TEXT COLLATE … NOT NULL</c>.
+        /// Without it a decimal column created before TASK-513 as plain <c>TEXT</c> would compare clean, and an
+        /// <c>ORDER BY</c> on it would sort lexically.
+        /// </summary>
+        protected override StoredColumn ReadStoredColumn(DbDataReader reader)
+        {
+            var name = reader.GetString(0);
+            var type = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+            var createSql = reader.IsDBNull(2) ? null : reader.GetString(2);
+            var collation = createSql == null ? null : DeclaredCollation(createSql, name, type);
+            return new StoredColumn(name, collation == null ? type : WithCollation(type, collation));
+        }
+
+        /// <summary>The one producer of a collated type's text, declared (<see cref="DecimalColumnType"/>) and stored.</summary>
+        private static string WithCollation(string type, string collation) => type + " COLLATE " + collation;
+
+        internal static string? DeclaredCollation(string createSql, string column, string type)
+        {
+            if (string.IsNullOrEmpty(type)) return null;
+            // After the type, the column's other constraints up to its COLLATE: quoted literals, one level of
+            // parentheses (DEFAULT (…), CHECK (…)), and bare words. None of them crosses a top-level comma,
+            // so the match cannot reach into the next column's definition.
+            var pattern = @"(?:^|[(,])\s*[""`\[]?" + System.Text.RegularExpressions.Regex.Escape(column) + @"[""`\]]?\s+"
+                + System.Text.RegularExpressions.Regex.Escape(type)
+                + @"(?:\s+(?!COLLATE\b)(?:'[^']*'|\([^()]*\)|[^\s,()']+))*?\s+COLLATE\s+[""`\[]?(\w+)";
+            var match = System.Text.RegularExpressions.Regex.Match(createSql, pattern,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+            return match.Success ? match.Groups[1].Value.ToUpperInvariant() : null;
+        }
+
+        /// <summary>
+        /// Identity: <see cref="ReadStoredColumn"/> already renders <see cref="ConvertType"/>'s vocabulary,
         /// because for a framework-created table the declared type IS what ConvertType emitted.
         /// </summary>
         protected override string RenderStoredType(StoredColumn column) => column.TypeName;
+
+        /// <summary>TASK-513 — the column type every <c>decimal</c> is declared as on SQLite.</summary>
+        public static readonly string DecimalColumnType = WithCollation("TEXT", SqLiteDecimal.Collation);
+
+        private static bool IsDecimal(Fields.AbstractField field)
+            => field.Type is DbType.Decimal or DbType.VarNumeric or DbType.Currency;
+
+        /// <summary>
+        /// TASK-513 — a decimal column adds through <see cref="SqLiteDecimal.AddFunction"/>: SQLite's own
+        /// <c>+</c> converts both sides to a double.
+        /// </summary>
+        public override string IncrementExpression(Fields.AbstractField field, string column, string parameter)
+            => IsDecimal(field)
+                ? string.Format("{0}({1}, {2})", SqLiteDecimal.AddFunction, column, parameter)
+                : base.IncrementExpression(field, column, parameter);
+
+        /// <summary>
+        /// TASK-513 — a decimal default is the text a decimal parameter binds as (<c>'0.0'</c>), so a
+        /// back-filled row is indistinguishable from one written by the store.
+        /// </summary>
+        public override string DefaultValueLiteral(object value)
+            => value is decimal d
+                ? "'" + SqLiteDecimal.Format(d) + "'"
+                : base.DefaultValueLiteral(value);
 
         public override string ConvertType(DbType type, AbstractField field)
         {
@@ -260,18 +328,12 @@ namespace Birko.Data.SQL.Connectors
             {
                 case DbType.Decimal:
                 case DbType.VarNumeric:
-                case DbType.Double:
                 case DbType.Currency:
-                    {
-                        if (field is DecimalField decimalField && decimalField.Precision != null && decimalField.Scale != null)
-                        {
-                            return string.Format("NUMERIC({0},{1})", decimalField.Precision, decimalField.Scale);
-                        }
-                        else
-                        {
-                            return "REAL";
-                        }
-                    }
+                    // TASK-513: REAL and NUMERIC(p,s) are both an 8-byte float on SQLite (see SqLiteDecimal).
+                    // Precision and scale are not rendered: SQLite would ignore them exactly as it did on NUMERIC.
+                    return DecimalColumnType;
+                case DbType.Double:
+                    return "REAL";
                 case DbType.Boolean:
                 case DbType.Date:
                 case DbType.DateTime:

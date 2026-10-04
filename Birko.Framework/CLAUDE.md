@@ -3,7 +3,7 @@
 Modular .NET framework with data access, communication, AI, and model infrastructure. General-purpose across enterprise back-office, e-commerce, presentation/CMS, desktop, IoT, and real-time domains.
 
 See also:
-- [CLAUDE-conventions.md](CLAUDE-conventions.md) — **the rulebook (63 rules with their measurements); § Conventions below indexes it and is not a substitute for it**
+- [CLAUDE-conventions.md](CLAUDE-conventions.md) — **the rulebook (64 rules with their measurements); § Conventions below indexes it and is not a substitute for it**
 - [CLAUDE-projects.md](CLAUDE-projects.md) — Full project catalog
 - [CLAUDE-maintenance.md](CLAUDE-maintenance.md) — Maintenance guidelines, new project checklist, solution registration
 - [CHANGELOG.md](CHANGELOG.md) — Historical architectural changes
@@ -82,7 +82,7 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 ## Conventions
 
-Day-to-day API conventions are below. **The rulebook proper — 63 rules, each with the measurement that
+Day-to-day API conventions are below. **The rulebook proper — 64 rules, each with the measurement that
 earned it — lives in [CLAUDE-conventions.md](CLAUDE-conventions.md).** The index after these bullets carries
 each rule's opening statement so you can tell whether one applies; open that file for the reasoning,
 the counter-examples and the measurements. They are not optional: every one exists because the defect
@@ -165,6 +165,7 @@ Search that file for the phrase to reach the full rule.
 61. A test teardown that reaches process-wide state damages a PARALLEL sibling, and the victim is never the file that caused it
 62. A process-wide cached object keeps attracting per-caller state, and the only thing that stops the next instance is a test
 63. A check that compares DECLARED against STORED asks the schema for the stored side, never the driver — and the declared side is the method that emits the DDL
+64. DDL that names something only a registration provides makes every connection a participant — the connector is its one producer, and any other connection must register or it fails
 
 ## Task tracking — this directory is the monorepo's aggregator
 
@@ -238,6 +239,16 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A SQLite `decimal` is exact TEXT ordered by a collation, not a float (2026-10-04)
+
+[[TASK-513]]. SQLite keeps `REAL` and `NUMERIC(p,s)` alike as an 8-byte float: a 22-digit value came back cut to 16,
+`decimal.MaxValue` wrote and then threw on read, and an increment stored `10.299999999999999`, all measured. A decimal
+is now `TEXT COLLATE BIRKO_DECIMAL`, and `SqLiteDecimal` registers the collation, `birko_decimal_add` (what Increment
+emits, via the new `IncrementExpression` hook) and exact `SUM`/`AVG` on every connector connection. **⚠ A raw
+`SqliteConnection` without `SqLiteDecimal.Register` cannot `ORDER BY` a decimal column or write an indexed one.**
+Old tables are reported by `DetectDrift`, not altered. The rebuild migration in [CHANGELOG.md](CHANGELOG.md) keeps
+already-drifted values as they are. Views still use the float `SUM`/`AVG`: [[TASK-514]].
+
 ### An unprecisioned `decimal` is `DECIMAL(22,6)`, not an integer (2026-10-03)
 
 [[TASK-512]]. On MySQL and SQL Server a bare `DECIMAL` has scale 0, so `7.5` was stored as `8`, measured. The
@@ -315,29 +326,6 @@ took 2½ months and an unrelated advisory hunt to notice. Three things worth car
   it.
 - **The migration was never hard, which is the point.** BardStudio — the other consumer implementing
   `Tool` — did it without difficulty. One of two followed; the other was simply never told.
-
-
-
-### A live suite that invents its own server gate never runs in CI (2026-09-20)
-
-[[TASK-042]] follow-up, from a red `live-tests` run. `Birko.Data.SQL.Providers.Tests` gated its three
-CRUD round-trips on `BIRKO_{PROVIDER}_TEST=host;db;user;pass` — a packed variable used by that suite
-and nothing else, while the other eleven SQL suites in the same job read the per-field
-`BIRKO_*_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_DB` group the workflow actually sets. Three
-things worth carrying:
-
-- **⚠ `BIRKO_REQUIRE_LIVE` converted the mismatch into a red job, which is it working.** The gate
-  found nothing, the promotion refused to call that a skip, and the job went **3 failed / 7 passed in
-  134 ms** — the duration being the tell, since all three threw before opening a socket. Without the
-  promotion this would have been eleven weeks of green instead.
-- **⚠ A gate verified only by its author is verified against their shell, not against the fixture.**
-  The sign-off's live 10/10 was real, measured with the packed variables exported by hand. Its own
-  mutation table records *"env var absent with `BIRKO_REQUIRE_LIVE=1` → 1 failed"* — exactly the
-  state CI was in, filed as a passing mutation test rather than recognised as the CI configuration.
-- **The fix reads what the fixture already sets; the workflow is unchanged.** Teaching
-  `live-tests.yml` the packed names was the smaller diff and was rejected — it leaves two gating
-  vocabularies in one job, which is what produced the defect. **A live suite joins the family's gate;
-  it does not bring its own.**
 
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:

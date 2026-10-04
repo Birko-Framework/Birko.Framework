@@ -71,13 +71,25 @@ public class SqliteMigrationColumnMetadataTests : IDisposable
     }
 
     /// <summary>
+    /// The table's own <c>CREATE</c> statement. <c>pragma_table_info</c> reports a decimal column as plain
+    /// <c>TEXT</c> — it drops the collation, which is the half that makes the column a number (TASK-513).
+    /// </summary>
+    private static string CreateSql(DbConnection conn, string table)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT sql FROM sqlite_master WHERE type = 'table' AND name = '{table}'";
+        return (string)cmd.ExecuteScalar()!;
+    }
+
+    /// <summary>
     /// ⚠ <b>The one that matters most, and it is on the default provider.</b> A migration declaring
     /// <c>precision: 18, scale: 2</c> used to get a <c>REAL</c> column — binary floating point for money —
-    /// because <c>SchemaField</c> was not a <c>DecimalField</c> and SQLite's <c>ConvertType</c> falls back
-    /// to <c>REAL</c> for an unqualified decimal. It now lands as <c>NUMERIC(18,2)</c>.
+    /// because <c>SchemaField</c> was not a <c>DecimalField</c> and SQLite's <c>ConvertType</c> fell back
+    /// to <c>REAL</c> for an unqualified decimal. It then landed as <c>NUMERIC(18,2)</c>, which SQLite also keeps
+    /// as a float; since TASK-513 (rule 56) it lands as the exact <c>TEXT COLLATE BIRKO_DECIMAL</c>.
     /// </summary>
     [Fact]
-    public void A_declared_scale_lands_as_NUMERIC_not_REAL()
+    public void A_declared_scale_lands_as_the_exact_decimal_column_not_REAL()
     {
         using var conn = OpenConnection();
         var schema = new SqlSchemaBuilder(conn, null, Connector());
@@ -87,8 +99,8 @@ public class SqliteMigrationColumnMetadataTests : IDisposable
             .WithField("Total", FieldType.Decimal, precision: 18, scale: 2)
             .Build();
 
-        Columns(conn, "Invoices")["Total"].Should().Be("NUMERIC(18,2)",
-            "a REAL column cannot hold 18.2 decimal money exactly, and the declaration asked for it");
+        CreateSql(conn, "Invoices").Should().Contain("Total TEXT COLLATE BIRKO_DECIMAL",
+            "neither REAL nor NUMERIC can hold 18.2 decimal money exactly on SQLite, and the declaration asked for it");
     }
 
     /// <summary>
@@ -203,7 +215,7 @@ public class SqliteMigrationColumnMetadataTests : IDisposable
             Scale = 4
         });
 
-        Columns(conn, "Growing")["Amount"].Should().Be("NUMERIC(12,4)",
+        CreateSql(conn, "Growing").Should().Contain("Amount TEXT COLLATE BIRKO_DECIMAL",
             "the ALTER TABLE ADD path goes through the same factory as CREATE TABLE");
     }
 }
