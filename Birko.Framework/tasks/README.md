@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-09-30 16:49. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-05 08:40. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,14 +13,16 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10     | 25     | —                   |
-| todo         | —                  | —                  | 166         |
+| todo         | —                  | —                  | 169         |
 | in-progress  | 7  | 9  | 0   |
-| review       | —                  | —                  | 0       |
+| verify       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 197         |
+| done         | 1        | 23        | 201         |
 | cancelled    | 0   | 0   | 4    |
 
-`todo` by priority: 32× P1 · 104× P2 · 30× P3.
+`blocked`: 1 (1 also counted in their own state).
+
+`todo` by priority: 32× P1 · 104× P2 · 33× P3.
 
 ## In progress now
 
@@ -28,7 +30,7 @@ _None_
 
 ## Blocked
 
-- [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) — `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3, ai)
+- [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) — `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3, ai) ⚠ blocked: on an external condition, not on another task
 
 ## Tree
 
@@ -418,7 +420,7 @@ _None_
   - STORY-044 Opt-in strict (fail-closed) tenancy mode — done (0/0 done) (done)
   - STORY-045 Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped — done (0/0 done) (done)
   - STORY-046 Restore ambient (tenant) scope for background event dispatch — in-progress (0/1 done)
-    - [ ] [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3) · FEATURE-017 ⚠ blocked
+    - [ ] [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3) ⚠ blocked: on an external condition, not on another task · FEATURE-017
 - **EPIC-018** Birko.Web.Core — the browser-side runtime — in-progress (6/6 tasks done)
   - [x] [TASK-198](EPIC-018-birko-web-core-runtime/TASK-198-fetch-has-no-timeout-so-a-dead-connection-hangs-forever.md) `fetch` has no timeout, so a dead connection hung the app forever — and a stalled body reported success (P0) · FEATURE-018
   - [x] [TASK-199](EPIC-018-birko-web-core-runtime/TASK-199-syncmanager-misreads-a-write-that-already-landed.md) `SyncManager` had no name for a write that had already landed (P1) · FEATURE-018
@@ -473,6 +475,12 @@ _None_
 - [x] [TASK-506](_loose/TASK-506-guid-member-naming-sweep.md) Guid-typed members named `…Id` — one word with the model base (`Guid`) and with Symbio's wire (P2)
 - [x] [TASK-507](_loose/TASK-507-form-level-errors-and-quoted-placeholders.md) `b-form` silently drops every non-field server error, and `b-input`/`b-textarea` truncate a placeholder at its first `"` (P1)
 - [ ] [TASK-509](_loose/TASK-509-split-domain-models-into-own-repo.md) Split the Birko.Models domain models out of the framework into their own repo (P3)
+- [x] [TASK-510](_loose/TASK-510-schema-ensure-never-adds-missing-columns.md) A table created before a type was mapped never gets that column — schema-ensure is create-only, and `AlterTableAdd` cannot add a NOT NULL column to a table with rows (P2)
+- [x] [TASK-511](_loose/TASK-511-detectdrift-unprecisioned-decimal-false-positive.md) `DetectDrift` reports an unprecisioned `decimal` as drifted on MySQL and SQL Server — on a table the framework created (P2)
+- [x] [TASK-512](_loose/TASK-512-unprecisioned-decimal-rounds-to-integer.md) An unprecisioned `decimal` is stored as an integer on MySQL and SQL Server — fractions are rounded away silently (P2)
+- [x] [TASK-513](_loose/TASK-513-sqlite-decimal-stored-as-float.md) A `decimal` on SQLite is stored as a binary float — money columns drift on the framework's default provider (P2)
+- [ ] [TASK-514](_loose/TASK-514-sqlite-view-decimal-aggregates-exact.md) SQLite views aggregate a `decimal` column with the built-in `SUM` / `AVG`, which go through a double (P3)
+- [ ] [TASK-515](_loose/TASK-515-sqlite-ignores-declared-decimal-scale.md) SQLite accepts a declared decimal precision / scale and does nothing with it (P3)
 
 ## Completed
 
