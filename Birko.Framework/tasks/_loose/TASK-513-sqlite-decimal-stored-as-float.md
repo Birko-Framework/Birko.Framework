@@ -148,5 +148,5 @@ here has a rendered surface a person would judge.
 - TEMP / attached-schema tables in `DetectDrift`'s collation read — decided not to do: the framework creates neither,
   and `StoredColumnsSql` already reads only the main schema's `pragma_table_info`
 - Symbio adopting the change — `SqLiteDecimal.Register` in `tools/sqlite-cli` and in its raw-connection tests,
-  recreating `symbio-dev.db` — owned by the Symbio session (prompt handed over 2026-10-04; it files the task itself,
-  Symbio id to be recorded here once filed)
+  recreating `symbio-dev.db` — Symbio TASK-879, done 2026-10-06 (merge `893401d9`: one test helper plus a guard
+  test, sqlite-cli references the framework, dev db recreated with 111 REAL + 2 NUMERIC decimal columns → 0)
