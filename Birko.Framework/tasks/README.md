@@ -17,7 +17,7 @@ which this regeneration never touches._
 | in-progress  | 7  | 9  | 0   |
 | verify       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 201         |
+| done         | 1        | 23        | 202         |
 | cancelled    | 0   | 0   | 4    |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -481,6 +481,7 @@ _None_
 - [x] [TASK-513](_loose/TASK-513-sqlite-decimal-stored-as-float.md) A `decimal` on SQLite is stored as a binary float — money columns drift on the framework's default provider (P2)
 - [ ] [TASK-514](_loose/TASK-514-sqlite-view-decimal-aggregates-exact.md) SQLite views aggregate a `decimal` column with the built-in `SUM` / `AVG`, which go through a double (P3)
 - [ ] [TASK-515](_loose/TASK-515-sqlite-ignores-declared-decimal-scale.md) SQLite accepts a declared decimal precision / scale and does nothing with it (P3)
+- [x] [TASK-516](_loose/TASK-516-zai-glm53-output-cap-and-truncation.md) ZAiProvider caps glm-5.3 at 4096 output tokens and reports a truncated reply as a normal end (P1)
 
 ## Completed
 

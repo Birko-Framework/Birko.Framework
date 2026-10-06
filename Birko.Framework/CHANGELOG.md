@@ -4,6 +4,25 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-06 — Z.AI: GLM-5.3 gets its output budget, and a truncated reply says so
+
+[[TASK-516]]. `ZAiProvider.GetMaxTokensForModel` knew GLM-5/5.1 and older; `glm-5.3` and `glm-5.3-flash` fell to the
+4096 default, so every request asked for at most 4096 output tokens. Z.AI documents GLM-5.3 with a default `max_tokens`
+of 65536 and a maximum of 131072. With deep thinking on, the reasoning counts against that budget: a long answer ran out
+and came back with empty `content` — measured in DraCode, whose Wyvern analyses on `glm-5.3` intermittently returned
+nothing. `ParseResponse` reported every non-tool reply as `end_turn`, so the truncation was invisible to callers.
+
+```text
+max_tokens   glm-5.3        4096 → 131072   (documented maximum, as glm-5.1)
+             glm-5.3-flash  4096 → 65536    (family default; no first-party maximum found)
+StopReason   finish_reason "length" → "max_tokens"   (was "end_turn"; non-streaming)
+```
+
+Both models join `ValidModels` (no more "may not be recognized" warning). The constructor gains an optional
+`HttpMessageHandler` test seam, as `OllamaProvider` has. `ZAiProviderTests` pin the request budget and the stop reason.
+
+---
+
 ## 2026-10-04 — Storage change on the default provider: a SQLite `decimal` is exact TEXT with a numeric collation
 
 [[TASK-513]]. SQLite has no decimal storage class. A `decimal` was declared `REAL` (unprecisioned) or `NUMERIC(p,s)`

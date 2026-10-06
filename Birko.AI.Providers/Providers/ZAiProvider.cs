@@ -54,7 +54,8 @@ namespace Birko.AI.Providers
             string? model = null,
             string? baseUrl = null,
             bool enableDeepThinking = false,
-            bool useCodingEndpoint = false)
+            bool useCodingEndpoint = false,
+            HttpMessageHandler? handler = null)
         {
             _apiKey = apiKey;
             _model = model ?? DefaultModel;
@@ -74,7 +75,8 @@ namespace Birko.AI.Providers
 
             _enableDeepThinking = enableDeepThinking;
 
-            _httpClient = new HttpClient
+            // handler is a test seam (inject a fake HttpMessageHandler); production callers omit it.
+            _httpClient = new HttpClient(handler ?? new HttpClientHandler())
             {
                 Timeout = TimeSpan.FromMinutes(5)
             };
@@ -174,6 +176,8 @@ namespace Birko.AI.Providers
         {
             return model switch
             {
+                Models.Glm53 => 131072,         // GLM-5.3: documented maximum 131072 (default 65536)
+                Models.Glm53Flash => 65536,     // GLM-5.3 Flash: the family default; no first-party maximum published
                 Models.Glm51Turbo => 131072,    // GLM-5.1 Turbo supports up to 131072 tokens
                 Models.Glm51 => 131072,         // GLM-5.1 supports up to 131072 tokens
                 Models.Glm5Turbo => 128000,     // GLM-5 Turbo supports up to 128000 tokens
@@ -278,6 +282,12 @@ namespace Birko.AI.Providers
                     }
                 }
 
+                // A reply cut off by the token limit is not a finished one; say so, so callers can tell
+                if (choice.TryGetProperty("finish_reason", out var finishReason) && finishReason.GetString() == "length")
+                {
+                    llmResponse.StopReason = "max_tokens";
+                }
+
                 // Extract token usage
                 if (result.TryGetProperty("usage", out var usage))
                 {
@@ -313,7 +323,7 @@ namespace Birko.AI.Providers
         private static readonly HashSet<string> ValidModels = new()
         {
             // GLM-5 series
-            Models.Glm5, Models.Glm5Turbo, Models.Glm51, Models.Glm51Turbo,
+            Models.Glm5, Models.Glm5Turbo, Models.Glm51, Models.Glm51Turbo, Models.Glm53, Models.Glm53Flash,
             // GLM-4.5 series
             Models.Glm45Flash, Models.Glm45Air, Models.Glm45,
             // GLM-4.6 series
@@ -334,6 +344,8 @@ namespace Birko.AI.Providers
         public static class Models
         {
             // GLM-5 series
+            public const string Glm53 = "glm-5.3";
+            public const string Glm53Flash = "glm-5.3-flash";
             public const string Glm51Turbo = "glm-5.1-turbo";
             public const string Glm51 = "glm-5.1";
             public const string Glm5Turbo = "glm-5-turbo";
