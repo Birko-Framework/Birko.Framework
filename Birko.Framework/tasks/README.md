@@ -12,8 +12,8 @@ which this regeneration never touches._
 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
-| planned      | 10     | 25     | —                   |
-| todo         | —                  | —                  | 169         |
+| planned      | 11     | 27     | —                   |
+| todo         | —                  | —                  | 179         |
 | in-progress  | 7  | 9  | 0   |
 | verify       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
@@ -22,7 +22,7 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 32× P1 · 104× P2 · 33× P3.
+`todo` by priority: 32× P1 · 108× P2 · 39× P3.
 
 ## In progress now
 
@@ -428,6 +428,20 @@ _None_
   - [x] [TASK-203](EPIC-018-birko-web-core-runtime/TASK-203-nothing-recorded-and-never-synced-both-read-as-empty.md) "nothing recorded" and "never synced" both read as `[]` (P2) · FEATURE-018
   - [x] [TASK-493](EPIC-018-birko-web-core-runtime/TASK-493-apiclient-getheaders-and-patch.md) `ApiClient` had no generic request-header hook and no `patch()` (P1) · FEATURE-018
   - [x] [TASK-508](EPIC-018-birko-web-core-runtime/TASK-508-apiclient-postform-multipart-upload.md) `ApiClient` cannot send a multipart upload (P1) · FEATURE-018
+
+- **EPIC-019** Birko framework backports from DraCode — planned (0/10 tasks done)
+  - STORY-058 Security / OAuth backports from DraCode — planned (0/6 done)
+    - [ ] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
+    - [ ] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)
+    - [ ] [TASK-519](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-519-aspnetcore-endpoint-mapping-for-the-oauth-server.md) ASP.NET Core endpoint mapping for the OAuth server (P3)
+    - [ ] [TASK-520](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-520-client-credentials-claims-hook-and-space-delimited-scope.md) client_credentials: let the app shape the token; read space-delimited scopes as permissions (P3)
+    - [ ] [TASK-521](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-521-web-sign-in-helpers-for-oauth-providers.md) Web (authorization-code) sign-in helpers for external OAuth providers, GitHub first (P3)
+    - [ ] [TASK-522](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-522-loopback-only-auth-bypass-option.md) Optional "no token needed when listening on loopback only" for Birko.Security.AspNetCore (P3)
+  - STORY-059 Web backports from DraCode — planned (0/4 done)
+    - [ ] [TASK-523](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-523-wsclient-request-response.md) WsClient: request/response with id correlation and timeout (P2)
+    - [ ] [TASK-524](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-524-shell-oauth-sign-in-helpers.md) Birko.Web.Shell auth: OAuth redirect parsing, token expiry and scheduled refresh (P2)
+    - [ ] [TASK-525](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-525-reorderable-tabs-and-persisted-split-sizes.md) b-tabs drag-and-drop reorder; b-split-panel size persistence; a layout serialize/restore hook (P3)
+    - [ ] [TASK-526](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-526-layered-runtime-config-loader.md) Birko.Web.Core: layered runtime configuration (defaults < server endpoint < local overrides) (P3)
 
 ## Loose tasks
 
