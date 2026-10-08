@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 11     | 27     | —                   |
-| todo         | —                  | —                  | 180         |
+| todo         | —                  | —                  | 179         |
 | in-progress  | 7  | 9  | 0   |
-| verify       | —                  | —                  | 1       |
+| verify       | —                  | —                  | 2       |
 | blocked      | —                  | —                  | 1      |
 | done         | 1        | 23        | 202         |
 | cancelled    | 0   | 0   | 4    |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 32× P1 · 109× P2 · 39× P3.
+`todo` by priority: 32× P1 · 108× P2 · 39× P3.
 
 ## In progress now
 
@@ -46,7 +46,7 @@ _None_
   - [x] [TASK-495](EPIC-001-web-components-ui-polish/TASK-495-file-upload-and-date-range-drop-the-field-label.md) `b-file-upload` and `b-date-range-picker` drop the field's label from their accessible names (P2) · FEATURE-001
   - [x] [TASK-496](EPIC-001-web-components-ui-polish/TASK-496-picker-triggers-announce-no-popup-and-clear-button-unnamed.md) Picker inputs don't announce their popup, and `b-select`'s clear button has no name (P2) · FEATURE-001
   - [x] [TASK-497](EPIC-001-web-components-ui-polish/TASK-497-b-range-dual-thumbs-sit-below-the-track.md) `b-range` in range mode draws its thumbs below the track (P2) · FEATURE-001
-  - [ ] [TASK-543](EPIC-001-web-components-ui-polish/TASK-543-b-code-block-ignores-content-changes.md) `b-code-block` does not re-render when its text content changes (P2)
+  - [ ] [TASK-543](EPIC-001-web-components-ui-polish/TASK-543-b-code-block-ignores-content-changes.md) `b-code-block` does not re-render when its text content changes (P2) · ⏳ verify — Presenter sign-off pending
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
