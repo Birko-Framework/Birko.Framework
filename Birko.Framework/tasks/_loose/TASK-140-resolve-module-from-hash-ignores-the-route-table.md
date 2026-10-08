@@ -3,7 +3,7 @@ id: TASK-140
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: verify
+status: done
 picked-by: fix-next
 priority: P1
 assignee: ai
@@ -68,8 +68,16 @@ Two defects follow:
   `/settings` the store claims a module that does not exist and events for the module they actually
   came from are dropped.
 
+  > **⚠ Corrected 2026-10-08, at sign-off — this bullet overstated the impact.** Those `sse-client.ts`
+  > lines handle `modules-changed`, `permissions-changed` and reconnect only (redirect out of a removed
+  > module, refresh the ribbon); **Symbio has no list-level live refresh at all** — the only page-level
+  > SSE subscription in `Symbio.UI` is the IoT sensor dashboard. So nothing was "dropped". The real
+  > consequences were the fabricated `activeModuleId` and the ribbon highlighting nothing. Live list
+  > refresh is a missing feature, not a casualty of this defect.
+
 That last one is why this is P1 rather than a cosmetic highlight bug: the consequence outlives the
-page the user is on, and there is no error anywhere in the chain.
+page the user is on, and there is no error anywhere in the chain. *(See the correction above: the
+fabricated id in shared state was real; the SSE consequence was not.)*
 
 **Why `alsoMatches` does not port directly.** The mobile shell matches a hash against a list of
 declared routes, so a surface can simply claim more of them. The module model is positional, so there
@@ -120,12 +128,20 @@ it to `b-ribbon` / `b-sidebar`, which compare ids, not routes. `activeSurface()`
 
 ## Human test plan
 
-- [ ] In Symbio, navigate from a module page (e.g. `#/inventory/stock`) to `#/settings`, then check
+- [x] In Symbio, navigate from a module page (e.g. `#/inventory/stock`) to `#/settings`, then check
       `moduleStore.get('activeModuleId')` in the console — it must not read `'settings'`
-- [ ] With an SSE-backed list open, navigate to `#/settings` and back, and confirm live updates for
-      the original module resume (this is the consequence the resolver defect hides, and no unit test
-      exercises the real event stream)
-- [ ] Confirm the ribbon's highlighted tab on every one of Symbio's non-module top-level routes is
+      — *run 2026-10-08 by the owner via a DevTools logpoint on the resolver's return (the store is not
+      on `window`): `#/customers/list` → `true customers list`, `#/settings` → `false`, empty ids. Each
+      navigation logs twice — Symbio calls the resolver from `app-shell.ts:243` and `router.ts:141`;
+      both agreed*
+- ~~With an SSE-backed list open, navigate to `#/settings` and back, and confirm live updates for
+      the original module resume~~ — **N/A, premise false**: Symbio has no SSE-backed list (see the
+      correction in Context). Run anyway, it showed no live update before or after, as expected. The SSE
+      paths that do read `activeModuleId` (module-removed redirect, permissions-changed) depend only on
+      module pages resolving as before, which the offline comparison covers: 468/468 identical. A
+      module-disable round-trip was offered and not runnable on that instance (the system tenant is
+      deliberately excluded from module toggling, `modules-page.ts:79`)
+- [x] Confirm the ribbon's highlighted tab on every one of Symbio's non-module top-level routes is
       whatever the criterion-3 decision says it should be — deliberately blank, or the last module —
       and not accidentally blank for a different reason
 
@@ -169,10 +185,12 @@ manifests, 468 of 468 module resolutions are identical before and after.
   stripped (the old resolver folded `?tab=2` into the option id).
 - *Bare module id* (`/inventory`) still resolves the module with no option — kept for back-compat.
 
-**Why `verify`, not `done`.** The Human test plan needs a running Symbio with the rebuilt UI (console check, a live SSE
-round-trip, the ribbon on each non-module route). No unit check exercises the real event stream, which is the
-consequence that made this P1.
+**Sign-off (2026-10-08, owner, Symbio rebuilt against this change).** Step 1 passed (logpoint: module page `true`,
+`/settings` `false`). Step 3 passed (no ribbon tab on the non-module routes; Customers highlights again). Step 2 was N/A:
+it tested live list refresh, which Symbio never had — the task's SSE claim was wrong and is corrected in Context. Closed
+`verify → done`. Whether Symbio *should* have live list refresh is a product question, not part of this fix.
 
 **Flagged, not fixed.** Nothing new. Symbio's `dashboard-grid.ts:53` comment describes `activeModuleId="dashboard"`,
 which no longer happens; the workaround it explains stays correct (it resolves against the widget's module). That is
 Symbio's file — its agent picks up the comment when it rebuilds against this change.
+- verify → done — owner sign-off 2026-10-08: steps 1 and 3 passed in Symbio; step 2 N/A (premise false, corrected in Context)

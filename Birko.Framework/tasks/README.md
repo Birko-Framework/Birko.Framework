@@ -15,9 +15,9 @@ which this regeneration never touches._
 | planned      | 11     | 27     | —                   |
 | todo         | —                  | —                  | 179         |
 | in-progress  | 7  | 9  | 0   |
-| verify       | —                  | —                  | 2       |
+| verify       | —                  | —                  | 1       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 202         |
+| done         | 1        | 23        | 203         |
 | cancelled    | 0   | 0   | 4    |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -471,7 +471,7 @@ _None_
 - [ ] [TASK-130](_loose/TASK-130-theme-contrast-scanner-gate.md) Scan every shipped theme for colour contrast, and gate it like the drift check (P1)
 - [ ] [TASK-138](_loose/TASK-138-readasync-zero-arg-overload-ambiguity.md) `ReadAsync()` with no arguments does not compile — CS0121 between the read-all and filtered overloads (P2)
 - [ ] [TASK-139](_loose/TASK-139-coarse-pointer-policy-vs-knob-in-the-component-catalogue.md) Decide whether a `pointer: coarse` rule inside a `b-*` component is policy or a knob (P2)
-- [ ] [TASK-140](_loose/TASK-140-resolve-module-from-hash-ignores-the-route-table.md) `resolveModuleFromHash` derives the module positionally and never consults the route table (P1) · ⏳ verify — Symbio sign-off pending
+- [x] [TASK-140](_loose/TASK-140-resolve-module-from-hash-ignores-the-route-table.md) `resolveModuleFromHash` derives the module positionally and never consults the route table (P1)
 - [ ] [TASK-142](_loose/TASK-142-spec-map-coverage-audit.md) The spec map silently under-covers, and nothing detects it (P2)
 - [ ] [TASK-143](_loose/TASK-143-public-crud-overrides-defeat-base-guards.md) Stores that override public CRUD instead of `*Core` defeat every base-class guard (P2)
 - [ ] [TASK-145](_loose/TASK-145-document-the-decorator-stripping-escape-hatch.md) Nothing at the `GetUnwrappedStore` call sites says they strip every decorator (P2)
