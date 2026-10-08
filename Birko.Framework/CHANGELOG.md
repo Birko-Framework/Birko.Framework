@@ -4,6 +4,22 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-08 — WebSocketServer caps a message; one capped whole-message receive for handlers
+
+[[TASK-537]]. `WebSocketServer.ReceiveLoopAsync` reassembled a message across frames into a `MemoryStream` with no
+limit: a client that streamed frames without ever setting `EndOfMessage` grew server memory without bound. It now
+receives through the new `ReceiveMessageAsync` extension (`Birko.Communication.WebSocket.Messaging`), capped by
+`WebSocketServer.MaxMessageBytes` — **default 4 MiB**; an over-cap client is closed with `MessageTooBig`. An app that
+legitimately receives larger messages must raise the property. ASP.NET Core handlers, which get a raw socket, use the
+same extension instead of a one-`ReceiveAsync` loop that parses a fragment.
+
+**Filed as a send-queue connection; the send half was falsified first.** The `WebSocket` docs allow one outstanding
+send, and two consumers had built a per-socket gate on that. Measured on .NET 10.0.12 (`ManagedWebSocket`, which both
+Kestrel and `HttpListener` return): 3 × 200 concurrent 100 KB `SendAsync` on one socket — 0 threw, 0 corrupt. No queue
+was built; `ConcurrentSendsOnOneSocket_AllArriveIntact` pins the runtime behaviour so a change surfaces as a red test.
+
+---
+
 ## 2026-10-08 — WebSocket `requireAuthentication: true` fails closed
 
 [[TASK-536]]. `MapWebSocketEndpoint` and the legacy `MapWebSocket` default to `requireAuthentication: true`, but both

@@ -23,6 +23,7 @@
        project alongside this one already has the reference, and declaring it here would break every
        such consumer at once. -->
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Messaging\WebSocketMessageExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ports\WebSocketPort.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Servers\WebSocketServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\WebSocketAuthenticationConfiguration.cs" />

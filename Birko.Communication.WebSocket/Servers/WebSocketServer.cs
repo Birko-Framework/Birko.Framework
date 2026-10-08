@@ -7,6 +7,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Communication.WebSocket.Messaging;
 using Microsoft.Extensions.Logging;
 using SysWebSocket = System.Net.WebSockets.WebSocket;
 
@@ -28,6 +29,20 @@ namespace Birko.Communication.WebSocket.Servers
         public event EventHandler<string>? OnClientDisconnected;
 
         public bool IsListening => _listener != null && _listener.IsListening;
+
+        private int _maxMessageBytes = WebSocketMessageExtensions.DefaultMaxMessageBytes;
+
+        /// <summary>
+        /// Largest message a client may send, in bytes (default 4 MiB). A client that exceeds it is closed with
+        /// <see cref="WebSocketCloseStatus.MessageTooBig"/> instead of being buffered without limit (TASK-537).
+        /// </summary>
+        public int MaxMessageBytes
+        {
+            get => _maxMessageBytes;
+            set => _maxMessageBytes = value > 0
+                ? value
+                : throw new ArgumentOutOfRangeException(nameof(value), value, "Must be positive.");
+        }
 
         public WebSocketServer(ILogger? logger = null)
         {
@@ -177,36 +192,25 @@ namespace Birko.Communication.WebSocket.Servers
 
         private async Task ReceiveLoopAsync(SysWebSocket socket, string clientId, CancellationToken cancellationToken)
         {
-            var buffer = new byte[64 * 1024]; // 64KB buffer for better performance
-            var messageBuffer = new MemoryStream();
-
             try
             {
                 while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
                 {
-                    var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken)
-                        .ConfigureAwait(false);
+                    var message = await socket.ReceiveMessageAsync(MaxMessageBytes, cancellationToken).ConfigureAwait(false);
 
-                    if (result.MessageType == WebSocketMessageType.Close)
+                    if (message.Outcome == WebSocketReceiveOutcome.TooBig)
                     {
-                        await socket.CloseAsync(
-                            WebSocketCloseStatus.NormalClosure,
-                            "Closed by client",
-                            CancellationToken.None).ConfigureAwait(false);
+                        _logger?.LogWarning("Closed client {ClientId}: message exceeded {MaxMessageBytes} bytes", clientId, MaxMessageBytes);
                         break;
                     }
 
-                    // Handle multi-frame messages
-                    messageBuffer.Write(buffer, 0, result.Count);
-
-                    if (result.EndOfMessage)
+                    if (message.Outcome == WebSocketReceiveOutcome.Closed)
                     {
-                        var received = messageBuffer.ToArray();
-                        messageBuffer.SetLength(0); // Reset for next message
-
-                        OnDataReceived?.Invoke(this, received);
-                        _logger?.LogDebug("Received {Count} bytes from {ClientId}", received.Length, clientId);
+                        break;
                     }
+
+                    OnDataReceived?.Invoke(this, message.Data);
+                    _logger?.LogDebug("Received {Count} bytes from {ClientId}", message.Data.Length, clientId);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -223,7 +227,6 @@ namespace Birko.Communication.WebSocket.Servers
                 OnClientDisconnected?.Invoke(this, clientId);
                 _logger?.LogInformation("Client disconnected: {ClientId}", clientId);
 
-                messageBuffer.Dispose();
                 await DisposeAsync(socket).ConfigureAwait(false);
             }
         }

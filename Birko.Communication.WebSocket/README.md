@@ -56,18 +56,42 @@ ws.Close();
 ```csharp
 using Birko.Communication.WebSocket.Servers;
 
-var server = new WebSocketServer("http://localhost:8080/");
+var server = new WebSocketServer { MaxMessageBytes = 1024 * 1024 }; // default 4 MiB
 server.OnDataReceived += (sender, data) =>
 {
-    // Handle received data from any client
+    // One whole message from any client, reassembled across frames
 };
 server.OnClientConnected += (sender, clientId) =>
 {
     Console.WriteLine($"Client connected: {clientId}");
 };
 
-await server.StartAsync();
+await server.StartAsync("http://localhost:8080/");
 ```
+
+A client whose message exceeds `MaxMessageBytes` is closed with `MessageTooBig` instead of being buffered without limit.
+
+### Receiving whole messages in a handler
+
+A message can span several frames; one `ReceiveAsync` returns a fragment. `ReceiveMessageAsync` reassembles it, caps it,
+and reports a close or an over-cap message as an outcome instead of an exception:
+
+```csharp
+using Birko.Communication.WebSocket.Messaging;
+
+app.MapWebSocketEndpoint("/ws", async (socket, context) =>
+{
+    while (true)
+    {
+        var message = await socket.ReceiveMessageAsync(maxMessageBytes: 256 * 1024, context.RequestAborted);
+        if (!message.IsMessage) break;            // Closed, or TooBig (socket already closed with MessageTooBig)
+        await HandleAsync(message.GetText());
+    }
+});
+```
+
+Sending from several tasks at once on one socket is safe on .NET 10: the runtime's `ManagedWebSocket` serializes
+concurrent `SendAsync` calls (measured in TASK-537 and pinned by a test), so no send queue is needed.
 
 ### ASP.NET Core Middleware
 

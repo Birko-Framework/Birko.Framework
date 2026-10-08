@@ -16,6 +16,8 @@ Unit tests for the Birko.Communication.WebSocket project - WebSocket communicati
 - `WebSocketAuthenticationServiceTests.cs` - static-token validation, token extraction, disposal
 - `WebSocketEndpointAuthenticationTests.cs` - `requireAuthentication` fails closed on both mapping paths (TASK-536)
 - `WebSocketServerTests.cs`, `WebSocketPortBufferTests.cs` - standalone server and port buffering
+- `WebSocketMessageReceiveTests.cs` - capped whole-message receive over an in-memory socket pair, the server's
+  `MessageTooBig` close, and the concurrent-send runtime pin (TASK-537)
 
 ## Dependencies
 - Birko.Communication.WebSocket (via .projitems) - WebSocket communication

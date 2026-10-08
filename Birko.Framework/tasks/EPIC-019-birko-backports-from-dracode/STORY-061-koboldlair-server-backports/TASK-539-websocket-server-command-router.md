@@ -23,8 +23,9 @@ a handler by command name and reply `{id, type: "response", data, timestamp}` or
 command is an error.
 
 Defect to fix in the generic version: `SendErrorAsync(webSocket, null, …)` drops the request id, so a correlating client
-waits out its 30 s timeout instead of failing at once. Sends are raw `webSocket.SendAsync`; they should go through
-[[TASK-537]]'s connection.
+waits out its 30 s timeout instead of failing at once. Requests are read with [[TASK-537]]'s capped
+`ReceiveMessageAsync`; replies may use `SendAsync` directly — TASK-537 measured that concurrent sends on one socket are
+serialized by the runtime, so no send queue is needed.
 
 Adopted in the consumer by DraCode TASK-137 (`Consumers/DraCode/tasks/EPIC-018-adopt-birko-upstreams/STORY-040`). The handler classes themselves stay in DraCode.
 

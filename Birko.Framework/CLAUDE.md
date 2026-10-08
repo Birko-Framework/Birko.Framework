@@ -239,6 +239,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A WebSocket message is capped, and concurrent sends need no queue (2026-10-08)
+
+[[TASK-537]]. `WebSocketServer` buffered a multi-frame message without limit; it now receives through
+`ReceiveMessageAsync` (Messaging/), capped by `MaxMessageBytes` (**default 4 MiB**, over-cap → `MessageTooBig`).
+**⚠ Filed as a send queue, falsified before code:** .NET 10's `ManagedWebSocket` serializes concurrent `SendAsync`
+(3 × 200 × 100 KB: 0 threw, 0 corrupt) — a test pins it; don't add a send gate without that test going red.
+
 ### WebSocket `requireAuthentication: true` fails closed (2026-10-08)
 
 [[TASK-536]]. Both WebSocket mapping paths skipped the token check when `WebSocketAuthenticationService` was not

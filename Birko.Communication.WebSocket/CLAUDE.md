@@ -19,8 +19,15 @@ WebSocket communication implementation for real-time bidirectional communication
 - `AsyncWebSocketCommunicator` - Async WebSocket client
 
 ### Server
-- `WebSocketServer` - WebSocket server
-- `WebSocketConnection` - Server-side connection
+- `WebSocketServer` - standalone HttpListener server; receives through `ReceiveMessageAsync`, capped by `MaxMessageBytes`
+  (default 4 MiB, over-cap → close `MessageTooBig`, TASK-537)
+
+### Messaging
+- `WebSocketMessageExtensions.ReceiveMessageAsync` — **the one whole-message receive**: reassembles across
+  `EndOfMessage`, caps size, returns `Message` / `Closed` / `TooBig` (never a truncated message). Use it in handlers;
+  don't write another reassembly loop (rule 16)
+- No send queue: concurrent `SendAsync` on one socket is serialized by .NET 10's `ManagedWebSocket` — measured in
+  TASK-537 and pinned by `ConcurrentSendsOnOneSocket_AllArriveIntact`. If that test goes red, a per-socket gate is the fix
 
 ### Middleware
 - ASP.NET Core middleware for WebSocket
