@@ -429,7 +429,7 @@ _None_
   - [x] [TASK-493](EPIC-018-birko-web-core-runtime/TASK-493-apiclient-getheaders-and-patch.md) `ApiClient` had no generic request-header hook and no `patch()` (P1) · FEATURE-018
   - [x] [TASK-508](EPIC-018-birko-web-core-runtime/TASK-508-apiclient-postform-multipart-upload.md) `ApiClient` cannot send a multipart upload (P1) · FEATURE-018
 
-- **EPIC-019** Birko framework backports from DraCode — planned (0/10 tasks done)
+- **EPIC-019** Birko framework backports from DraCode — planned (0/26 tasks done)
   - STORY-058 Security / OAuth backports from DraCode — planned (0/6 done)
     - [ ] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
     - [ ] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)
@@ -442,6 +442,24 @@ _None_
     - [ ] [TASK-524](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-524-shell-oauth-sign-in-helpers.md) Birko.Web.Shell auth: OAuth redirect parsing, token expiry and scheduled refresh (P2)
     - [ ] [TASK-525](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-525-reorderable-tabs-and-persisted-split-sizes.md) b-tabs drag-and-drop reorder; b-split-panel size persistence; a layout serialize/restore hook (P3)
     - [ ] [TASK-526](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-526-layered-runtime-config-loader.md) Birko.Web.Core: layered runtime configuration (defaults < server endpoint < local overrides) (P3)
+  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — planned (0/9 done)
+    - [ ] [TASK-527](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-527-agent-loop-hooks.md) Agent loop: per-iteration and tool-call hooks, a readable system prompt, resume from a conversation (P1)
+    - [ ] [TASK-528](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-528-orchestration-plan-model-and-step-validators.md) Birko.AI.Orchestration: a plan model with behaviour, step validators, and a pinned enum encoding (P1)
+    - [ ] [TASK-529](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-529-sql-event-store.md) Ship a SQL IAsyncEventStore (P1)
+    - [ ] [TASK-530](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-530-resilience-stores.md) Birko.AI.Resilience: store implementations for circuit-breaker state and usage (P2)
+    - [ ] [TASK-531](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-531-classified-llm-failures.md) LlmResponse carries a classified failure (status, transient, retry-after), not just a string (P2)
+    - [ ] [TASK-532](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-532-config-secret-provider-and-field-cipher.md) Birko.Security: a configuration ISecretProvider and a field cipher keyed from a secret (P2)
+    - [ ] [TASK-533](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-533-keyed-live-event-broadcaster.md) A keyed live-event broadcaster: non-blocking publish, drop-oldest per subscriber, per-key sequence (P2)
+    - [ ] [TASK-534](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-534-process-runner-and-git-tools.md) One process runner in Birko.Helpers; a git service and agent git tools on top of it (P2)
+    - [ ] [TASK-535](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-535-conversation-checkpoints-and-safe-trim.md) Conversation checkpoints: serialize / restore, and a trim that keeps tool pairs together (P2)
+  - STORY-061 KoboldLair server backports from DraCode — planned (0/7 done)
+    - [ ] [TASK-536](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-536-websocket-require-authentication-fails-open.md) `MapWebSocketEndpoint(requireAuthentication: true)` accepts anonymous upgrades when no auth service is registered (P1)
+    - [ ] [TASK-537](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-537-websocket-connection-send-queue-and-framed-receive.md) Birko.Communication.WebSocket: a connection with a serialized send queue and a framed receive loop (P1)
+    - [ ] [TASK-538](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-538-background-jobs-hosting-and-di.md) Birko.BackgroundJobs: hosted-service bridges and DI registration (P2)
+    - [ ] [TASK-539](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-539-websocket-server-command-router.md) Birko.Communication.WebSocket: a server-side command router (the server half of TASK-523) (P2)
+    - [ ] [TASK-540](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-540-aspnetcore-sse-result-with-heartbeat.md) Birko.Communication.SSE: an ASP.NET Core minimal-API result with heartbeat and terminal stop (P3)
+    - [ ] [TASK-541](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-541-owner-or-admin-access-predicate.md) Birko.Communication.AspNetCore: an owner-or-admin access check usable outside MapOwnedCrud (P3)
+    - [ ] [TASK-542](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-542-websocket-reverse-proxy-endpoint.md) A WebSocket reverse-proxy endpoint mapper (P3)
 
 ## Loose tasks
 
