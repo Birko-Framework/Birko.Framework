@@ -15,9 +15,9 @@ which this regeneration never touches._
 | planned      | 11     | 27     | —                   |
 | todo         | —                  | —                  | 179         |
 | in-progress  | 7  | 9  | 0   |
-| verify       | —                  | —                  | 1       |
+| verify       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 203         |
+| done         | 1        | 23        | 204         |
 | cancelled    | 0   | 0   | 4    |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -34,7 +34,7 @@ _None_
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (18/26 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (19/26 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -46,7 +46,7 @@ _None_
   - [x] [TASK-495](EPIC-001-web-components-ui-polish/TASK-495-file-upload-and-date-range-drop-the-field-label.md) `b-file-upload` and `b-date-range-picker` drop the field's label from their accessible names (P2) · FEATURE-001
   - [x] [TASK-496](EPIC-001-web-components-ui-polish/TASK-496-picker-triggers-announce-no-popup-and-clear-button-unnamed.md) Picker inputs don't announce their popup, and `b-select`'s clear button has no name (P2) · FEATURE-001
   - [x] [TASK-497](EPIC-001-web-components-ui-polish/TASK-497-b-range-dual-thumbs-sit-below-the-track.md) `b-range` in range mode draws its thumbs below the track (P2) · FEATURE-001
-  - [ ] [TASK-543](EPIC-001-web-components-ui-polish/TASK-543-b-code-block-ignores-content-changes.md) `b-code-block` does not re-render when its text content changes (P2) · ⏳ verify — Presenter sign-off pending
+  - [x] [TASK-543](EPIC-001-web-components-ui-polish/TASK-543-b-code-block-ignores-content-changes.md) `b-code-block` does not re-render when its text content changes (P2)
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)

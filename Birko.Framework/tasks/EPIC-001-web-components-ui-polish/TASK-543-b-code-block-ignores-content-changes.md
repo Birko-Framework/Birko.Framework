@@ -3,7 +3,7 @@ id: TASK-543
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 picked-by: fix-next
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
@@ -69,8 +69,11 @@ slide content on slide change). This task is the root-cause fix in the component
 
 - [x] In the Playground code-block page, swap a block's text in place from devtools
       (`el.firstChild.textContent = 'var x = 1;'`) → the rendered, highlighted code updates immediately
-- [ ] After the fix lands, in Presenter run `docs/talks/02-birko-framework.md` and step 7 → 8 → 9 with
+- [x] After the fix lands, in Presenter run `docs/talks/02-birko-framework.md` and step 7 → 8 → 9 with
       Presenter TASK-014's workaround reverted (or before it lands) → each slide shows its own code
+      — *run 2026-10-08 by the owner on Presenter `main` (TASK-014's workaround is only on its unmerged
+      `task/TASK-014` branch), SPA rebuilt against this fix, deck served locally: 7 → 8 → 9 → 8, every slide
+      showed its own code*
 
 ## Implementation plan
 
@@ -105,9 +108,11 @@ not observe), labelled as such.
   render per keystroke-sized mutation that changes nothing.
 - *Observer lives in `onMount`/`onUnmount`,* so a reconnected element re-observes and a detached one costs nothing.
 
-**Why `verify`, not `done`.** The Human test plan's second step is the field repro in Presenter (slides 7 → 8 → 9 with
-its TASK-014 workaround off). The harness reproduces the same mechanism, but the step is the reporter's confirmation in
-the consumer where it was found. The first step (devtools in-place swap) is automated by "in-place text edit re-renders".
+**Sign-off (2026-10-08, owner).** The field repro passed in Presenter without its own workaround: on `main`, rebuilt
+against this fix, slides 7 → 8 → 9 → 8 each showed their own code. The first plan step is automated by "in-place text
+edit re-renders". Closed `verify → done`. Presenter's TASK-014 (`data-morph="skip"` on slide containers) is no longer
+needed for this bug; whether to keep it as a general guard is Presenter's call.
 
 **Flagged, not fixed.** Other `b-*` components that read light-DOM content may share the pattern — already a boundary in
 Out of scope, which says a found one gets its own task; none was looked for here.
+- verify → done — owner sign-off 2026-10-08: field repro in Presenter (main, no TASK-014 workaround) passed
