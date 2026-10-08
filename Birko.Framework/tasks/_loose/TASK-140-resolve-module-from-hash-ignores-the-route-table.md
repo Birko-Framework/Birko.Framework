@@ -3,7 +3,8 @@ id: TASK-140
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: verify
+picked-by: fix-next
 priority: P1
 assignee: ai
 created: 2026-08-06
@@ -83,26 +84,26 @@ it to `b-ribbon` / `b-sidebar`, which compare ids, not routes. `activeSurface()`
 
 ## Acceptance criteria
 
-- [ ] `resolveModuleFromHash` resolves against the **declared** routes (`buildModuleRoutes`'s
+- [x] `resolveModuleFromHash` resolves against the **declared** routes (`buildModuleRoutes`'s
       `RouteEntry[]`, or the manifests it derives them from) rather than by segment position, so an
       option whose `route` does not read `/{moduleId}/{optionId}` resolves correctly
-- [ ] A hash matching **no** declared route does **not** write a fabricated module id — the store is
+- [x] A hash matching **no** declared route does **not** write a fabricated module id — the store is
       left with an explicit "no module" value, and the decision is observable to the caller (return
       shape says unresolved; do not rely on the caller to notice)
-- [ ] Whether the previous `activeModuleId` is **cleared or preserved** on an unmatched route is
+- [x] Whether the previous `activeModuleId` is **cleared or preserved** on an unmatched route is
       decided explicitly and documented in the function's doc comment, with the reasoning — the two
       behaviours are both defensible and the SSE gating above makes the choice consequential
-- [ ] A way for a module to claim a route outside its own `/{moduleId}/…` subtree exists **or** is
+- [x] A way for a module to claim a route outside its own `/{moduleId}/…` subtree exists **or** is
       recorded as a deliberate "no" with reasoning (the `alsoMatches` counterpart; do not add it
       speculatively if the resolver fix alone covers the real cases)
-- [ ] `entityId` (segment 2 today) keeps working for the conventional shape, and its behaviour under
+- [x] `entityId` (segment 2 today) keeps working for the conventional shape, and its behaviour under
       a declared multi-segment route is defined rather than incidental
-- [ ] Back-compat: every currently-correct resolution still resolves identically. Verified against
+- [x] Back-compat: every currently-correct resolution still resolves identically. Verified against
       Symbio's real manifest shape, not only a synthetic one
-- [ ] Smoke coverage in `Birko.Web.Playground`'s `backport-smoke.ts` beside the existing
+- [x] Smoke coverage in `Birko.Web.Playground`'s `backport-smoke.ts` beside the existing
       `M266 resolveModuleFromHash …` checks (`:490-493`), covering: a conventional route, a
       non-conventional declared route, an unmatched top-level route, and the store state after each
-- [ ] Every new check is **red-verified** by reverting the fix, and any check that passes either way
+- [x] Every new check is **red-verified** by reverting the fix, and any check that passes either way
       is either fixed to be falsifiable or labelled as a back-compat assertion
 
 ## Out of scope
@@ -130,4 +131,48 @@ it to `b-ribbon` / `b-sidebar`, which compare ids, not routes. `activeSurface()`
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-140` — leave empty until then._
+Planned and executed inline by fix-next; see Progress log and Outcome.
+
+## Progress log
+
+- step 2 — picked at the user's request (2026-10-08) after TASK-537; the only open P1 framework defect outside EPIC-019, live in Symbio (fabricated `activeModuleId` silently breaks SSE live-refresh gating)
+- step 3 — verified: holds. `route-builder.ts:16-29` splits by position and writes `parts[0]` unconditionally. Measured against Symbio: all 156 declared options in 24 modules are conventional `/{moduleId}/{optionId}` (so defect 2 is unreached there today), and its 11 non-module routes each write a fabricated id (defect 1, live). Symbio's `dashboard-grid.ts:53` already carries a workaround comment for `activeModuleId="dashboard"`
+- step 4 — layer: local (Birko.Web.Shell, in the `Birko\Web` checkout)
+- step 5 — fix in `Web/Birko.Web.Shell/src/modules/route-builder.ts` (+ `ModuleResolution` export in `modules/index.ts`); checks in `Consumers/Birko.Web.Playground/src/backport-smoke.ts`; `node verify.mjs`: backport-smoke 319/319, 0 failing checks across all suites
+- step 6 — reverted route-builder.ts to HEAD: 5/8 checks failed; fix-dependent = "unmatched /settings is unresolved, store cleared" (old: activeModuleId=settings), "non-conventional declared route resolves to its module" (old: sales/leads/7), "longest declared route wins" (old: option stock, entity archive), "query string is not part of the option" (old: stock?tab=2), "nothing loaded yet resolves nothing and clears the stale id"; back-compat assertions (pass either way, labelled so) = M266 parses module/option/entity, M266 updates store, bare module id. Separately, old-vs-new over Symbio's real manifests (extracted from 24 `*Module.cs`): 468 hashes (156 routes × plain / +entity / +entity+segment) identical, 0 differ
+- step 7 — no spec area: Birko.Web.* is on `docs/specs/.map.yml:81`'s uncovered list. Docs: Birko.Web.Shell README API entry rewritten
+- step 8 — handed to /tasks close --unattended; outcome in status:, commit in git log
+
+## Outcome
+
+**What was fixed.** `resolveModuleFromHash` took the first hash segment as the module id and wrote it to the module
+store whether or not such a module existed. In Symbio, every non-module page (`/settings`, `/dashboard`, `/profile`, …)
+therefore set `activeModuleId` to a module that does not exist — the ribbon highlighted nothing, and SSE live-refresh,
+which gates on `activeModuleId`, stopped matching the module the user came from. It now matches the hash against the
+option routes the modules actually declare; an unmatched hash returns `resolved: false` and clears the active module
+to `null`.
+
+**Proof.** Reverting fails 5 of the 8 resolver checks — every new behaviour — and the failure lines show the old values
+(`/settings` → `activeModuleId=settings`). 3 checks are labelled back-compat and pass either way. Against Symbio's real
+manifests, 468 of 468 module resolutions are identical before and after.
+
+**Judgement calls.**
+- *Clear, not preserve, on an unmatched route* (criterion 3). On `/settings` the user is in no module; a preserved id
+  would keep active-module-scoped permission checks and SSE refresh acting for a page that is not shown, and is the
+  same "store claims a state that isn't true" defect in a milder form. Documented in the function's doc comment.
+- *No ownership field* (criterion 4, the `alsoMatches` counterpart). Once the resolver reads declared routes, an option
+  that declares `/settings` owns it — a second field would be the two-sources-for-one-answer hazard this task names.
+- *Read the table from `store.modules`, not a new parameter.* The store already holds the manifests, so the signature
+  and both consumers' call sites stay unchanged. Cost: nothing resolves before modules load — both consumers resolve
+  again after loading (DraCode awaits `loadModules()` first; Symbio re-runs the router on `_rebuildRoutes`).
+- *`entityId` is exactly the one segment after the matched route*, deeper segments left to the page; a query string is
+  stripped (the old resolver folded `?tab=2` into the option id).
+- *Bare module id* (`/inventory`) still resolves the module with no option — kept for back-compat.
+
+**Why `verify`, not `done`.** The Human test plan needs a running Symbio with the rebuilt UI (console check, a live SSE
+round-trip, the ribbon on each non-module route). No unit check exercises the real event stream, which is the
+consequence that made this P1.
+
+**Flagged, not fixed.** Nothing new. Symbio's `dashboard-grid.ts:53` comment describes `activeModuleId="dashboard"`,
+which no longer happens; the workaround it explains stays correct (it resolves against the widget's module). That is
+Symbio's file — its agent picks up the comment when it rebuilds against this change.
