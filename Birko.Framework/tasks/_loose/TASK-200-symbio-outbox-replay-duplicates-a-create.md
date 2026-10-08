@@ -3,7 +3,7 @@ id: TASK-200
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: cancelled  # moved to Symbio TASK-894 — no framework work remains
 priority: P1
 assignee: ai
 created: 2026-08-11
@@ -16,6 +16,11 @@ jira-key: null
 ---
 
 # Symbio: an outbox replay duplicates a create, and TASK-151 scoped the cause out of itself
+
+> **Cancelled 2026-10-08 — moved to Symbio.** Every remaining criterion is Symbio code or a Symbio decision; the
+> framework half shipped as [[TASK-199]], and the reachable user-facing variant was fixed as Symbio TASK-390. Consumer
+> tasks live in the consumer's own `tasks/`, so the work continues as **Symbio TASK-894**
+> (`Consumers/Symbio/tasks/EPIC-029-pwa-offline-sync/STORY-063-sync-reliability`). Kept here for the measured history.
 
 ## Context
 

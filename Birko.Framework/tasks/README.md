@@ -476,7 +476,7 @@ _None_
 - [ ] [TASK-145](_loose/TASK-145-document-the-decorator-stripping-escape-hatch.md) Nothing at the `GetUnwrappedStore` call sites says they strip every decorator (P2)
 - [ ] [TASK-147](_loose/TASK-147-attachtag-does-not-validate-tag-ownership.md) `AttachTagAsync` validates neither a tag's existence nor its ownership (P2)
 - [ ] [TASK-149](_loose/TASK-149-story-level-tracking-is-invisible-to-every-scheduler.md) A story that tracks work without task files is invisible to every scheduler (P2)
-- [ ] [TASK-200](_loose/TASK-200-symbio-outbox-replay-duplicates-a-create.md) Symbio: an outbox replay duplicates a create, and TASK-151 scoped the cause out of itself (P1)
+- ~~[TASK-200](_loose/TASK-200-symbio-outbox-replay-duplicates-a-create.md) Symbio: an outbox replay duplicates a create, and TASK-151 scoped the cause out of itself~~ (P1) → moved to Symbio TASK-894
 - [x] [TASK-201](_loose/TASK-201-reps-declare-idpinned-on-client-minted-creates.md) Reps: declare `idPinned` on the client-minted creates — and not on the one that must not have it (P2)
 - [ ] [TASK-206](_loose/TASK-206-hybrid-l2-fallback-cannot-tell-misconfiguration-from-outage.md) `HybridCache`'s L2 fallback filter cannot tell a misconfiguration from an outage (P2)
 - ~~[TASK-235](_loose/TASK-235-fisdata-angular-will-hit-netsdk1087-on-migration.md) `FisData.Stock.Angular.Server` will fail `NETSDK1087` when its net10 migration lands~~ (P3)
