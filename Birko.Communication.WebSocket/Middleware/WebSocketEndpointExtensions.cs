@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
 using SysWebSocket = System.Net.WebSockets.WebSocket;
@@ -23,19 +24,30 @@ namespace Birko.Communication.WebSocket.Middleware
     public static class WebSocketEndpointExtensions
     {
         /// <summary>
-        /// Maps a WebSocket endpoint with optional authentication
+        /// Maps a WebSocket endpoint, by default behind the static-token check.
         /// </summary>
-        /// <param name="app">The application builder</param>
+        /// <param name="endpoints">The endpoint route builder</param>
         /// <param name="pattern">The route pattern</param>
         /// <param name="handler">The WebSocket connection handler</param>
-        /// <param name="requireAuthentication">Whether to require authentication (default: true)</param>
-        /// <returns>The route handler builder</returns>
+        /// <param name="requireAuthentication">
+        /// Require a token accepted by <see cref="Services.WebSocketAuthenticationService"/> (static / M2M tokens
+        /// from <see cref="Services.WebSocketAuthenticationConfiguration"/>, passed as <c>?token=</c>). This is
+        /// <b>not</b> per-user authentication. When true and the service is not registered, mapping throws
+        /// <see cref="InvalidOperationException"/>, and a request that still gets through is refused with 401.
+        /// For per-user (JWT / cookie) auth pass <c>false</c> and chain <c>.RequireAuthorization()</c>.
+        /// </param>
+        /// <returns>The endpoint convention builder</returns>
         public static IEndpointConventionBuilder MapWebSocketEndpoint(
             this IEndpointRouteBuilder endpoints,
             string pattern,
             WebSocketConnectionHandler handler,
             bool requireAuthentication = true)
         {
+            if (requireAuthentication)
+            {
+                WebSocketAuthenticationGate.EnsureRegistered(endpoints.ServiceProvider, pattern);
+            }
+
             var pipeline = endpoints.CreateApplicationBuilder()
                 .UseMiddleware<WebSocketAuthenticationMiddleware>(requireAuthentication)
                 .UseMiddleware<WebSocketMiddleware>(handler)
@@ -60,7 +72,8 @@ namespace Birko.Communication.WebSocket.Middleware
         }
 
         /// <summary>
-        /// Legacy extension method for direct app.UseWebSocket() style
+        /// Legacy extension method for direct app.UseWebSocket() style. <paramref name="requireAuthentication"/>
+        /// means exactly what it does on <see cref="MapWebSocketEndpoint"/>, including failing closed.
         /// </summary>
         public static void MapWebSocket(
             this IApplicationBuilder app,
@@ -68,25 +81,18 @@ namespace Birko.Communication.WebSocket.Middleware
             WebSocketConnectionHandler handler,
             bool requireAuthentication = true)
         {
+            if (requireAuthentication)
+            {
+                WebSocketAuthenticationGate.EnsureRegistered(app.ApplicationServices, pattern);
+            }
+
             app.Map(pattern, appBuilder =>
             {
                 appBuilder.Use(async (HttpContext context, RequestDelegate next) =>
                 {
-                    if (requireAuthentication)
+                    if (requireAuthentication && !await WebSocketAuthenticationGate.AuthorizeAsync(context, null))
                     {
-                        var authService = context.RequestServices.GetService<Services.WebSocketAuthenticationService>();
-                        if (authService != null)
-                        {
-                            var token = authService.ExtractTokenFromQuery(context);
-                            var clientIp = authService.GetClientIpAddress(context);
-
-                            if (!authService.ValidateToken(token, clientIp))
-                            {
-                                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                                await context.Response.WriteAsync("Unauthorized: Invalid or missing authentication token, or IP address not allowed");
-                                return;
-                            }
-                        }
+                        return;
                     }
 
                     if (context.WebSockets.IsWebSocketRequest)

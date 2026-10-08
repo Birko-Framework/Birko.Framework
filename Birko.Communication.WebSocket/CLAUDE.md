@@ -24,6 +24,10 @@ WebSocket communication implementation for real-time bidirectional communication
 
 ### Middleware
 - ASP.NET Core middleware for WebSocket
+- `MapWebSocketEndpoint` / legacy `MapWebSocket` — `requireAuthentication` (default true) is the **static-token** check;
+  both paths go through `WebSocketAuthenticationGate`, which **fails closed**: map-time throw when
+  `WebSocketAuthenticationService` is not registered, 401 per request as backstop (TASK-536). Per-user auth:
+  `requireAuthentication: false` + `.RequireAuthorization()`
 
 ### Services
 - Connection management

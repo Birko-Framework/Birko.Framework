@@ -13,6 +13,9 @@ Unit tests for the Birko.Communication.WebSocket project - WebSocket communicati
 
 ## Test Structure
 - `WebSocketSettingsTests.cs` - WebSocket settings configuration tests
+- `WebSocketAuthenticationServiceTests.cs` - static-token validation, token extraction, disposal
+- `WebSocketEndpointAuthenticationTests.cs` - `requireAuthentication` fails closed on both mapping paths (TASK-536)
+- `WebSocketServerTests.cs`, `WebSocketPortBufferTests.cs` - standalone server and port buffering
 
 ## Dependencies
 - Birko.Communication.WebSocket (via .projitems) - WebSocket communication

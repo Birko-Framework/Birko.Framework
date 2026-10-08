@@ -1,6 +1,6 @@
 ---
 id: EPIC-019
-status: planned
+status: in-progress
 created: 2026-10-07
 owner: ai
 affects: [Birko.Security.OAuth.Server, Birko.Security.AspNetCore, Birko.Communication.OAuth, Birko.Communication.OAuth.Providers, Birko.Data.SQL.SqLite, Birko.Web.Core, Birko.Web.Components, Birko.Web.Shell, Birko.AI, Birko.AI.Contracts, Birko.AI.Orchestration, Birko.AI.Resilience, Birko.Data.EventSourcing, Birko.EventBus, Birko.Security, Birko.Helpers, Birko.Communication.WebSocket, Birko.Communication.SSE, Birko.Communication.AspNetCore, Birko.BackgroundJobs]

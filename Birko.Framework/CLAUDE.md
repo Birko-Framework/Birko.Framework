@@ -239,6 +239,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### WebSocket `requireAuthentication: true` fails closed (2026-10-08)
+
+[[TASK-536]]. Both WebSocket mapping paths skipped the token check when `WebSocketAuthenticationService` was not
+registered, and nothing registers it — so the **default** accepted anonymous upgrades (rule 51). Now mapping throws, and
+a request that still reaches the gate gets 401. The flag means **static tokens**, not per-user auth: for JWT use
+`requireAuthentication: false` + `.RequireAuthorization()`. No consumer was affected; migration in [CHANGELOG.md](CHANGELOG.md).
+
 ### A SQLite `decimal` is exact TEXT ordered by a collation, not a float (2026-10-04)
 
 [[TASK-513]]. SQLite keeps `REAL` and `NUMERIC(p,s)` alike as an 8-byte float: a 22-digit value came back cut to 16,

@@ -27,6 +27,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Servers\WebSocketServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\WebSocketAuthenticationConfiguration.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\WebSocketAuthenticationService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\WebSocketAuthenticationGate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Middleware\WebSocketEndpointExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Middleware\WebSocketMiddleware.cs" />
   </ItemGroup>

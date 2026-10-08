@@ -78,6 +78,30 @@ app.UseWebSockets();
 app.UseMiddleware<WebSocketMiddleware>();
 ```
 
+### Mapping endpoints and authentication
+
+`MapWebSocketEndpoint(pattern, handler, requireAuthentication: true)` puts the endpoint behind the **static-token**
+check of `WebSocketAuthenticationService` (tokens / token bindings from `WebSocketAuthenticationConfiguration`, sent as
+`?token=`). It is meant for machine-to-machine and edge clients, **not** per-user sign-in.
+
+It fails closed. With `requireAuthentication: true` and no `WebSocketAuthenticationService` registered, mapping throws
+`InvalidOperationException`, and a request that reaches the gate anyway is refused with 401. Before TASK-536 the check
+was skipped and anonymous upgrades were accepted.
+
+```csharp
+// Static tokens
+builder.Services.Configure<WebSocketAuthenticationConfiguration>(builder.Configuration.GetSection("WebSocketAuth"));
+builder.Services.AddSingleton<WebSocketAuthenticationService>();
+app.MapWebSocketEndpoint("/ws/devices", DeviceHandler.HandleAsync);
+
+// Per-user auth (JWT / cookie): turn the token check off and use ASP.NET Core authorization
+app.MapWebSocketEndpoint("/ws/realtime", RealtimeHandler.HandleAsync, requireAuthentication: false)
+   .RequireAuthorization();
+
+// Public endpoint
+app.MapWebSocketEndpointNoAuth("/ws/display", DisplayHandler.HandleAsync);
+```
+
 ## API Reference
 
 ### Classes

@@ -98,21 +98,9 @@ namespace Birko.Communication.WebSocket.Middleware
                 return;
             }
 
-            var authService = context.RequestServices.GetService<Services.WebSocketAuthenticationService>();
-            if (authService != null)
+            if (!await WebSocketAuthenticationGate.AuthorizeAsync(context, _logger))
             {
-                var token = authService.ExtractTokenFromQuery(context);
-                var clientIp = authService.GetClientIpAddress(context);
-
-                if (!authService.ValidateToken(token, clientIp))
-                {
-                    _logger.LogWarning("WebSocket authentication failed from IP: {ClientIp}", clientIp ?? "unknown");
-                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    await context.Response.WriteAsync("Unauthorized: Invalid or missing authentication token, or IP address not allowed");
-                    return;
-                }
-
-                _logger.LogDebug("WebSocket authenticated from IP: {ClientIp}", clientIp ?? "unknown");
+                return;
             }
 
             await _next(context);

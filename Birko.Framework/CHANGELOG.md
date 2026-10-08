@@ -4,6 +4,27 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-08 — WebSocket `requireAuthentication: true` fails closed
+
+[[TASK-536]]. `MapWebSocketEndpoint` and the legacy `MapWebSocket` default to `requireAuthentication: true`, but both
+ran the token check only `if (authService != null)`. Nothing in the framework registers `WebSocketAuthenticationService`,
+so the default accepted every anonymous upgrade — a safety flag that did nothing (rule 51).
+
+```text
+requireAuthentication: true, service not registered
+  map time      nothing          → InvalidOperationException naming the endpoint and both remedies
+  per request   upgrade accepted → 401, handler not run  (backstop when the container cannot answer at map time)
+```
+
+**Migration.** An app that maps with the default and never registered the service now fails at startup. Pick one:
+register `WebSocketAuthenticationService` (+ `WebSocketAuthenticationConfiguration`) for static tokens; pass
+`requireAuthentication: false` + `.RequireAuthorization()` for per-user auth; or `MapWebSocketEndpointNoAuth` for a
+public endpoint. Measured across the consumers on 2026-10-08: none was affected (gameshow-app uses `NoAuth`, Symbio
+passes `false` with `.RequireAuthorization()`, DraCode does not use the mapping). The check now lives in one place,
+`Middleware/WebSocketAuthenticationGate.cs`, shared by both paths.
+
+---
+
 ## 2026-10-06 — Z.AI: GLM-5.3 gets its output budget, and a truncated reply says so
 
 [[TASK-516]]. `ZAiProvider.GetMaxTokensForModel` knew GLM-5/5.1 and older; `glm-5.3` and `glm-5.3-flash` fell to the
