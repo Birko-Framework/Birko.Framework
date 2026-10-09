@@ -2,7 +2,7 @@
 id: TASK-484
 parent: STORY-057
 feature: FEATURE-001
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-24
@@ -51,10 +51,11 @@ The Playground's Input card now has a `clearable` toggle, next to `size` / `disa
 
 - [x] Playground: `b-input clearable` at `size="sm"`, default and `lg`. Type a long value and check the text never runs under the × — owner, 2026-10-09
 - [x] Keyboard: Tab reaches the ×, Enter/Space clears it, focus lands back in the field — owner, 2026-10-09
-- [ ] Screen reader announces the × with its label, in EN and SK. The package ships only `en.json`, so SK means a
-      consumer registering `bwc.input.clear` (Presenter's TASK-012), or `label-clear` on the element
+- [x] Screen reader announces the × with its label, EN: Windows Narrator reads "Clear, button" in the Playground — owner, 2026-10-09
+- [x] Screen reader, SK: Narrator in Slovak reads the × label in Presenter — owner, 2026-10-09. The package ships only `en.json`, so SK means a consumer registering `bwc.input.clear`
+      (Presenter's TASK-012), or `label-clear` on the element. Checked together with the Presenter sign-off below
 - [x] Light and dark theme: the × uses `--b-*` tokens and is legible in both — owner, 2026-10-09
-- [ ] Sign-off in Presenter: TASK-012 replaces its button beside the field with `clearable`
+- [x] Sign-off in Presenter: TASK-012 replaces its button beside the field with `clearable` — owner, 2026-10-09
 
 ## Implementation plan
 
@@ -91,3 +92,9 @@ no inline padding → 7 fail at all three sizes; clear without the input event �
   nothing. Recorded in the package's CLAUDE.md because `b-input bare` is the planned editable-table cell.
 - *New key `bwc.input.clear` ("Clear")* rather than reusing `bwc.common.clear`, as the criterion asks.
   `b-select` keeps its own.
+
+**Found at sign-off, not this task's defect.** Presenter's URL field has no `label`, so Narrator announces the
+placeholder (`https://example.com/deck.md`) as the field's name, ahead of the typed value. Chrome's accessibility
+tree confirms `b-input` exposes the value correctly (name = placeholder, value = `abc`; with `label`, name = the
+label). The fix belongs in Presenter: give the field a `label`. `b-input` has no way to give a field an
+accessible name without a visible label that keeps the error row; `bare` removes that row.
