@@ -64,12 +64,6 @@ namespace Birko.AI
         public bool StreamingFallbackToSync { get; set; } = true;
 
         /// <summary>
-        /// Interval (in iterations) between self-reflection checkpoints. Default: 3
-        /// Set to 0 to disable checkpoint prompts.
-        /// </summary>
-        public int CheckpointInterval { get; set; } = 3;
-
-        /// <summary>
         /// Optional callback invoked after each successful LLM response.
         /// </summary>
         public Action? OnLlmResponseReceived { get; set; }
@@ -89,7 +83,6 @@ namespace Birko.AI
                 AllowedExternalPaths = new List<string>(AllowedExternalPaths),
                 EnableStreaming = EnableStreaming,
                 StreamingFallbackToSync = StreamingFallbackToSync,
-                CheckpointInterval = CheckpointInterval,
                 OnLlmResponseReceived = OnLlmResponseReceived
             };
         }
@@ -112,7 +105,6 @@ namespace Birko.AI
                 AllowedExternalPaths = new List<string>(other.AllowedExternalPaths);
             EnableStreaming = other.EnableStreaming;
             StreamingFallbackToSync = other.StreamingFallbackToSync;
-            CheckpointInterval = other.CheckpointInterval;
             if (other.OnLlmResponseReceived != null)
                 OnLlmResponseReceived = other.OnLlmResponseReceived;
         }
@@ -148,8 +140,6 @@ namespace Birko.AI
                 options.EnableStreaming = enableStreamingVal;
             if (config.TryGetValue("streamingFallbackToSync", out var streamingFallbackToSync) && bool.TryParse(streamingFallbackToSync, out var streamingFallbackToSyncVal))
                 options.StreamingFallbackToSync = streamingFallbackToSyncVal;
-            if (config.TryGetValue("checkpointInterval", out var checkpointInterval) && int.TryParse(checkpointInterval, out var checkpointIntervalVal))
-                options.CheckpointInterval = checkpointIntervalVal;
 
             return options;
         }
@@ -167,8 +157,7 @@ namespace Birko.AI
                 ["modelDepth"] = ModelDepth.ToString(),
                 ["allowedExternalPaths"] = string.Join('\n', AllowedExternalPaths),
                 ["enableStreaming"] = EnableStreaming.ToString(),
-                ["streamingFallbackToSync"] = StreamingFallbackToSync.ToString(),
-                ["checkpointInterval"] = CheckpointInterval.ToString()
+                ["streamingFallbackToSync"] = StreamingFallbackToSync.ToString()
             };
 
             if (DefaultPromptResponse != null)

@@ -4,6 +4,44 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-09 — BREAKING: `AgentOptions.CheckpointInterval` removed; the agent loop gains hooks and `ResumeAsync`
+
+[[TASK-527]]. DraCode's `Kobold` forked `Agent.RunAsync` (~375 lines) to inject a reflection prompt and stop early,
+read the protected `SystemPrompt` by reflection, and re-wrapped every tool to observe calls. `Agent` now offers those
+seams, so the fork can go.
+
+```text
+Agent.Hooks               IAgentHooks? — OnIterationStartingAsync(AgentIterationContext)
+                                         OnToolCallStartingAsync(ToolCallStarted, ct)
+                                         OnToolCallFinishedAsync(ToolCallFinished, ct)
+Agent.CurrentSystemPrompt string — the protected SystemPrompt, readable from outside
+Agent.ResumeAsync         (IEnumerable<Message>, int? maxIterations, ct) — no user turn added
+```
+
+`AgentIterationContext` can `AppendUserMessage` (sent with that iteration's call) and `Stop()`; it fires before the
+cancellation check, so a hook can end a cancelled run cleanly. A throwing hook ends the run as `AgentHookException`
+(OCE passes through) and is excluded from the streaming sync-fallback. A tool's exception still propagates after
+`OnToolCallFinishedAsync` sees it in `ToolCallFinished.Exception`. The streaming and non-streaming loops are now one
+loop, so hooks and the token cannot drift between paths. Additive — no existing member changed.
+
+**Breaking — `AgentOptions.CheckpointInterval` is removed.**
+
+```text
+old  public int CheckpointInterval { get; set; } = 3;    // also in Clone / Merge / ToDictionary / FromDictionary
+new  (removed)
+```
+
+Nothing in `Birko.AI` ever read it — only DraCode's fork did — so it was an option that did nothing (rule 51).
+Honouring it would have put DraCode's reflection prompt into every Birko agent. **Migration:** the compiler points at
+every reader (DraCode `Kobold.cs:1418`); move the interval into your own settings and inject the prompt from
+`OnIterationStartingAsync`. A persisted options dictionary's `checkpointInterval` key is now **silently ignored** by
+`FromDictionary`, which skips unknown keys.
+
+Found on the way, filed as [[TASK-544]]: the streaming fallback wraps the whole streaming run, so a failure in a later
+iteration replays every iteration — and every tool — in sync mode.
+
+---
+
 ## 2026-10-08 — WebSocketServer caps a message; one capped whole-message receive for handlers
 
 [[TASK-537]]. `WebSocketServer.ReceiveLoopAsync` reassembled a message across frames into a `MemoryStream` with no
@@ -259,6 +297,32 @@ A listener that only wants to know is migrated by reading `value` and is otherwi
 
 **Migrated:** Symbio's three tag listeners (`modules/{building,products,tasks}/list/list-page.ts`), in the
 same change. A search of every checkout under `C:\Source\Birko` found no other listener.
+
+## 2026-09-23 — A shared project cannot announce a breaking change, so someone has to
+
+[[TASK-483]]. `Tool.ExecuteAsync` gained a `CancellationToken` on its **abstract** signature in
+`6b4e374b` (2026-07-09). The framework migrated its own 10 implementers the same day and told nobody
+else. DraCode's **41 tool classes have not compiled since** — `41 × CS0534 + 41 × CS0115` — and it
+took 2½ months and an unrelated advisory hunt to notice. Three things worth carrying:
+
+- **⚠ The break was RIGHT; keep the abstract signature.** The tempting fix — a virtual
+  three-argument overload forwarding to the old two-argument abstract — compiles everywhere and
+  **discards the token**. The run loop would pass a token believing execution could be cancelled
+  while tools did uncancellable file, network and database I/O. That is rule 51's *"silent no-op
+  wearing a parameter's name"*. **A compile error naming all 41 files is the cheapest failure mode
+  available**, and keeping consumers compiling is not worth a parameter that does nothing.
+- **⚠ A `.projitems` shared project has NO package identity, so a breaking change carries no
+  signal** — nothing to bump, no `NU1605`, no restore warning. [[TASK-473]] measured that property
+  from the security side; this is the same property from the API side, and it means the warning must
+  be written by hand or it does not exist. The protocol is now in
+  [CLAUDE-maintenance.md](CLAUDE-maintenance.md) § Breaking changes in a shared project: a
+  `CHANGELOG.md` entry naming the member, both signatures, and the migration. A README update is not
+  a substitute — it is a file inside the framework, and the people who need the warning are outside
+  it.
+- **The migration was never hard, which is the point.** BardStudio — the other consumer implementing
+  `Tool` — did it without difficulty. One of two followed; the other was simply never told.
+
+---
 
 ## 2026-09-20 — A live suite that invents its own server gate never runs in CI
 

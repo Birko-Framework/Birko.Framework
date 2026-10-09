@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-05 08:40, TASK-543 added 2026-10-08 by `/tasks new`. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-09 13:48. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -12,17 +12,17 @@ which this regeneration never touches._
 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
-| planned      | 11     | 27     | —                   |
-| todo         | —                  | —                  | 179         |
-| in-progress  | 7  | 9  | 0   |
+| planned      | 10     | 27     | —                   |
+| todo         | —                  | —                  | 192         |
+| in-progress  | 8  | 11  | 0   |
 | verify       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 204         |
-| cancelled    | 0   | 0   | 4    |
+| done         | 1        | 23        | 208         |
+| cancelled    | 0   | 0   | 5    |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 32× P1 · 108× P2 · 39× P3.
+`todo` by priority: 33× P1 · 116× P2 · 43× P3.
 
 ## In progress now
 
@@ -34,7 +34,7 @@ _None_
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (19/26 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (20/27 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -46,7 +46,8 @@ _None_
   - [x] [TASK-495](EPIC-001-web-components-ui-polish/TASK-495-file-upload-and-date-range-drop-the-field-label.md) `b-file-upload` and `b-date-range-picker` drop the field's label from their accessible names (P2) · FEATURE-001
   - [x] [TASK-496](EPIC-001-web-components-ui-polish/TASK-496-picker-triggers-announce-no-popup-and-clear-button-unnamed.md) Picker inputs don't announce their popup, and `b-select`'s clear button has no name (P2) · FEATURE-001
   - [x] [TASK-497](EPIC-001-web-components-ui-polish/TASK-497-b-range-dual-thumbs-sit-below-the-track.md) `b-range` in range mode draws its thumbs below the track (P2) · FEATURE-001
-  - [x] [TASK-543](EPIC-001-web-components-ui-polish/TASK-543-b-code-block-ignores-content-changes.md) `b-code-block` does not re-render when its text content changes (P2)
+  - [x] [TASK-543](EPIC-001-web-components-ui-polish/TASK-543-b-code-block-ignores-content-changes.md) b-code-block does not re-render when its text content changes (P2)
+  - [ ] [TASK-545](EPIC-001-web-components-ui-polish/TASK-545-undo-instead-of-confirm-for-reversible-deletes.md) A reversible delete can offer Undo instead of a confirm dialog — toast action + base-page opt-in (P3)
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
@@ -65,8 +66,8 @@ _None_
     - [x] [TASK-041](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-041-shared-coerce-css-length.md) Extract a shared `coerceCssLength` helper and fix the unitless-length bug across components (P2) · FEATURE-001
   - STORY-050 Visible help text on form controls — in-progress (1/1 done)
     - [x] [TASK-091](EPIC-001-web-components-ui-polish/STORY-050-help-text-row/TASK-091-description-help-text-row.md) `description` — a persistent help-text row on the form controls (P2) · FEATURE-001
-  - STORY-057 Input adornments — prefix / suffix slots on text-like controls — planned (0/2 done)
-    - [ ] [TASK-484](EPIC-001-web-components-ui-polish/STORY-057-input-adornments/TASK-484-b-input-prefix-suffix-slots-clearable.md) b-input: `prefix` / `suffix` slots + `clearable` (P2) · FEATURE-001
+  - STORY-057 Input adornments — prefix / suffix slots on text-like controls — planned (1/2 done)
+    - [x] [TASK-484](EPIC-001-web-components-ui-polish/STORY-057-input-adornments/TASK-484-b-input-prefix-suffix-slots-clearable.md) b-input: `prefix` / `suffix` slots + `clearable` (P2) · FEATURE-001
     - [ ] [TASK-485](EPIC-001-web-components-ui-polish/STORY-057-input-adornments/TASK-485-adornment-slots-other-text-controls.md) Extend adornment slots to the other text-like controls; move `b-search-input` onto them (P3) · FEATURE-001
 - **EPIC-002** Birko.Data.Redis — planned (0/1 tasks done)
   - [ ] [TASK-004](EPIC-002-birko-data-redis/TASK-004-implement-birko-data-redis.md) Implement Birko.Data.Redis (P2) · FEATURE-002
@@ -429,8 +430,7 @@ _None_
   - [x] [TASK-203](EPIC-018-birko-web-core-runtime/TASK-203-nothing-recorded-and-never-synced-both-read-as-empty.md) "nothing recorded" and "never synced" both read as `[]` (P2) · FEATURE-018
   - [x] [TASK-493](EPIC-018-birko-web-core-runtime/TASK-493-apiclient-getheaders-and-patch.md) `ApiClient` had no generic request-header hook and no `patch()` (P1) · FEATURE-018
   - [x] [TASK-508](EPIC-018-birko-web-core-runtime/TASK-508-apiclient-postform-multipart-upload.md) `ApiClient` cannot send a multipart upload (P1) · FEATURE-018
-
-- **EPIC-019** Birko framework backports from DraCode — in-progress (2/26 tasks done)
+- **EPIC-019** Birko framework backports from DraCode — in-progress (3/28 tasks done)
   - STORY-058 Security / OAuth backports from DraCode — planned (0/6 done)
     - [ ] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
     - [ ] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)
@@ -443,8 +443,8 @@ _None_
     - [ ] [TASK-524](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-524-shell-oauth-sign-in-helpers.md) Birko.Web.Shell auth: OAuth redirect parsing, token expiry and scheduled refresh (P2)
     - [ ] [TASK-525](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-525-reorderable-tabs-and-persisted-split-sizes.md) b-tabs drag-and-drop reorder; b-split-panel size persistence; a layout serialize/restore hook (P3)
     - [ ] [TASK-526](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-526-layered-runtime-config-loader.md) Birko.Web.Core: layered runtime configuration (defaults < server endpoint < local overrides) (P3)
-  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — planned (0/9 done)
-    - [ ] [TASK-527](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-527-agent-loop-hooks.md) Agent loop: per-iteration and tool-call hooks, a readable system prompt, resume from a conversation (P1)
+  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — in-progress (1/11 done)
+    - [x] [TASK-527](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-527-agent-loop-hooks.md) Agent loop: per-iteration and tool-call hooks, a readable system prompt, resume from a conversation (P1)
     - [ ] [TASK-528](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-528-orchestration-plan-model-and-step-validators.md) Birko.AI.Orchestration: a plan model with behaviour, step validators, and a pinned enum encoding (P1)
     - [ ] [TASK-529](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-529-sql-event-store.md) Ship a SQL IAsyncEventStore (P1)
     - [ ] [TASK-530](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-530-resilience-stores.md) Birko.AI.Resilience: store implementations for circuit-breaker state and usage (P2)
@@ -452,7 +452,9 @@ _None_
     - [ ] [TASK-532](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-532-config-secret-provider-and-field-cipher.md) Birko.Security: a configuration ISecretProvider and a field cipher keyed from a secret (P2)
     - [ ] [TASK-533](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-533-keyed-live-event-broadcaster.md) A keyed live-event broadcaster: non-blocking publish, drop-oldest per subscriber, per-key sequence (P2)
     - [ ] [TASK-534](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-534-process-runner-and-git-tools.md) One process runner in Birko.Helpers; a git service and agent git tools on top of it (P2)
-    - [ ] [TASK-535](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-535-conversation-checkpoints-and-safe-trim.md) Conversation checkpoints: serialize / restore, and a trim that keeps tool pairs together (P2)
+    - [ ] [TASK-535](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-535-conversation-checkpoints-and-safe-trim.md) Conversation checkpoints: serialize / restore, and a trim that keeps tool_use and tool_result together (P2)
+    - [ ] [TASK-544](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-544-streaming-fallback-reruns-executed-tools.md) The streaming fallback re-runs tools that already executed (P1)
+    - [ ] [TASK-546](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-546-consecutive-user-turns-from-hook-injection.md) A hook-injected message after a tool-result turn makes two consecutive user turns (P2)
   - STORY-061 KoboldLair server backports from DraCode — in-progress (2/7 done)
     - [x] [TASK-536](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-536-websocket-require-authentication-fails-open.md) `MapWebSocketEndpoint(requireAuthentication: true)` accepts anonymous upgrades when no auth service is registered (P1)
     - [x] [TASK-537](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-537-websocket-connection-send-queue-and-framed-receive.md) Birko.Communication.WebSocket: one capped whole-message receive, used by WebSocketServer and offered to handlers (P1)

@@ -15,7 +15,18 @@ Core AI agent framework with LLM provider base class, agent run loop, factories,
 - `LlmProviderBase` — Base class for LLM providers with retry logic, SSE parsing, and OpenAI-compatible helpers
 
 ### Agents/Agent.cs
-- `Agent` — Core agent run loop with streaming support and tool execution
+- `Agent` — Core agent run loop with streaming support and tool execution. **One** private loop (`RunLoopAsync`)
+  serves the streaming and non-streaming paths (only iteration 1 streams) — never reintroduce a second copy, it is
+  how hooks or token flow drift on one path. `CurrentSystemPrompt` exposes the protected `SystemPrompt`;
+  `ResumeAsync` continues a saved conversation without adding a user turn.
+
+### Agents/AgentHooks.cs
+- `IAgentHooks` / `AgentHooks` (no-op base) — attached via `Agent.Hooks`. `OnIterationStartingAsync(AgentIterationContext)`
+  fires before each model call and **before** the cancellation check (so it can `Stop()` a cancelled run cleanly),
+  and can `AppendUserMessage`. `OnToolCallStartingAsync` / `OnToolCallFinishedAsync` carry `ToolCallStarted` /
+  `ToolCallFinished` (name, id, input, result, found, `IsError`, `Exception`, duration).
+- A throwing hook ends the run as `AgentHookException` (OCE passes through) and is excluded from the streaming
+  sync-fallback filter. A tool's own exception still propagates after the finished hook sees it (TASK-527).
 
 ### Factories/AgentFactory.cs
 - `AgentFactory` — Factory for creating agent instances from providers (does NOT create providers)

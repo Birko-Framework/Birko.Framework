@@ -59,6 +59,7 @@ namespace Birko.AI.Tests
             // Regression for CR-M007: ToDictionary/FromDictionary silently dropped
             // AllowedExternalPaths, EnableStreaming, StreamingFallbackToSync and CheckpointInterval,
             // so a serialize/rebuild round-trip reset those four fields to their defaults.
+            // (CheckpointInterval was later removed by TASK-527.)
             var original = new AgentOptions
             {
                 Interactive = false,
@@ -71,8 +72,7 @@ namespace Birko.AI.Tests
                 ModelDepth = 8,
                 AllowedExternalPaths = new List<string> { "/etc/hosts", "/opt/data" },
                 EnableStreaming = true,
-                StreamingFallbackToSync = false,
-                CheckpointInterval = 5
+                StreamingFallbackToSync = false
             };
 
             var restored = AgentOptions.FromDictionary(original.ToDictionary());
@@ -88,7 +88,23 @@ namespace Birko.AI.Tests
             restored.AllowedExternalPaths.Should().Equal("/etc/hosts", "/opt/data");
             restored.EnableStreaming.Should().BeTrue();
             restored.StreamingFallbackToSync.Should().BeFalse();
-            restored.CheckpointInterval.Should().Be(5);
+        }
+
+        [Fact]
+        public void FromDictionary_RemovedCheckpointIntervalKey_IsIgnored()
+        {
+            // TASK-527 removed CheckpointInterval: nothing in the base loop read it (rule 51). A
+            // dictionary persisted before the removal still carries the key; it must not throw or
+            // disturb the fields beside it.
+            var restored = AgentOptions.FromDictionary(new Dictionary<string, string>
+            {
+                ["checkpointInterval"] = "3",
+                ["maxIterations"] = "7",
+                ["enableStreaming"] = "True",
+            });
+
+            restored.MaxIterations.Should().Be(7);
+            restored.EnableStreaming.Should().BeTrue();
         }
 
         [Fact]
@@ -112,14 +128,12 @@ namespace Birko.AI.Tests
                 ["maxIterations"] = "ten",
                 ["promptTimeout"] = "soon",
                 ["enableStreaming"] = "maybe",
-                ["checkpointInterval"] = "-",
             });
 
             restored.Interactive.Should().Be(defaults.Interactive);
             restored.MaxIterations.Should().Be(defaults.MaxIterations);
             restored.PromptTimeout.Should().Be(defaults.PromptTimeout);
             restored.EnableStreaming.Should().Be(defaults.EnableStreaming);
-            restored.CheckpointInterval.Should().Be(defaults.CheckpointInterval);
         }
 
         [Fact]

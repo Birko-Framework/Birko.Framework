@@ -11,7 +11,8 @@ Birko.AI provides the foundational infrastructure for building AI agents — a b
 | Type | Namespace | Description |
 |------|-----------|-------------|
 | `LlmProviderBase` | `Birko.AI.Providers` | Base class with retry logic, SSE parsing, OpenAI helpers |
-| `Agent` | `Birko.AI.Agents` | Core run loop with streaming and tool execution |
+| `Agent` | `Birko.AI.Agents` | Core run loop with streaming and tool execution; `ResumeAsync`, `CurrentSystemPrompt` |
+| `IAgentHooks` / `AgentHooks` | `Birko.AI.Agents` | Per-iteration and tool-call hooks, attached via `Agent.Hooks` |
 | `ListFilesTool` | `Birko.AI.Tools` | List files in a directory |
 | `ReadFileTool` | `Birko.AI.Tools` | Read file contents |
 | `WriteFileTool` | `Birko.AI.Tools` | Write content to a file |
@@ -40,6 +41,38 @@ using Birko.AI.Agents;
 var agent = new Agent(provider, options);
 await agent.RunAsync("Describe this codebase");
 ```
+
+### Hooks
+
+```csharp
+sealed class ReflectEvery3 : AgentHooks
+{
+    public override ValueTask OnIterationStartingAsync(AgentIterationContext context)
+    {
+        if (context.CancellationToken.IsCancellationRequested)
+            context.Stop("shutting down");          // a clean stop instead of an OperationCanceledException
+        else if (context.Iteration % 3 == 0)
+            context.AppendUserMessage("Pause and check your progress against the plan.");
+        return ValueTask.CompletedTask;
+    }
+
+    public override ValueTask OnToolCallFinishedAsync(ToolCallFinished call, CancellationToken cancellationToken)
+    {
+        Console.WriteLine($"{call.ToolName} {(call.IsError ? "failed" : "ok")} in {call.Duration.TotalMilliseconds:F0} ms");
+        return ValueTask.CompletedTask;
+    }
+}
+
+agent.Hooks = new ReflectEvery3();
+var conversation = await agent.RunAsync("Fix the build");
+
+// After a crash — continue a conversation checkpointed mid-run, exactly as it stands. No user turn is added,
+// so it must end in a user or tool-result turn; one ending in an assistant turn is refused (use ContinueAsync).
+await agent.ResumeAsync(checkpoint);
+```
+
+Hooks fire on the streaming and non-streaming path alike. A throwing hook ends the run with `AgentHookException`
+and is never retried by the streaming fallback. An agent instance is not safe for concurrent runs.
 
 ## License
 

@@ -51,7 +51,8 @@ Core interfaces, models, and provider factory with zero dependencies:
 Base classes, agent factory, and shared utilities:
 
 - **LlmProviderBase** — Retry logic (uses `Birko.RetryPolicy`), SSE parsing, OpenAI-compatible message/tool builders, streaming helpers
-- **Agent** — Run loop with streaming/sync modes, tool execution, multi-turn conversations, depth guidance
+- **Agent** — Run loop with streaming/sync modes, tool execution, multi-turn conversations, depth guidance; `ResumeAsync` continues a saved conversation as it stands, `CurrentSystemPrompt` exposes the prompt
+- **IAgentHooks / AgentHooks** — Attached via `Agent.Hooks`: a per-iteration hook that can append a user message or stop the run, and tool-call started / finished hooks with name, input, result, error and duration. A throwing hook ends the run with `AgentHookException`
 - **AgentFactory** — Registration-based factory: `Register()`, `RegisterAlias()`, `Create(provider, agentType)`, `IsRegistered()`, `GetRegisteredAgentTypes()`
 - **Default Tools** — ListFiles, ReadFile, WriteFile, EditFile, AppendToFile, SearchCode, RunCommand, DisplayText, AskUser (all use `Birko.Helpers.PathHelper` for path safety)
 
@@ -160,6 +161,10 @@ var agent = AgentFactory.Create(tracked, agentType: "csharp");
 var oauth = GitHubOAuthProvider.CreateDeviceFlowClient("your-client-id");
 var copilot = new GitHubCopilotProvider(oauth);
 var agent = AgentFactory.Create(copilot, agentType: "coding");
+
+// Observe and steer the run loop (fires on streaming and sync paths alike)
+agent.Hooks = new MyHooks();   // : AgentHooks — override OnIterationStartingAsync / OnToolCallFinishedAsync
+// in OnIterationStartingAsync: context.AppendUserMessage("Check your progress."); or context.Stop("done");
 
 // Parallel step execution
 var analyzer = new StepDependencyAnalyzer();
