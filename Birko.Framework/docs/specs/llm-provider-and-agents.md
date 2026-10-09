@@ -1,7 +1,7 @@
 ---
 area: llm-provider-and-agents
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 3e0132c7e76de40a9b31da9a9661515e3175556d
+generated-on: 2026-10-09
 sources:
   - ../Birko.AI.Contracts/AgentOptions.cs
   - ../Birko.AI.Contracts/LlmProviderFactory.cs
@@ -14,6 +14,7 @@ sources:
   - ../Birko.AI.Contracts/Providers/ILlmProvider.cs
   - ../Birko.AI.Contracts/Tools/Tool.cs
   - ../Birko.AI/Agents/Agent.cs
+  - ../Birko.AI/Agents/AgentHooks.cs
   - ../Birko.AI/Factories/AgentFactory.cs
   - ../Birko.AI/Providers/LlmProviderBase.cs
   - ../Birko.AI/Tools/AppendToFileTool.cs
@@ -25,13 +26,9 @@ sources:
   - ../Birko.AI/Tools/RunCommandTool.cs
   - ../Birko.AI/Tools/SearchCodeTool.cs
   - ../Birko.AI/Tools/WriteFileTool.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-07-30 10:48:14,
-                  # commit 3728969). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.AI: ed540db
-  ../Birko.AI.Contracts: 52e43f8
 shaped-by: [FEATURE-006]
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 275
 ---
 
 # LLM provider contract, agent run loop and tool execution
@@ -501,7 +498,7 @@ returns `string.Empty`.
 The system SHALL default `AgentOptions` to `Interactive = true`, `MaxIterations = 10`,
 `MaxIterationsPerStep = 10`, `Verbose = true`, `WorkingDirectory = "./"`,
 `PromptTimeout = 300`, `ModelDepth = 5`, `EnableStreaming = false`,
-`StreamingFallbackToSync = true`, `CheckpointInterval = 3`, an empty `AllowedExternalPaths`
+`StreamingFallbackToSync = true`, an empty `AllowedExternalPaths`
 and a null `DefaultPromptResponse`. `Clone()` SHALL copy every field and allocate a new
 `AllowedExternalPaths` list. `Merge(other)` SHALL return immediately on a null `other`, copy
 every value-typed field unconditionally, and copy `WorkingDirectory`, `DefaultPromptResponse`,
@@ -533,7 +530,14 @@ The system SHALL build `AgentOptions` from a `Dictionary<string, string>` in `Fr
 using `TryParse` for every typed field, so an absent key or an unparseable value leaves the
 default in place rather than throwing. `allowedExternalPaths` SHALL be split on `'\n'`, with an
 empty string yielding an empty list. `ToDictionary` SHALL emit every field except
-`DefaultPromptResponse`, which SHALL be emitted only when non-null.
+`DefaultPromptResponse`, which SHALL be emitted only when non-null. A key no field reads —
+including `checkpointInterval`, whose option was removed — SHALL be ignored.
+
+#### Scenario: Removed checkpointInterval key is ignored
+
+- **Given** the config `{"checkpointInterval": "3", "maxIterations": "7", "enableStreaming": "True"}`
+- **When** `FromDictionary` runs
+- **Then** no exception is thrown, `MaxIterations` is 7 and `EnableStreaming` is `true`
 
 #### Scenario: Malformed numeric value is ignored
 
@@ -609,9 +613,10 @@ thorough" text, and every other value yields the "Balanced" text. Derived agents
 
 ### Requirement: Agent runs a bounded call-and-tool loop
 
-The system SHALL iterate from 1 to `maxIterations ?? Options.MaxIterations`, checking
-cancellation at the top of every iteration, sending the whole conversation plus tools plus
-`SystemPrompt` to the provider, invoking `Options.OnLlmResponseReceived` after each response,
+The system SHALL iterate from 1 to `maxIterations ?? Options.MaxIterations` in one loop shared
+by the streaming and non-streaming paths, firing the iteration hook (when `Hooks` is set) and
+then checking cancellation at the top of every iteration, sending the whole conversation plus
+tools plus `SystemPrompt` to the provider, invoking `Options.OnLlmResponseReceived` after each response,
 appending the assistant turn to the conversation, then dispatching on the stop reason. When the
 loop finishes without a terminal stop reason it SHALL emit a `"warning"` (when `Verbose`) stating
 the maximum was reached and return the conversation.
@@ -629,6 +634,19 @@ the maximum was reached and return the conversation.
 - **When** the loop runs
 - **Then** a new list is built from `history` with the new user turn appended, and the caller's
   original list is not mutated
+
+#### Scenario: ResumeAsync continues a saved conversation as it stands
+
+- **Given** a saved conversation ending in a tool-result `user` turn
+- **When** `ResumeAsync(saved)` runs
+- **Then** the first provider call receives exactly the saved turns with no user turn added, the
+  caller's list is copied rather than mutated, and the model's reply is appended to the copy
+
+#### Scenario: ResumeAsync refuses a conversation with nothing to answer
+
+- **Given** an empty conversation, or one whose last turn has `Role = "assistant"`
+- **When** `ResumeAsync` is called
+- **Then** `ArgumentException` is thrown and no provider call is made
 
 #### Scenario: Explicit iteration cap overrides options
 
@@ -652,7 +670,8 @@ the maximum was reached and return the conversation.
 ### Requirement: Streaming applies to the first iteration only, with sync fallback
 
 The system SHALL, when `Options.EnableStreaming` is true, snapshot the conversation, run the
-streaming loop, and on any non-`OperationCanceledException` failure — provided
+streaming loop, and on any failure other than `OperationCanceledException` or
+`AgentHookException` — provided
 `Options.StreamingFallbackToSync` is true — emit a `"warning"`, restore the pre-streaming
 snapshot and re-run the whole task through the synchronous loop. Within the streaming loop only
 iteration 1 SHALL use `SendMessageStreamingAsync`; every later iteration SHALL use
@@ -679,6 +698,20 @@ converted into `InvalidOperationException($"Streaming failed: {error}")`.
 - **Given** `EnableStreaming = true` and a cancelled token
 - **When** the streaming loop throws `OperationCanceledException`
 - **Then** the `when` clause excludes it and the exception propagates unchanged
+
+#### Scenario: A hook failure is never converted into a fallback
+
+- **Given** `EnableStreaming = true`, `StreamingFallbackToSync = true` and an iteration or tool
+  hook that throws
+- **When** the streaming loop throws `AgentHookException`
+- **Then** the exception propagates, the hook ran once and no tool is executed a second time
+
+#### Scenario: A fallback replays hooks
+
+- **Given** `EnableStreaming = true`, `StreamingFallbackToSync = true`, hooks attached and a
+  streaming failure that is not a hook failure
+- **When** the run falls back to the synchronous loop from the snapshot
+- **Then** every hook fires again for the replayed iterations and tool calls
 
 #### Scenario: Chunks are surfaced as they arrive
 
@@ -775,7 +808,112 @@ current iteration has reached the maximum.
 
 - **Given** a custom tool whose `ExecuteAsync` throws
 - **When** the agent executes it
-- **Then** the exception propagates out of `RunAsync`; the agent has no per-tool try/catch
+- **Then** the same exception propagates out of `RunAsync` — immediately when no `Hooks` are set,
+  and after `OnToolCallFinishedAsync` has observed it when they are
+
+### Requirement: An iteration hook can append a user message or stop the run
+
+The system SHALL read `Agent.Hooks` (an `IAgentHooks`; `AgentHooks` supplies no-op defaults)
+once at the start of each run and, when it is set, invoke `OnIterationStartingAsync` before
+every model call and before the run's cancellation check, with an `AgentIterationContext`
+carrying the 1-based `Iteration`, `MaxIterations`, `IsStreaming` (true only for the streamed
+first call), the exact `SystemPrompt` that call will send, the run's `CancellationToken` and a
+read-only live view of the conversation. Messages added through `AppendUserMessage` SHALL be
+appended as `user` turns and sent with that iteration's call; a blank message SHALL be refused
+with `ArgumentException`. `Stop(reason)` SHALL end the run before the model call, returning the
+conversation with any messages appended in the same hook call. `Agent.CurrentSystemPrompt` SHALL
+expose the `SystemPrompt` the next call will send.
+
+#### Scenario: Hooks fire in loop order on both paths
+
+- **Given** hooks attached and a model that requests one tool, then ends its turn
+- **When** `RunAsync` runs, streamed or not
+- **Then** the order is iteration 1, provider call 1, tool started, tool executed, tool
+  finished, iteration 2, provider call 2, and `IsStreaming` is set only on iteration 1 of a
+  streaming run
+
+#### Scenario: Stop ends the run before the model call
+
+- **Given** an iteration hook that calls `Stop("enough")` at iteration 2
+- **When** the run reaches iteration 2
+- **Then** only one provider call was made and the returned conversation ends with the
+  tool-result `user` turn
+
+#### Scenario: Stop on a cancelled token returns normally
+
+- **Given** a cancelled token and an iteration hook that stops when cancellation is requested
+- **When** `RunAsync` runs
+- **Then** it returns the seeded conversation without throwing and no provider call is made
+
+#### Scenario: An appended message reaches the provider
+
+- **Given** an iteration hook that calls `AppendUserMessage("reflect now")` at iteration 2
+- **When** the second provider call is made
+- **Then** its last message is that `user` turn and its system prompt equals the context's
+  `SystemPrompt` and `CurrentSystemPrompt`
+
+#### Scenario: No hooks attached
+
+- **Given** `Hooks = null`
+- **When** a run executes one tool and ends its turn
+- **Then** the loop behaves as without hooks: one tool execution, two provider calls, four turns
+
+### Requirement: Tool-call hooks observe every tool call
+
+The system SHALL, when `Hooks` is set, invoke `OnToolCallStartingAsync` with a `ToolCallStarted`
+(iteration, tool-use id, tool name, read-only input) before resolving and executing each
+requested tool, and `OnToolCallFinishedAsync` with a `ToolCallFinished` after it — carrying the
+same identity and input plus `Result`, `ToolFound`, `IsError`, `Exception` and `Duration`.
+`IsError` SHALL be true for an unknown tool, a result beginning `Error:` or a thrown exception;
+`Result` SHALL be null only when the tool threw. Both hooks SHALL receive the run's token.
+
+#### Scenario: Finished hook carries structured data
+
+- **Given** a tool that returns `"done"` for input `{"path": "a.cs"}`
+- **When** the call finishes
+- **Then** `ToolCallFinished` holds the tool-use id, the input, `Result = "done"`,
+  `ToolFound = true`, `IsError = false`, a null `Exception` and a positive `Duration`
+
+#### Scenario: Unknown tool is an error
+
+- **Given** a `tool_use` block naming a tool the agent does not hold
+- **When** the finished hook fires
+- **Then** `ToolFound = false`, `IsError = true` and `Result` begins `"Error:"`
+
+#### Scenario: Throwing tool
+
+- **Given** a tool whose `ExecuteAsync` throws
+- **When** the finished hook fires
+- **Then** `Exception` is that exception, `IsError = true`, `Result` is null, and the exception
+  then propagates out of the run
+
+### Requirement: A failing hook ends the run as AgentHookException
+
+The system SHALL wrap any exception thrown by a hook, other than `OperationCanceledException`,
+in an `AgentHookException` carrying the hook's name, the iteration and the hook's exception as
+`InnerException`, and SHALL let `OperationCanceledException` propagate unwrapped. When
+`OnToolCallFinishedAsync` throws while reporting a tool's exception, that tool exception SHALL
+be carried as `ToolException`.
+
+#### Scenario: Throwing iteration hook
+
+- **Given** an iteration hook that throws `InvalidOperationException`
+- **When** `RunAsync` runs
+- **Then** `AgentHookException` is thrown with `HookName = "OnIterationStartingAsync"`,
+  `Iteration = 1` and that exception as `InnerException`, and no provider call is made
+
+#### Scenario: Throwing finished hook while a tool exception is in flight
+
+- **Given** a tool that throws and a finished hook that throws `ArgumentException`
+- **When** the call finishes
+- **Then** `AgentHookException` is thrown with the `ArgumentException` as `InnerException` and the
+  tool's exception as `ToolException`
+
+#### Scenario: Cancellation from a hook
+
+- **Given** an iteration hook that throws `OperationCanceledException`
+- **When** `RunAsync` runs
+- **Then** exactly `OperationCanceledException` propagates and no provider call is made
 
 ### Requirement: Providers are created through a registration-based factory
 
@@ -1157,22 +1295,3 @@ it SHALL emit `"prompt_console"` and return
 - **When** the prompt is emitted
 - **Then** the message body is `"Context: {context}\n\nQuestion: {question}"` while the callback
   still receives question and context as separate arguments
-
-### Requirement: CheckpointInterval has no effect on the run loop
-
-The system SHALL carry `AgentOptions.CheckpointInterval` (default 3, documented as the interval
-between self-reflection checkpoints) through `Clone`, `Merge`, `FromDictionary` and
-`ToDictionary`, but the `Agent` run loop SHALL never read it, so no checkpoint prompt is ever
-injected regardless of its value.
-
-#### Scenario: Checkpoint interval set to 1
-
-- **Given** `CheckpointInterval = 1` and a task requiring five iterations
-- **When** the loop runs
-- **Then** no additional checkpoint message or prompt is produced at any iteration
-
-#### Scenario: Checkpoint interval survives serialization
-
-- **Given** `CheckpointInterval = 7`
-- **When** the options are round-tripped through `ToDictionary` and `FromDictionary`
-- **Then** the value 7 is preserved even though nothing consumes it
