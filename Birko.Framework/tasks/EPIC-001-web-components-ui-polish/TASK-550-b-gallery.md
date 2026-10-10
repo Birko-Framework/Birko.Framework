@@ -3,7 +3,7 @@ id: TASK-550
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P1
 assignee: ai
