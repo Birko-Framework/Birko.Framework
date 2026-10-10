@@ -78,6 +78,9 @@ Decisions beyond the criteria:
   rule (`b-carousel:not(:defined) > :not(:first-child) { display: none }`), documented.
 - **Focus stops autoplay for good** (APG), hover only pauses; the stop / start control is the first thing in the
   carousel. Automatic steps are not announced; user moves are ("Slide 2 of 3").
+- **Owner's walkthrough (2026-10-10) found a stale stop:** having Tabbed through the carousel before autoplay was
+  switched on, the autoplay started *stopped* (▶). Focus now stops only a rotation that is running, and adding
+  `autoplay` clears an earlier stop. Regression checks fail on the old code (2), suite 53/53.
 - A consumer's own `role` / `aria-label` on a slide is kept; attributes the carousel adds are removed when a slide
   leaves.
 
