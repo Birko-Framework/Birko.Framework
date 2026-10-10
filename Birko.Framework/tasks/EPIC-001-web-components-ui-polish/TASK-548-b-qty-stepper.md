@@ -65,8 +65,10 @@ constraint, not an increment, so this is a new component, not a `b-input` mode.
 
 **Walkthrough 2026-10-10 (owner, Edge + Narrator, Playground):** typing/snap, buttons and keys, Narrator (after the
 plain-field rework), CS / SK formatting via the new header Locale switch — all passed. **Open:** the phone check, and
-Narrator occasionally appending "new line" after an announced value ("2 m new line") — cosmetic; candidate fix is
-moving the status region inside the stepper row, needs a Narrator re-check.
+Narrator occasionally appending "new line" after an announced value ("2 m new line"). Moving the status region
+inside the row did NOT fix it (owner re-check). Now announcements go through `announce()` → `Element.ariaNotify()`
+(Chrome/Edge), with the region only as the fallback — needs one more Narrator re-check. Also observed: arrow keys
+"sometimes" do nothing — that is Narrator's scan mode taking the arrows (Caps Lock+Space toggles it), not a defect.
 
 ## Implementation plan
 
