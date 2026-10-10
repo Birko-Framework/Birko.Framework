@@ -69,12 +69,53 @@ namespace Birko.AI.Providers
 
         protected override bool IsConfigured() => !string.IsNullOrWhiteSpace(_apiKey) && !string.IsNullOrWhiteSpace(_model);
 
+        // Gemini's functionCall carries no id, so the parser invents one (a GUID) for the agent's tool_use
+        // block, and the agent's tool_result carries only that id. Gemini's functionResponse must name the
+        // FUNCTION it answers, so the id is resolved back to the name from the assistant turn that made the
+        // call (TASK-554 — it used to send the GUID as the name).
+        private static Dictionary<string, string> FunctionNamesById(IEnumerable<Message> messages)
+        {
+            var names = new Dictionary<string, string>();
+            foreach (var message in messages)
+            {
+                if (message.Role != "assistant")
+                    continue;
+                if (message.Content is IEnumerable<ContentBlock> blocks)
+                {
+                    foreach (var b in blocks)
+                        if (b.Type == "tool_use" && b.Id != null && b.Name != null)
+                            names[b.Id] = b.Name;
+                }
+                else if (message.Content is JsonElement { ValueKind: JsonValueKind.Array } array)
+                {
+                    foreach (var e in array.EnumerateArray())
+                        if (e.ValueKind == JsonValueKind.Object
+                            && e.TryGetProperty("type", out var t) && t.GetString() == "tool_use"
+                            && e.TryGetProperty("id", out var id) && id.GetString() is { } idText
+                            && e.TryGetProperty("name", out var n) && n.GetString() is { } name)
+                            names[idText] = name;
+                }
+            }
+            return names;
+        }
+
+        private static object FunctionResponse(Dictionary<string, string> functionNames, string? toolUseId, string? result) => new
+        {
+            functionResponse = new
+            {
+                // No matching call in the conversation (a trimmed history): the id is all there is.
+                name = toolUseId != null && functionNames.TryGetValue(toolUseId, out var name) ? name : toolUseId,
+                response = new { result }
+            }
+        };
+
         private static object BuildRequestPayload(IEnumerable<Message> messages, IEnumerable<Tool> tools, string systemPrompt)
         {
             // Gemini documents that `contents` roles alternate user / model. Two messages in a row with one
             // role — a hook's AppendUserMessage after a tool-result turn (TASK-546) — become ONE content with
             // both messages' parts in order, in the request only; the agent's conversation is unchanged.
             var turns = new List<(string Role, List<object> Parts)>();
+            var functionNames = FunctionNamesById(messages);
 
             foreach (var message in messages)
             {
@@ -120,15 +161,7 @@ namespace Birko.AI.Providers
                             {
                                 var toolUseId = jsonElement.GetProperty("tool_use_id").GetString();
                                 var resultContent = jsonElement.GetProperty("content").GetString();
-
-                                parts.Add(new
-                                {
-                                    functionResponse = new
-                                    {
-                                        name = toolUseId,
-                                        response = new { result = resultContent }
-                                    }
-                                });
+                                parts.Add(FunctionResponse(functionNames, toolUseId, resultContent));
                             }
                         }
                         else
@@ -149,15 +182,7 @@ namespace Birko.AI.Providers
                                     {
                                         var toolUseId = toolUseIdProp.GetValue(item)?.ToString();
                                         var resultContent = contentProp.GetValue(item)?.ToString();
-
-                                        parts.Add(new
-                                        {
-                                            functionResponse = new
-                                            {
-                                                name = toolUseId,
-                                                response = new { result = resultContent }
-                                            }
-                                        });
+                                        parts.Add(FunctionResponse(functionNames, toolUseId, resultContent));
                                     }
                                 }
                             }

@@ -13,11 +13,11 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10     | 27     | —                   |
-| todo         | —                  | —                  | 195         |
+| todo         | —                  | —                  | 194         |
 | in-progress  | 8  | 11  | 0   |
 | verify       | —                  | —                  | 1       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 210         |
+| done         | 1        | 23        | 211         |
 | cancelled    | 0   | 0   | 5    |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -448,7 +448,7 @@ _None_
     - [ ] [TASK-524](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-524-shell-oauth-sign-in-helpers.md) Birko.Web.Shell auth: OAuth redirect parsing, token expiry and scheduled refresh (P2)
     - [ ] [TASK-525](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-525-reorderable-tabs-and-persisted-split-sizes.md) b-tabs drag-and-drop reorder; b-split-panel size persistence; a layout serialize/restore hook (P3)
     - [ ] [TASK-526](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-526-layered-runtime-config-loader.md) Birko.Web.Core: layered runtime configuration (defaults < server endpoint < local overrides) (P3)
-  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — in-progress (3/12 done)
+  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — in-progress (4/12 done)
     - [x] [TASK-527](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-527-agent-loop-hooks.md) Agent loop: per-iteration and tool-call hooks, a readable system prompt, resume from a conversation (P1)
     - [ ] [TASK-528](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-528-orchestration-plan-model-and-step-validators.md) Birko.AI.Orchestration: a plan model with behaviour, step validators, and a pinned enum encoding (P1)
     - [ ] [TASK-529](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-529-sql-event-store.md) Ship a SQL IAsyncEventStore (P1)
@@ -460,7 +460,7 @@ _None_
     - [ ] [TASK-535](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-535-conversation-checkpoints-and-safe-trim.md) Conversation checkpoints: serialize / restore, and a trim that keeps tool_use and tool_result together (P2)
     - [x] [TASK-544](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-544-streaming-fallback-reruns-executed-tools.md) The streaming fallback re-runs tools that already executed (P1)
     - [x] [TASK-546](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-546-consecutive-user-turns-from-hook-injection.md) A hook-injected message after a tool-result turn makes two consecutive user turns (P2)
-    - [ ] [TASK-554](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-554-gemini-function-response-carries-a-guid-not-the-function-name.md) GeminiProvider sends a GUID as functionResponse.name, not the function's name (P2)
+    - [x] [TASK-554](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-554-gemini-function-response-carries-a-guid-not-the-function-name.md) GeminiProvider sends a GUID as functionResponse.name, not the function's name (P2)
   - STORY-061 KoboldLair server backports from DraCode — in-progress (2/7 done)
     - [x] [TASK-536](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-536-websocket-require-authentication-fails-open.md) `MapWebSocketEndpoint(requireAuthentication: true)` accepts anonymous upgrades when no auth service is registered (P1)
     - [x] [TASK-537](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-537-websocket-connection-send-queue-and-framed-receive.md) Birko.Communication.WebSocket: one capped whole-message receive, used by WebSocketServer and offered to handlers (P1)

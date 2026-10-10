@@ -134,6 +134,47 @@ public class ProviderTurnOrderTests
         contents[2].GetProperty("parts").GetArrayLength().Should().Be(1);
     }
 
+    // TASK-554 — Gemini's functionResponse names the FUNCTION, not the invented tool_use id.
+    [Fact]
+    public void Gemini_FunctionResponse_NamesTheCalledFunction()
+    {
+        var contents = StaticPayload(typeof(GeminiProvider), HookAfterToolBatch(), new List<Tool>(), "system").GetProperty("contents");
+
+        contents[1].GetProperty("parts")[0].GetProperty("functionCall").GetProperty("name").GetString().Should().Be("record");
+        contents[2].GetProperty("parts")[0].GetProperty("functionResponse").GetProperty("name").GetString()
+            .Should().Be("record", "the response must name the function it answers, not the id t1");
+    }
+
+    [Fact]
+    public void Gemini_FunctionResponse_ResolvesFromAJsonConversation()
+    {
+        // A conversation restored from JSON holds JsonElement content, not ContentBlock lists.
+        var assistant = JsonSerializer.SerializeToElement(new[] { new { type = "tool_use", id = "g-1", name = "search", input = new { } } });
+        var messages = new List<Message>
+        {
+            new() { Role = "user", Content = "find" },
+            new() { Role = "assistant", Content = assistant },
+            new() { Role = "user", Content = new List<object> { new { type = "tool_result", tool_use_id = "g-1", content = "hits" } } }
+        };
+
+        var contents = StaticPayload(typeof(GeminiProvider), messages, new List<Tool>(), "system").GetProperty("contents");
+
+        contents[contents.GetArrayLength() - 1].GetProperty("parts")[0].GetProperty("functionResponse").GetProperty("name").GetString().Should().Be("search");
+    }
+
+    [Fact]
+    public void Gemini_FunctionResponse_WithoutItsCall_FallsBackToTheId()
+    {
+        var messages = new List<Message>
+        {
+            new() { Role = "user", Content = new List<object> { new { type = "tool_result", tool_use_id = "orphan", content = "x" } } }
+        };
+
+        var contents = StaticPayload(typeof(GeminiProvider), messages, new List<Tool>(), "system").GetProperty("contents");
+
+        contents[0].GetProperty("parts")[0].GetProperty("functionResponse").GetProperty("name").GetString().Should().Be("orphan");
+    }
+
     [Fact]
     public void Claude_PassesConsecutiveUserTurnsThrough()
     {
