@@ -65,6 +65,15 @@ var body = await engine.RenderAsync(
 // Result: "Hello John, your order ORD-123 is ready!"
 ```
 
+Optional sections render only when the value is present — not `null`, not blank, not `false` (`0` is present):
+
+```csharp
+await engine.RenderAsync("Order {{Number}}.{{#if TrackingUrl}} Track it: {{TrackingUrl}}{{/if}}", model);
+```
+
+Sections do not nest and have no else branch. An unbalanced, nested or unknown `{{#…}}` / `{{/…}}` marker throws
+`TemplateRenderException` instead of reaching the recipient.
+
 ## SMS / Push (Interface Only)
 
 SMS and push notification sender interfaces are defined in core. Provider implementations are in separate projects:

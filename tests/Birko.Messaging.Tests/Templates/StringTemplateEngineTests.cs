@@ -121,6 +121,75 @@ public class StringTemplateEngineTests
         await act.Should().ThrowAsync<ArgumentNullException>().WithParameterName("messageTemplate");
     }
 
+    // ── {{#if}} sections (TASK-553) ──
+
+    [Fact]
+    public async Task RenderAsync_IfSection_PresentValue_KeepsBodyAndRendersItsPlaceholders()
+    {
+        var result = await _engine.RenderAsync(
+            "Order 7.{{#if Url}}\nTrack it: {{Url}}{{/if}}\nThanks.", new { Url = "https://shop.example/t?a=x%2B1" });
+
+        result.Should().Be("Order 7.\nTrack it: https://shop.example/t?a=x%2B1\nThanks.");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task RenderAsync_IfSection_AbsentString_DropsTheWholeSection(string? url)
+    {
+        var result = await _engine.RenderAsync("Order 7.{{#if Url}}\nTrack it: {{Url}}{{/if}}\nThanks.", new { Url = url });
+
+        result.Should().Be("Order 7.\nThanks.");
+    }
+
+    [Fact]
+    public async Task RenderAsync_IfSection_FalseDropsAndZeroKeeps()
+    {
+        // Zero is a value, not an absence — a "0 items" line must still render.
+        var result = await _engine.RenderAsync("{{#if Flag}}F{{/if}}{{#if Count}}C{{Count}}{{/if}}", new { Flag = false, Count = 0 });
+
+        result.Should().Be("C0");
+    }
+
+    [Fact]
+    public async Task RenderAsync_IfSection_SeveralSectionsAreIndependent()
+    {
+        var result = await _engine.RenderAsync(
+            "{{#if A}}a{{/if}}-{{#if B}}b{{/if}}-{{#if A}}again{{/if}}", new { A = "x", B = (string?)null });
+
+        result.Should().Be("a--again");
+    }
+
+    [Fact]
+    public async Task RenderAsync_IfSection_NestedPath_Resolves()
+    {
+        var result = await _engine.RenderAsync(
+            "{{#if Customer.Email}}mail{{/if}}", new { Customer = new { Email = "a@b.c" } });
+
+        result.Should().Be("mail");
+    }
+
+    [Fact]
+    public async Task RenderAsync_IfSection_MissingProperty_Throws()
+    {
+        var act = () => _engine.RenderAsync("{{#if Missing}}x{{/if}}", new { Name = "World" });
+
+        await act.Should().ThrowAsync<TemplateRenderException>().WithMessage("*Missing*");
+    }
+
+    [Theory]
+    [InlineData("{{#if A}}never closed")]
+    [InlineData("stray {{/if}}")]
+    [InlineData("{{#if A}}{{#if B}}x{{/if}}{{/if}}")]
+    [InlineData("{{#each A}}x{{/each}}")]
+    public async Task RenderAsync_IfSection_MalformedMarkers_ThrowRatherThanReachTheRecipient(string template)
+    {
+        var act = () => _engine.RenderAsync(template, new { A = "x", B = "y" });
+
+        await act.Should().ThrowAsync<TemplateRenderException>();
+    }
+
     private class TestTemplate : IMessageTemplate
     {
         public string Name { get; set; } = string.Empty;

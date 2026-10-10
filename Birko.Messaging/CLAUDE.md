@@ -33,7 +33,7 @@ Core messaging framework providing unified interfaces for email, SMS, and push n
 
 ### Templates (`Birko.Messaging.Templates`)
 - **ITemplateEngine** - RenderAsync(template, model) and RenderAsync(IMessageTemplate, model)
-- **StringTemplateEngine** - `{{Property.SubProperty}}` replacement via reflection, GeneratedRegex
+- **StringTemplateEngine** - `{{Property.SubProperty}}` replacement via reflection, GeneratedRegex; `{{#if Path}}…{{/if}}` optional sections (present = not null / blank / `false`; no nesting, no else; any leftover `{{#`/`{{/` marker throws)
 
 ## Dependencies
 - **Birko.Data.Core** - ILoadable\<T\> interface
