@@ -80,8 +80,12 @@ Decisions beyond the criteria:
   would show a quantity nobody stored. The first press from an off-grid value lands on the adjacent grid point.
 - **Buttons are named after the field** (`Decrease {label}`), so a cart of steppers is distinguishable in a
   screen reader's button list; plain `Decrease` / `Increase` without a label.
-- **Buttons are out of the tab order** (`tabindex="-1"`, spinbutton pattern) and a press does not move focus to
-  the field (that would open a phone keyboard), so the new value is announced via a polite `role="status"` region.
+- ~~Spinbutton pattern~~ **reverted after the owner's Narrator test (2026-10-10):** the unit was not read and the −
+  button could not be reached ("new line" instead of "Increase"). Measured cause: Chrome drops `aria-valuetext` on a
+  text `<input>` (the accessibility tree showed `valuetext: "1.5"`), and Tab-skipped / `disabled` buttons fall out of
+  Narrator's reading order. Now a plain text field described by the unit (tree: textbox "Fabric", value 1.5,
+  description "m"), − / + in the Tab order with `aria-disabled` at a limit, every step announced with its unit.
+  Suite still 57/57 (checks rewritten for the new pattern). Human test step 3 to be repeated.
 - `min` defaults to `0`, `step` to `1`, no `max`. Unreadable typed text reverts with no `change`.
 
 **Proof.** Playground `src/qty-stepper-smoke.ts` (registered in `app.ts` and `verify.mjs`): 57/57, every other
