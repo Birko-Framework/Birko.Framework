@@ -3,7 +3,7 @@ id: TASK-551
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P3
 assignee: ai
@@ -46,8 +46,8 @@ Sequenced after the storefront components TASK-548–550 (user decision 2026-10-
 - [x] An unknown `{name}` with no param is left as is (current behaviour, now pinned by a test)
 - [x] Regression tests for all three; the first is proved to fail on the old code
 - [x] Plural forms path (if it interpolates separately) uses the same function — one producer
-- [ ] Reply on FFS TASK-106 that the client side is fixed, so both sides agree — **not done here**: the
-      FlowerFurStudio repo is mid-branch in another session (TASK-008/009); left for that session (see Resolution)
+- [x] Reply on FFS TASK-106 that the client side is fixed, so both sides agree — FlowerFurStudio `437fc78`
+      (2026-10-10, after its TASK-008/009 session merged to `main`)
 
 ## Out of scope
 
@@ -77,4 +77,4 @@ suites green. Mutation — the old loop restored in `I18n.t()` — fails 5, repr
 
 **For FlowerFurStudio TASK-106:** its criterion "the client's `t()` checked" can be ticked as *fixed upstream in
 Birko TASK-551* (`interpolate()` in Birko.Web.Core); its server-side `StorefrontText` still needs its own one-pass
-fix. Not written into that repo from here because it is on a task branch in another session.
+fix. Written into that repo as a note on TASK-106 (`437fc78`) once its task-branch session had merged.
