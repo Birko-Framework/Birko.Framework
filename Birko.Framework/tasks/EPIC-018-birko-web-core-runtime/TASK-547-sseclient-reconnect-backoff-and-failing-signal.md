@@ -3,7 +3,7 @@ id: TASK-547
 parent: EPIC-018
 feature: null
 status: todo
-priority: P2
+priority: P1
 assignee: ai
 created: 2026-10-09
 depends-on: []

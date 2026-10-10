@@ -13,7 +13,7 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10     | 27     | —                   |
-| todo         | —                  | —                  | 193         |
+| todo         | —                  | —                  | 197         |
 | in-progress  | 8  | 11  | 0   |
 | verify       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
@@ -22,7 +22,7 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 33× P1 · 117× P2 · 43× P3.
+`todo` by priority: 37× P1 · 116× P2 · 44× P3.
 
 ## In progress now
 
@@ -48,6 +48,10 @@ _None_
   - [x] [TASK-497](EPIC-001-web-components-ui-polish/TASK-497-b-range-dual-thumbs-sit-below-the-track.md) `b-range` in range mode draws its thumbs below the track (P2) · FEATURE-001
   - [x] [TASK-543](EPIC-001-web-components-ui-polish/TASK-543-b-code-block-ignores-content-changes.md) b-code-block does not re-render when its text content changes (P2)
   - [ ] [TASK-545](EPIC-001-web-components-ui-polish/TASK-545-undo-instead-of-confirm-for-reversible-deletes.md) A reversible delete can offer Undo instead of a confirm dialog — toast action + base-page opt-in (P3)
+  - [ ] [TASK-548](EPIC-001-web-components-ui-polish/TASK-548-b-qty-stepper.md) b-qty-stepper — a form-associated quantity stepper with decimal step, min, max and a unit label (P1)
+  - [ ] [TASK-549](EPIC-001-web-components-ui-polish/TASK-549-b-carousel.md) b-carousel — slotted, server-rendered slides with arrows, dots, swipe and an autoplay that yields (P1)
+  - [ ] [TASK-550](EPIC-001-web-components-ui-polish/TASK-550-b-gallery.md) b-gallery — product image gallery with thumbnails, swipe and an accessible zoom (P1)
+  - [ ] [TASK-551](EPIC-001-web-components-ui-polish/TASK-551-i18n-t-interpolates-one-placeholder-at-a-time.md) I18n.t() fills placeholders one after another, so a value holding "{other}" is rewritten by the next one (P3)
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
@@ -430,7 +434,7 @@ _None_
   - [x] [TASK-203](EPIC-018-birko-web-core-runtime/TASK-203-nothing-recorded-and-never-synced-both-read-as-empty.md) "nothing recorded" and "never synced" both read as `[]` (P2) · FEATURE-018
   - [x] [TASK-493](EPIC-018-birko-web-core-runtime/TASK-493-apiclient-getheaders-and-patch.md) `ApiClient` had no generic request-header hook and no `patch()` (P1) · FEATURE-018
   - [x] [TASK-508](EPIC-018-birko-web-core-runtime/TASK-508-apiclient-postform-multipart-upload.md) `ApiClient` cannot send a multipart upload (P1) · FEATURE-018
-  - [ ] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P2)
+  - [ ] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P1)
 - **EPIC-019** Birko framework backports from DraCode — in-progress (3/28 tasks done)
   - STORY-058 Security / OAuth backports from DraCode — planned (0/6 done)
     - [ ] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
