@@ -84,6 +84,13 @@ Decisions beyond the criteria:
 - **Responsive zoom (owner's choice, 2026-10-10):** full-screen on a phone; from 48rem a framed panel
   (`min(90vw, 72rem)` × `min(90dvh, 54rem)`) over the dialog backdrop, which a click closes. Checked in
   `device-fix-check` § 8 at 390 and 1280 px with real mouse clicks.
+- **Owner's phone: a strip of overlay left and right of the full-screen zoom.** The zoom was `100vw` wide, and the
+  Playground's Layout page is laid out at 433px on a 390px phone (it overflows sideways), so the zoom sat centred
+  with ~22px of backdrop each side. Now pinned with `inset: 0` (the framed desktop panel too, centred by
+  `margin: auto`); device check covers an overflowing page edge to edge (73/73).
+- Playground harness, found on the way: the gallery suite's modal disturbed concurrent suites (ribbon flyout light-
+  dismissed), so it now waits for five suites' done flags; and `verify.mjs` left the modal Design-tokens drawer open
+  for the whole run (page inert behind it) — now closed after its token checks. Three consecutive green runs.
 - **`zoom-close-outside` (opt-in, owner's request 2026-10-10):** the zoom is full-screen, so there is no backdrop;
   with the attribute a click on the empty space around the image closes it. Off by default so a stray tap beside a
   magnified image while panning does not close it. Playground card has the toggle.
