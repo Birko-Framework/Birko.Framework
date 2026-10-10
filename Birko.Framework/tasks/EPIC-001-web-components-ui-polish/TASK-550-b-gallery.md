@@ -72,7 +72,8 @@ Decisions beyond the criteria:
 
 - **`index` is a start, then a command, never a leash** — read once at first render; later attribute changes
   navigate; a re-render does not snap back.
-- **Thumbnails become dots by a container query** on the gallery's own width (30rem), not the viewport.
+- **Thumbnails become dots by a container query** on the gallery's own width (24rem — first 30rem, which gave the
+  owner's ~410px Playground card dots; container-query rem is the root size), not the viewport.
 - **Zoom is a native modal `<dialog>`** named by the image's alt; click magnifies ×2 around the point, pinch is
   native; next / previous work inside the zoom and move the gallery too.
 - Images out of view are `inert`; every image stays named through its thumbnail.
