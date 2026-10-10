@@ -76,6 +76,11 @@ Decisions beyond the criteria:
 - **Zoom is a native modal `<dialog>`** named by the image's alt; click magnifies ×2 around the point, pinch is
   native; next / previous work inside the zoom and move the gallery too.
 - Images out of view are `inert`; every image stays named through its thumbnail.
+- **Owner's walkthrough (2026-10-10): the gallery card showed no images** — measured 0px wide. The `.gallery` is a
+  size container (for the thumbs-to-dots container query), and a size container takes no width from its content, so
+  in a shrink-to-fit parent (the Playground's centred flex card; a consumer could do the same) it collapsed. The host
+  is now `width: 100%` (consumer CSS still wins); b-carousel got the same so it never shrinks to one slide's content.
+  Regression checks in both suites; without the fix the gallery measures 0px (gallery 40/40, carousel 54/54).
 - **Without `data-full` the zoom takes the largest `srcset` candidate** — `currentSrc` is the one the browser
   picked for the small main image, the wrong thing to enlarge (follow-up commit; suite 39/39).
 - Found on the way: the dot's `1.5rem` target measured 21px under the Playground's 14px root (below WCAG 2.5.8's
