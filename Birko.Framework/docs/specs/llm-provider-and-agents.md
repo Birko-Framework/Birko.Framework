@@ -669,13 +669,14 @@ the maximum was reached and return the conversation.
 
 ### Requirement: Streaming applies to the first iteration only, with sync fallback
 
-The system SHALL, when `Options.EnableStreaming` is true, snapshot the conversation, run the
-streaming loop, and on any failure other than `OperationCanceledException` or
-`AgentHookException` — provided
-`Options.StreamingFallbackToSync` is true — emit a `"warning"`, restore the pre-streaming
-snapshot and re-run the whole task through the synchronous loop. Within the streaming loop only
-iteration 1 SHALL use `SendMessageStreamingAsync`; every later iteration SHALL use
-`SendMessageAsync`. A non-empty `LlmStreamingResponse.Error` SHALL be reported as `"error"` and
+The system SHALL, when `Options.EnableStreaming` is true, use `SendMessageStreamingAsync` for
+iteration 1 only; every later iteration SHALL use `SendMessageAsync`. When iteration 1's streaming
+request fails — opening the stream or reading it — with anything other than
+`OperationCanceledException`, and `Options.StreamingFallbackToSync` is true, the system SHALL emit
+a `"warning"` and retry **that one model call** with `SendMessageAsync`, then continue the run. The
+fallback SHALL NOT cover a later iteration, a tool or a hook: those failures propagate, and no
+iteration, tool or hook runs twice (TASK-544 — the fallback used to replay the whole run from a
+snapshot, re-executing every tool). A non-empty `LlmStreamingResponse.Error` SHALL be reported as `"error"` and
 converted into `InvalidOperationException($"Streaming failed: {error}")`.
 
 #### Scenario: Provider without streaming support falls back
@@ -684,8 +685,8 @@ converted into `InvalidOperationException($"Streaming failed: {error}")`.
   default `SendMessageStreamingAsync`
 - **When** `RunAsync` executes
 - **Then** the streaming attempt throws `InvalidOperationException`, a `"warning"` beginning
-  `"Streaming failed:"` is emitted, the conversation is restored to its pre-streaming state and
-  the synchronous loop produces the result
+  `"Streaming failed:"` is emitted and iteration 1 is answered by `SendMessageAsync`; the
+  iteration hook fired once and nothing was appended to the conversation by the failed attempt
 
 #### Scenario: Fallback disabled propagates the failure
 
@@ -706,12 +707,13 @@ converted into `InvalidOperationException($"Streaming failed: {error}")`.
 - **When** the streaming loop throws `AgentHookException`
 - **Then** the exception propagates, the hook ran once and no tool is executed a second time
 
-#### Scenario: A fallback replays hooks
+#### Scenario: A failure after the streaming call is never converted into a fallback
 
-- **Given** `EnableStreaming = true`, `StreamingFallbackToSync = true`, hooks attached and a
-  streaming failure that is not a hook failure
-- **When** the run falls back to the synchronous loop from the snapshot
-- **Then** every hook fires again for the replayed iterations and tool calls
+- **Given** `EnableStreaming = true`, `StreamingFallbackToSync = true` and a tool executed in
+  iteration 1
+- **When** iteration 2's `SendMessageAsync` throws, or the tool itself throws
+- **Then** the exception propagates out of `RunAsync`, the tool executed once and every hook
+  fired once per iteration and tool call
 
 #### Scenario: Chunks are surfaced as they arrive
 

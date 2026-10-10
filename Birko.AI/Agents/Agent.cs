@@ -200,27 +200,7 @@ Reasoning approach: Balanced
 
         private async Task<List<Message>> RunWithHistoryAsync(List<Message> conversation, int? maxIterations = null, CancellationToken cancellationToken = default)
         {
-            var hooks = Hooks;
-
-            if (_options.EnableStreaming)
-            {
-                // Snapshot the conversation before the streaming attempt. The streaming loop appends
-                // assistant/tool messages as it runs, so a failure part-way through can leave the list
-                // with a dangling assistant turn (tool_use blocks but no matching tool_result) that most
-                // providers reject. Restore the pre-streaming state before the sync fallback (CR-L001).
-                var snapshot = new List<Message>(conversation);
-                try
-                {
-                    return await RunLoopAsync(conversation, streaming: true, hooks, maxIterations, cancellationToken);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException && ex is not AgentHookException && _options.StreamingFallbackToSync)
-                {
-                    SendMessage("warning", $"Streaming failed: {ex.Message}. Falling back to synchronous mode.");
-                    conversation = snapshot;
-                }
-            }
-
-            return await RunLoopAsync(conversation, streaming: false, hooks, maxIterations, cancellationToken);
+            return await RunLoopAsync(conversation, _options.EnableStreaming, Hooks, maxIterations, cancellationToken);
         }
 
         // The only run loop — streaming and sync share it so hooks and the token cannot drift between paths.
@@ -241,16 +221,9 @@ Reasoning approach: Balanced
                 if (_options.Verbose)
                     SendMessage("info", $"ITERATION {iteration}{(streamThisCall ? " (streaming)" : "")}");
 
-                LlmResponse response;
-                if (streamThisCall)
-                {
-                    response = await GetStreamingResponseAsync(conversation, systemPrompt, cancellationToken);
-                }
-                else
-                {
-                    response = await _llmProvider.SendMessageAsync(conversation, _tools, systemPrompt, cancellationToken);
-                    _options.OnLlmResponseReceived?.Invoke();
-                }
+                var response = streamThisCall
+                    ? await GetStreamingResponseOrFallbackAsync(conversation, systemPrompt, cancellationToken)
+                    : await GetSyncResponseAsync(conversation, systemPrompt, cancellationToken);
 
                 if (_options.Verbose)
                     SendMessage("info", $"Stop reason: {response.StopReason}");
@@ -283,6 +256,32 @@ Reasoning approach: Balanced
             if (_options.Verbose)
                 SendMessage("info", $"Run stopped by hook at iteration {iteration}{(context.StopReason is null ? "" : $": {context.StopReason}")}");
             return true;
+        }
+
+        private async Task<LlmResponse> GetSyncResponseAsync(List<Message> conversation, string systemPrompt, CancellationToken cancellationToken)
+        {
+            var response = await _llmProvider.SendMessageAsync(conversation, _tools, systemPrompt, cancellationToken);
+            _options.OnLlmResponseReceived?.Invoke();
+            return response;
+        }
+
+        // StreamingFallbackToSync covers the streaming REQUEST only — opening the stream and reading it —
+        // and retries that one model call without streaming. It used to wrap the whole run, so a failure
+        // in a later iteration or a throwing tool replayed the run from the start and every tool that had
+        // already executed ran a second time (TASK-544). Nothing is appended to the conversation until a
+        // response is in hand, so there is no partial turn to roll back.
+        private async Task<LlmResponse> GetStreamingResponseOrFallbackAsync(List<Message> conversation, string systemPrompt, CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await GetStreamingResponseAsync(conversation, systemPrompt, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException && _options.StreamingFallbackToSync)
+            {
+                SendMessage("warning", $"Streaming failed: {ex.Message}. Falling back to synchronous mode.");
+            }
+
+            return await GetSyncResponseAsync(conversation, systemPrompt, cancellationToken);
         }
 
         private async Task<LlmResponse> GetStreamingResponseAsync(List<Message> conversation, string systemPrompt, CancellationToken cancellationToken)

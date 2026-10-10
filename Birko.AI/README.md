@@ -71,8 +71,9 @@ var conversation = await agent.RunAsync("Fix the build");
 await agent.ResumeAsync(checkpoint);
 ```
 
-Hooks fire on the streaming and non-streaming path alike. A throwing hook ends the run with `AgentHookException`
-and is never retried by the streaming fallback. An agent instance is not safe for concurrent runs.
+Hooks fire on the streaming and non-streaming path alike, once per iteration and tool call. A throwing hook ends
+the run with `AgentHookException`. `StreamingFallbackToSync` retries only a failed **streaming request** (iteration 1's
+model call) without streaming; a later iteration, tool or hook that fails propagates, so no tool runs twice. An agent instance is not safe for concurrent runs.
 
 ## License
 

@@ -239,12 +239,19 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### The streaming fallback retries one model call, not the run (2026-10-10)
+
+[[TASK-544]]. `StreamingFallbackToSync` wrapped the whole streaming run, so a later-iteration provider error or a
+throwing tool replayed the task from a snapshot and **every executed tool ran twice**. It now retries only iteration
+1's streaming request without streaming. **Observable:** a later failure throws out of `RunAsync` instead of a silent
+full re-run — migration in [CHANGELOG.md](CHANGELOG.md); transient retries belong to `Birko.AI.Resilience`.
+
 ### The agent loop has hooks; `CheckpointInterval` is gone (2026-10-09)
 
 [[TASK-527]]. `Agent.Hooks` (`IAgentHooks`: per-iteration with `AppendUserMessage` / `Stop`, tool-call started /
 finished with structured data), `CurrentSystemPrompt`, `ResumeAsync`. **One loop serves both paths** — don't
 reintroduce a streaming copy. **Breaking:** `AgentOptions.CheckpointInterval` removed (nothing read it, rule 51);
-migration in [CHANGELOG.md](CHANGELOG.md). The streaming fallback replaying tools is [[TASK-544]].
+migration in [CHANGELOG.md](CHANGELOG.md). The streaming fallback replaying tools was [[TASK-544]], fixed 2026-10-10.
 
 ### A WebSocket message is capped, and concurrent sends need no queue (2026-10-08)
 

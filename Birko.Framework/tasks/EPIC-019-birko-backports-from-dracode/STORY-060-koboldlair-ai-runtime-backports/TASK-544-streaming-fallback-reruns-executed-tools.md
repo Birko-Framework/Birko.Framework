@@ -2,7 +2,7 @@
 id: TASK-544
 parent: STORY-060
 feature: null
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-09
@@ -34,17 +34,17 @@ what the fallback covers. Implement after TASK-527 lands, on its single loop.
 
 ## Acceptance criteria
 
-- [ ] The sync fallback covers only the failure of the **streaming request itself** (iteration 1's
+- [x] The sync fallback covers only the failure of the **streaming request itself** (iteration 1's
       `SendMessageStreamingAsync` and the stream's consumption), never a later iteration or a tool call
-- [ ] A failure after the first tool has executed propagates; no tool runs twice
-- [ ] No `IAgentHooks` member fires twice for the same iteration or tool call (TASK-527's hooks currently re-fire
+- [x] A failure after the first tool has executed propagates; no tool runs twice
+- [x] No `IAgentHooks` member fires twice for the same iteration or tool call (TASK-527's hooks currently re-fire
       on the replay, so a hook's counters and telemetry double-count); remove the ⚠ replay note from
       `IAgentHooks`' XML doc once fixed
-- [ ] Iteration 1's streaming failure still falls back to a sync request for **that** iteration, without
+- [x] Iteration 1's streaming failure still falls back to a sync request for **that** iteration, without
       re-running anything
-- [ ] Regression test proven to fail on the current code: a tool counter reads 1, not 2, when iteration 2's
+- [x] Regression test proven to fail on the current code: a tool counter reads 1, not 2, when iteration 2's
       provider call throws with `EnableStreaming = true` and `StreamingFallbackToSync = true`
-- [ ] CHANGELOG entry if the behaviour change is observable to consumers (a later-iteration error now throws
+- [x] CHANGELOG entry if the behaviour change is observable to consumers (a later-iteration error now throws
       instead of being retried)
 
 ## Out of scope
@@ -58,4 +58,24 @@ N/A — library behaviour, covered by unit tests.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-544` — leave empty until then._
+Done directly.
+
+## Resolution (2026-10-10)
+
+The fallback moved from `RunWithHistoryAsync` (around the whole run) into the loop:
+`GetStreamingResponseOrFallbackAsync` wraps only iteration 1's `GetStreamingResponseAsync` (opening and reading the
+stream) and, on any non-cancellation failure with `StreamingFallbackToSync`, warns and answers **that** call with
+`SendMessageAsync` (`GetSyncResponseAsync`, the one sync-call producer). Nothing is appended to the conversation
+before a response is in hand, so the CR-L001 snapshot is gone — there is no partial turn to roll back. The
+`AgentHookException` exclusion went with it: no hook runs inside the streaming request.
+
+Docs: `IAgentHooks` XML (⚠ replay note replaced — hooks fire once; `IsStreaming` stays `true` on a fallen-back
+iteration), `AgentOptions.StreamingFallbackToSync` XML, spec `llm-provider-and-agents.md` (requirement rewritten; the
+"fallback replays hooks" scenario replaced by "a failure after the streaming call is never converted"), Birko.AI
+README, CHANGELOG (observable change + migration), CLAUDE.md Recent Updates.
+
+**Proof.** New `tests/Birko.AI.Agents.Tests/AgentStreamingFallbackTests.cs` (7): later-iteration failure propagates
+with the tool executed once and hooks once each; a throwing tool propagates with no sync call; streaming request
+failure (throws / `Error` field / mid-stream) retries that call with the same conversation and continues, hook's
+appended message not duplicated; fallback off propagates; cancellation not converted. **Mutation** — old `Agent.cs`
+restored: 5 fail. Agents 58/58, Orchestration 3/3, Birko.AI 28/28.

@@ -13,8 +13,9 @@ namespace Birko.AI.Agents
     /// same state a throwing tool leaves — so that conversation is not resumable as is.
     /// </para>
     /// <para>
-    /// ⚠ When a streaming run falls back to sync, the run is replayed from the start and every hook
-    /// fires again for the replayed iterations and tools (TASK-544).
+    /// Each hook fires once per iteration and tool call. When a streaming request falls back to sync,
+    /// only that model call is retried; the iteration's <see cref="AgentIterationContext.IsStreaming"/>
+    /// still reads <c>true</c>, because it was decided before the call.
     /// </para>
     /// </summary>
     public interface IAgentHooks

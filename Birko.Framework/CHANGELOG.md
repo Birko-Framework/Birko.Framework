@@ -4,6 +4,21 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-10 — The streaming sync-fallback retries one model call, never the run
+
+[[TASK-544]]. `RunWithHistoryAsync` wrapped the **whole** streaming run in the `StreamingFallbackToSync` catch, so a
+provider error in iteration 2+, a timeout or a throwing tool restored the pre-run snapshot (CR-L001) and re-ran the
+task in sync mode: every tool already executed — file writes, database calls, sends — ran a second time, and the
+hooks fired again. Now the fallback wraps only iteration 1's streaming request (opening and reading the stream) and
+retries that one call with `SendMessageAsync`; nothing is appended before a response is in hand, so the snapshot is
+gone. Proven by mutation: with the old code restored, 5 of the new `AgentStreamingFallbackTests` fail (a tool runs
+twice; the fallback re-fires iteration hooks).
+
+**Observable change — migration:** a failure after the streaming call (a later iteration's provider call, a tool)
+now **throws out of `RunAsync`** instead of being silently retried from scratch. A consumer that relied on that as a
+retry should use `Birko.AI.Resilience` for transient provider errors. `AgentIterationContext.IsStreaming` still reads
+`true` for an iteration whose streaming call fell back, since it is decided before the call.
+
 ## 2026-10-09 — BREAKING: `AgentOptions.CheckpointInterval` removed; the agent loop gains hooks and `ResumeAsync`
 
 [[TASK-527]]. DraCode's `Kobold` forked `Agent.RunAsync` (~375 lines) to inject a reflection prompt and stop early,

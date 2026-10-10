@@ -59,7 +59,9 @@ namespace Birko.AI
         public bool EnableStreaming { get; set; } = false;
 
         /// <summary>
-        /// Fallback to synchronous mode if streaming fails. Default: true
+        /// When the streaming request (iteration 1's model call) fails, retry that one call without
+        /// streaming and continue the run. Covers the streaming request only: a later iteration, a tool
+        /// or a hook that fails is never retried, so no tool runs twice (TASK-544). Default: true
         /// </summary>
         public bool StreamingFallbackToSync { get; set; } = true;
 
