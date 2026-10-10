@@ -59,7 +59,7 @@ TASK-549 lands first.
 
 **Walkthrough 2026-10-10 (owner, Edge):** after the 0px-width and 30rem→24rem fixes — thumbnails, arrows, drag,
 narrow dots, zoom (open, navigate, magnify, Escape, focus return) and the new opt-in `zoom-close-outside` passed.
-**Open:** phone swipe and pinch inside the zoom.
+No-JS (Playground `nojs.html`): images stacked, primary first — passed. **Open:** phone swipe and pinch inside the zoom.
 
 ## Implementation plan
 
