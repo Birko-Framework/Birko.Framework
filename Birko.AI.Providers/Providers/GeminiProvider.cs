@@ -71,7 +71,10 @@ namespace Birko.AI.Providers
 
         private static object BuildRequestPayload(IEnumerable<Message> messages, IEnumerable<Tool> tools, string systemPrompt)
         {
-            var contents = new List<object>();
+            // Gemini documents that `contents` roles alternate user / model. Two messages in a row with one
+            // role — a hook's AppendUserMessage after a tool-result turn (TASK-546) — become ONE content with
+            // both messages' parts in order, in the request only; the agent's conversation is unchanged.
+            var turns = new List<(string Role, List<object> Parts)>();
 
             foreach (var message in messages)
             {
@@ -172,11 +175,15 @@ namespace Birko.AI.Providers
                     parts.Add(new { text = message.Content.ToString() ?? string.Empty });
                 }
 
-                if (parts.Count > 0)
-                {
-                    contents.Add(new { role, parts = parts.ToArray() });
-                }
+                if (parts.Count == 0)
+                    continue;
+                if (turns.Count > 0 && turns[^1].Role == role)
+                    turns[^1].Parts.AddRange(parts);
+                else
+                    turns.Add((role, parts));
             }
+
+            var contents = turns.Select(t => (object)new { role = t.Role, parts = t.Parts.ToArray() }).ToList();
 
             var payload = new
             {

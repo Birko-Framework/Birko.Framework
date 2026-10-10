@@ -92,7 +92,13 @@ namespace Birko.AI.Agents
 
         /// <summary>
         /// Appends a user message to the conversation; it is sent with THIS iteration's model call. A
-        /// message added after a tool-result turn makes two consecutive user turns.
+        /// message added after a tool-result turn makes two consecutive user turns in the conversation,
+        /// and the conversation keeps them as written. Each provider makes that valid for its own API in
+        /// the request only (TASK-546): Gemini merges them into one content, Mistral gets a placeholder
+        /// assistant message between the tool message and the user message, and Claude and the
+        /// OpenAI-style providers accept it as is. A local server (vLLM, llama.cpp, LM Studio, SGLang,
+        /// Ollama) applies the model's chat template, and a template that demands strict user/assistant
+        /// alternation can still reject it.
         /// </summary>
         public void AppendUserMessage(string content)
         {

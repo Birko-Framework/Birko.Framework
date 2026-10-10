@@ -112,6 +112,13 @@ namespace Birko.AI.Providers
         }
 
         /// <summary>
+        /// The <c>messages</c> array of both payloads. Override where a provider's turn-order contract is
+        /// stricter than OpenAI's (see <see cref="MistralProvider"/>).
+        /// </summary>
+        protected virtual List<object> BuildMessages(List<Message> messages, string systemPrompt)
+            => BuildOpenAiStyleMessages(messages, systemPrompt);
+
+        /// <summary>
         /// Build the request payload. Override to customize payload structure.
         /// </summary>
         protected virtual object BuildPayload(List<Message> messages, List<Tool> tools, string systemPrompt)
@@ -119,7 +126,7 @@ namespace Birko.AI.Providers
             return new
             {
                 model = Model,
-                messages = BuildOpenAiStyleMessages(messages, systemPrompt),
+                messages = BuildMessages(messages, systemPrompt),
                 stream = false,
                 tools = BuildOpenAiStyleTools(tools),
                 temperature = Temperature,
@@ -272,7 +279,7 @@ namespace Birko.AI.Providers
             return new
             {
                 model = Model,
-                messages = BuildOpenAiStyleMessages(messages, systemPrompt),
+                messages = BuildMessages(messages, systemPrompt),
                 stream = true,
                 tools = BuildOpenAiStyleTools(tools),
                 temperature = Temperature,

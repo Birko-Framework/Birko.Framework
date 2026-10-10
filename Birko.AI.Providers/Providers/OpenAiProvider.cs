@@ -76,24 +76,6 @@ namespace Birko.AI.Providers
         protected override bool IsConfigured()
             => !string.IsNullOrWhiteSpace(_apiKey) && !string.IsNullOrWhiteSpace(_model);
 
-        private static List<object> BuildMessages(IEnumerable<Message> messages, string systemPrompt)
-        {
-            var openAiMessages = new List<object> { new { role = "system", content = systemPrompt } };
-            openAiMessages.AddRange(messages.Select(m => new { role = m.Role, content = m.Content }));
-            return openAiMessages;
-        }
-
-        private static object BuildRequestPayload(IEnumerable<Message> messages, IEnumerable<Tool> tools, string systemPrompt) => new
-        {
-            model = "" /* replaced below */,
-            messages = BuildMessages(messages, systemPrompt),
-            tools = tools.Select(t => new
-            {
-                type = "function",
-                function = new { name = t.Name, description = t.Description, parameters = t.InputSchema }
-            }).ToList()
-        };
-
         private static LlmResponse ParseResponse(string responseJson)
         {
             var result = JsonSerializer.Deserialize<JsonElement>(responseJson);
