@@ -53,10 +53,14 @@ the first slide is the page's content before any JS runs. No carousel exists in 
 
 ## Human test plan
 
-- [ ] Tab into a hero carousel → arrows focusable, autoplay pauses
+- [x] Tab into a hero carousel → arrows focusable, autoplay pauses — owner, 2026-10-10
 - [ ] Swipe on a phone; with reduced motion on in the OS, autoplay never starts
 - [ ] Disable JS → the first slide is visible and readable
-- [ ] Mouse: drag the hero sideways — it snaps to a slide, and a slide that is a link does not open
+- [x] Mouse: drag the hero sideways — it snaps to a slide, and a slide that is a link does not open — owner, 2026-10-10
+
+**Walkthrough 2026-10-10 (owner, Edge):** arrows, dots, loop, mouse drag, keyboard, autoplay (hover pause, focus
+stop, stop/start) and reduced motion (DevTools emulation — autoplay correctly absent) passed after the stale-focus-stop
+fix. **Open:** phone swipe, and the no-JS check.
 
 ## Implementation plan
 

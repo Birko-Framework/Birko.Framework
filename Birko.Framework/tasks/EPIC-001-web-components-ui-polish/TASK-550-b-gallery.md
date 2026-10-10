@@ -54,8 +54,12 @@ TASK-549 lands first.
 ## Human test plan
 
 - [ ] Swipe through images on a phone; pinch inside the zoom
-- [ ] Keyboard only: open zoom with Enter, close with Escape, focus is back on the zoom button
-- [ ] Narrow the window: thumbnails turn into dots; the current one is highlighted
+- [x] Keyboard only: open zoom with Enter, close with Escape, focus is back on the zoom button — owner, 2026-10-10
+- [x] Narrow the window: thumbnails turn into dots; the current one is highlighted — owner, 2026-10-10
+
+**Walkthrough 2026-10-10 (owner, Edge):** after the 0px-width and 30rem→24rem fixes — thumbnails, arrows, drag,
+narrow dots, zoom (open, navigate, magnify, Escape, focus return) and the new opt-in `zoom-close-outside` passed.
+**Open:** phone swipe and pinch inside the zoom.
 
 ## Implementation plan
 

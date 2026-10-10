@@ -58,10 +58,15 @@ constraint, not an increment, so this is a new component, not a `b-input` mode.
 
 ## Human test plan
 
-- [ ] Type 0.7 with step 0.5, min 0.5 → corrected to 0.5 visibly on blur
+- [x] Type 0.7 with step 0.5, min 0.5 → corrected to 0.5 visibly on blur — owner, 2026-10-10
 - [ ] On a phone, tap + and − through the range; − greys out at min
-- [ ] NVDA: arrow keys announce each new value with its unit
-- [ ] With the app locale set to `cs` / `sk`, the field shows `1,5` and accepts a typed comma
+- [x] NVDA: arrow keys announce each new value with its unit — owner, 2026-10-10
+- [x] With the app locale set to `cs` / `sk`, the field shows `1,5` and accepts a typed comma — owner, 2026-10-10
+
+**Walkthrough 2026-10-10 (owner, Edge + Narrator, Playground):** typing/snap, buttons and keys, Narrator (after the
+plain-field rework), CS / SK formatting via the new header Locale switch — all passed. **Open:** the phone check, and
+Narrator occasionally appending "new line" after an announced value ("2 m new line") — cosmetic; candidate fix is
+moving the status region inside the stepper row, needs a Narrator re-check.
 
 ## Implementation plan
 
