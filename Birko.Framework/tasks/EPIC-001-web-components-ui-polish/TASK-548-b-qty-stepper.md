@@ -3,7 +3,7 @@ id: TASK-548
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P1
 assignee: ai
@@ -64,8 +64,10 @@ constraint, not an increment, so this is a new component, not a `b-input` mode.
 - [x] With the app locale set to `cs` / `sk`, the field shows `1,5` and accepts a typed comma — owner, 2026-10-10
 
 **Walkthrough 2026-10-10 (owner, Edge + Narrator, Playground):** typing/snap, buttons and keys, Narrator (after the
-plain-field rework), CS / SK formatting via the new header Locale switch — all passed. **Phone passed.** Observed: after hiding the on-screen keyboard the page stays scrolled up — being compared
-with a plain `b-input` to tell browser behaviour from the stepper. Earlier: Narrator occasionally appending "new line" after an announced value ("2 m new line"). Moving the status region
+plain-field rework), CS / SK formatting via the new header Locale switch — all passed. **Phone passed.** Observed: after hiding the on-screen keyboard the page stays scrolled up. Compared by the
+owner: **every input does it, not only the stepper** — the phone browser scrolls the page to keep the focused field
+above the keyboard and does not scroll back when the keyboard closes. The Playground has no fixed-height shell
+(`100vh` / `overflow: hidden` on the page) that could cause it, so it is browser behaviour, not a defect here. Earlier: Narrator occasionally appending "new line" after an announced value ("2 m new line"). Moving the status region
 inside the row did NOT fix it (owner re-check). Now announcements go through `announce()` → `Element.ariaNotify()`
 (Chrome/Edge), with the region only as the fallback — Narrator re-check: no "new line" any more — passed. Also observed: arrow keys
 "sometimes" do nothing — that is Narrator's scan mode taking the arrows (Caps Lock+Space toggles it), not a defect.
