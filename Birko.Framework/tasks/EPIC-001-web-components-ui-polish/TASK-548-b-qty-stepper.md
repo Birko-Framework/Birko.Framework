@@ -59,15 +59,15 @@ constraint, not an increment, so this is a new component, not a `b-input` mode.
 ## Human test plan
 
 - [x] Type 0.7 with step 0.5, min 0.5 → corrected to 0.5 visibly on blur — owner, 2026-10-10
-- [ ] On a phone, tap + and − through the range; − greys out at min
+- [x] On a phone, tap + and − through the range; − greys out at min — owner, 2026-10-10 (decimal keypad, no focus zoom, snap, CS comma)
 - [x] NVDA: arrow keys announce each new value with its unit — owner, 2026-10-10
 - [x] With the app locale set to `cs` / `sk`, the field shows `1,5` and accepts a typed comma — owner, 2026-10-10
 
 **Walkthrough 2026-10-10 (owner, Edge + Narrator, Playground):** typing/snap, buttons and keys, Narrator (after the
-plain-field rework), CS / SK formatting via the new header Locale switch — all passed. **Open:** the phone check, and
-Narrator occasionally appending "new line" after an announced value ("2 m new line"). Moving the status region
+plain-field rework), CS / SK formatting via the new header Locale switch — all passed. **Phone passed.** Observed: after hiding the on-screen keyboard the page stays scrolled up — being compared
+with a plain `b-input` to tell browser behaviour from the stepper. Earlier: Narrator occasionally appending "new line" after an announced value ("2 m new line"). Moving the status region
 inside the row did NOT fix it (owner re-check). Now announcements go through `announce()` → `Element.ariaNotify()`
-(Chrome/Edge), with the region only as the fallback — needs one more Narrator re-check. Also observed: arrow keys
+(Chrome/Edge), with the region only as the fallback — Narrator re-check: no "new line" any more — passed. Also observed: arrow keys
 "sometimes" do nothing — that is Narrator's scan mode taking the arrows (Caps Lock+Space toggles it), not a defect.
 
 ## Implementation plan
