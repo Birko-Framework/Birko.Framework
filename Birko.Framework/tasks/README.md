@@ -50,7 +50,7 @@ _None_
   - [ ] [TASK-545](EPIC-001-web-components-ui-polish/TASK-545-undo-instead-of-confirm-for-reversible-deletes.md) A reversible delete can offer Undo instead of a confirm dialog — toast action + base-page opt-in (P3)
   - [x] [TASK-548](EPIC-001-web-components-ui-polish/TASK-548-b-qty-stepper.md) b-qty-stepper — a form-associated quantity stepper with decimal step, min, max and a unit label (P1)
   - [x] [TASK-549](EPIC-001-web-components-ui-polish/TASK-549-b-carousel.md) b-carousel — slotted, server-rendered slides with arrows, dots, swipe and an autoplay that yields (P1)
-  - [ ] [TASK-550](EPIC-001-web-components-ui-polish/TASK-550-b-gallery.md) b-gallery — product image gallery with thumbnails, swipe and an accessible zoom (P1)
+  - [x] [TASK-550](EPIC-001-web-components-ui-polish/TASK-550-b-gallery.md) b-gallery — product image gallery with thumbnails, swipe and an accessible zoom (P1)
   - [ ] [TASK-551](EPIC-001-web-components-ui-polish/TASK-551-i18n-t-interpolates-one-placeholder-at-a-time.md) I18n.t() fills placeholders one after another, so a value holding "{other}" is rewritten by the next one (P3)
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
