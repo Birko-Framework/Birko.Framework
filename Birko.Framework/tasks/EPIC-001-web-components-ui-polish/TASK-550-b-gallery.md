@@ -76,10 +76,12 @@ Decisions beyond the criteria:
 - **Zoom is a native modal `<dialog>`** named by the image's alt; click magnifies ×2 around the point, pinch is
   native; next / previous work inside the zoom and move the gallery too.
 - Images out of view are `inert`; every image stays named through its thumbnail.
+- **Without `data-full` the zoom takes the largest `srcset` candidate** — `currentSrc` is the one the browser
+  picked for the small main image, the wrong thing to enlarge (follow-up commit; suite 39/39).
 - Found on the way: the dot's `1.5rem` target measured 21px under the Playground's 14px root (below WCAG 2.5.8's
   24px) — now `max(1.5rem, 24px)` in the shared sheet, which fixes b-carousel's dots too.
 
-**Proof.** Playground `src/gallery-smoke.ts`: 38/38 on three consecutive full runs; mutation (re-reading `index` on
+**Proof.** Playground `src/gallery-smoke.ts`: 38/38 (39/39 with the srcset check) on three consecutive full runs; mutation (re-reading `index` on
 every render) fails "an unrelated re-render does not snap back". The suite waits for `input-adornment-smoke` (new
 `__inputAdornmentSmokeDone` flag): its modal and image decoding in the shared page delayed that suite's
 ResizeObserver past its fixed 60ms settle (2 geometry failures, measured), and focus is read inside the dialog's
