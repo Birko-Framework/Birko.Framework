@@ -91,6 +91,17 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         protected virtual int IndexedBinaryColumnLength => 255;
 
+        /// <inheritdoc />
+        public override bool IsUniqueViolationException(Exception ex)
+        {
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                if (current is MySqlException mysqlEx)
+                    return (int)mysqlEx.ErrorCode == 1062; // ER_DUP_ENTRY
+            }
+            return false;
+        }
+
         public override bool IsTransientException(Exception ex)
         {
             if (base.IsTransientException(ex)) return true;

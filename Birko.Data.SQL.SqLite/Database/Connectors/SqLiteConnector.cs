@@ -40,6 +40,18 @@ namespace Birko.Data.SQL.Connectors
             return false;
         }
 
+        /// <inheritdoc />
+        public override bool IsUniqueViolationException(Exception ex)
+        {
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                if (current is SqliteException sqliteEx)
+                    return sqliteEx.SqliteErrorCode == 19  // SQLITE_CONSTRAINT
+                        && (sqliteEx.SqliteExtendedErrorCode == 2067 || sqliteEx.SqliteExtendedErrorCode == 1555); // _UNIQUE, _PRIMARYKEY
+            }
+            return false;
+        }
+
         /// <remarks>
         /// TASK-277 — this used to answer a missing table with <c>DoInit()</c> and a <b>return</b>, so a
         /// write against a table that does not exist reported success and lost the row. The decision now

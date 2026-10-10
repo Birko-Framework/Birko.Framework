@@ -3,7 +3,7 @@
 ## Overview
 Decorator-style event sourcing for Birko stores. Wraps any `IStore<T>` / `IAsyncStore<T>` (incl. bulk variants) so every Create / Update / Delete also appends a `DomainEvent` to an `IEventStore`. Reads pass through to the inner store. Provides Replay + history APIs to rebuild aggregate state from the event stream.
 
-This project ships **interfaces, wrappers, and an aggregate base class only** — no concrete `IEventStore` backend, no snapshot store, no built-in projections. Bring your own event-store implementation (typically backed by another Birko store, e.g. SQL/Mongo/JSON).
+This project ships **interfaces, wrappers, and an aggregate base class only** — no snapshot store, no built-in projections. The one shipped backend is the sibling **Birko.Data.EventSourcing.SQL** (`SqlEventStore<DB>`, async, any SQL provider — TASK-529); anything else, bring your own.
 
 ## Project Location
 `Birko.Data.EventSourcing/`
@@ -42,7 +42,9 @@ The event-store contract consumed by the wrappers. Members:
 - `GetVersion(Guid)` — current aggregate version (0 if none)
 - `ReadAllFrom(DateTime)` — global tail-read by time
 
-Async variants take a `CancellationToken`. No concrete implementation lives here.
+Async variants take a `CancellationToken`. No concrete implementation lives here — `SqlEventStore<DB>` is in Birko.Data.EventSourcing.SQL.
+
+`EventStoreConcurrencyException` (`AggregateGuid`, `Version`) is the contract's optimistic-concurrency signal: an append whose (aggregate, version) is already taken. A backend throws it and writes nothing from the batch.
 
 ### `IEventSourced` / `EventSourcedAggregate` (`Models/IEventSourced.cs`)
 Entity contract for aggregates the wrappers can sit in front of:

@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Events\IEvent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Events\DomainEvent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Events\EventStoreConcurrencyException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Events\IEventStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\IEventSourced.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\EventSourcingStoreWrapper.cs" />

@@ -4,6 +4,20 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-10 — A SQL event store ships: `Birko.Data.EventSourcing.SQL`
+
+[[TASK-529]]. `IAsyncEventStore` had no implementation, so consumers wrote their own (DraCode's SQLite-only one:
+a non-atomic "atomic" range, no unique version, a full read for the current version). `SqlEventStore<DB>` runs on
+any SQL provider: `__Events` with **UNIQUE (AggregateGuid, Version)** created explicitly on first use (it throws
+if it cannot be built — the index is the concurrency guard), append-range in one `SqlUnitOfWork` that joins a
+caller's boundary, `MAX(Version)` for the current version. A taken version throws the new contract-level
+`EventStoreConcurrencyException` (Birko.Data.EventSourcing) and writes nothing. New connector hook
+`IsUniqueViolationException` (SQLite 19/2067/1555, SQL Server 2601/2627, PostgreSQL 23505, MySQL 1062). Additive.
+
+⚠ Found while proving atomicity: the provider stores' bulk insert is atomic by itself, but the generic
+`AsyncDataBaseBulkStore`'s bulk create inserts row by row — on that path only the unit of work holds the batch
+together. A test pins it.
+
 ## 2026-10-10 — BREAKING: a store overrides `DestroyCore`, and `Destroy` re-arms initialization
 
 [[TASK-163]] (SH-M307, SH-M316). `Destroy()` / `DestroyAsync(ct)` were abstract, so the init latch stayed set after a
@@ -250,6 +264,25 @@ ALTER TABLE [T] ALTER COLUMN [Col] DECIMAL(22,6) NOT NULL;       -- NULL, not NO
 `EnsureColumns` does not do this — it adds missing columns and never retypes (TASK-510). TASK-511's
 `DeclaredAsStored` comparison hook was removed: it existed only to make a bare declaration compare clean, and
 nothing declares one any more (rule 53).
+
+## 2026-09-26 — An atomic counter needs a shape a translator cannot misread
+
+[[TASK-498]]. `PropertyUpdate<T>` gained `Increment` / `Decrement` (SQL `col = col + @p`, Mongo `$inc`,
+painless `+=`), requested by Symbio for a hit counter on an anonymous GET. Three things worth carrying:
+
+- **⚠ The one failure that must not ship is `+1` written as `= 1`, so the assignment list lost its `Value`.**
+  `Assignments` is now `SetAssignment | IncrementAssignment` reached only through `Match(set, increment)` —
+  every old `foreach (var (p, v) …)` stops compiling, and an enum-plus-`Value` fix is impossible because there
+  is no `Value` to reach. Proven by mutation: with the SQL translator emitting `col = @p`, **50 parallel
+  `Increment(1)` calls end at 1**, and all seven SQLite end-to-end tests go red. CHANGELOG carries the migration.
+- **⚠ The task said "quote the identifiers"; rule 17 won.** Framework DDL writes columns unquoted, so a quoted
+  `"HitCount"` misses PostgreSQL's folded `hitcount`. Columns go out bare from table metadata, the table quoted.
+  *A requirement quoting a consumer's rulebook is not evidence about the framework's DDL.*
+- **⚠ Measured, not assumed: a decimal counter DRIFTS on SQLite.** `10.10m + 0.20m` reads back
+  `10.299999999999999m` under both `REAL` and `NUMERIC(18,2)` — SQLite keeps both as a float — while a Set of
+  `10.30m` round-trips exactly. The plan had predicted `NUMERIC` would be exact; the test pins what came back.
+
+---
 
 ## 2026-09-26 — BREAKING: `PropertyUpdate<T>.Assignments` is a closed hierarchy; `Increment` / `Decrement` added
 

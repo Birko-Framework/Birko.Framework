@@ -84,6 +84,7 @@
   </Folder>
   <Folder Name="/Data.Patterns/">
     <Project Path="../Birko.Data.EventSourcing/Birko.Data.EventSourcing.shproj" />
+    <Project Path="../Birko.Data.EventSourcing.SQL/Birko.Data.EventSourcing.SQL.shproj" />
     <Project Path="../Birko.Data.Patterns/Birko.Data.Patterns.shproj" />
     <Project Path="../Birko.Data.Processors/Birko.Data.Processors.shproj" />
     <Project Path="../Birko.Data.Tenant/Birko.Data.Tenant.shproj" />
@@ -279,6 +280,7 @@
     <Project Path="../tests/Birko.Data.InfluxDB.Tests/Birko.Data.InfluxDB.Tests.csproj" />
     <Project Path="../tests/Birko.Data.JSON.Tests/Birko.Data.JSON.Tests.csproj" />
     <Project Path="../tests/Birko.Data.EventSourcing.Tests/Birko.Data.EventSourcing.Tests.csproj" />
+    <Project Path="../tests/Birko.Data.EventSourcing.SQL.Tests/Birko.Data.EventSourcing.SQL.Tests.csproj" />
     <Project Path="../tests/Birko.Data.Migrations.RavenDB.Tests/Birko.Data.Migrations.RavenDB.Tests.csproj" />
     <Project Path="../tests/Birko.Data.Sync.RavenDB.Tests/Birko.Data.Sync.RavenDB.Tests.csproj" />
     <Project Path="../tests/Birko.AI.Providers.Tests/Birko.AI.Providers.Tests.csproj" />

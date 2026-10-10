@@ -27,6 +27,10 @@ Birko.Time.Abstractions (zero deps: IDateTimeProvider, SystemDateTimeProvider, T
 Birko.Data.Patterns + Birko.Data.Tenant + Birko.Time.Abstractions
   -> Birko.Data.Composition (StoreWrapperBuilder — runtime decorator chains)
 
+Birko.Data.EventSourcing + Birko.Data.SQL
+  -> Birko.Data.EventSourcing.SQL (SqlEventStore<DB> — a per-backend sibling, like BackgroundJobs.SQL / EventBus.Outbox.SQL,
+     so the event-sourcing contract stays free of SQL)
+
 Birko.Data.Core
   -> Birko.Data.Tagging (ITaggable, Tag, EntityTag, ITagService, TagServiceBase)
 
@@ -106,6 +110,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Data.Tagging** - Entity tagging system (Tag, EntityTag, ITaggable, ITagService, TagServiceBase — tenant-scoped, polymorphic junction)
 - **Birko.Data.Views** - Unified fluent view builder (ViewDefinitionBuilder, IViewMapping, ViewMapRegistry, IViewStore, IViewManager — cross-platform views/projections/aggregations; AggregateFunction imported from Birko.Data.Stores)
 - **Birko.Data.EventSourcing** - Event sourcing pattern
+- **Birko.Data.EventSourcing.SQL** - SQL `IAsyncEventStore` (SqlEventStore<DB> over any SQL provider — `__Events` table, unique (aggregate, version), typed `EventStoreConcurrencyException`)
 - **Birko.Data.SQL.View** + **.MSSql.View** / **.PostgreSQL.View** / **.MySQL.View** / **.SqLite.View** - SQL view DDL
 - **Birko.Data.SQL.View.Migrations** - Integration between SQL View definitions and the Migration framework (ViewSqlGenerator, ViewMigrationExtensions)
 - **Birko.Data.SQL.Caching** - Query caching decorator for SQL stores (CachedAsyncDataBaseBulkStore, SqlCacheKeyBuilder, SqlCacheOptions)
@@ -250,7 +255,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Data.TimescaleDB.Tests, Birko.Data.InfluxDB.Tests, Birko.Data.JSON.Tests
 - Birko.Data.Views.Tests
 - Birko.Validation.Tests, Birko.Data.Sync.Tests
-- Birko.BackgroundJobs.SQL.Tests, Birko.Workflow.SQL.Tests
+- Birko.BackgroundJobs.SQL.Tests, Birko.Workflow.SQL.Tests, Birko.Data.EventSourcing.SQL.Tests
 - Birko.Communication.Camera.Tests, Birko.Communication.REST.Tests, Birko.Communication.WebSocket.Tests
 - Birko.Data.Migrations.SQL.Tests, Birko.Data.XML.Tests
 - Birko.Caching.Tests

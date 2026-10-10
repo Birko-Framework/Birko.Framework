@@ -239,6 +239,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A SQL event store ships (2026-10-10)
+
+[[TASK-529]]. `Birko.Data.EventSourcing.SQL`: `SqlEventStore<DB>` on any provider — UNIQUE (aggregate, version) as the
+concurrency guard (typed `EventStoreConcurrencyException`), atomic append-range, `MAX` for the version. New connector
+hook `IsUniqueViolationException`. ⚠ The generic `AsyncDataBaseBulkStore`'s bulk create is **not** atomic (row by
+row); the provider stores' is.
+
 ### BREAKING: stores override `DestroyCore`; `Destroy` re-arms init (2026-10-10)
 
 [[TASK-163]]. `Destroy` is a non-virtual base wrapper that clears the init latch, so a destroyed store re-provisions
@@ -320,24 +327,6 @@ stayed missing after the mapping landed, every INSERT failed, two months of rows
   refused before any DDL. Explicit call, so it throws (rule 49); never wired into schema-ensure (TASK-204/254).
   Found on the way: `DetectDrift` reports an unprecisioned `decimal` as drifted on MySQL and SQL Server, on a
   table `CREATE TABLE` made — [[TASK-511]].
-
-### An atomic counter needs a shape a translator cannot misread (2026-09-26)
-
-[[TASK-498]]. `PropertyUpdate<T>` gained `Increment` / `Decrement` (SQL `col = col + @p`, Mongo `$inc`,
-painless `+=`), requested by Symbio for a hit counter on an anonymous GET. Three things worth carrying:
-
-- **⚠ The one failure that must not ship is `+1` written as `= 1`, so the assignment list lost its `Value`.**
-  `Assignments` is now `SetAssignment | IncrementAssignment` reached only through `Match(set, increment)` —
-  every old `foreach (var (p, v) …)` stops compiling, and an enum-plus-`Value` fix is impossible because there
-  is no `Value` to reach. Proven by mutation: with the SQL translator emitting `col = @p`, **50 parallel
-  `Increment(1)` calls end at 1**, and all seven SQLite end-to-end tests go red. CHANGELOG carries the migration.
-- **⚠ The task said "quote the identifiers"; rule 17 won.** Framework DDL writes columns unquoted, so a quoted
-  `"HitCount"` misses PostgreSQL's folded `hitcount`. Columns go out bare from table metadata, the table quoted.
-  *A requirement quoting a consumer's rulebook is not evidence about the framework's DDL.*
-- **⚠ Measured, not assumed: a decimal counter DRIFTS on SQLite.** `10.10m + 0.20m` reads back
-  `10.299999999999999m` under both `REAL` and `NUMERIC(18,2)` — SQLite keeps both as a float — while a Set of
-  `10.30m` round-trips exactly. The plan had predicted `NUMERIC` would be exact; the test pins what came back.
-
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

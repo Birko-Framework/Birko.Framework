@@ -1298,6 +1298,21 @@ namespace Birko.Data.SQL.Connectors
         public virtual bool IsIndexMissingException(Exception ex) => false;
 
         /// <summary>
+        /// Whether <paramref name="ex"/> reports a <b>UNIQUE / PRIMARY KEY violation</b> on a write — the
+        /// database refusing a row because another row already holds that key.
+        /// </summary>
+        /// <remarks>
+        /// TASK-529, for the SQL event store: a concurrent append at an existing (aggregate, version) must
+        /// surface as a typed concurrency conflict, and only the unique index can decide that across
+        /// processes. Default <c>false</c>; each provider matches its own error <b>code</b>, never message
+        /// text, and walks <c>InnerException</c> — <c>AbstractConnector.InitException</c> re-wraps every
+        /// command failure. SQLite 19 / extended 2067 (UNIQUE) or 1555 (PRIMARY KEY); SQL Server 2601 / 2627;
+        /// PostgreSQL SQLSTATE 23505; MySQL 1062. ⚠ MySQL 1062 is also what an index <i>build</i> over
+        /// duplicate data reports — this answers about the exception, so ask it only of a write.
+        /// </remarks>
+        public virtual bool IsUniqueViolationException(Exception ex) => false;
+
+        /// <summary>
         /// Generates a DROP INDEX SQL statement.
         /// Override in provider-specific connectors if the DDL syntax differs (e.g. MSSQL).
         /// </summary>

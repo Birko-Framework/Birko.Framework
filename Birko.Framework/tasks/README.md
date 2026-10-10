@@ -13,9 +13,9 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10     | 27     | —                   |
-| todo         | —                  | —                  | 192         |
+| todo         | —                  | —                  | 191         |
 | in-progress  | 8  | 11  | 1   |
-| verify       | —                  | —                  | 1       |
+| verify       | —                  | —                  | 2       |
 | blocked      | —                  | —                  | 1      |
 | done         | 1        | 23        | 212         |
 | cancelled    | 0   | 0   | 5    |
@@ -451,7 +451,7 @@ _None_
   - STORY-060 KoboldLair agent-runtime and data backports from DraCode — in-progress (4/12 done)
     - [x] [TASK-527](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-527-agent-loop-hooks.md) Agent loop: per-iteration and tool-call hooks, a readable system prompt, resume from a conversation (P1)
     - [ ] [TASK-528](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-528-orchestration-plan-model-and-step-validators.md) Birko.AI.Orchestration: a plan model with behaviour, step validators, and a pinned enum encoding (P1)
-    - [ ] [TASK-529](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-529-sql-event-store.md) Ship a SQL IAsyncEventStore (P1)
+    - [x] [TASK-529](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-529-sql-event-store.md) Ship a SQL IAsyncEventStore (P1)
     - [ ] [TASK-530](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-530-resilience-stores.md) Birko.AI.Resilience: store implementations for circuit-breaker state and usage (P2)
     - [ ] [TASK-531](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-531-classified-llm-failures.md) LlmResponse carries a classified failure (status, transient, retry-after), not just a string (P2)
     - [ ] [TASK-532](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-532-config-secret-provider-and-field-cipher.md) Birko.Security: a configuration ISecretProvider and a field cipher keyed from a secret (P2)

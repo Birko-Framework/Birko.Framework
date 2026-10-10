@@ -41,6 +41,21 @@ namespace Birko.Data.SQL.Connectors
         /// Detects SQL Server transient errors: deadlocks (1205), timeouts (-2),
         /// transport-level errors (20), login failures (64), resource busy (49920), etc.
         /// </summary>
+        /// <inheritdoc />
+        public override bool IsUniqueViolationException(Exception ex)
+        {
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                if (current is SqlException sqlEx)
+                {
+                    foreach (SqlError error in sqlEx.Errors)
+                        if (error.Number == 2601 || error.Number == 2627) return true; // unique index / constraint
+                    return false;
+                }
+            }
+            return false;
+        }
+
         public override bool IsTransientException(Exception ex)
         {
             if (base.IsTransientException(ex)) return true;

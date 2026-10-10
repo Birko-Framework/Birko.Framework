@@ -47,6 +47,17 @@ namespace Birko.Data.SQL.Connectors
         /// Detects PostgreSQL transient errors: deadlocks (40P01), serialization failures (40001),
         /// connection exceptions (08xxx), insufficient resources (53xxx), operator intervention (57xxx).
         /// </summary>
+        /// <inheritdoc />
+        public override bool IsUniqueViolationException(Exception ex)
+        {
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                if (current is PostgresException pgEx)
+                    return pgEx.SqlState == "23505"; // unique_violation
+            }
+            return false;
+        }
+
         public override bool IsTransientException(Exception ex)
         {
             if (base.IsTransientException(ex)) return true;
