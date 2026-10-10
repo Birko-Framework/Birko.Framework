@@ -2,7 +2,7 @@
 id: TASK-547
 parent: EPIC-018
 feature: null
-status: todo
+status: verify
 priority: P1
 assignee: ai
 created: 2026-10-09
@@ -31,18 +31,18 @@ default, or the server's `retry:`). Two retry loops overlap: if the native retry
 
 ## Acceptance criteria
 
-- [ ] **One retry loop:** on error the native source is closed and `SseClient`'s schedule alone owns the retry
-- [ ] **A delay schedule:** e.g. `reconnectDelays?: number[]` (default `[5000, 10000, 30000, 60000]`, last value
+- [x] **One retry loop:** on error the native source is closed and `SseClient`'s schedule alone owns the retry
+- [x] **A delay schedule:** e.g. `reconnectDelays?: number[]` (default `[5000, 10000, 30000, 60000]`, last value
       repeats); the delay grows per consecutive failure and resets on `_open`. `reconnectMs` keeps working as a single
       fixed delay; giving both is refused (or one documented winner), never silently merged
-- [ ] **A failure signal:** consecutive failures are counted (reset on `_open`); after a threshold (e.g.
+- [x] **A failure signal:** consecutive failures are counted (reset on `_open`); after a threshold (e.g.
       `failingAfter?: number`, default ~20) an internal `_failing` event is dispatched with `{ failures, nextDelayMs }`.
       Recovery stays signalled by `_reconnect`
-- [ ] `disconnect()` cancels any pending retry; `connect()` after `disconnect()` starts the schedule fresh
-- [ ] Tests (fake timers + a fake `EventSource`): no second connection while one retry is pending; delays follow the
+- [x] `disconnect()` cancels any pending retry; `connect()` after `disconnect()` starts the schedule fresh
+- [x] Tests (fake timers + a fake `EventSource`): no second connection while one retry is pending; delays follow the
       schedule and reset on open; `_failing` fires once at the threshold; disconnect cancels; the old fixed
       `reconnectMs` behaviour is unchanged for existing callers
-- [ ] `Birko.Web.Core` README/CLAUDE.md document the options and events; the final option and event names are sent
+- [x] `Birko.Web.Core` README/CLAUDE.md document the options and events; the final option and event names are sent
       back to the Presenter session (its TASK-009)
 
 ## Out of scope
@@ -57,4 +57,33 @@ default, or the server's `retry:`). Two retry loops overlap: if the native retry
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-547` — leave empty until then._
+Done directly.
+
+## Resolution (2026-10-10)
+
+`Birko.Web.Core/src/http/event-source.ts`:
+
+- **One retry loop.** `onerror` closes the native source before scheduling, so the browser's own retry (and a
+  server `retry:` field) never runs alongside the client's. `connect()` (public) resets the schedule; retries go
+  through a private `_open()`, so a retry does not reset it.
+- **Schedule.** `reconnectDelays?: number[]`, default `[5000, 10000, 30000, 60000]`, last repeats, reset on open.
+  `reconnectMs` becomes the one-entry schedule `[reconnectMs]` — unchanged for the existing callers (Symbio, DraCode
+  KoboldLair pass `reconnectMs: 5000`); `0` still disables reconnecting. **Both options → `TypeError`**; an empty or
+  negative schedule → `TypeError`.
+- **Failure signal.** `_failing` with `SseFailing { failures, nextDelayMs }` (type exported), fired **once** when
+  the consecutive count reaches `failingAfter`, again only after an open and a new outage; `0` never fires. Recovery
+  stays `_reconnect`. New `failures` getter; `state` reads `'connecting'` while a retry is pending (it would read
+  `'closed'` now that the native source is closed during the wait).
+- **`failingAfter` default is 5, not the provisional ~20.** On the default schedule 20 failures is ~18 minutes, so
+  this task's own human test (airplane mode ~2 minutes) could never show the hint; 5 failures is ≈2¾ minutes
+  (5 + 10 + 30 + 60 + 60 s). A consumer wanting a longer wait sets it.
+
+Docs: Core README (§ SseClient — reconnecting, options, events) and CLAUDE.md (§ SseClient rules).
+
+**Proof.** Birko.Web `dad5d8a`, Playground `d7c0539`, Presenter `e5467b1`. Playground `src/sse-retry-smoke.ts` (fake `EventSource` swapped in for the run; delays read by wrapping
+`setTimeout` around the synchronous error dispatch only): 30/30, full run 0 failing checks. **Mutation** — old
+`event-source.ts` restored: 16 fail, including "a pending retry never closes a connection the native source
+recovered" (the overlap defect itself). Core and Playground `tsc` clean.
+
+**Sent to Presenter:** the final names and the `failingAfter` default are written into Presenter TASK-009, and its
+`blocked:` line removed. The human test plan above runs in Presenter, after its TASK-009 wiring.

@@ -13,9 +13,9 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10     | 27     | —                   |
-| todo         | —                  | —                  | 196         |
+| todo         | —                  | —                  | 195         |
 | in-progress  | 8  | 11  | 0   |
-| verify       | —                  | —                  | 0       |
+| verify       | —                  | —                  | 1       |
 | blocked      | —                  | —                  | 1      |
 | done         | 1        | 23        | 209         |
 | cancelled    | 0   | 0   | 5    |
@@ -434,7 +434,7 @@ _None_
   - [x] [TASK-203](EPIC-018-birko-web-core-runtime/TASK-203-nothing-recorded-and-never-synced-both-read-as-empty.md) "nothing recorded" and "never synced" both read as `[]` (P2) · FEATURE-018
   - [x] [TASK-493](EPIC-018-birko-web-core-runtime/TASK-493-apiclient-getheaders-and-patch.md) `ApiClient` had no generic request-header hook and no `patch()` (P1) · FEATURE-018
   - [x] [TASK-508](EPIC-018-birko-web-core-runtime/TASK-508-apiclient-postform-multipart-upload.md) `ApiClient` cannot send a multipart upload (P1) · FEATURE-018
-  - [ ] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P1)
+  - [x] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P1)
 - **EPIC-019** Birko framework backports from DraCode — in-progress (3/28 tasks done)
   - STORY-058 Security / OAuth backports from DraCode — planned (0/6 done)
     - [ ] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
