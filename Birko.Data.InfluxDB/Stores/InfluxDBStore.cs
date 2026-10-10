@@ -101,7 +101,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Destroy()
+        protected override void DestroyCore()
         {
             if (Client == null || _settings == null) return;
 

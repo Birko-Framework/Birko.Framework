@@ -139,7 +139,7 @@ public class RavenDBStore<T>
     }
 
     /// <inheritdoc />
-    public override void Destroy()
+    protected override void DestroyCore()
     {
         var dbName = _documentStore?.Database;
         if (!string.IsNullOrEmpty(dbName))

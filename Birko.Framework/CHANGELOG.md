@@ -4,6 +4,32 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-10 — BREAKING: a store overrides `DestroyCore`, and `Destroy` re-arms initialization
+
+[[TASK-163]] (SH-M307, SH-M316). `Destroy()` / `DestroyAsync(ct)` were abstract, so the init latch stayed set after a
+store dropped its table / collection / file and the next operation ran against storage that was gone. They are now
+non-virtual base wrappers that clear the latch (also when the core throws). Separately, a CRUD call from inside
+`InitCore` no longer recurses to a stack overflow (sync) or deadlocks (async): it passes through on the
+initializing flow.
+
+**Migration — every class deriving from `AbstractStore<T>` / `AbstractAsyncStore<T>` (any Birko store):**
+
+```text
+old  public override void Destroy() { … }
+new  protected override void DestroyCore() { … }
+
+old  public override async Task DestroyAsync(CancellationToken ct = default) { … }
+new  protected override async Task DestroyCoreAsync(CancellationToken ct = default) { … }
+
+old  base.Destroy() / base.DestroyAsync(ct)   inside such an override
+new  base.DestroyCore() / base.DestroyCoreAsync(ct)
+```
+
+The compiler flags the first two (`CS0506`). It **cannot** flag the third: a `DestroyCore` that still calls
+`base.Destroy*` reaches the public wrapper, which dispatches back to the override — measured as a stack overflow
+in two test doubles. That call now throws `InvalidOperationException` naming the fix. Callers of `Destroy` and
+repositories' own `Destroy` overrides are unaffected. No consumer repo overrides a store's `Destroy` (searched).
+
 ## 2026-10-10 — The streaming sync-fallback retries one model call, never the run
 
 [[TASK-544]]. `RunWithHistoryAsync` wrapped the **whole** streaming run in the `StreamingFallbackToSync` catch, so a

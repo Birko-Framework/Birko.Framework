@@ -57,7 +57,7 @@ public class SluggableStoreWrapperTests
         }
 
         protected override void InitCore() { }
-        public override void Destroy() { }
+        protected override void DestroyCore() { }
         public override TestModel CreateInstance() => new();
     }
 

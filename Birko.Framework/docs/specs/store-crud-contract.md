@@ -106,6 +106,18 @@ stores therefore never have to repeat the initialization call.
   guarantees `InitCore()` / `InitCoreAsync(ct)` executes once; `_initialized` is a plain non-volatile `bool`
   read outside the lock on the fast path
 
+#### Scenario: A CRUD call made from inside InitCore passes through
+
+- **Given** an `InitCore()` / `InitCoreAsync(ct)` that seeds defaults through `this.Create(...)` /
+  `await CreateAsync(...)`
+- **When** the store initializes
+- **Then** the nested call's `EnsureInitialized` sees that **its own call flow** is running this store's init
+  (a per-instance `AsyncLocal<bool>`) and returns at once, so `InitCore` runs once and the seed is stored —
+  in both bases alike. Another thread or flow still waits for the init to finish. TASK-163 (SH-M316): before,
+  the sync base's re-entrant `Monitor` let the nested call in to run `InitCore` again until a
+  `StackOverflowException`, and the async base's `SemaphoreSlim` (no owner affinity) deadlocked — one mistake,
+  two unrelated symptoms
+
 #### Scenario: Failed initialization is retried on the next call
 
 - **Given** an `InitCore()` implementation that throws (for example, the database is unreachable)
@@ -220,8 +232,11 @@ catching `MissingMethodException` and then attempting
 
 ### Requirement: Destroy permanently deletes stored data and is documented as such
 
-The system SHALL declare `Destroy()` / `DestroyAsync(ct)` abstract in the bases, without opening the
-initialization gate, and SHALL NOT reset the private `_initialized` flag when they run.
+The system SHALL implement `Destroy()` / `DestroyAsync(ct)` in the bases as **non-virtual** wrappers that
+call the abstract `DestroyCore()` / `DestroyCoreAsync(ct)` without opening the initialization gate, and then
+**reset the private `_initialized` flag** — also when the core throws (TASK-163, SH-M307; rule 12). A
+`DestroyCore` override that calls the public `Destroy` again on the same flow SHALL be refused with
+`InvalidOperationException` naming `base.DestroyCore` rather than recursing.
 
 The XML documentation on `IBaseStore.Destroy()` and `IAsyncBaseStore.DestroyAsync(ct)` SHALL state
 that the operation **permanently deletes every row the store can see and is not disposal**, SHALL
@@ -255,11 +270,12 @@ described what an existing, correct member already did.
 - **When** they read the remarks
 - **Then** they are pointed at `IDisposable` where the store implements it, `IBulkDeleteStore<T>.Delete(filter)` / `IAsyncBulkStore<T>.DeleteAsync(filter)`, and `DeleteAll()` / `DeleteAllAsync()` — the last stated as base-class members on `AbstractBulkStore<T>` / `AbstractAsyncBulkStore<T>` rather than interface members, because they are not on any interface
 
-#### Scenario: No implementation changed
+#### Scenario: No implementation changed (SH-H046 only)
 
 - **Given** the 17 `Destroy` / `DestroyAsync` overrides across the backends
 - **When** SH-H046 is fixed
-- **Then** none of them changes — they were behaving correctly and were described wrongly, so the fix is entirely on the contract's documentation
+- **Then** none of them changes (TASK-163 later renamed every override to `DestroyCore` / `DestroyCoreAsync`
+  for the latch reset — a separate change) — they were behaving correctly and were described wrongly, so the fix is entirely on the contract's documentation
 
 #### Scenario: Destroying an in-memory store
 
@@ -268,12 +284,13 @@ described what an existing, correct member already did.
 - **Then** `_items.Clear()` empties the backing dictionary and the store keeps serving CRUD calls against the
   now-empty dictionary
 
-#### Scenario: CRUD after Destroy does not re-initialize
+#### Scenario: CRUD after Destroy initializes again
 
-- **Given** any store whose `InitCore()` provisions backend structures and whose `Destroy()` removes them
-- **When** a CRUD method is invoked after `Destroy()`
-- **Then** `EnsureInitialized()` sees `_initialized == true` and returns immediately, so `InitCore()` is not
-  re-run and the operation proceeds against torn-down storage
+- **Given** any store whose `InitCore()` provisions backend structures and whose `DestroyCore()` removes them
+- **When** a CRUD method is invoked after `Destroy()` — including after a `Destroy()` that threw
+- **Then** `_initialized` was reset by the `Destroy` wrapper, so `EnsureInitialized()` runs `InitCore()` again
+  and the storage is provisioned before the operation. Before TASK-163 the flag stayed `true` and the
+  operation ran against torn-down storage (SH-M307)
 
 ### Requirement: The store data delegate can only influence a write by mutating the entity in place
 

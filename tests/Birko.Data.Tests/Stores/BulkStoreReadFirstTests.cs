@@ -30,7 +30,7 @@ namespace Birko.Data.Tests.Stores
             private readonly Dictionary<Guid, TestModel> _data = new();
 
             protected override void InitCore() { }
-            public override void Destroy() => _data.Clear();
+            protected override void DestroyCore() => _data.Clear();
 
             protected override Guid CreateCore(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null)
             {
@@ -87,7 +87,7 @@ namespace Birko.Data.Tests.Stores
             private readonly Dictionary<Guid, TestModel> _data = new();
 
             protected override Task InitCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
-            public override Task DestroyAsync(CancellationToken ct = default) { _data.Clear(); return Task.CompletedTask; }
+            protected override Task DestroyCoreAsync(CancellationToken ct = default) { _data.Clear(); return Task.CompletedTask; }
 
             protected override Task<Guid> CreateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
             {

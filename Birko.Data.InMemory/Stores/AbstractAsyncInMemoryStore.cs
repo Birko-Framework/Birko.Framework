@@ -45,7 +45,7 @@ namespace Birko.Data.InMemory.Stores
         }
 
         /// <inheritdoc />
-        public override Task DestroyAsync(CancellationToken ct = default)
+        protected override Task DestroyCoreAsync(CancellationToken ct = default)
         {
             _items.Clear();
             return Task.CompletedTask;

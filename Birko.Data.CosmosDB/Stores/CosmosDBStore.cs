@@ -140,7 +140,7 @@ public class CosmosDBStore<T>
     }
 
     /// <inheritdoc />
-    public override void Destroy()
+    protected override void DestroyCore()
     {
         if (_container != null)
         {

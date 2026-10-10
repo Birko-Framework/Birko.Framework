@@ -21,10 +21,10 @@ public class AsyncBulkRepositoryDestroyTests
     private class CountingStore : AsyncInMemoryStore<Entity>
     {
         public int DestroyCount;
-        public override Task DestroyAsync(CancellationToken ct = default)
+        protected override Task DestroyCoreAsync(CancellationToken ct = default)
         {
             DestroyCount++;
-            return base.DestroyAsync(ct);
+            return base.DestroyCoreAsync(ct);
         }
     }
 

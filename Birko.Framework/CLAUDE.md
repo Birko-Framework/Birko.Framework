@@ -239,6 +239,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### BREAKING: stores override `DestroyCore`; `Destroy` re-arms init (2026-10-10)
+
+[[TASK-163]]. `Destroy` is a non-virtual base wrapper that clears the init latch, so a destroyed store re-provisions
+on its next call (it used to run against the dropped table / file). Override `DestroyCore` / `DestroyCoreAsync`;
+**never call `base.Destroy*` from them** — that recursed, and now throws. A `Create` inside `InitCore` passes
+through instead of a stack overflow (sync) or deadlock (async). Migration in [CHANGELOG.md](CHANGELOG.md).
+
 ### The streaming fallback retries one model call, not the run (2026-10-10)
 
 [[TASK-544]]. `StreamingFallbackToSync` wrapped the whole streaming run, so a later-iteration provider error or a

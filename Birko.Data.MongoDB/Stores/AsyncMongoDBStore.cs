@@ -260,7 +260,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task DestroyAsync(CancellationToken ct = default)
+        protected override async Task DestroyCoreAsync(CancellationToken ct = default)
         {
             if (Client != null)
             {

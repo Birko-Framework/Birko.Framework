@@ -14,6 +14,13 @@ namespace Birko.Data.Stores
     {
         private bool _initialized;
         private readonly object _initLock = new();
+        // True for the call flow running THIS store's InitCore (TASK-163, SH-M316). A CRUD call made from
+        // InitCore (seeding defaults through Create) re-enters EnsureInitialized on that flow; it must pass
+        // straight through. Before, the re-entrant Monitor let it in, it saw _initialized == false and called
+        // InitCore again — unbounded recursion to an uncatchable StackOverflowException. Per call flow and
+        // per instance, like the connector's IsInitializing scope (TASK-270): another thread still waits.
+        private readonly System.Threading.AsyncLocal<bool> _initializingHere = new();
+        private readonly System.Threading.AsyncLocal<bool> _destroyingHere = new();
 
         #region Initialization and Lifecycle
 
@@ -23,11 +30,20 @@ namespace Birko.Data.Stores
         /// </summary>
         protected void EnsureInitialized()
         {
+            if (_initializingHere.Value) return;
             if (_initialized && CanTrustRememberedInitialization) return;
             lock (_initLock)
             {
                 if (_initialized && CanTrustRememberedInitialization) return;
-                InitCore();
+                _initializingHere.Value = true;
+                try
+                {
+                    InitCore();
+                }
+                finally
+                {
+                    _initializingHere.Value = false;
+                }
                 _initialized = CanRememberInitialization;
             }
         }
@@ -99,8 +115,37 @@ namespace Birko.Data.Stores
         /// </summary>
         protected abstract void InitCore();
 
-        /// <inheritdoc />
-        public abstract void Destroy();
+        /// <summary>
+        /// Removes the store's backing storage, then forgets the initialization, so the next operation
+        /// provisions it again (TASK-163, SH-M307). Non-virtual on purpose (rule 12): when <c>Destroy</c> was
+        /// abstract the latch reset had to be repeated in every store, and none did — a JSON store whose file
+        /// was deleted, a Mongo store whose collection was dropped, kept writing as if they still existed.
+        /// The latch is cleared even when <see cref="DestroyCore"/> throws: storage in an unknown state is
+        /// re-provisioned, which costs one idempotent init, rather than trusted.
+        /// </summary>
+        public void Destroy()
+        {
+            // A DestroyCore override calling base.Destroy() (the pre-TASK-163 shape) lands back here and would
+            // recurse until the process dies; refuse it with the fix in the message instead.
+            if (_destroyingHere.Value)
+                throw new InvalidOperationException(string.Format("{0}.{1} called {2}, which dispatches back to {1} — unbounded recursion. Call base.{1} to reach the parent store's destroy.", GetType().Name, nameof(DestroyCore), nameof(Destroy)));
+            _destroyingHere.Value = true;
+            try
+            {
+                DestroyCore();
+            }
+            finally
+            {
+                _destroyingHere.Value = false;
+                _initialized = false;
+            }
+        }
+
+        /// <summary>
+        /// Core destroy logic: drop the table, delete the file, remove the collection. Override in concrete
+        /// stores; <see cref="Destroy"/> resets the initialization afterwards.
+        /// </summary>
+        protected abstract void DestroyCore();
 
         #endregion
 

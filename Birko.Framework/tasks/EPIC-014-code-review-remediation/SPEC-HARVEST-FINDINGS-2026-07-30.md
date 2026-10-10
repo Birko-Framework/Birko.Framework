@@ -2968,6 +2968,8 @@ Save routes to Update whenever data.Guid is non-empty, then returns data.Guid!.V
 
 Destroy()/DestroyAsync() are abstract and the private `_initialized` field is never cleared. For a store whose InitCore provisions backend structures and whose Destroy removes them — RavenDBStore drops the database, CosmosDBStore deletes the container, MongoDBStore drops the collection, JsonStore deletes the file — the next CRUD call sees _initialized == true, skips InitCore, and operates against storage that no longer exists.
 
+**Verdict: CONFIRMED — fixed by [[TASK-163]] (2026-10-10).** `AbstractStore.cs:103` / `AbstractAsyncStore.cs:120` declared `public abstract void Destroy()` / `Task DestroyAsync(ct)`, and `_initialized` (private, line 15 / 17) had no writer besides `EnsureInitialized*`, so none of the 44 backend overrides could clear it. Now `Destroy` / `DestroyAsync` are non-virtual base wrappers over a new abstract `DestroyCore` / `DestroyCoreAsync` that reset `_initialized` in a `finally` (rule 12); every override renamed. `StoreInitializationLatchTests`: 4 red with the reset removed.
+
 #### SH-M308 — In-memory UpdateCore's ContainsKey-then-indexer is a non-atomic check-then-act that resurrects deleted entities
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:90`
@@ -3021,6 +3023,8 @@ The delegate is declared `public delegate T StoreDataDelegate<T>(T data)` (IStor
 `../Birko.Data.Stores/AbstractStore.cs:27`
 
 `lock (_initLock)` is a re-entrant Monitor and `_initialized = true` is set only after InitCore() returns (line 31), so an InitCore seeding defaults via this.Create(...) re-enters EnsureInitialized on the same thread, still sees false, and recurses to an uncatchable StackOverflowException. The async base uses SemaphoreSlim (AbstractAsyncStore.cs:18/39), which has no owner affinity, so identical code deadlocks forever instead. One mistake, two unrelated symptoms, so it ports between hierarchies undetected.
+
+**Verdict: CONFIRMED — fixed by [[TASK-163]] (2026-10-10).** Both halves as stated: `AbstractStore.cs:27-31` (re-entrant `lock`, flag set after `InitCore` returns → recursion) and `AbstractAsyncStore.cs:39-44` (`SemaphoreSlim.WaitAsync` re-entered → hang). A per-instance `AsyncLocal<bool>` marks the flow running this store's init — the TASK-270 shape — and `EnsureInitialized*` returns at once on that flow, so a seeding `Create` inside `InitCore` runs once in both bases; other flows still wait (pinned). `StoreInitializationLatchTests`: 2 red with the pass-through removed (sync: second `InitCore`; async: 5 s timeout instead of a hang).
 
 ### area: store-decorator-composition
 

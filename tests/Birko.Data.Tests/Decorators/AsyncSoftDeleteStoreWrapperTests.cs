@@ -64,7 +64,7 @@ public class AsyncSoftDeleteStoreWrapperTests
         }
 
         protected override Task InitCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
-        public override Task DestroyAsync(CancellationToken ct = default) => Task.CompletedTask;
+        protected override Task DestroyCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
         public override TestModel CreateInstance() => new();
     }
 

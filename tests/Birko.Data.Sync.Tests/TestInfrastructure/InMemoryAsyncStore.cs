@@ -24,7 +24,7 @@ public abstract class InMemoryAsyncStore<T> : AbstractAsyncBulkStore<T>
 
     protected override Task InitCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
 
-    public override Task DestroyAsync(CancellationToken ct = default)
+    protected override Task DestroyCoreAsync(CancellationToken ct = default)
     {
         _items.Clear();
         return Task.CompletedTask;

@@ -89,7 +89,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Destroy()
+        protected override void DestroyCore()
         {
             if (Client == null) return;
             var collectionName = typeof(T).Name;

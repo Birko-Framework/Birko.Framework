@@ -113,7 +113,10 @@ Concrete store overrides:    protected override CreateCoreAsync(data) { /* your 
 
 - **Thread-safe**: Uses `SemaphoreSlim` (async) / `lock` (sync) with double-checked pattern
 - **Idempotent**: `Init()`/`InitAsync()` can be called explicitly or never — the guard handles both
-- **Destroy not affected**: `Destroy()`/`DestroyAsync()` remains explicit, not lazy
+- **Destroy resets it**: `Destroy()`/`DestroyAsync()` are explicit, never lazy, and are base-class wrappers —
+  override `DestroyCore()`/`DestroyCoreAsync()`; the wrapper resets the init latch afterwards, so the next
+  operation provisions the storage again. Never call `Destroy()` from `DestroyCore()` — use `base.DestroyCore()`
+- **InitCore may call CRUD**: a `Create` from inside `InitCore` (seeding defaults) passes straight through
 - No need to call `Init()` before using a store — it happens automatically
 
 ## Implementation Options
@@ -131,9 +134,9 @@ public class MyCustomStore<T> : AbstractStore<T> where T : AbstractModel
         // Initialize storage backend (called once automatically before first CRUD)
     }
 
-    public override void Destroy()
+    protected override void DestroyCore()
     {
-        // Clean up / remove data
+        // Remove the backing storage (drop table / delete file); Destroy() resets the init latch afterwards
     }
 
     protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
@@ -177,9 +180,9 @@ public class MyCustomAsyncStore<T> : AbstractAsyncStore<T> where T : AbstractMod
         // Initialize storage backend (called once automatically before first CRUD)
     }
 
-    public override async Task DestroyAsync(CancellationToken ct = default)
+    protected override async Task DestroyCoreAsync(CancellationToken ct = default)
     {
-        // Clean up
+        // Remove the backing storage; DestroyAsync() resets the init latch afterwards
     }
 
     protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null,

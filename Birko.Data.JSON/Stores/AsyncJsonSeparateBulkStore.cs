@@ -51,7 +51,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override async Task DestroyAsync(CancellationToken ct = default)
+        protected override async Task DestroyCoreAsync(CancellationToken ct = default)
         {
             _items?.Clear();
             _files.Clear();

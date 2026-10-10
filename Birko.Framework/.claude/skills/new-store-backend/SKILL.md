@@ -62,8 +62,8 @@ In `C:\Source\Birko\Framework\Birko.Data.X\Stores\XStore.cs`:
 
 - `public class XStore<T> : AbstractBulkStore<T>, ISettingsStore<XSettings> where T : class`
 - Constructor takes the platform's native client / connection / file path. Do **not** open it in the constructor — `Init()` does that.
-- Override `Init()` to open the connection / load the file / ensure the index exists. **Idempotent** — calling `Init()` twice must be safe (the base lazy-init protects you, but defensive coding still matters).
-- Override `Destroy()` to close the connection / flush + release the file handle.
+- Override `InitCore()` to open the connection / load the file / ensure the index exists. **Idempotent** — it runs again after a `Destroy()` (the base resets the latch), and the lazy-init guard calls it at most once otherwise. A `Create` from inside it (seeding) is fine.
+- Override `DestroyCore()` to **remove the backing storage** (drop the table / collection, delete the file) — it is not disposal; release connections through `IDisposable`. The public `Destroy()` is a base wrapper: never override it, never call it from `DestroyCore()` (use `base.DestroyCore()`).
 - Override the **`*Core` methods only**, not the public CRUD:
   - `CreateCore(T entity)`
   - `ReadCore(Expression<Func<T, bool>>? filter, int? skip, int? limit)`

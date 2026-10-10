@@ -13,7 +13,10 @@ finding-ids: SH-M001 … SH-M428
 
 ## Progress
 
-**0 / 428 closed.** All are unverified harvester claims. Per-finding detail is in
+**2 / 428 closed by triage tasks:** `SH-M307` and `SH-M316` ([[TASK-163]], 2026-10-10 — the two store-latch
+findings of its 15; the other 13 remain open there). ⚠ This line had read 0 while **10 other medium findings**
+already carried a `Verdict:` line in the findings doc from other passes — recount from those lines, not from here.
+The rest are unverified harvester claims. Per-finding detail is in
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md) § Medium severity.
 
 ## User story

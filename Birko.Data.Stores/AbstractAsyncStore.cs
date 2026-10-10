@@ -16,6 +16,13 @@ namespace Birko.Data.Stores
     {
         private bool _initialized;
         private readonly SemaphoreSlim _initLock = new(1, 1);
+        // True for the call flow running THIS store's InitCoreAsync (TASK-163, SH-M316). A CRUD call awaited
+        // from InitCoreAsync re-enters EnsureInitializedAsync on that flow; it must pass straight through.
+        // Before, it waited on the SemaphoreSlim the outer call held — SemaphoreSlim has no owner affinity —
+        // and the store hung for good, where the sync base recursed to a StackOverflowException instead.
+        // Per call flow and per instance, like the connector's IsInitializing scope (TASK-270).
+        private readonly AsyncLocal<bool> _initializingHere = new();
+        private readonly AsyncLocal<bool> _destroyingHere = new();
 
         #region Constructors and Initialization
 
@@ -35,12 +42,17 @@ namespace Birko.Data.Stores
             // Observe cancellation on every operation — all public async CRUD methods funnel through here,
             // including already-initialized stores that would otherwise return below without checking the token.
             ct.ThrowIfCancellationRequested();
+            if (_initializingHere.Value) return;
             if (_initialized && CanTrustRememberedInitialization) return;
             await _initLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
                 if (_initialized && CanTrustRememberedInitialization) return;
+                // Set inside this async method, so the value flows into InitCoreAsync and everything it awaits
+                // and is restored automatically when this method returns to its caller.
+                _initializingHere.Value = true;
                 await InitCoreAsync(ct).ConfigureAwait(false);
+                _initializingHere.Value = false;
                 _initialized = CanRememberInitialization;
             }
             finally
@@ -116,8 +128,34 @@ namespace Birko.Data.Stores
         /// </summary>
         protected abstract Task InitCoreAsync(CancellationToken ct = default);
 
-        /// <inheritdoc />
-        public abstract Task DestroyAsync(CancellationToken ct = default);
+        /// <summary>
+        /// Removes the store's backing storage, then forgets the initialization, so the next operation
+        /// provisions it again (TASK-163, SH-M307). Non-virtual on purpose (rule 12) — see
+        /// <see cref="AbstractStore{T}.Destroy"/>. The latch is cleared even when
+        /// <see cref="DestroyCoreAsync"/> throws.
+        /// </summary>
+        public async Task DestroyAsync(CancellationToken ct = default)
+        {
+            // A DestroyCoreAsync override awaiting base.DestroyAsync() (the pre-TASK-163 shape) lands back here
+            // and would recurse until the process dies; refuse it with the fix in the message instead.
+            if (_destroyingHere.Value)
+                throw new InvalidOperationException(string.Format("{0}.{1} called {2}, which dispatches back to {1} — unbounded recursion. Call base.{1} to reach the parent store's destroy.", GetType().Name, nameof(DestroyCoreAsync), nameof(DestroyAsync)));
+            _destroyingHere.Value = true;
+            try
+            {
+                await DestroyCoreAsync(ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _initialized = false;
+            }
+        }
+
+        /// <summary>
+        /// Core destroy logic. Override in concrete stores; <see cref="DestroyAsync"/> resets the
+        /// initialization afterwards.
+        /// </summary>
+        protected abstract Task DestroyCoreAsync(CancellationToken ct = default);
 
         #endregion
 

@@ -167,7 +167,7 @@ namespace Birko.Data.XML.Stores
         }
 
         /// <inheritdoc />
-        public override void Destroy()
+        protected override void DestroyCore()
         {
             _items?.Clear();
             if (!string.IsNullOrEmpty(Path) && File.Exists(Path))

@@ -34,10 +34,10 @@ public class BulkViewModelRepositoryDestroyTests
     {
         public int DestroyCalls { get; private set; }
 
-        public override Task DestroyAsync(CancellationToken ct = default)
+        protected override Task DestroyCoreAsync(CancellationToken ct = default)
         {
             DestroyCalls++;
-            return base.DestroyAsync(ct);
+            return base.DestroyCoreAsync(ct);
         }
     }
 

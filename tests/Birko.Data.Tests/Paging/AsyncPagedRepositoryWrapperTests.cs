@@ -65,7 +65,7 @@ public class AsyncPagedRepositoryWrapperTests
         protected override Task DeleteCoreAsync(TestModel data, CancellationToken ct = default) { _data.Remove(data); return Task.CompletedTask; }
         protected override Task DeleteCoreAsync(IEnumerable<TestModel> data, CancellationToken ct = default) { foreach (var d in data) _data.Remove(d); return Task.CompletedTask; }
         protected override Task InitCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
-        public override Task DestroyAsync(CancellationToken ct = default) => Task.CompletedTask;
+        protected override Task DestroyCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
         public override TestModel CreateInstance() => new();
     }
 

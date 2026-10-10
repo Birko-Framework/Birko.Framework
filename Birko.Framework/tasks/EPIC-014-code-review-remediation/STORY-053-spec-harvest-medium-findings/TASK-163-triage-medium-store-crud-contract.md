@@ -2,7 +2,7 @@
 id: TASK-163
 parent: STORY-053
 feature: FEATURE-014
-# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+# status: in-progress | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 status: todo
 priority: P1
 assignee: ai
@@ -82,6 +82,35 @@ re-verified as still present on 2026-09-08.
 ⚠ And note the framework now contains the remedy both halves ask for, in a different class: [[TASK-270]]
 built an `AsyncLocal<bool>` re-entrancy scope for `DataBase.IsInitializing`, per call flow and per
 instance, restoring on exception. Reuse that shape rather than inventing a second one.
+
+## Progress — 2 of 15 (2026-10-10)
+
+Done first because consumer **Affiliate** needs the Destroy latch; the other 13 findings are untouched.
+
+- **SH-M307 (Destroy latch) — confirmed, fixed.** `Destroy()` / `DestroyAsync(ct)` are now non-virtual wrappers
+  in `AbstractStore` / `AbstractAsyncStore` over a new abstract `DestroyCore()` / `DestroyCoreAsync(ct)`; the
+  wrapper clears `_initialized` in a `finally` (a destroy that throws leaves storage in an unknown state, so it is
+  re-provisioned rather than trusted). Rule 12: the reset could not live in 44 overrides that each had to remember
+  it. All 44 production overrides and 19 test doubles renamed, compiler-driven (CS0506 at each site, two rounds,
+  0 errors). ⚠ **Breaking for anyone deriving from a store** — CHANGELOG carries the migration.
+- **Found on the way, and guarded:** a renamed override still calling `base.DestroyAsync(ct)` now lands on the
+  wrapper, which dispatches back to the override — measured as a **stack overflow that killed the test host** in
+  two test doubles (`AsyncBulkRepositoryDestroyTests`, `BulkViewModelRepositoryDestroyTests`, now
+  `base.DestroyCoreAsync`). A consumer migrating by hand would hit the same, so a re-entrant `Destroy*` on the
+  same flow now throws `InvalidOperationException` naming `base.DestroyCore` instead of recursing.
+- **SH-M316 (InitCore re-entrancy) — confirmed both halves, fixed.** A per-instance `AsyncLocal<bool>` (the
+  TASK-270 shape) marks the flow running this store's init; `EnsureInitialized*` returns at once on it. A seeding
+  `Create` inside `InitCore` runs once in both bases; other flows still wait.
+- **Proof** — `tests/Birko.Data.Tests/Stores/StoreInitializationLatchTests.cs` (9). Mutation: latch reset removed
+  → 4 red; re-entrancy pass removed → 2 red (sync: a second `InitCore`; async: the 5 s timeout, where it used to
+  hang). Contract pin, passes either way: another flow still waits for init. The recursion guard has no clean red
+  — without it the host dies, which is the measurement above. Suites: Birko.Data 229, Repositories 18, ViewModel
+  37, Sync 64, Validation 130, InMemory 74, JSON 37, XML 32, SQLite 440, Patterns 68, InfluxDB.ViewModel 5 — all
+  green; solution build 0 errors. Live Mongo / Raven / Cosmos / Elastic / Influx suites not run (rename only in
+  those files).
+- Verdicts written into `SPEC-HARVEST-FINDINGS-2026-07-30.md`; spec `store-crud-contract.md` updated by hand
+  (requirement and both scenarios), not regenerated; `docs/store-implementation.md` and the `new-store-backend`
+  skill corrected (it also said to override `Init()` and to use `Destroy` for closing connections).
 
 ## Out of scope
 

@@ -13,8 +13,8 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10     | 27     | —                   |
-| todo         | —                  | —                  | 193         |
-| in-progress  | 8  | 11  | 0   |
+| todo         | —                  | —                  | 192         |
+| in-progress  | 8  | 11  | 1   |
 | verify       | —                  | —                  | 1       |
 | blocked      | —                  | —                  | 1      |
 | done         | 1        | 23        | 212         |

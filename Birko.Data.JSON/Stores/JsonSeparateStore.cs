@@ -49,7 +49,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override void Destroy()
+        protected override void DestroyCore()
         {
             _items?.Clear();
             _files.Clear();

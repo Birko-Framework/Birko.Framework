@@ -841,7 +841,7 @@ namespace Birko.Data.ElasticSearch.Stores
         }
 
         /// <inheritdoc />
-        public override void Destroy()
+        protected override void DestroyCore()
         {
             DeleteIndex();
         }

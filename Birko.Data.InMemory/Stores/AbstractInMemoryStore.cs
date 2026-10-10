@@ -42,7 +42,7 @@ namespace Birko.Data.InMemory.Stores
         }
 
         /// <inheritdoc />
-        public override void Destroy()
+        protected override void DestroyCore()
         {
             _items.Clear();
         }

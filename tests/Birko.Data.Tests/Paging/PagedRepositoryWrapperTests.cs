@@ -64,7 +64,7 @@ public class PagedRepositoryWrapperTests
         protected override void DeleteCore(TestModel data) => _data.Remove(data);
         protected override void DeleteCore(IEnumerable<TestModel> data) { foreach (var d in data) _data.Remove(d); }
         protected override void InitCore() { }
-        public override void Destroy() { }
+        protected override void DestroyCore() { }
         public override TestModel CreateInstance() => new();
     }
 

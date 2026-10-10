@@ -244,7 +244,7 @@ namespace Birko.Data.SQL.Stores
             => Connector == null || Connector.SchemaGeneration == _initSchemaGeneration;
 
         /// <inheritdoc />
-        public override async Task DestroyAsync(CancellationToken ct = default)
+        protected override async Task DestroyCoreAsync(CancellationToken ct = default)
         {
             if (Connector == null) return;
             if (AsyncConnector != null)

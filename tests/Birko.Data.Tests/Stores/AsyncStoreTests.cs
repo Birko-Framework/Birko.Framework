@@ -79,7 +79,7 @@ namespace Birko.Data.Tests.Stores
                 return Task.CompletedTask;
             }
 
-            public override Task DestroyAsync(CancellationToken ct = default)
+            protected override Task DestroyCoreAsync(CancellationToken ct = default)
             {
                 _data.Clear();
                 return Task.CompletedTask;

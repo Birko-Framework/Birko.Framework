@@ -182,7 +182,7 @@ namespace Birko.Data.SQL.Stores
             => Connector == null || Connector.SchemaGeneration == _initSchemaGeneration;
 
         /// <inheritdoc />
-        public override void Destroy()
+        protected override void DestroyCore()
         {
             Connector?.DropTable(new[] { typeof(T) });
         }
