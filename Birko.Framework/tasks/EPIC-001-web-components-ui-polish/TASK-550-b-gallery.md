@@ -77,6 +77,9 @@ Decisions beyond the criteria:
 - **Zoom is a native modal `<dialog>`** named by the image's alt; click magnifies ×2 around the point, pinch is
   native; next / previous work inside the zoom and move the gallery too.
 - Images out of view are `inert`; every image stays named through its thumbnail.
+- **`zoom-close-outside` (opt-in, owner's request 2026-10-10):** the zoom is full-screen, so there is no backdrop;
+  with the attribute a click on the empty space around the image closes it. Off by default so a stray tap beside a
+  magnified image while panning does not close it. Playground card has the toggle.
 - **Owner's walkthrough (2026-10-10): the gallery card showed no images** — measured 0px wide. The `.gallery` is a
   size container (for the thumbs-to-dots container query), and a size container takes no width from its content, so
   in a shrink-to-fit parent (the Playground's centred flex card; a consumer could do the same) it collapsed. The host
