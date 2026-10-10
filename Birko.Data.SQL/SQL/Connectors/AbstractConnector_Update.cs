@@ -122,7 +122,14 @@ namespace Birko.Data.SQL.Connectors
 
         public void Update(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, bool allowAllRows = false)
         {
-            if (values != null && values.Any())
+            // What "nothing to set" means depends on the path (TASK-331). The value path's payload is
+            // `values` — an empty one has no parameters for its `col = @SETcol` list. The expression path's
+            // payload is the SET clauses in `fields`; `values` holds only the constants they bound, and
+            // `UPPER(Name)` or `A + B` binds none — gating it on `values` skipped the UPDATE silently.
+            var hasPayload = isExpressionValues
+                ? fields.Any()
+                : values != null && values.Any();
+            if (hasPayload)
             {
                 // SH-H002 — refuse before the transaction wrapper; see AbstractConnector_Delete.
                 if (!allowAllRows && WouldTargetEveryRow(conditions))
@@ -142,7 +149,7 @@ namespace Birko.Data.SQL.Connectors
                     }
 
                     AddRequiredWhere(conditions, command, "update", tableName, allowAllRows);
-                    foreach (var kvp in values)
+                    foreach (var kvp in values ?? new Dictionary<string, object>())
                     {
                         if (!isExpressionValues)
                         {

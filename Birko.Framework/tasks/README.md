@@ -13,11 +13,11 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10     | 27     | —                   |
-| todo         | —                  | —                  | 194         |
+| todo         | —                  | —                  | 193         |
 | in-progress  | 8  | 11  | 0   |
 | verify       | —                  | —                  | 1       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 211         |
+| done         | 1        | 23        | 212         |
 | cancelled    | 0   | 0   | 5    |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -239,7 +239,7 @@ _None_
   - [ ] [TASK-328](EPIC-014-code-review-remediation/TASK-328-should-the-event-tenant-bridge-refuse-to-widen.md) Decide: should the event↔tenant bridge REFUSE to widen when it cannot establish a tenant? (P1) · FEATURE-014
   - [x] [TASK-329](EPIC-014-code-review-remediation/TASK-329-sql-bulk-stores-never-apply-the-bounded-filter-guard.md) The SQL bulk stores never apply `RequireBoundedFilter`, so a filter that reduces to every row rewrites the table (P0) · FEATURE-014
   - [ ] [TASK-330](EPIC-014-code-review-remediation/TASK-330-the-action-overloads-all-rows-door-is-a-different-shape.md) Decide whether the `Action<T>` destructive overloads need an all-rows door of their own shape (P3) · FEATURE-014
-  - [ ] [TASK-331](EPIC-014-code-review-remediation/TASK-331-an-expression-set-that-binds-no-parameter-is-a-silent-no-op.md) An expression-valued UPDATE that binds no parameter issues no statement at all, silently (P1) · FEATURE-014
+  - [x] [TASK-331](EPIC-014-code-review-remediation/TASK-331-an-expression-set-that-binds-no-parameter-is-a-silent-no-op.md) An expression-valued UPDATE that binds no parameter issues no statement at all, silently (P1) · FEATURE-014
   - [x] [TASK-332](EPIC-014-code-review-remediation/TASK-332-migrations-state-table-is-not-dialect-portable.md) The migration runner's own bookkeeping table could not be created on MySQL or SQL Server (P0) · FEATURE-014
   - [ ] [TASK-446](EPIC-014-code-review-remediation/TASK-446-workflow-instance-stores-have-no-store-level-tests.md) All seven workflow instance stores have zero store-level tests, and that is where two high findings lived (P2) · FEATURE-014
   - [x] [TASK-447](EPIC-014-code-review-remediation/TASK-447-cosmos-view-filter-values-are-a-sql-injection-sink.md) A Cosmos view filter's string value breaks out of its own quotes (P0) · FEATURE-014

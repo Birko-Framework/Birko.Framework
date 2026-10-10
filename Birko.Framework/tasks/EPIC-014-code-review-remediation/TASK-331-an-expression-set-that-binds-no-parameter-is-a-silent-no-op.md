@@ -2,7 +2,7 @@
 id: TASK-331
 parent: EPIC-014
 feature: FEATURE-014
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-09-09
@@ -21,7 +21,33 @@ affects: [Birko.Data.SQL]
 
 Spawned at [[TASK-308]] while writing the opt-out test for `SH-H024`. Not that finding's root cause — a
 different mechanism at a different layer — and out of TASK-308's scope, so it gets an id rather than an
-`## Out of scope` sentence.
+`## Resolution (2026-10-10)
+
+**The callers, measured.** `Update(tableName, fields, values, conditions, isExpressionValues, allowAllRows)` (sync
+and async twins) has five:
+
+| Caller | `isExpressionValues` | Empty `values` means |
+|---|---|---|
+| `Update(Table, object model, …)` | false | a model with no mapped fields — `fields` is the select list, `values` its written values |
+| `Update<T,P>(…, IDictionary<Expression, object>, …)` | false | no assignments — `fields` empty too |
+| `Update(Table, IDictionary<string, object>, …)` | false | nothing to set, but `fields` is the **whole select list** — running would emit `col = @SETcol` for every column with no parameter bound |
+| `Update<T,P>(…, IDictionary<Expression, Expression>, …)` | **true** | only that the SET clauses bound no constant — `fields` holds them |
+| `DataBaseBulkStore` / `AsyncDataBaseBulkStore` `Update(filter, PropertyUpdate<T>)` | **true** | never: `PropertyUpdateSqlTranslator` binds one parameter per assignment (`values.Add(parameter, value ?? DBNull.Value)`), so `values` is empty only when `fields` is |
+
+**Fix.** The gate is `isExpressionValues ? fields.Any() : values.Any()` — the existing flag is the discriminator, no
+new one. The value path is untouched; the store path is unchanged (both counts are equal there). The parameter
+loop tolerates a null `values` on the expression path.
+
+**Proof.** `PredicateMistranslationEndToEndTests` (SQLite, real file database, values read back): TASK-308's pin
+inverted to `An_expression_SET_that_binds_no_parameter_issues_its_statement` (comment records where the line
+moved), plus its async twin, column arithmetic (`Amount + Amount` → 20), and a parameter-free SET with no filter now
+**refused** as a whole-table write (before: returned before the guard). **Red before the fix: 4 of 4.**
+`An_empty_SET_payload_issues_nothing_on_every_door` (5 doors incl. async) passed before and after — a **contract
+pin**, not evidence. SQLite 440/440, Birko.Data.SQL 700/700. Live MSSQL / PostgreSQL / MySQL suites not run (the
+change is in the shared base connector, no provider override). Spec: scenario added under "An unrecognised call
+in an UPDATE SET value is refused" in `docs/specs/filter-expression-translation.md` (hand edit, not a regen).
+
+## Out of scope` sentence.
 
 `AbstractConnector_Update.Update(string tableName, IDictionary<int, string> fields,
 IDictionary<string, object> values, …)` opens with:
@@ -83,19 +109,19 @@ non-expression path does today before changing it, and check the third caller �
 
 ## Acceptance criteria
 
-- [ ] The three callers of `Update(tableName, fields, values, conditions, isExpressionValues, allowAllRows)`
+- [x] The three callers of `Update(tableName, fields, values, conditions, isExpressionValues, allowAllRows)`
       are enumerated and each one's meaning of an empty `values` is **measured**, not inferred
-- [ ] An expression-valued SET that binds no parameter issues its statement, asserted as the **value read
+- [x] An expression-valued SET that binds no parameter issues its statement, asserted as the **value read
       back** from a real database — never as the absence of an exception
-- [ ] An empty payload on the non-expression path still does whatever it does today, asserted, so the fix
+- [x] An empty payload on the non-expression path still does whatever it does today, asserted, so the fix
       is distinguishable from removing the guard
-- [ ] `isExpressionValues` is the discriminator if a discriminator is needed — it already reaches this
+- [x] `isExpressionValues` is the discriminator if a discriminator is needed — it already reaches this
       method and already says which path the caller took; do not add a second flag
-- [ ] Proven able to fail
-- [ ] TASK-308's pin
+- [x] Proven able to fail
+- [x] TASK-308's pin
       (`An_expression_SET_that_binds_no_parameter_is_a_SILENT_NO_OP`) is **inverted, not deleted**, with a
       comment recording where the line moved
-- [ ] `/specs regen filter-expression-translation` if the SET-value contract changes
+- [x] `/specs regen filter-expression-translation` if the SET-value contract changes
 
 ## Out of scope
 
@@ -105,5 +131,5 @@ non-expression path does today before changing it, and check the third caller �
 
 ## Human test plan
 
-- [ ] N/A — fully covered by automated tests; the deliverable is a value read back from SQLite, which a
+- [x] N/A — fully covered by automated tests; the deliverable is a value read back from SQLite, which a
       human adds nothing to.

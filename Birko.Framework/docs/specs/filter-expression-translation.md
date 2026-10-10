@@ -459,6 +459,17 @@ inconsistency is the root cause being closed.
 - **Then** the statement is issued and the row's name becomes `R1` — `Replace`, `ToLower` and `ToUpper`
   are translated to SQL and are unaffected
 
+#### Scenario: A SET that binds no constant is still issued
+
+- **Given** `SET Name = r.Name.ToUpper()` (`UPPER(Name)`) or `SET Amount = r.Amount + r.Amount` — SET clauses that
+  bind no parameter
+- **When** the UPDATE is issued through `Update(tableName, fields, values, conditions, isExpressionValues: true)`
+- **Then** the statement runs and the value reads back changed. The empty-payload gate keys on `fields` (the SET
+  clauses) on the expression path and on `values` on the value path; before TASK-331 it keyed on `values` for
+  both, so a clause binding no constant was skipped with no exception and no log entry
+- **And** with no filter it reaches the whole-table write refusal like any other UPDATE
+- **And** an empty payload on either path still issues nothing and throws nothing
+
 #### Scenario: A parameter-free call is still folded to a constant
 
 - **Given** `SET Name = string.Concat("fixed", suffix)` where `suffix` is a captured local

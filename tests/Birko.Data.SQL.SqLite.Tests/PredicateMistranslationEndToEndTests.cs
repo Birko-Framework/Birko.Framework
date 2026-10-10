@@ -292,10 +292,8 @@ public class PredicateMistranslationEndToEndTests : IDisposable
         // § SH-H037's opt-out, executed rather than reasoned about: the refusal above must not have closed
         // the door on the calls this path does translate.
         //
-        // ⚠ `Replace` rather than `ToUpper`, and the difference is not cosmetic — see
-        // An_expression_SET_that_binds_no_parameter_is_a_SILENT_NO_OP below. `ToUpper()` binds no constant,
-        // so the whole UPDATE is skipped by a pre-existing gate and this test would have passed for a
-        // reason that has nothing to do with the guard it is meant to exercise.
+        // `Replace` rather than `ToUpper` dates from TASK-308, when a SET binding no constant was skipped
+        // entirely (TASK-331, fixed since — see An_expression_SET_that_binds_no_parameter_issues_its_statement).
         var store = await Seeded();
         var connector = SQL.DataBase.GetConnector<SqLiteConnector>(_settings);
         var sets = new Dictionary<Expression<Func<Row, string?>>, Expression<Func<Row, string?>>>
@@ -313,19 +311,14 @@ public class PredicateMistranslationEndToEndTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠ <b>Pins a defect this task did NOT fix, so it cannot be believed fixed.</b> Found 2026-09-09 while
-    /// writing the opt-out test above, and owned by [[TASK-331]] rather than folded into TASK-308 — it is a
-    /// different root cause (an eligibility gate, not a translation) and is out of this task's scope.
-    /// <para><c>AbstractConnector_Update.Update(tableName, fields, values, conditions, isExpressionValues)</c>
-    /// opens with <c>if (values != null &amp;&amp; values.Any())</c>. On the <b>expression</b>-valued path
-    /// <c>values</c> holds only the constants the SET expressions bound, so a SET that binds none —
-    /// <c>r =&gt; r.Name.ToUpper()</c>, <c>r =&gt; r.A + r.B</c>, any pure column expression — makes the
-    /// method return having issued nothing. No statement, no exception, no log entry.</para>
-    /// <para>Assert the defect, not the remedy: when TASK-331 lands this test fails, and that failure is
-    /// the instruction to invert it.</para>
+    /// [[TASK-331]] — inverted from TASK-308's pin <c>An_expression_SET_that_binds_no_parameter_is_a_SILENT_NO_OP</c>,
+    /// which asserted the defect. <c>Update(tableName, fields, values, conditions, isExpressionValues)</c> gated on
+    /// <c>values.Any()</c>; on the expression path <c>values</c> holds only the constants the SET expressions bound,
+    /// so <c>UPPER(Name)</c> (no constant) skipped the UPDATE with nothing reported. The line moved: the expression
+    /// path now gates on <c>fields</c> (the SET clauses are its payload); the value path keeps <c>values</c>.
     /// </summary>
     [Fact]
-    public async Task An_expression_SET_that_binds_no_parameter_is_a_SILENT_NO_OP()
+    public async Task An_expression_SET_that_binds_no_parameter_issues_its_statement()
     {
         var store = await Seeded();
         var connector = SQL.DataBase.GetConnector<SqLiteConnector>(_settings);
@@ -338,9 +331,85 @@ public class PredicateMistranslationEndToEndTests : IDisposable
             typeof(Row), sets,
             SQL.DataBase.ParseConditionExpression((Expression<Func<Row, bool>>)(x => x.Amount == 10)));
 
-        (await Rows(store)).Select(r => r.Name).Should().BeEquivalentTo(new[] { "r1", "r2", "r3" },
-            "UPPER(Name) binds no parameter, so values is empty and the UPDATE is skipped entirely — "
-            + "the row that should read R1 still reads r1, with nothing reported. TASK-331 owns this.");
+        var rows = await Rows(store);
+        rows.Single(r => r.Amount == 10).Name.Should().Be("R1");
+        rows.Where(r => r.Amount != 10).Select(r => r.Name).Should().BeEquivalentTo(new[] { "r2", "r3" });
+    }
+
+    [Fact]
+    public async Task An_expression_SET_that_binds_no_parameter_issues_its_statement_async()
+    {
+        var store = await Seeded();
+        var connector = SQL.DataBase.GetConnector<SqLiteConnector>(_settings);
+        var sets = new Dictionary<Expression<Func<Row, string?>>, Expression<Func<Row, string?>>>
+        {
+            { r => r.Name, r => r.Name!.ToUpper() },
+        };
+
+        await ((AbstractAsyncConnector)connector).UpdateAsync(
+            typeof(Row), sets,
+            SQL.DataBase.ParseConditionExpression((Expression<Func<Row, bool>>)(x => x.Amount == 10)));
+
+        (await Rows(store)).Single(r => r.Amount == 10).Name.Should().Be("R1");
+    }
+
+    [Fact]
+    public async Task Column_arithmetic_in_a_SET_issues_its_statement()
+    {
+        var store = await Seeded();
+        var connector = SQL.DataBase.GetConnector<SqLiteConnector>(_settings);
+        var sets = new Dictionary<Expression<Func<Row, int>>, Expression<Func<Row, int>>>
+        {
+            { r => r.Amount, r => r.Amount + r.Amount },
+        };
+
+        connector.Update(
+            typeof(Row), sets,
+            SQL.DataBase.ParseConditionExpression((Expression<Func<Row, bool>>)(x => x.Name == "r1")));
+
+        (await Rows(store)).Single(r => r.Name == "r1").Amount.Should().Be(20);
+    }
+
+    [Fact]
+    public async Task A_parameter_free_expression_SET_with_no_filter_is_refused_as_a_whole_table_write()
+    {
+        // Before TASK-331 this returned before the SH-H002 guard ran, so a whole-table UPPER(Name) was
+        // neither applied nor refused. Now it reaches the guard like any other update.
+        var store = await Seeded();
+        var connector = SQL.DataBase.GetConnector<SqLiteConnector>(_settings);
+        var sets = new Dictionary<Expression<Func<Row, string?>>, Expression<Func<Row, string?>>>
+        {
+            { r => r.Name, r => r.Name!.ToUpper() },
+        };
+
+        var act = () => connector.Update(typeof(Row), sets, (IEnumerable<SQL.Conditions.Condition>?)null);
+
+        act.Should().Throw<Birko.Data.Exceptions.WholeTableWriteException>();
+        (await Rows(store)).Select(r => r.Name).Should().BeEquivalentTo(new[] { "r1", "r2", "r3" });
+    }
+
+    /// <summary>
+    /// TASK-331's control: an EMPTY payload still issues nothing and throws nothing, on every door — measured on
+    /// the code before the fix and unchanged by it (a contract pin, passes either way). This is what tells the
+    /// fix apart from deleting the gate, which would send <c>UPDATE … SET</c> with unbound <c>@SET*</c> parameters
+    /// or no SET list at all.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_SET_payload_issues_nothing_on_every_door()
+    {
+        var store = await Seeded();
+        var connector = SQL.DataBase.GetConnector<SqLiteConnector>(_settings);
+        var table = SQL.DataBase.LoadTable(typeof(Row));
+        var where = SQL.DataBase.ParseConditionExpression((Expression<Func<Row, bool>>)(x => x.Amount == 10));
+
+        connector.Update(table, new Dictionary<string, object>(), where);
+        connector.Update(typeof(Row), new Dictionary<Expression<Func<Row, string?>>, object>(), where);
+        connector.Update(typeof(Row), new Dictionary<Expression<Func<Row, string?>>, Expression<Func<Row, string?>>>(), where);
+        connector.Update(typeof(Row), new Dictionary<Expression<Func<Row, string?>>, Expression<Func<Row, string?>>>(),
+            (IEnumerable<SQL.Conditions.Condition>?)null);
+        await ((AbstractAsyncConnector)connector).UpdateAsync(table, new Dictionary<string, object>(), where);
+
+        (await Rows(store)).Select(r => r.Name).Should().BeEquivalentTo(new[] { "r1", "r2", "r3" });
     }
 
     [Fact]
