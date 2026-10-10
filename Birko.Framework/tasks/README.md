@@ -15,9 +15,9 @@ which this regeneration never touches._
 | planned      | 10     | 27     | —                   |
 | todo         | —                  | —                  | 191         |
 | in-progress  | 8  | 11  | 1   |
-| verify       | —                  | —                  | 2       |
+| verify       | —                  | —                  | 1       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 212         |
+| done         | 1        | 23        | 213         |
 | cancelled    | 0   | 0   | 5    |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -448,7 +448,7 @@ _None_
     - [ ] [TASK-524](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-524-shell-oauth-sign-in-helpers.md) Birko.Web.Shell auth: OAuth redirect parsing, token expiry and scheduled refresh (P2)
     - [ ] [TASK-525](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-525-reorderable-tabs-and-persisted-split-sizes.md) b-tabs drag-and-drop reorder; b-split-panel size persistence; a layout serialize/restore hook (P3)
     - [ ] [TASK-526](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-526-layered-runtime-config-loader.md) Birko.Web.Core: layered runtime configuration (defaults < server endpoint < local overrides) (P3)
-  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — in-progress (4/12 done)
+  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — in-progress (5/12 done)
     - [x] [TASK-527](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-527-agent-loop-hooks.md) Agent loop: per-iteration and tool-call hooks, a readable system prompt, resume from a conversation (P1)
     - [ ] [TASK-528](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-528-orchestration-plan-model-and-step-validators.md) Birko.AI.Orchestration: a plan model with behaviour, step validators, and a pinned enum encoding (P1)
     - [x] [TASK-529](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-529-sql-event-store.md) Ship a SQL IAsyncEventStore (P1)

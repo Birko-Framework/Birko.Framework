@@ -2,7 +2,7 @@
 id: TASK-529
 parent: STORY-060
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-08
@@ -36,7 +36,7 @@ Adopted in the consumer by DraCode TASK-127 (`Consumers/DraCode/tasks/EPIC-018-a
 - [x] Append-range is one transaction (rule 6)
 - [x] Unique (aggregate, version); a concurrent append at the same version fails with a typed concurrency exception
 - [x] Current version via an aggregate query, not a full read
-- [ ] Tests on SQLite and the live suites — **SQLite done; live suites written, not yet run** (Docker was not running): append / read / version, concurrent-append conflict, a failing batch leaves nothing behind
+- [x] Tests on SQLite and the live suites — SQLite 11, live 15 + 3 classifier (2026-10-10, Docker): append / read / version, concurrent-append conflict, a failing batch leaves nothing behind
 
 ## Human test plan
 
@@ -46,7 +46,7 @@ N/A — library behaviour, covered by unit tests.
 
 Done directly.
 
-## Resolution (2026-10-10) — code done; live run pending
+## Resolution (2026-10-10)
 
 New project **`Birko.Data.EventSourcing.SQL`** (registered in the `.slnx`, CLAUDE-projects.md catalog, dependency
 flow and tests list): `Models/DomainEventModel.cs` (`__Events`, `[CompositeIndex(UNIQUE AggregateGuid, Version)]`,
@@ -75,6 +75,14 @@ inside a caller's unit of work rolls back / commits with it, the unique index ex
 SQLite classifier (unique yes, wrapped yes, missing table / NOT NULL no). **Mutations:** index not unique → 5 red;
 classifier answering false → 5 red; unit of work removed → 1 red (the generic-store test).
 
-**Live:** `UniqueViolationClassifierLiveTests` added to the PostgreSQL, MSSql and MySQL test projects (duplicate →
-true, wrapped → true, NOT NULL → false). They compile and skip without `BIRKO_*_HOST`; **not run** — Docker Desktop
-was not running. Run them per `.github/workflows/live-tests.yml` before closing.
+**Live (2026-10-10, Docker: postgres:16, mysql:8.4, mssql/server:2022, `BIRKO_REQUIRE_LIVE=1`):**
+
+- `UniqueViolationClassifierLiveTests` in the PostgreSQL, MSSql and MySQL test projects — duplicate → true (the
+  servers raised `23505`, `Violation of UNIQUE KEY constraint` = 2627, `Duplicate entry` = 1062), wrapped → true,
+  NOT NULL → false: **3/3**.
+- `SqlEventStoreLiveTests` (event-store project, 5 cases × 3 servers through the `SqlSettings` constructor, i.e. the
+  generic store): round trip + version + slices, typed conflict and a part-way batch leaving nothing, the 8-writer
+  race, append inside a caller's unit of work rolls back / commits, and a conflict inside a caller's unit of work
+  is typed and makes the caller's commit fail. **15/15, three consecutive runs.**
+- **Mutation, live:** unit of work removed → **6 red** (the part-way batch and the in-boundary conflict, on all
+  three servers) — on the server path it is load-bearing, not only on the one SQLite generic-store test.
