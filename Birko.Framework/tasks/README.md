@@ -48,7 +48,7 @@ _None_
   - [x] [TASK-497](EPIC-001-web-components-ui-polish/TASK-497-b-range-dual-thumbs-sit-below-the-track.md) `b-range` in range mode draws its thumbs below the track (P2) · FEATURE-001
   - [x] [TASK-543](EPIC-001-web-components-ui-polish/TASK-543-b-code-block-ignores-content-changes.md) b-code-block does not re-render when its text content changes (P2)
   - [ ] [TASK-545](EPIC-001-web-components-ui-polish/TASK-545-undo-instead-of-confirm-for-reversible-deletes.md) A reversible delete can offer Undo instead of a confirm dialog — toast action + base-page opt-in (P3)
-  - [ ] [TASK-548](EPIC-001-web-components-ui-polish/TASK-548-b-qty-stepper.md) b-qty-stepper — a form-associated quantity stepper with decimal step, min, max and a unit label (P1)
+  - [x] [TASK-548](EPIC-001-web-components-ui-polish/TASK-548-b-qty-stepper.md) b-qty-stepper — a form-associated quantity stepper with decimal step, min, max and a unit label (P1)
   - [ ] [TASK-549](EPIC-001-web-components-ui-polish/TASK-549-b-carousel.md) b-carousel — slotted, server-rendered slides with arrows, dots, swipe and an autoplay that yields (P1)
   - [ ] [TASK-550](EPIC-001-web-components-ui-polish/TASK-550-b-gallery.md) b-gallery — product image gallery with thumbnails, swipe and an accessible zoom (P1)
   - [ ] [TASK-551](EPIC-001-web-components-ui-polish/TASK-551-i18n-t-interpolates-one-placeholder-at-a-time.md) I18n.t() fills placeholders one after another, so a value holding "{other}" is rewritten by the next one (P3)
