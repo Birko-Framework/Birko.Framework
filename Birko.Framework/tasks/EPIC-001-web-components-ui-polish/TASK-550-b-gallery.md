@@ -81,6 +81,9 @@ Decisions beyond the criteria:
 - **Zoom is a native modal `<dialog>`** named by the image's alt; click magnifies ×2 around the point, pinch is
   native; next / previous work inside the zoom and move the gallery too.
 - Images out of view are `inert`; every image stays named through its thumbnail.
+- **Responsive zoom (owner's choice, 2026-10-10):** full-screen on a phone; from 48rem a framed panel
+  (`min(90vw, 72rem)` × `min(90dvh, 54rem)`) over the dialog backdrop, which a click closes. Checked in
+  `device-fix-check` § 8 at 390 and 1280 px with real mouse clicks.
 - **`zoom-close-outside` (opt-in, owner's request 2026-10-10):** the zoom is full-screen, so there is no backdrop;
   with the attribute a click on the empty space around the image closes it. Off by default so a stray tap beside a
   magnified image while panning does not close it. Playground card has the toggle.
