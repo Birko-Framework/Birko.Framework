@@ -53,6 +53,7 @@
   <SolidColorBrush x:Key="BTextBrush" Color="{DynamicResource BText}" />
   <SolidColorBrush x:Key="BTextInverseBrush" Color="{DynamicResource BTextInverse}" />
   <SolidColorBrush x:Key="BTextMutedBrush" Color="{DynamicResource BTextMuted}" />
+  <SolidColorBrush x:Key="BTextOnPrimaryBrush" Color="{DynamicResource BTextOnPrimary}" />
   <SolidColorBrush x:Key="BTextSecondaryBrush" Color="{DynamicResource BTextSecondary}" />
   <SolidColorBrush x:Key="BTooltipBgBrush" Color="{DynamicResource BTooltipBg}" />
   <SolidColorBrush x:Key="BTooltipBorderBrush" Color="{DynamicResource BTooltipBorder}" />

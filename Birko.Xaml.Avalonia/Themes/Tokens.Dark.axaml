@@ -60,7 +60,8 @@
       <Color x:Key="BTableHeaderTextHover">#F1F5F9</Color>
       <Color x:Key="BText">#F1F5F9</Color>
       <Color x:Key="BTextInverse">#FFFFFF</Color>
-      <Color x:Key="BTextMuted">#64748B</Color>
+      <Color x:Key="BTextMuted">#8391A7</Color>
+      <Color x:Key="BTextOnPrimary">#0F172A</Color>
       <Color x:Key="BTextSecondary">#94A3B8</Color>
       <Color x:Key="BTooltipBg">#0F172A</Color>
       <Color x:Key="BTooltipBorder">#1E293B</Color>

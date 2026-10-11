@@ -61,6 +61,7 @@
       <Color x:Key="BText">#E6F0FF</Color>
       <Color x:Key="BTextInverse">#06301A</Color>
       <Color x:Key="BTextMuted">#4A5F7E</Color>
+      <Color x:Key="BTextOnPrimary">#06301A</Color>
       <Color x:Key="BTextSecondary">#6F87A8</Color>
       <Color x:Key="BTooltipBg">#16306A</Color>
       <Color x:Key="BTooltipBorder">#3A6EA5</Color>
