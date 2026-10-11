@@ -51,7 +51,11 @@ namespace Birko.Data.Stores
                 // Set inside this async method, so the value flows into InitCoreAsync and everything it awaits
                 // and is restored automatically when this method returns to its caller.
                 _initializingHere.Value = true;
-                await InitCoreAsync(ct).ConfigureAwait(false);
+                // SH-M425 (TASK-324): one-time setup is shared, so no single caller's token may govern it. It used to
+                // run under the token of whichever caller won the lock, so a caller with a 50 ms timeout could abort
+                // DDL mid-flight for everyone. It runs on this caller's own flow, not detached, because a schema-ensure
+                // participates in the caller's transaction (rule 7) and must not outlive it on its connection.
+                await InitCoreAsync(CancellationToken.None).ConfigureAwait(false);
                 _initializingHere.Value = false;
                 _initialized = CanRememberInitialization;
             }
@@ -59,6 +63,8 @@ namespace Birko.Data.Stores
             {
                 _initLock.Release();
             }
+            // This caller's own cancellation is still honoured — after the shared work, not in the middle of it.
+            ct.ThrowIfCancellationRequested();
         }
 
         /// <summary>

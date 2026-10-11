@@ -4,6 +4,20 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — An async store's one-time initialization is no longer cancelled by one caller
+
+[[TASK-324]] (SH-M425). `AbstractAsyncStore.EnsureInitializedAsync` ran `InitCoreAsync` under the token of whichever
+concurrent caller won the init lock, so a caller with a short timeout could abort the shared setup mid-flight (on a
+real backend, DDL half-applied) and the next caller repeated it. Init now runs under `CancellationToken.None`, on the
+winning caller's own flow — not detached, because a schema-ensure participates in that caller's transaction (rule 7).
+
+**Observable:** an `InitCoreAsync` override receives a token that cannot be cancelled. A caller cancelled while its
+own call is running the initialization gets `OperationCanceledException` **after** the initialization finishes, not
+during it. A caller still queued for the init lock stops waiting as before. Initialization is bounded by the backend's
+own command timeouts.
+
+---
+
 ## 2026-10-11 — A failed unit of work releases its connection; an Elasticsearch partial commit names its failed items
 
 [[TASK-325]] (SH-M426–SH-M428). `SqlUnitOfWork` released its pooled connection only on the success path: a failed

@@ -192,24 +192,26 @@ without ever having acquired the lock and without executing a spurious `Release(
 - **When** B's wait is cancelled
 - **Then** B's `CountAsync` fails with `OperationCanceledException` even if A's initialization is about to succeed — there is no re-check of `_initialized` after a cancelled wait
 
-### Requirement: Initialization runs under the token of whichever caller wins the race
+### Requirement: Initialization runs under no caller's token
 
-The system SHALL pass the `CancellationToken` supplied by the caller that acquired the init lock into
-`InitCoreAsync(ct)`. The token is neither replaced by `CancellationToken.None` nor combined with the
-tokens of queued callers, so which token governs the one-time initialization depends on the arrival
-order of concurrent callers.
+The system SHALL run `InitCoreAsync` under `CancellationToken.None`, on the flow of the caller that
+acquired the init lock, and SHALL observe that caller's own token only after the initialization and the
+lock release — so one-time setup that every caller shares is never aborted by one caller's cancellation,
+and still participates in that caller's transaction boundary rather than running detached from it
+(SH-M425, fixed by TASK-324; it used to run under the winner's token, so arrival order decided which
+caller's timeout governed the DDL).
 
-#### Scenario: Winner's token cancels initialization, loser re-runs it with its own token
+#### Scenario: A short-lived token does not abort initialization for everyone
 
-- **Given** caller A awaiting `CreateAsync(a, ct: ctA)` and caller B awaiting `CreateAsync(b, ct: ctB)`, with A acquiring the lock first
-- **When** `ctA` is cancelled during `InitCoreAsync(ctA)`
-- **Then** A's operation throws `OperationCanceledException`, `_initialized` remains `false`, and B — on acquiring the released lock — sees `_initialized == false` and runs `InitCoreAsync(ctB)` itself
+- **Given** caller A with a token that is cancelled while `InitCoreAsync` is running, arriving first, and caller B with `CancellationToken.None` queued behind it
+- **When** the initialization finishes
+- **Then** it has run exactly once and to completion, A's operation throws `OperationCanceledException` afterwards, and B proceeds without repeating it
 
-#### Scenario: A short-lived token performs initialization for a long-lived caller
+#### Scenario: Init code cannot be cancelled by a caller
 
-- **Given** caller A with a token that has a 50 ms timeout, arriving first, and caller B with `CancellationToken.None`
-- **When** `InitCoreAsync` needs 200 ms
-- **Then** the initialization actually performed under A's token is aborted at 50 ms, and B then repeats the whole initialization under `None` — the framework does not detach the one-time init from the winner's cancellation scope
+- **Given** any caller token
+- **When** `InitCoreAsync(ct)` runs
+- **Then** `ct.CanBeCanceled` is `false`; the initialization is bounded by the backend's own timeouts, since a store has no cancellation of its own
 
 ### Requirement: Recursive initialization fails differently on the sync and async sides
 
