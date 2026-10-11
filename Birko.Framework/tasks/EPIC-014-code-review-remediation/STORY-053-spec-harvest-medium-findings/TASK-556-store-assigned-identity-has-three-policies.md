@@ -42,6 +42,15 @@ not look at the portable backends or at RavenDB's bulk path, which keep or overw
 `AbstractStore.Save` already treats `Guid.Empty` as "new" (`AbstractStore.cs:239`), which is the policy the first row
 contradicts: `Save(entity with Guid.Empty)` → `Create` → stored under `Guid.Empty`.
 
+## Decision (2026-10-11, by the user)
+
+**CR-L190 is reversed: bulk create keeps a caller-supplied Guid on every backend**, exactly as single-item create
+does. One producer assigns an identity only when the Guid is `null` or `Guid.Empty`; every site uses it. A duplicate
+id on bulk create fails as a single create does. CHANGELOG migration note for SQL / RavenDB bulk callers who relied on
+fresh server-side ids.
+
+The task is no longer a decision task: it is runnable by [[fix-next]].
+
 ## Acceptance criteria
 
 - [ ] One producer — e.g. `AbstractModel.EnsureGuid()` (assign when `null` or `Guid.Empty`, keep any other value) —

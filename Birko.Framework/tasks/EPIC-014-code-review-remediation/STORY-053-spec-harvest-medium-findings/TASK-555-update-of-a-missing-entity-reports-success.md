@@ -40,6 +40,16 @@ the in-memory double strict alone would make it diverge from every real backend 
 2. **`Save` with a Guid that is not stored** — upsert (insert it under the caller's Guid), or throw. Upsert matches
    what `Save` is used for; it needs a per-provider native upsert or a read-then-write inside the store's boundary.
 
+## Decision (2026-10-11, by the user)
+
+1. **`Update` of a missing entity throws** a typed `EntityNotFoundException` (a `StoreException`); `Update` stays
+   `void`. Each provider reads its native matched/affected count — no pre-read. The bulk `Update(IEnumerable)` throws
+   too, naming the missing ids.
+2. **`Save` with a Guid that is not stored upserts** — inserts the entity under the caller's Guid (native upsert where
+   the provider has one, otherwise update-then-create-on-miss inside the store's boundary).
+
+The task is no longer a decision task: it is runnable by [[fix-next]].
+
 ## Acceptance criteria
 
 - [ ] The two decisions above recorded (here, and in `docs/specs/store-crud-contract.md` after regen)

@@ -35,6 +35,16 @@ than a local fix, so they were not changed there.
   real backends but changes what `Items[guid]` / `Read` return (no longer `BeSameAs` the created object), which
   existing tests across the repo may rely on — measure that before choosing.
 
+## Decision (2026-10-11, by the user)
+
+- **SH-M315 — honour the delegate's return:** `data = storeDelegate?.Invoke(data) ?? data`, at one producer per
+  hierarchy; `StoreDataDelegate<T>` keeps its signature (non-breaking).
+- **SH-M311 — not yet decided:** measure first, as the acceptance asks — how many tests across the repo rely on
+  `Read` / `Items[guid]` returning the very object that was created — then snapshot on write and read unless that
+  measurement argues for a documented opt-out. The fixer reports the number and the choice in the Outcome.
+
+SH-M315 is runnable by [[fix-next]]; SH-M311's remaining choice is a measured one, not the user's.
+
 ## Acceptance criteria
 
 - [ ] SH-M315: decision recorded; the chosen shape applied at every call site (compiler-driven if `Action<T>`); a
