@@ -2,7 +2,7 @@
 id: TASK-565
 parent: STORY-053
 feature: FEATURE-014
-status: in-progress
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-11
@@ -42,19 +42,19 @@ Consumers on `AddEventBus`: Symbio (with the outbox), DraCode.KoboldLair.Server.
 
 ## Acceptance criteria
 
-- [ ] Measured, not asserted: a test shows that before the fix two publishes with `ValidateScopes = false` see the
+- [x] Measured, not asserted: a test shows that before the fix two publishes with `ValidateScopes = false` see the
       **same** scoped instance, and that with `ValidateScopes = true` the publish throws.
-- [ ] `InProcessEventBus` resolves DI handlers from a **fresh async scope per `PublishAsync`**, keeps that scope for the
+- [x] `InProcessEventBus` resolves DI handlers from a **fresh async scope per `PublishAsync`**, keeps that scope for the
       whole pipeline + dispatch, and disposes it afterwards (async disposal, so `IAsyncDisposable` handlers/deps work).
-- [ ] `AddEventBus` composition works under `ValidateScopes = true` + `ValidateOnBuild = true` with a handler that
+- [x] `AddEventBus` composition works under `ValidateScopes = true` + `ValidateOnBuild = true` with a handler that
       depends on a scoped service, both through direct publish and through `AddOutbox` + `OutboxProcessor`.
-- [ ] Each publish gets a distinct scoped instance, and it is disposed after that publish.
-- [ ] Manual-only buses (`new InProcessEventBus()`, no provider) behave exactly as before; existing EventBus tests
+- [x] Each publish gets a distinct scoped instance, and it is disposed after that publish.
+- [x] Manual-only buses (`new InProcessEventBus()`, no provider) behave exactly as before; existing EventBus tests
       stay green.
-- [ ] The new tests are red-verified: resolving from the root again fails them. Report the split as numbers.
-- [ ] `SPEC-HARVEST-FINDINGS-2026-07-30.md` § SH-M120 carries a `Verdict:` line, and [[TASK-155]] notes that SH-M120
+- [x] The new tests are red-verified: resolving from the root again fails them. Report the split as numbers.
+- [x] `SPEC-HARVEST-FINDINGS-2026-07-30.md` § SH-M120 carries a `Verdict:` line, and [[TASK-155]] notes that SH-M120
       moved here.
-- [ ] `/specs regen event-bus-and-messaging` (or a hand edit of the requirement if regen is not run), with the spec
+- [x] `/specs regen event-bus-and-messaging` (or a hand edit of the requirement if regen is not run), with the spec
       diff reviewed. The spec currently documents the root-provider resolve as shipped behaviour.
 
 ## Out of scope
@@ -81,3 +81,17 @@ guest order on the Development API producing its e-mail) belongs to Symbio TASK-
 3. Tests for criteria 2–5, including an outbox round trip with `AddOutbox` (in-memory store) + `OutboxProcessor`.
 4. Mutation: revert step 2 and confirm the new tests go red, then restore.
 5. Verdict line, TASK-155 note, spec update. Then commit and push. Symbio TASK-905 consumes it.
+
+## Outcome
+
+- **Measured before the fix** (`HandlerScopeTests`): with `ValidateScopes` the publish threw *"Cannot resolve
+  'IEnumerable<IEventHandler<OrderPlaced>>' from root provider because it requires scoped service"*. Without it, two
+  publishes saw the **same** scoped instance, owned by the root: disposing the root threw because the instance was
+  `IAsyncDisposable`-only. The outbox round trip left the entry un-`Published`.
+- **Fix:** `InProcessEventBus.PublishAsync` opens `IServiceScopeFactory.CreateAsyncScope()` per publish and resolves
+  `GetHandlers` from it. Enrichers stay singletons outside. A provider with no scope factory is used directly, as before.
+- **Tests:** `HandlerScopeTests` (5). EventBus suite **113/113** green. Red-verified: pointing the resolve back at the
+  root → **4 of 5 red**. The 5th (manual-only bus) is a contract pin that passes either way.
+- **Spec:** `event-bus-and-messaging` § *In-process publication…* and § *DI registration surface…* edited by hand. The
+  area was not regenerated, because only these two requirements describe the changed behaviour.
+- **Follow-up:** the same defect on the message-queue path → [[TASK-566]].

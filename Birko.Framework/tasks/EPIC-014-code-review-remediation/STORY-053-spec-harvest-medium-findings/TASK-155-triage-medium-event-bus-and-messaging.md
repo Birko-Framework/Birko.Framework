@@ -62,6 +62,9 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Out of scope
 
+- **`SH-M120`** — moved out on 2026-10-11 as a live P1 in a consumer (Symbio TASK-905): confirmed and fixed by
+  [[TASK-565]]; its distributed-bus twin is [[TASK-566]]. 23 findings remain here.
+
 - The other 397 medium findings — they belong to the other 21 per-area tasks under [[STORY-053]].
 - High-severity findings in this area — [[STORY-051]] owns those.
 - Low-severity findings in this area — [[TASK-174]] owns them. Where a fix closes both, do it once and

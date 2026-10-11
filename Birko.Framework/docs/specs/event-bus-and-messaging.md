@@ -177,8 +177,10 @@ defaulting `DeliveryCount` to 1 and `Metadata` to an empty dictionary when none 
 
 The system SHALL, on `InProcessEventBus.PublishAsync<TEvent>`, throw `ObjectDisposedException` if the
 bus is disposed, run every registered `IEventEnricher` in order, then collect handlers as
-`IEnumerable<IEventHandler<TEvent>>` resolved from the supplied `IServiceProvider` followed by
-manually `Subscribe`d handlers, and dispatch to them.
+`IEnumerable<IEventHandler<TEvent>>` resolved from a fresh async DI scope opened for this publish (from
+the supplied `IServiceProvider`'s `IServiceScopeFactory`; directly from the provider when it has none)
+followed by manually `Subscribe`d handlers, and dispatch to them. The scope lives for the whole dispatch,
+is shared by every handler of that publish, and is disposed when the publish ends (TASK-565, SH-M120).
 
 #### Scenario: Both registration styles present
 
@@ -1765,13 +1767,16 @@ transient `IEventHandler<TEvent>`, and register behaviours/enrichers as singleto
 
 - **Given** `AddEventBus()` then `AddEventHandler<OrderPlaced, OrderPlacedHandler>()`
 - **When** `IEventBus` is resolved and an `OrderPlaced` is published
-- **Then** the handler is resolved from the root provider and invoked
+- **Then** the handler is resolved from a scope opened for that publish and invoked
 
 #### Scenario: Handler with a scoped dependency
 
-- **Given** a handler registered transiently that depends on a scoped service
-- **When** the singleton bus resolves handlers from the root provider during publish
-- **Then** resolution of the scoped dependency fails — publication is not wrapped in a DI scope
+- **Given** a handler registered transiently that depends on a scoped service, in a root built with
+  `ValidateScopes = true`
+- **When** an event is published, directly or through `AddOutbox` + `OutboxProcessor`
+- **Then** the handler runs with a scoped instance owned by that publish's scope; two publishes see two
+  instances, each disposed when its publish ends (TASK-565 — before it, resolution from the root threw
+  under `ValidateScopes` and otherwise shared one root-owned instance across every dispatch)
 
 #### Scenario: Deduplication convenience registration
 
