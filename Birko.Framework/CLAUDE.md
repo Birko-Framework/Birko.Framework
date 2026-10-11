@@ -239,6 +239,14 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### The in-memory store refuses a duplicate create; StoreLocator refuses colliding settings (2026-10-11)
+
+[[TASK-163]]. In-memory `Create` of a stored key throws `StoreException` (it upserted, so the canonical test double
+passed code a primary key would reject); an update cannot resurrect a concurrently deleted entity. `StoreLocator`
+serves async stores and **throws on a hit whose settings differ outside `GetId()`** (a password, a token) instead of
+handing back the first caller's store. `IsStoreOfType` sees through any wrapper depth. Migration in
+[CHANGELOG.md](CHANGELOG.md); the cross-provider halves are [[TASK-555]]–[[TASK-557]].
+
 ### BREAKING: orchestration plans gain behaviour; status enums pinned (2026-10-11)
 
 [[TASK-528]]. `ImplementationPlan` / `ImplementationStep` gain lifecycle, `RetryOrFail`, the current step,

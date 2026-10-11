@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,6 +6,7 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Birko.Data.Exceptions;
 using Birko.Data.Stores;
 
 namespace Birko.Data.InMemory.Stores
@@ -63,8 +64,9 @@ namespace Birko.Data.InMemory.Stores
                 return Task.FromResult(Guid.Empty);
             }
             data.Guid ??= Guid.NewGuid();
+            RequireNewKeys(new[] { data });
             processDelegate?.Invoke(data);
-            _items[data.Guid.Value] = data;
+            AddNew(data);
             return Task.FromResult(data.Guid.Value);
         }
 
@@ -94,7 +96,7 @@ namespace Birko.Data.InMemory.Stores
             if (data?.Guid != null && _items.ContainsKey(data.Guid.Value))
             {
                 processDelegate?.Invoke(data);
-                _items[data.Guid.Value] = data;
+                ReplaceExisting(data);
             }
             return Task.CompletedTask;
         }
@@ -163,11 +165,16 @@ namespace Birko.Data.InMemory.Stores
             {
                 return Task.CompletedTask;
             }
-            foreach (var item in data.Where(x => x != null))
+            var items = data.Where(x => x != null).ToList();
+            foreach (var item in items)
             {
                 item.Guid ??= Guid.NewGuid();
+            }
+            RequireNewKeys(items);
+            foreach (var item in items)
+            {
                 storeDelegate?.Invoke(item);
-                _items[item.Guid.Value] = item;
+                AddNew(item);
             }
             return Task.CompletedTask;
         }
@@ -182,7 +189,7 @@ namespace Birko.Data.InMemory.Stores
             foreach (var item in data.Where(x => x != null && x.Guid.HasValue && _items.ContainsKey(x.Guid.Value)))
             {
                 storeDelegate?.Invoke(item);
-                _items[item.Guid!.Value] = item;
+                ReplaceExisting(item);
             }
             return Task.CompletedTask;
         }
@@ -201,19 +208,54 @@ namespace Birko.Data.InMemory.Stores
             return Task.CompletedTask;
         }
 
+        #endregion
+
+        #region Write helpers
+
         /// <summary>
-        /// Deletes all entities matching the filter in a single pass over the backing dictionary.
+        /// SH-M310: a create never replaces an entity — a real backend's primary key rejects the duplicate, and the
+        /// canonical test double must too, or a create path that repeats an identifier passes here and destroys a row
+        /// in production. Checked for the whole batch before anything is written.
         /// </summary>
-        public override async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+        protected void RequireNewKeys(IReadOnlyCollection<T> items)
         {
-            // SH-M023 / TASK-215 — see AbstractInMemoryStore.Delete.
-            RequireFilter(filter, "delete");
-            RequireBoundedFilter(filter, "delete");
-            await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            var predicate = filter.Compile();
-            foreach (var pair in _items.Where(pair => predicate(pair.Value)).ToList())
+            var seen = new HashSet<Guid>();
+            foreach (var item in items)
             {
-                _items.TryRemove(pair.Key, out _);
+                var key = item.Guid!.Value;
+                if (_items.ContainsKey(key) || !seen.Add(key))
+                {
+                    throw new StoreException($"{GetType().Name} already holds a {typeof(T).Name} with Guid {key}; Create does not replace — use Update.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Adds an entity whose key <see cref="RequireNewKeys"/> cleared; a concurrent create of the same key still
+        /// loses rather than overwrites.
+        /// </summary>
+        protected void AddNew(T item)
+        {
+            if (!_items.TryAdd(item.Guid!.Value, item))
+            {
+                throw new StoreException($"{GetType().Name} already holds a {typeof(T).Name} with Guid {item.Guid}; Create does not replace — use Update.");
+            }
+        }
+
+        /// <summary>
+        /// SH-M308: replaces the stored entity only while one is stored. <c>ContainsKey</c> then the indexer was two
+        /// atomic calls, not one, so a delete between them — another thread's, or the store delegate's own — was
+        /// undone by the write. A concurrent replacement is retried; a removal ends it.
+        /// </summary>
+        protected void ReplaceExisting(T item)
+        {
+            var key = item.Guid!.Value;
+            while (_items.TryGetValue(key, out var current))
+            {
+                if (_items.TryUpdate(key, item, current))
+                {
+                    return;
+                }
             }
         }
 

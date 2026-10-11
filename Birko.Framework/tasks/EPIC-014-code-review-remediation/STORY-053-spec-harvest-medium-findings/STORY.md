@@ -13,8 +13,11 @@ finding-ids: SH-M001 … SH-M428
 
 ## Progress
 
-**2 / 428 closed by triage tasks:** `SH-M307` and `SH-M316` ([[TASK-163]], 2026-10-10 — the two store-latch
-findings of its 15; the other 13 remain open there). ⚠ This line had read 0 while **10 other medium findings**
+**15 / 428 triaged by triage tasks — all of `store-crud-contract` ([[TASK-163]], done 2026-10-11):** 9 fixed
+(`SH-M302`–`SH-M305`, `SH-M307`, `SH-M308`, `SH-M310`, `SH-M312`, `SH-M316`), 6 confirmed and spawned as fix tasks
+under this story because each is a cross-provider contract decision: [[TASK-555]] (`SH-M306`, `SH-M309`),
+[[TASK-556]] (`SH-M313`, `SH-M314`), [[TASK-557]] (`SH-M311`, `SH-M315`). 0 refuted; 1 confirmed-narrower
+(`SH-M305`). ⚠ This line had read 0 while **10 other medium findings**
 already carried a `Verdict:` line in the findings doc from other passes — recount from those lines, not from here.
 The rest are unverified harvester claims. Per-finding detail is in
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md) § Medium severity.
@@ -61,7 +64,7 @@ fix there. That goes out via `/tasks spawn`, never as a ticked box with the work
 | [[TASK-160]] | `llm-provider-and-agents` | 20 (`SH-M152`–`SH-M171`) | P2 |
 | [[TASK-161]] | `tenant-isolation` | 18 (`SH-M337`–`SH-M354`) | P1 |
 | [[TASK-162]] | `repository-contract` | 16 (`SH-M205`–`SH-M220`) | P1 |
-| [[TASK-163]] | `store-crud-contract` | 15 (`SH-M302`–`SH-M316`) | P1 |
+| [[TASK-163]] | `store-crud-contract` | 15 (`SH-M302`–`SH-M316`) — **done**; 6 spawned → [[TASK-555]], [[TASK-556]], [[TASK-557]] | P1 |
 | [[TASK-164]] | `settings-configuration-chain` | 15 (`SH-M275`–`SH-M289`) | P2 |
 | [[TASK-165]] | `security-and-authorization` | 15 (`SH-M246`–`SH-M260`) | P1 |
 | [[TASK-166]] | `entity-tagging` | 15 (`SH-M084`–`SH-M098`) | P2 |

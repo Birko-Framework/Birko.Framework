@@ -2938,11 +2938,15 @@ orderBy defaults to null in both wrappers and interfaces and is forwarded unchan
 
 `if (store is IStoreWrapper<T> w) return w.GetInnerStoreAs<TStore>() != null;` returns directly, never reaching the chain walk at line 85. Every wrapper implements GetInnerStoreAs as a SINGLE-level `_innerStore as TInner` (AuditStoreWrapper.cs:62, SoftDeleteStoreWrapper.cs:82, DefaultStoreWrapper.cs:129, + async twins). On the chain StoreWrapperBuilder builds, the inner store is another wrapper, so the cast is null and the answer is false. ElasticSearchModelRepository.cs:25 then throws ArgumentException; ~20 backend repositories gate identically.
 
+**Verdict: CONFIRMED — fixed by [[TASK-163]] (2026-10-11).** `StoreExtensions.cs:79` (and the three twin overloads at :132/:165/:198) returned `genericWrapper.GetInnerStoreAs<TStore>() != null`, and every wrapper implements that as one level (`_innerStore as TInner`), so a two-wrapper chain answered false and never reached the chain walk below it. All four overloads now share `IsOrWraps`: the store itself, or the innermost store `GetUnwrappedStore` reaches — which is exactly what the backend repositories then use. `StoreCrudContractTests`: 1 red with a one-level unwrap restored (`IsStoreOfType_sees_through_two_wrappers`); the one-wrapper case passes either way (contract pin).
+
 #### SH-M303 — StoreLocator returns the cached instance by indexing the Dictionary outside the lock
 
 `../Birko.Data.Stores/StoreLocator.cs:44`  ·  _restates a first-pass finding_
 
 `return (TStore)_stores[id][type];` sits after the `lock (_lockObject)` block. Both `_stores` and the inner per-id map are plain non-thread-safe Dictionary. A thread reaching that return while another is inside the lock doing `_stores.Add` / `_stores[id].Add` can observe a resize in progress, yielding InvalidOperationException or a spurious KeyNotFoundException. Moving the return inside the lock fixes it.
+
+**Verdict: CONFIRMED — fixed by [[TASK-163]] (2026-10-11).** `StoreLocator.cs:44` read `_stores[id][type]` after the `lock` block, over plain `Dictionary`s. The read is now inside the lock (the shape `RepositoryLocator` got at CR-H081). **No red test:** a torn read during a resize is not reproducible deterministically, so this is recorded as a fix by inspection, not by measurement.
 
 #### SH-M304 — StoreLocator cannot serve async stores — the constraint is IBaseStore, which IAsyncBaseStore does not extend
 
@@ -2950,17 +2954,23 @@ orderBy defaults to null in both wrappers and interfaces and is forwarded unchan
 
 Both overloads constrain `where TStore : IBaseStore` (lines 14, 22). IAsyncBaseStore (IAsyncStore.cs:13) is standalone and does not derive from IBaseStore, and AbstractAsyncStore<T>/AbstractAsyncBulkStore<T> pull in only IAsyncBaseStore. So `GetStore<AsyncInMemoryStore<Invoice>>()` does not compile and the entire async half of the store family is excluded from the process-wide cache, with no async locator anywhere.
 
+**Verdict: CONFIRMED — fixed by [[TASK-163]] (2026-10-11).** Both overloads were `where TStore : IBaseStore` (`StoreLocator.cs:14/22`) and `IAsyncBaseStore` does not extend it. The constraint is removed (source-compatible for every caller) and replaced by a run-time check accepting either base interface; anything else throws `ArgumentException`. Measured: with the old constraint restored the test project does not compile (`CS0311` on `AsyncInMemoryStore<T>`); with the run-time check removed, 1 red (`StoreLocator_refuses_a_type_that_is_not_a_store`).
+
 #### SH-M305 — StoreLocator silently discards the settings argument on a cache hit
 
 `../Birko.Data.Stores/StoreLocator.cs:35`
 
 SetSettings runs only inside `if (!_stores[id].ContainsKey(type))`. The bucket key is settings.GetId(), and several providers omit fields from it — RavenDB Settings.GetId() returns only "{Location}:{Name}", dropping UserName/Password/UseSecure. Two settings instances differing only in credentials therefore collapse onto whichever was constructed first, with no error: the second caller gets a store configured with someone else's credentials and cannot tell.
 
+**Verdict: CONFIRMED-NARROWER, and fixed by [[TASK-163]] (2026-10-11).** The mechanism holds (`StoreLocator.cs:35`: settings applied only on a miss, bucket = `GetId()`), but **the named example is harmless**: RavenDB's `GetId()` does drop `UserName`/`Password`, yet `Settings.CreateDocumentStore` (`Birko.Data.RavenDB/Stores/Settings.cs:29`) never uses them, so two RavenDB settings differing only there build identical stores. Real instances: a SQL/Mongo password, Mongo `AuthDatabase`/`ReplicaSet`, an InfluxDB token — all used, all outside `GetId()`. Fix: each cache entry remembers the settings it was configured with; a hit whose settings differ in any value-typed public property now throws `InvalidOperationException` instead of returning the first caller's store (equal values in a fresh instance are still a hit — Affiliate's per-call `new BatchSettings{…}` relies on that; its suite is 82/82). `StoreCrudContractTests`: 1 red with the comparison removed.
+
 #### SH-M306 — Save returns a Guid for an entity that was never persisted
 
 `../Birko.Data.Stores/AbstractStore.cs:145`  ·  _restates a first-pass finding_
 
 Save routes to Update whenever data.Guid is non-empty, then returns data.Guid!.Value. Update returns void and — in AbstractInMemoryStore.UpdateCore, which no-ops when the key is absent — cannot report that nothing was written. Save(entityWithFabricatedGuid) reports success and hands back a plausible identifier for data that does not exist. Same in AbstractAsyncStore.SaveAsync line 161.
+
+**Verdict: CONFIRMED, broader than stated — deferred to [[TASK-555]].** `AbstractStore.cs:233-247` returns `data.Guid!.Value` after a `void` `Update`, and **no** backend can report a missing key: in-memory/JSON/XML guard with `ContainsKey` and write nothing, `DataBaseStore.UpdateCore` (:209) issues an UPDATE that matches 0 rows, `MongoDBStore.UpdateCore` (:163) ignores `MatchedCount`. Fixing the in-memory double alone would make it diverge from every backend it stands in for, so this is a cross-provider contract decision (throw vs count; `Save` as upsert vs throw).
 
 #### SH-M307 — Destroy does not reset the initialization latch, so torn-down storage is never re-provisioned
 
@@ -2976,11 +2986,15 @@ Destroy()/DestroyAsync() are abstract and the private `_initialized` field is ne
 
 `if (data?.Guid != null && _items.ContainsKey(data.Guid.Value)) { ...; _items[data.Guid.Value] = data; }` — ConcurrentDictionary makes each call atomic but not the pair. If another thread removes the key between the ContainsKey and the indexer assignment, the update writes the entity back and a deleted row reappears. TryUpdate/AddOrUpdate exists for this. Same shape in the bulk override at line 171 (Where evaluates ContainsKey lazily while the loop body writes) and in AbstractAsyncInMemoryStore.cs:94 and :182.
 
+**Verdict: CONFIRMED — fixed by [[TASK-163]] (2026-10-11).** `AbstractInMemoryStore.cs:90-93` / `:171-174` and the async twins (:94, :182): `ContainsKey` then the indexer. The window is reachable without threads — the store delegate runs inside it, so a delegate that deletes the entity got it written back. Replacement now goes through `ReplaceExisting`: `TryGetValue` + `TryUpdate` in a loop, so a concurrent replacement is retried and a removal ends it. `StoreCrudContractTests`: 4 red (sync/async × single/bulk) with the indexer write restored.
+
 #### SH-M309 — In-memory UpdateCore silently drops the write when the key is absent, with no channel to report it
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:88`
 
 The whole body is guarded by `data?.Guid != null && _items.ContainsKey(...)`; updating an entity whose Guid is null, or absent from _items, returns successfully with nothing written and the delegate never invoked. Update returns void so there is no result to inspect, and StoreException exists for exactly this failure but is never thrown. The bulk override (line 171) additionally applies partially — some items written, some skipped, no report of which. This is the mechanism behind Save's bogus success return.
+
+**Verdict: CONFIRMED, broader than stated — deferred to [[TASK-555]].** As SH-M306: the silent no-op is every backend's behaviour, not the in-memory store's, because `IUpdateStore.Update` returns `void` and has no not-found channel. Fixed together with SH-M306 there.
 
 #### SH-M310 — In-memory CreateCore silently upserts over an existing key where a real backend's primary key would reject
 
@@ -2988,11 +3002,15 @@ The whole body is guarded by `data?.Guid != null && _items.ContainsKey(...)`; up
 
 `_items[data.Guid.Value] = data;` is an indexer assignment with no duplicate-key detection. Create(entityWithExistingGuid) silently replaces the stored entity and reports success, whereas a SQL store with a Guid primary key raises a unique-constraint violation and Mongo/Cosmos reject the duplicate id. Since InMemory is the canonical test double, a create path that can repeat an identifier passes in tests and destroys a row in production. Same at AbstractAsyncInMemoryStore.cs:67 and both bulk create paths (160 / 170).
 
+**Verdict: CONFIRMED — fixed by [[TASK-163]] (2026-10-11).** `AbstractInMemoryStore.cs:63` / `:160` and async :67 / :170 assigned through the indexer. Create now refuses an existing key with `StoreException` ("Create does not replace — use Update") via `RequireNewKeys` + `TryAdd`; a bulk create checks the whole batch — existing keys and keys repeated inside it — **before** writing anything, so a refused batch writes nothing. (JSON/XML already refused, by `Dictionary.Add`'s `ArgumentException`.) 0 of 853 tests in the 16 suites that use the in-memory store relied on the upsert. `StoreCrudContractTests`: 4 red with the upsert restored.
+
 #### SH-M311 — In-memory store persists the caller's reference, not a snapshot, so post-write mutation silently changes stored state
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:63`
 
 `_items[data.Guid.Value] = data` stores the live object, and ReadCore/Read(Guid)/the bulk ReadCore hand the same reference back. Every serializing backend (SQL, JSON, XML, Mongo, ES) takes a value copy at write time. So `store.Create(e); e.Name = "x";` leaves the InMemory store holding "x" with no second write, and a read-modify-without-Update sequence appears to persist. AbstractModel exposes CopyTo for exactly this and it is unused, so the test double gives false-green for the whole class of missing-Update bugs.
+
+**Verdict: CONFIRMED — deferred to [[TASK-557]].** `_items[key] = data` and `Read` returning the same reference, as stated. Not fixed here: `AbstractModel.CopyTo` copies only `Guid` unless a model overrides it, so it cannot be the snapshot; a serializer round-trip is faithful but changes what `Items` / `Read` return for every test that compares references — a semantics decision for the canonical test double, measured before it is taken.
 
 #### SH-M312 — In-memory Delete(filter) overrides the public member and bypasses DeleteCore entirely
 
@@ -3000,11 +3018,15 @@ The whole body is guarded by `data?.Guid != null && _items.ContainsKey(...)`; up
 
 AbstractBulkStore.Delete(filter) (AbstractBulkStore.cs:97-101) reads the matches then routes them through Delete(items) -> DeleteCore(IEnumerable<T>). This override goes straight to `_items.TryRemove`, so a subclass overriding DeleteCore — the documented extension point — never sees filter-based deletes and any logging/auditing it adds is skipped on the destructive path only. Also violates the convention that concrete stores override protected *Core, not public CRUD (MongoDBStore.cs:99 records CR-M117 removing such overrides). Same at AbstractAsyncInMemoryStore.cs:207.
 
+**Verdict: CONFIRMED — fixed by [[TASK-163]] (2026-10-11).** `AbstractInMemoryStore.cs:194` / `AbstractAsyncInMemoryStore.cs:207` overrode the public `Delete(filter)` and removed straight from the dictionary. Both overrides are deleted; the base `AbstractBulkStore.Delete(filter)` (:122) / `AbstractAsyncBulkStore.DeleteAsync(filter)` already runs both guards (`RequireFilter`, `RequireBoundedFilter`) and routes the matches through `DeleteCore`. `StoreCrudContractTests`: 2 red with the overrides restored (a subclass's `DeleteCore` saw nothing); the TASK-215 guard suites stay green.
+
 #### SH-M313 — In-memory Read(Guid) makes an entity stored under Guid.Empty unreachable by identifier, unlike other backends
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:77`
 
 The base AbstractStore.Read(Guid) (lines 79-82) builds ModelByGuid<T>(guid).Filter() = `x => x.Guid == guid`, which matches an entity whose Guid is explicitly Guid.Empty. This override short-circuits on `guid != Guid.Empty` and returns null. Since CreateCore's `??=` (line 61) happily stores an entity under the Guid.Empty key, InMemory can hold a row it can never return by identifier while SQL/Mongo/ES, which use the inherited Read(Guid), return it. Same at AbstractAsyncInMemoryStore.cs:81.
+
+**Verdict: CONFIRMED — deferred to [[TASK-556]], with SH-M314 (one root cause).** `AbstractInMemoryStore.cs:80` refuses `Guid.Empty` while `CreateCore` stores under it. Fixing `Read` alone would make the row reachable; the root is that nothing should be stored under `Guid.Empty` — see SH-M314.
 
 #### SH-M314 — CreateCore's `??=` lets Guid.Empty survive, colliding with the null-data failure return
 
@@ -3012,11 +3034,15 @@ The base AbstractStore.Read(Guid) (lines 79-82) builds ModelByGuid<T>(guid).Filt
 
 `data.Guid ??= Guid.NewGuid()` only replaces a NULL Guid. An entity arriving with Guid.Empty is stored under the Guid.Empty key and CreateCore returns Guid.Empty — the exact value returned when data was null (line 59), so success is indistinguishable from failure. Worse, the Read(Guid) override at line 80 rejects Guid.Empty, so the entity is unreachable by identifier. Same at AbstractAsyncInMemoryStore.cs:65 and in both bulk create paths.
 
+**Verdict: CONFIRMED, broader than stated — deferred to [[TASK-556]].** `data.Guid ??= Guid.NewGuid()` keeps `Guid.Empty` in **40** production sites, not only the in-memory store, while `AbstractStore.Save` (:239) treats `Guid.Empty` as new. Measured on 2026-10-11, identity assignment follows three policies across the providers — null-only (`??=`), null-or-empty (ElasticSearch bulk, CosmosDB async), and always-overwrite (SQL bulk on every provider, by CR-L190's recorded decision, and RavenDB bulk) — so the fix is one producer, and reopening CR-L190, not an in-memory edit.
+
 #### SH-M315 — StoreDataDelegate<T> returns T but every invocation discards the return value
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:62`  ·  _restates a first-pass finding_
 
 The delegate is declared `public delegate T StoreDataDelegate<T>(T data)` (IStore.cs:13), yet all call sites are `storeDelegate?.Invoke(data);` followed by persisting the original `data` reference (AbstractInMemoryStore.cs:62/92/159/173, AbstractAsyncInMemoryStore.cs:66/96/169/184). A delegate written in the natural functional style — returning a modified copy rather than mutating in place — is silently ignored and the unmodified entity is stored. Either honour the return or declare it as Action<T>.
+
+**Verdict: CONFIRMED, broader than stated — deferred to [[TASK-557]].** Not only the eight in-memory call sites: all **105** `storeDelegate` invocations in the framework discard the return. Honouring it vs declaring `Action<T>` is an API decision that reaches consumers implementing the store interfaces (DraCode, Symbio).
 
 #### SH-M316 — InitCore re-entrancy fails two different ways in the sync and async bases for identical subclass code
 

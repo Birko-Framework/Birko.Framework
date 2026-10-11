@@ -69,21 +69,7 @@ namespace Birko.Data.Stores
                 return false;
             }
 
-            // Check direct type
-            if (store is TStore)
-            {
-                return true;
-            }
-
-            // Check if it's a generic wrapper with a matching inner store
-            if (store is IStoreWrapper<T> genericWrapper)
-            {
-                return genericWrapper.GetInnerStoreAs<TStore>() != null;
-            }
-
-            // Fallback to reflection-based unwrap
-            var unwrapped = GetUnwrappedStore((object)store);
-            return unwrapped is TStore;
+            return IsOrWraps<TStore>(store);
         }
 
         /// <summary>
@@ -122,21 +108,7 @@ namespace Birko.Data.Stores
                 return false;
             }
 
-            // Check direct type
-            if (store is TStore)
-            {
-                return true;
-            }
-
-            // Check if it's a generic wrapper with a matching inner store
-            if (store is IStoreWrapper<T> genericWrapper)
-            {
-                return genericWrapper.GetInnerStoreAs<TStore>() != null;
-            }
-
-            // Fallback to reflection-based unwrap
-            var unwrapped = GetUnwrappedStore((object)store);
-            return unwrapped is TStore;
+            return IsOrWraps<TStore>(store);
         }
 
         /// <summary>
@@ -155,21 +127,7 @@ namespace Birko.Data.Stores
                 return false;
             }
 
-            // Check direct type
-            if (store is TStore)
-            {
-                return true;
-            }
-
-            // Check if it's a generic wrapper with a matching inner store
-            if (store is IStoreWrapper<T> genericWrapper)
-            {
-                return genericWrapper.GetInnerStoreAs<TStore>() != null;
-            }
-
-            // Fallback to reflection-based unwrap
-            var unwrapped = GetUnwrappedStore((object)store);
-            return unwrapped is TStore;
+            return IsOrWraps<TStore>(store);
         }
 
         /// <summary>
@@ -188,21 +146,23 @@ namespace Birko.Data.Stores
                 return false;
             }
 
-            // Check direct type
-            if (store is TStore)
-            {
-                return true;
-            }
+            return IsOrWraps<TStore>(store);
+        }
 
-            // Check if it's a generic wrapper with a matching inner store
-            if (store is IStoreWrapper<T> genericWrapper)
-            {
-                return genericWrapper.GetInnerStoreAs<TStore>() != null;
-            }
-
-            // Fallback to reflection-based unwrap
-            var unwrapped = GetUnwrappedStore((object)store);
-            return unwrapped is TStore;
+        /// <summary>
+        /// The store itself, or the innermost store of its wrapper chain, is a <typeparamref name="TStore"/> — the
+        /// store a backend repository then reaches through <see cref="GetUnwrappedStore(object?)"/>.
+        /// </summary>
+        /// <remarks>
+        /// SH-M302: this used to ask the first wrapper for its <i>immediate</i> inner store
+        /// (<see cref="IStoreWrapper{T}.GetInnerStoreAs{TStore}"/>, one level by contract) and return that answer,
+        /// so on a chain of two wrappers — what <c>StoreWrapperBuilder</c> builds — the inner was another wrapper
+        /// and every backend repository's constructor rejected a correctly composed store.
+        /// </remarks>
+        private static bool IsOrWraps<TStore>(object store)
+            where TStore : class
+        {
+            return store is TStore || GetUnwrappedStore(store) is TStore;
         }
     }
 }

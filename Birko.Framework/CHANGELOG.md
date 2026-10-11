@@ -4,6 +4,31 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — The in-memory store refuses a duplicate create; StoreLocator serves async stores and refuses colliding settings
+
+[[TASK-163]] closes `store-crud-contract`'s 15 medium findings: 9 fixed, 6 spawned ([[TASK-555]]–[[TASK-557]]).
+Observable changes:
+
+- **In-memory `Create` with a stored key throws `StoreException`** (it silently replaced the entity). A bulk create
+  checks the whole batch — keys already stored and keys repeated inside it — before writing anything. JSON and XML
+  already refused (`Dictionary.Add`). An in-memory `Update` can no longer resurrect an entity deleted while it ran
+  (`TryUpdate` instead of `ContainsKey` + indexer).
+- **In-memory `Delete(filter)` is the base class's**, so a subclass's `DeleteCore` now sees filter deletes; both
+  guards (`RequireFilter`, `RequireBoundedFilter`) still run, from the base.
+- **`StoreLocator.GetStore<TStore, …>` lost its `where TStore : IBaseStore` constraint** — async stores are served
+  (they could not be named before); a non-store type throws `ArgumentException` at run time. The cached store is
+  read inside the lock.
+- **A `StoreLocator` cache hit whose settings differ from the cached store's in a value property throws
+  `InvalidOperationException`.** It used to return the store configured with the first caller's settings, so two
+  callers whose settings share `GetId()` but not a password / token silently shared one connection. Equal values in
+  a fresh settings instance are still a hit.
+- **`IsStoreOfType` sees through any depth of wrappers** — backend repository constructors rejected a store wrapped
+  twice (what `StoreWrapperBuilder` builds).
+
+**Migration:** a test that `Create`s the same entity twice into an in-memory store to overwrite it must call
+`Update` (none of the framework's 853 in-memory tests did). Code that calls `StoreLocator.GetStore` with settings
+that differ only outside `GetId()` must construct those stores directly, or give the settings distinct ids.
+
 ## 2026-10-11 — BREAKING: orchestration plans gain behaviour, step validators, and pinned enum values
 
 [[TASK-528]]. `Birko.AI.Orchestration`'s `ImplementationPlan` / `ImplementationStep` were a data bag, and

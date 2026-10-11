@@ -48,8 +48,11 @@ Settings classes have been extracted to **Birko.Settings (namespace `Birko.Confi
 ### Utilities
 - **OrderBy\<T\>** — Type-safe sorting specification with expression-based API
 - **PropertyUpdate\<T\>** — Fluent property assignment builder for native bulk updates
-- **StoreLocator** — Thread-safe service locator for store instances
-- **StoreExtensions** — Helper methods for unwrapping store decorators
+- **StoreLocator** — Thread-safe cache of store instances per `(settings.GetId(), store type)`; sync and async stores;
+  a cache hit whose settings differ in a value outside `GetId()` (a password, a token) throws rather than returning
+  the first caller's store (TASK-163)
+- **StoreExtensions** — Helper methods for unwrapping store decorators; `IsStoreOfType` tests the innermost store of a
+  wrapper chain, however deep (TASK-163)
 
 ## Dependencies
 - **Birko.Settings (namespace `Birko.Configuration`)** — Settings hierarchy (Settings, PasswordSettings, RemoteSettings) — imported transitively

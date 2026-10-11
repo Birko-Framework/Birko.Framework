@@ -3,7 +3,7 @@ id: TASK-163
 parent: STORY-053
 feature: FEATURE-014
 # status: in-progress | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-09
@@ -47,18 +47,19 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 15 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 15 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
-- [ ] Any behavioural fix is followed by `/specs regen store-crud-contract`, with the spec diff reviewed as the change's
-      evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] Any behavioural fix is followed by `/specs regen store-crud-contract`, with the spec diff reviewed as the change's
+      evidence — **done by hand, not by regen**, as for the first two: every requirement and scenario the fixes
+      falsified was rewritten (see 2026-10-11 below)
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
 
 ## ⚠ Two of these findings were independently re-reported (added 2026-09-08 by [[TASK-195]])
 
@@ -83,7 +84,45 @@ re-verified as still present on 2026-09-08.
 built an `AsyncLocal<bool>` re-entrancy scope for `DataBase.IsInitializing`, per call flow and per
 instance, restoring on exception. Reuse that shape rather than inventing a second one.
 
-## Progress — 2 of 15 (2026-10-10)
+## Progress — 15 of 15 (2026-10-11)
+
+### 2026-10-11 — the other 13: 7 fixed, 6 spawned
+
+Verdicts with `file:line` and mechanism are in `SPEC-HARVEST-FINDINGS-2026-07-30.md`. 0 refuted; `SH-M305`
+confirmed-narrower (its RavenDB example is harmless — `CreateDocumentStore` never uses the credentials `GetId()`
+drops — but SQL/Mongo passwords and the InfluxDB token are real).
+
+**Fixed** (one commit, `tests/Birko.Data.InMemory.Tests/StoreCrudContractTests.cs`, 17 tests):
+
+| Finding | Fix | Red with the fix reverted |
+|---|---|---|
+| `SH-M302` wrapper chain | `IsStoreOfType` (4 overloads) → one `IsOrWraps`: the store or its innermost store | 1 (two wrappers); one-wrapper test is a pin |
+| `SH-M303` unlocked read | read inside the lock | **none** — a torn read is not reproducible; fixed by inspection |
+| `SH-M304` async excluded | constraint removed, run-time `IBaseStore`/`IAsyncBaseStore` check | old constraint: test project fails `CS0311`; check removed: 1 |
+| `SH-M305` settings dropped on hit | entry remembers its settings; a hit with different value properties throws | 1 |
+| `SH-M308` resurrecting update | `ReplaceExisting`: `TryGetValue` + `TryUpdate` loop | 4 (sync/async × single/bulk) |
+| `SH-M310` create upserts | `RequireNewKeys` (whole batch, before any write) + `TryAdd` → `StoreException` | 4 |
+| `SH-M312` Delete(filter) bypass | both public overrides deleted; the base runs both guards and reaches `DeleteCore` | 2 |
+
+Blast radius: the 16 suites that use the in-memory store or `StoreLocator` — 853 tests before the new ones — all
+green (none relied on create-as-upsert); solution build 0 errors; consumer Affiliate (the `StoreLocator` user,
+fresh `new BatchSettings{…}` per call) builds and passes 82/82 (3 skipped).
+
+**Spawned** — each is a cross-provider contract decision, not an in-memory edit, so fixing the test double alone
+would make it diverge from the backends it stands in for:
+
+- [[TASK-555]] — `SH-M306`, `SH-M309`: `Update` of a missing entity is a silent no-op on **every** backend, and
+  `Save` returns its Guid.
+- [[TASK-556]] — `SH-M313`, `SH-M314`: identity assignment follows **three** policies across ~55 sites (keep
+  `Guid.Empty`; replace it; always overwrite — SQL and RavenDB bulk, by CR-L190's recorded decision, reopened there).
+- [[TASK-557]] — `SH-M311`, `SH-M315`: the delegate's return is discarded at all 105 call sites; the in-memory
+  store keeps the caller's live object.
+
+Docs: spec `store-crud-contract.md` (create, update, bulk writes, filter delete, StoreLocator ×2, IsStoreOfType,
+StoreException), `Birko.Data.InMemory/CLAUDE.md` ("behaves like a real backend, on purpose"),
+`Birko.Data.Stores/CLAUDE.md`, CHANGELOG (behaviour changes + migration).
+
+### 2026-10-10 — the first two
 
 Done first because consumer **Affiliate** needs the Destroy latch; the other 13 findings are untouched.
 
@@ -114,6 +153,10 @@ Done first because consumer **Affiliate** needs the Destroy latch; the other 13 
 
 ## Out of scope
 
+- Deferred to [[TASK-555]] — `Update` of a missing entity / `Save`'s Guid (`SH-M306`, `SH-M309`).
+- Deferred to [[TASK-556]] — one identity-assignment policy across backends (`SH-M313`, `SH-M314`).
+- Deferred to [[TASK-557]] — the delegate's return value and in-memory snapshots (`SH-M311`, `SH-M315`).
+
 - The other 406 medium findings — they belong to the other 21 per-area tasks under [[STORY-053]].
 - High-severity findings in this area — [[STORY-051]] owns those.
 - Low-severity findings in this area — [[TASK-182]] owns them. Where a fix closes both, do it once and
@@ -125,11 +168,8 @@ Done first because consumer **Affiliate** needs the Destroy latch; the other 13 
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A — fully covered by automated tests: a library contract with no UI surface, and every fix carries a
+red-verified regression test (the one exception, `SH-M303`'s torn read, has no reproducible red at all).
 
 ## Implementation plan
 

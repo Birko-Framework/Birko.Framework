@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10     | 27     | —                   |
-| todo         | —                  | —                  | 190         |
+| todo         | —                  | —                  | 192         |
 | in-progress  | 8  | 11  | 1   |
 | verify       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 215         |
+| done         | 1        | 23        | 216         |
 | cancelled    | 0   | 0   | 5    |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 36× P1 · 116× P2 · 44× P3.
+`todo` by priority: 35× P1 · 119× P2 · 44× P3.
 
 ## In progress now
 
@@ -143,7 +143,7 @@ _None_
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (121/213 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (122/216 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [ ] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -314,7 +314,7 @@ _None_
     - [x] [TASK-321](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-321-triage-high-store-crud-contract.md) Triage the 1 remaining high spec-harvest finding in `store-crud-contract` (P1) · FEATURE-014
     - [x] [TASK-322](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-322-triage-high-views-and-aggregation.md) Triage the 1 remaining high spec-harvest finding in `views-and-aggregation` (P1) · FEATURE-014
     - [ ] [TASK-445](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-445-conflictresolution-merge-is-a-silent-no-op.md) `ConflictResolution.Merge` is a silent no-op, and the enum advertises it as supported (P3) · FEATURE-014
-  - STORY-053 Spec-harvest — medium findings — planned (0/25 done)
+  - STORY-053 Spec-harvest — medium findings — planned (1/28 done)
     - [ ] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
     - [ ] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
     - [ ] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
@@ -327,7 +327,7 @@ _None_
     - [ ] [TASK-160](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-160-triage-medium-llm-provider-and-agents.md) Triage the 20 medium spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
     - [ ] [TASK-161](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-161-triage-medium-tenant-isolation.md) Triage the 18 medium spec-harvest findings in `tenant-isolation` (P1) · FEATURE-014
     - [ ] [TASK-162](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-162-triage-medium-repository-contract.md) Triage the 16 medium spec-harvest findings in `repository-contract` (P1) · FEATURE-014
-    - [ ] [TASK-163](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-163-triage-medium-store-crud-contract.md) Triage the 15 medium spec-harvest findings in `store-crud-contract` (P1) · FEATURE-014
+    - [x] [TASK-163](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-163-triage-medium-store-crud-contract.md) Triage the 15 medium spec-harvest findings in `store-crud-contract` (P1) · FEATURE-014
     - [ ] [TASK-164](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-164-triage-medium-settings-configuration-chain.md) Triage the 15 medium spec-harvest findings in `settings-configuration-chain` (P2) · FEATURE-014
     - [ ] [TASK-165](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-165-triage-medium-security-and-authorization.md) Triage the 15 medium spec-harvest findings in `security-and-authorization` (P1) · FEATURE-014
     - [ ] [TASK-166](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-166-triage-medium-entity-tagging.md) Triage the 15 medium spec-harvest findings in `entity-tagging` (P2) · FEATURE-014
@@ -340,6 +340,9 @@ _None_
     - [ ] [TASK-323](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-323-fix-medium-core-model-contracts.md) Fix the 3 verified medium findings in `core-model-contracts` (P2) · FEATURE-014
     - [ ] [TASK-324](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-324-fix-medium-store-lazy-initialization.md) Fix the 1 verified medium finding in `store-lazy-initialization` (P1) · FEATURE-014
     - [ ] [TASK-325](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-325-fix-medium-unit-of-work-and-transactions.md) Fix the 3 verified medium findings in `unit-of-work-and-transactions` (P1) · FEATURE-014
+    - [ ] [TASK-555](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-555-update-of-a-missing-entity-reports-success.md) `Update` of an entity that is not stored reports success on every backend, and `Save` hands back its Guid (P2) · FEATURE-014
+    - [ ] [TASK-556](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-556-store-assigned-identity-has-three-policies.md) Store-assigned identity follows three different policies across backends — one of them overwrites the caller's Guid (P2) · FEATURE-014
+    - [ ] [TASK-557](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-557-store-delegate-return-value-and-in-memory-snapshots.md) The store delegate's return value is discarded everywhere, and the in-memory store keeps the caller's live object (P2) · FEATURE-014
   - STORY-054 Spec-harvest — low findings — planned (0/24 done)
     - [ ] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
     - [ ] [TASK-174](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-174-triage-low-event-bus-and-messaging.md) Triage the 29 low spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014

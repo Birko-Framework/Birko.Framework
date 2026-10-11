@@ -337,11 +337,13 @@ is created in its field initializer), and lose all data when the instance is dis
 - **When** the initialization gate calls `InitCoreAsync(ct)`
 - **Then** `Task.CompletedTask` is returned without touching the token or the dictionary
 
-### Requirement: In-memory create assigns a missing identifier and upserts by key
+### Requirement: In-memory create assigns a missing identifier and refuses an existing key
 
 The system SHALL, in `CreateCore` / `CreateCoreAsync`, return `Guid.Empty` without storing anything when
-`data` is `null`; otherwise assign `data.Guid ??= Guid.NewGuid()`, invoke the delegate, write
-`_items[data.Guid.Value] = data`, and return `data.Guid.Value`.
+`data` is `null`; otherwise assign `data.Guid ??= Guid.NewGuid()`, refuse a key already stored with
+`StoreException` **before** invoking the delegate, invoke the delegate, add the entity with `TryAdd` (a concurrent
+create of the same key also throws), and return `data.Guid.Value`. A create never replaces a stored entity
+(SH-M310, [[TASK-163]]): a real backend's primary key rejects the duplicate, and the canonical test double does too.
 
 #### Scenario: Creating an entity with no identifier
 
@@ -353,8 +355,8 @@ The system SHALL, in `CreateCore` / `CreateCoreAsync`, return `Guid.Empty` witho
 
 - **Given** `_items` already contains an entity under `g`
 - **When** `Create(other)` is called with `other.Guid == g`
-- **Then** the indexer assignment silently replaces the stored entity — there is no duplicate-key detection
-  and no exception, so create behaves as an upsert
+- **Then** `StoreException` ("Create does not replace — use Update") is thrown, the delegate is not invoked, and
+  the stored entity is unchanged
 
 #### Scenario: Creating null
 
@@ -424,10 +426,12 @@ The system SHALL implement `ReadCore(filter)` / `ReadCoreAsync(filter, ct)` as
 
 ### Requirement: In-memory update and delete silently ignore entities they cannot act on
 
-The system SHALL, in `UpdateCore` / `UpdateCoreAsync`, apply the delegate and write
-`_items[data.Guid.Value] = data` only when `data?.Guid != null` and `_items.ContainsKey(data.Guid.Value)`,
-and otherwise do nothing; and SHALL, in `DeleteCore` / `DeleteCoreAsync`, call `_items.TryRemove` when
-`data?.Guid != null`, discarding the result.
+The system SHALL, in `UpdateCore` / `UpdateCoreAsync`, apply the delegate only when `data?.Guid != null` and
+`_items.ContainsKey(data.Guid.Value)`, and otherwise do nothing; and SHALL then replace the stored entity
+**only while one is stored** — `TryGetValue` + `TryUpdate`, retried on a concurrent replacement and abandoned on a
+removal (SH-M308, [[TASK-163]]). It SHALL, in `DeleteCore` / `DeleteCoreAsync`, call `_items.TryRemove` when
+`data?.Guid != null`, discarding the result. The silent no-op on a missing key is shared by every backend and is
+[[TASK-555]]'s decision, not this store's.
 
 #### Scenario: Updating an entity that is not stored
 
@@ -440,6 +444,13 @@ and otherwise do nothing; and SHALL, in `DeleteCore` / `DeleteCoreAsync`, call `
 - **Given** an entity whose `Guid` is `null`
 - **When** `Update(entity)` is called
 - **Then** the guard fails, the delegate is never invoked, and nothing is stored
+
+#### Scenario: The entity is deleted while the update runs
+
+- **Given** a stored entity, and a store delegate (or another thread) that deletes it after the existence check
+- **When** `Update(entity, delegate)` writes
+- **Then** the entity stays deleted — the write was a `TryUpdate` against the stored value, not an indexer
+  assignment, so it cannot re-insert a removed key (before SH-M308 it resurrected it)
 
 #### Scenario: Deleting an entity twice
 
@@ -502,15 +513,22 @@ supplied, then `ToList()` so the result is materialized before return.
 
 The system SHALL treat a `null` collection as a no-op in bulk `CreateCore`, `UpdateCore` and `DeleteCore`
 (and their async twins); SHALL skip `null` items in bulk create; SHALL restrict bulk update to items with
-`Guid.HasValue` whose key already exists in `_items`; and SHALL restrict bulk delete to items with
-`Guid.HasValue`.
+`Guid.HasValue` whose key already exists in `_items`, replacing each as the single-item update does; SHALL
+refuse a bulk create containing a key already stored, or a key repeated inside the batch, with `StoreException`
+**before writing anything**; and SHALL restrict bulk delete to items with `Guid.HasValue`.
 
 #### Scenario: Bulk create over a collection containing nulls
 
 - **Given** a collection of three entities of which one element is `null`
 - **When** bulk `Create(data)` runs
 - **Then** the `null` is filtered out, the other two receive generated identifiers where missing, and both
-  are upserted
+  are added
+
+#### Scenario: Bulk create with one key already stored
+
+- **Given** a store holding an entity under `g`, and a batch of a fresh entity plus one carrying `g`
+- **When** bulk `Create(data)` runs
+- **Then** `StoreException` is thrown and **neither** entity is written — the whole batch is checked first
 
 #### Scenario: Bulk update where only some items exist
 
@@ -525,19 +543,17 @@ The system SHALL treat a `null` collection as a no-op in bulk `CreateCore`, `Upd
 - **When** bulk `Create(null)`, `Update(null)` or `Delete(null)` runs
 - **Then** the method returns immediately (`Task.CompletedTask` in the async store) leaving `_items` untouched
 
-### Requirement: In-memory filter-based delete requires a filter that is both present and bounded, then snapshots the matches before removing them
+### Requirement: In-memory filter-based delete is the base class's, so it runs both guards and reaches DeleteCore
 
-The system SHALL override the public `Delete(Expression<Func<T, bool>> filter)` /
-`DeleteAsync(filter, ct)` in the in-memory stores to run **two** guards before doing anything else —
-`RequireFilter` (the filter is present) and `RequireBoundedFilter` (it does not cover every row) — then
-open the initialization gate, compile the predicate, materialize the matching key/value pairs with
-`.ToList()`, and `TryRemove` each key.
+The in-memory stores SHALL NOT override the public `Delete(Expression<Func<T, bool>> filter)` /
+`DeleteAsync(filter, ct)`. The base `AbstractBulkStore<T>.Delete(filter)` / `AbstractAsyncBulkStore<T>.DeleteAsync`
+runs **two** guards — `RequireFilter` (the filter is present) and `RequireBoundedFilter` (it does not cover every
+row) — then reads the matches into a list and routes them through `Delete(items)` → `DeleteCore`, so a subclass
+overriding `DeleteCore` (the documented extension point) sees filter-based deletes too.
 
-Both checks SHALL be repeated **in the override itself** rather than inherited. Overriding the *public*
-method bypasses the base class's guards entirely, so the base cannot enforce the invariant for it — which
-is precisely why the family convention has concrete stores override `protected *Core` and not the public
-CRUD methods (SH-M023). These overrides predate the guards and stand against that convention; repeating
-the checks is the contained fix, and converting them to `*Core` is separate work.
+Until [[TASK-163]] (SH-M312) the in-memory stores overrode the public method and removed straight from the
+dictionary, bypassing `DeleteCore` — against the family convention that concrete stores override `protected *Core`
+and not the public CRUD methods — and so had to repeat both guards themselves (SH-M023, TASK-215).
 
 **The scope guard is not redundant with the null guard, and in this store it is the more dangerous of the
 two.** The predicate here is compiled and run as an ordinary C# delegate, with no translation layer
@@ -550,27 +566,27 @@ downstream is involved.
 
 - **Given** ten stored entities of which four match the filter
 - **When** `Delete(filter)` is called
-- **Then** exactly those four keys are removed in one pass, and the matches were captured into a list before
-  any removal so the dictionary is not mutated during its own enumeration
+- **Then** exactly those four are removed, through `DeleteCore`; the matches were read into a list before any
+  removal, so the dictionary is not mutated during its own enumeration
 
 #### Scenario: Filter matches nothing
 
 - **Given** no stored entity satisfies the filter
 - **When** `Delete(filter)` is called
-- **Then** the snapshot list is empty, no removal occurs, and no exception is raised
+- **Then** the match list is empty, no removal occurs, and no exception is raised
 
 #### Scenario: A null filter is refused rather than clearing the whole collection
 
 - **Given** an in-memory store holding entities
 - **When** `Delete(null!)` / `DeleteAsync(null!, ct)` is called
-- **Then** the override throws `ArgumentNullException` naming the `filter` parameter, and **no** entity is
+- **Then** the base guard throws `ArgumentNullException` naming the `filter` parameter, and **no** entity is
   removed — a compiled null predicate would otherwise have matched everything
 
 #### Scenario: A filter that is present but covers every entity is refused
 
 - **Given** an in-memory store holding three entities and an empty collection `empty`
 - **When** `Delete(x => !empty.Contains(x.Field))` is called
-- **Then** the override throws `WholeTableWriteException` naming the deliberate door, and all three
+- **Then** the base guard throws `WholeTableWriteException` naming the deliberate door, and all three
   entities remain — the predicate is true of every entity, so before the guard this left **0 of 3** rows
   with no exception raised
 
@@ -646,11 +662,13 @@ storage. `SetSettings(ISettings)` SHALL apply the value only when the argument i
 
 ### Requirement: StoreLocator caches one store instance per settings identity and store type
 
-The system SHALL maintain a process-wide `IDictionary<string, IDictionary<Type, object>>` keyed first by
-`settings?.GetId() ?? string.Empty` and then by `typeof(TStore)`; SHALL create a missing entry with
-`Activator.CreateInstance(type, new object[] { })`; and SHALL return the cached instance on subsequent calls.
-`GetStore<TStore>()` SHALL delegate to `GetStore<TStore, ISettings>(default!)`, which resolves to the
-empty-string identity bucket.
+The system SHALL maintain a process-wide cache keyed first by `settings?.GetId() ?? string.Empty` and then by
+`typeof(TStore)`; SHALL create a missing entry with `Activator.CreateInstance(type, Array.Empty<object>())`; and SHALL
+return the cached instance on subsequent calls, reading it **inside** the lock (SH-M303). `TStore` is unconstrained
+and checked at run time: a type implementing neither `IBaseStore` nor `IAsyncBaseStore` is refused with
+`ArgumentException`, and an async store is served like a sync one (SH-M304 — the old `where TStore : IBaseStore`
+excluded the whole async family). `GetStore<TStore>()` SHALL delegate to `GetStore<TStore, ISettings>(default!)`,
+which resolves to the empty-string identity bucket.
 
 #### Scenario: Two lookups with the same settings
 
@@ -678,12 +696,17 @@ empty-string identity bucket.
 - **Then** `Activator.CreateInstance(type, new object[] { })` throws `MissingMethodException` while the
   static lock is held
 
-#### Scenario: Cached instance is read outside the lock
+#### Scenario: An async store is located
 
-- **Given** one thread inside the `lock (_lockObject)` block adding a new entry to `_stores[id]`
-- **When** another thread reaches the final `return (TStore)_stores[id][type];`, which sits after the lock
-  block
-- **Then** it indexes the non-thread-safe `Dictionary` concurrently with that mutation
+- **Given** `AsyncInMemoryStore<T>`, which implements `IAsyncBaseStore` and not `IBaseStore`
+- **When** `GetStore<AsyncInMemoryStore<T>, TSettings>(settings)` is called twice
+- **Then** it compiles, and the same instance is returned both times
+
+#### Scenario: A type that is not a store
+
+- **Given** a model type
+- **When** it is passed as `TStore`
+- **Then** `ArgumentException` ("is not a store") is thrown before anything is constructed
 
 ### Requirement: StoreLocator applies settings only on first construction, and only through the ISettings interface
 
@@ -710,12 +733,21 @@ when the identity string is non-empty and the new instance is assignable to `ISe
 - **Then** the `!string.IsNullOrEmpty(id)` guard fails and `SetSettings` is skipped, so the store is returned
   unconfigured
 
-#### Scenario: Settings changed after the instance is cached
+#### Scenario: A fresh settings instance with the same values
 
 - **Given** a store already cached under identity `"db1"`
-- **When** `GetStore` is called again for `"db1"` with a different settings instance
-- **Then** the cached instance is returned as-is; `SetSettings` runs only inside the
-  `!_stores[id].ContainsKey(type)` branch
+- **When** `GetStore` is called again for `"db1"` with a new settings instance whose value-typed public properties
+  are all equal to the cached one's
+- **Then** the cached instance is returned; `SetSettings` is not called again
+
+#### Scenario: Settings that share the identity but differ in a value
+
+- **Given** a store cached under `"loc:db"` for `PasswordSettings` with password `a`
+- **When** `GetStore` is called for the same type with `PasswordSettings` `"loc:db"`, password `b` — `GetId()` leaves
+  the password out, so the identities collide
+- **Then** `InvalidOperationException` ("configured with different settings") is thrown, instead of returning a
+  store running on the first caller's credentials (SH-M305). Only public properties of value-like types (primitives,
+  enums, strings, `decimal`, `TimeSpan`, `DateTime(Offset)`, `Guid`, and their nullable forms) are compared
 
 ### Requirement: Store wrappers expose their inner store for unwrapping
 
@@ -765,12 +797,11 @@ The typed overloads `GetUnwrappedStore<T, TStore>(this IStore<T>?)` and
 - **Then** none is declared — only the `IStore<T>` and `IAsyncStore<T>` overloads exist, even though
   `IsStoreOfType` has all four
 
-### Requirement: IsStoreOfType tests the store, then its generic wrapper, then the innermost store
+### Requirement: IsStoreOfType tests the store, then the innermost store of its wrapper chain
 
 The system SHALL implement `IsStoreOfType<T, TStore>` for `IStore<T>?`, `IAsyncStore<T>?`, `IBulkStore<T>?`
-and `IAsyncBulkStore<T>?` with the same three-stage body: `false` for `null`; `true` when the store itself
-`is TStore`; otherwise when the store is an `IStoreWrapper<T>`, the result of
-`GetInnerStoreAs<TStore>() != null`; otherwise the result of testing the innermost unwrapped store.
+and `IAsyncBulkStore<T>?` with one body: `false` for `null`; otherwise `true` when the store itself `is TStore`
+or the innermost store `GetUnwrappedStore` reaches `is TStore` — the store a backend repository then uses.
 
 #### Scenario: The store is directly the requested type
 
@@ -778,19 +809,13 @@ and `IAsyncBulkStore<T>?` with the same three-stage body: `false` for `null`; `t
 - **When** `IsStoreOfType<Invoice, DataBaseStore<MyDb, Invoice>>()` is called
 - **Then** `true` is returned on the direct type check, without unwrapping
 
-#### Scenario: Generic wrapper answers for its inner store
+#### Scenario: A chain of two wrappers
 
-- **Given** a wrapper implementing `IStoreWrapper<Invoice>` whose `GetInnerStoreAs<TStore>()` returns a value
-- **When** `IsStoreOfType<Invoice, TStore>()` is called
-- **Then** `true` is returned from the wrapper branch, and the chain-walking fallback is never reached
-
-#### Scenario: Generic wrapper denies, and the walk is not consulted
-
-- **Given** a store implementing `IStoreWrapper<Invoice>` whose `GetInnerStoreAs<TStore>()` returns `null`
-  even though a deeper layer is a `TStore`
-- **When** `IsStoreOfType<Invoice, TStore>()` is called
-- **Then** `false` is returned — the `IStoreWrapper<T>` branch returns directly, so reaching the innermost
-  store depends entirely on that wrapper's own implementation
+- **Given** a wrapper around a wrapper around an `ElasticSearchStore<Invoice>` — what `StoreWrapperBuilder` builds
+- **When** `IsStoreOfType<Invoice, ElasticSearchStore<Invoice>>()` is called, as every backend repository's
+  constructor does
+- **Then** `true` is returned. Until [[TASK-163]] (SH-M302) the first wrapper's one-level `GetInnerStoreAs`
+  answered — with the second wrapper, so `false` — and the repository rejected a correctly composed store
 
 #### Scenario: Null store
 
@@ -809,10 +834,12 @@ constructor delegating to `(string message, Exception? innerException)` with a `
 - **When** it is rethrown as `new StoreException("Insert failed", ex)`
 - **Then** the message and `InnerException` are both preserved by the base `Exception` constructor
 
-#### Scenario: No CRUD path in this contract raises it
+#### Scenario: The one CRUD path in this contract that raises it
 
 - **Given** the abstract bases, the in-memory stores, `StoreLocator` and `StoreExtensions`
-- **When** invalid input is supplied — `null` entities, missing identifiers, unknown keys
-- **Then** none of them throws `StoreException`; the contract answers with `Guid.Empty`, `null`, `false` or a
-  silent no-op instead, and only reflection failures (`MissingMethodException`) and cancellation
-  (`OperationCanceledException`) surface as exceptions
+- **When** invalid input is supplied
+- **Then** only an in-memory create of a key already stored throws `StoreException`; `null` entities, missing
+  identifiers and unknown keys are still answered with `Guid.Empty`, `null`, `false` or a silent no-op
+  ([[TASK-555]] owns the update half). `StoreLocator` refuses with `ArgumentException` (not a store) and
+  `InvalidOperationException` (colliding settings); reflection failures (`MissingMethodException`) and
+  cancellation (`OperationCanceledException`) surface as before

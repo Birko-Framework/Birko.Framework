@@ -30,8 +30,19 @@ No data is persisted: everything is lost when the store is garbage-collected or 
 All four follow the framework store hierarchy: concrete stores override the `*Core` methods
 (`CreateCore`, `ReadCore`, `UpdateCore`, `DeleteCore`, `CountCore` + bulk variants), **never**
 the public CRUD methods, so lazy-init via `EnsureInitialized`/`EnsureInitializedAsync` is
-preserved. `Read(Guid)` / `ReadAsync(Guid)` and `Delete(filter)` / `DeleteAsync(filter)` are
-overridden for O(1) lookup and single-pass deletion respectively.
+preserved. `Read(Guid)` / `ReadAsync(Guid)` is the one public override (O(1) lookup). `Delete(filter)` used to be
+overridden too and bypassed `DeleteCore`; it is the base class's since TASK-163 (SH-M312).
+
+### Behaves like a real backend, on purpose
+It is the canonical test double, so where it is lenient a production bug passes the tests:
+
+- **`Create` never replaces.** An existing key — or a key repeated inside one bulk batch — throws `StoreException`
+  before anything is written, as a primary key would (SH-M310). Use `Update` to replace.
+- **`Update` cannot resurrect a deleted entity.** The write is a `TryUpdate` against the stored value, so a delete
+  that lands mid-update (another thread, or the store delegate itself) wins (SH-M308).
+- Still lenient, tracked: an update of a missing key is a silent no-op on every backend ([[TASK-555]]); a
+  `Guid.Empty` id is kept on create ([[TASK-556]]); the store keeps the caller's live object, not a snapshot
+  ([[TASK-557]]).
 
 ## Settings
 In-memory stores have no connection string or path. They implement
