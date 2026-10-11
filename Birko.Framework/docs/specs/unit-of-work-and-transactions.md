@@ -97,7 +97,10 @@ starting a new one."`, and SHALL NOT replace or nest the existing transaction.
 ### Requirement: Commit and rollback require an active transaction
 
 The system SHALL throw `NoActiveTransactionException` from `CommitAsync` and from `RollbackAsync`
-when `IsActive` is `false`, with the message `"No active transaction. Call BeginAsync() first."`.
+when `IsActive` is `false`, with the message `"No active transaction. Call BeginAsync() first."` —
+except that on `SqlUnitOfWork` and `ElasticSearchUnitOfWork` the **first** `RollbackAsync` after a
+`CommitAsync` that threw returns without effect, so a catch-and-roll-back keeps the commit's exception
+(TASK-325).
 
 #### Scenario: Commit without begin
 
@@ -264,47 +267,53 @@ nulls the transaction, and closes, disposes and nulls the connection.
 - **When** `RollbackAsync()` completes
 - **Then** `DbTransaction.RollbackAsync` has been awaited and exactly the same cleanup has run
 
-### Requirement: A failed SQL commit or rollback leaves the unit of work active
+### Requirement: A failed SQL commit or rollback releases the connection
 
-The system SHALL await the transaction operation *before* running cleanup, and SHALL NOT wrap that
-await in a try/finally — so when `CommitAsync` or `RollbackAsync` throws (deadlock victim, connection
-drop, cancellation), `CleanupAsync` never runs and the unit of work remains `IsActive == true` with
-the connection and transaction still held.
+The system SHALL, when `SqlUnitOfWork.CommitAsync` or `RollbackAsync` throws (deadlock victim,
+connection drop, cancellation), release the transaction and the connection before rethrowing the
+provider's exception unchanged; disposing the uncommitted `DbTransaction` rolls it back. A failure while
+releasing is swallowed so it cannot replace that exception. After a failed commit the unit of work is
+inactive, and the first `RollbackAsync` that follows is a no-op (SH-M428, fixed by TASK-325).
 
 #### Scenario: Commit fails with a database error
 
 - **Given** an active `SqlUnitOfWork` whose underlying transaction will fail to commit
 - **When** `CommitAsync()` is called and the provider throws
-- **Then** the exception propagates unwrapped (it is not translated to `UnitOfWorkException`),
-  `IsActive` remains `true`, `Context` is still non-null, and the caller must call `RollbackAsync()`
-  or dispose to release the connection
+- **Then** the exception propagates unwrapped, the transaction and the connection have been disposed,
+  `IsActive` is `false` and `Context` is `null`
 
-#### Scenario: Cancellation during commit
+#### Scenario: Catch-and-roll-back after a failed commit
 
-- **Given** an active `SqlUnitOfWork` and a cancellation token that is cancelled mid-commit
-- **When** `CommitAsync(ct)` throws `OperationCanceledException`
-- **Then** no cleanup has occurred and the connection remains open
+- **Given** the caller's pattern `try { await uow.CommitAsync(); } catch { await uow.RollbackAsync(); throw; }`
+- **When** the commit throws
+- **Then** `RollbackAsync()` returns without effect and the commit's exception — not a
+  `NoActiveTransactionException` — reaches the caller; a second `RollbackAsync()` throws
+  `NoActiveTransactionException` as usual
 
-### Requirement: A failed SQL begin retains the created connection outside the active state
+#### Scenario: Rollback fails
 
-The system SHALL assign the newly created connection to its field before opening it, so that when
-`OpenAsync` or `BeginTransactionAsync` throws, the connection object remains referenced while
-`IsActive` stays `false`.
+- **Given** an active `SqlUnitOfWork` whose rollback statement throws
+- **When** `RollbackAsync()` is called
+- **Then** the exception propagates and the connection has been released
+
+### Requirement: A failed SQL begin releases the created connection
+
+The system SHALL, when `OpenAsync` or `BeginTransactionAsync` throws during `SqlUnitOfWork.BeginAsync`,
+release the created connection before rethrowing, leaving `IsActive` `false` and `Context` `null`
+(SH-M427, fixed by TASK-325).
 
 #### Scenario: Open fails with bad credentials
 
 - **Given** a `SqlUnitOfWork` whose settings produce an unreachable or unauthorised connection string
 - **When** `BeginAsync()` throws from `OpenAsync`
-- **Then** `IsActive` is `false` and `Context` is `null`, so `CommitAsync`/`RollbackAsync` would
-  throw `NoActiveTransactionException`; the created connection is released only when `Dispose()` or
-  `DisposeAsync()` is eventually called
+- **Then** the created connection has been disposed, `IsActive` is `false` and `Context` is `null`
 
 #### Scenario: Retrying begin after a failed begin
 
-- **Given** a `SqlUnitOfWork` whose previous `BeginAsync()` threw after the connection field was set
+- **Given** a `SqlUnitOfWork` whose previous `BeginAsync()` threw
 - **When** `BeginAsync()` is called again
-- **Then** the passed-in-active check does not trip (`IsActive` is still `false`) and the connection
-  field is overwritten with a new connection, without the previous one being closed or disposed
+- **Then** a new connection is created, and every connection from a failed attempt has already been
+  released — none is stranded by the field being overwritten
 
 ### Requirement: SQL disposal releases resources without an explicit rollback call
 
@@ -419,9 +428,9 @@ SHALL be internal so only the unit of work can create one.
 
 ### Requirement: Elasticsearch commit flushes one bulk request
 
-The system SHALL, on `CommitAsync`, issue a single `_client.BulkAsync(...)` call containing every
-buffered operation and pass the cancellation token to it, then clear the context; when the buffer is
-empty it SHALL skip the request entirely and still clear the context and report success.
+The system SHALL, on `CommitAsync`, clear the context and then issue a single `_client.BulkAsync(...)`
+call containing every buffered operation, passing the cancellation token to it; when the buffer is
+empty it SHALL skip the request entirely and report success.
 
 #### Scenario: Non-empty buffer is flushed as one call
 
@@ -439,54 +448,57 @@ empty it SHALL skip the request entirely and still clear the context and report 
 
 ### Requirement: Elasticsearch commit failure is reported as UnitOfWorkException
 
-The system SHALL inspect the bulk response and throw `UnitOfWorkException` in two distinct cases:
-when `response.IsValid` is false, with message `"Elasticsearch bulk operation failed: {reason}"`
-where the reason falls back through `ServerError?.Error?.Reason`, then
-`OriginalException?.Message`, then `"Unknown error"`, passing `response.OriginalException` as the
-inner exception; and when `response.Errors` is true, with message `"Elasticsearch bulk operation
-partially failed: {n} items had errors."` where `n` is `ItemsWithErrors?.Count() ?? 0` and no inner
-exception is attached.
+The system SHALL throw from `CommitAsync` when `response.IsValid` is false — which NEST 7 also reports
+when any item failed. When the response names failed items it SHALL throw
+`ElasticSearchBulkCommitException` (a `UnitOfWorkException`) whose `Failures` lists each refused item
+(`Operation`, `Index`, `Id`, `Status`, `Reason`) and whose `SucceededCount` counts the applied ones;
+otherwise it SHALL throw `UnitOfWorkException` with message
+`"Elasticsearch bulk operation failed: {reason}"`, the reason falling back through
+`ServerError?.Error?.Reason`, then `OriginalException?.Message`, then `"Unknown error"`, with
+`response.OriginalException` as the inner exception.
 
 #### Scenario: Whole request rejected by the server
 
-- **Given** a bulk call that comes back with `IsValid == false` and a `ServerError` reason
+- **Given** a bulk call that comes back with `IsValid == false`, a `ServerError` reason and no items
 - **When** `CommitAsync()` evaluates the response
 - **Then** `UnitOfWorkException` is thrown whose message embeds that server reason and whose
   `InnerException` is `response.OriginalException`
 
 #### Scenario: Transport failure with no server error
 
-- **Given** a bulk response with `IsValid == false`, no `ServerError`, and an `OriginalException`
+- **Given** a bulk response with `IsValid == false`, no `ServerError`, no items and an `OriginalException`
 - **When** `CommitAsync()` evaluates the response
 - **Then** the message embeds `OriginalException.Message`, and if both are absent the literal
   `"Unknown error"` is used
 
 #### Scenario: Some items failed, others were applied
 
-- **Given** a bulk response with `IsValid == true` but `Errors == true` and two items in error
+- **Given** a bulk response of three items where an `index` failed with 400 and an `update` failed with 404
 - **When** `CommitAsync()` evaluates the response
-- **Then** `UnitOfWorkException` is thrown reporting `"2 items had errors."`, and the items that
-  succeeded remain applied in Elasticsearch — nothing is compensated or undone
+- **Then** `ElasticSearchBulkCommitException` is thrown with those two items in `Failures` and
+  `SucceededCount == 1`, and the succeeded item remains applied in Elasticsearch — nothing is
+  compensated or undone (SH-M426, fixed by TASK-325; it used to surface as
+  `"failed: Unknown error"` naming no item, measured)
 
-### Requirement: Elasticsearch commit does not clear its buffer on failure
+### Requirement: A failed Elasticsearch commit ends the unit of work
 
-The system SHALL assign `_context = null` only after both response checks have passed, so a commit
-that throws leaves the unit of work `IsActive == true` with every buffered operation still queued.
+The system SHALL clear the buffer when the bulk request is sent, whatever its outcome, so a commit
+that throws leaves the unit of work `IsActive == false` with nothing queued; the caller retries the
+items named in `ElasticSearchBulkCommitException.Failures` in a new unit of work (SH-M426, fixed by
+TASK-325).
 
-#### Scenario: Retrying a partially failed commit re-sends everything
+#### Scenario: A retry does not re-send applied items
 
-- **Given** an `ElasticSearchUnitOfWork` whose `CommitAsync()` threw
-  `UnitOfWorkException("... partially failed: 1 items had errors.")` for a batch of three operations
-- **When** the caller calls `CommitAsync()` again to retry
-- **Then** all three operations are sent again — including the two that already succeeded — because
-  the buffer was never trimmed or cleared
+- **Given** an `ElasticSearchUnitOfWork` whose `CommitAsync()` threw for a batch of three operations
+- **When** the caller calls `BeginAsync()` again
+- **Then** the new buffer is empty — the operations that already succeeded are not sent a second time
 
 #### Scenario: Discarding after a failed commit
 
 - **Given** the same failed state
 - **When** the caller calls `RollbackAsync()` instead of retrying
-- **Then** it succeeds and drops the buffer, leaving Elasticsearch with whichever subset of the
-  operations had already been applied
+- **Then** it returns without effect, leaving Elasticsearch with whichever subset of the operations
+  had already been applied
 
 ### Requirement: Elasticsearch rollback and disposal discard the buffer locally
 

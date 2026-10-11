@@ -3,9 +3,10 @@ id: TASK-325
 parent: STORY-053
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P1
 assignee: ai
+picked-by: fix-next
 created: 2026-09-08
 depends-on: []
 blocks: []
@@ -59,20 +60,20 @@ the code *does*, defects included. So a behavioural fix leaves `docs/specs/unit-
 
 ## Acceptance criteria
 
-- [ ] All 3 findings are fixed with a regression test, or explicitly waived with a recorded reason. Findings sharing a
+- [x] All 3 findings are fixed with a regression test, or explicitly waived with a recorded reason. Findings sharing a
       root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers,
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers,
       and name any test that passes either way as a contract pin rather than as evidence
-- [ ] ⚠ The assertion is the **observed state**, never that no exception was thrown. § Conventions records
+- [x] ⚠ The assertion is the **observed state**, never that no exception was thrown. § Conventions records
       several defects hidden by exactly that assertion, including one in this epic that hid a live MSSql
       failure for weeks
-- [ ] Any public-surface change (a signature, a namespace, a nullable annotation) is preceded by a
+- [x] Any public-surface change (a signature, a namespace, a nullable annotation) is preceded by a
       **measured** consumer blast radius across all 16 consumer repos, and the count is written into the
       task — not asserted
-- [ ] `/specs regen unit-of-work-and-transactions` run after any behavioural fix, with the spec diff reviewed as the evidence
-- [ ] Anything too large for this task is spawned via `/tasks spawn` — never left as a ticked box with the
+- [x] `/specs regen unit-of-work-and-transactions` run after any behavioural fix, with the spec diff reviewed as the evidence
+- [x] Anything too large for this task is spawned via `/tasks spawn` — never left as a ticked box with the
       work undone, and never as an `## Out of scope` sentence describing work
-- [ ] [[STORY-053]]'s task table and `finding-count` reflect this area's closed count
+- [x] [[STORY-053]]'s task table and `finding-count` reflect this area's closed count
 
 ## Out of scope
 
@@ -88,8 +89,67 @@ the code *does*, defects included. So a behavioural fix leaves `docs/specs/unit-
 
 ## Human test plan
 
-N/A — library contracts with no UI surface; the proof is the regression tests and their red-verification.
+N/A — library code with no UI surface; fully covered by automated tests (`SqlUnitOfWorkFailureReleaseTests`,
+`ElasticSearchUnitOfWorkCommitFailureTests`).
 
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-325` — leave empty until then._
+
+## Outcome
+
+**All 3 fixed — one shape, cleanup that was a sequential statement where it had to run on failure.**
+`SqlUnitOfWork` now releases its connection when open, begin, commit or rollback throws, and rethrows the provider's
+exception unchanged. `ElasticSearchUnitOfWork` spends its buffer when it sends it, and a partial failure throws
+`ElasticSearchBulkCommitException` naming every failed item. In both, the first `RollbackAsync` after a failed commit
+is a no-op, so the idiomatic catch-and-roll-back cannot replace the real error (the deadlock) with a
+`NoActiveTransactionException`.
+
+- **Step-6 split (fake `DbConnection`/`DbTransaction`; canned NEST bulk responses):**
+  - SQL, whole fix reverted: **6/10** red — `A_failed_open_releases_the_connection`,
+    `A_failed_begin_releases_the_opened_connection`, `Retried_failed_begins_leak_no_connection`,
+    `A_unit_of_work_can_begin_again_after_a_failed_begin`, `A_failed_commit_releases_the_transaction_and_the_connection`,
+    `A_failed_rollback_releases_the_connection`.
+  - One guard at a time: begin catch → 4/10 (the four begin tests); commit catch → 1/10; rollback catch → 1/10;
+    no-op rollback → 2/10 (`Catch_and_roll_back_after_a_failed_commit_keeps_the_commits_exception`,
+    `The_no_op_rollback_is_spent_once`). Those two **pass on the original code** (it left the transaction open, so
+    the rollback had something to roll back): they pin the no-op that the release made necessary, not the original
+    defect.
+  - **Contract pins (pass either way):** `Rollback_without_a_transaction_still_throws`,
+    `A_successful_commit_releases_the_connection`.
+  - ES, original Commit/Rollback (new types kept so the file compiles): **3/5** red —
+    `A_partially_failed_commit_names_each_failed_item` (original threw `UnitOfWorkException: … failed: Unknown error`),
+    `A_failed_commit_ends_the_unit_of_work_and_drops_the_sent_buffer`,
+    `Catch_and_roll_back_after_a_failed_commit_keeps_the_commits_exception`. Buffer kept → 1/5; no-op rollback
+    removed → 1/5. **Pins:** `A_successful_commit_ends_the_unit_of_work`, `Rollback_without_a_unit_of_work_still_throws`.
+  - Full suites: SQL 710/710, ElasticSearch 186/186, SQLite 440/440.
+- **Judgement calls.**
+  - *Rollback after a failed commit is a no-op, once.* Rejected: making `RollbackAsync` on an inactive UoW always
+    silent, which would hide a genuine double-rollback or a rollback with no begin — those still throw (pinned).
+    Rejected too: leaving the UoW active after a failed commit so the caller's rollback releases it. That is the
+    original defect for every caller that does not roll back.
+  - *Release, don't explicitly roll back, on a failed commit:* disposing an uncommitted `DbTransaction` rolls it back,
+    and an explicit `RollbackAsync` on a deadlock-victim transaction is itself an error on SQL Server. A failure while
+    releasing is swallowed so it cannot replace the exception the caller needs.
+  - *ES: clear before send.* If the request itself throws (transport), the buffer is gone too. Rejected: keeping it
+    for that case, because a transport failure can arrive after the server applied the batch — re-sending blindly is
+    the defect.
+  - *NEST fixture realism:* NEST 7's item `IsValid` requires `_type` (real ES 7 responses carry `"_doc"`) and treats a
+    404 `delete` as valid. Fixtures follow the real shape; noted in the test file.
+- **Not changed, recorded:** `RavenDbUnitOfWork` has the same "failed commit leaves it active" shape for
+  `SaveChangesAsync`, and Mongo never ends its session on commit failure. Not in this task's findings, and both hold
+  no pooled connection (a session, disposed on `Dispose`), so no leak — but the catch-and-roll-back semantics now
+  differ across the family. Recorded here rather than spawned: no defect is claimed until someone measures one.
+- **Merge gate:** inline review of the diff. Public-surface change is additive (`BulkItemFailure`,
+  `ElasticSearchBulkCommitException`); `ElasticSearchUnitOfWork` has 0 consumer references (TASK-325 Context), and
+  `SqlUnitOfWork`'s signatures are unchanged. No nullable warnings; solution builds 0 errors.
+
+## Progress log
+
+- step 2 — picked; ranked above TASK-324 (store-lazy-initialization, 1 verified medium) because SH-M427/428 are live in 3 consumer files and leak a pooled connection under a measured trigger (TASK-306 deadlock 1205); TASK-555 (higher on severity: silent wrong success) excluded from the unattended pool — its acceptance opens with a cross-provider contract decision
+- step 3 — verified: all three hold as recorded. `SqlUnitOfWork.BeginAsync` assigns `_connection` then awaits `OpenAsync` / `BeginTransactionAsync` with no try (`Birko.Data.SQL/UnitOfWork/SqlUnitOfWork.cs:107-110`); `CommitAsync` / `RollbackAsync` are `await …; await CleanupAsync();` sequential pairs (:140-141, :159-160). `ElasticSearchUnitOfWork.CommitAsync` clears `_context` only after both throw sites (`Birko.Data.ElasticSearch/UnitOfWork/ElasticSearchUnitOfWork.cs:140-158`). Design point found while verifying: a cleanup-in-finally alone would make the idiomatic `catch { await uow.RollbackAsync(); throw; }` raise `NoActiveTransactionException` inside the catch and **replace** the commit's exception (the deadlock 1205 the caller needs). Family today: Cosmos already ends the UoW on a failed commit (rollback then throws NoActive); Raven, like SQL, leaves it active
+- step 4 — layer: local (Birko.Data.SQL, Birko.Data.ElasticSearch)
+- step 5 — fix in `Birko.Data.SQL/UnitOfWork/SqlUnitOfWork.cs` (begin/commit/rollback release on failure, `ReleaseAfterFailureAsync`, one-shot no-op rollback) and `Birko.Data.ElasticSearch/UnitOfWork/ElasticSearchUnitOfWork.cs` (buffer spent on send, `ElasticSearchBulkCommitException` + `BulkItemFailure`, one-shot no-op rollback); tests in `tests/Birko.Data.SQL.Tests/UnitOfWork/SqlUnitOfWorkFailureReleaseTests.cs` (10) and `tests/Birko.Data.ElasticSearch.Tests/UnitOfWork/ElasticSearchUnitOfWorkCommitFailureTests.cs` (5); SQL 710/710, ES 186/186, SQLite 440/440
+- step 6 — SQL whole revert 6/10 red; per guard 4/1/1/2; ES original 3/5 red, per guard 1/1; pins named in Outcome; original ES partial failure measured as "failed: Unknown error"
+- step 7 — respecced unit-of-work-and-transactions; requirements rewritten: *A failed SQL commit or rollback releases the connection*, *A failed SQL begin releases the created connection*, *Elasticsearch commit failure is reported as UnitOfWorkException* (bulk exception), *A failed Elasticsearch commit ends the unit of work*; amended: *Commit and rollback require an active transaction* (one-shot exception), *Elasticsearch commit flushes one bulk request* (clear before send)
+- step 8 — handed to /tasks close --unattended; outcome in status:, commit in git log

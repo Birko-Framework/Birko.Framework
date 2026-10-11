@@ -30,6 +30,9 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
     // Set when BeginAsync found an enclosing boundary against the same database and joined it instead
     // of opening a second connection. A participant never commits and never rolls back the transaction.
     private AmbientSqlTransaction.Entry? _joined;
+    // Set when CommitAsync failed and released the transaction. The next RollbackAsync is then a no-op rather than
+    // a NoActiveTransactionException, so the idiomatic catch-and-roll-back cannot replace the commit's exception.
+    private bool _endedByFailedCommit;
 
     public bool IsActive => _transaction is not null || _joined is not null;
 
@@ -90,6 +93,7 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (IsActive)
             throw new TransactionAlreadyActiveException();
+        _endedByFailedCommit = false;
 
         var settingsId = _settings.GetId();
 
@@ -106,8 +110,19 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
 
         _connection = _connector.CreateConnection(_settings);
 
-        await _connection.OpenAsync(ct);
-        _transaction = await _connection.BeginTransactionAsync(ct);
+        try
+        {
+            await _connection.OpenAsync(ct);
+            _transaction = await _connection.BeginTransactionAsync(ct);
+        }
+        catch
+        {
+            // SH-M427: a failed open or begin left the connection assigned and IsActive false, so nothing but an
+            // eventual Dispose released it — and a retried BeginAsync overwrote the field, leaking one pooled
+            // connection per failed attempt.
+            await ReleaseAfterFailureAsync();
+            throw;
+        }
         Context = new SqlTransactionContext(_connection, _transaction);
 
         // Publishing to the ambient scope is what makes every store in this flow participate without
@@ -140,7 +155,19 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
         // Leave the ambient scope BEFORE committing, so a store used during commit cannot enlist in a
         // transaction that is on its way out.
         ExitAmbient();
-        await _transaction!.CommitAsync(ct);
+        try
+        {
+            await _transaction!.CommitAsync(ct);
+        }
+        catch
+        {
+            // SH-M428: a commit that throws (a deadlock victim, 1205, is measured — TASK-306) leaves a transaction
+            // nobody can complete. Release it here: disposing an uncommitted DbTransaction rolls it back, and the
+            // connection goes back to the pool instead of being held until Dispose.
+            _endedByFailedCommit = true;
+            await ReleaseAfterFailureAsync();
+            throw;
+        }
         await CleanupAsync();
     }
 
@@ -148,7 +175,15 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
+        {
+            if (_endedByFailedCommit)
+            {
+                // The failed commit already released — and so rolled back — the transaction.
+                _endedByFailedCommit = false;
+                return;
+            }
             throw new NoActiveTransactionException();
+        }
 
         if (_joined is not null)
         {
@@ -161,7 +196,16 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
         }
 
         ExitAmbient();
-        await _transaction!.RollbackAsync(ct);
+        try
+        {
+            await _transaction!.RollbackAsync(ct);
+        }
+        catch
+        {
+            // SH-M428, rollback half: the connection is released whether or not the rollback statement succeeded.
+            await ReleaseAfterFailureAsync();
+            throw;
+        }
         await CleanupAsync();
     }
 
@@ -169,6 +213,25 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
     {
         _ambientScope?.Dispose();
         _ambientScope = null;
+    }
+
+    /// <summary>
+    /// Cleanup on a path that is already throwing: a second failure while releasing must not replace the exception
+    /// the caller needs to see.
+    /// </summary>
+    private async Task ReleaseAfterFailureAsync()
+    {
+        try
+        {
+            await CleanupAsync();
+        }
+        catch
+        {
+            // Deliberately swallowed — see summary. The fields are cleared below even if a dispose threw.
+        }
+        _transaction = null;
+        _connection = null;
+        Context = null;
     }
 
     private async Task CleanupAsync()

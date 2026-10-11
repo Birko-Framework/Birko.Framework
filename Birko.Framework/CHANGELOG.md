@@ -4,6 +4,25 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — A failed unit of work releases its connection; an Elasticsearch partial commit names its failed items
+
+[[TASK-325]] (SH-M426–SH-M428). `SqlUnitOfWork` released its pooled connection only on the success path: a failed
+`OpenAsync` / `BeginTransactionAsync` kept it until `Dispose` (and a retried `BeginAsync` overwrote it — one leak per
+attempt), and a failed `CommitAsync` / `RollbackAsync` — a deadlock victim, measured in TASK-306 — held the connection
+and a transaction nobody could complete. All four paths now release before rethrowing the provider's exception
+unchanged. `ElasticSearchUnitOfWork` kept a partly failed batch queued, already-applied items included, and reported
+it as `"failed: Unknown error"`: NEST 7 folds failed items into `IsValid`, so the `Errors` branch was unreachable.
+
+**Observable:**
+- After a failed commit both units of work are **inactive**. The **first** `RollbackAsync` after it is a no-op, so
+  `catch { await uow.RollbackAsync(); throw; }` still rethrows the commit's exception; a second one throws
+  `NoActiveTransactionException`.
+- A partial Elasticsearch commit throws `ElasticSearchBulkCommitException` (a `UnitOfWorkException`) with `Failures`
+  (operation, index, id, status, reason) and `SucceededCount`. Retry the failures in a new unit of work — a second
+  `CommitAsync` no longer re-sends the whole batch.
+
+---
+
 ## 2026-10-11 — A Redis subscription without a consumer group receives messages
 
 [[TASK-318]] (SH-H020). With no consumer group (the `RedisStreamSettings` default) and `FromBeginning` false,
