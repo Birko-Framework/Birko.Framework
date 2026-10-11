@@ -13,7 +13,7 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 183   |
+| todo         | —     | —       | 184   |
 | in-progress  | 8     | 11      | 1     |
 | verify       | —     | —       | 2     |
 | blocked      | —     | —       | 1     |
@@ -22,7 +22,7 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 22× P1 · 117× P2 · 44× P3.
+`todo` by priority: 22× P1 · 118× P2 · 44× P3.
 
 ## In progress now
 
@@ -39,7 +39,7 @@ which this regeneration never touches._
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (25/35 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (25/36 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -61,6 +61,7 @@ which this regeneration never touches._
   - [ ] [TASK-554](EPIC-001-web-components-ui-polish/TASK-554-validation-refusals-never-reach-the-screen.md) A validator's refusal never reaches the screen — problem+json was read as text, and its entries printed as [object Object] (P1)
   - [x] [TASK-562](EPIC-001-web-components-ui-polish/TASK-562-muted-text-and-dark-primary-below-aa.md) `--b-text-muted` and the dark primary button fall below WCAG AA in light and dark (P2)
   - [ ] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
+  - [ ] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
