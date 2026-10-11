@@ -101,6 +101,56 @@ namespace Birko.AI.Orchestration.Services
             return sorted;
         }
 
+        /// <summary>
+        /// The ordering violations in a plan: a step that modifies a file a <b>later</b> step creates. Empty when the
+        /// order is valid. Steps that merely touch the same file, or a creator placed before its modifier, are not
+        /// violations — only "used before it exists" is.
+        /// </summary>
+        public List<string> ValidateOrdering(ImplementationPlan plan)
+        {
+            var violations = new List<string>();
+            for (var i = 0; i < plan.Steps.Count; i++)
+            {
+                var step = plan.Steps[i];
+                for (var j = i + 1; j < plan.Steps.Count; j++)
+                {
+                    var later = plan.Steps[j];
+                    var files = step.FilesToModify.Where(f => later.FilesToCreate.Contains(f)).ToList();
+                    if (files.Count == 0) continue;
+                    violations.Add($"Step {step.Index} ('{step.Title}') modifies {string.Join(", ", files)}, " +
+                                   $"which step {later.Index} ('{later.Title}') creates later");
+                }
+            }
+            return violations;
+        }
+
+        /// <summary>
+        /// Puts the plan's steps into <see cref="SuggestOptimalOrder"/>'s order and renumbers
+        /// <see cref="ImplementationStep.Index"/> 1..n. Returns false, changing nothing, when the order is already
+        /// that one.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">The plan has started (a step is not pending, or
+        /// <see cref="ImplementationPlan.CurrentStepIndex"/> has moved) or has step assignments — both are positions
+        /// in <see cref="ImplementationPlan.Steps"/>, and reordering would silently point them at other steps.</exception>
+        public bool Reorder(ImplementationPlan plan)
+        {
+            if (plan.CurrentStepIndex != 0 || plan.Steps.Any(s => s.Status != StepStatus.Pending))
+                throw new InvalidOperationException("Cannot reorder a plan that has started executing: CurrentStepIndex and step positions would point at different steps.");
+            if (plan.AssignedStepIndices.Count > 0)
+                throw new InvalidOperationException("Cannot reorder a plan with step assignments: they are positions in Steps. Clear them first, then assign again.");
+
+            var ordered = SuggestOptimalOrder(plan.Steps);
+            if (ordered.SequenceEqual(plan.Steps)) return false;
+
+            plan.Steps.Clear();
+            plan.Steps.AddRange(ordered);
+            for (var i = 0; i < plan.Steps.Count; i++)
+                plan.Steps[i].Index = i + 1;
+            plan.AddLogEntry("Steps reordered based on file dependencies: " +
+                             string.Join(", ", plan.Steps.Select(s => $"{s.Index}. {s.Title}")));
+            return true;
+        }
+
         private void Visit(
             ImplementationStep step,
             Dictionary<ImplementationStep, List<ImplementationStep>> dependencies,

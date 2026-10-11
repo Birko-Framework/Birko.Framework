@@ -11,13 +11,14 @@ Birko.AI.Orchestration provides infrastructure for coordinating multiple AI agen
 | Type | Namespace | Description |
 |------|-----------|-------------|
 | `AgentTaskRecord` | `Models` | Persistent record of a task assigned to an agent |
-| `ImplementationPlan` | `Models` | High-level plan composed of ordered steps |
-| `ImplementationStep` | `Models` | Single step within an implementation plan |
+| `ImplementationPlan` | `Models` | Ordered steps + execution state: current step, per-worker assignment, log, metrics, lessons |
+| `ImplementationStep` | `Models` | One step: `Start` / `Complete` / `Fail` / `Skip`, `RetryOrFail`, metrics |
 | `TaskAssignment` | `Models` | Assignment of a task to a specific agent type |
 | `EscalationAlert` | `Models` | Alert for failed tasks or human intervention |
 | `ITaskDispatcher` | `Dispatch` | Interface for dispatching tasks to agents |
 | `DirectTaskDispatcher` | `Dispatch` | In-process task dispatcher implementation |
-| `StepDependencyAnalyzer` | `Services` | Dependency analysis for parallel step execution |
+| `StepDependencyAnalyzer` | `Services` | Parallel groups, topological order, `ValidateOrdering`, `Reorder` |
+| `StepValidationService` | `Validation` | Runs `IStepValidator`s: files created, files modified, `ExpectedContent` present |
 
 ## Dependencies
 
@@ -32,9 +33,21 @@ Birko.AI.Orchestration provides infrastructure for coordinating multiple AI agen
 ```csharp
 using Birko.AI.Orchestration.Dispatch;
 
-var dispatcher = new DirectTaskDispatcher(agentFactory, logger);
-await dispatcher.DispatchAsync(taskAssignment);
+var dispatcher = new DirectTaskDispatcher((assignment, ct) => RunAgentAsync(assignment, ct), logger);
+await dispatcher.DispatchTaskAsync(taskAssignment);
 ```
+
+```csharp
+using Birko.AI.Orchestration.Validation;
+
+step.Start();
+// ... the agent works ...
+var check = await new StepValidationService().ValidateStepAsync(step, workspacePath);
+if (check.Success) step.Complete();
+else if (step.RetryOrFail(string.Join("; ", check.AllIssues), "Validation", retryable: true)) { /* run it again */ }
+```
+
+Status enums have **pinned numeric values**, so they are safe to store as integers — see [CLAUDE.md](CLAUDE.md).
 
 ## License
 

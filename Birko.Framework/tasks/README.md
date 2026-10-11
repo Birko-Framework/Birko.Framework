@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10     | 27     | —                   |
-| todo         | —                  | —                  | 191         |
+| todo         | —                  | —                  | 190         |
 | in-progress  | 8  | 11  | 1   |
 | verify       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 214         |
+| done         | 1        | 23        | 215         |
 | cancelled    | 0   | 0   | 5    |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 37× P1 · 116× P2 · 44× P3.
+`todo` by priority: 36× P1 · 116× P2 · 44× P3.
 
 ## In progress now
 
@@ -435,7 +435,7 @@ _None_
   - [x] [TASK-493](EPIC-018-birko-web-core-runtime/TASK-493-apiclient-getheaders-and-patch.md) `ApiClient` had no generic request-header hook and no `patch()` (P1) · FEATURE-018
   - [x] [TASK-508](EPIC-018-birko-web-core-runtime/TASK-508-apiclient-postform-multipart-upload.md) `ApiClient` cannot send a multipart upload (P1) · FEATURE-018
   - [x] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P1)
-- **EPIC-019** Birko framework backports from DraCode — in-progress (3/28 tasks done)
+- **EPIC-019** Birko framework backports from DraCode — in-progress (8/29 tasks done)
   - STORY-058 Security / OAuth backports from DraCode — planned (0/6 done)
     - [ ] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
     - [ ] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)
@@ -448,9 +448,9 @@ _None_
     - [ ] [TASK-524](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-524-shell-oauth-sign-in-helpers.md) Birko.Web.Shell auth: OAuth redirect parsing, token expiry and scheduled refresh (P2)
     - [ ] [TASK-525](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-525-reorderable-tabs-and-persisted-split-sizes.md) b-tabs drag-and-drop reorder; b-split-panel size persistence; a layout serialize/restore hook (P3)
     - [ ] [TASK-526](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-526-layered-runtime-config-loader.md) Birko.Web.Core: layered runtime configuration (defaults < server endpoint < local overrides) (P3)
-  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — in-progress (5/12 done)
+  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — in-progress (6/12 done)
     - [x] [TASK-527](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-527-agent-loop-hooks.md) Agent loop: per-iteration and tool-call hooks, a readable system prompt, resume from a conversation (P1)
-    - [ ] [TASK-528](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-528-orchestration-plan-model-and-step-validators.md) Birko.AI.Orchestration: a plan model with behaviour, step validators, and a pinned enum encoding (P1)
+    - [x] [TASK-528](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-528-orchestration-plan-model-and-step-validators.md) Birko.AI.Orchestration: a plan model with behaviour, step validators, and a pinned enum encoding (P1)
     - [x] [TASK-529](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-529-sql-event-store.md) Ship a SQL IAsyncEventStore (P1)
     - [ ] [TASK-530](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-530-resilience-stores.md) Birko.AI.Resilience: store implementations for circuit-breaker state and usage (P2)
     - [ ] [TASK-531](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-531-classified-llm-failures.md) LlmResponse carries a classified failure (status, transient, retry-after), not just a string (P2)

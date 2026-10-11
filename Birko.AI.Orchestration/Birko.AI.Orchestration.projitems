@@ -12,10 +12,14 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\AgentTaskStatus.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\AgentTaskRecord.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\ImplementationPlan.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ExecutionMetrics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\TaskAssignment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\EscalationAlert.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dispatch\ITaskDispatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dispatch\DirectTaskDispatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\StepDependencyAnalyzer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Validation\IStepValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Validation\StepValidators.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Validation\StepValidationService.cs" />
   </ItemGroup>
 </Project>

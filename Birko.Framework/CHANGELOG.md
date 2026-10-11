@@ -4,6 +4,38 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — BREAKING: orchestration plans gain behaviour, step validators, and pinned enum values
+
+[[TASK-528]]. `Birko.AI.Orchestration`'s `ImplementationPlan` / `ImplementationStep` were a data bag, and
+DraCode.KoboldLair kept a 735-line fork with the behaviour. Backported, minus the fork's defects:
+
+- **Step lifecycle and retry.** `Start` / `Complete` / `Fail` / `Skip`, `Metrics`, and `RetryOrFail(error, category,
+  retryable)`: back to `Pending` while `RetryCount < MaxRetries`, else a final failure saying the retries ran out.
+- **Plan execution state.** `CurrentStepIndex` / `AdvanceToNextStep`, `MarkInProgress` / `MarkCompleted` /
+  `MarkFailed`, `ExecutionLog`, `GetAggregatedMetrics`, `CaptureLessonsLearned`, per-worker `AssignSteps` /
+  `GetAssignedSteps`. **A worker missing from a split plan gets no steps** (DraCode's gave it every step, so it
+  re-ran every other worker's).
+- **Ordering lives on the analyzer.** `ValidateOrdering(plan)` flags only a step modifying a file a later step
+  creates (DraCode's flagged the correct order too, through the symmetric `HasDependency`); `Reorder(plan)` refuses a
+  started plan or one with assignments, which are positions in `Steps`.
+- **`ExpectedContent` is finally checked.** `Validation/`: `FileCreationValidator`, `FileModificationValidator`,
+  `ContentExpectationValidator`, `StepValidationService`. The result type is `StepValidationResult`, so it does not
+  shadow `Birko.Validation.ValidationResult`. A step that declares expected content but names no files, or whose file
+  cannot be read, **fails** (DraCode's passed it), and a throwing validator is a failed check.
+- `EscalationAlert.WorkerId`.
+
+Proof: 39 tests. Mutations: a missing worker given every step → 1 red; the symmetric ordering check → 3; expected
+content without files passing → 1; DraCode's old step ordering → 2; no attempt count → 1.
+
+**BREAKING — enum values renumbered and pinned.** `PlanStatus` gains `Ready` (1), so `InProgress` / `Completed` /
+`Failed` move to 2 / 3 / 4, and `StepStatus.Skipped` / `Failed` swap to 3 / 4. Those are DraCode's values, so its
+stored plans adopt without a data migration. No consumer stored Birko's: DraCode uses its fork, and Symbio and the
+Sandbox import the project but reference none of its types. **Migration:** anyone who persisted these as integers
+before today maps `PlanStatus` 1→2, 2→3, 3→4 and swaps `StepStatus` 3↔4. String-serialized values are unaffected.
+`AgentTaskStatus` and the escalation enums keep their values; they are only made explicit. The full DraCode → Birko
+mapping is in `Birko.AI.Orchestration/CLAUDE.md`. DraCode's `QueueTaskDispatcher` stays in DraCode: it would give
+this zero-dependency project a `Birko.MessageQueue` edge for one 52-line class.
+
 ## 2026-10-10 — A SQL event store ships: `Birko.Data.EventSourcing.SQL`
 
 [[TASK-529]]. `IAsyncEventStore` had no implementation, so consumers wrote their own (DraCode's SQLite-only one:

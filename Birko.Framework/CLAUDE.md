@@ -239,6 +239,14 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### BREAKING: orchestration plans gain behaviour; status enums pinned (2026-10-11)
+
+[[TASK-528]]. `ImplementationPlan` / `ImplementationStep` gain lifecycle, `RetryOrFail`, the current step,
+per-worker assignment and metrics. `StepDependencyAnalyzer` gains `ValidateOrdering` / `Reorder`, and the new
+`Validation/` validators check `ExpectedContent`. **Status enums are renumbered to DraCode's values and pinned**
+(`StepStatus.Skipped` 3 / `Failed` 4; `PlanStatus` gains `Ready` 1): never renumber them. The migration and the
+DraCode mapping are in [CHANGELOG.md](CHANGELOG.md) and `Birko.AI.Orchestration/CLAUDE.md`.
+
 ### A SQL event store ships (2026-10-10)
 
 [[TASK-529]]. `Birko.Data.EventSourcing.SQL`: `SqlEventStore<DB>` on any provider — UNIQUE (aggregate, version) as the
