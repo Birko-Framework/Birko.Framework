@@ -1891,7 +1891,7 @@ IsNullOrEmpty matches no case in the method-name switch, so Type stays Equal; th
 
 `../Birko.Data.SQL/SQL/Conditions/RuleConditionConverter.cs:59`  ·  _restates a first-pass finding_
 
-ConvertGroup marks children via SetOr, then wraps them with Condition.AndSubCondition, which passes isOr: false. AppendSubConditionsTo (AbstractConnectorBase:280) picks its separator from the PARENT's IsOr and explicitly ignores the children's flags, so the group renders `(a AND b)` — strictly fewer rows than the rule specified. Child marking only takes effect in a top-level condition list. Condition.OrSubCondition exists and is the correct wrapper.
+ConvertGroup marks children via SetOr, then wraps them with Condition.AndSubCondition, which passes isOr: false. AppendSubConditionsTo (AbstractConnectorBase:280) picks its separator from the PARENT's IsOr and explicitly ignores the children's flags, so the group renders `(a AND b)` — strictly fewer rows than the rule specified. Child marking only takes effect in a top-level condition list. Condition.OrSubCondition exists and is the correct wrapper. **Fixed by [[TASK-559]] (2026-10-11)** — measured on SQLite first: `A OR B` returned the intersection. An OR group is now `OrSubCondition`, a top-level OR group is wrapped in one AND term, `SetOr` removed. OR fix reverted alone: 5 tests red.
 
 #### SH-M129 — A Between rule keeps only its lower bound (RuleConditionConverter)
 
@@ -4607,7 +4607,7 @@ IsEmpty enumerates once and BuildInClause again; Condition.Values is a non-gener
 
 `../Birko.Data.SQL/SQL/Conditions/RuleConditionConverter.cs:116`
 
-The only call site passes `isOr: false` (line 24), so `if (isOr) return new Condition(..., true)` never executes and OR marking is left entirely to SetOr — whose result is then discarded by the AndSubCondition wrapper (the OR-renders-as-AND defect). The dead parameter makes the file read as if leaves can carry their own OR flag, obscuring where the actual bug is.
+The only call site passes `isOr: false` (line 24), so `if (isOr) return new Condition(..., true)` never executes and OR marking is left entirely to SetOr — whose result is then discarded by the AndSubCondition wrapper (the OR-renders-as-AND defect). The dead parameter makes the file read as if leaves can carry their own OR flag, obscuring where the actual bug is. **Fixed by [[TASK-559]] (2026-10-11)** — the parameter and its branch removed with `SetOr` (rule 53).
 
 #### SH-L142 — ParseExpression stores a possibly-null constant in a non-nullable parameter dictionary and can throw on a duplicate key
 

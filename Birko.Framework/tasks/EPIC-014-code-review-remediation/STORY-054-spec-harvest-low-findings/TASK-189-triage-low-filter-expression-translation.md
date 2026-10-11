@@ -30,6 +30,9 @@ that fall in the `filter-expression-translation` area.
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md) § Low severity →
 `### area: filter-expression-translation`, lines 3818–3897.
 
+**Closed outside this task:** `SH-L141` (`ConvertLeaf`'s dead `isOr` parameter) — removed by [[TASK-559]]
+(2026-10-11) together with `SetOr`. Do not re-verify it here.
+
 **The contract under review** is specced in [`docs/specs/filter-expression-translation.md`](../../../docs/specs/filter-expression-translation.md), harvested from
 15 source globs — `../Birko.Data.Core/Expressions/*.cs`, `../Birko.Data.Core/Filters/*.cs`, `../Birko.Data.SQL/SQL/DataBase.cs`, and 12 more. Every one of
 them points into a **sibling repo**, so a fix here normally lands as three commits in three repos (production,

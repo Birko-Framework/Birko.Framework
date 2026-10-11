@@ -219,14 +219,16 @@ public class RuleFieldResolutionTests
     [Fact]
     public void An_or_group_of_valid_fields_still_resolves_every_leaf()
     {
-        // SetOr rebuilds each Condition from its Name; this pins that the resolved name survives that
-        // rebuild rather than being replaced by the raw field.
+        // Pins that every leaf of an OR group carries the resolved name, not the raw field. (It used to guard SetOr's
+        // rebuild of each leaf; TASK-559 builds an OR group as an OR sub-condition instead, and a top-level OR group
+        // is wrapped in one AND term so its IsOr cannot join it to a sibling — hence the extra level.)
         var group = RuleGroup.Or(
             new Rule("Label", ComparisonOperator.Equal, "a"),
             new Rule("Rank", ComparisonOperator.Equal, 1));
 
-        var children = RuleConditionConverter.ToConditions<RuleRow>(group)
-            .Single().SubConditions!.ToList();
+        var orGroup = RuleConditionConverter.ToConditions<RuleRow>(group).Single().SubConditions!.Single();
+        orGroup.IsOr.Should().BeTrue();
+        var children = orGroup.SubConditions!.ToList();
 
         children.Select(c => c.Name).Should().Equal("RuleRows.label_col", "RuleRows.Rank");
     }
@@ -239,9 +241,16 @@ public class RuleFieldResolutionTests
         // Disabled rules are dropped before conversion, so the guard never sees them. That is correct —
         // nothing reaches CommandText — but it is worth pinning, because "the payload did not throw" and
         // "the payload was emitted" would otherwise look the same from the outside.
+        // FIELD-026 (TASK-559): this asserted an EMPTY result, which also pinned the defect — an empty condition
+        // list is no WHERE, every row. A disabled rule now converts to the always-false term; the payload is still
+        // never emitted.
         var rule = new Rule("Rank OR 1=1 --", ComparisonOperator.Equal, 999) { IsEnabled = false };
 
-        RuleConditionConverter.ToConditions<RuleRow>(rule).Should().BeEmpty();
+        var conditions = RuleConditionConverter.ToConditions<RuleRow>(rule).ToList();
+
+        conditions.Should().ContainSingle().Which.Type.Should().Be(ConditionType.In);
+        conditions[0].Values!.Cast<object>().Should().BeEmpty("match-none, not match-all");
+        conditions.Should().NotContain(c => c.Name != null && c.Name.Contains("OR"));
     }
 
     [Fact]

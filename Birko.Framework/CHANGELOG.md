@@ -4,6 +4,22 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — The SQL rule converter selects what the other rule engines select
+
+[[TASK-559]] (FIELD-026, SH-M128, SH-L141). `RuleConditionConverter` turned a disabled rule, an empty or all-disabled
+group and a disabled `RuleSet` into **no condition** — no `WHERE`, every row — where `RuleSpecification` and
+`RuleEvaluator` match nothing; nested in an AND it was dropped, so `A AND <empty>` selected A. And **every OR group
+rendered as AND** (`AndSubCondition` with `IsOr` on the children, which the renderer ignores): `A OR B` returned the
+intersection, measured on SQLite. Now: match-nothing is an always-false term (`1 = 0`), negation is pushed to the
+leaves by De Morgan (as TASK-320 did for `RuleSpecification`) so it cannot invert a match-nothing, and an OR group is
+an `OrSubCondition`.
+
+**Observable — no measured caller outside the framework's tests.** An OR group now selects the union; a disabled or
+empty tree selects nothing, and a `Delete` fed one deletes nothing instead of throwing `WholeTableWriteException`; a
+negated group renders as negated leaves (`NOT a OR NOT b`) rather than `NOT (a AND b)` — same rows.
+
+---
+
 ## 2026-10-11 — A log model copies and loads its timestamps through any reference; a copy is never its source
 
 [[TASK-323]] (SH-M422–SH-M424). `AbstractLogModel.CopyTo` / `LoadFrom` were overloads, not overrides, so through an

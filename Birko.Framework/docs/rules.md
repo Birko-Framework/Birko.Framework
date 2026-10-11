@@ -254,6 +254,9 @@ There are two conversion paths from rules:
 | `RuleExpressionConverter.ToExpression<T>()` | `Expression<Func<T, bool>>` | Any store (SQL, ES, MongoDB, JSON) |
 | `RuleConditionConverter.ToConditions<T>()` | SQL `Condition` tree | SQL-specific (direct WHERE clause) |
 
+The SQL converter selects the same rows as `RuleSpecification` / `RuleEvaluator`: a disabled rule, an empty
+group or a disabled `RuleSet` **matches nothing** (an always-false `1 = 0`), never every row.
+
 The expression converter is the universal path — use it unless you need SQL-specific optimizations.
 
 > **Pass the entity type** — `ToConditions<T>(rule)` or `ToConditions(typeof(T), rule)`. A rule's `Field`

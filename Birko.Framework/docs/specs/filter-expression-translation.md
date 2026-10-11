@@ -1255,19 +1255,41 @@ other method call SHALL be evaluated and bound as a constant.
 
 ### Requirement: Rules-to-SQL condition conversion
 
-`RuleConditionConverter` SHALL skip any rule, rule group or rule set whose `IsEnabled` is false; SHALL
-convert a leaf `Rule` into a `Condition` whose name is the **resolved column** for the rule's `Field`
+`RuleConditionConverter` SHALL select the same rows as `RuleSpecification` and `RuleEvaluator` for the same
+rule tree. It SHALL treat a disabled rule, an empty or all-disabled group and a disabled `RuleSet` as
+**matching nothing** — an always-false term (an `IN` over no values, rendered `1 = 0`), never an empty
+sequence, because an empty condition list is no `WHERE` and selects every row. It SHALL skip disabled members
+of an enabled group or set, so `A AND <match-nothing>` matches nothing and `A OR <match-nothing>` is `A`. It
+SHALL convert a leaf `Rule` into a `Condition` whose name is the **resolved column** for the rule's `Field`
 (never the `Field` string itself — see the rule-field resolution requirement below); SHALL map `NotEqual`,
-`NotContains`, `NotIn` and `IsNotNull` to their positive `ConditionType` with `IsNot` inverted relative
-to the rule's own `IsNegated`; SHALL wrap a group's children in a sub-condition; and SHALL return an
-empty sequence for a group with no rules or no enabled rules.
+`NotContains`, `NotIn` and `IsNotNull` to their positive `ConditionType` with `IsNot` inverted relative to
+the rule's own `IsNegated`; SHALL push a group's negation down to the leaves by De Morgan rather than
+wrapping the group in `NOT`, so a match-nothing member is never inverted into match-all; and SHALL build an
+OR group as an OR sub-condition (`Condition.OrSubCondition`) and an AND group as an AND one (FIELD-026 and
+`SH-M128`, fixed by TASK-559 — a disabled tree used to convert to an empty sequence, and every OR group
+rendered as AND).
 
-#### Scenario: Disabled rule contributes nothing
+#### Scenario: Disabled rule matches nothing
 
 - **Given** a `Rule` with `IsEnabled = false`
 - **When** `ToConditions(rule)` is called
-- **Then** an empty sequence is returned, and its `Field` is never checked — a disabled rule carrying a
-  SQL payload is dropped before conversion rather than refused
+- **Then** a single always-false condition is returned and a read through it returns no rows; its `Field` is
+  never checked or emitted, so a disabled rule carrying a SQL payload never reaches the statement
+
+#### Scenario: A delete through a disabled rule deletes nothing
+
+- **Given** the conditions converted from a disabled rule
+- **When** they are passed to the connector's `Delete`
+- **Then** no row is deleted and no `WholeTableWriteException` is raised — the clause is a non-empty
+  always-false `WHERE`. (Before TASK-559 the empty list reached the whole-table guard, which refused it.)
+
+#### Scenario: The SQL converter agrees with the in-memory engines
+
+- **Given** any of: a disabled leaf, an empty group, an all-disabled OR group, a negated empty group,
+  `A AND <empty>`, `A OR <empty>`, `NOT (A OR <empty>)`, `NOT ((A OR <empty>) AND B)`, `NOT (A AND <empty>)`,
+  `NOT (A OR B)`, `A OR B`, `A OR (B AND C)`, `(A OR B) AND (B OR C)`
+- **When** the converted conditions are run against SQLite and the same tree through `RuleSpecification`
+- **Then** both select the same rows (`RuleConverterMatchNoneTests`)
 
 ### Requirement: Rule fields resolve against table metadata before reaching the WHERE clause
 
@@ -1365,17 +1387,21 @@ first `LoadView`, so that resolution at the caller does not depend on what has a
 - **When** `MapOperator` runs
 - **Then** the values are `null`, matching `NullConditionStrategy` which binds nothing
 
-#### Scenario: Empty group is dropped
+#### Scenario: Empty group matches nothing
 
 - **Given** a `RuleGroup` whose `Rules` collection is empty, or all of whose rules are disabled
-- **When** `ConvertGroup` runs
-- **Then** an empty sequence is returned rather than an empty sub-condition
+- **When** it is converted at the root
+- **Then** the always-false condition is returned; nested, it makes an enclosing AND match nothing and is
+  dropped from an enclosing OR
 
-#### Scenario: An OR rule group is wrapped in an AND sub-condition
+#### Scenario: An OR rule group is an OR sub-condition
 
 - **Given** a `RuleGroup` with `Logic = LogicOperator.Or` and two enabled leaf rules
-- **When** `ConvertGroup` calls `SetOr(children)` — which sets `IsOr = true` on every child after the first — and passes the result to `Condition.AndSubCondition`, whose wrapper is constructed with `isOr: false`
-- **Then** the wrapper's `IsOr` is `false`, and because `AppendSubConditionsTo` selects its separator from the PARENT's flag and ignores the children's, the group renders as `(a AND b)`
+- **When** it is converted
+- **Then** it becomes `Condition.OrSubCondition`, whose `IsOr` is what `AppendSubConditionsTo` joins the children
+  with, so it renders `(a OR b)`; at the root or as a member of a `RuleSet` it is wrapped in one AND term, so its
+  `IsOr` never joins it to a sibling in the flat chain (it used to be `AndSubCondition` with `IsOr` set on the
+  children, which the renderer ignores — the group rendered `(a AND b)`, `SH-M128`)
 
 #### Scenario: A Between rule keeps only its lower bound
 
@@ -1383,11 +1409,12 @@ first `LoadView`, so that resolution at the caller does not depend on what has a
 - **When** `MapOperator` runs
 - **Then** it returns `(ConditionType.GreatherAndEqual, [rule.Value])` — a single `>=` comparison with no upper bound
 
-#### Scenario: Negated group sets IsNot on the wrapper
+#### Scenario: Negated group is pushed down to its leaves
 
 - **Given** an AND `RuleGroup` with `IsNegated = true` and two enabled children
-- **When** `ConvertGroup` runs
-- **Then** a single sub-condition with `IsNot = true` wrapping both children is returned, which `AppendSubConditionsTo` renders as `NOT (a AND b)`
+- **When** it is converted
+- **Then** an OR sub-condition of the two leaves with each leaf's `IsNot` inverted is returned —
+  `NOT a OR NOT b` — rather than a `NOT` wrapper, so a match-nothing member stays match-nothing
 
 ### Requirement: ElasticSearch filter translation guard
 

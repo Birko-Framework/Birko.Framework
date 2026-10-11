@@ -160,20 +160,32 @@ public class RuleConditionConverterTests
 
     // ── Disabled rules ──
 
+    // FIELD-026 (TASK-559): these two pinned "returns empty" — and an empty condition list is no WHERE, every row.
+    // Inverted, not deleted: a disabled rule matches nothing, as RuleSpecification / RuleEvaluator answer.
+
     [Fact]
-    public void DisabledRule_ReturnsEmpty()
+    public void DisabledRule_ReturnsMatchNone()
     {
         var rule = new Rule("A", ComparisonOperator.Equal, 1) { IsEnabled = false };
-        RuleConditionConverter.ToConditions(rule).Should().BeEmpty();
+        var conditions = RuleConditionConverter.ToConditions(rule).ToList();
+
+        conditions.Should().ContainSingle();
+        conditions[0].Type.Should().Be(ConditionType.In);
+        conditions[0].IsNot.Should().BeFalse();
+        conditions[0].Values!.Cast<object>().Should().BeEmpty("an empty IN renders as the always-false 1 = 0");
     }
 
     [Fact]
-    public void DisabledRuleSet_ReturnsEmpty()
+    public void DisabledRuleSet_ReturnsMatchNone()
     {
         var ruleSet = new RuleSet("Test",
             new Rule("A", ComparisonOperator.Equal, 1)
         ) { IsEnabled = false };
-        RuleConditionConverter.ToConditions(ruleSet).Should().BeEmpty();
+        var conditions = RuleConditionConverter.ToConditions(ruleSet).ToList();
+
+        conditions.Should().ContainSingle();
+        conditions[0].Type.Should().Be(ConditionType.In);
+        conditions[0].Values!.Cast<object>().Should().BeEmpty();
     }
 
     // ── RuleSet ──
