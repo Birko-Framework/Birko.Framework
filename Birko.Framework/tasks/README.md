@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-09 13:49. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-11. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -10,23 +10,28 @@ which this regeneration never touches._
 
 ## Counts
 
-| Status       | Epics              | Stories            | Tasks               |
-|--------------|--------------------|--------------------|---------------------|
-| planned      | 10     | 27     | —                   |
-| todo         | —                  | —                  | 186         |
-| in-progress  | 8  | 11  | 1   |
-| verify       | —                  | —                  | 0       |
-| blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 226         |
-| cancelled    | 0   | 0   | 5    |
+| Status       | Epics | Stories | Tasks |
+|--------------|-------|---------|-------|
+| planned      | 10    | 27      | —     |
+| todo         | —     | —       | 183   |
+| in-progress  | 8     | 11      | 1     |
+| verify       | —     | —       | 2     |
+| blocked      | —     | —       | 1     |
+| done         | 1     | 23      | 232   |
+| cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 29× P1 · 118× P2 · 45× P3.
+`todo` by priority: 22× P1 · 117× P2 · 44× P3.
 
 ## In progress now
 
-_None_
+- [ ] [TASK-555](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-555-update-of-a-missing-entity-reports-success.md) `Update` of an entity that is not stored reports success on every backend, and `Save` hands back its Guid (P2) · FEATURE-014
+
+## Awaiting verification
+
+- [ ] [TASK-554](EPIC-001-web-components-ui-polish/TASK-554-validation-refusals-never-reach-the-screen.md) A validator's refusal never reaches the screen — problem+json was read as text, and its entries printed as [object Object] (P1)
+- [ ] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
 
 ## Blocked
 
@@ -34,7 +39,7 @@ _None_
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (20/27 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (25/35 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -52,6 +57,10 @@ _None_
   - [x] [TASK-549](EPIC-001-web-components-ui-polish/TASK-549-b-carousel.md) b-carousel — slotted, server-rendered slides with arrows, dots, swipe and an autoplay that yields (P1)
   - [x] [TASK-550](EPIC-001-web-components-ui-polish/TASK-550-b-gallery.md) b-gallery — product image gallery with thumbnails, swipe and an accessible zoom (P1)
   - [x] [TASK-551](EPIC-001-web-components-ui-polish/TASK-551-i18n-t-interpolates-one-placeholder-at-a-time.md) I18n.t() fills placeholders one after another, so a value holding "{other}" is rewritten by the next one (P3)
+  - [ ] [TASK-552](EPIC-001-web-components-ui-polish/TASK-552-b-editable-table-shows-stale-typed-values-after-setdata.md) b-editable-table shows stale typed values after setData or a row removal (P2)
+  - [ ] [TASK-554](EPIC-001-web-components-ui-polish/TASK-554-validation-refusals-never-reach-the-screen.md) A validator's refusal never reaches the screen — problem+json was read as text, and its entries printed as [object Object] (P1)
+  - [x] [TASK-562](EPIC-001-web-components-ui-polish/TASK-562-muted-text-and-dark-primary-below-aa.md) `--b-text-muted` and the dark primary button fall below WCAG AA in light and dark (P2)
+  - [ ] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
@@ -84,9 +93,10 @@ _None_
     - [ ] [TASK-007](EPIC-004-storage-cloud-providers/STORY-005-google-cloud-storage/TASK-007-birko-storage-google.md) Implement Birko.Storage.Google (P2) · FEATURE-004
   - STORY-006 MinIO (S3-compatible) — planned (0/1 done)
     - [ ] [TASK-008](EPIC-004-storage-cloud-providers/STORY-006-minio/TASK-008-birko-storage-minio.md) Implement Birko.Storage.Minio (P2) · FEATURE-004
-- **EPIC-005** Birko.Messaging — Provider expansion — planned (0/7 tasks done)
+- **EPIC-005** Birko.Messaging — Provider expansion — planned (1/8 tasks done)
   - [ ] [TASK-471](EPIC-005-messaging-provider-expansion/TASK-471-birko-messaging-brevo.md) Implement Birko.Messaging.Brevo (P2) · FEATURE-005
   - [ ] [TASK-472](EPIC-005-messaging-provider-expansion/TASK-472-birko-messaging-mailjet.md) Implement Birko.Messaging.Mailjet (P2) · FEATURE-005
+  - [x] [TASK-553](EPIC-005-messaging-provider-expansion/TASK-553-string-template-engine-if-sections.md) StringTemplateEngine: optional `{{#if}}` sections (P2)
   - STORY-007 Email providers (SendGrid + Mailgun) — planned (0/2 done)
     - [ ] [TASK-009](EPIC-005-messaging-provider-expansion/STORY-007-email-providers/TASK-009-birko-messaging-sendgrid.md) Implement Birko.Messaging.SendGrid (P1) · FEATURE-005
     - [ ] [TASK-010](EPIC-005-messaging-provider-expansion/STORY-007-email-providers/TASK-010-birko-messaging-mailgun.md) Implement Birko.Messaging.Mailgun (P2) · FEATURE-005
@@ -143,7 +153,7 @@ _None_
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (132/220 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (133/220 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [ ] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
