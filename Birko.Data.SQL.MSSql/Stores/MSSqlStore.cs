@@ -1,6 +1,7 @@
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Stores;
 using System;
+using Birko.Data.Stores;
 using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
@@ -64,11 +65,13 @@ namespace Birko.Data.SQL.MSSql.Stores
                 return;
 
             var items = data.ToList();
-            foreach (var item in items)
+            for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
             {
+                var item = items[itemIndex];
                 // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
                 item.EnsureGuid();
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
+                items[itemIndex] = item; // the list is what gets persisted
             }
 
             // The store-level door has to publish the boundary too, or the connector fix is
@@ -85,12 +88,10 @@ namespace Birko.Data.SQL.MSSql.Stores
                 return;
 
             var items = data.ToList();
-            if (storeDelegate != null)
+            // TASK-557: the list is what gets persisted, so it takes what the delegate returns.
+            for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
             {
-                foreach (var item in items)
-                {
-                    storeDelegate.Invoke(item);
-                }
+                items[itemIndex] = StoreDelegates.Apply(storeDelegate, items[itemIndex]);
             }
 
             using var _tx = EnterTransactionScope();

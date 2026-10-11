@@ -1,6 +1,7 @@
 using InfluxDB.Client.Api.Domain;
 using InfluxDB.Client.Writes;
 using System;
+using Birko.Data.Stores;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -222,7 +223,7 @@ namespace Birko.Data.InfluxDB.Stores
             }
 
             data.EnsureGuid();
-            processDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(processDelegate, data);
 
             try
             {
@@ -255,7 +256,7 @@ namespace Birko.Data.InfluxDB.Stores
                 return;
             }
 
-            processDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(processDelegate, data);
 
             try
             {
@@ -471,10 +472,12 @@ namespace Birko.Data.InfluxDB.Stores
             }
 
             var points = new List<PointData>();
-            foreach (var item in itemsToCreate)
+            for (var itemIndex = 0; itemIndex < itemsToCreate.Count; itemIndex++)
             {
+                var item = itemsToCreate[itemIndex];
                 item.EnsureGuid();
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
+                itemsToCreate[itemIndex] = item; // the list is what gets persisted
                 points.Add(ModelToPoint(item));
             }
 
@@ -510,9 +513,11 @@ namespace Birko.Data.InfluxDB.Stores
             }
 
             var points = new List<PointData>();
-            foreach (var item in itemsToUpdate)
+            for (var itemIndex = 0; itemIndex < itemsToUpdate.Count; itemIndex++)
             {
-                storeDelegate?.Invoke(item);
+                var item = itemsToUpdate[itemIndex];
+                item = StoreDelegates.Apply(storeDelegate, item);
+                itemsToUpdate[itemIndex] = item; // the list is what gets persisted
                 points.Add(ModelToPoint(item));
             }
 

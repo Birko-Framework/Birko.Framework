@@ -178,7 +178,7 @@ public class AsyncRavenDBStore<T>
         }
 
         data.EnsureGuid();
-        processDelegate?.Invoke(data);
+        data = StoreDelegates.Apply(processDelegate, data);
 
         if (TransactionContext != null)
         {
@@ -256,7 +256,7 @@ public class AsyncRavenDBStore<T>
             throw new EntityNotFoundException(typeof(T), data.Guid);
         }
 
-        processDelegate?.Invoke(data);
+        data = StoreDelegates.Apply(processDelegate, data);
 
         if (TransactionContext != null)
         {
@@ -345,7 +345,7 @@ public class AsyncRavenDBStore<T>
             return Guid.Empty;
         }
 
-        processDelegate?.Invoke(data);
+        data = StoreDelegates.Apply(processDelegate, data);
 
         data.EnsureGuid();
 
@@ -445,12 +445,13 @@ public class AsyncRavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            foreach (var item in data)
+            foreach (var itemSource in data)
             {
+                var item = itemSource;
                 if (item == null) continue;
                 // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
                 item.EnsureGuid();
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
                 await TransactionContext.StoreAsync(item, IdOf(item.Guid.Value), ct);
             }
             return;
@@ -460,14 +461,15 @@ public class AsyncRavenDBStore<T>
         // accepted but never observed).
         using var bulkInsert = _documentStore.BulkInsert(token: ct);
 
-        foreach (var item in data)
+        foreach (var itemSource in data)
         {
+            var item = itemSource;
             if (item == null) continue;
             ct.ThrowIfCancellationRequested();
 
             // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
             item.EnsureGuid();
-            storeDelegate?.Invoke(item);
+            item = StoreDelegates.Apply(storeDelegate, item);
 
             await bulkInsert.StoreAsync(item, IdOf(item.Guid.Value));
         }
@@ -486,8 +488,9 @@ public class AsyncRavenDBStore<T>
         var session = TransactionContext ?? _documentStore.OpenAsyncSession();
         try
         {
-            foreach (var item in data)
+            foreach (var itemSource in data)
             {
+                var item = itemSource;
                 if (item == null)
                 {
                     continue;
@@ -498,7 +501,7 @@ public class AsyncRavenDBStore<T>
                     continue;
                 }
 
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
 
                 var existing = await session.LoadAsync<T>(IdOf(item.Guid.Value), ct);
                 if (existing == null)

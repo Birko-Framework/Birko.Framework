@@ -106,7 +106,7 @@ namespace Birko.Data.ElasticSearch.Stores
             if (Connector == null || data == null) return Guid.Empty;
 
             data.EnsureGuid();
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
 
             var indexName = GetIndexName();
             var response = await Connector.CreateAsync(data, i => i.Id(data.Guid).Index(indexName), ct);
@@ -156,7 +156,7 @@ namespace Birko.Data.ElasticSearch.Stores
                 throw new EntityNotFoundException(typeof(T), data.Guid);
             }
 
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
 
             var indexName = GetIndexName();
             var response = await Connector.UpdateAsync<T, T>(data.Guid, (i) => i.Index(indexName).Doc(data), ct);
@@ -220,8 +220,7 @@ namespace Birko.Data.ElasticSearch.Stores
             var itemsToCreate = data.Where(x => x != null).Select(x =>
             {
                 x.EnsureGuid();
-                storeDelegate?.Invoke(x);
-                return x;
+                return StoreDelegates.Apply(storeDelegate, x);
             });
 
             await BulkAsync(itemsToCreate, null, null, ct);
@@ -234,8 +233,7 @@ namespace Birko.Data.ElasticSearch.Stores
 
             var itemsToUpdate = data.Where(x => x != null && x.Guid != null && x.Guid != Guid.Empty).Select(x =>
             {
-                storeDelegate?.Invoke(x);
-                return x;
+                return StoreDelegates.Apply(storeDelegate, x);
             });
 
             await BulkAsync(null, itemsToUpdate, null, ct);

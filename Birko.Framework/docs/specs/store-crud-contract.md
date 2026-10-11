@@ -344,23 +344,26 @@ described what an existing, correct member already did.
   and the storage is provisioned before the operation. Before TASK-163 the flag stayed `true` and the
   operation ran against torn-down storage (SH-M307)
 
-### Requirement: The store data delegate can only influence a write by mutating the entity in place
+### Requirement: A store persists what the store data delegate returns
 
-The system SHALL declare `StoreDataDelegate<T>(T data)` as returning `T`, and SHALL discard that return value
-at every invocation site in this area — `storeDelegate?.Invoke(data)` / `processDelegate?.Invoke(data)` —
-persisting the original `data` reference instead.
+The system SHALL declare `StoreDataDelegate<T>(T data)` as returning `T` and SHALL, at every invocation site on every
+provider and decorator, persist what the delegate returns through the one helper `StoreDelegates.Apply` — the original
+entity when the delegate returns `null`, and a returned replacement with no Guid of its own inherits the original's
+(identity is assigned and checked before the delegate runs). On a bulk path whose collection is what gets written, the
+collection takes the replacement. (SH-M315, fixed by TASK-557 — all ~110 call sites used to discard the return and
+persist the original, so a delegate in the functional style was silently ignored.)
 
 #### Scenario: Delegate stamps a field
 
-- **Given** a delegate `d => { d.Guid ??= Guid.NewGuid(); return d; }`
-- **When** `Create(entity, delegate)` reaches `AbstractInMemoryStore.CreateCore`
-- **Then** the mutation is visible, because the same `entity` reference is the one written into `_items`
+- **Given** a delegate `d => { d.Name = "x"; return d; }`
+- **When** `Create(entity, delegate)` runs on any provider
+- **Then** the mutation is stored (contract pin `Contract_A_delegate_that_mutates_in_place_still_works`)
 
 #### Scenario: Delegate returns a different instance
 
 - **Given** a delegate that builds and returns a new, modified copy of the entity
-- **When** `Create(entity, delegate)` runs
-- **Then** the returned copy is thrown away and the unmodified `entity` is stored
+- **When** `Create`, `Update`, bulk `Create` or bulk `Update` runs, sync or async, on any provider
+- **Then** the returned copy is what is stored (`DelegateContract`, run on every provider — it used to be thrown away)
 
 #### Scenario: Delegate parameter name differs between sync and async
 
@@ -382,6 +385,16 @@ is created in its field initializer), and lose all data when the instance is dis
 - **Given** a test using `InMemoryStore<Invoice>` as a stand-in for a SQL store
 - **When** it needs to verify what was persisted
 - **Then** it reads `store.Items`, a read-only view over the live dictionary
+
+#### Scenario: The store keeps copies, like a real backend
+
+- **Given** an `InMemoryStore<T>` with `SnapshotEntities` at its default `true`
+- **When** an entity is created and the caller then mutates its own object, or mutates an object a read returned
+- **Then** a fresh read still returns the stored state — the store keeps and hands out detached copies (a JSON
+  round-trip, overridable through `Snapshot`), as every serializing backend does. Only `Update` changes stored state
+  (SH-M311, fixed by TASK-557 — it used to store and return the caller's live reference, so a missing `Update` passed
+  on the canonical test double). `SnapshotEntities = false` restores shared references for a model that cannot
+  round-trip.
 
 #### Scenario: No initialization work is required
 

@@ -41,9 +41,11 @@ namespace Birko.Data.EventSourcing.Stores
             var items = data.ToList();
             var events = new List<IEvent>();
 
-            foreach (var item in items)
+            for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
             {
-                storeDelegate?.Invoke(item);
+                var item = items[itemIndex];
+                item = StoreDelegates.Apply(storeDelegate, item);
+                items[itemIndex] = item; // the list is what gets persisted
 
                 // Assign the Guid up front so the event AggregateId, version lookup, and inner-store
                 // row all key off the SAME id (CR-C06); the throwaway Guid.NewGuid() was never written
@@ -99,11 +101,13 @@ namespace Birko.Data.EventSourcing.Stores
             var items = data.ToList();
             var events = new List<IEvent>();
 
-            foreach (var item in items)
+            for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
             {
+                var item = items[itemIndex];
                 if (item?.Guid == null) continue;
 
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
+                items[itemIndex] = item; // the list is what gets persisted
 
                 var currentVersion = _eventStore.GetVersion(item.Guid.Value);
                 var newVersion = currentVersion + 1;

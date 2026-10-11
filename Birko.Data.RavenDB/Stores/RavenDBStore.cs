@@ -171,7 +171,7 @@ public class RavenDBStore<T>
         if (_documentStore == null || data == null) return Guid.Empty;
 
         data.EnsureGuid();
-        storeDelegate?.Invoke(data);
+        data = StoreDelegates.Apply(storeDelegate, data);
 
         if (TransactionContext != null)
         {
@@ -259,7 +259,7 @@ public class RavenDBStore<T>
             throw new EntityNotFoundException(typeof(T), data.Guid);
         }
 
-        storeDelegate?.Invoke(data);
+        data = StoreDelegates.Apply(storeDelegate, data);
 
         if (TransactionContext != null)
         {
@@ -395,12 +395,13 @@ public class RavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            foreach (var item in data)
+            foreach (var itemSource in data)
             {
+                var item = itemSource;
                 if (item == null) continue;
                 // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
                 item.EnsureGuid();
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
                 TransactionContext.Store(item, IdOf(item.Guid.Value));
             }
             return;
@@ -408,13 +409,14 @@ public class RavenDBStore<T>
 
         using var bulkInsert = _documentStore.BulkInsert();
 
-        foreach (var item in data)
+        foreach (var itemSource in data)
         {
+            var item = itemSource;
             if (item == null) continue;
 
             // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
             item.EnsureGuid();
-            storeDelegate?.Invoke(item);
+            item = StoreDelegates.Apply(storeDelegate, item);
 
             bulkInsert.Store(item, IdOf(item.Guid.Value));
         }
@@ -430,8 +432,9 @@ public class RavenDBStore<T>
         var session = TransactionContext ?? _documentStore.OpenSession();
         try
         {
-            foreach (var item in data)
+            foreach (var itemSource in data)
             {
+                var item = itemSource;
                 if (item == null)
                 {
                     continue;
@@ -442,7 +445,7 @@ public class RavenDBStore<T>
                     continue;
                 }
 
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
 
                 var existing = session.Load<T>(IdOf(item.Guid.Value));
                 if (existing == null)

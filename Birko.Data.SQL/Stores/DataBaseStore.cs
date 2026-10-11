@@ -196,7 +196,7 @@ namespace Birko.Data.SQL.Stores
         {
             using var _tx = EnterTransactionScope();
             data.EnsureGuid();
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
             Connector.Insert(data);
             return data.Guid!.Value;
         }
@@ -217,7 +217,7 @@ namespace Birko.Data.SQL.Stores
                 conditions.Add(SQL.DataBase.CreateCondition(field, data));
             }
 
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
             // SH-M306 (TASK-555): a statement that matched no row means the entity is not stored — say so.
             if (Connector.Update(data, conditions) == 0)
             {

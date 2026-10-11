@@ -54,7 +54,7 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         public virtual async Task<Guid> CreateAsync(T item, StoreDataDelegate<T>? processDelegate = null, CancellationToken cancellationToken = default)
         {
-            processDelegate?.Invoke(item);
+            item = StoreDelegates.Apply(processDelegate, item);
 
             // Assign the Guid up front so the event AggregateId, version lookup, and inner-store
             // row all key off the SAME id (CR-C06); the throwaway Guid.NewGuid() was never written
@@ -119,7 +119,7 @@ namespace Birko.Data.EventSourcing.Stores
                 return;
             }
 
-            processDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(processDelegate, data);
 
             // Get current version
             var currentVersion = await _eventStore.GetVersionAsync(data.Guid.Value, cancellationToken);

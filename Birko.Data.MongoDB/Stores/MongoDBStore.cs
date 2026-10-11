@@ -4,6 +4,7 @@ using Birko.Data.MongoDB.ChangeStreams;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using System;
+using Birko.Data.Stores;
 using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
@@ -142,7 +143,7 @@ namespace Birko.Data.MongoDB.Stores
             if (Collection == null || data == null) return Guid.Empty;
 
             data.EnsureGuid();
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
 
             if (TransactionContext != null)
                 Collection.InsertOne(TransactionContext, data);
@@ -161,7 +162,7 @@ namespace Birko.Data.MongoDB.Stores
                 throw new EntityNotFoundException(typeof(T), data.Guid);
             }
 
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
 
             if (!ReplaceExisting(data))
             {
@@ -232,10 +233,12 @@ namespace Birko.Data.MongoDB.Stores
             var itemsToCreate = data.Where(x => x != null).ToList();
             if (itemsToCreate.Count == 0) return;
 
-            foreach (var item in itemsToCreate)
+            for (var itemIndex = 0; itemIndex < itemsToCreate.Count; itemIndex++)
             {
+                var item = itemsToCreate[itemIndex];
                 item.EnsureGuid();
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
+                itemsToCreate[itemIndex] = item; // the list is what gets persisted
             }
 
             if (TransactionContext != null)
@@ -254,15 +257,17 @@ namespace Birko.Data.MongoDB.Stores
 
             // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
             var missing = new List<Guid>();
-            foreach (var item in itemsToUpdate)
+            for (var itemIndex = 0; itemIndex < itemsToUpdate.Count; itemIndex++)
             {
+                var item = itemsToUpdate[itemIndex];
                 if (item.Guid == null || item.Guid == Guid.Empty)
                 {
                     missing.Add(Guid.Empty);
                     continue;
                 }
 
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
+                itemsToUpdate[itemIndex] = item; // the list is what gets persisted
 
                 if (!ReplaceExisting(item))
                 {

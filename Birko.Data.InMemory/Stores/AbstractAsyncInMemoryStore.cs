@@ -34,6 +34,34 @@ namespace Birko.Data.InMemory.Stores
         /// </summary>
         public IReadOnlyDictionary<Guid, T> Items => _items;
 
+        /// <summary>
+        /// SH-M311 (TASK-557): store and hand out COPIES, as every serializing backend does. The store used to keep the
+        /// caller's own reference and return it from every read, so <c>store.Create(e); e.Name = "x";</c> changed stored
+        /// state with no <c>Update</c> — the canonical test double was false-green for the whole class of missing-Update
+        /// bugs. Default <c>true</c>; set <c>false</c> only for a model that cannot round-trip through
+        /// <see cref="Snapshot"/> (and accept that the double then shares references).
+        /// </summary>
+        public bool SnapshotEntities { get; set; } = true;
+
+        private static readonly System.Text.Json.JsonSerializerOptions SnapshotOptions = new()
+        {
+            IncludeFields = true,
+        };
+
+        /// <summary>
+        /// A detached copy of <paramref name="item"/> — by default a JSON round-trip, which is what a file or document
+        /// backend stores. Override for a model that needs a different copy.
+        /// </summary>
+        protected virtual T Snapshot(T item)
+        {
+            if (!SnapshotEntities || item == null)
+            {
+                return item!;
+            }
+            var json = System.Text.Json.JsonSerializer.Serialize(item, item.GetType(), SnapshotOptions);
+            return (T)System.Text.Json.JsonSerializer.Deserialize(json, item.GetType(), SnapshotOptions)!;
+        }
+
         #endregion
 
         #region Initialization and Lifecycle
@@ -65,7 +93,7 @@ namespace Birko.Data.InMemory.Stores
             }
             data.EnsureGuid();
             RequireNewKeys(new[] { data });
-            processDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(processDelegate, data);
             AddNew(data);
             return Task.FromResult(data.Guid.Value);
         }
@@ -74,7 +102,8 @@ namespace Birko.Data.InMemory.Stores
         protected override Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
             var predicate = filter?.Compile();
-            return Task.FromResult(_items.Values.FirstOrDefault(x => predicate?.Invoke(x) ?? true));
+            var found = _items.Values.FirstOrDefault(x => predicate?.Invoke(x) ?? true);
+            return Task.FromResult(found == null ? null : Snapshot(found));
         }
 
         /// <summary>
@@ -85,7 +114,7 @@ namespace Birko.Data.InMemory.Stores
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
             if (guid != Guid.Empty && _items.TryGetValue(guid, out var value))
             {
-                return value;
+                return Snapshot(value);
             }
             return null;
         }
@@ -102,7 +131,7 @@ namespace Birko.Data.InMemory.Stores
             {
                 throw new EntityNotFoundException(typeof(T), data.Guid);
             }
-            processDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(processDelegate, data);
             if (!ReplaceExisting(data))
             {
                 throw new EntityNotFoundException(typeof(T), data.Guid);
@@ -164,7 +193,7 @@ namespace Birko.Data.InMemory.Stores
             }
 
             // Materialize to a stable snapshot — the backing dictionary may mutate concurrently.
-            return Task.FromResult<IEnumerable<T>>(result.ToList());
+            return Task.FromResult<IEnumerable<T>>(result.Select(Snapshot).ToList());
         }
 
         /// <inheritdoc />
@@ -180,9 +209,11 @@ namespace Birko.Data.InMemory.Stores
                 item.EnsureGuid();
             }
             RequireNewKeys(items);
-            foreach (var item in items)
+            for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
             {
-                storeDelegate?.Invoke(item);
+                var item = items[itemIndex];
+                item = StoreDelegates.Apply(storeDelegate, item);
+                items[itemIndex] = item; // the list is what gets persisted
                 AddNew(item);
             }
             return Task.CompletedTask;
@@ -197,14 +228,15 @@ namespace Birko.Data.InMemory.Stores
             }
             // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
             var missing = new List<Guid>();
-            foreach (var item in data.Where(x => x != null))
+            foreach (var itemSource in data.Where(x => x != null))
             {
+                var item = itemSource;
                 if (!item.Guid.HasValue || !_items.ContainsKey(item.Guid.Value))
                 {
                     missing.Add(item.Guid ?? Guid.Empty);
                     continue;
                 }
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
                 if (!ReplaceExisting(item))
                 {
                     missing.Add(item.Guid.Value);
@@ -259,7 +291,7 @@ namespace Birko.Data.InMemory.Stores
         /// </summary>
         protected void AddNew(T item)
         {
-            if (!_items.TryAdd(item.Guid!.Value, item))
+            if (!_items.TryAdd(item.Guid!.Value, Snapshot(item)))
             {
                 throw new StoreException($"{GetType().Name} already holds a {typeof(T).Name} with Guid {item.Guid}; Create does not replace — use Update.");
             }
@@ -276,7 +308,7 @@ namespace Birko.Data.InMemory.Stores
             var key = item.Guid!.Value;
             while (_items.TryGetValue(key, out var current))
             {
-                if (_items.TryUpdate(key, item, current))
+                if (_items.TryUpdate(key, Snapshot(item), current))
                 {
                     return true;
                 }

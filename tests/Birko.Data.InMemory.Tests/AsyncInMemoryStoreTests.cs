@@ -46,7 +46,11 @@ public class AsyncInMemoryStoreTests
         id.Should().NotBe(Guid.Empty);
         model.Guid.Should().Be(id);
         (await store.CountAsync()).Should().Be(1);
-        (await store.ReadAsync(id)).Should().BeSameAs(model);
+        // TASK-557 (SH-M311, rule 56): this asserted BeSameAs — the shared live reference that let a mutation skip Update.
+        var stored = await store.ReadAsync(id);
+        stored.Should().NotBeSameAs(model);
+        stored!.Name.Should().Be("x");
+        stored.Value.Should().Be(5);
     }
 
     [Fact]

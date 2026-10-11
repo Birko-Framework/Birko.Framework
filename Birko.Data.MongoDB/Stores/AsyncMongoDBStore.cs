@@ -182,7 +182,7 @@ namespace Birko.Data.MongoDB.Stores
             }
 
             data.EnsureGuid();
-            processDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(processDelegate, data);
 
             if (TransactionContext != null)
                 await Collection.InsertOneAsync(TransactionContext, data, null, ct);
@@ -204,7 +204,7 @@ namespace Birko.Data.MongoDB.Stores
                 throw new EntityNotFoundException(typeof(T), data.Guid);
             }
 
-            processDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(processDelegate, data);
 
             if (!await ReplaceExistingAsync(data, ct))
             {
@@ -258,7 +258,7 @@ namespace Birko.Data.MongoDB.Stores
                 await EnsureInitializedAsync(ct);
                 // TASK-555: the delegate ran on the create branch but was skipped here — a Save that updated never
                 // applied it. The native upsert already stores an unstored Guid (SH-M309 does not apply).
-                processDelegate?.Invoke(data);
+                data = StoreDelegates.Apply(processDelegate, data);
 
                 var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
                 if (TransactionContext != null)
@@ -351,10 +351,12 @@ namespace Birko.Data.MongoDB.Stores
                 return;
             }
 
-            foreach (var item in itemsToCreate)
+            for (var itemIndex = 0; itemIndex < itemsToCreate.Count; itemIndex++)
             {
+                var item = itemsToCreate[itemIndex];
                 item.EnsureGuid();
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
+                itemsToCreate[itemIndex] = item; // the list is what gets persisted
             }
 
             if (TransactionContext != null)
@@ -382,15 +384,17 @@ namespace Birko.Data.MongoDB.Stores
 
             // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
             var missing = new List<Guid>();
-            foreach (var item in itemsToUpdate)
+            for (var itemIndex = 0; itemIndex < itemsToUpdate.Count; itemIndex++)
             {
+                var item = itemsToUpdate[itemIndex];
                 if (item.Guid == null || item.Guid == Guid.Empty)
                 {
                     missing.Add(Guid.Empty);
                     continue;
                 }
 
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
+                itemsToUpdate[itemIndex] = item; // the list is what gets persisted
 
                 if (!await ReplaceExistingAsync(item, ct))
                 {

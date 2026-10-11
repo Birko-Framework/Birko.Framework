@@ -4,6 +4,23 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — A store persists what the store delegate returns, and the in-memory store keeps copies
+
+[[TASK-557]] (SH-M315, SH-M311). `StoreDataDelegate<T>` returns `T`, but all ~110 invocation sites discarded the result
+and persisted the original — a delegate returning a modified copy was silently ignored. Every site now persists
+`StoreDelegates.Apply(delegate, entity)`: the returned entity (the original when it returns `null`; a replacement with no
+Guid inherits the original's), and a bulk path's written collection takes the replacement. And the in-memory stores
+kept the caller's live reference, so mutating an entity after `Create` changed stored state with no `Update` — the
+canonical test double was false-green for missing-`Update` bugs. They now keep and return detached copies (a JSON
+round-trip; override `Snapshot` to change it). Measured before choosing: 168 of 169 test projects passed unchanged.
+
+**Observable — migration:** a delegate that returns a different instance now has that instance stored. Code or tests that
+relied on an in-memory read returning the very object they created (`BeSameAs`), or on mutating it without `Update`,
+must re-read / call `Update`; a model that cannot round-trip through System.Text.Json sets
+`SnapshotEntities = false` on the store.
+
+---
+
 ## 2026-10-11 — One identity rule: bulk create keeps the caller's Guid, and Guid.Empty is never a key
 
 [[TASK-556]] (SH-M313, SH-M314). Store-assigned identity followed three policies across ~60 sites: `??=` (and

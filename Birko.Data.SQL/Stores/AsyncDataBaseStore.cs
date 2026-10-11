@@ -264,7 +264,7 @@ namespace Birko.Data.SQL.Stores
             using var _tx = EnterTransactionScope();
 
             data.EnsureGuid();
-            processDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(processDelegate, data);
 
             if (AsyncConnector != null)
                 await AsyncConnector.InsertAsync(data, ct);
@@ -312,7 +312,7 @@ namespace Birko.Data.SQL.Stores
                 conditions.Add(SQL.DataBase.CreateCondition(field, data));
             }
 
-            processDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(processDelegate, data);
 
             var matched = AsyncConnector != null
                 ? await AsyncConnector.UpdateAsync(data, conditions, ct)

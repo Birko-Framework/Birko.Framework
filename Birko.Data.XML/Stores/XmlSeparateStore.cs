@@ -137,7 +137,7 @@ namespace Birko.Data.XML.Stores
         {
             EnsureWritable();
             data.EnsureGuid();
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
             _items.Add(data.Guid.Value, data);
 
             var fileName = $"{RequireSettings().Name}-{data.Guid.Value}.xml";
@@ -163,7 +163,7 @@ namespace Birko.Data.XML.Stores
             {
                 throw new EntityNotFoundException(typeof(T), data?.Guid);
             }
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
             _items[data.Guid.Value] = data;
 
             if (_files.ContainsKey(data.Guid.Value))

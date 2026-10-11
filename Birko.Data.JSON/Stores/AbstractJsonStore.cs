@@ -75,7 +75,7 @@ namespace Birko.Data.JSON.Stores
         {
             EnsureWritable();
             data.EnsureGuid();
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
             _items.Add(data.Guid.Value, data);
             SaveData();
             return data.Guid.Value;
@@ -90,7 +90,7 @@ namespace Birko.Data.JSON.Stores
             {
                 throw new EntityNotFoundException(typeof(T), data?.Guid);
             }
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
             _items[data.Guid.Value] = data;
             SaveData();
         }
@@ -210,13 +210,14 @@ namespace Birko.Data.JSON.Stores
         {
             EnsureWritable();
             bool save = false;
-            foreach (var item in data.Where(x => x != null))
+            foreach (var itemSource in data.Where(x => x != null))
             {
+                var item = itemSource;
                 // CR-M098: preserve a caller-supplied Guid (was overwritten) and upsert via the indexer
                 // (was _items.Add, which throws ArgumentException on a duplicate key) — matches the
                 // single-item CreateCore's Guid handling and the async bulk path's indexer store.
                 item.EnsureGuid();
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
                 _items[item.Guid.Value] = item;
                 save = true;
             }
@@ -233,14 +234,15 @@ namespace Birko.Data.JSON.Stores
             // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
             var missing = new List<Guid>();
             bool save = false;
-            foreach (var item in data.Where(x => x != null))
+            foreach (var itemSource in data.Where(x => x != null))
             {
+                var item = itemSource;
                 if (item.Guid == null || !(_items?.ContainsKey(item.Guid.Value) ?? false))
                 {
                     missing.Add(item.Guid ?? Guid.Empty);
                     continue;
                 }
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
                 _items[item.Guid.Value] = item;
                 save = true;
             }

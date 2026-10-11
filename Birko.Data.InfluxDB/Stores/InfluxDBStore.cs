@@ -1,6 +1,7 @@
 using InfluxDB.Client.Api.Domain;
 using InfluxDB.Client.Writes;
 using System;
+using Birko.Data.Stores;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -235,7 +236,7 @@ namespace Birko.Data.InfluxDB.Stores
             if (Client == null || _settings == null || data == null) return Guid.Empty;
 
             data.EnsureGuid();
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
 
             try
             {
@@ -267,7 +268,7 @@ namespace Birko.Data.InfluxDB.Stores
         {
             if (Client == null || _settings == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
 
             try
             {
@@ -388,10 +389,12 @@ namespace Birko.Data.InfluxDB.Stores
             if (itemsToCreate.Count == 0) return;
 
             var points = new List<PointData>();
-            foreach (var item in itemsToCreate)
+            for (var itemIndex = 0; itemIndex < itemsToCreate.Count; itemIndex++)
             {
+                var item = itemsToCreate[itemIndex];
                 item.EnsureGuid();
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
+                itemsToCreate[itemIndex] = item; // the list is what gets persisted
                 points.Add(ModelToPoint(item));
             }
 
@@ -420,9 +423,11 @@ namespace Birko.Data.InfluxDB.Stores
             if (itemsToUpdate.Count == 0) return;
 
             var points = new List<PointData>();
-            foreach (var item in itemsToUpdate)
+            for (var itemIndex = 0; itemIndex < itemsToUpdate.Count; itemIndex++)
             {
-                storeDelegate?.Invoke(item);
+                var item = itemsToUpdate[itemIndex];
+                item = StoreDelegates.Apply(storeDelegate, item);
+                itemsToUpdate[itemIndex] = item; // the list is what gets persisted
                 points.Add(ModelToPoint(item));
             }
 

@@ -207,7 +207,7 @@ public class AsyncCosmosDBStore<T>
         if (_container == null || data == null) return Guid.Empty;
 
         data.EnsureGuid();
-        processDelegate?.Invoke(data);
+        data = StoreDelegates.Apply(processDelegate, data);
 
         if (TransactionContext != null)
         {
@@ -273,7 +273,7 @@ public class AsyncCosmosDBStore<T>
             throw new EntityNotFoundException(typeof(T), data.Guid);
         }
 
-        processDelegate?.Invoke(data);
+        data = StoreDelegates.Apply(processDelegate, data);
 
         if (TransactionContext != null)
         {
@@ -350,7 +350,7 @@ public class AsyncCosmosDBStore<T>
         await EnsureInitializedAsync(ct);
         if (_container == null || data == null) return Guid.Empty;
 
-        processDelegate?.Invoke(data);
+        data = StoreDelegates.Apply(processDelegate, data);
 
         data.EnsureGuid();
 
@@ -437,11 +437,12 @@ public class AsyncCosmosDBStore<T>
 
         if (TransactionContext != null)
         {
-            foreach (var item in data)
+            foreach (var itemSource in data)
             {
+                var item = itemSource;
                 if (item == null) continue;
                 item.EnsureGuid();
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
                 RequireBatchPartition(item.Guid!.Value);
                 TransactionContext.CreateItem(item);
             }
@@ -449,12 +450,13 @@ public class AsyncCosmosDBStore<T>
         }
 
         var tasks = new List<Task>();
-        foreach (var item in data)
+        foreach (var itemSource in data)
         {
+            var item = itemSource;
             if (item == null) continue;
 
             item.EnsureGuid();
-            storeDelegate?.Invoke(item);
+            item = StoreDelegates.Apply(storeDelegate, item);
 
             tasks.Add(_container.CreateItemAsync(item, new PartitionKey(item.Guid.Value.ToString()), cancellationToken: ct));
         }
@@ -469,10 +471,11 @@ public class AsyncCosmosDBStore<T>
 
         if (TransactionContext != null)
         {
-            foreach (var item in data)
+            foreach (var itemSource in data)
             {
+                var item = itemSource;
                 if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
                 RequireBatchPartition(item.Guid.Value);
                 TransactionContext.ReplaceItem(item.Guid.Value.ToString(), item);
             }
@@ -483,8 +486,9 @@ public class AsyncCosmosDBStore<T>
         // items are still written. Any other failure propagates as before.
         var missing = new System.Collections.Concurrent.ConcurrentBag<Guid>();
         var tasks = new List<Task>();
-        foreach (var item in data)
+        foreach (var itemSource in data)
         {
+            var item = itemSource;
             if (item == null) continue;
             if (item.Guid == null || item.Guid == Guid.Empty)
             {
@@ -492,7 +496,7 @@ public class AsyncCosmosDBStore<T>
                 continue;
             }
 
-            storeDelegate?.Invoke(item);
+            item = StoreDelegates.Apply(storeDelegate, item);
             tasks.Add(ReplaceOrRecordMissAsync(item, missing, ct));
         }
 

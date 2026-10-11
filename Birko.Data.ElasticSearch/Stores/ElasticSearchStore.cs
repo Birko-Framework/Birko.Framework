@@ -103,7 +103,7 @@ namespace Birko.Data.ElasticSearch.Stores
             if (data == null) return Guid.Empty;
 
             data.EnsureGuid();
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
 
             try
             {
@@ -172,7 +172,7 @@ namespace Birko.Data.ElasticSearch.Stores
                 throw new EntityNotFoundException(typeof(T), data.Guid);
             }
 
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
 
             try
             {
@@ -242,8 +242,7 @@ namespace Birko.Data.ElasticSearch.Stores
             var itemsToCreate = data.Where(x => x != null).Select(x =>
             {
                 x.EnsureGuid();
-                storeDelegate?.Invoke(x);
-                return x;
+                return StoreDelegates.Apply(storeDelegate, x);
             });
 
             Bulk(itemsToCreate, null, null);
@@ -263,8 +262,7 @@ namespace Birko.Data.ElasticSearch.Stores
 
             var itemsToUpdate = data.Where(x => x != null && x.Guid != null && x.Guid != Guid.Empty).Select(x =>
             {
-                storeDelegate?.Invoke(x);
-                return x;
+                return StoreDelegates.Apply(storeDelegate, x);
             });
 
             Bulk(null, itemsToUpdate, null);

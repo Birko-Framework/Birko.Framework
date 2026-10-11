@@ -52,7 +52,7 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         public virtual Guid Create(T item, StoreDataDelegate<T>? processDelegate = null)
         {
-            processDelegate?.Invoke(item);
+            item = StoreDelegates.Apply(processDelegate, item);
 
             // Assign the Guid up front so the event AggregateId, the version lookup, and the
             // inner-store row all key off the SAME id (CR-C05). Previously the event used a
@@ -117,7 +117,7 @@ namespace Birko.Data.EventSourcing.Stores
                 return;
             }
 
-            processDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(processDelegate, data);
 
             // Get current version
             var currentVersion = _eventStore.GetVersion(data.Guid.Value);

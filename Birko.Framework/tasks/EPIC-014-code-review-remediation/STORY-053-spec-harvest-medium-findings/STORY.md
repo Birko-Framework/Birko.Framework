@@ -13,7 +13,7 @@ finding-ids: SH-M001 … SH-M428
 
 ## Progress
 
-**26 / 428 closed by this story's tasks.** `SH-M313` and `SH-M314` of `store-crud-contract` ([[TASK-556]], done 2026-10-11): fixed; spawned [[TASK-567]]. `SH-M306` and `SH-M309` of `store-crud-contract` ([[TASK-555]], done 2026-10-11): fixed on every provider. All 3 of `core-model-contracts` ([[TASK-323]], done 2026-10-11): `SH-M422`–`SH-M424` fixed. `SH-M425` of `store-lazy-initialization` ([[TASK-324]], done 2026-10-11): fixed. All 3 of `unit-of-work-and-transactions` ([[TASK-325]], done 2026-10-11): `SH-M426`–`SH-M428` fixed. All 15 of `store-crud-contract` ([[TASK-163]], done 2026-10-11): 9 fixed
+**28 / 428 closed by this story's tasks.** `SH-M311` and `SH-M315` of `store-crud-contract` ([[TASK-557]], done 2026-10-11): fixed. `SH-M313` and `SH-M314` of `store-crud-contract` ([[TASK-556]], done 2026-10-11): fixed; spawned [[TASK-567]]. `SH-M306` and `SH-M309` of `store-crud-contract` ([[TASK-555]], done 2026-10-11): fixed on every provider. All 3 of `core-model-contracts` ([[TASK-323]], done 2026-10-11): `SH-M422`–`SH-M424` fixed. `SH-M425` of `store-lazy-initialization` ([[TASK-324]], done 2026-10-11): fixed. All 3 of `unit-of-work-and-transactions` ([[TASK-325]], done 2026-10-11): `SH-M426`–`SH-M428` fixed. All 15 of `store-crud-contract` ([[TASK-163]], done 2026-10-11): 9 fixed
 (`SH-M302`–`SH-M305`, `SH-M307`, `SH-M308`, `SH-M310`, `SH-M312`, `SH-M316`), 6 confirmed and spawned as fix tasks
 under this story because each is a cross-provider contract decision: [[TASK-555]] (`SH-M306`, `SH-M309`),
 [[TASK-556]] (`SH-M313`, `SH-M314`), [[TASK-557]] (`SH-M311`, `SH-M315`). 0 refuted; 1 confirmed-narrower

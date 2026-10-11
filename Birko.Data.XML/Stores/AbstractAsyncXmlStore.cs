@@ -79,7 +79,7 @@ namespace Birko.Data.XML.Stores
             if (data == null) return Guid.Empty;
 
             data.EnsureGuid();
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
             _items.Add(data.Guid.Value, data);
 
             await SaveDataAsync(ct);
@@ -98,7 +98,7 @@ namespace Birko.Data.XML.Stores
             {
                 throw new EntityNotFoundException(typeof(T), data?.Guid);
             }
-            storeDelegate?.Invoke(data);
+            data = StoreDelegates.Apply(storeDelegate, data);
             _items[data.Guid.Value] = data;
             await SaveDataAsync(ct);
         }
@@ -279,10 +279,11 @@ namespace Birko.Data.XML.Stores
 
             if (data == null) return;
 
-            foreach (var item in data.Where(x => x != null))
+            foreach (var itemSource in data.Where(x => x != null))
             {
+                var item = itemSource;
                 item.EnsureGuid();
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
                 _items[item.Guid!.Value] = item;
             }
 
@@ -298,15 +299,16 @@ namespace Birko.Data.XML.Stores
 
             // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
             var missing = new List<Guid>();
-            foreach (var item in data.Where(x => x != null && x.Guid.HasValue))
+            foreach (var itemSource in data.Where(x => x != null && x.Guid.HasValue))
             {
+                var item = itemSource;
                 // It wrote every item, stored or not — a bulk Update that silently created entities.
                 if (!_items.ContainsKey(item.Guid!.Value))
                 {
                     missing.Add(item.Guid!.Value);
                     continue;
                 }
-                storeDelegate?.Invoke(item);
+                item = StoreDelegates.Apply(storeDelegate, item);
                 _items[item.Guid!.Value] = item;
             }
 

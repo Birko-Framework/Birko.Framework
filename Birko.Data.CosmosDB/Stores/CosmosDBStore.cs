@@ -160,7 +160,7 @@ public class CosmosDBStore<T>
         if (_container == null || data == null) return Guid.Empty;
 
         data.EnsureGuid();
-        storeDelegate?.Invoke(data);
+        data = StoreDelegates.Apply(storeDelegate, data);
 
         _container.CreateItemAsync(data, new PartitionKey(data.Guid.Value.ToString()))
             .GetAwaiter().GetResult();
@@ -230,7 +230,7 @@ public class CosmosDBStore<T>
             throw new EntityNotFoundException(typeof(T), data.Guid);
         }
 
-        storeDelegate?.Invoke(data);
+        data = StoreDelegates.Apply(storeDelegate, data);
 
         try
         {
@@ -339,12 +339,13 @@ public class CosmosDBStore<T>
 
         var tasks = new List<System.Threading.Tasks.Task>();
 
-        foreach (var item in data)
+        foreach (var itemSource in data)
         {
+            var item = itemSource;
             if (item == null) continue;
 
             item.EnsureGuid();
-            storeDelegate?.Invoke(item);
+            item = StoreDelegates.Apply(storeDelegate, item);
 
             tasks.Add(_container.CreateItemAsync(item, new PartitionKey(item.Guid.Value.ToString())));
         }
@@ -362,8 +363,9 @@ public class CosmosDBStore<T>
         var missing = new System.Collections.Concurrent.ConcurrentBag<Guid>();
         var tasks = new List<System.Threading.Tasks.Task>();
 
-        foreach (var item in data)
+        foreach (var itemSource in data)
         {
+            var item = itemSource;
             if (item == null) continue;
             if (item.Guid == null || item.Guid == Guid.Empty)
             {
@@ -371,7 +373,7 @@ public class CosmosDBStore<T>
                 continue;
             }
 
-            storeDelegate?.Invoke(item);
+            item = StoreDelegates.Apply(storeDelegate, item);
             tasks.Add(ReplaceOrRecordMissAsync(item, missing));
         }
 
