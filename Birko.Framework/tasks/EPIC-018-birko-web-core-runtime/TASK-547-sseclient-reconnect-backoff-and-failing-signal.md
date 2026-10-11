@@ -2,7 +2,7 @@
 id: TASK-547
 parent: EPIC-018
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-09
@@ -87,3 +87,14 @@ recovered" (the overlap defect itself). Core and Playground `tsc` clean.
 
 **Sent to Presenter:** the final names and the `failingAfter` default are written into Presenter TASK-009, and its
 `blocked:` line removed. The human test plan above runs in Presenter, after its TASK-009 wiring.
+
+## Verified (2026-10-11)
+
+Presenter's human test passed, run by the user against Presenter TASK-009 (`_failing` → a "connection lost" hint,
+`_open` → clears it, on the presenter, remote and follow pages; `SseClient` built with `url` only, so the default
+schedule). Server stopped: the hint appeared after ~2 min on all three pages. A real phone remote in airplane mode
+for ~3 min: the hint appeared; airplane mode off: it cleared on its own and Next/Prev worked again. Merged on
+Presenter main as `601477e` (task commit `aebcb9a`). verify → done.
+
+Found on the way, not a defect: Chrome DevTools Network → *Offline* does not break an already-open `EventSource`,
+so it cannot produce `_failing`. Recorded in the Core README (Birko.Web `910653c`).
