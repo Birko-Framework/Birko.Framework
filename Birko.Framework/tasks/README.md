@@ -17,12 +17,12 @@ which this regeneration never touches._
 | in-progress  | 8  | 11  | 1   |
 | verify       | —                  | —                  | 0       |
 | blocked      | —                  | —                  | 1      |
-| done         | 1        | 23        | 218         |
+| done         | 1        | 23        | 219         |
 | cancelled    | 0   | 0   | 5    |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 33× P1 · 121× P2 · 45× P3.
+`todo` by priority: 32× P1 · 122× P2 · 45× P3.
 
 ## In progress now
 
@@ -143,7 +143,7 @@ _None_
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (124/219 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (125/220 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [ ] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -266,7 +266,7 @@ _None_
   - STORY-027 Low findings — done (0/0 done) (done)
   - STORY-042 Integration-test tier — the Docker-gated remediation findings — planned (0/0 done)
   - STORY-043 Workflow backends — unify the serialization seam (ISerializer everywhere) — done (0/0 done) (done)
-  - STORY-051 Spec-harvest — high findings — in-progress (44/50 done)
+  - STORY-051 Spec-harvest — high findings — in-progress (45/51 done)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0) · FEATURE-014
     - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0) · FEATURE-014
@@ -307,7 +307,7 @@ _None_
     - [x] [TASK-314](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-314-triage-high-migrations.md) Triage the 5 remaining high spec-harvest findings in `migrations` (P1) · FEATURE-014
     - [x] [TASK-315](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-315-triage-high-workflow-state-machine.md) Triage the 2 remaining high spec-harvest findings in `workflow-state-machine` (P1) · FEATURE-014
     - [x] [TASK-316](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-316-triage-high-repository-contract.md) Triage the 2 remaining high spec-harvest findings in `repository-contract` (P1) · FEATURE-014
-    - [ ] [TASK-317](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-317-triage-high-background-jobs.md) Triage the 1 remaining high spec-harvest finding in `background-jobs` (P1) · FEATURE-014
+    - [x] [TASK-317](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-317-triage-high-background-jobs.md) Triage the 1 remaining high spec-harvest finding in `background-jobs` (P1) · FEATURE-014
     - [ ] [TASK-318](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-318-triage-high-event-bus-and-messaging.md) Triage the 1 remaining high spec-harvest finding in `event-bus-and-messaging` (P1) · FEATURE-014
     - [x] [TASK-319](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-319-triage-high-schema-index-and-ddl.md) Triage the 1 remaining high spec-harvest finding in `schema-index-and-ddl` (P1) · FEATURE-014
     - [x] [TASK-320](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-320-triage-high-specifications-and-paging.md) Triage the 1 remaining high spec-harvest finding in `specifications-and-paging` (P1) · FEATURE-014
@@ -317,6 +317,7 @@ _None_
     - [ ] [TASK-558](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-558-rule-expression-converter-drops-an-unresolved-child.md) `RuleExpressionConverter` drops a child it cannot resolve, so an AND group widens — and a negated group around it widens again (P2) · FEATURE-014
     - [ ] [TASK-559](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-559-sql-rule-converter-empty-group-is-every-row.md) The SQL `RuleConditionConverter` turns a disabled rule or an empty group into no condition — every row — where the other engines match nothing (P2) · FEATURE-014
     - [ ] [TASK-560](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-560-reindex-without-waiting-reports-success.md) `ReindexHelper.Reindex(…, waitForCompletion: false)` reports `Successful` for a reindex that has only started (P3) · FEATURE-014
+    - [ ] [TASK-561](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-561-redis-unnamed-jobs-only-on-literal-default-queue.md) Redis serves an unnamed job only to a queue literally named `"default"` (P2) · FEATURE-014
   - STORY-053 Spec-harvest — medium findings — planned (1/28 done)
     - [ ] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
     - [ ] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014

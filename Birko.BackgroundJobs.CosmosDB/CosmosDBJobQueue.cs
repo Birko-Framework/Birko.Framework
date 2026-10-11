@@ -61,8 +61,12 @@ public class CosmosDBJobQueue : IJobQueue
             // null-comparison semantics under the Cosmos SQL translation aren't guaranteed to match
             // in-memory nullable-DateTime comparison), and add a FIFO tiebreaker so equal-priority jobs
             // dequeue in enqueue order — matching the MongoDB backend (CR-L020/L021).
+            // An unnamed job belongs to every queue, as on every sibling backend: JobDispatcher leaves QueueName
+            // null and BackgroundJobProcessor always dequeues a named queue, so without the middle term no
+            // dispatcher-enqueued job ever ran on Cosmos (SH-H001). The serializer writes QueueName: null
+            // explicitly, so `= null` matches the stored document.
             filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
-                && (queueName == null || j.QueueName == queueName),
+                && (queueName == null || j.QueueName == null || j.QueueName == queueName),
             orderBy: OrderBy<CosmosJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
             limit: 1,
             ct: ct

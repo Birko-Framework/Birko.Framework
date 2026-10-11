@@ -281,22 +281,21 @@ time, and SHALL return `null` when no such job exists.
 ### Requirement: Queue-name scoping on dequeue
 
 The system SHALL scope `DequeueAsync(queueName)` to the named queue, and — on the in-memory, SQL,
-MongoDB, Elasticsearch, RavenDB, JSON and XML backends — SHALL additionally admit jobs whose
-`QueueName` is `null`; Cosmos DB SHALL NOT admit null-queue jobs for a named request, and Redis
-SHALL isolate queues by key so that a null `QueueName` is stored in and served from the literal
-`default` queue.
+MongoDB, Elasticsearch, RavenDB, Cosmos DB, JSON and XML backends — SHALL additionally admit jobs whose
+`QueueName` is `null`; Redis SHALL isolate queues by key so that a null `QueueName` is stored in and
+served from the literal `default` queue.
 
 #### Scenario: A null-queue job is served to a named-queue request on most backends
 
 - **Given** a pending job with `QueueName = null`
-- **When** `DequeueAsync("reports")` is called on the in-memory, SQL, MongoDB, Elasticsearch, RavenDB, JSON or XML backend
+- **When** `DequeueAsync("reports")` is called on the in-memory, SQL, MongoDB, Elasticsearch, RavenDB, Cosmos DB, JSON or XML backend
 - **Then** the job is returned, because the predicate is `queueName == null || j.QueueName == null || j.QueueName == queueName`
 
-#### Scenario: Cosmos DB hides a null-queue job from a named-queue request
+#### Scenario: Cosmos DB serves a dispatcher-enqueued job to the processor's default queue
 
-- **Given** a pending job with `QueueName = null` stored in Cosmos DB
-- **When** `DequeueAsync("reports")` is called
-- **Then** `null` is returned, because the Cosmos predicate is `queueName == null || j.QueueName == queueName` with no null-queue alternative
+- **Given** a job enqueued on Cosmos DB through `JobDispatcher.EnqueueAsync<TJob>()`, which leaves `QueueName = null`
+- **When** `DequeueAsync(new JobQueueOptions().DefaultQueueName)` is called, as `BackgroundJobProcessor` does
+- **Then** the job is returned and stored as `Processing`; the Cosmos serializer writes `"QueueName": null` explicitly, so the predicate's `j.QueueName == null` term matches the stored document (SH-H001, fixed by TASK-317 — the predicate used to omit that term, so no dispatcher-enqueued job ever ran on Cosmos)
 
 #### Scenario: Redis routes a null-queue job to the "default" key
 

@@ -4,6 +4,18 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — Cosmos DB runs dispatcher-enqueued background jobs
+
+[[TASK-317]] (SH-H001). `CosmosDBJobQueue.DequeueAsync(queueName)` matched only jobs whose `QueueName` equalled the
+requested name. `JobDispatcher.EnqueueAsync` / `ScheduleAsync` / `EnqueueWithPriorityAsync` leave `QueueName` null and
+`BackgroundJobProcessor` always dequeues `JobQueueOptions.DefaultQueueName`, so on Cosmos **no dispatcher-enqueued job
+ever ran**: it stayed `Pending` forever, and `PurgeAsync` never removed it. The predicate now admits an unnamed job on
+any named dequeue, as every other backend does.
+
+**Observable:** existing stranded `Pending` documents on Cosmos start running as soon as a processor polls — expect a
+backlog to drain on first deploy. Redis still serves an unnamed job only to a queue literally named `"default"` —
+[[TASK-561]].
+
 ## 2026-10-11 — A reindex that stopped early is a failure, so the alias swap never deletes the only complete copy
 
 [[TASK-319]] (SH-H038). Elasticsearch answers a reindex that stopped early — `timed_out: true`, or a task cancelled
