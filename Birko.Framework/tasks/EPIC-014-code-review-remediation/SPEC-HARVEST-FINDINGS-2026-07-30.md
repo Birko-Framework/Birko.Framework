@@ -447,6 +447,17 @@ All 12 data-access hooks (16-28) carry no tenant parameter and TagServiceBase ne
 
 `var lastId = state.LastReadId ?? (state.Options.FromBeginning ? "0-0" : "$")`. With no consumer group (RedisStreamSettings.ConsumerGroup null by default) and FromBeginning false (ConsumerOptions default), StreamReadAsync issues a NON-blocking XREAD from `$`, which by definition returns nothing. state.LastReadId is only ever assigned from a processed entry (line 354), so the position stays `$` forever. A DistributedEventBus over a default RedisStreamQueue delivers zero events, with no error, no log, and IsActive reporting true.
 
+**Verdict: CONFIRMED-WIDER, mechanism corrected — fixed by [[TASK-318]] (2026-10-11).** Zero delivery and the silence
+hold; the mechanism is not an empty read. Measured against Redis 7 / StackExchange.Redis 2.13.17, `StreamReadAsync(key, "$")`
+is refused client-side — `InvalidOperationException: StreamPosition.NewMessages cannot be used with StreamRead.` — so every
+poll of `RedisConsumer.RunPollLoopAsync` (`Birko.MessageQueue.Redis/RedisConsumer.cs:224`) threw into the catch-all, which
+raises `PollError` and retries after 2 s, forever. `PollError` is `internal`, so no consumer can observe it, and
+`IsActive` stays true. **Wider, same position tracking:** `ProcessEntryAsync` set `LastReadId` only after a delivered
+entry, so an unparseable or expired entry ending a batch was re-read on every poll with no delay. Fix: the start position
+is resolved to the newest entry's id (`XREVRANGE … COUNT 1`, `"0-0"` for an empty stream), and the position advances past
+every entry read. `RedisNonGroupReadPositionTests` (4, a fake stream that refuses `"$"` as the driver does): tail
+resolution reverted → 2/53 red; position advance reverted → 1/53 red; 1 contract pin. Tail semantics re-checked live.
+
 ### area: filter-expression-translation
 
 #### SH-H021 — An untranslatable AND/OR operand is read as constant TRUE, so an OR predicate loses its WHERE clause entirely

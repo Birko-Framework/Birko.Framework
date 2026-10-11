@@ -1186,17 +1186,27 @@ The system SHALL poll a stream with `XREADGROUP` (consumer group present) or `XR
 leave a failed handler's entry unacknowledged in the Pending Entries List, and — when a consumer group
 is used and `PendingRetryMilliseconds > 0` — reclaim and reprocess idle pending entries via
 `XAUTOCLAIM` on each empty poll. Without a consumer group the read position is the consumer's own
-`LastReadId`, which starts at `"$"` unless `FromBeginning` is set and is only ever advanced by an entry
-that was actually processed.
+`LastReadId`, which starts at `"0-0"` when `FromBeginning` is set and otherwise at the id of the stream's
+newest entry at the first poll (`"0-0"` for an empty or missing stream) — never `"$"` — and advances past
+every entry a read returned, including one that is unparseable or expired.
 
 #### Scenario: Subscription with no consumer group and default options
 
 - **Given** `RedisStreamSettings.ConsumerGroup` null, no `ConsumerOptions.GroupId`, and
   `ConsumerOptions.FromBeginning` at its default false
-- **When** the poll loop runs and messages are produced to the stream
-- **Then** every `XREAD` is issued from `"$"` and returns nothing, so `LastReadId` is never assigned and
-  the position stays `"$"` for the subscription's whole life — no message is ever delivered, no error is
-  raised, and `RedisSubscription.IsActive` still reports true
+- **When** the poll loop runs and messages are produced to the stream after it started
+- **Then** the first poll resolves the start position to the newest entry's id (`XREVRANGE … COUNT 1`),
+  entries already in the stream are not delivered, and every message produced afterwards is (SH-H020,
+  fixed by TASK-318 — the position used to be `"$"`, which StackExchange.Redis refuses for `XREAD` with an
+  `InvalidOperationException`, so every poll failed into the internal `PollError` and nothing was delivered)
+
+#### Scenario: An unparseable entry without a consumer group
+
+- **Given** a subscription with no consumer group and a stream entry with neither a `message` nor a `body`
+  field
+- **When** a read returns it
+- **Then** it is skipped and `LastReadId` moves past it, so the next read starts after it rather than
+  returning it again
 
 #### Scenario: Handler fails under a consumer group
 

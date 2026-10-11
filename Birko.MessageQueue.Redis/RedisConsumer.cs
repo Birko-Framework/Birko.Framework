@@ -220,11 +220,18 @@ namespace Birko.MessageQueue.Redis
                     }
                     else
                     {
-                        // Simple XREAD - track last ID ourselves
-                        var lastId = state.LastReadId ?? (state.Options.FromBeginning ? "0-0" : "$");
+                        // Simple XREAD - track last ID ourselves. "New messages only" starts from the stream's
+                        // current tail as a concrete id: XREAD's "$" means "after whatever is last at the moment
+                        // of this call", so even a blocking client would skip everything between polls, and
+                        // StackExchange.Redis refuses it outright (InvalidOperationException) — every poll threw
+                        // and nothing was ever delivered (SH-H020). Resolved inside the try so a connection error
+                        // at startup is retried like any other.
+                        state.LastReadId ??= state.Options.FromBeginning
+                            ? "0-0"
+                            : await ResolveStreamTailAsync(db, state.StreamKey).ConfigureAwait(false);
                         entries = await db.StreamReadAsync(
                             state.StreamKey,
-                            lastId,
+                            state.LastReadId,
                             count: _settings.ReadCount
                         ).ConfigureAwait(false);
                     }
@@ -298,6 +305,14 @@ namespace Birko.MessageQueue.Redis
         /// </summary>
         private async Task ProcessEntryAsync(IDatabase db, SubscriptionState state, StreamEntry entry, bool useConsumerGroup, CancellationToken ct)
         {
+            // Without a group the read position is ours, and it moves past every entry the read returned —
+            // including one that is unparseable or expired. Advancing only after a delivered entry re-read such
+            // an entry on every poll, with no delay because the batch was non-empty (SH-H020).
+            if (!useConsumerGroup)
+            {
+                state.LastReadId = entry.Id;
+            }
+
             var message = ParseStreamEntry(entry);
             if (message == null)
             {
@@ -348,11 +363,17 @@ namespace Birko.MessageQueue.Redis
                 }
                 // Entry stays in the Pending Entries List; the reclaim pass will redeliver it.
             }
+        }
 
-            if (!useConsumerGroup)
-            {
-                state.LastReadId = entry.Id;
-            }
+        /// <summary>
+        /// The id of the newest entry in the stream, or <c>"0-0"</c> when the stream is empty or does not exist
+        /// yet — the concrete position from which a non-group subscription reads only messages added after it
+        /// started.
+        /// </summary>
+        private static async Task<string> ResolveStreamTailAsync(IDatabase db, string streamKey)
+        {
+            var newest = await db.StreamRangeAsync(streamKey, "-", "+", count: 1, messageOrder: Order.Descending).ConfigureAwait(false);
+            return newest != null && newest.Length > 0 ? newest[0].Id.ToString() : "0-0";
         }
 
         /// <summary>

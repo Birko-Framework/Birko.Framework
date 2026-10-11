@@ -4,6 +4,21 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — A Redis subscription without a consumer group receives messages
+
+[[TASK-318]] (SH-H020). With no consumer group (the `RedisStreamSettings` default) and `FromBeginning` false,
+`RedisConsumer` started its `XREAD` at `"$"`, which StackExchange.Redis refuses for `XREAD`
+(`InvalidOperationException`, measured). Every poll failed into the internal `PollError` and retried, so **no message
+was ever delivered** while `IsActive` read true. The start position is now the stream's newest entry id at the first
+poll (`"0-0"` for an empty stream), and the position advances past every entry read — an unparseable or expired entry
+used to be re-read on every poll with no delay.
+
+**Observable:** default non-group subscriptions now deliver messages produced after they start. Entries already in the
+stream are still skipped (that is what `FromBeginning = false` means). A consumer *group* still replays a retained
+stream on creation — SH-M102, [[TASK-155]].
+
+---
+
 ## 2026-10-11 — Cosmos DB runs dispatcher-enqueued background jobs
 
 [[TASK-317]] (SH-H001). `CosmosDBJobQueue.DequeueAsync(queueName)` matched only jobs whose `QueueName` equalled the
