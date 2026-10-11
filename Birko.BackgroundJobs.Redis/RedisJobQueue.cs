@@ -25,24 +25,59 @@ namespace Birko.BackgroundJobs.Redis
 
         private string KeyPrefix => _settings.KeyPrefix ?? "birko:jobs";
 
+        /// <summary>
+        /// How many due members of the shared <c>default</c> key a named dequeue inspects to find an unnamed job
+        /// (see the dequeue script). Bounds the script's work per claim.
+        /// </summary>
+        private const int UnnamedScanLimit = 100;
+
         // Lua script for atomic dequeue: finds the best eligible candidate, removes it from the queue,
         // and — in the SAME atomic script — flips the job hash to Processing (bump AttemptCount, stamp
         // LastAttemptAt) and moves its status-set membership. Doing the whole claim in one script closes
         // the orphan/double-dispatch window that existed when the ZREM was atomic but the hash mutation
         // ran as separate round-trips (CR-M025).
-        // KEYS[1] = queue sorted-set key. ARGV: [1] key prefix, [2] now threshold, [3] LastAttemptAt
-        // ticks, [4] Processing status int. Returns the job id, or nil.
+        //
+        // FIELD-028 (TASK-561): a job with no QueueName is stored under the `default` key, and a named dequeue used to
+        // read only its own key — so with JobQueueOptions.DefaultQueueName = "work" no JobDispatcher job (QueueName
+        // null) ever ran. Every sibling backend admits an unnamed job on any named dequeue, so this script also reads
+        // the unnamed key and claims the better-scored of the two candidates. That key is shared with jobs EXPLICITLY
+        // named "default", which must stay on their queue, so only members whose hash carries no QueueName qualify;
+        // the scan steps past up to ARGV[6] of them (a backlog deeper than that waits for the default processor to
+        // drain it, it is never claimed by the wrong queue).
+        // KEYS[1] = named queue key, KEYS[2] = unnamed (`default`) key. ARGV: [1] key prefix, [2] now threshold,
+        // [3] LastAttemptAt ticks, [4] Processing status int, [5] "1" when KEYS[2] is a different key that must
+        // also be read, [6] how many due members of KEYS[2] to inspect. Returns the job id, or nil.
         private const string DequeueScript = @"
-            local queueKey = KEYS[1]
             local prefix = ARGV[1]
             local now = tonumber(ARGV[2])
             local nowTicks = ARGV[3]
             local processing = ARGV[4]
-            local members = redis.call('ZRANGEBYSCORE', queueKey, '-inf', now, 'LIMIT', 0, 1)
-            if #members == 0 then
+            local queueKey = KEYS[1]
+            local id = nil
+            local score = nil
+            local named = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', now, 'WITHSCORES', 'LIMIT', 0, 1)
+            if #named > 0 then
+                id = named[1]
+                score = tonumber(named[2])
+            end
+            if ARGV[5] == '1' then
+                local due = redis.call('ZRANGEBYSCORE', KEYS[2], '-inf', now, 'WITHSCORES', 'LIMIT', 0, tonumber(ARGV[6]))
+                for i = 1, #due, 2 do
+                    local q = redis.call('HGET', prefix .. ':job:' .. due[i], 'QueueName')
+                    if not q or q == '' then
+                        local s = tonumber(due[i + 1])
+                        if score == nil or s < score then
+                            id = due[i]
+                            score = s
+                            queueKey = KEYS[2]
+                        end
+                        break
+                    end
+                end
+            end
+            if id == nil then
                 return nil
             end
-            local id = members[1]
             redis.call('ZREM', queueKey, id)
             local jobKey = prefix .. ':job:' .. id
             if redis.call('EXISTS', jobKey) == 0 then
@@ -121,6 +156,8 @@ namespace Birko.BackgroundJobs.Redis
 
             var db = _connectionManager.GetDatabase();
             var queueKey = GetQueueKey(queueName);
+            var unnamedKey = GetQueueKey(null);
+            var readUnnamed = queueKey != unnamedKey;
             // Encode the threshold on the SAME scale as the stored score's time component (CR-C02):
             // previously this passed raw ticks while the score used ticks/1e4, so the threshold was
             // ~4 orders of magnitude larger than any score and every future job dequeued immediately.
@@ -129,8 +166,8 @@ namespace Birko.BackgroundJobs.Redis
             // Atomic dequeue + claim (ZREM + hash flip to Processing) in a single Lua script (CR-M025).
             var result = await db.ScriptEvaluateAsync(
                 DequeueScript,
-                new RedisKey[] { queueKey },
-                new RedisValue[] { KeyPrefix, now, DateTime.UtcNow.Ticks, (int)JobStatus.Processing }
+                new RedisKey[] { queueKey, unnamedKey },
+                new RedisValue[] { KeyPrefix, now, DateTime.UtcNow.Ticks, (int)JobStatus.Processing, readUnnamed ? "1" : "0", UnnamedScanLimit }
             ).ConfigureAwait(false);
 
             if (result.IsNull)

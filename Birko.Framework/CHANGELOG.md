@@ -4,6 +4,20 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — Redis serves an unnamed job to any named queue
+
+[[TASK-561]] (FIELD-028). `RedisJobQueue` stored a job with no `QueueName` under the `default` key and a named
+`DequeueAsync` read only its own key, so with `JobQueueOptions.DefaultQueueName = "work"` no `JobDispatcher` job ever
+ran on Redis — it sat `Pending` forever — while every other backend admits an unnamed job on any named dequeue (the
+Cosmos DB twin was TASK-317). The dequeue script now reads both keys and claims the better-scored candidate, taking
+from the shared `default` key only members with no `QueueName` (so a job explicitly named `"default"` stays on its
+queue), inspecting at most 100 due members per claim.
+
+**Observable:** a processor on a non-default queue now also drains unnamed jobs on Redis, as on every sibling. No
+storage change: keys and existing pending data are as before.
+
+---
+
 ## 2026-10-11 — RuleExpressionConverter never returns null and never drops a rule
 
 [[TASK-558]] (FIELD-025, SH-M358). `RuleExpressionConverter` dropped a child it could not translate — a field that

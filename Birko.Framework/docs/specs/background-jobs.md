@@ -280,10 +280,11 @@ time, and SHALL return `null` when no such job exists.
 
 ### Requirement: Queue-name scoping on dequeue
 
-The system SHALL scope `DequeueAsync(queueName)` to the named queue, and — on the in-memory, SQL,
-MongoDB, Elasticsearch, RavenDB, Cosmos DB, JSON and XML backends — SHALL additionally admit jobs whose
-`QueueName` is `null`; Redis SHALL isolate queues by key so that a null `QueueName` is stored in and
-served from the literal `default` queue.
+The system SHALL scope `DequeueAsync(queueName)` to the named queue, and on every backend SHALL additionally
+admit jobs whose `QueueName` is `null`. On Redis a null `QueueName` is stored under the `default` key (shared with
+jobs explicitly named `"default"`), and a named dequeue reads both keys in one script, claiming the better-scored
+candidate; from the `default` key it takes only a member whose hash carries no `QueueName`, inspecting at most 100
+due members (FIELD-028, fixed by TASK-561 — Redis used to serve an unnamed job only to a queue named `"default"`).
 
 #### Scenario: A null-queue job is served to a named-queue request on most backends
 
@@ -302,6 +303,19 @@ served from the literal `default` queue.
 - **Given** a `RedisJobQueue` and a descriptor with `QueueName = null`
 - **When** it is enqueued and then `DequeueAsync("default")` is called
 - **Then** the job is returned, because `GetQueueKey(null)` and `GetQueueKey("default")` both resolve to `{prefix}:queue:default`
+
+#### Scenario: Redis serves a null-queue job to any named queue
+
+- **Given** a `RedisJobQueue`, a job with `QueueName = null` and `JobQueueOptions.DefaultQueueName = "work"`
+- **When** `DequeueAsync("work")` is called
+- **Then** the job is returned and stored as `Processing`; with a `"work"` job also due, the lower score (due time,
+  then priority) is claimed first (`RedisUnnamedJobDequeueTests`, live)
+
+#### Scenario: Redis keeps an explicitly "default" job on its queue
+
+- **Given** a job enqueued with `QueueName = "default"`, sharing the key unnamed jobs use
+- **When** `DequeueAsync("work")` is called
+- **Then** it is not returned and stays `Pending`; an unnamed job queued behind it in that key is still found
 
 #### Scenario: A job on a non-default queue is invisible to the shipped processor
 
