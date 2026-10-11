@@ -10,6 +10,7 @@ using Raven.Client.Documents.Queries.Facets;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -250,28 +251,29 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        if (_documentStore == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
+        if (_documentStore == null || data == null) return;
+        // SH-M306 (TASK-555): Update stored the document whether or not it existed — an update of a missing entity
+        // silently CREATED it. The load this method always did is the existence check; a miss now throws.
+        if (data.Guid == null || data.Guid == Guid.Empty)
+        {
+            throw new EntityNotFoundException(typeof(T), data.Guid);
+        }
 
         storeDelegate?.Invoke(data);
 
         if (TransactionContext != null)
         {
-            var existing = TransactionContext.Load<T>(IdOf(data.Guid.Value));
-            if (existing != null)
-            {
-                TransactionContext.Advanced.Evict(existing);
-            }
+            var existing = TransactionContext.Load<T>(IdOf(data.Guid.Value))
+                ?? throw new EntityNotFoundException(typeof(T), data.Guid);
+            TransactionContext.Advanced.Evict(existing);
             TransactionContext.Store(data, IdOf(data.Guid.Value));
             return;
         }
 
         using var session = _documentStore.OpenSession();
-        var existingItem = session.Load<T>(IdOf(data.Guid.Value));
-
-        if (existingItem != null)
-        {
-            session.Advanced.Evict(existingItem);
-        }
+        var existingItem = session.Load<T>(IdOf(data.Guid.Value))
+            ?? throw new EntityNotFoundException(typeof(T), data.Guid);
+        session.Advanced.Evict(existingItem);
 
         session.Store(data, IdOf(data.Guid.Value));
         session.SaveChanges();
@@ -421,23 +423,32 @@ public class RavenDBStore<T>
     {
         if (_documentStore == null || data == null) return;
 
+        // TASK-555: an entity that is not stored is reported, not created — the stored ones are still written.
+        var missing = new List<Guid>();
         var session = TransactionContext ?? _documentStore.OpenSession();
         try
         {
             foreach (var item in data)
             {
-                if (item == null || item.Guid == null || item.Guid == Guid.Empty)
+                if (item == null)
                 {
+                    continue;
+                }
+                if (item.Guid == null || item.Guid == Guid.Empty)
+                {
+                    missing.Add(Guid.Empty);
                     continue;
                 }
 
                 storeDelegate?.Invoke(item);
 
                 var existing = session.Load<T>(IdOf(item.Guid.Value));
-                if (existing != null)
+                if (existing == null)
                 {
-                    session.Advanced.Evict(existing);
+                    missing.Add(item.Guid.Value);
+                    continue;
                 }
+                session.Advanced.Evict(existing);
 
                 session.Store(item, IdOf(item.Guid.Value));
             }
@@ -454,6 +465,7 @@ public class RavenDBStore<T>
                 session.Dispose();
             }
         }
+        EntityNotFoundException.ThrowIfAny(typeof(T), missing);
     }
 
     /// <inheritdoc />

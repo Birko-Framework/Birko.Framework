@@ -66,6 +66,8 @@ public class AsyncSluggableBulkStoreWrapperTests
         var items = Enumerable.Range(0, 5)
             .Select(i => new Article { Guid = Guid.NewGuid(), Title = $"Title {i}" })
             .ToList();
+        // TASK-555: an update now refuses an entity that is not stored, so the fixture stores them first.
+        await probe.CreateAsync(items);
 
         await wrapper.UpdateAsync(items);
 
@@ -81,6 +83,8 @@ public class AsyncSluggableBulkStoreWrapperTests
 
         var a = new Article { Guid = Guid.NewGuid(), Title = "Hello World" };
         var b = new Article { Guid = Guid.NewGuid(), Title = "Hello World" };
+        // TASK-555: an update now refuses an entity that is not stored, so the fixture stores them first.
+        await probe.CreateAsync(new[] { a, b });
 
         await wrapper.UpdateAsync(new[] { a, b });
 
@@ -95,12 +99,16 @@ public class AsyncSluggableBulkStoreWrapperTests
         var probe = new ConcurrencyProbingStore();
         var wrapper = new AsyncSluggableBulkStoreWrapper<ConcurrencyProbingStore, Article>(probe);
 
+        var one = new Article { Guid = Guid.NewGuid(), Title = "One" };
+        var two = new Article { Guid = Guid.NewGuid(), Title = "Two" };
+        // TASK-555: an update now refuses an entity that is not stored, so the fixture stores them first.
+        await probe.CreateAsync(new[] { one, two });
         int enumerations = 0;
         IEnumerable<Article> LazySource()
         {
             enumerations++;
-            yield return new Article { Guid = Guid.NewGuid(), Title = "One" };
-            yield return new Article { Guid = Guid.NewGuid(), Title = "Two" };
+            yield return one;
+            yield return two;
         }
 
         await wrapper.UpdateAsync(LazySource());

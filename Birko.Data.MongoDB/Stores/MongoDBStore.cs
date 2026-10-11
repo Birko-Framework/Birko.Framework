@@ -4,6 +4,7 @@ using Birko.Data.MongoDB.ChangeStreams;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -154,15 +155,29 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         protected override void UpdateCore(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
+            if (Collection == null || data == null) return;
+            if (data.Guid == null || data.Guid == Guid.Empty)
+            {
+                throw new EntityNotFoundException(typeof(T), data.Guid);
+            }
 
             storeDelegate?.Invoke(data);
 
-            var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
-            if (TransactionContext != null)
-                Collection.ReplaceOne(TransactionContext, filter, data, new ReplaceOptions { IsUpsert = false });
-            else
-                Collection.ReplaceOne(filter, data, new ReplaceOptions { IsUpsert = false });
+            if (!ReplaceExisting(data))
+            {
+                throw new EntityNotFoundException(typeof(T), data.Guid);
+            }
+        }
+
+        /// <summary>SH-M306 (TASK-555): a replace that matched no document means the entity is not stored. An
+        /// unacknowledged write concern reports no count, so only an acknowledged zero is a miss.</summary>
+        private bool ReplaceExisting(T item)
+        {
+            var filter = new ModelByGuid<T>(item.Guid!.Value).Filter();
+            var result = TransactionContext != null
+                ? Collection!.ReplaceOne(TransactionContext, filter, item, new ReplaceOptions { IsUpsert = false })
+                : Collection!.ReplaceOne(filter, item, new ReplaceOptions { IsUpsert = false });
+            return !result.IsAcknowledged || result.MatchedCount > 0;
         }
 
         /// <inheritdoc />
@@ -237,21 +252,24 @@ namespace Birko.Data.MongoDB.Stores
             var itemsToUpdate = data.Where(x => x != null).ToList();
             if (itemsToUpdate.Count == 0) return;
 
+            // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
+            var missing = new List<Guid>();
             foreach (var item in itemsToUpdate)
             {
                 if (item.Guid == null || item.Guid == Guid.Empty)
                 {
+                    missing.Add(Guid.Empty);
                     continue;
                 }
 
                 storeDelegate?.Invoke(item);
 
-                var filter = new ModelByGuid<T>(item.Guid.Value).Filter();
-                if (TransactionContext != null)
-                    Collection.ReplaceOne(TransactionContext, filter, item, new ReplaceOptions { IsUpsert = false });
-                else
-                    Collection.ReplaceOne(filter, item, new ReplaceOptions { IsUpsert = false });
+                if (!ReplaceExisting(item))
+                {
+                    missing.Add(item.Guid.Value);
+                }
             }
+            EntityNotFoundException.ThrowIfAny(typeof(T), missing);
         }
 
         /// <inheritdoc />

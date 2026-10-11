@@ -75,6 +75,41 @@ into `IStore<T>` (sync) and `IAsyncStore<T>` (async), both constrained to `T : M
 - **Then** it returns `void` — unlike `Create`, which returns the `Guid` of the created entity — so a caller
   wanting the identifier after an update must read it from the entity it passed in
 
+### Requirement: An update of an entity that is not stored throws
+
+The system SHALL, on every provider, make `Update` / `UpdateAsync` of an entity whose `Guid` matches no stored
+entity — or that has no `Guid` — throw `EntityNotFoundException` (a `StoreException` carrying `EntityType` and
+`Guids`) and write nothing. Each provider SHALL detect the miss from its own native signal, never a pre-read: the
+in-memory and file stores their key lookup, SQL the rows the `UPDATE` matched, MongoDB `MatchedCount` (acknowledged
+writes only), RavenDB the load it already performs, CosmosDB an item-level 404 (sub-status 1003, a missing container,
+still propagates as `CosmosException`), Elasticsearch `document_missing_exception`. A bulk `Update` SHALL write every
+entity that is stored and then throw one `EntityNotFoundException` naming the rest (SH-M306, fixed by TASK-555 — every
+backend used to write nothing and report success; RavenDB and the async XML bulk update instead created the entity).
+**InfluxDB is the exception:** a point write has no matched count and overwrites by series key and time, so its
+`Update` writes the point (an upsert); detecting the miss would cost a query per write.
+
+#### Scenario: Updating an entity that is not stored
+
+- **Given** a store holding one entity, and an entity carrying a `Guid` no stored record uses
+- **When** `Update(entity)` is called
+- **Then** `EntityNotFoundException` is thrown with `Guids` = that `Guid`, and the store still holds one entity
+  (the cross-provider `UpdateMissContract`, run on in-memory, JSON, XML ×3, SQLite, PostgreSQL, MySQL, SQL Server,
+  TimescaleDB, MongoDB, RavenDB, CosmosDB and Elasticsearch, sync and async)
+
+#### Scenario: Bulk update with one missing entity
+
+- **Given** two stored entities, renamed, and one entity that is not stored, in one batch
+- **When** bulk `Update(batch)` runs
+- **Then** both stored entities are written and `EntityNotFoundException` names only the missing one
+
+#### Scenario: A model with no declared primary key on a SQL bulk path
+
+- **Given** a SQL-mapped model with no `[PrimaryField]` (the ordinary `AbstractModel`)
+- **When** a native bulk `Update` or `Delete` runs on SQLite, PostgreSQL, MySQL or SQL Server
+- **Then** it keys on `Guid` through `DataBase.GetPrimaryFields`, like every single-item path — the bulk paths used
+  `Table.GetPrimaryFields()`, which has no fallback, and silently updated or deleted nothing (TASK-555,
+  `BulkPrimaryKeyFallbackTests`)
+
 #### Scenario: Settings-aware store combines both contracts, sync only
 
 - **Given** `ISettingsStore<T, TSettings> : IStore<T>, ISettingsStore<TSettings> where TSettings : ISettings`
@@ -188,7 +223,11 @@ initialization gate itself; the gate is opened by the filter overload it delegat
 
 The system SHALL implement `Save` / `SaveAsync` to return `Guid.Empty` when `data` is `null`; to call
 `Create` / `CreateAsync` when `data.Guid` is `null` or `Guid.Empty`, returning the identifier that create
-reported; and otherwise to call `Update` / `UpdateAsync` and return `data.Guid!.Value`.
+reported; and otherwise to call `Update` / `UpdateAsync` and return `data.Guid!.Value` — **creating the entity under
+that Guid when the update reports `EntityNotFoundException` for it** (an upsert). The decision has one producer,
+`StoreSave`, used by both base stores and every decorator that routes it (timestamp, audit, soft-delete, sluggable,
+default, versioned, localization, event sourcing, tenant), each passing its own create so its create behaviour runs.
+The store delegate runs once on the upsert path. MongoDB, RavenDB and CosmosDB `SaveAsync` upsert natively.
 
 #### Scenario: Saving a new entity
 
@@ -206,9 +245,22 @@ reported; and otherwise to call `Update` / `UpdateAsync` and return `data.Guid!.
 #### Scenario: Saving an entity whose identifier is not in the store
 
 - **Given** an entity carrying a non-empty `Guid` that no stored record uses
-- **When** `Save(entity)` is called against an in-memory store
-- **Then** `Update` is chosen, `UpdateCore` finds no matching key and does nothing, and `Save` still returns
-  `entity.Guid.Value` — so the caller receives a plausible identifier for data that was never persisted
+- **When** `Save(entity)` is called, on any provider or through any routing decorator
+- **Then** the entity is created under that `Guid` and `Save` returns it (SH-M309, fixed by TASK-555 — `Save` used to
+  return the `Guid` of an entity it never stored)
+
+#### Scenario: The upsert runs the delegate once
+
+- **Given** an entity with an unstored `Guid` and a store delegate
+- **When** `Save(entity, delegate)` updates, misses, and creates
+- **Then** the delegate has run exactly once
+
+#### Scenario: A provider SaveAsync override honours the store contract
+
+- **Given** `AsyncMongoDBStore` / `AsyncCosmosDBStore`, whose `SaveAsync` overrides the public wrapper
+- **When** `SaveAsync` updates an existing entity, or is the first call on a store
+- **Then** the delegate runs (MongoDB skipped it on the update branch) and the lazy initialization runs first
+  (CosmosDB returned `Guid.Empty` and wrote nothing) — both found by the contract, fixed by TASK-555
 
 ### Requirement: CreateInstance constructs the entity type reflectively with a fallback attempt
 
@@ -424,33 +476,32 @@ The system SHALL implement `ReadCore(filter)` / `ReadCoreAsync(filter, ct)` as
 - **When** `Read(filter)` is called
 - **Then** `FirstOrDefault` yields `null`
 
-### Requirement: In-memory update and delete silently ignore entities they cannot act on
+### Requirement: In-memory update refuses an entity it cannot act on; delete is silent
 
-The system SHALL, in `UpdateCore` / `UpdateCoreAsync`, apply the delegate only when `data?.Guid != null` and
-`_items.ContainsKey(data.Guid.Value)`, and otherwise do nothing; and SHALL then replace the stored entity
-**only while one is stored** — `TryGetValue` + `TryUpdate`, retried on a concurrent replacement and abandoned on a
-removal (SH-M308, [[TASK-163]]). It SHALL, in `DeleteCore` / `DeleteCoreAsync`, call `_items.TryRemove` when
-`data?.Guid != null`, discarding the result. The silent no-op on a missing key is shared by every backend and is
-[[TASK-555]]'s decision, not this store's.
+The system SHALL, in `UpdateCore` / `UpdateCoreAsync`, throw `EntityNotFoundException` when `data.Guid` is `null` or
+not a key of `_items`, before invoking the delegate; and SHALL then replace the stored entity **only while one is
+stored** — `TryGetValue` + `TryUpdate`, retried on a concurrent replacement — throwing `EntityNotFoundException` when a
+concurrent removal ends it (SH-M308, [[TASK-163]]; the throw is TASK-555). It SHALL, in `DeleteCore` /
+`DeleteCoreAsync`, call `_items.TryRemove` when `data?.Guid != null`, discarding the result.
 
 #### Scenario: Updating an entity that is not stored
 
 - **Given** an entity with a non-empty `Guid` absent from `_items`
 - **When** `Update(entity)` is called
-- **Then** nothing is written and no exception is raised — the caller cannot tell the update was dropped
+- **Then** `EntityNotFoundException` is thrown and nothing is written (it used to return silently)
 
 #### Scenario: Updating an entity with no identifier
 
 - **Given** an entity whose `Guid` is `null`
 - **When** `Update(entity)` is called
-- **Then** the guard fails, the delegate is never invoked, and nothing is stored
+- **Then** `EntityNotFoundException` is thrown, the delegate is never invoked, and nothing is stored
 
 #### Scenario: The entity is deleted while the update runs
 
 - **Given** a stored entity, and a store delegate (or another thread) that deletes it after the existence check
 - **When** `Update(entity, delegate)` writes
-- **Then** the entity stays deleted — the write was a `TryUpdate` against the stored value, not an indexer
-  assignment, so it cannot re-insert a removed key (before SH-M308 it resurrected it)
+- **Then** the entity stays deleted — the write was a `TryUpdate` against the stored value, so it cannot re-insert a
+  removed key (before SH-M308 it resurrected it) — and the lost race is reported as `EntityNotFoundException`
 
 #### Scenario: Deleting an entity twice
 
@@ -534,8 +585,8 @@ refuse a bulk create containing a key already stored, or a key repeated inside t
 
 - **Given** a collection of four entities, two of which have identifiers present in `_items`
 - **When** bulk `Update(data)` runs
-- **Then** only the two present entities are written; the delegate is not invoked for the other two and no
-  error reports the partial application
+- **Then** the two present entities are written, the delegate is not invoked for the other two, and
+  `EntityNotFoundException` names the two missing ones (it used to report nothing)
 
 #### Scenario: Bulk operation with a null collection
 

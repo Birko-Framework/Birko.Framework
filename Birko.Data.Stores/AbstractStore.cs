@@ -230,22 +230,9 @@ namespace Birko.Data.Stores
         /// </summary>
         /// <param name="data">The entity to save.</param>
         /// <param name="storeDelegate">Optional delegate to process the entity before saving.</param>
+        /// <remarks>An entity whose Guid is not stored is created under that Guid (TASK-555) — see <see cref="StoreSave"/>.</remarks>
         public virtual Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null)
-        {
-            if (data == null)
-            {
-                return Guid.Empty;
-            }
-            if (data.Guid == null || data.Guid == Guid.Empty)
-            {
-                return Create(data, storeDelegate);
-            }
-            else
-            {
-                Update(data, storeDelegate);
-                return data.Guid!.Value;
-            }
-        }
+            => StoreSave.Save(data, storeDelegate, Create, Update);
 
         /// <summary>
         /// Creates a new instance of the entity type.

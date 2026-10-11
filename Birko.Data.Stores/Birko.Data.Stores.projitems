@@ -27,6 +27,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)PropertyUpdate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreLocator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)StoreSave.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AggregateQuery.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AggregateResult.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IAggregatableStore.cs" />

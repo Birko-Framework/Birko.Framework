@@ -242,6 +242,12 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
+        /// <remarks>
+        /// TASK-555: unlike every other provider, an update of a Guid that is not stored does not throw
+        /// <c>EntityNotFoundException</c> — it writes the point. InfluxDB has no update: a point overwrites by series key
+        /// and time, so a write reports no matched count, and detecting the miss would cost a query on every write (the
+        /// contract forbids a pre-read). The write is applied, never lost, so <c>Save</c>'s upsert holds here too.
+        /// </remarks>
         protected override async Task UpdateCoreAsync(T data, Data.Stores.StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
             if (Client == null || _settings == null || data == null || data.Guid == null || data.Guid == Guid.Empty)

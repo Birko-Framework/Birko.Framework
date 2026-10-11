@@ -28,4 +28,8 @@
   <Import Project="..\..\Birko.Data.CosmosDB\Birko.Data.CosmosDB.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
+  <ItemGroup>
+    <Compile Include="..\Shared\StoreContract\UpdateMissContract.cs" Link="Shared\UpdateMissContract.cs" />
+  </ItemGroup>
+
 </Project>

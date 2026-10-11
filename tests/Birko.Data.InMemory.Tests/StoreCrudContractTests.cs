@@ -28,8 +28,10 @@ public class StoreCrudContractTests
 
         // The store delegate runs between the existence check and the write — exactly the window another thread's
         // delete can land in, made deterministic.
-        store.Update(entity, e => { store.Delete(e); return e; });
+        // TASK-555 (rule 56): this asserted a silent return; the miss is now reported. The row must still stay deleted.
+        var act = () => store.Update(entity, e => { store.Delete(e); return e; });
 
+        act.Should().Throw<EntityNotFoundException>().Which.Guids.Should().Equal(entity.Guid!.Value);
         store.Count().Should().Be(0);
         store.Read(entity.Guid!.Value).Should().BeNull();
     }
@@ -41,8 +43,10 @@ public class StoreCrudContractTests
         var entity = new TestModel { Name = "a" };
         await store.CreateAsync(entity);
 
-        await store.UpdateAsync(entity, e => { store.Items.Should().ContainKey(e.Guid!.Value); store.DeleteAsync(e).GetAwaiter().GetResult(); return e; });
+        // TASK-555 (rule 56): this asserted a silent return; the miss is now reported. The row must still stay deleted.
+        var act = () => store.UpdateAsync(entity, e => { store.Items.Should().ContainKey(e.Guid!.Value); store.DeleteAsync(e).GetAwaiter().GetResult(); return e; });
 
+        await act.Should().ThrowAsync<EntityNotFoundException>();
         (await store.CountAsync()).Should().Be(0);
     }
 
@@ -54,8 +58,10 @@ public class StoreCrudContractTests
         var b = new TestModel { Name = "b" };
         store.Create(new[] { a, b });
 
-        store.Update(new[] { a, b }, e => { if (e == a) store.Delete(a); return e; });
+        // TASK-555 (rule 56): this asserted a silent return; the miss is now reported. The row must still stay deleted.
+        var act = () => store.Update(new[] { a, b }, e => { if (e == a) store.Delete(a); return e; });
 
+        act.Should().Throw<EntityNotFoundException>().Which.Guids.Should().Equal(a.Guid!.Value);
         store.Items.Keys.Should().BeEquivalentTo(new[] { b.Guid!.Value });
     }
 
@@ -67,8 +73,10 @@ public class StoreCrudContractTests
         var b = new TestModel { Name = "b" };
         await store.CreateAsync(new[] { a, b });
 
-        await store.UpdateAsync(new[] { a, b }, e => { if (e == a) store.DeleteAsync(a).GetAwaiter().GetResult(); return e; });
+        // TASK-555 (rule 56): this asserted a silent return; the miss is now reported. The row must still stay deleted.
+        var act = () => store.UpdateAsync(new[] { a, b }, e => { if (e == a) store.DeleteAsync(a).GetAwaiter().GetResult(); return e; });
 
+        (await act.Should().ThrowAsync<EntityNotFoundException>()).Which.Guids.Should().Equal(a.Guid!.Value);
         store.Items.Keys.Should().BeEquivalentTo(new[] { b.Guid!.Value });
     }
 

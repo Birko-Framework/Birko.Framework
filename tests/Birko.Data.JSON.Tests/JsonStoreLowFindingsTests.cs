@@ -46,11 +46,14 @@ public class JsonStoreLowFindingsTests : IDisposable
 
         // Bulk-update a mix: one existing, one that was never created.
         var ghost = new TestModel { Guid = Guid.NewGuid(), Name = "ghost" };
-        await store.UpdateAsync(new[]
+        // TASK-555 (rule 56): the miss used to be skipped in silence; it is now reported after the stored item is
+        // written. What this test is about — the ghost is not upserted — is unchanged.
+        var act = () => store.UpdateAsync(new[]
         {
             new TestModel { Guid = existing.Guid, Name = "updated" },
             ghost,
         });
+        (await act.Should().ThrowAsync<Birko.Data.Exceptions.EntityNotFoundException>()).Which.Guids.Should().Equal(ghost.Guid!.Value);
 
         var reader = new AsyncJsonStore<TestModel>();
         reader.SetSettings(new Settings(_location, "l129.json"));

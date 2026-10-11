@@ -4,6 +4,7 @@ using Birko.Data.Stores;
 using Birko.Configuration;
 using Nest;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -165,7 +166,11 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <inheritdoc />
         protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (data == null || data.Guid == null || data.Guid == Guid.Empty) return;
+            if (data == null) return;
+            if (data.Guid == null || data.Guid == Guid.Empty)
+            {
+                throw new EntityNotFoundException(typeof(T), data.Guid);
+            }
 
             storeDelegate?.Invoke(data);
 
@@ -176,13 +181,19 @@ namespace Birko.Data.ElasticSearch.Stores
 
                 if (!response.IsValid || response.OriginalException != null)
                 {
+                    if (Data.ElasticSearch.ElasticSearch.IsDocumentMissing(response))
+                    {
+                        // SH-M306 (TASK-555): the update API answers a missing document with a 404, which used to
+                        // surface as a generic failure — a typed miss lets Save create the entity instead.
+                        throw new EntityNotFoundException(typeof(T), data.Guid);
+                    }
                     throw new InvalidOperationException(
                         $"ElasticSearch update failed. Index: {indexName}, Guid: {data.Guid}. " +
                         $"DebugInfo: {response.DebugInformation}",
                         response.OriginalException);
                 }
             }
-            catch (Exception ex) when (ex is InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException || ex is EntityNotFoundException)
             {
                 throw;
             }
@@ -368,6 +379,7 @@ namespace Birko.Data.ElasticSearch.Stores
 
             if (!bulkResponse.IsValid)
             {
+                Data.ElasticSearch.ElasticSearch.ThrowIfOnlyMissingDocuments(typeof(T), bulkResponse);
                 var errorItems = bulkResponse.ItemsWithErrors.Take(10);
                 var errors = string.Join("\n", errorItems.Select(item =>
                     $"Index: {item.Index}, Id: {item.Id}, Error: {item.Error?.Reason ?? item.Error?.Type ?? "Unknown"}"));

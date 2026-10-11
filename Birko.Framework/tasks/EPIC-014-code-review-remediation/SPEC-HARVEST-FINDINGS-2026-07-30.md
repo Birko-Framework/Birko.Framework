@@ -2987,7 +2987,7 @@ SetSettings runs only inside `if (!_stores[id].ContainsKey(type))`. The bucket k
 
 Save routes to Update whenever data.Guid is non-empty, then returns data.Guid!.Value. Update returns void and — in AbstractInMemoryStore.UpdateCore, which no-ops when the key is absent — cannot report that nothing was written. Save(entityWithFabricatedGuid) reports success and hands back a plausible identifier for data that does not exist. Same in AbstractAsyncStore.SaveAsync line 161.
 
-**Verdict: CONFIRMED, broader than stated — deferred to [[TASK-555]].** `AbstractStore.cs:233-247` returns `data.Guid!.Value` after a `void` `Update`, and **no** backend can report a missing key: in-memory/JSON/XML guard with `ContainsKey` and write nothing, `DataBaseStore.UpdateCore` (:209) issues an UPDATE that matches 0 rows, `MongoDBStore.UpdateCore` (:163) ignores `MatchedCount`. Fixing the in-memory double alone would make it diverge from every backend it stands in for, so this is a cross-provider contract decision (throw vs count; `Save` as upsert vs throw).
+**Verdict: CONFIRMED, broader than stated — deferred to [[TASK-555]].** `AbstractStore.cs:233-247` returns `data.Guid!.Value` after a `void` `Update`, and **no** backend can report a missing key: in-memory/JSON/XML guard with `ContainsKey` and write nothing, `DataBaseStore.UpdateCore` (:209) issues an UPDATE that matches 0 rows, `MongoDBStore.UpdateCore` (:163) ignores `MatchedCount`. Fixing the in-memory double alone would make it diverge from every backend it stands in for, so this is a cross-provider contract decision (throw vs count; `Save` as upsert vs throw). **Fixed by [[TASK-555]] (2026-10-11)** — decided: `Save` of an unstored Guid creates it (upsert), through one producer (`StoreSave`) that the base stores and every routing decorator use.
 
 #### SH-M307 — Destroy does not reset the initialization latch, so torn-down storage is never re-provisioned
 
@@ -3011,7 +3011,7 @@ Destroy()/DestroyAsync() are abstract and the private `_initialized` field is ne
 
 The whole body is guarded by `data?.Guid != null && _items.ContainsKey(...)`; updating an entity whose Guid is null, or absent from _items, returns successfully with nothing written and the delegate never invoked. Update returns void so there is no result to inspect, and StoreException exists for exactly this failure but is never thrown. The bulk override (line 171) additionally applies partially — some items written, some skipped, no report of which. This is the mechanism behind Save's bogus success return.
 
-**Verdict: CONFIRMED, broader than stated — deferred to [[TASK-555]].** As SH-M306: the silent no-op is every backend's behaviour, not the in-memory store's, because `IUpdateStore.Update` returns `void` and has no not-found channel. Fixed together with SH-M306 there.
+**Verdict: CONFIRMED, broader than stated — deferred to [[TASK-555]].** As SH-M306: the silent no-op is every backend's behaviour, not the in-memory store's, because `IUpdateStore.Update` returns `void` and has no not-found channel. Fixed together with SH-M306 there. **Fixed by [[TASK-555]] (2026-10-11)** — `Update` of an unstored entity throws `EntityNotFoundException` on every provider, from its native matched signal; bulk names every miss after writing the rest. InfluxDB documented as an upsert (no matched count).
 
 #### SH-M310 — In-memory CreateCore silently upserts over an existing key where a real backend's primary key would reject
 

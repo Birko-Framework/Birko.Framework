@@ -5,6 +5,7 @@ using ISettings = Birko.Configuration.ISettings;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Azure.Cosmos.Linq;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -266,19 +267,39 @@ public class AsyncCosmosDBStore<T>
     /// <inheritdoc />
     protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
-        if (_container == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
+        if (_container == null || data == null) return;
+        if (data.Guid == null || data.Guid == Guid.Empty)
+        {
+            throw new EntityNotFoundException(typeof(T), data.Guid);
+        }
 
         processDelegate?.Invoke(data);
 
         if (TransactionContext != null)
         {
+            // A replace inside a transactional batch is checked when the batch executes: a missing item fails the
+            // whole batch atomically at commit, which reports it (TASK-555 changes nothing here).
             RequireBatchPartition(data.Guid.Value);
             TransactionContext.ReplaceItem(data.Guid.Value.ToString(), data);
             return;
         }
 
-        await _container.ReplaceItemAsync(data, data.Guid.Value.ToString(), new PartitionKey(data.Guid.Value.ToString()), cancellationToken: ct);
+        try
+        {
+            await _container.ReplaceItemAsync(data, data.Guid.Value.ToString(), new PartitionKey(data.Guid.Value.ToString()), cancellationToken: ct);
+        }
+        catch (CosmosException ex) when (IsItemNotFound(ex))
+        {
+            throw new EntityNotFoundException(typeof(T), data.Guid);
+        }
     }
+
+    /// <summary>
+    /// SH-M306 (TASK-555): a replace of an item that is not stored answers 404. Sub-status 1003 is the CONTAINER
+    /// missing — an infrastructure failure, not a miss — so it keeps propagating as the CosmosException it is.
+    /// </summary>
+    private static bool IsItemNotFound(CosmosException ex)
+        => ex.StatusCode == HttpStatusCode.NotFound && ex.SubStatusCode != 1003;
 
     /// <inheritdoc />
     protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
@@ -323,6 +344,10 @@ public class AsyncCosmosDBStore<T>
     /// <inheritdoc />
     public override async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
+        // TASK-555: this overrides the PUBLIC wrapper, so it must run the lazy-init + cancellation gate itself (the slip
+        // CR-H077 fixed in the RavenDB store). Without it a SaveAsync as the first call on a store found no container,
+        // returned Guid.Empty and wrote nothing, silently. Found by the update-miss contract, measured on the emulator.
+        await EnsureInitializedAsync(ct);
         if (_container == null || data == null) return Guid.Empty;
 
         processDelegate?.Invoke(data);
@@ -457,16 +482,37 @@ public class AsyncCosmosDBStore<T>
             return;
         }
 
+        // TASK-555: each replace reports its own miss — Task.WhenAll surfaced only the first failure — and the stored
+        // items are still written. Any other failure propagates as before.
+        var missing = new System.Collections.Concurrent.ConcurrentBag<Guid>();
         var tasks = new List<Task>();
         foreach (var item in data)
         {
-            if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
+            if (item == null) continue;
+            if (item.Guid == null || item.Guid == Guid.Empty)
+            {
+                missing.Add(Guid.Empty);
+                continue;
+            }
 
             storeDelegate?.Invoke(item);
-            tasks.Add(_container.ReplaceItemAsync(item, item.Guid.Value.ToString(), new PartitionKey(item.Guid.Value.ToString()), cancellationToken: ct));
+            tasks.Add(ReplaceOrRecordMissAsync(item, missing, ct));
         }
 
         await Task.WhenAll(tasks);
+        EntityNotFoundException.ThrowIfAny(typeof(T), missing);
+    }
+
+    private async Task ReplaceOrRecordMissAsync(T item, System.Collections.Concurrent.ConcurrentBag<Guid> missing, CancellationToken ct)
+    {
+        try
+        {
+            await _container!.ReplaceItemAsync(item, item.Guid!.Value.ToString(), new PartitionKey(item.Guid.Value.ToString()), cancellationToken: ct).ConfigureAwait(false);
+        }
+        catch (CosmosException ex) when (IsItemNotFound(ex))
+        {
+            missing.Add(item.Guid!.Value);
+        }
     }
 
     /// <inheritdoc />

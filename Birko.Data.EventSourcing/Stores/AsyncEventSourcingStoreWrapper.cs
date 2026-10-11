@@ -185,21 +185,8 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         public virtual async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken cancellationToken = default)
         {
-            if (data == null)
-            {
-                return Guid.Empty;
-            }
-
-            if (data.Guid == null || data.Guid == Guid.Empty)
-            {
-                await CreateAsync(data, processDelegate, cancellationToken);
-            }
-            else
-            {
-                await UpdateAsync(data, processDelegate, cancellationToken);
-            }
-
-            return data.Guid ?? Guid.Empty;
+            // TASK-555: the create-or-update decision has one producer; an unstored Guid is created, not lost.
+            return await StoreSave.SaveAsync(data, processDelegate, CreateAsync, UpdateAsync, cancellationToken);
         }
 
         /// <summary>

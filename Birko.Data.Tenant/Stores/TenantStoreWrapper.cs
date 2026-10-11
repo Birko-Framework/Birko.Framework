@@ -83,20 +83,8 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 
     public Guid Save(T data, StoreDataDelegate<T>? processDelegate = null)
     {
-        if (data == null)
-        {
-            return Guid.Empty;
-        }
-
-        if (data.Guid == null || data.Guid == Guid.Empty)
-        {
-            return Create(data, processDelegate);
-        }
-        else
-        {
-            Update(data, processDelegate);
-            return data.Guid ?? Guid.Empty;
-        }
+        // TASK-555: the create-or-update decision has one producer; an unstored Guid is created, not lost.
+        return StoreSave.Save(data, processDelegate, Create, Update);
     }
 
     public void Init()

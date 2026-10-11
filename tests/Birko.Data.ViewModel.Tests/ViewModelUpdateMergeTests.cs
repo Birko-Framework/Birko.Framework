@@ -395,14 +395,18 @@ public class ViewModelUpdateMergeTests
     }
 
     [Fact]
-    public void Updating_a_view_model_whose_row_does_not_exist_behaves_as_before()
+    public void Updating_a_view_model_whose_row_does_not_exist_reports_the_stores_miss()
     {
+        // TASK-555 (rule 56): this asserted NotThrow, because the store's miss USED to be a silent no-op. The point was
+        // always that the merge invents no failure of its own and the store reports the miss — which it now does.
         var store = new ProbeStore();
         var repo = new SyncRepo(store);
+        var ghost = Guid.NewGuid();
 
-        var act = () => repo.Update(new Vm { Guid = Guid.NewGuid(), Name = "ghost" });
+        var act = () => repo.Update(new Vm { Guid = ghost, Name = "ghost" });
 
-        act.Should().NotThrow("the merge must not invent a different failure when the row is missing — the store reports the miss the way it always has");
+        act.Should().Throw<Birko.Data.Exceptions.EntityNotFoundException>("the store reports the miss; the merge adds no failure of its own")
+            .Which.Guids.Should().Equal(ghost);
         store.Read(null, null, null, null).Should().BeEmpty();
     }
 

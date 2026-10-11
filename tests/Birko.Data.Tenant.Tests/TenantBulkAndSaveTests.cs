@@ -63,7 +63,10 @@ public class TenantBulkAndSaveTests
     public async Task UpdateAsync_enumerates_the_source_once()
     {
         var (wrapper, tenant) = NewBulk();
-        var source = new CountingEnumerable<Doc>(new[] { new Doc { Guid = Guid.NewGuid(), TenantGuid = tenant } });
+        var doc = new Doc { Guid = Guid.NewGuid(), TenantGuid = tenant };
+        // TASK-555: an update now refuses an entity that is not stored, so the fixture stores it first.
+        await wrapper.CreateAsync(doc);
+        var source = new CountingEnumerable<Doc>(new[] { doc });
 
         await wrapper.UpdateAsync(source);
 

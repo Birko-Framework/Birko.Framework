@@ -1,4 +1,5 @@
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -85,12 +86,14 @@ namespace Birko.Data.JSON.Stores
             EnsureWritable();
             await EnsureDataLoadedAsync(ct);
 
-            if (data?.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
+            // SH-M306 (TASK-555): an update of an entity that is not stored throws instead of writing nothing.
+            if (data?.Guid == null || !(_items?.ContainsKey(data.Guid.Value) ?? false))
             {
-                storeDelegate?.Invoke(data);
-                _items[data.Guid.Value] = data;
-                await SaveDataAsync(ct);
+                throw new EntityNotFoundException(typeof(T), data?.Guid);
             }
+            storeDelegate?.Invoke(data);
+            _items[data.Guid.Value] = data;
+            await SaveDataAsync(ct);
         }
 
         /// <inheritdoc />
@@ -291,11 +294,14 @@ namespace Birko.Data.JSON.Stores
             // CR-L129: only update items that already exist — matching single-item UpdateCoreAsync and the
             // sync bulk UpdateCore. Without the ContainsKey guard this silently upserted a non-existent
             // entity, making async-bulk Update behave as an upsert (inconsistent with Update semantics).
+            // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
+            var missing = new List<Guid>();
             var updated = false;
             foreach (var item in data.Where(x => x != null && x.Guid.HasValue))
             {
                 if (!(_items?.ContainsKey(item.Guid!.Value) ?? false))
                 {
+                    missing.Add(item.Guid!.Value);
                     continue;
                 }
                 storeDelegate?.Invoke(item);
@@ -306,6 +312,10 @@ namespace Birko.Data.JSON.Stores
             if (updated)
             {
                 await SaveDataAsync(ct);
+            }
+            if (missing.Count > 0)
+            {
+                throw new EntityNotFoundException(typeof(T), missing);
             }
         }
 

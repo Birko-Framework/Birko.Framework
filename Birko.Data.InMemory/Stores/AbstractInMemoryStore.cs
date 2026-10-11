@@ -89,10 +89,19 @@ namespace Birko.Data.InMemory.Stores
         /// <inheritdoc />
         protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (data?.Guid != null && _items.ContainsKey(data.Guid.Value))
+            if (data == null)
             {
-                storeDelegate?.Invoke(data);
-                ReplaceExisting(data);
+                return;
+            }
+            // SH-M306 (TASK-555): an update of an entity that is not stored throws instead of writing nothing.
+            if (data.Guid == null || !_items.ContainsKey(data.Guid.Value))
+            {
+                throw new EntityNotFoundException(typeof(T), data.Guid);
+            }
+            storeDelegate?.Invoke(data);
+            if (!ReplaceExisting(data))
+            {
+                throw new EntityNotFoundException(typeof(T), data.Guid);
             }
         }
 
@@ -175,10 +184,24 @@ namespace Birko.Data.InMemory.Stores
             {
                 return;
             }
-            foreach (var item in data.Where(x => x != null && x.Guid.HasValue && _items.ContainsKey(x.Guid.Value)))
+            // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
+            var missing = new List<Guid>();
+            foreach (var item in data.Where(x => x != null))
             {
+                if (!item.Guid.HasValue || !_items.ContainsKey(item.Guid.Value))
+                {
+                    missing.Add(item.Guid ?? Guid.Empty);
+                    continue;
+                }
                 storeDelegate?.Invoke(item);
-                ReplaceExisting(item);
+                if (!ReplaceExisting(item))
+                {
+                    missing.Add(item.Guid.Value);
+                }
+            }
+            if (missing.Count > 0)
+            {
+                throw new EntityNotFoundException(typeof(T), missing);
             }
         }
 
@@ -234,16 +257,18 @@ namespace Birko.Data.InMemory.Stores
         /// atomic calls, not one, so a delete between them — another thread's, or the store delegate's own — was
         /// undone by the write. A concurrent replacement is retried; a removal ends it.
         /// </summary>
-        protected void ReplaceExisting(T item)
+        /// <returns>False when nothing is stored under the key — the caller reports the miss (TASK-555).</returns>
+        protected bool ReplaceExisting(T item)
         {
             var key = item.Guid!.Value;
             while (_items.TryGetValue(key, out var current))
             {
                 if (_items.TryUpdate(key, item, current))
                 {
-                    return;
+                    return true;
                 }
             }
+            return false;
         }
 
         #endregion

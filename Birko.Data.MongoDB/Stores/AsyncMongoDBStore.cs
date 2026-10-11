@@ -5,6 +5,7 @@ using Birko.Data.Stores;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -194,18 +195,32 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         protected override async Task UpdateCoreAsync(T data, Data.Stores.StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
-            if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
+            if (Collection == null || data == null)
             {
                 return;
+            }
+            if (data.Guid == null || data.Guid == Guid.Empty)
+            {
+                throw new EntityNotFoundException(typeof(T), data.Guid);
             }
 
             processDelegate?.Invoke(data);
 
-            var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
-            if (TransactionContext != null)
-                await Collection.ReplaceOneAsync(TransactionContext, filter, data, new ReplaceOptions { IsUpsert = false }, ct);
-            else
-                await Collection.ReplaceOneAsync(filter, data, new ReplaceOptions { IsUpsert = false }, ct);
+            if (!await ReplaceExistingAsync(data, ct))
+            {
+                throw new EntityNotFoundException(typeof(T), data.Guid);
+            }
+        }
+
+        /// <summary>SH-M306 (TASK-555): a replace that matched no document means the entity is not stored. An
+        /// unacknowledged write concern reports no count, so only an acknowledged zero is a miss.</summary>
+        private async Task<bool> ReplaceExistingAsync(T item, CancellationToken ct)
+        {
+            var filter = new ModelByGuid<T>(item.Guid!.Value).Filter();
+            var result = TransactionContext != null
+                ? await Collection!.ReplaceOneAsync(TransactionContext, filter, item, new ReplaceOptions { IsUpsert = false }, ct)
+                : await Collection!.ReplaceOneAsync(filter, item, new ReplaceOptions { IsUpsert = false }, ct);
+            return !result.IsAcknowledged || result.MatchedCount > 0;
         }
 
         /// <inheritdoc />
@@ -241,6 +256,9 @@ namespace Birko.Data.MongoDB.Stores
                 // CR-M119: the native-upsert fast path must still honor the init/cancellation contract
                 // (the create branch gets it via CreateAsync; this branch previously did not).
                 await EnsureInitializedAsync(ct);
+                // TASK-555: the delegate ran on the create branch but was skipped here — a Save that updated never
+                // applied it. The native upsert already stores an unstored Guid (SH-M309 does not apply).
+                processDelegate?.Invoke(data);
 
                 var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
                 if (TransactionContext != null)
@@ -362,21 +380,24 @@ namespace Birko.Data.MongoDB.Stores
                 return;
             }
 
+            // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
+            var missing = new List<Guid>();
             foreach (var item in itemsToUpdate)
             {
                 if (item.Guid == null || item.Guid == Guid.Empty)
                 {
+                    missing.Add(Guid.Empty);
                     continue;
                 }
 
                 storeDelegate?.Invoke(item);
 
-                var filter = new ModelByGuid<T>(item.Guid.Value).Filter();
-                if (TransactionContext != null)
-                    await Collection.ReplaceOneAsync(TransactionContext, filter, item, new ReplaceOptions { IsUpsert = false }, ct);
-                else
-                    await Collection.ReplaceOneAsync(filter, item, new ReplaceOptions { IsUpsert = false }, ct);
+                if (!await ReplaceExistingAsync(item, ct))
+                {
+                    missing.Add(item.Guid.Value);
+                }
             }
+            EntityNotFoundException.ThrowIfAny(typeof(T), missing);
         }
 
         /// <inheritdoc />

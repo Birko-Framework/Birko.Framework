@@ -113,16 +113,8 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
         {
             await UnsetOtherDefaultsAsync(data.Guid, ct: ct);
         }
-
-        if (data.Guid == null || data.Guid == Guid.Empty)
-        {
-            return await _innerStore.CreateAsync(data, processDelegate, ct);
-        }
-        else
-        {
-            await _innerStore.UpdateAsync(data, processDelegate, ct);
-            return data.Guid ?? Guid.Empty;
-        }
+        // TASK-555: the create-or-update decision has one producer; an unstored Guid is created, not lost.
+        return await StoreSave.SaveAsync(data, processDelegate, _innerStore.CreateAsync, _innerStore.UpdateAsync, ct);
     }
 
     public Task InitAsync(CancellationToken ct = default) => _innerStore.InitAsync(ct);

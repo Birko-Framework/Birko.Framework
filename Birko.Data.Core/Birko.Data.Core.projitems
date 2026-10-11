@@ -12,6 +12,7 @@
   <ItemGroup>
     <!-- Exceptions -->
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\StoreException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Exceptions\EntityNotFoundException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\WholeTableWriteException.cs" />
     <!-- Expressions -->
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionParameterReplacer.cs" />

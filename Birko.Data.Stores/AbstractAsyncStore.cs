@@ -244,23 +244,9 @@ namespace Birko.Data.Stores
         #region Utility Methods
 
         /// <inheritdoc />
-        public virtual async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
-        {
-            if (data == null)
-            {
-                return Guid.Empty;
-            }
-
-            if (data.Guid == null || data.Guid == Guid.Empty)
-            {
-                return await CreateAsync(data, processDelegate, ct);
-            }
-            else
-            {
-                await UpdateAsync(data, processDelegate, ct);
-                return data.Guid!.Value;
-            }
-        }
+        /// <remarks>An entity whose Guid is not stored is created under that Guid (TASK-555) — see <see cref="StoreSave"/>.</remarks>
+        public virtual Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+            => StoreSave.SaveAsync(data, processDelegate, CreateAsync, UpdateAsync, ct);
 
         /// <inheritdoc />
         public virtual T CreateInstance()

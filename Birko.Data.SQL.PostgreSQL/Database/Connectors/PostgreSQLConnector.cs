@@ -693,29 +693,35 @@ namespace Birko.Data.SQL.Connectors
             }, ct, retryWhenOwned: false);
         }
 
-        public void BulkUpdate(Type type, IEnumerable<object> models)
+        /// <returns>The models whose primary key matched no row (TASK-555) — the caller reports them as not stored.
+        /// Every model that does match is written.</returns>
+        public IReadOnlyList<object> BulkUpdate(Type type, IEnumerable<object> models)
         {
             if (models == null || !models.Any())
-                return;
+                return Array.Empty<object>();
 
             var table = DataBase.LoadTable(type);
             if (table == null)
-                return;
+                return Array.Empty<object>();
 
-            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
+            // TASK-555: the ONE primary-key lookup (DataBase.GetPrimaryFields falls back to Guid when no
+            // [PrimaryField] is declared — the common AbstractModel case). table.GetPrimaryFields() has no fallback,
+            // so for such a model these bulk paths found no key and silently updated / deleted NOTHING.
+            var primaryFields = DataBase.GetPrimaryFields(type).ToList();
             if (!primaryFields.Any())
-                return;
+                return Array.Empty<object>();
 
             var allFields = table.Fields.Select(f => f.Value).ToList();
-            var updateFields = allFields.Where(f => !f.IsPrimary && !f.IsAutoincrement).ToList();
+            var updateFields = allFields.Where(f => !primaryFields.Contains(f) && !f.IsAutoincrement).ToList();
             if (!updateFields.Any())
-                return;
+                return Array.Empty<object>();
 
             // A bulk write must JOIN an open boundary on this database rather than open a second connection.
             // On PostgreSQL two connections are perfectly legal, so before this the statements committed on
             // their own transaction and SURVIVED the owner's rollback with no error anywhere — the quiet
             // half of the defect. retryWhenOwned: false keeps the own-connection path exactly as it shipped;
             // this path never retried and the fix is not the place to start.
+            var unmatched = new List<object>();
             RunBulk("BulkUpdate " + table.Name, (dbConnection, dbTransaction, owned) =>
             {
                 var connection = (NpgsqlConnection)dbConnection;
@@ -743,6 +749,7 @@ namespace Birko.Data.SQL.Connectors
                     }
                     command.Prepare();
 
+                    unmatched.Clear(); // a retried attempt starts over
                     foreach (var model in models)
                     {
                         foreach (var field in updateFields)
@@ -753,7 +760,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
                         }
-                        command.ExecuteNonQuery();
+                        if (command.ExecuteNonQuery() == 0) unmatched.Add(model);
                     }
 
                     if (owned) transaction.Commit();
@@ -764,27 +771,34 @@ namespace Birko.Data.SQL.Connectors
                     InitException(ex, commandText ?? "BulkUpdate " + table.Name);
                 }
             }, retryWhenOwned: false);
+            return unmatched;
         }
 
-        public async Task BulkUpdateAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
+        /// <returns>The models whose primary key matched no row (TASK-555) — the caller reports them as not stored.
+        /// Every model that does match is written.</returns>
+        public async Task<IReadOnlyList<object>> BulkUpdateAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
         {
             if (models == null || !models.Any())
-                return;
+                return Array.Empty<object>();
 
             var table = DataBase.LoadTable(type);
             if (table == null)
-                return;
+                return Array.Empty<object>();
 
-            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
+            // TASK-555: the ONE primary-key lookup (DataBase.GetPrimaryFields falls back to Guid when no
+            // [PrimaryField] is declared — the common AbstractModel case). table.GetPrimaryFields() has no fallback,
+            // so for such a model these bulk paths found no key and silently updated / deleted NOTHING.
+            var primaryFields = DataBase.GetPrimaryFields(type).ToList();
             if (!primaryFields.Any())
-                return;
+                return Array.Empty<object>();
 
             var allFields = table.Fields.Select(f => f.Value).ToList();
-            var updateFields = allFields.Where(f => !f.IsPrimary && !f.IsAutoincrement).ToList();
+            var updateFields = allFields.Where(f => !primaryFields.Contains(f) && !f.IsAutoincrement).ToList();
             if (!updateFields.Any())
-                return;
+                return Array.Empty<object>();
 
             // Joins an open boundary instead of opening a second connection — see BulkUpdate above.
+            var unmatched = new List<object>();
             await RunBulkAsync("BulkUpdateAsync " + table.Name, async (dbConnection, dbTransaction, owned) =>
             {
                 var connection = (NpgsqlConnection)dbConnection;
@@ -812,6 +826,7 @@ namespace Birko.Data.SQL.Connectors
                     }
                     await command.PrepareAsync(ct).ConfigureAwait(false);
 
+                    unmatched.Clear(); // a retried attempt starts over
                     foreach (var model in models)
                     {
                         ct.ThrowIfCancellationRequested();
@@ -823,7 +838,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
                         }
-                        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                        if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0) unmatched.Add(model);
                     }
 
                     if (owned) await transaction.CommitAsync(ct).ConfigureAwait(false);
@@ -839,6 +854,7 @@ namespace Birko.Data.SQL.Connectors
                     InitException(ex, commandText ?? "BulkUpdateAsync " + table.Name);
                 }
             }, ct, retryWhenOwned: false);
+            return unmatched;
         }
 
         public void BulkDelete(Type type, IEnumerable<object> models)
@@ -850,7 +866,10 @@ namespace Birko.Data.SQL.Connectors
             if (table == null)
                 return;
 
-            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
+            // TASK-555: the ONE primary-key lookup (DataBase.GetPrimaryFields falls back to Guid when no
+            // [PrimaryField] is declared — the common AbstractModel case). table.GetPrimaryFields() has no fallback,
+            // so for such a model these bulk paths found no key and silently updated / deleted NOTHING.
+            var primaryFields = DataBase.GetPrimaryFields(type).ToList();
             if (!primaryFields.Any())
                 return;
 
@@ -904,7 +923,10 @@ namespace Birko.Data.SQL.Connectors
             if (table == null)
                 return;
 
-            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
+            // TASK-555: the ONE primary-key lookup (DataBase.GetPrimaryFields falls back to Guid when no
+            // [PrimaryField] is declared — the common AbstractModel case). table.GetPrimaryFields() has no fallback,
+            // so for such a model these bulk paths found no key and silently updated / deleted NOTHING.
+            var primaryFields = DataBase.GetPrimaryFields(type).ToList();
             if (!primaryFields.Any())
                 return;
 

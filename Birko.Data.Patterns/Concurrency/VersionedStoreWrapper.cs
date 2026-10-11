@@ -53,13 +53,8 @@ public class VersionedStoreWrapper<T> : IStore<T>, IStoreWrapper
 
     public Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        if (data.Guid == null || data.Guid == Guid.Empty)
-        {
-            return Create(data, storeDelegate);
-        }
-
-        Update(data, storeDelegate);
-        return data.Guid.Value;
+        // TASK-555: the create-or-update decision has one producer; an unstored Guid is created, not lost.
+        return StoreSave.Save(data, storeDelegate, Create, Update);
     }
 
     public object? GetInnerStore() => _inner;

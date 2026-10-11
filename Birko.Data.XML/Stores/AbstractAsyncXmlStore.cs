@@ -1,4 +1,5 @@
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -92,12 +93,14 @@ namespace Birko.Data.XML.Stores
             EnsureWritable();
             await EnsureDataLoadedAsync(ct);
 
-            if (data?.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
+            // SH-M306 (TASK-555): an update of an entity that is not stored throws instead of writing nothing.
+            if (data?.Guid == null || !(_items?.ContainsKey(data.Guid.Value) ?? false))
             {
-                storeDelegate?.Invoke(data);
-                _items[data.Guid.Value] = data;
-                await SaveDataAsync(ct);
+                throw new EntityNotFoundException(typeof(T), data?.Guid);
             }
+            storeDelegate?.Invoke(data);
+            _items[data.Guid.Value] = data;
+            await SaveDataAsync(ct);
         }
 
         /// <inheritdoc />
@@ -296,13 +299,25 @@ namespace Birko.Data.XML.Stores
             await EnsureDataLoadedAsync(ct);
             if (data == null) return;
 
+            // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
+            var missing = new List<Guid>();
             foreach (var item in data.Where(x => x != null && x.Guid.HasValue))
             {
+                // It wrote every item, stored or not — a bulk Update that silently created entities.
+                if (!_items.ContainsKey(item.Guid!.Value))
+                {
+                    missing.Add(item.Guid!.Value);
+                    continue;
+                }
                 storeDelegate?.Invoke(item);
                 _items[item.Guid!.Value] = item;
             }
 
             await SaveDataAsync(ct);
+            if (missing.Count > 0)
+            {
+                throw new EntityNotFoundException(typeof(T), missing);
+            }
         }
 
         /// <inheritdoc />

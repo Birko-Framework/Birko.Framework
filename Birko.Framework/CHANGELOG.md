@@ -4,6 +4,28 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — An update of an entity that is not stored throws; Save of an unstored Guid creates it
+
+[[TASK-555]] (SH-M306, SH-M309). `Update` of an entity that is not stored wrote nothing and reported success on every
+backend, and `Save` with a client-chosen Guid routed to that `Update` and returned the Guid of an entity it never
+stored. Now `Update` / `UpdateAsync` throw the new `EntityNotFoundException` (a `StoreException` with `EntityType` and
+`Guids`), each provider reading its own matched signal — never a pre-read. A bulk `Update` writes what is stored, then
+names every miss. `Save` / `SaveAsync` create the entity under its Guid when the update misses, through one producer
+(`StoreSave`) that both base stores and every routing decorator now call with their own create; the delegate runs once.
+
+Found and fixed on the way, each measured: SQL native **bulk update and bulk delete keyed on a lookup with no `Guid`
+fallback**, so for a model with no `[PrimaryField]` they silently wrote or deleted nothing (all four SQL providers);
+RavenDB `Update` and the async XML bulk update **created** a missing entity; `AsyncMongoDBStore.SaveAsync` skipped the
+delegate when updating; `AsyncCosmosDBStore.SaveAsync` as a store's first call returned `Guid.Empty` and wrote nothing.
+
+**Observable — migration:** code that called `Update` on an entity that might not exist, relying on the silent no-op,
+now gets `EntityNotFoundException`: catch it, or call `Save` (which now upserts). A bulk `Update` with misses throws after
+writing the rest. SQL connector `Update` / `UpdateAsync` and the providers' `BulkUpdate(Async)` now return the
+matched count / the unmatched models (source-compatible). **InfluxDB is unchanged:** its `Update` writes the point,
+so it already behaves as an upsert.
+
+---
+
 ## 2026-10-11 — Redis serves an unnamed job to any named queue
 
 [[TASK-561]] (FIELD-028). `RedisJobQueue` stored a job with no `QueueName` under the `default` key and a named

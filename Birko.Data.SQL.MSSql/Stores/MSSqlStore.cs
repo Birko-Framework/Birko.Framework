@@ -1,6 +1,7 @@
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Stores;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -92,7 +93,9 @@ namespace Birko.Data.SQL.MSSql.Stores
             }
 
             using var _tx = EnterTransactionScope();
-            Connector.BulkUpdate(typeof(T), items.Cast<object>());
+            // SH-M306 (TASK-555): rows that matched nothing are reported once the rest are written.
+            var unmatched = Connector.BulkUpdate(typeof(T), items.Cast<object>());
+            EntityNotFoundException.ThrowIfAny(typeof(T), unmatched.Cast<T>().Select(m => m.Guid ?? Guid.Empty));
         }
 
         /// <inheritdoc />

@@ -15,13 +15,10 @@ namespace Birko.Data.SQL.Connectors
             return UpdateAsync(model, DataBase.ParseConditionExpression(expr), ct);
         }
 
-        public Task UpdateAsync(object model, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
+        /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        public Task<int> UpdateAsync(object model, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
-            if (model != null)
-            {
-                return UpdateAsync(model.GetType(), model, conditions, ct);
-            }
-            return Task.CompletedTask;
+            return model != null ? UpdateAsync(model.GetType(), model, conditions, ct) : Task.FromResult(-1);
         }
 
         public Task UpdateAsync(Type type, object model, LambdaExpression expr, CancellationToken ct = default)
@@ -29,18 +26,20 @@ namespace Birko.Data.SQL.Connectors
             return UpdateAsync(DataBase.LoadTable(type), model, DataBase.ParseConditionExpression(expr), ct);
         }
 
-        public Task UpdateAsync(Type type, object model, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
+        /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        public Task<int> UpdateAsync(Type type, object model, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
             return UpdateAsync(DataBase.LoadTable(type), model, conditions, ct);
         }
 
-        public Task UpdateAsync(Tables.Table table, object model, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
+        /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        public Task<int> UpdateAsync(Tables.Table table, object model, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
-            if (model != null)
+            if (model == null)
             {
-                return UpdateAsync(table.Name, table.GetSelectFields(), DataBase.Write(table.Fields.Select(f => f.Value), model), conditions, false, ct);
+                return Task.FromResult(-1);
             }
-            return Task.CompletedTask;
+            return UpdateAsync(table.Name, table.GetSelectFields(), DataBase.Write(table.Fields.Select(f => f.Value), model), conditions, false, ct);
         }
 
         public Task UpdateAsync<T, P>(Type type, IDictionary<Expression<Func<T, P>>, object> expresions, LambdaExpression expr, CancellationToken ct = default)
@@ -120,8 +119,10 @@ namespace Birko.Data.SQL.Connectors
             return UpdateAsync(tableName, fields, values, conditions, false, ct);
         }
 
-        public virtual async Task UpdateAsync(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, CancellationToken ct = default, bool allowAllRows = false)
+        /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        public virtual async Task<int> UpdateAsync(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, CancellationToken ct = default, bool allowAllRows = false)
         {
+            var matched = -1;
             // What "nothing to set" means depends on the path (TASK-331). The value path's payload is
             // `values` — an empty one has no parameters for its `col = @SETcol` list. The expression path's
             // payload is the SET clauses in `fields`; `values` holds only the constants they bound, and
@@ -164,9 +165,10 @@ namespace Birko.Data.SQL.Connectors
                     await Task.CompletedTask;
                 }, async (command) =>
                 {
-                    await command.ExecuteNonQueryAsync(ct);
+                    matched = await command.ExecuteNonQueryAsync(ct);
                 }, true);
             }
+            return matched;
         }
     }
 }

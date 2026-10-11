@@ -1,4 +1,5 @@
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -171,21 +172,23 @@ namespace Birko.Data.XML.Stores
         protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
             EnsureWritable();
-            if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
+            // SH-M306 (TASK-555): an update of an entity that is not stored throws instead of writing nothing.
+            if (data?.Guid == null || !(_items?.ContainsKey(data.Guid.Value) ?? false))
             {
-                storeDelegate?.Invoke(data);
-                _items[data.Guid.Value] = data;
+                throw new EntityNotFoundException(typeof(T), data?.Guid);
+            }
+            storeDelegate?.Invoke(data);
+            _items[data.Guid.Value] = data;
 
-                if (_files.ContainsKey(data.Guid.Value))
+            if (_files.ContainsKey(data.Guid.Value))
+            {
+                var filePath = _files[data.Guid.Value];
+                await Task.Run(() =>
                 {
-                    var filePath = _files[data.Guid.Value];
-                    await Task.Run(() =>
-                    {
-                        File.Delete(filePath);
-                        using FileStream fileStream = File.OpenWrite(filePath);
-                        WriteToStream(fileStream, data);
-                    }, ct);
-                }
+                    File.Delete(filePath);
+                    using FileStream fileStream = File.OpenWrite(filePath);
+                    WriteToStream(fileStream, data);
+                }, ct);
             }
         }
 
@@ -224,9 +227,22 @@ namespace Birko.Data.XML.Stores
         protected override async Task UpdateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
             EnsureWritable();
+            // TASK-555: each item's miss is collected rather than ending the batch — the stored ones are still written.
+            var missing = new List<Guid>();
             foreach (var item in data.Where(x => x != null))
             {
-                await UpdateCoreAsync(item, storeDelegate, ct);
+                try
+                {
+                    await UpdateCoreAsync(item, storeDelegate, ct);
+                }
+                catch (EntityNotFoundException ex)
+                {
+                    missing.AddRange(ex.Guids);
+                }
+            }
+            if (missing.Count > 0)
+            {
+                throw new EntityNotFoundException(typeof(T), missing);
             }
         }
 

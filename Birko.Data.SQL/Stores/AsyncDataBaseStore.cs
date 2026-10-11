@@ -2,6 +2,7 @@ using Birko.Data.SQL.Connectors;
 using Birko.Data.Stores;
 using Birko.Configuration;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -313,10 +314,14 @@ namespace Birko.Data.SQL.Stores
 
             processDelegate?.Invoke(data);
 
-            if (AsyncConnector != null)
-                await AsyncConnector.UpdateAsync(data, conditions, ct);
-            else
-                await Task.Run(() => Connector!.Update(data, conditions), ct);
+            var matched = AsyncConnector != null
+                ? await AsyncConnector.UpdateAsync(data, conditions, ct)
+                : await Task.Run(() => Connector!.Update(data, conditions), ct);
+            // SH-M306 (TASK-555): a statement that matched no row means the entity is not stored — say so.
+            if (matched == 0)
+            {
+                throw new EntityNotFoundException(typeof(T), data.Guid);
+            }
         }
 
         protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)

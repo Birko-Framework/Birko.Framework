@@ -93,11 +93,12 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
         => new(Host!, Database, User, Password, Port, "Ts", "1 day");
 
     /// <summary>
-    /// The time column carries the primary key. That is not a stylistic choice: bulk update and delete key
-    /// on <c>Table.GetPrimaryFields()</c> and do nothing at all without one, while TimescaleDB refuses a
-    /// unique index that omits the partitioning column — and this framework emits <c>PRIMARY KEY</c> per
-    /// column, so a composite <c>(Guid, Ts)</c> key is not expressible. Time-keyed is the only shape where
-    /// a Birko hypertable supports the bulk verbs under test.
+    /// The time column carries the primary key. When this was written, bulk update and delete keyed on
+    /// <c>Table.GetPrimaryFields()</c> and did nothing at all without a declared key; since TASK-555 they use
+    /// <c>DataBase.GetPrimaryFields</c>, which falls back to <c>Guid</c>, so an undeclared-key hypertable works too
+    /// (<c>UpdateMissContractTests</c> runs one). The time key is kept because it is what this file measured:
+    /// TimescaleDB refuses a unique index that omits the partitioning column, and this framework emits
+    /// <c>PRIMARY KEY</c> per column, so a composite <c>(Guid, Ts)</c> key is not expressible.
     /// </summary>
     public class BulkRow : AbstractModel
     {

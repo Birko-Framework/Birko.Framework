@@ -21,6 +21,33 @@ namespace Birko.Data.ElasticSearch
         public static readonly int MaxBulkSize = 10000;
 
         /// <summary>
+        /// The error type Elasticsearch answers an update of a document that does not exist with (HTTP 404).
+        /// </summary>
+        public const string DocumentMissingErrorType = "document_missing_exception";
+
+        /// <summary>
+        /// SH-M306 (TASK-555): whether a failed single-document update failed only because the document is not stored.
+        /// </summary>
+        public static bool IsDocumentMissing(IResponse response)
+            => response.ServerError?.Error?.Type == DocumentMissingErrorType;
+
+        /// <summary>
+        /// SH-M306 (TASK-555): when every failed item of a bulk response is an update of a document that is not stored,
+        /// throws <see cref="Birko.Data.Exceptions.EntityNotFoundException"/> naming them — the other items were written.
+        /// Any other item error is left to the caller's generic failure.
+        /// </summary>
+        public static void ThrowIfOnlyMissingDocuments(Type entityType, BulkResponse bulkResponse)
+        {
+            var failed = bulkResponse.ItemsWithErrors.ToList();
+            if (failed.Count == 0 || failed.Any(i => i.Error?.Type != DocumentMissingErrorType))
+            {
+                return;
+            }
+            throw new Birko.Data.Exceptions.EntityNotFoundException(
+                entityType, failed.Select(i => Guid.TryParse(i.Id, out var g) ? g : Guid.Empty));
+        }
+
+        /// <summary>
         /// Default scroll time for large result sets.
         /// </summary>
         public static TimeSpan DefaultScrollTime { get; set; } = TimeSpan.FromMinutes(1);

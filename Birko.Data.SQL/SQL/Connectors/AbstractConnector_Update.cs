@@ -13,12 +13,10 @@ namespace Birko.Data.SQL.Connectors
             Update(model, DataBase.ParseConditionExpression(expr));
         }
 
-        public void Update(object model, IEnumerable<Conditions.Condition>? conditions = null)
+        /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        public int Update(object model, IEnumerable<Conditions.Condition>? conditions = null)
         {
-            if (model != null)
-            {
-                Update(model.GetType(), model, conditions);
-            }
+            return model != null ? Update(model.GetType(), model, conditions) : -1;
         }
 
         public void Update(Type type, object model, LambdaExpression expr)
@@ -26,17 +24,20 @@ namespace Birko.Data.SQL.Connectors
             Update(DataBase.LoadTable(type), model, DataBase.ParseConditionExpression(expr));
         }
 
-        public void Update(Type type, object model, IEnumerable<Conditions.Condition>? conditions = null)
+        /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        public int Update(Type type, object model, IEnumerable<Conditions.Condition>? conditions = null)
         {
-            Update(DataBase.LoadTable(type), model, conditions);
+            return Update(DataBase.LoadTable(type), model, conditions);
         }
 
-        public void Update(Tables.Table table, object model, IEnumerable<Conditions.Condition>? conditions = null)
+        /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        public int Update(Tables.Table table, object model, IEnumerable<Conditions.Condition>? conditions = null)
         {
-            if (model != null)
+            if (model == null)
             {
-                Update(table.Name, table.GetSelectFields(), DataBase.Write(table.Fields.Select(f => f.Value), model), conditions);
+                return -1;
             }
+            return Update(table.Name, table.GetSelectFields(), DataBase.Write(table.Fields.Select(f => f.Value), model), conditions);
         }
 
         public void Update<T, P>(Type type, IDictionary<Expression<Func<T, P>>, object> expresions, LambdaExpression expr)
@@ -120,8 +121,10 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         internal static string SetParameterName(string column) => "@SET" + column.Replace(".", string.Empty);
 
-        public void Update(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, bool allowAllRows = false)
+        /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        public int Update(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, bool allowAllRows = false)
         {
+            var matched = -1;
             // What "nothing to set" means depends on the path (TASK-331). The value path's payload is
             // `values` — an empty one has no parameters for its `col = @SETcol` list. The expression path's
             // payload is the SET clauses in `fields`; `values` holds only the constants they bound, and
@@ -161,9 +164,10 @@ namespace Birko.Data.SQL.Connectors
                         }
                     }
                 }, (command) => {
-                    command.ExecuteNonQuery();
+                    matched = command.ExecuteNonQuery();
                 }, true);
             }
+            return matched;
         }
     }
 }

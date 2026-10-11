@@ -30,4 +30,8 @@
   <Import Project="..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <ItemGroup>
+    <Compile Include="..\Shared\StoreContract\UpdateMissContract.cs" Link="Shared\UpdateMissContract.cs" />
+  </ItemGroup>
+
 </Project>

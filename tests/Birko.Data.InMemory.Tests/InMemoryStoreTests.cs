@@ -3,6 +3,7 @@ using Birko.Data.InMemory.Stores;
 using Birko.Data.Stores;
 using FluentAssertions;
 using System;
+using Birko.Data.Exceptions;
 using System.Linq;
 using Xunit;
 
@@ -135,13 +136,15 @@ public class InMemoryStoreTests
     }
 
     [Fact]
-    public void Update_UnknownEntity_ShouldBeNoOp()
+    public void Update_UnknownEntity_ShouldThrowAndWriteNothing()
     {
+        // TASK-555 (rule 56): was Update_UnknownEntity_ShouldBeNoOp — the silent no-op SH-M306 reported.
         var store = SeededStore();
         var orphan = new TestModel { Guid = Guid.NewGuid(), Name = "orphan" };
 
-        store.Update(orphan);
+        var act = () => store.Update(orphan);
 
+        act.Should().Throw<EntityNotFoundException>().Which.Guids.Should().Equal(orphan.Guid!.Value);
         store.Count().Should().Be(3);
         store.Read(orphan.Guid!.Value).Should().BeNull();
     }

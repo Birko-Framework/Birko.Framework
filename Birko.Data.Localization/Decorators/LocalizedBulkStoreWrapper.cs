@@ -272,15 +272,8 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
     public Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        if (data.Guid == null || data.Guid == Guid.Empty)
-        {
-            return Create(data, storeDelegate);
-        }
-        else
-        {
-            Update(data, storeDelegate);
-            return data.Guid ?? Guid.Empty;
-        }
+        // TASK-555: the create-or-update decision has one producer; an unstored Guid is created, not lost.
+        return StoreSave.Save(data, storeDelegate, Create, Update);
     }
 
     public void Init() => _innerStore.Init();

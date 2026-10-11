@@ -2,6 +2,7 @@ using Birko.Data.SQL.Connectors;
 using Birko.Data.Stores;
 using Birko.Configuration;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -217,7 +218,11 @@ namespace Birko.Data.SQL.Stores
             }
 
             storeDelegate?.Invoke(data);
-            Connector.Update(data, conditions);
+            // SH-M306 (TASK-555): a statement that matched no row means the entity is not stored — say so.
+            if (Connector.Update(data, conditions) == 0)
+            {
+                throw new EntityNotFoundException(typeof(T), data.Guid);
+            }
         }
 
         protected override void DeleteCore(T data)

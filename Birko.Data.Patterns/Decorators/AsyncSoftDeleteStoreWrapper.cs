@@ -63,15 +63,8 @@ public class AsyncSoftDeleteStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrap
 
     public async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
-        if (data.Guid == null || data.Guid == Guid.Empty)
-        {
-            await CreateAsync(data, processDelegate, ct);
-        }
-        else
-        {
-            await UpdateAsync(data, processDelegate, ct);
-        }
-        return data.Guid ?? Guid.Empty;
+        // TASK-555: the create-or-update decision has one producer; an unstored Guid is created, not lost.
+        return await StoreSave.SaveAsync(data, processDelegate, CreateAsync, UpdateAsync, ct);
     }
 
     public Task InitAsync(CancellationToken ct = default) => _innerStore.InitAsync(ct);

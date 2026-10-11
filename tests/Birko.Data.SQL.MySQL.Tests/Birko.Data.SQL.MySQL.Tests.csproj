@@ -38,4 +38,8 @@
   <Import Project="..\..\Birko.Data.SQL.ViewModel\Birko.Data.SQL.ViewModel.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\StoreContract\UpdateMissContract.cs" Link="Shared\UpdateMissContract.cs" />
+  </ItemGroup>
+
 </Project>

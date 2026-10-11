@@ -1,4 +1,5 @@
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -157,18 +158,20 @@ namespace Birko.Data.XML.Stores
         protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureWritable();
-            if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
+            // SH-M306 (TASK-555): an update of an entity that is not stored throws instead of writing nothing.
+            if (data?.Guid == null || !(_items?.ContainsKey(data.Guid.Value) ?? false))
             {
-                storeDelegate?.Invoke(data);
-                _items[data.Guid.Value] = data;
+                throw new EntityNotFoundException(typeof(T), data?.Guid);
+            }
+            storeDelegate?.Invoke(data);
+            _items[data.Guid.Value] = data;
 
-                if (_files.ContainsKey(data.Guid.Value))
-                {
-                    var filePath = _files[data.Guid.Value];
-                    File.Delete(filePath);
-                    using FileStream fileStream = File.OpenWrite(filePath);
-                    WriteToStream(fileStream, data);
-                }
+            if (_files.ContainsKey(data.Guid.Value))
+            {
+                var filePath = _files[data.Guid.Value];
+                File.Delete(filePath);
+                using FileStream fileStream = File.OpenWrite(filePath);
+                WriteToStream(fileStream, data);
             }
         }
 
@@ -207,9 +210,22 @@ namespace Birko.Data.XML.Stores
         protected override void UpdateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureWritable();
+            // TASK-555: each item's miss is collected rather than ending the batch — the stored ones are still written.
+            var missing = new List<Guid>();
             foreach (var item in data.Where(x => x != null))
             {
-                UpdateCore(item, storeDelegate);
+                try
+                {
+                    UpdateCore(item, storeDelegate);
+                }
+                catch (EntityNotFoundException ex)
+                {
+                    missing.AddRange(ex.Guids);
+                }
+            }
+            if (missing.Count > 0)
+            {
+                throw new EntityNotFoundException(typeof(T), missing);
             }
         }
 

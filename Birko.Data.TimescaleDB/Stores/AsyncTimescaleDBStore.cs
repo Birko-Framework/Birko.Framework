@@ -3,6 +3,7 @@ using Birko.Data.SQL.Stores;
 using Birko.Data.Stores;
 using Birko.Configuration;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -156,7 +157,9 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
             }
 
             using var _tx = EnterTransactionScope();
-            await Connector.BulkUpdateAsync(typeof(T), items.Cast<object>(), ct).ConfigureAwait(false);
+            // SH-M306 (TASK-555): rows that matched nothing are reported once the rest are written.
+            var unmatched = await Connector.BulkUpdateAsync(typeof(T), items.Cast<object>(), ct).ConfigureAwait(false);
+            EntityNotFoundException.ThrowIfAny(typeof(T), unmatched.Cast<T>().Select(m => m.Guid ?? Guid.Empty));
         }
 
         /// <inheritdoc />

@@ -1,4 +1,5 @@
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -117,12 +118,14 @@ namespace Birko.Data.XML.Stores
         protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureWritable();
-            if (data.Guid != null && _items.ContainsKey(data.Guid.Value))
+            // SH-M306 (TASK-555): an update of an entity that is not stored throws instead of writing nothing.
+            if (data?.Guid == null || !_items.ContainsKey(data.Guid.Value))
             {
-                storeDelegate?.Invoke(data);
-                _items[data.Guid.Value] = data;
-                SaveData();
+                throw new EntityNotFoundException(typeof(T), data?.Guid);
             }
+            storeDelegate?.Invoke(data);
+            _items[data.Guid.Value] = data;
+            SaveData();
         }
 
         /// <inheritdoc />
@@ -154,17 +157,25 @@ namespace Birko.Data.XML.Stores
         protected override void UpdateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureWritable();
+            // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
+            var missing = new List<Guid>();
             var changed = false;
             foreach (var item in data.Where(x => x != null))
             {
-                if (item.Guid != null && _items.ContainsKey(item.Guid.Value))
+                if (item.Guid == null || !_items.ContainsKey(item.Guid.Value))
                 {
-                    storeDelegate?.Invoke(item);
-                    _items[item.Guid.Value] = item;
-                    changed = true;
+                    missing.Add(item.Guid ?? Guid.Empty);
+                    continue;
                 }
+                storeDelegate?.Invoke(item);
+                _items[item.Guid.Value] = item;
+                changed = true;
             }
             if (changed) SaveData();
+            if (missing.Count > 0)
+            {
+                throw new EntityNotFoundException(typeof(T), missing);
+            }
         }
 
         /// <inheritdoc />

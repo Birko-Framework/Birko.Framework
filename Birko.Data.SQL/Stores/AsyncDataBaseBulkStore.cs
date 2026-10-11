@@ -2,6 +2,7 @@
 using Birko.Data.Stores;
 using Birko.Configuration;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -132,10 +133,20 @@ namespace Birko.Data.SQL.Stores
             StoreDataDelegate<T>? storeDelegate = null,
             CancellationToken ct = default)
         {
+            // TASK-555: each item's miss is collected rather than ending the batch — the stored ones are still written.
+            var missing = new List<Guid>();
             foreach (var item in data)
             {
-                await UpdateAsync(item, storeDelegate, ct);
+                try
+                {
+                    await UpdateAsync(item, storeDelegate, ct);
+                }
+                catch (EntityNotFoundException ex)
+                {
+                    missing.AddRange(ex.Guids);
+                }
             }
+            EntityNotFoundException.ThrowIfAny(typeof(T), missing);
         }
 
         /// <inheritdoc />

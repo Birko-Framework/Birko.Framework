@@ -5,6 +5,7 @@ using ISettings = Birko.Configuration.ISettings;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Azure.Cosmos.Linq;
 using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -223,13 +224,31 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        if (_container == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
+        if (_container == null || data == null) return;
+        if (data.Guid == null || data.Guid == Guid.Empty)
+        {
+            throw new EntityNotFoundException(typeof(T), data.Guid);
+        }
 
         storeDelegate?.Invoke(data);
 
-        _container.ReplaceItemAsync(data, data.Guid.Value.ToString(), new PartitionKey(data.Guid.Value.ToString()))
-            .GetAwaiter().GetResult();
+        try
+        {
+            _container.ReplaceItemAsync(data, data.Guid.Value.ToString(), new PartitionKey(data.Guid.Value.ToString()))
+                .GetAwaiter().GetResult();
+        }
+        catch (CosmosException ex) when (IsItemNotFound(ex))
+        {
+            throw new EntityNotFoundException(typeof(T), data.Guid);
+        }
     }
+
+    /// <summary>
+    /// SH-M306 (TASK-555): a replace of an item that is not stored answers 404. Sub-status 1003 is the CONTAINER
+    /// missing — an infrastructure failure, not a miss — so it keeps propagating as the CosmosException it is.
+    /// </summary>
+    private static bool IsItemNotFound(CosmosException ex)
+        => ex.StatusCode == HttpStatusCode.NotFound && ex.SubStatusCode != 1003;
 
     /// <inheritdoc />
     protected override void DeleteCore(T data)
@@ -338,17 +357,38 @@ public class CosmosDBStore<T>
     {
         if (_container == null || data == null) return;
 
+        // TASK-555: each replace reports its own miss — Task.WhenAll surfaced only the first failure — and the stored
+        // items are still written. Any other failure propagates as before.
+        var missing = new System.Collections.Concurrent.ConcurrentBag<Guid>();
         var tasks = new List<System.Threading.Tasks.Task>();
 
         foreach (var item in data)
         {
-            if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
+            if (item == null) continue;
+            if (item.Guid == null || item.Guid == Guid.Empty)
+            {
+                missing.Add(Guid.Empty);
+                continue;
+            }
 
             storeDelegate?.Invoke(item);
-            tasks.Add(_container.ReplaceItemAsync(item, item.Guid.Value.ToString(), new PartitionKey(item.Guid.Value.ToString())));
+            tasks.Add(ReplaceOrRecordMissAsync(item, missing));
         }
 
         System.Threading.Tasks.Task.WhenAll(tasks).GetAwaiter().GetResult();
+        EntityNotFoundException.ThrowIfAny(typeof(T), missing);
+    }
+
+    private async System.Threading.Tasks.Task ReplaceOrRecordMissAsync(T item, System.Collections.Concurrent.ConcurrentBag<Guid> missing)
+    {
+        try
+        {
+            await _container!.ReplaceItemAsync(item, item.Guid!.Value.ToString(), new PartitionKey(item.Guid.Value.ToString())).ConfigureAwait(false);
+        }
+        catch (CosmosException ex) when (IsItemNotFound(ex))
+        {
+            missing.Add(item.Guid!.Value);
+        }
     }
 
     /// <inheritdoc />
