@@ -213,7 +213,10 @@ absent, and SHALL carry the resolved field value on the result as `ActualValue`.
 The system SHALL evaluate a `RuleGroup` by short-circuiting over its **enabled** children — `And`
 returning `NoMatch` on the first non-matching child and `Or` returning `Match` on the first matching
 child — SHALL skip disabled children entirely, and SHALL return `NoMatch` for a group whose `Rules`
-list is empty or whose every child is disabled.
+list is empty or whose every child is disabled. It SHALL honour `RuleGroup.IsNegated` by pushing the negation
+to the leaves (De Morgan) — a negated AND evaluates as an OR of its children's negations, a negated OR as an
+AND — so a leaf whose answer could not be given is still never inverted, and a negated empty or all-disabled
+group is still `NoMatch` (SH-H045, [[TASK-320]]). It agrees with `RuleSpecification.ToExpression()` on group negation.
 
 #### Scenario: AND group with one failing child
 
@@ -239,11 +242,18 @@ list is empty or whose every child is disabled.
 - **When** `Evaluate` is called
 - **Then** the result is `NoMatch` in both cases (an empty AND group is *not* treated as vacuously true)
 
-#### Scenario: Group-level negation is ignored in memory
+#### Scenario: Group-level negation is applied in memory
 
 - **Given** `RuleGroup.And(new Rule("A", Equal, 1)) { IsNegated = true }` and a context where `A == 1`
 - **When** `Evaluate` is called
-- **Then** the result is `Match` — `RuleEvaluator.EvaluateGroup` never reads `RuleGroup.IsNegated`, so the negation has no effect on in-memory evaluation (whereas `RuleExpressionConverter.BuildGroupExpression` *does* apply it)
+- **Then** the result is `NoMatch` — until SH-H045 `EvaluateGroup` never read `IsNegated` and answered `Match`
+
+#### Scenario: A negated group does not invert an inapplicable leaf
+
+- **Given** a negated AND group of `Quantity GreaterThan 0` and `Quantity Contains "1"`, and a context where `Quantity == 5`
+- **When** `Evaluate` is called
+- **Then** the result is `NoMatch`: `Contains` cannot be evaluated on an `int`, so it stays a non-match under the
+  negation, leaving `NOT(Quantity > 0)` — false. Inverting the whole group's result would have answered `Match`
 
 ### Requirement: Rule set and batch evaluation
 

@@ -31,7 +31,7 @@ public class RuleSpecification<T> : Specification<T> where T : class
     public override Expression<Func<T, bool>> ToExpression()
     {
         var param = Expression.Parameter(typeof(T), "x");
-        var body = BuildExpression(_rule, param);
+        var body = BuildExpression(_rule, param, negate: false);
         return Expression.Lambda<Func<T, bool>>(body, param);
     }
 
@@ -86,7 +86,13 @@ public class RuleSpecification<T> : Specification<T> where T : class
         public static Leaf Unevaluable() => new(Expression.Constant(false), true);
     }
 
-    private static Expression BuildExpression(IRule rule, ParameterExpression param)
+    /// <param name="negate">
+    /// Whether an enclosing negated group inverts this rule. Negation is pushed down to the leaves (De Morgan)
+    /// rather than wrapped around a combined group, because only a leaf knows whether it <b>degraded</b>: a
+    /// <c>Not</c> around <c>a AND unevaluable</c> would read the unevaluable leaf's <c>false</c> as a real answer
+    /// and turn it into match-all — the same hole <see cref="Leaf"/> closes for a single leaf (SH-H045).
+    /// </param>
+    private static Expression BuildExpression(IRule rule, ParameterExpression param, bool negate)
     {
         // A disabled rule matches NOTHING, agreeing with RuleEvaluator.Evaluate, which returns
         // NoMatch for the same condition (SH-H042). This previously returned Constant(true): a
@@ -102,13 +108,13 @@ public class RuleSpecification<T> : Specification<T> where T : class
 
         return rule switch
         {
-            Rules.Rule leaf => BuildLeafExpression(leaf, param),
-            RuleGroup group => BuildGroupExpression(group, param),
+            Rules.Rule leaf => BuildLeafExpression(leaf, param, negate),
+            RuleGroup group => BuildGroupExpression(group, param, negate),
             _ => Expression.Constant(false)
         };
     }
 
-    private static Expression BuildLeafExpression(Rules.Rule rule, ParameterExpression param)
+    private static Expression BuildLeafExpression(Rules.Rule rule, ParameterExpression param, bool negate)
     {
         var property = typeof(T).GetProperty(rule.Field,
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
@@ -154,7 +160,8 @@ public class RuleSpecification<T> : Specification<T> where T : class
         // THE invariant: a degraded leaf is never negated. `Not(match-none)` is match-ALL, which is how
         // SH-H043/SH-H044 turned an inapplicable predicate into "every row". A leaf that could not be
         // evaluated matches nothing whichever way it is read.
-        if (rule.IsNegated && !leaf.Degraded)
+        // The leaf's own flag and an enclosing negated group's cancel out: NOT(NOT a) is a.
+        if (rule.IsNegated != negate && !leaf.Degraded)
             return Expression.Not(leaf.Expr);
 
         return leaf.Expr;
@@ -330,18 +337,26 @@ public class RuleSpecification<T> : Specification<T> where T : class
         }
     }
 
-    private static Expression BuildGroupExpression(RuleGroup group, ParameterExpression param)
+    /// <summary>
+    /// Combines a group's enabled children; a negated group by De Morgan (see <c>BuildExpression</c>'s
+    /// <c>negate</c>). SH-H045: the flag used to be ignored, so through <c>Delete(spec.ToExpression())</c> a negated
+    /// group deleted the rows it meant to keep. An empty or all-disabled group matches nothing, negated or not.
+    /// </summary>
+    private static Expression BuildGroupExpression(RuleGroup group, ParameterExpression param, bool negate)
     {
         var enabledRules = group.Rules.Where(r => r.IsEnabled).ToList();
         if (enabledRules.Count == 0)
             return Expression.Constant(false);
 
-        Expression combined = BuildExpression(enabledRules[0], param);
+        var negated = group.IsNegated != negate;
+        var conjunction = (group.Logic == LogicOperator.And) != negated;
+
+        Expression combined = BuildExpression(enabledRules[0], param, negated);
 
         for (int i = 1; i < enabledRules.Count; i++)
         {
-            var next = BuildExpression(enabledRules[i], param);
-            combined = group.Logic == LogicOperator.And
+            var next = BuildExpression(enabledRules[i], param, negated);
+            combined = conjunction
                 ? Expression.AndAlso(combined, next)
                 : Expression.OrElse(combined, next);
         }

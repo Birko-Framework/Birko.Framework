@@ -448,12 +448,18 @@ the first argument alone, so case sensitivity there follows the column's databas
 - **When** the store's condition parser translates the `Contains(string, StringComparison)` call
 - **Then** only the first argument becomes the `LIKE` pattern and the `StringComparison.OrdinalIgnoreCase` argument is skipped as a non-operand argument, so whether `Name = "ACME Ltd"` is returned depends on the column's collation rather than on the ordinal-ignore-case semantics the expression requested
 
-### Requirement: Rule-group translation drops disabled children and treats an empty group as unsatisfiable
+### Requirement: Rule-group translation drops disabled children, treats an empty group as unsatisfiable, and negates a group by De Morgan
 
 The system SHALL translate a `RuleGroup` by first filtering its children to those with `IsEnabled`, and:
 when no enabled child remains, emit `Expression.Constant(false)`; otherwise fold the children
 left-to-right with `Expression.AndAlso` when `group.Logic == LogicOperator.And` and `Expression.OrElse`
-otherwise. The group's own `IsNegated` flag SHALL NOT be applied.
+otherwise. The group's own `IsNegated` flag SHALL be applied by pushing the negation to the leaves (De Morgan):
+a negated AND group combines its children's negations with `OrElse`, a negated OR group with `AndAlso`, and a leaf
+inside it is negated by the same rule as any other leaf — so an **unevaluable** leaf stays match-none, and a negated
+empty or all-disabled group stays match-none too. The negation SHALL NOT be a `Not` around the combined group: that
+reads an unevaluable leaf's `false` as a real answer and inverts it to match-all. An enclosing negation and a
+child's own `IsNegated` cancel (SH-H045, [[TASK-320]]; previously the flag was ignored, so a negated group selected
+exactly the rows it meant to exclude).
 
 #### Scenario: Mixed enabled and disabled children in an AND group
 
@@ -473,11 +479,24 @@ otherwise. The group's own `IsNegated` flag SHALL NOT be applied.
 - **When** `ToExpression()` is built
 - **Then** the result is `Expression.Constant(false)`, matching the in-memory evaluator's `NoMatch` for an empty group
 
-#### Scenario: Negated group is silently un-negated
+#### Scenario: Negated group is its complement
 
 - **Given** a `RuleGroup` with `IsNegated = true` containing one enabled child `A`
 - **When** `ToExpression()` is built
-- **Then** the body is `A` with no surrounding `Expression.Not` — group-level negation is ignored by the translator
+- **Then** the body is `!A`; for `NOT(A AND B)` it is `!A || !B`, and for `NOT(A OR B)` it is `!A && !B`
+
+#### Scenario: An unevaluable leaf inside a negated group does not widen
+
+- **Given** a negated AND group of `Quantity GreaterThan 0` and `Quantity Contains "1"` on an `int` property
+- **When** `ToExpression()` is built
+- **Then** the body is `!(x.Quantity > 0) || false` — the unevaluable leaf stays match-none — and not
+  `!(x.Quantity > 0 && false)`, which matches every row
+
+#### Scenario: A negated group through a destructive call
+
+- **Given** a store holding Draft, Active and Archived rows, and a negated group `NOT(State == Archived)`
+- **When** `Delete(spec.ToExpression())` runs
+- **Then** only the Archived row remains — before SH-H045 the Archived row was the one deleted
 
 #### Scenario: Nested groups
 

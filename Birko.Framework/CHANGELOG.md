@@ -4,6 +4,21 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — A negated rule group is honoured, by De Morgan — in the translator and the evaluator
+
+[[TASK-320]] (SH-H045). `RuleGroup.IsNegated` was ignored by `RuleSpecification.ToExpression()` and by
+`RuleEvaluator`, so `NOT(a AND b)` selected `a AND b` — the complement of the intended rows; through
+`Delete(spec.ToExpression())` it deleted the rows meant to be kept. Both now push the negation to the leaves
+(`NOT(a AND b)` → `NOT a OR NOT b`), so an unevaluable leaf stays match-none instead of a `Not` around the group
+inverting it to match-all (TASK-116's invariant), and a negated empty group still matches nothing.
+
+**Observable:** a rule tree containing a negated group now selects different rows — the ones it always said it
+selected. Anything that stored negated groups (Symbio's IoT alarm and automation rules are evaluated from stored
+rule data) gets the documented meaning; no code in the framework or its consumers constructs one. The two other
+translators are separate: `RuleExpressionConverter` already negated groups but drops an unresolved child
+([[TASK-558]]); the SQL `RuleConditionConverter` negates soundly but turns an empty group into every row
+([[TASK-559]]).
+
 ## 2026-10-11 — The in-memory store refuses a duplicate create; StoreLocator serves async stores and refuses colliding settings
 
 [[TASK-163]] closes `store-crud-contract`'s 15 medium findings: 9 fixed, 6 spawned ([[TASK-555]]–[[TASK-557]]).
@@ -321,6 +336,24 @@ ALTER TABLE [T] ALTER COLUMN [Col] DECIMAL(22,6) NOT NULL;       -- NULL, not NO
 `EnsureColumns` does not do this — it adds missing columns and never retypes (TASK-510). TASK-511's
 `DeclaredAsStored` comparison hook was removed: it existed only to make a bare declaration compare clean, and
 nothing declares one any more (rule 53).
+
+## 2026-10-03 — A table older than its mapping gets the column — on request, never on startup
+
+[[TASK-510]], from consumer DraCode (its TASK-082): a `double` column `CREATE TABLE` skipped before SH-H037
+stayed missing after the mapping landed, every INSERT failed, two months of rows were lost.
+`AbstractConnector.EnsureColumns(Type)` now adds what `DetectDrift` reports `Missing`. Three things worth carrying:
+
+- **⚠ `AlterTableAdd` had never worked on SQL Server.** `ADD COLUMN` was hard-coded; T-SQL is `ADD` (measured:
+  `Msg 156`). So migrations' `AddColumn` was broken there too, unnoticed — nothing ran it against MSSQL.
+  `AddColumnClause` is now a provider hook, and `AddColumnSql` the one producer for sync and async.
+- **⚠ The back-fill is the field's writer applied to `default(T)`, not a DbType table.** `TimeOnly` is
+  `DbType.String` and stores `'00:00:00'`; a per-DbType `''` would read back wrong. Literals are rendered per
+  provider where measured (PG `FALSE`, MySQL `DEFAULT (expr)` for `LONGTEXT`). Proven by mutation: without the
+  `DEFAULT`, 3 of 8 SQLite tests fail with DraCode's own error. 16 column types round-trip on all four providers.
+- **Refuses rather than invents.** A missing unique / primary / identity / `[RequiredField]` string column is
+  refused before any DDL. Explicit call, so it throws (rule 49); never wired into schema-ensure (TASK-204/254).
+  Found on the way: `DetectDrift` reports an unprecisioned `decimal` as drifted on MySQL and SQL Server, on a
+  table `CREATE TABLE` made — [[TASK-511]].
 
 ## 2026-09-26 — An atomic counter needs a shape a translator cannot misread
 

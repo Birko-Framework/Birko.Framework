@@ -239,6 +239,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A negated rule group is honoured (2026-10-11)
+
+[[TASK-320]] (SH-H045). `RuleSpecification` and `RuleEvaluator` ignored `RuleGroup.IsNegated`, so a negated group
+selected exactly the rows it meant to exclude. Both now negate **by De Morgan, down to the leaves** — never a `Not`
+around the combined group, which would invert an unevaluable leaf's match-none into match-all. The other two
+translators: [[TASK-558]], [[TASK-559]].
+
 ### The in-memory store refuses a duplicate create; StoreLocator refuses colliding settings (2026-10-11)
 
 [[TASK-163]]. In-memory `Create` of a stored key throws `StoreException` (it upserted, so the canonical test double
@@ -325,24 +332,6 @@ unprecisioned decimal, which is how it went unseen. **⚠ The noise was hiding a
 **scale 0**, so `7.5` is stored as `8` on both servers, measured. Now the report is quiet about it, correctly,
 because the schema is what the DDL made. The declaration is [[TASK-512]]. The framework's own SQL-mapped decimals
 all carry `HasPrecision(22).HasScale(6)`; consumers' plain `decimal` properties do not.
-
-### A table older than its mapping gets the column — on request, never on startup (2026-10-03)
-
-[[TASK-510]], from consumer DraCode (its TASK-082): a `double` column `CREATE TABLE` skipped before SH-H037
-stayed missing after the mapping landed, every INSERT failed, two months of rows were lost.
-`AbstractConnector.EnsureColumns(Type)` now adds what `DetectDrift` reports `Missing`. Three things worth carrying:
-
-- **⚠ `AlterTableAdd` had never worked on SQL Server.** `ADD COLUMN` was hard-coded; T-SQL is `ADD` (measured:
-  `Msg 156`). So migrations' `AddColumn` was broken there too, unnoticed — nothing ran it against MSSQL.
-  `AddColumnClause` is now a provider hook, and `AddColumnSql` the one producer for sync and async.
-- **⚠ The back-fill is the field's writer applied to `default(T)`, not a DbType table.** `TimeOnly` is
-  `DbType.String` and stores `'00:00:00'`; a per-DbType `''` would read back wrong. Literals are rendered per
-  provider where measured (PG `FALSE`, MySQL `DEFAULT (expr)` for `LONGTEXT`). Proven by mutation: without the
-  `DEFAULT`, 3 of 8 SQLite tests fail with DraCode's own error. 16 column types round-trip on all four providers.
-- **Refuses rather than invents.** A missing unique / primary / identity / `[RequiredField]` string column is
-  refused before any DDL. Explicit call, so it throws (rule 49); never wired into schema-ensure (TASK-204/254).
-  Found on the way: `DetectDrift` reports an unprecisioned `decimal` as drifted on MySQL and SQL Server, on a
-  table `CREATE TABLE` made — [[TASK-511]].
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

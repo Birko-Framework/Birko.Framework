@@ -39,7 +39,7 @@ work.
 | [[TASK-317]] | `background-jobs` | 1 (`SH-H001`) | P1 |
 | [[TASK-318]] | `event-bus-and-messaging` | 1 (`SH-H020`) | P1 |
 | [[TASK-319]] | `schema-index-and-ddl` | 1 (`SH-H038`) | P1 |
-| [[TASK-320]] | `specifications-and-paging` | 1 (`SH-H045`) | P1 |
+| [[TASK-320]] | `specifications-and-paging` | 1 (`SH-H045`) — **done**; spawned [[TASK-558]], [[TASK-559]] | P1 |
 | [[TASK-321]] | `store-crud-contract` | 1 (`SH-H046`) | P1 | ✅ **done 2026-09-17** — confirmed-narrower (the harvest's *no store implements IDisposable* is false) and **widened** to `IBaseRepository`, which carries the identical wording
 | [[TASK-322]] | `views-and-aggregation` | 1 (`SH-H055`) | P1 | ✅ **done 2026-09-16** — confirmed, fixed; spawned [[TASK-447]] (P0 injection sink in the same method)
 
@@ -157,7 +157,7 @@ rather than an out-of-scope sentence, and TASK-308 pins the defect meanwhile.
 
 ## Progress
 
-**52 / 57 findings closed** (SH-H029/030/031/032/033 via [[TASK-314]], SH-H034+SH-H035 via [[TASK-316]], SH-H015/016/017/018 via [[TASK-313]], SH-H046 via [[TASK-321]], SH-H055 via [[TASK-322]], SH-H056+SH-H057 via [[TASK-315]], SH-H008/009/010/011/012/013/014 via [[TASK-309]], SH-H021/022/024/025/026/027/028 via [[TASK-308]], SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
+**53 / 57 findings closed** (SH-H045 via [[TASK-320]] (2026-10-11), SH-H029/030/031/032/033 via [[TASK-314]], SH-H034+SH-H035 via [[TASK-316]], SH-H015/016/017/018 via [[TASK-313]], SH-H046 via [[TASK-321]], SH-H055 via [[TASK-322]], SH-H056+SH-H057 via [[TASK-315]], SH-H008/009/010/011/012/013/014 via [[TASK-309]], SH-H021/022/024/025/026/027/028 via [[TASK-308]], SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
 SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]],
 SH-H002+SH-M023 via [[TASK-109]], SH-H041+SH-H042+SH-H043+SH-H044 via [[TASK-116]], SH-H036 via [[TASK-125]], SH-H019 via [[TASK-126]],
 SH-H023 via [[TASK-111]]) — and **29 of the 57 findings now have a task**, across 31 files: 29 done, 1 in review ([[TASK-118]]), 1 cancelled. The **other 39 findings were decomposed into 15 per-area triage tasks on 2026-09-08** — see the section above; the counts in the rest of this paragraph predate that and describe the original 23-task set. [[TASK-137]] closed the defect [[TASK-109]] filed against itself while being
