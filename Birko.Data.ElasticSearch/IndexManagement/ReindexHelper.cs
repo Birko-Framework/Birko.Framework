@@ -58,12 +58,10 @@ namespace Birko.Data.ElasticSearch.IndexManagement
 
                 sw.Stop();
 
-                if (!response.IsValid)
+                var refused = Refusal(response, sourceIndex, targetIndex);
+                if (refused != null)
                 {
-                    return ReindexResult.Failed(sourceIndex, targetIndex,
-                        response.DebugInformation,
-                        response.Created,
-                        response.Failures?.Count ?? 0);
+                    return refused;
                 }
 
                 _client.Indices.Refresh(targetIndex);
@@ -95,12 +93,10 @@ namespace Birko.Data.ElasticSearch.IndexManagement
 
                 sw.Stop();
 
-                if (!response.IsValid)
+                var refused = Refusal(response, sourceIndex, targetIndex);
+                if (refused != null)
                 {
-                    return ReindexResult.Failed(sourceIndex, targetIndex,
-                        response.DebugInformation,
-                        response.Created,
-                        response.Failures?.Count ?? 0);
+                    return refused;
                 }
 
                 await _client.Indices.RefreshAsync(targetIndex, null, ct).ConfigureAwait(false);
@@ -137,12 +133,10 @@ namespace Birko.Data.ElasticSearch.IndexManagement
 
                 sw.Stop();
 
-                if (!response.IsValid)
+                var refused = Refusal(response, sourceIndex, targetIndex);
+                if (refused != null)
                 {
-                    return ReindexResult.Failed(sourceIndex, targetIndex,
-                        response.DebugInformation,
-                        response.Created,
-                        response.Failures?.Count ?? 0);
+                    return refused;
                 }
 
                 _client.Indices.Refresh(targetIndex);
@@ -176,12 +170,10 @@ namespace Birko.Data.ElasticSearch.IndexManagement
 
                 sw.Stop();
 
-                if (!response.IsValid)
+                var refused = Refusal(response, sourceIndex, targetIndex);
+                if (refused != null)
                 {
-                    return ReindexResult.Failed(sourceIndex, targetIndex,
-                        response.DebugInformation,
-                        response.Created,
-                        response.Failures?.Count ?? 0);
+                    return refused;
                 }
 
                 await _client.Indices.RefreshAsync(targetIndex, null, ct).ConfigureAwait(false);
@@ -435,6 +427,57 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                 throw new InvalidOperationException($"Alias '{aliasName}' points to {count} indices. Zero-downtime reindex requires the alias to point to exactly one index.");
 
             return foundIndex!;
+        }
+
+        /// <summary>
+        /// Why a reindex response that passed <c>IsValid</c> still did not copy the whole source, or <c>null</c> when
+        /// it did.
+        /// </summary>
+        /// <remarks>
+        /// <c>IsValid</c> covers a rejected request and per-document <c>failures</c>, which NEST folds into it. It does
+        /// not cover a copy that stopped early but answered HTTP 200: <c>timed_out: true</c>, or a task cancelled
+        /// mid-copy (<c>canceled</c>, which NEST 7 does not surface). Both leave the per-outcome counts short of
+        /// <c>total</c>, so completeness is judged by the counts rather than by naming each way to stop (SH-H038).
+        /// A response with no counts, from a reindex started without waiting, has <c>total</c> 0 and passes.
+        /// NEST 7 exposes no <c>deleted</c> count, so a script that deletes documents (<c>ctx.op = "delete"</c>) reads as
+        /// incomplete and is refused: a loud false alarm, never a silent swap over a partial copy.
+        /// </remarks>
+        public static string? IncompleteReason(ReindexOnServerResponse response)
+        {
+            if (response == null) throw new ArgumentNullException(nameof(response));
+
+            var accounted = response.Created + response.Updated + response.Noops + response.VersionConflicts;
+            if (!response.TimedOut && accounted >= response.Total)
+            {
+                return null;
+            }
+
+            var how = response.TimedOut ? "timed out" : "stopped";
+            return $"{how} after accounting for {accounted} of {response.Total} document(s) ({response.Created} created)";
+        }
+
+        /// <summary>
+        /// The failed result a reindex response describes, or <c>null</c> when the copy completed.
+        /// </summary>
+        private static ReindexResult? Refusal(ReindexOnServerResponse response, string sourceIndex, string targetIndex)
+        {
+            if (!response.IsValid)
+            {
+                return ReindexResult.Failed(sourceIndex, targetIndex,
+                    response.DebugInformation,
+                    response.Created,
+                    response.Failures?.Count ?? 0);
+            }
+
+            var incomplete = IncompleteReason(response);
+            if (incomplete != null)
+            {
+                return ReindexResult.Failed(sourceIndex, targetIndex,
+                    $"Reindex from '{sourceIndex}' to '{targetIndex}' {incomplete}.",
+                    response.Created);
+            }
+
+            return null;
         }
 
         private static void ValidateReindexArgs(string sourceIndex, string targetIndex)

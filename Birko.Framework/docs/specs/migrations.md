@@ -1231,7 +1231,8 @@ build an aggregation pipeline of the caller's transform stage(s) followed by `$m
 accepting either a single stage object or a JSON array of stages and treating null/empty/`"{}"` as a
 straight copy. **ElasticSearch** SHALL throw `NotSupportedException` when `transformJson` is
 non-empty, and otherwise `ReindexOnServer` with `WaitForCompletion(true)` followed by a refresh of
-the target. **RavenDB** SHALL **always** throw `NotSupportedException` — the operation is
+the target, failing the step when the reindex response is invalid **or incomplete** — timed out or cancelled, judged by
+`ReindexHelper.IncompleteReason` (a partial copy that `IsValid` passes — SH-H038, [[TASK-319]]). **RavenDB** SHALL **always** throw `NotSupportedException` — the operation is
 unimplemented. **SQL** SHALL emit `INSERT INTO {target} SELECT * FROM {source}` and **silently
 ignore** `transformJson`. **CosmosDB** SHALL page every source document and upsert it into the target
 container, **silently ignoring** `transformJson`. **InfluxDB** SHALL query the source bucket over

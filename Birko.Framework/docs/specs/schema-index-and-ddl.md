@@ -1466,6 +1466,25 @@ are non-empty and differ case-insensitively, refresh the target on success, and 
 - **Then** `ReindexResult.Failed` is returned carrying `response.DebugInformation` as `ErrorMessage`,
   `response.Created` as `DocumentsProcessed` and the failure count (`0` when `Failures` is null)
 
+#### Scenario: Per-document failures in an HTTP 200 are a failed result
+
+- **Given** ES answers HTTP 200 with one document listed in `failures` (a version conflict)
+- **When** the response is inspected
+- **Then** `Success == false` with `Failures == 1` — NEST's `IsValid` already folds `failures` in, measured at
+  [[TASK-319]], so the invalid-response branch above carries it; this is pinned, not re-implemented
+
+#### Scenario: A reindex that stopped early is a failed result
+
+- **Given** ES answers HTTP 200 with no failures listed but the copy stopped early — `timed_out: true`, or a task
+  cancelled mid-copy (`canceled`, which NEST 7 does not surface) — with `created: 1`, `total: 3`
+- **When** the response is inspected
+- **Then** `ReindexResult.Failed` is returned with `"timed out after accounting for 1 of 3 document(s)"` (or
+  `"stopped after …"` for the cancelled case) and `DocumentsProcessed == 1`. `IsValid` passes such a response, so
+  `ReindexHelper.IncompleteReason` judges completeness by the counts — `created + updated + noops +
+  version_conflicts` must reach `total` — and by the `timed_out` flag, which wins even when the counts add up
+  (SH-H038, [[TASK-319]]). NEST 7 exposes no `deleted` count, so a script that deletes documents is refused as
+  incomplete: a loud false alarm rather than a silent swap
+
 #### Scenario: A thrown exception becomes a failed result
 
 - **Given** a transport exception during reindex
@@ -1520,6 +1539,13 @@ returning a successful result whose `SourceIndex` is the resolved old index.
 - **When** `ReindexWithAlias` handles it
 - **Then** the newly created index is deleted and the failing `ReindexResult` is returned unchanged — the
   alias still points at the old index
+
+#### Scenario: A partial copy never moves the alias or deletes the source
+
+- **Given** `ReindexWithAlias(alias, new, deleteOldIndex: true)` whose reindex step timed out, was cancelled, or listed failures
+- **When** it completes
+- **Then** no alias action is sent, the old index still exists and the new index is deleted — before SH-H038 a
+  timed-out copy was `Successful`, so the alias moved to the partial index and the only complete copy was deleted
 
 #### Scenario: A failed swap leaves the new index behind
 

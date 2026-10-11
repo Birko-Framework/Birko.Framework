@@ -31,6 +31,11 @@ normally: rule 22, *a write that cannot be applied must never report success*.
 TASK-498 made this sharper: an increment is exactly the write concurrency collides with, and its XML-doc and the
 Stores README now name this task as the reason ES increments are not yet atomic.
 
+> **Measured at [[TASK-319]] (2026-10-11), on the reindex response only:** NEST's `IsValid` already goes false when
+> the body lists `failures`, but **not** on `timed_out: true` — an HTTP 200 with no failures and only part of the work
+> done. The by-query responses share the body shape; measure whether their `IsValid` behaves the same before relying
+> on it, and check `TimedOut` explicitly either way (`ReindexHelper.Refusal` is the shape used there).
+
 ## Acceptance criteria
 
 - [ ] A conflicted or failed UpdateByQuery (sync and async) throws, carrying the conflict/failure counts — or retries

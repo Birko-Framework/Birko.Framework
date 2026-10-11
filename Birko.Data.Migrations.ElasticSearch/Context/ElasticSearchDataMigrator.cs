@@ -89,6 +89,13 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
                 .WaitForCompletion(true)
             );
             EnsureValid(reindexResponse, $"ReindexOnServer '{sourceCollection}' -> '{targetCollection}'");
+            // A copy that stopped early (timed out, cancelled) passes IsValid; see ReindexHelper.IncompleteReason.
+            var incomplete = Birko.Data.ElasticSearch.IndexManagement.ReindexHelper.IncompleteReason(reindexResponse);
+            if (incomplete != null)
+            {
+                throw new InvalidOperationException(
+                    $"ElasticSearch migration step failed: ReindexOnServer '{sourceCollection}' -> '{targetCollection}' {incomplete}.");
+            }
 
             EnsureValid(_client.Indices.Refresh(targetCollection), $"Refresh index '{targetCollection}'");
         }

@@ -4,6 +4,21 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — A reindex that stopped early is a failure, so the alias swap never deletes the only complete copy
+
+[[TASK-319]] (SH-H038). Elasticsearch answers a reindex that stopped early — `timed_out: true`, or a task cancelled
+mid-copy (`canceled`, which NEST 7 does not surface) — with HTTP 200 and no failures listed, so NEST's `IsValid`
+passes it. `ReindexHelper` returned `Successful`, and `ReindexWithAlias` swapped the alias to the partial index and,
+with `deleteOldIndex: true`, deleted the source. The new `ReindexHelper.IncompleteReason` judges completeness by the
+counts (`created + updated + noops + version_conflicts` must reach `total`; `timed_out` always fails); all four
+reindex variants and `ElasticSearchDataMigrator.CopyData` use it. (Per-document `failures` were already a failure:
+NEST folds them into `IsValid`, measured.)
+
+**Observable:** a partial reindex returns `Success == false` ("timed out / stopped after accounting for N of M
+document(s)"); the alias stays and the old index survives. ⚠ A reindex **script that deletes documents**
+(`ctx.op = "delete"`) is now refused as incomplete, because NEST 7 reports no `deleted` count. A started-only reindex
+(`waitForCompletion: false`) is still reported `Successful` — [[TASK-560]].
+
 ## 2026-10-11 — A negated rule group is honoured, by De Morgan — in the translator and the evaluator
 
 [[TASK-320]] (SH-H045). `RuleGroup.IsNegated` was ignored by `RuleSpecification.ToExpression()` and by
