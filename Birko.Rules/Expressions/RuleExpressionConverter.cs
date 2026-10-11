@@ -12,98 +12,89 @@ namespace Birko.Rules;
 /// <summary>
 /// Converts Birko.Rules rule trees into LINQ Expression&lt;Func&lt;T, bool&gt;&gt; predicates.
 /// Works with any store that accepts LINQ expressions (SQL, Elasticsearch, MongoDB, JSON, etc.).
+/// <para>
+/// <b>FIELD-025 (TASK-558).</b> A rule this converter cannot turn into a predicate MATCHES NOTHING — the answer
+/// <c>RuleSpecification</c> and <c>RuleEvaluator</c> give for the same tree. That covers a field that resolves to no
+/// property, a disabled rule, an empty or all-disabled group and a disabled <see cref="RuleSet"/>. Such a child used
+/// to be dropped, so <c>AND(Status == "Open", NonExistent == "x")</c> became <c>Status == "Open"</c> — wider than
+/// the rule — and at the root the converter returned <c>null</c>, which a caller reads as "no filter".
+/// The entry points therefore never return <c>null</c>: nothing-to-match is <c>x =&gt; false</c>.
+/// </para>
+/// <para>
+/// Negation is pushed down to the leaves by De Morgan (as <c>RuleSpecification</c> does since TASK-320), never
+/// wrapped around a combined group: match-nothing is a fact about the rule, not a predicate, so an enclosing
+/// negated group must not invert it into match-all. Disabled members of an enabled group or set are skipped.
+/// </para>
 /// </summary>
 public static class RuleExpressionConverter
 {
     /// <summary>
-    /// Converts a single rule (leaf or group) into a LINQ predicate expression.
-    /// Returns null if the rule is disabled.
+    /// Converts a single rule (leaf or group) into a LINQ predicate expression. Never null: a disabled rule, an
+    /// empty group or an unresolved field yields <c>x =&gt; false</c>.
     /// </summary>
-    public static Expression<Func<T, bool>>? ToExpression<T>(IRule rule) where T : class
+    public static Expression<Func<T, bool>> ToExpression<T>(IRule rule) where T : class
     {
-        if (!rule.IsEnabled)
-            return null;
-
         var param = Expression.Parameter(typeof(T), "x");
-        var body = BuildExpression(rule, param, typeof(T));
-
-        if (body is null)
-            return null;
-
-        return Expression.Lambda<Func<T, bool>>(body, param);
+        return Lambda<T>(BuildExpression(rule, param, typeof(T), negate: false), param);
     }
 
     /// <summary>
-    /// Converts all enabled rules in a RuleSet into a single AND-combined predicate.
-    /// Returns null if no enabled rules exist.
+    /// Converts all enabled rules in a RuleSet into a single AND-combined predicate. Never null: a disabled set,
+    /// a set with no enabled rules, or one whose rules match nothing yields <c>x =&gt; false</c>.
     /// </summary>
-    public static Expression<Func<T, bool>>? ToExpression<T>(RuleSet ruleSet) where T : class
+    public static Expression<Func<T, bool>> ToExpression<T>(RuleSet ruleSet) where T : class
     {
-        if (!ruleSet.IsEnabled || ruleSet.Rules.Count == 0)
-            return null;
-
         var param = Expression.Parameter(typeof(T), "x");
-        Expression? combined = null;
+        if (!ruleSet.IsEnabled)
+            return Lambda<T>(null, param);
 
-        foreach (var rule in ruleSet.Rules)
-        {
-            if (!rule.IsEnabled)
-                continue;
-
-            var expr = BuildExpression(rule, param, typeof(T));
-            if (expr is null)
-                continue;
-
-            combined = combined is null ? expr : Expression.AndAlso(combined, expr);
-        }
-
-        if (combined is null)
-            return null;
-
-        return Expression.Lambda<Func<T, bool>>(combined, param);
+        return Lambda<T>(BuildConjunction(ruleSet.Rules, param, typeof(T)), param);
     }
 
     /// <summary>
-    /// Converts multiple rules into a single AND-combined predicate.
-    /// Returns null if no enabled rules produce expressions.
+    /// Converts multiple rules into a single AND-combined predicate. Never null: no enabled rules, or a rule that
+    /// matches nothing, yields <c>x =&gt; false</c>.
     /// </summary>
-    public static Expression<Func<T, bool>>? ToExpression<T>(IEnumerable<IRule> rules) where T : class
+    public static Expression<Func<T, bool>> ToExpression<T>(IEnumerable<IRule> rules) where T : class
     {
         var param = Expression.Parameter(typeof(T), "x");
-        Expression? combined = null;
-
-        foreach (var rule in rules)
-        {
-            if (!rule.IsEnabled)
-                continue;
-
-            var expr = BuildExpression(rule, param, typeof(T));
-            if (expr is null)
-                continue;
-
-            combined = combined is null ? expr : Expression.AndAlso(combined, expr);
-        }
-
-        if (combined is null)
-            return null;
-
-        return Expression.Lambda<Func<T, bool>>(combined, param);
+        return Lambda<T>(BuildConjunction(rules, param, typeof(T)), param);
     }
 
-    private static Expression? BuildExpression(IRule rule, ParameterExpression param, Type entityType)
+    private static Expression<Func<T, bool>> Lambda<T>(Expression? body, ParameterExpression param)
+        => Expression.Lambda<Func<T, bool>>(body ?? Expression.Constant(false), param);
+
+    /// <summary>An AND of the enabled rules; null (match-nothing) when there are none or any matches nothing.</summary>
+    private static Expression? BuildConjunction(IEnumerable<IRule> rules, ParameterExpression param, Type entityType)
+    {
+        // Every enabled rule is built before any is discarded, so each one's own errors surface.
+        var built = rules
+            .Where(r => r.IsEnabled)
+            .Select(r => BuildExpression(r, param, entityType, negate: false))
+            .ToList();
+
+        if (built.Count == 0 || built.Any(e => e is null))
+            return null;
+
+        return built.Aggregate((a, b) => Expression.AndAlso(a!, b!));
+    }
+
+    /// <param name="negate">Whether an enclosing negated group inverts this rule — pushed down to the leaves.</param>
+    /// <returns>The predicate, or null when the rule matches nothing under any negation.</returns>
+    private static Expression? BuildExpression(IRule rule, ParameterExpression param, Type entityType, bool negate)
     {
         if (!rule.IsEnabled)
             return null;
 
         return rule switch
         {
-            Rule leaf => BuildLeafExpression(leaf, param, entityType),
-            RuleGroup group => BuildGroupExpression(group, param, entityType),
+            Rule leaf => BuildLeafExpression(leaf, param, entityType, negate),
+            RuleGroup group => BuildGroupExpression(group, param, entityType, negate),
             _ => null
         };
     }
 
-    private static Expression? BuildLeafExpression(Rule rule, ParameterExpression param, Type entityType)
+    private static Expression? BuildLeafExpression(Rule rule, ParameterExpression param, Type entityType, bool negate)
     {
         var property = ResolveProperty(entityType, rule.Field);
         if (property is null)
@@ -112,7 +103,7 @@ public static class RuleExpressionConverter
         var member = BuildMemberAccess(param, rule.Field);
         var propertyType = GetMemberType(member);
 
-        Expression body = rule.Operator switch
+        Expression? body = rule.Operator switch
         {
             ComparisonOperator.IsNull => BuildIsNull(member, propertyType),
             ComparisonOperator.IsNotNull => Expression.Not(BuildIsNull(member, propertyType)),
@@ -130,50 +121,42 @@ public static class RuleExpressionConverter
             ComparisonOperator.Like => BuildLike(member, propertyType, rule.Value),
             ComparisonOperator.In => BuildIn(member, propertyType, rule.Value),
             ComparisonOperator.NotIn => Expression.Not(BuildIn(member, propertyType, rule.Value)),
-            _ => Expression.Constant(false)
+            // An operator this converter does not know is match-nothing, not a `false` a negation could invert.
+            _ => null
         };
 
-        if (rule.IsNegated)
+        if (body is null)
+            return null;
+
+        if (rule.IsNegated != negate)
             body = Expression.Not(body);
 
-        // Wrap with null guards for nested properties (e.g., Address.City)
-        body = WrapWithNullGuards(param, rule.Field, body);
-
-        return body;
+        // Wrap with null guards for nested properties (e.g., Address.City). Applied after the negation, so a null
+        // intermediate never matches — negated or not.
+        return WrapWithNullGuards(param, rule.Field, body);
     }
 
-    private static Expression? BuildGroupExpression(RuleGroup group, ParameterExpression param, Type entityType)
+    private static Expression? BuildGroupExpression(RuleGroup group, ParameterExpression param, Type entityType, bool negate)
     {
-        if (group.Rules.Count == 0)
+        var negated = group.IsNegated != negate;
+        // NOT (A AND B) is NOT A OR NOT B: under negation the group's connective flips.
+        var conjunction = (group.Logic == LogicOperator.And) != negated;
+
+        // Every enabled child is built before any is discarded, so each one's own errors surface.
+        var built = group.Rules
+            .Where(r => r.IsEnabled)
+            .Select(r => BuildExpression(r, param, entityType, negated))
+            .ToList();
+
+        // A AND <nothing> matches nothing; A OR <nothing> is A.
+        if (conjunction && built.Any(e => e is null))
             return null;
 
-        Expression? combined = null;
-
-        foreach (var child in group.Rules)
-        {
-            var childExpr = BuildExpression(child, param, entityType);
-            if (childExpr is null)
-                continue;
-
-            if (combined is null)
-            {
-                combined = childExpr;
-            }
-            else
-            {
-                combined = group.Logic == LogicOperator.And
-                    ? Expression.AndAlso(combined, childExpr)
-                    : Expression.OrElse(combined, childExpr);
-            }
-        }
-
-        if (combined is null)
+        var children = built.Where(e => e is not null).Select(e => e!).ToList();
+        if (children.Count == 0)
             return null;
 
-        if (group.IsNegated)
-            combined = Expression.Not(combined);
-
-        return combined;
+        return children.Aggregate((a, b) => conjunction ? Expression.AndAlso(a, b) : Expression.OrElse(a, b));
     }
 
     // ── Property resolution (supports nested: "Address.City") ──

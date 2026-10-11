@@ -437,11 +437,15 @@ value or `Value` is `null`, and SHALL define `NotIn` as the exact negation of th
 ### Requirement: Rule tree to LINQ predicate conversion
 
 The system SHALL convert a rule tree into `Expression<Func<T,bool>>` via
-`RuleExpressionConverter.ToExpression<T>`, SHALL return `null` for a disabled rule, for a disabled or
-empty `RuleSet`, and whenever no child produced an expression, SHALL AND-combine the enabled rules of
-a `RuleSet` or `IEnumerable<IRule>` overload, SHALL combine group children with `AndAlso` / `OrElse`
-according to `RuleGroup.Logic`, and SHALL apply `RuleGroup.IsNegated` by wrapping the combined group
-expression in `Expression.Not`.
+`RuleExpressionConverter.ToExpression<T>` and SHALL select the same rows as `RuleSpecification` and
+`RuleEvaluator`. It SHALL never return `null`. It SHALL answer **match-nothing** (`x => false`) for a
+disabled rule, an empty or all-disabled group, a disabled `RuleSet`, an empty rule list, and a field that
+resolves to no property. That answer is never inverted by an enclosing negation: `A AND <match-nothing>`
+matches nothing, and `A OR <match-nothing>` is `A`. It SHALL AND-combine the enabled rules of a `RuleSet` or
+`IEnumerable<IRule>` and skip their disabled members. It SHALL apply `RuleGroup.IsNegated` by De Morgan down
+to the leaves: a negated group flips its connective and inverts each leaf. It never wraps the combined group
+in `Expression.Not`. (FIELD-025 and `SH-M358` were fixed by TASK-558. Before that fix the converter returned
+`null`, which every store reads as "no filter", and it dropped an untranslatable child, which widened an AND.)
 
 #### Scenario: Rule set becomes a conjunction
 
@@ -449,17 +453,26 @@ expression in `Expression.Not`.
 - **When** `ToExpression<T>(ruleSet)` is called
 - **Then** a lambda over parameter `x` is returned whose body is an `AndAlso` of the two leaf predicates
 
-#### Scenario: Disabled input yields no predicate
+#### Scenario: Disabled input matches nothing
 
-- **Given** a rule with `IsEnabled = false`, or a `RuleSet` with `IsEnabled = false`, or a `RuleSet` with zero rules
+- **Given** a rule with `IsEnabled = false`, or a `RuleSet` with `IsEnabled = false`, or a `RuleSet` with zero rules,
+  or an empty or all-disabled `RuleGroup`
 - **When** `ToExpression<T>` is called
-- **Then** `null` is returned in every case, and the caller cannot distinguish these from a conversion failure
+- **Then** a non-null predicate is returned that selects no rows — never `null`, which a store reads as "no filter"
 
-#### Scenario: Group negation is honoured in the expression path
+#### Scenario: Group negation agrees with the other engines
 
 - **Given** `RuleGroup.And(new Rule("A", Equal, 1)) { IsNegated = true }`
 - **When** `ToExpression<T>` is called and the predicate is compiled and applied to an instance whose `A == 1`
-- **Then** the predicate returns `false`, the opposite of what `RuleEvaluator.Evaluate` returns for the same group
+- **Then** the predicate returns `false`, as `RuleEvaluator.Evaluate` and `RuleSpecification` answer for the same group
+
+#### Scenario: The converter agrees with RuleSpecification and RuleEvaluator
+
+- **Given** any of: an unresolved leaf (negated or not), `A AND unresolved`, `A OR unresolved`,
+  `NOT (A AND unresolved)`, `NOT (A OR unresolved)`, `NOT ((A OR unresolved) AND B)`, a disabled leaf, an empty
+  group, `A AND <empty>`, a negated empty group, `NOT (A OR B)`, `NOT (A AND B)`
+- **When** each is applied to one shared table through all three engines
+- **Then** all three select the same rows (`RuleExpressionConverterAgreementTests`)
 
 #### Scenario: Property caching is concurrency-safe
 
@@ -469,10 +482,12 @@ expression in `Expression.Not`.
 
 ### Requirement: Expression conversion — property resolution and nested paths
 
-The system SHALL resolve a rule's `Field` against `T` by splitting on `'.'` and walking public
-instance properties case-insensitively, SHALL return `null` (silently dropping the rule) when any
-segment cannot be resolved, and SHALL guard a nested access by prefixing `AndAlso` null checks for
-every intermediate segment whose type is nullable.
+The system SHALL resolve a rule's `Field` against `T` by splitting on `'.'` and walking public instance
+properties case-insensitively. When any segment cannot be resolved it SHALL treat the rule as
+match-nothing. The rule is never dropped, as it was before TASK-558. The system SHALL guard a nested access
+by prefixing `AndAlso` null checks for every intermediate segment whose type is nullable. The checks go
+outside any negation, whether it comes from the rule's own `IsNegated` or from an enclosing negated group,
+so a null intermediate never matches. Whether it should match a negated rule is `SH-M367`, still open.
 
 #### Scenario: Nested field builds a guarded member access
 
@@ -480,19 +495,25 @@ every intermediate segment whose type is nullable.
 - **When** the predicate is built and applied to an entity whose `Address` is `null`
 - **Then** the guard `x.Address != null` short-circuits and the predicate returns `false` without a `NullReferenceException`
 
-#### Scenario: Unresolvable field is dropped, widening the query
+#### Scenario: An unresolvable field matches nothing
 
 - **Given** a `RuleSet` with one rule whose `Field` is a typo not present on `T`
 - **When** `ToExpression<T>(ruleSet)` is called
-- **Then** the leaf yields `null`, nothing is combined, and `ToExpression` returns `null` — a store handed a `null` filter reads every row rather than reporting the bad field
+- **Then** the predicate selects no rows. Before TASK-558 it was `null`, and a store handed `null` read every row.
 
-#### Scenario: Dropping a child changes group meaning asymmetrically
+#### Scenario: An unresolvable child narrows or vanishes like the other engines
 
-- **Given** a group with one resolvable and one unresolvable child
+- **Given** a group with one resolvable child `A` and one unresolvable child
 - **When** the group is `And`
-- **Then** the surviving child alone forms the predicate, matching *more* rows than intended
+- **Then** it matches nothing
 - **When** the group is `Or`
-- **Then** the surviving child alone forms the predicate, matching *fewer* rows than intended
+- **Then** it is `A`
+
+#### Scenario: Both negation routes agree on a null parent
+
+- **Given** `Address.City == "Prague"` negated by its own `IsNegated`, and the same rule inside a negated group
+- **When** both predicates are applied to an entity whose `Address` is `null`
+- **Then** neither matches it, because the negation lands inside the null guard in both cases
 
 #### Scenario: Non-nullable intermediate segment adds no guard
 

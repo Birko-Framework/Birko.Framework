@@ -266,22 +266,37 @@ public class RuleExpressionConverterTests
         result.Should().ContainSingle().Which.Name.Should().Be("Widget");
     }
 
+    [Fact]
+    public void A_negated_group_over_a_nested_field_treats_a_null_parent_like_a_negated_leaf_does()
+    {
+        // Contract pin (TASK-558): group negation is pushed down to the leaf, so it lands INSIDE the null guard,
+        // exactly where the leaf's own IsNegated has always landed — a null Address matches neither form. Whether
+        // a negated nested rule SHOULD include null-parent rows is SH-M367, open under TASK-156; this pins only that
+        // the two negation routes agree.
+        var negatedLeaf = Apply(new Rule("Address.City", ComparisonOperator.Equal, "Prague") { IsNegated = true });
+        var negatedGroup = Apply(new RuleGroup(LogicOperator.And, new Rule("Address.City", ComparisonOperator.Equal, "Prague")) { IsNegated = true });
+
+        negatedGroup.Select(p => p.Name).Should().Equal(negatedLeaf.Select(p => p.Name));
+        negatedGroup.Select(p => p.Name).Should().Equal("Gadget");
+    }
+
     // ── Disabled rules ──
 
+    // FIELD-025 (TASK-558): the five *_ReturnsNull tests pinned the defect — a null predicate is read by a caller as
+    // "no filter", every row, where RuleSpecification / RuleEvaluator match nothing. Inverted, not deleted.
+
     [Fact]
-    public void DisabledRule_ReturnsNull()
+    public void DisabledRule_MatchesNothing()
     {
         var rule = new Rule("Name", ComparisonOperator.Equal, "Widget") { IsEnabled = false };
-        var expr = RuleExpressionConverter.ToExpression<Product>(rule);
-        expr.Should().BeNull();
+        Apply(rule).Should().BeEmpty();
     }
 
     [Fact]
-    public void UnknownProperty_ReturnsNull()
+    public void UnknownProperty_MatchesNothing()
     {
         var rule = new Rule("NonExistent", ComparisonOperator.Equal, "x");
-        var expr = RuleExpressionConverter.ToExpression<Product>(rule);
-        expr.Should().BeNull();
+        Apply(rule).Should().BeEmpty();
     }
 
     // ── RuleGroup ──
@@ -336,22 +351,19 @@ public class RuleExpressionConverterTests
     }
 
     [Fact]
-    public void EmptyGroup_ReturnsNull()
+    public void EmptyGroup_MatchesNothing()
     {
-        var group = RuleGroup.And();
-        var expr = RuleExpressionConverter.ToExpression<Product>(group);
-        expr.Should().BeNull();
+        Apply(RuleGroup.And()).Should().BeEmpty();
     }
 
     [Fact]
-    public void Group_AllDisabled_ReturnsNull()
+    public void Group_AllDisabled_MatchesNothing()
     {
         var group = RuleGroup.And(
             new Rule("Name", ComparisonOperator.Equal, "x") { IsEnabled = false },
             new Rule("Name", ComparisonOperator.Equal, "y") { IsEnabled = false });
 
-        var expr = RuleExpressionConverter.ToExpression<Product>(group);
-        expr.Should().BeNull();
+        Apply(group).Should().BeEmpty();
     }
 
     // ── RuleSet ──
@@ -372,13 +384,13 @@ public class RuleExpressionConverterTests
     }
 
     [Fact]
-    public void RuleSet_Disabled_ReturnsNull()
+    public void RuleSet_Disabled_MatchesNothing()
     {
         var set = new RuleSet("test") { IsEnabled = false };
         set.Rules.Add(new Rule("Name", ComparisonOperator.Equal, "Widget"));
 
         var expr = RuleExpressionConverter.ToExpression<Product>(set);
-        expr.Should().BeNull();
+        Products.AsQueryable().Where(expr).Should().BeEmpty();
     }
 
     [Fact]

@@ -30,6 +30,8 @@ that fall in the `validation-and-rules` area.
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md) § Medium severity →
 `### area: validation-and-rules`, lines 2614–2747.
 
+**Closed outside this task:** `SH-M358` (an unresolvable rule field is dropped; a lone one makes `ToExpression` return null = match-all) — fixed by [[TASK-558]] (2026-10-11). `SH-M367` was **narrowed, not closed** there: both negation routes now exclude null-parent rows; whether they should is still this task's question.
+
 **The contract under review** is specced in [`docs/specs/validation-and-rules.md`](../../../docs/specs/validation-and-rules.md), harvested from
 2 source globs — `../Birko.Validation/**/*.cs`, `../Birko.Rules/**/*.cs`. Every one of
 them points into a **sibling repo**, so a fix here normally lands as three commits in three repos (production,

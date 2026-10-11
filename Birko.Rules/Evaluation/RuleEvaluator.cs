@@ -93,8 +93,8 @@ public class RuleEvaluator : IRuleEvaluator
 
         // Skip disabled children so a disabled child neither fails an AND group nor is otherwise
         // treated as a non-match — mirroring RuleExpressionConverter.BuildGroupExpression, which
-        // drops disabled children from the AndAlso/OrElse combination (the two agree on disabled children;
-        // on group negation the converter still negates naively — TASK-558).
+        // drops disabled children from the AndAlso/OrElse combination and, since TASK-558, negates by
+        // De Morgan exactly as this method does.
         var evaluatedAny = false;
 
         if (conjunction)

@@ -4,6 +4,23 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — RuleExpressionConverter never returns null and never drops a rule
+
+[[TASK-558]] (FIELD-025, SH-M358). `RuleExpressionConverter` dropped a child it could not translate — a field that
+resolves to no property, a disabled rule, an empty group — so `AND(Status == "Open", NonExistent == "x")` became
+`Status == "Open"`, wider than the rule, and negated a group with `Expression.Not` around the survivors, so
+`NOT (A OR unresolved)` became `NOT A`. At the root it returned `null`, which every store reads as "no filter":
+a misspelled field in a rule meant to restrict reads returned the whole table. Now such a rule matches nothing, as
+`RuleSpecification` and `RuleEvaluator` answer, and negation is pushed to the leaves by De Morgan.
+
+**BREAKING (annotation) / observable — no measured caller outside the framework's tests.** The three
+`ToExpression<T>` overloads return `Expression<Func<T, bool>>` (no longer nullable) and give `x => false` where they
+gave `null`: a disabled rule, a disabled or empty `RuleSet`, an empty group or rule list, an unknown field. A
+`null` check on the result is now dead. A negated group over a nested field (`Address.City`) no longer includes
+rows whose `Address` is null — it now agrees with the leaf's own `IsNegated` (SH-M367 remains open).
+
+---
+
 ## 2026-10-11 — The SQL rule converter selects what the other rule engines select
 
 [[TASK-559]] (FIELD-026, SH-M128, SH-L141). `RuleConditionConverter` turned a disabled rule, an empty or all-disabled

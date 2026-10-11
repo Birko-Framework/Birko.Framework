@@ -240,7 +240,8 @@ new Rule("Status", ComparisonOperator.Equal, "Active")               // string â
 - All 16 comparison operators supported
 - AND/OR groups with arbitrary nesting
 - Negation (IsNegated) on rules and groups
-- Disabled rules/groups skipped (returns null)
+- A disabled rule, an empty group or an unknown field **matches nothing** (`x => false`, never `null`); a disabled
+  member of an enabled group or set is skipped
 - Case-insensitive property resolution and string comparisons
 - SQL LIKE-style wildcards (%, StartsWith, EndsWith, Contains)
 - In/NotIn with collections

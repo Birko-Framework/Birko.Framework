@@ -134,6 +134,9 @@ var ruleSet = new RuleSet("Active expensive products",
     new Rule("Price", ComparisonOperator.GreaterThan, 50m));
 var expr = RuleExpressionConverter.ToExpression<Product>(ruleSet);
 
+// Never null: a disabled rule, an empty group or a misspelled field yields x => false (matches nothing),
+// as RuleSpecification and RuleEvaluator answer — never a null filter that a store would read as "every row".
+
 // Nested properties (null-safe)
 var rule = new Rule("Address.City", ComparisonOperator.Equal, "Prague");
 // Generates: x => x.Address != null && x.Address.City == "Prague"
