@@ -44,7 +44,7 @@ as plain `application/json`); this is the validator half.
 - [x] Guard in the consumer: Symbio `tests/ui-e2e/tenant-settings-tracking-url.spec.ts`. It asserts the Slovak sentence
       is on the field and visible, is not the raw JSON and not `[object Object]`, and that nothing is stored.
       Mutation-checked: reverting either fix alone turns it red. `form-level-error.spec.ts` stays green.
-- [ ] Symbio's gate 3 green with the change (every page's error handling goes through it).
+- [x] Symbio's gate 3 green with the change (every page's error handling goes through it): 475 tests, 0 failed, 0 flaky (2026-10-11).
 - [ ] Tag on the next push (README § Versions: a fix → PATCH).
 
 ## Out of scope
