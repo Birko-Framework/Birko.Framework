@@ -148,7 +148,7 @@ namespace Birko.Data.XML.Stores
         protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
             EnsureWritable();
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             storeDelegate?.Invoke(data);
             _items.Add(data.Guid.Value, data);
 

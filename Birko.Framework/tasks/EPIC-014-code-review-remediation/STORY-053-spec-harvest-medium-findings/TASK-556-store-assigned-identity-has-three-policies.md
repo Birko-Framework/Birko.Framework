@@ -2,9 +2,10 @@
 id: TASK-556
 parent: STORY-053
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
+picked-by: fix-next
 created: 2026-10-11
 depends-on: []
 blocks: []
@@ -53,16 +54,16 @@ The task is no longer a decision task: it is runnable by [[fix-next]].
 
 ## Acceptance criteria
 
-- [ ] One producer — e.g. `AbstractModel.EnsureGuid()` (assign when `null` or `Guid.Empty`, keep any other value) —
+- [x] One producer — e.g. `AbstractModel.EnsureGuid()` (assign when `null` or `Guid.Empty`, keep any other value) —
       used at every site above; no store re-implements the rule
-- [ ] CR-L190 decided on the record: bulk create either keeps a caller-supplied Guid on **every** backend (SQL and
+- [x] CR-L190 decided on the record: bulk create either keeps a caller-supplied Guid on **every** backend (SQL and
       RavenDB then can hit a duplicate key — test it, consistently with [[TASK-163]]'s in-memory "create never
       replaces") or overwrites it on every backend, documented on `IBulkStore.Create` / `IAsyncBulkStore.CreateAsync`
-- [ ] In-memory `Read(Guid)` and the base `Read(Guid)` agree on `Guid.Empty` once nothing can be stored under it
-- [ ] A per-provider contract test: create with `null`, with `Guid.Empty`, and with a caller Guid (single and bulk);
+- [x] In-memory `Read(Guid)` and the base `Read(Guid)` agree on `Guid.Empty` once nothing can be stored under it
+- [x] A per-provider contract test: create with `null`, with `Guid.Empty`, and with a caller Guid (single and bulk);
       red-verified, including the bulk-overwrite case on SQLite
-- [ ] CHANGELOG migration entry for the bulk-create behaviour change
-- [ ] `/specs regen store-crud-contract`
+- [x] CHANGELOG migration entry for the bulk-create behaviour change
+- [x] `/specs regen store-crud-contract`
 
 ## Out of scope
 
@@ -75,3 +76,49 @@ N/A — a library contract with no UI surface; fully covered by the per-provider
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-556` — leave empty until then._
+
+## Outcome
+
+**Fixed.** Every store now gives an entity its identity the same way: a fresh Guid when it has none or has
+`Guid.Empty`, and the caller's own Guid kept otherwise — single or bulk, on every provider. Bulk create on SQL,
+TimescaleDB and RavenDB used to throw the caller's ids away and store entities under new ones; it now keeps them, as the
+user decided (2026-10-11, CR-L190 reversed).
+
+- **One producer:** `AbstractModel.EnsureGuid()`. 61 sites in 40 files now call it: the `??=` form (kept `Guid.Empty`),
+  the guarded null-or-empty form, the null-only `HasValue` form (JSON / XML async bulk), the unconditional overwrite
+  (SQL ×8, TimescaleDB ×2, RavenDB bulk ×4), and a **fourth form the first sweep missed** —
+  `item.Guid = item.Guid ?? Guid.NewGuid()` in MongoDB and InfluxDB bulk create — which the shared contract caught live on
+  MongoDB. Background-job and sync model mappers (`Guid ?? Guid.NewGuid()` when converting a domain object) are not
+  store-assigned identity and were left.
+- **Documented** on `IBulkCreateStore.Create` / `IAsyncBulkCreateStore.CreateAsync`; stale CR-L190 comments
+  (PostgreSQL) and the ViewModel repositories' comment ("every store honours a pre-assigned Guid, because every one uses
+  `??=`" — never true of SQL/RavenDB bulk) rewritten.
+- **Read(Guid.Empty):** the in-memory override refuses it and the base filters on it; with nothing stored under
+  `Guid.Empty` they agree — pinned by the contract (`…empty_guid…` asserts a read of `Guid.Empty` finds nothing).
+- **Contract:** `tests/Shared/StoreContract/IdentityContract.cs` (5 sync + 4 async), same 12 test projects; the shared
+  classes were renamed `StoreContract<T>` / `AsyncStoreContract<T>` (partial) since they now hold more than update-miss.
+- **Step-6 split (store edits reverted, `EnsureGuid` kept), identity tests red:** InMemory, JSON, SQLite, PostgreSQL,
+  MySQL, SQL Server, TimescaleDB, MongoDB, RavenDB, CosmosDB 4/11 each; XML 12/33 (3 layouts); Elasticsearch 2/11 (its
+  bulk path already treated Empty as new). **Contract pins** (green on revert): create with no Guid, single create keeps a
+  caller Guid (sync + async).
+- **Live (throwaway containers, removed):** PostgreSQL 136, MySQL 158, SQL Server 172, TimescaleDB 77, MongoDB 127,
+  RavenDB 90, Elasticsearch 207, CosmosDB 84 — all green. Local: InMemory 117, JSON 58, XML 95, SQLite 481. Full solution
+  (no live servers): 169/169 test projects green.
+- **Measured, spawned [[TASK-567]] (acceptance 2's duplicate-key half):** a SQL table for a model with no declared key has
+  no PK/unique on `Guid`, so a create of a stored Guid inserts a second row — single (as always) and now bulk too (SQLite:
+  3 rows under one Guid). Fixing it is a DDL + migration decision, so it is its own task; the interface docs say so.
+- **Process incident, recorded:** this task's step-6 revert list was built from `git diff` globs and swept in another live
+  session's uncommitted `Birko.EventBus/Local/InProcessEventBus.cs`; that session's TASK-565 commit `829034b9` landed in
+  the revert window without its production fix. Told the session (it re-committed as `d622f1c4`) and the user; feedback
+  memory added (revert and commit only explicit own paths). This commit uses an explicit pathspec.
+- **Merge gate:** inline review. Public surface: new `AbstractModel.EnsureGuid()`. No nullable warnings.
+
+## Progress log
+
+- step 2 — picked; ranked above TASK-557 (delegate return discarded, in-memory live references) on key 1: SQL/RavenDB bulk create stores different ids than the caller set (wrong data, breaks pre-linked entities) on the default provider; decided 2026-10-11 (4e6ef5f2): keep the caller Guid everywhere, one producer for identity assignment
+- step 3 — verified: held as written and wider — a fourth assignment form (`x.Guid = x.Guid ?? Guid.NewGuid()`, MongoDB/InfluxDB bulk) found by the live contract
+- step 4 — layer: local; decision recorded 2026-10-11 (4e6ef5f2): keep the caller Guid everywhere
+- step 5 — `AbstractModel.EnsureGuid()` + 61 call sites in 40 files; interface docs; `IdentityContract` (9) on 12 providers; all local + 8 live suites green; full solution 169/169
+- step 6 — store edits reverted → identity tests red on every provider (numbers in Outcome)
+- step 7 — respecced store-crud-contract: new requirement *Every store assigns an identity through one rule, single or bulk* (2 scenarios); in-memory create requirement amended, its Guid.Empty scenario inverted, the null-create scenario corrected
+- step 8 — handed to /tasks close --unattended; outcome in status:, commit in git log

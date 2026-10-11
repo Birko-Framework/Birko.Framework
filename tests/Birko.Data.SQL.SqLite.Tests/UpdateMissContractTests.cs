@@ -16,7 +16,7 @@ public class UpdateMissRow : AbstractModel
 }
 
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="SQLiteStore{T}"/>, against a real file.</summary>
-public sealed class SQLiteUpdateMissContractTests : UpdateMissContract<UpdateMissRow>, IDisposable
+public sealed class SQLiteUpdateMissContractTests : StoreContract<UpdateMissRow>, IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "birko-sqlite-555-" + Guid.NewGuid().ToString("N"));
 
@@ -40,7 +40,7 @@ public sealed class SQLiteUpdateMissContractTests : UpdateMissContract<UpdateMis
 }
 
 /// <summary>The async twin, on <see cref="AsyncSQLiteStore{T}"/>.</summary>
-public sealed class AsyncSQLiteUpdateMissContractTests : AsyncUpdateMissContract<UpdateMissRow>, IDisposable
+public sealed class AsyncSQLiteUpdateMissContractTests : AsyncStoreContract<UpdateMissRow>, IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "birko-sqlite-555-" + Guid.NewGuid().ToString("N"));
 

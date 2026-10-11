@@ -107,7 +107,7 @@ namespace Birko.Data.XML.Stores
         protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureWritable();
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             storeDelegate?.Invoke(data);
             _items[data.Guid.Value] = data;
             SaveData();
@@ -145,7 +145,7 @@ namespace Birko.Data.XML.Stores
             var changed = false;
             foreach (var item in data.Where(x => x != null))
             {
-                item.Guid ??= Guid.NewGuid();
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
                 _items[item.Guid.Value] = item;
                 changed = true;

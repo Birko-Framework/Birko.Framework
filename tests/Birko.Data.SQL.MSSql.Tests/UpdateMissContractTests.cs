@@ -49,7 +49,7 @@ internal sealed class SQLServerLive
 
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="MSSqlStore{T}"/>, live. The table is dropped
 /// before each test so its counts start from zero.</summary>
-public sealed class SQLServerUpdateMissContractTests : UpdateMissContract<UpdateMissSyncRow>
+public sealed class SQLServerUpdateMissContractTests : StoreContract<UpdateMissSyncRow>
 {
     private readonly SQLServerLive _live;
     public SQLServerUpdateMissContractTests(ITestOutputHelper output) => _live = new SQLServerLive(output);
@@ -69,7 +69,7 @@ public sealed class SQLServerUpdateMissContractTests : UpdateMissContract<Update
 }
 
 /// <summary>The async twin, on <see cref="AsyncMSSqlStore{T}"/>.</summary>
-public sealed class AsyncSQLServerUpdateMissContractTests : AsyncUpdateMissContract<UpdateMissAsyncRow>
+public sealed class AsyncSQLServerUpdateMissContractTests : AsyncStoreContract<UpdateMissAsyncRow>
 {
     private readonly SQLServerLive _live;
     public AsyncSQLServerUpdateMissContractTests(ITestOutputHelper output) => _live = new SQLServerLive(output);

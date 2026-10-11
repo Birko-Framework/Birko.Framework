@@ -102,7 +102,7 @@ namespace Birko.Data.ElasticSearch.Stores
         {
             if (data == null) return Guid.Empty;
 
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             storeDelegate?.Invoke(data);
 
             try
@@ -241,10 +241,7 @@ namespace Birko.Data.ElasticSearch.Stores
 
             var itemsToCreate = data.Where(x => x != null).Select(x =>
             {
-                if (x.Guid == null || x.Guid == Guid.Empty)
-                {
-                    x.Guid = Guid.NewGuid();
-                }
+                x.EnsureGuid();
                 storeDelegate?.Invoke(x);
                 return x;
             });

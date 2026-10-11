@@ -64,7 +64,7 @@ internal sealed class CosmosLive : IDisposable
 }
 
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="CosmosDBStore{T}"/>, live.</summary>
-public sealed class CosmosUpdateMissContractTests : UpdateMissContract<UpdateMissDoc>, IDisposable
+public sealed class CosmosUpdateMissContractTests : StoreContract<UpdateMissDoc>, IDisposable
 {
     private readonly CosmosLive _live;
     public CosmosUpdateMissContractTests(ITestOutputHelper output) => _live = new CosmosLive(output);
@@ -83,7 +83,7 @@ public sealed class CosmosUpdateMissContractTests : UpdateMissContract<UpdateMis
 }
 
 /// <summary>The async twin, on <see cref="AsyncCosmosDBStore{T}"/>.</summary>
-public sealed class AsyncCosmosUpdateMissContractTests : AsyncUpdateMissContract<UpdateMissDoc>, IDisposable
+public sealed class AsyncCosmosUpdateMissContractTests : AsyncStoreContract<UpdateMissDoc>, IDisposable
 {
     private readonly CosmosLive _live;
     public AsyncCosmosUpdateMissContractTests(ITestOutputHelper output) => _live = new CosmosLive(output);

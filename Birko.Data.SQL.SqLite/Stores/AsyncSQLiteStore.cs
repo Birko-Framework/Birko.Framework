@@ -110,7 +110,8 @@ namespace Birko.Data.SQL.SqLite.Stores
             var items = data.ToList();
             foreach (var item in items)
             {
-                item.Guid = Guid.NewGuid();
+                // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
             }
 

@@ -31,7 +31,7 @@ internal sealed class TempDirs : IDisposable
 }
 
 /// <summary>TASK-555's cross-provider update-miss contract (<c>tests/Shared/StoreContract</c>) on <see cref="JsonStore{T}"/>.</summary>
-public sealed class JsonUpdateMissContractTests : UpdateMissContract<TestModel>, IDisposable
+public sealed class JsonUpdateMissContractTests : StoreContract<TestModel>, IDisposable
 {
     private readonly TempDirs _dirs = new();
 
@@ -49,7 +49,7 @@ public sealed class JsonUpdateMissContractTests : UpdateMissContract<TestModel>,
 }
 
 /// <summary>The async twin, on <see cref="AsyncJsonStore{T}"/>.</summary>
-public sealed class AsyncJsonUpdateMissContractTests : AsyncUpdateMissContract<TestModel>, IDisposable
+public sealed class AsyncJsonUpdateMissContractTests : AsyncStoreContract<TestModel>, IDisposable
 {
     private readonly TempDirs _dirs = new();
 

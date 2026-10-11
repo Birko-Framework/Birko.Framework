@@ -49,7 +49,7 @@ internal sealed class MySQLLive
 
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="MySQLStore{T}"/>, live. The table is dropped
 /// before each test so its counts start from zero.</summary>
-public sealed class MySQLUpdateMissContractTests : UpdateMissContract<UpdateMissSyncRow>
+public sealed class MySQLUpdateMissContractTests : StoreContract<UpdateMissSyncRow>
 {
     private readonly MySQLLive _live;
     public MySQLUpdateMissContractTests(ITestOutputHelper output) => _live = new MySQLLive(output);
@@ -69,7 +69,7 @@ public sealed class MySQLUpdateMissContractTests : UpdateMissContract<UpdateMiss
 }
 
 /// <summary>The async twin, on <see cref="AsyncMySQLStore{T}"/>.</summary>
-public sealed class AsyncMySQLUpdateMissContractTests : AsyncUpdateMissContract<UpdateMissAsyncRow>
+public sealed class AsyncMySQLUpdateMissContractTests : AsyncStoreContract<UpdateMissAsyncRow>
 {
     private readonly MySQLLive _live;
     public AsyncMySQLUpdateMissContractTests(ITestOutputHelper output) => _live = new MySQLLive(output);

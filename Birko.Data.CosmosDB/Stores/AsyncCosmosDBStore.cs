@@ -206,7 +206,7 @@ public class AsyncCosmosDBStore<T>
     {
         if (_container == null || data == null) return Guid.Empty;
 
-        data.Guid ??= Guid.NewGuid();
+        data.EnsureGuid();
         processDelegate?.Invoke(data);
 
         if (TransactionContext != null)
@@ -352,10 +352,7 @@ public class AsyncCosmosDBStore<T>
 
         processDelegate?.Invoke(data);
 
-        if (data.Guid == null || data.Guid == Guid.Empty)
-        {
-            data.Guid = Guid.NewGuid();
-        }
+        data.EnsureGuid();
 
         if (TransactionContext != null)
         {
@@ -443,7 +440,7 @@ public class AsyncCosmosDBStore<T>
             foreach (var item in data)
             {
                 if (item == null) continue;
-                item.Guid ??= Guid.NewGuid();
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
                 RequireBatchPartition(item.Guid!.Value);
                 TransactionContext.CreateItem(item);
@@ -456,7 +453,7 @@ public class AsyncCosmosDBStore<T>
         {
             if (item == null) continue;
 
-            item.Guid ??= Guid.NewGuid();
+            item.EnsureGuid();
             storeDelegate?.Invoke(item);
 
             tasks.Add(_container.CreateItemAsync(item, new PartitionKey(item.Guid.Value.ToString()), cancellationToken: ct));

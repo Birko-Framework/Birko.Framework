@@ -58,7 +58,7 @@ namespace Birko.Data.EventSourcing.Stores
             // inner-store row all key off the SAME id (CR-C05). Previously the event used a
             // throwaway Guid.NewGuid() that was never written back, so the inner store assigned
             // a different Guid and Replay/GetHistory by the persisted id never found the Created event.
-            item.Guid ??= Guid.NewGuid();
+            item.EnsureGuid();
 
             // Generate new version
             var newVersion = _eventStore.GetVersion(item.Guid.Value) + 1;

@@ -5,7 +5,7 @@ using Birko.Tests.Shared.StoreContract;
 namespace Birko.Data.InMemory.Tests;
 
 /// <summary>TASK-555's cross-provider update-miss contract (<c>tests/Shared/StoreContract</c>) on the in-memory store.</summary>
-public class InMemoryUpdateMissContractTests : UpdateMissContract<TestModel>
+public class InMemoryUpdateMissContractTests : StoreContract<TestModel>
 {
     protected override IBulkStore<TestModel> NewStore() => new InMemoryStore<TestModel>();
     protected override TestModel NewEntity(string name) => new() { Name = name };
@@ -14,7 +14,7 @@ public class InMemoryUpdateMissContractTests : UpdateMissContract<TestModel>
 }
 
 /// <summary>The async twin, on <see cref="AsyncInMemoryStore{T}"/>.</summary>
-public class AsyncInMemoryUpdateMissContractTests : AsyncUpdateMissContract<TestModel>
+public class AsyncInMemoryUpdateMissContractTests : AsyncStoreContract<TestModel>
 {
     protected override IAsyncBulkStore<TestModel> NewStore() => new AsyncInMemoryStore<TestModel>();
     protected override TestModel NewEntity(string name) => new() { Name = name };

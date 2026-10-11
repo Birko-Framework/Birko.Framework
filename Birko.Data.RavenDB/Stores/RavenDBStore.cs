@@ -170,7 +170,7 @@ public class RavenDBStore<T>
     {
         if (_documentStore == null || data == null) return Guid.Empty;
 
-        data.Guid ??= Guid.NewGuid();
+        data.EnsureGuid();
         storeDelegate?.Invoke(data);
 
         if (TransactionContext != null)
@@ -398,7 +398,8 @@ public class RavenDBStore<T>
             foreach (var item in data)
             {
                 if (item == null) continue;
-                item.Guid = Guid.NewGuid();
+                // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
                 TransactionContext.Store(item, IdOf(item.Guid.Value));
             }
@@ -411,7 +412,8 @@ public class RavenDBStore<T>
         {
             if (item == null) continue;
 
-            item.Guid = Guid.NewGuid();
+            // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
+            item.EnsureGuid();
             storeDelegate?.Invoke(item);
 
             bulkInsert.Store(item, IdOf(item.Guid.Value));

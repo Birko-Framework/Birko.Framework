@@ -78,7 +78,7 @@ namespace Birko.Data.XML.Stores
 
             if (data == null) return Guid.Empty;
 
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             storeDelegate?.Invoke(data);
             _items.Add(data.Guid.Value, data);
 
@@ -281,10 +281,7 @@ namespace Birko.Data.XML.Stores
 
             foreach (var item in data.Where(x => x != null))
             {
-                if (!item.Guid.HasValue)
-                {
-                    item.Guid = Guid.NewGuid();
-                }
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
                 _items[item.Guid!.Value] = item;
             }

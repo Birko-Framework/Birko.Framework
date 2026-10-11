@@ -67,6 +67,14 @@ namespace Birko.Data.Stores
         /// <param name="data">The entities to create.</param>
         /// <param name="storeDelegate">Optional delegate to process entities before creation.</param>
         /// <param name="ct">A cancellation token to cancel the operation.</param>
+        /// <remarks>
+        /// Identity follows the single-item rule on every provider (TASK-556): an entity whose <c>Guid</c> is null or
+        /// <c>Guid.Empty</c> gets a fresh one (<c>AbstractModel.EnsureGuid</c>); any other Guid the caller set is KEPT, so
+        /// entities linked by pre-set ids are stored under them. A Guid that is already stored behaves as it does on a
+        /// single create, which still differs by provider — the in-memory store refuses it, while a SQL table with no
+        /// declared key inserts a second row (TASK-567). (SQL, TimescaleDB and RavenDB bulk create used to overwrite
+        /// every caller Guid — CR-L190.)
+        /// </remarks>
         Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default);
     }
 

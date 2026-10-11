@@ -339,12 +339,11 @@ namespace Birko.Data.Repositories
             // here, before the store sees the item -- the same fix the bulk path already carries
             // (CR-H110). StoreHash stays inside the store delegate because CreateCore assigns
             // data.Guid before invoking it, and the hash is keyed by Guid.
-            // The store's CreateCore does `data.Guid ??= Guid.NewGuid()` *before* it invokes the store
-            // delegate, so a ProcessDataDelegate used to be able to read the newly assigned key (to
-            // stamp child rows, an audit record, an outbox message). Hoisting the transform out would
-            // have silently taken that away, so the key is assigned here first; every store honours a
-            // pre-assigned Guid, because every one of them uses `??=`.
-            item.Guid ??= Guid.NewGuid();
+            // The store's CreateCore assigns the identity (AbstractModel.EnsureGuid) *before* it invokes the store
+            // delegate, so a ProcessDataDelegate used to be able to read the newly assigned key. Hoisting the transform
+            // out would have silently taken that away, so the key is assigned here first; every store keeps a
+            // pre-assigned Guid (TASK-556 made that true of the SQL and RavenDB bulk paths too).
+            item.EnsureGuid();
             item = processDelegate?.Invoke(item) ?? item;
             var guid = Store.Create(item, (x) =>
             {

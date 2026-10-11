@@ -56,7 +56,7 @@ internal sealed class MongoLive : IDisposable
 }
 
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="MongoDBStore{T}"/>, live.</summary>
-public sealed class MongoUpdateMissContractTests : UpdateMissContract<UpdateMissDoc>, IDisposable
+public sealed class MongoUpdateMissContractTests : StoreContract<UpdateMissDoc>, IDisposable
 {
     private readonly MongoLive _live;
     public MongoUpdateMissContractTests(ITestOutputHelper output) => _live = new MongoLive(output);
@@ -77,7 +77,7 @@ public sealed class MongoUpdateMissContractTests : UpdateMissContract<UpdateMiss
 }
 
 /// <summary>The async twin, on <see cref="AsyncMongoDBStore{T}"/>.</summary>
-public sealed class AsyncMongoUpdateMissContractTests : AsyncUpdateMissContract<UpdateMissDoc>, IDisposable
+public sealed class AsyncMongoUpdateMissContractTests : AsyncStoreContract<UpdateMissDoc>, IDisposable
 {
     private readonly MongoLive _live;
     public AsyncMongoUpdateMissContractTests(ITestOutputHelper output) => _live = new MongoLive(output);

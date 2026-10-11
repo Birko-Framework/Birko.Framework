@@ -60,7 +60,7 @@ internal sealed class RavenLive : IDisposable
 }
 
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="RavenDBStore{T}"/>, live.</summary>
-public sealed class RavenUpdateMissContractTests : UpdateMissContract<UpdateMissDoc>, IDisposable
+public sealed class RavenUpdateMissContractTests : StoreContract<UpdateMissDoc>, IDisposable
 {
     private readonly RavenLive _live;
     public RavenUpdateMissContractTests(ITestOutputHelper output) => _live = new RavenLive(output);
@@ -73,7 +73,7 @@ public sealed class RavenUpdateMissContractTests : UpdateMissContract<UpdateMiss
 }
 
 /// <summary>The async twin, on <see cref="AsyncRavenDBStore{T}"/>.</summary>
-public sealed class AsyncRavenUpdateMissContractTests : AsyncUpdateMissContract<UpdateMissDoc>, IDisposable
+public sealed class AsyncRavenUpdateMissContractTests : AsyncStoreContract<UpdateMissDoc>, IDisposable
 {
     private readonly RavenLive _live;
     public AsyncRavenUpdateMissContractTests(ITestOutputHelper output) => _live = new RavenLive(output);

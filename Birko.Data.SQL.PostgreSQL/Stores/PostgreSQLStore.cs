@@ -60,10 +60,9 @@ namespace Birko.Data.SQL.PostgreSQL.Stores
             var items = data.ToList();
             foreach (var item in items)
             {
-                // Bulk create assigns a fresh server-side Guid to every row, intentionally discarding any
-                // caller-supplied Guid — matching the MSSql sibling's bulk convention (CR-L190). Callers
-                // needing to preserve a known id should use the single-item create path.
-                item.Guid = Guid.NewGuid();
+                // TASK-556 reversed CR-L190, which made bulk create discard a caller-supplied Guid: it is kept, as on
+                // every other path, and a fresh one is assigned only when the Guid is null or Empty.
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
             }
 

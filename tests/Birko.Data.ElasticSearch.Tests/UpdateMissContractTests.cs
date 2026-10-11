@@ -59,7 +59,7 @@ internal sealed class ElasticLive : IDisposable
 }
 
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="ElasticSearchStore{T}"/>, live.</summary>
-public sealed class ElasticUpdateMissContractTests : UpdateMissContract<UpdateMissDoc>, IDisposable
+public sealed class ElasticUpdateMissContractTests : StoreContract<UpdateMissDoc>, IDisposable
 {
     private readonly ElasticLive _live;
     public ElasticUpdateMissContractTests(ITestOutputHelper output) => _live = new ElasticLive(output);
@@ -80,7 +80,7 @@ public sealed class ElasticUpdateMissContractTests : UpdateMissContract<UpdateMi
 }
 
 /// <summary>The async twin, on <see cref="AsyncElasticSearchStore{T}"/>.</summary>
-public sealed class AsyncElasticUpdateMissContractTests : AsyncUpdateMissContract<UpdateMissDoc>, IDisposable
+public sealed class AsyncElasticUpdateMissContractTests : AsyncStoreContract<UpdateMissDoc>, IDisposable
 {
     private readonly ElasticLive _live;
     public AsyncElasticUpdateMissContractTests(ITestOutputHelper output) => _live = new ElasticLive(output);

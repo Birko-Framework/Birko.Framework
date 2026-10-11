@@ -20,7 +20,7 @@ namespace Birko.Tests.Shared.StoreContract;
 /// subclasses it with its own store and model. Observed state is what the store returns afterwards — never "did not
 /// throw".</para>
 /// </summary>
-public abstract class UpdateMissContract<T> where T : AbstractModel
+public abstract partial class StoreContract<T> where T : AbstractModel
 {
     /// <summary>
     /// False when the backend is not reachable — a live provider reports its own skip (and fails instead under
@@ -151,8 +151,8 @@ public abstract class UpdateMissContract<T> where T : AbstractModel
     }
 }
 
-/// <summary>The async twin of <see cref="UpdateMissContract{T}"/>.</summary>
-public abstract class AsyncUpdateMissContract<T> where T : AbstractModel
+/// <summary>The async twin of <see cref="StoreContract{T}"/>.</summary>
+public abstract partial class AsyncStoreContract<T> where T : AbstractModel
 {
     /// <summary>
     /// False when the backend is not reachable — a live provider reports its own skip (and fails instead under

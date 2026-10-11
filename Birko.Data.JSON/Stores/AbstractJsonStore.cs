@@ -74,7 +74,7 @@ namespace Birko.Data.JSON.Stores
         protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureWritable();
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             storeDelegate?.Invoke(data);
             _items.Add(data.Guid.Value, data);
             SaveData();
@@ -215,7 +215,7 @@ namespace Birko.Data.JSON.Stores
                 // CR-M098: preserve a caller-supplied Guid (was overwritten) and upsert via the indexer
                 // (was _items.Add, which throws ArgumentException on a duplicate key) — matches the
                 // single-item CreateCore's Guid handling and the async bulk path's indexer store.
-                item.Guid ??= Guid.NewGuid();
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
                 _items[item.Guid.Value] = item;
                 save = true;

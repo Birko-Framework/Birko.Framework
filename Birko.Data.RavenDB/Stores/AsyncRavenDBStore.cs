@@ -177,7 +177,7 @@ public class AsyncRavenDBStore<T>
             return Guid.Empty;
         }
 
-        data.Guid ??= Guid.NewGuid();
+        data.EnsureGuid();
         processDelegate?.Invoke(data);
 
         if (TransactionContext != null)
@@ -347,10 +347,7 @@ public class AsyncRavenDBStore<T>
 
         processDelegate?.Invoke(data);
 
-        if (data.Guid == null || data.Guid == Guid.Empty)
-        {
-            data.Guid = Guid.NewGuid();
-        }
+        data.EnsureGuid();
 
         if (TransactionContext != null)
         {
@@ -451,7 +448,8 @@ public class AsyncRavenDBStore<T>
             foreach (var item in data)
             {
                 if (item == null) continue;
-                item.Guid = Guid.NewGuid();
+                // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
                 await TransactionContext.StoreAsync(item, IdOf(item.Guid.Value), ct);
             }
@@ -467,7 +465,8 @@ public class AsyncRavenDBStore<T>
             if (item == null) continue;
             ct.ThrowIfCancellationRequested();
 
-            item.Guid = Guid.NewGuid();
+            // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
+            item.EnsureGuid();
             storeDelegate?.Invoke(item);
 
             await bulkInsert.StoreAsync(item, IdOf(item.Guid.Value));

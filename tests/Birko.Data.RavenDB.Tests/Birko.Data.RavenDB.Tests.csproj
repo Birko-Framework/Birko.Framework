@@ -31,6 +31,7 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\StoreContract\UpdateMissContract.cs" Link="Shared\UpdateMissContract.cs" />
+    <Compile Include="..\Shared\StoreContract\IdentityContract.cs" Link="Shared\IdentityContract.cs" />
   </ItemGroup>
 
 </Project>

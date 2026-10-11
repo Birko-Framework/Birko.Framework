@@ -49,7 +49,7 @@ internal sealed class PostgreSQLLive
 
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="PostgreSQLStore{T}"/>, live. The table is dropped
 /// before each test so its counts start from zero.</summary>
-public sealed class PostgreSQLUpdateMissContractTests : UpdateMissContract<UpdateMissSyncRow>
+public sealed class PostgreSQLUpdateMissContractTests : StoreContract<UpdateMissSyncRow>
 {
     private readonly PostgreSQLLive _live;
     public PostgreSQLUpdateMissContractTests(ITestOutputHelper output) => _live = new PostgreSQLLive(output);
@@ -69,7 +69,7 @@ public sealed class PostgreSQLUpdateMissContractTests : UpdateMissContract<Updat
 }
 
 /// <summary>The async twin, on <see cref="AsyncPostgreSQLStore{T}"/>.</summary>
-public sealed class AsyncPostgreSQLUpdateMissContractTests : AsyncUpdateMissContract<UpdateMissAsyncRow>
+public sealed class AsyncPostgreSQLUpdateMissContractTests : AsyncStoreContract<UpdateMissAsyncRow>
 {
     private readonly PostgreSQLLive _live;
     public AsyncPostgreSQLUpdateMissContractTests(ITestOutputHelper output) => _live = new PostgreSQLLive(output);

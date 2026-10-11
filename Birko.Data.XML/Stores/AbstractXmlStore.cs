@@ -73,7 +73,7 @@ namespace Birko.Data.XML.Stores
         protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureWritable();
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             storeDelegate?.Invoke(data);
             _items.Add(data.Guid.Value, data);
             SaveData();
@@ -217,7 +217,7 @@ namespace Birko.Data.XML.Stores
                 // preserve a caller-supplied Guid (only assign when null) and use the indexer instead of
                 // _items.Add, which threw ArgumentException on a duplicate key. The sync path previously
                 // discarded caller Guids AND could throw; both stores now upsert by Guid.
-                item.Guid ??= Guid.NewGuid();
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
                 _items[item.Guid.Value] = item;
                 save = true;

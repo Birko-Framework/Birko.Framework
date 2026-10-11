@@ -63,7 +63,7 @@ namespace Birko.Data.InMemory.Stores
             {
                 return Task.FromResult(Guid.Empty);
             }
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             RequireNewKeys(new[] { data });
             processDelegate?.Invoke(data);
             AddNew(data);
@@ -177,7 +177,7 @@ namespace Birko.Data.InMemory.Stores
             var items = data.Where(x => x != null).ToList();
             foreach (var item in items)
             {
-                item.Guid ??= Guid.NewGuid();
+                item.EnsureGuid();
             }
             RequireNewKeys(items);
             foreach (var item in items)

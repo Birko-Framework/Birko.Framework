@@ -95,7 +95,7 @@ public class CosmosSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
             }
             // System.Guid is fully qualified: the inherited instance property `Guid` shadows the type
             // name in this static method's expression context.
-            cosmosItem.Guid ??= System.Guid.NewGuid();
+            cosmosItem.EnsureGuid();
             return cosmosItem;
         }
 

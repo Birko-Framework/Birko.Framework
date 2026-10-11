@@ -181,7 +181,7 @@ namespace Birko.Data.MongoDB.Stores
                 return Guid.Empty;
             }
 
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             processDelegate?.Invoke(data);
 
             if (TransactionContext != null)
@@ -353,7 +353,7 @@ namespace Birko.Data.MongoDB.Stores
 
             foreach (var item in itemsToCreate)
             {
-                item.Guid = item.Guid ?? Guid.NewGuid();
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
             }
 

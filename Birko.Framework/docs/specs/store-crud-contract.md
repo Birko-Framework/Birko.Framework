@@ -389,10 +389,33 @@ is created in its field initializer), and lose all data when the instance is dis
 - **When** the initialization gate calls `InitCoreAsync(ct)`
 - **Then** `Task.CompletedTask` is returned without touching the token or the dictionary
 
+### Requirement: Every store assigns an identity through one rule, single or bulk
+
+The system SHALL give an entity its identity on create, on every provider and on both the single and the bulk path,
+through `AbstractModel.EnsureGuid()` alone: a new `Guid` when `Guid` is `null` **or** `Guid.Empty`, and any other value
+kept as the caller supplied it. No store re-implements the rule (SH-M313 / SH-M314, fixed by TASK-556). Before it, ~55
+sites followed three policies: `??=` kept `Guid.Empty` as a real key (stored under it, then unreachable through the
+in-memory `Read(Guid)`), two paths replaced it, and every SQL (SQLite, PostgreSQL, MySQL, SQL Server), TimescaleDB and
+RavenDB **bulk** create overwrote the caller's Guid — CR-L190's recorded decision, reversed on the user's decision of
+2026-10-11 — so entities linked by pre-set ids were stored under different ones on the default provider.
+
+#### Scenario: Bulk create keeps the ids the caller chose
+
+- **Given** a parent and a child carrying caller-chosen Guids
+- **When** they are bulk-created on any provider
+- **Then** both are stored under those Guids (`IdentityContract`, run on every provider, sync and async)
+
+#### Scenario: An empty Guid is never a key
+
+- **Given** an entity whose `Guid` is `Guid.Empty`, created alone or in a bulk batch
+- **When** it is created
+- **Then** it receives a fresh `Guid`, and a read of `Guid.Empty` finds nothing — so the in-memory `Read(Guid)` refusing
+  `Guid.Empty` and the base `Read(Guid)` filtering on it agree
+
 ### Requirement: In-memory create assigns a missing identifier and refuses an existing key
 
 The system SHALL, in `CreateCore` / `CreateCoreAsync`, return `Guid.Empty` without storing anything when
-`data` is `null`; otherwise assign `data.Guid ??= Guid.NewGuid()`, refuse a key already stored with
+`data` is `null`; otherwise assign the identity with `data.EnsureGuid()`, refuse a key already stored with
 `StoreException` **before** invoking the delegate, invoke the delegate, add the entity with `TryAdd` (a concurrent
 create of the same key also throws), and return `data.Guid.Value`. A create never replaces a stored entity
 (SH-M310, [[TASK-163]]): a real backend's primary key rejects the duplicate, and the canonical test double does too.
@@ -414,15 +437,15 @@ create of the same key also throws), and return `data.Guid.Value`. A create neve
 
 - **Given** `data` is `null`
 - **When** `Create(null)` is called
-- **Then** `Guid.Empty` is returned and `_items` is unchanged — the same return value a successful create of
-  an entity carrying `Guid.Empty` would produce
+- **Then** `Guid.Empty` is returned and `_items` is unchanged — a value no successful create returns any more, since
+  `Guid.Empty` is never a key (TASK-556)
 
 #### Scenario: Creating an entity whose identifier is already Guid.Empty
 
 - **Given** an entity whose `Guid` is `Guid.Empty` rather than `null`
 - **When** `Create(entity)` is called
-- **Then** `??=` does not replace it, the entity is stored under the `Guid.Empty` key, and `Guid.Empty` is
-  returned
+- **Then** it receives a fresh `Guid`, is stored under it, and that `Guid` is returned (it used to be stored under the
+  `Guid.Empty` key, unreachable by identifier — SH-M313 / SH-M314, TASK-556)
 
 ### Requirement: In-memory read by identifier is an O(1) lookup that rejects the empty Guid
 

@@ -234,7 +234,7 @@ namespace Birko.Data.InfluxDB.Stores
         {
             if (Client == null || _settings == null || data == null) return Guid.Empty;
 
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             storeDelegate?.Invoke(data);
 
             try
@@ -390,7 +390,7 @@ namespace Birko.Data.InfluxDB.Stores
             var points = new List<PointData>();
             foreach (var item in itemsToCreate)
             {
-                item.Guid = item.Guid ?? Guid.NewGuid();
+                item.EnsureGuid();
                 storeDelegate?.Invoke(item);
                 points.Add(ModelToPoint(item));
             }

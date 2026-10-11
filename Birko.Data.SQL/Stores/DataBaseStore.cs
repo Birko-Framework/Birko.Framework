@@ -195,7 +195,7 @@ namespace Birko.Data.SQL.Stores
         protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
             using var _tx = EnterTransactionScope();
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             storeDelegate?.Invoke(data);
             Connector.Insert(data);
             return data.Guid!.Value;

@@ -159,7 +159,7 @@ public class CosmosDBStore<T>
     {
         if (_container == null || data == null) return Guid.Empty;
 
-        data.Guid ??= Guid.NewGuid();
+        data.EnsureGuid();
         storeDelegate?.Invoke(data);
 
         _container.CreateItemAsync(data, new PartitionKey(data.Guid.Value.ToString()))
@@ -343,7 +343,7 @@ public class CosmosDBStore<T>
         {
             if (item == null) continue;
 
-            item.Guid ??= Guid.NewGuid();
+            item.EnsureGuid();
             storeDelegate?.Invoke(item);
 
             tasks.Add(_container.CreateItemAsync(item, new PartitionKey(item.Guid.Value.ToString())));

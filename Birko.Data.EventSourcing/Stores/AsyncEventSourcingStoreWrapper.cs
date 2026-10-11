@@ -59,7 +59,7 @@ namespace Birko.Data.EventSourcing.Stores
             // Assign the Guid up front so the event AggregateId, version lookup, and inner-store
             // row all key off the SAME id (CR-C06); the throwaway Guid.NewGuid() was never written
             // back, orphaning the Created event from the persisted row.
-            item.Guid ??= Guid.NewGuid();
+            item.EnsureGuid();
 
             // Generate new version
             var currentVersion = await _eventStore.GetVersionAsync(item.Guid.Value, cancellationToken);

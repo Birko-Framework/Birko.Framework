@@ -4,6 +4,23 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — One identity rule: bulk create keeps the caller's Guid, and Guid.Empty is never a key
+
+[[TASK-556]] (SH-M313, SH-M314). Store-assigned identity followed three policies across ~60 sites: `??=` (and
+`x.Guid = x.Guid ?? Guid.NewGuid()`) kept `Guid.Empty` as a real key — stored under it, then unreachable through the
+in-memory `Read(Guid)`; two paths replaced it; and every SQL (SQLite, PostgreSQL, MySQL, SQL Server), TimescaleDB and
+RavenDB **bulk** create overwrote the caller's Guid (CR-L190), so entities linked by pre-set ids were stored under
+different ones on the default provider while JSON and in-memory kept them. Now `AbstractModel.EnsureGuid()` is the one
+producer: null or `Guid.Empty` → a fresh Guid, any other value kept, single or bulk, every provider.
+
+**BREAKING (behaviour) — migration:** a SQL / TimescaleDB / RavenDB bulk `Create` now stores entities under the Guids
+the caller set; code that relied on bulk create minting fresh ids must clear `Guid` first. An entity created with
+`Guid.Empty` now gets a fresh Guid everywhere (it used to be stored under `Guid.Empty` on most providers). ⚠ A Guid that
+is already stored is still not refused by a SQL table whose model declares no key — it inserts a second row, on single
+create as before and now on bulk create too: [[TASK-567]].
+
+---
+
 ## 2026-10-11 — An update of an entity that is not stored throws; Save of an unstored Guid creates it
 
 [[TASK-555]] (SH-M306, SH-M309). `Update` of an entity that is not stored wrote nothing and reported success on every

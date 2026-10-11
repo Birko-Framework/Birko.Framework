@@ -51,7 +51,7 @@ internal sealed class TimescaleDBLive
 
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="TimescaleDBStore{T}"/>, live. The table is dropped
 /// before each test so its counts start from zero.</summary>
-public sealed class TimescaleDBUpdateMissContractTests : UpdateMissContract<UpdateMissSyncRow>
+public sealed class TimescaleDBUpdateMissContractTests : StoreContract<UpdateMissSyncRow>
 {
     private readonly TimescaleDBLive _live;
     public TimescaleDBUpdateMissContractTests(ITestOutputHelper output) => _live = new TimescaleDBLive(output);
@@ -71,7 +71,7 @@ public sealed class TimescaleDBUpdateMissContractTests : UpdateMissContract<Upda
 }
 
 /// <summary>The async twin, on <see cref="AsyncTimescaleDBStore{T}"/>.</summary>
-public sealed class AsyncTimescaleDBUpdateMissContractTests : AsyncUpdateMissContract<UpdateMissAsyncRow>
+public sealed class AsyncTimescaleDBUpdateMissContractTests : AsyncStoreContract<UpdateMissAsyncRow>
 {
     private readonly TimescaleDBLive _live;
     public AsyncTimescaleDBUpdateMissContractTests(ITestOutputHelper output) => _live = new TimescaleDBLive(output);

@@ -32,7 +32,7 @@ internal sealed class TempDirs : IDisposable
 }
 
 /// <summary>TASK-555's update-miss contract on the three sync XML layouts (one file, file per entity, batches).</summary>
-public abstract class XmlUpdateMissContractBase<TStore> : UpdateMissContract<TestModel>, IDisposable
+public abstract class XmlUpdateMissContractBase<TStore> : StoreContract<TestModel>, IDisposable
     where TStore : AbstractXmlStore<TestModel>, ISettingsStore<Settings>, new()
 {
     private readonly TempDirs _dirs = new();
@@ -55,7 +55,7 @@ public sealed class XmlSeparateStoreUpdateMissContractTests : XmlUpdateMissContr
 public sealed class XmlBatchStoreUpdateMissContractTests : XmlUpdateMissContractBase<XmlBatchStore<TestModel>> { }
 
 /// <summary>The async twins.</summary>
-public abstract class AsyncXmlUpdateMissContractBase<TStore> : AsyncUpdateMissContract<TestModel>, IDisposable
+public abstract class AsyncXmlUpdateMissContractBase<TStore> : AsyncStoreContract<TestModel>, IDisposable
     where TStore : AbstractAsyncXmlStore<TestModel>, ISettingsStore<Settings>, new()
 {
     private readonly TempDirs _dirs = new();

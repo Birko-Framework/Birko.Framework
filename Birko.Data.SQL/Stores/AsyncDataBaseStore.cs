@@ -263,7 +263,7 @@ namespace Birko.Data.SQL.Stores
             if (Connector == null || data == null) return Guid.Empty;
             using var _tx = EnterTransactionScope();
 
-            data.Guid ??= Guid.NewGuid();
+            data.EnsureGuid();
             processDelegate?.Invoke(data);
 
             if (AsyncConnector != null)
