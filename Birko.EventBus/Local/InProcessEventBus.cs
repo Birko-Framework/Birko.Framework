@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Birko.EventBus.Enrichment;
 using Birko.EventBus.Pipeline;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Birko.EventBus.Local
 {
@@ -55,8 +56,18 @@ namespace Birko.EventBus.Local
                 await enricher.EnrichAsync(@event, context, cancellationToken).ConfigureAwait(false);
             }
 
+            // TASK-565 (SH-M120): DI handlers come from a scope of this publish's own, never from the provider the
+            // bus was built with. AddEventBus builds the bus as a singleton over the ROOT provider, and the outbox
+            // dispatches from a background loop with no request scope, so resolving from _serviceProvider either
+            // throws under ValidateScopes or hands every dispatch one root-owned, never-disposed instance of each
+            // scoped dependency. One scope per publish: every handler of this event shares it (including parallel
+            // ones under MaxConcurrency > 1), and it ends with the dispatch.
+            await using var scope = _serviceProvider?.GetService(typeof(IServiceScopeFactory)) is IServiceScopeFactory scopeFactory
+                ? scopeFactory.CreateAsyncScope()
+                : (AsyncServiceScope?)null;
+
             // Collect handlers: DI-registered + manual subscriptions
-            var handlers = GetHandlers<TEvent>();
+            var handlers = GetHandlers<TEvent>(scope?.ServiceProvider ?? _serviceProvider);
 
             if (handlers.Count == 0)
             {
@@ -98,15 +109,15 @@ namespace Birko.EventBus.Local
             });
         }
 
-        private List<IEventHandler<TEvent>> GetHandlers<TEvent>() where TEvent : IEvent
+        private List<IEventHandler<TEvent>> GetHandlers<TEvent>(IServiceProvider? serviceProvider) where TEvent : IEvent
         {
             var handlers = new List<IEventHandler<TEvent>>();
 
             // DI-registered handlers
-            if (_serviceProvider != null)
+            if (serviceProvider != null)
             {
                 var serviceType = typeof(IEnumerable<IEventHandler<TEvent>>);
-                if (_serviceProvider.GetService(serviceType) is IEnumerable<IEventHandler<TEvent>> diHandlers)
+                if (serviceProvider.GetService(serviceType) is IEnumerable<IEventHandler<TEvent>> diHandlers)
                 {
                     handlers.AddRange(diHandlers);
                 }
