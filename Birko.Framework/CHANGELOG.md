@@ -4,6 +4,20 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-11 — A log model copies and loads its timestamps through any reference; a copy is never its source
+
+[[TASK-323]] (SH-M422–SH-M424). `AbstractLogModel.CopyTo` / `LoadFrom` were overloads, not overrides, so through an
+`AbstractModel`, `ICopyable<AbstractModel>` or `ILoadable<IGuidEntity>` reference only the `Guid` moved and
+`CreatedAt` / `UpdatedAt` / `PrevUpdatedAt` were silently dropped. Both now override (the typed overloads stay).
+`CopyTo()` with no target returned `this` — the "copy" was the source; `MongoDBLogModel.CopyTo()` returned `null`.
+
+**Observable — migration:** `AbstractModel.CopyTo(null)` / `AbstractLogModel.CopyTo(null)` (and the no-argument
+call when no override allocates) now throw `ArgumentNullException` instead of returning the source. Pass a target,
+or override `CopyTo` to allocate your type when none is given — as every Birko model and the measured consumer
+models already do (0 measured call sites hit the base with null). Signatures are unchanged.
+
+---
+
 ## 2026-10-11 — An async store's one-time initialization is no longer cancelled by one caller
 
 [[TASK-324]] (SH-M425). `AbstractAsyncStore.EnsureInitializedAsync` ran `InitCoreAsync` under the token of whichever

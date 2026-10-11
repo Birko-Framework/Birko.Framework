@@ -42,9 +42,10 @@ base classes supply the identity property, the state-copy operation and the stat
 of the framework (stores, repositories, sync, view models) assumes is present on every model.
 
 Two structural facts shape everything below. First, all of these types live in the namespace
-`Birko.Data.Models` even though they are split across two shared projects. Second, `AbstractLogModel` extends
-`AbstractModel` by **adding overloads** rather than overriding, which makes the copy/load behaviour depend on
-the *static* type of the reference through which it is invoked.
+`Birko.Data.Models` even though they are split across two shared projects. Second, `AbstractLogModel`
+**overrides** the `AbstractModel` copy/load virtuals and also keeps its typed overloads, so the copy/load
+behaviour is the same through a base-typed reference as through the derived one (TASK-323 — before it, the
+derived methods were overloads only, and the behaviour depended on the *static* type of the reference).
 
 ## Requirements
 
@@ -140,28 +141,31 @@ target, it copies **only** the `Guid` property onto the target and returns that 
 - **When** `AbstractModel.CopyTo(target)` runs
 - **Then** only `Guid` is assigned — the base method body contains exactly `clone.Guid = Guid;` — so derived state must be copied by a derived `CopyTo`
 
-### Requirement: Omitted copy target returns the source itself
+### Requirement: An omitted copy target is refused by the abstract bases
 
-The system SHALL, when `CopyTo` is called with a null or omitted target, return `this` — the source instance —
-rather than allocating a new instance.
+The system SHALL, when `AbstractModel.CopyTo` or `AbstractLogModel.CopyTo` is called with a null or omitted
+target, throw `ArgumentNullException` (parameter `clone`): an abstract base cannot allocate the concrete type, and
+returning `this` would hand back the source as its own copy. The optional parameter is kept, so a concrete model
+that overrides `CopyTo` may allocate its own type when no target is supplied (SH-M424, fixed by TASK-323; it used
+to return `this`).
 
-#### Scenario: CopyTo() with no argument yields a self-reference
+#### Scenario: CopyTo() with no argument on a model with no allocating override
 
-- **Given** a model instance `src` deriving from `AbstractModel`
-- **When** `var result = src.CopyTo();` is evaluated
-- **Then** `ReferenceEquals(result, src)` is `true`, because the implementation begins `if (clone == null) { return this; }`
+- **Given** a model instance `src` deriving from `AbstractModel` or `AbstractLogModel` that does not override `CopyTo`
+- **When** `src.CopyTo()` is evaluated, through its own type or an `AbstractModel` reference
+- **Then** `ArgumentNullException` is thrown — no alias of `src` is returned
 
-#### Scenario: Mutating the "copy" mutates the original
+#### Scenario: A concrete model that allocates its own copy
 
-- **Given** `AbstractLogModel alias = src.CopyTo(null);`
-- **When** `alias.UpdatedAt` is assigned `2099-01-01`
-- **Then** `src.UpdatedAt` also reads `2099-01-01`, because `alias` and `src` are the same object — no defensive copy was made
+- **Given** a model that overrides `CopyTo(AbstractModel? clone = null)` and allocates its type when `clone` is null, then calls `base.CopyTo(target)`
+- **When** `src.CopyTo()` is evaluated
+- **Then** a new instance carrying `src`'s state is returned, never `src` itself
 
-#### Scenario: The documented nullability contract disagrees with the code
+#### Scenario: The documented nullability contract matches the code
 
-- **Given** the XML documentation on `ICopyable<T>.CopyTo` which states that when no target is supplied implementations "allocate a fresh instance"
-- **When** `AbstractModel.CopyTo(null)` and `AbstractLogModel.CopyTo(null)` are executed
-- **Then** neither allocates; both return `this`
+- **Given** the XML documentation on `ICopyable<T>.CopyTo`
+- **When** it is read beside `AbstractModel.CopyTo`
+- **Then** both say the abstract bases throw on a null target and a concrete override may allocate
 
 ### Requirement: Copy of timestamped state
 
@@ -179,32 +183,32 @@ and `PrevUpdatedAt` onto the target, returning that target.
 
 - **Given** an instance whose static type is `AbstractLogModel` (or a class derived from it), so that both `CopyTo(AbstractModel? = null)` and `CopyTo(AbstractLogModel? = null)` are applicable with zero arguments
 - **When** `src.CopyTo()` is evaluated
-- **Then** it compiles without ambiguity and binds to the `AbstractLogModel` overload, because overload resolution discards candidates declared in a base type of an applicable derived candidate
+- **Then** it compiles without ambiguity and binds to the `AbstractLogModel` overload — an override is not a candidate declared on the derived type — which throws `ArgumentNullException` for the missing target
 
-### Requirement: Copy dispatch depends on the static reference type
+#### Scenario: The typed overload does not dispatch back through the override
 
-The system SHALL declare `AbstractLogModel.CopyTo` as a **new overload** taking `AbstractLogModel?`, not as an
-override of the `virtual` `AbstractModel.CopyTo(AbstractModel?)`. Consequently, invoking `CopyTo` through a
-reference whose static type is `AbstractModel` or `ICopyable<AbstractModel>` SHALL execute the base
-implementation and copy only `Guid`, silently leaving the target's timestamps at their prior values.
+- **Given** a model derived from `AbstractLogModel` that overrides `CopyTo(AbstractModel?)` and calls `base.CopyTo(target)` with a target of its own type
+- **When** the override runs
+- **Then** `base.CopyTo(target)` binds to the typed overload, which copies `Guid` and the timestamps without a virtual call — so it does not recurse into the override
 
-#### Scenario: Copying through a base-typed reference drops all timestamps
+### Requirement: Copy dispatch does not depend on the static reference type
+
+The system SHALL make `AbstractLogModel` override the `virtual` `AbstractModel.CopyTo(AbstractModel?)`, copying
+`CreatedAt`, `UpdatedAt` and `PrevUpdatedAt` whenever the target is an `AbstractLogModel`, so invoking `CopyTo`
+through an `AbstractModel` or `ICopyable<AbstractModel>` reference transfers the timestamps (SH-M422, fixed by
+TASK-323; the derived method used to be an overload only, and a base-typed call left them at `0001-01-01`).
+
+#### Scenario: Copying through a base-typed reference keeps the timestamps
 
 - **Given** `AbstractModel asBase = logModelWithCreatedAt2020;` and an empty target of the same concrete type
 - **When** `asBase.CopyTo(target)` is called
-- **Then** `target.Guid` is populated but `target.CreatedAt` and `target.UpdatedAt` remain `0001-01-01` — no exception, no warning, and the loss is not observable at the call site
+- **Then** `target.Guid`, `target.CreatedAt`, `target.UpdatedAt` and `target.PrevUpdatedAt` all equal the source's
 
-#### Scenario: Copying through the generic interface drops all timestamps
+#### Scenario: Copying through the generic interface keeps the timestamps
 
-- **Given** `ICopyable<AbstractModel> ic = logModel;` where `logModel` also implements `ICopyable<AbstractLogModel>`
+- **Given** `ICopyable<AbstractModel> ic = logModel;`
 - **When** `ic.CopyTo(target)` is called with an `AbstractLogModel` target
-- **Then** `target.CreatedAt` remains `0001-01-01`, because `ICopyable<AbstractModel>` is satisfied by the base method and the derived overload never participates
-
-#### Scenario: The same call through the derived type is correct
-
-- **Given** the identical source and target as the two preceding scenarios
-- **When** `CopyTo(target)` is called through an `AbstractLogModel`-typed reference
-- **Then** the timestamps do transfer — so the observable outcome of `CopyTo` is determined by the compile-time type of the receiver, not the runtime type
+- **Then** the target's timestamps equal the source's
 
 ### Requirement: Load of identity state with null tolerance
 
@@ -247,24 +251,25 @@ The system SHALL implement `AbstractLogModel.LoadFrom(ILogEntity data)` such tha
 - **When** `AbstractLogModel.LoadFrom(null)` runs
 - **Then** `base.LoadFrom(null)` is entered unconditionally and returns without effect thanks to its own guard, then the derived guard skips the timestamp copy — so the outer method has no null check preceding the base call and relies on the base method's guard
 
-### Requirement: Load dispatch depends on the static reference type
+### Requirement: Load dispatch does not depend on the static reference type
 
-The system SHALL declare `AbstractLogModel.LoadFrom(ILogEntity)` as a new overload rather than an override of
-the `virtual` `AbstractModel.LoadFrom(IGuidEntity)`. Consequently, loading through an
-`ILoadable<IGuidEntity>`-typed reference SHALL copy only `Guid` and SHALL discard the source's timestamps even
-when the argument object carries them.
+The system SHALL make `AbstractLogModel` override the `virtual` `AbstractModel.LoadFrom(IGuidEntity)`, loading
+`CreatedAt`, `UpdatedAt` and `PrevUpdatedAt` whenever the source is an `ILogEntity`, so loading through an
+`ILoadable<IGuidEntity>` reference keeps the timestamps the argument carries (SH-M423, fixed by TASK-323; the
+derived method used to be an overload only). A source that is only an `IGuidEntity` loads the `Guid` and leaves
+the timestamps unchanged.
 
-#### Scenario: Timestamps present on the argument are dropped by interface dispatch
+#### Scenario: Timestamps present on the argument survive interface dispatch
 
 - **Given** `ILoadable<IGuidEntity> il = target;` where `target` derives from `AbstractLogModel`, and a source that is itself an `ILogEntity` with `CreatedAt` = `2020-01-01`
 - **When** `il.LoadFrom(source)` is called
-- **Then** `target.Guid` is populated but `target.CreatedAt` remains `0001-01-01` — the runtime type of the argument does carry the timestamps, but the selected method has no code to read them
+- **Then** `target.Guid` and `target.CreatedAt` = `2020-01-01` are both loaded
 
-#### Scenario: A log model exposes two distinct load contracts simultaneously
+#### Scenario: A guid-only source leaves the timestamps alone
 
-- **Given** `AbstractLogModel` which implements both `ILoadable<IGuidEntity>` (inherited from `AbstractModel`) and `ILoadable<ILogEntity>` (declared on itself)
-- **When** a generic caller resolves `ILoadable<T>` for such a model
-- **Then** two different implementations are reachable with different fidelity, and only the `ILoadable<ILogEntity>` path preserves timestamps
+- **Given** a log model with `CreatedAt` set, loaded through `ILoadable<IGuidEntity>`
+- **When** the source implements only `IGuidEntity`
+- **Then** `Guid` is loaded and `CreatedAt` keeps its value
 
 ### Requirement: Contract types share one namespace across two projects
 

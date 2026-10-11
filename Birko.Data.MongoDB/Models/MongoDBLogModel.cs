@@ -10,16 +10,15 @@ namespace Birko.Data.MongoDB.Models
         public virtual DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public virtual DateTime? PrevUpdatedAt { get; set; } = null;
 
-        public AbstractLogModel CopyTo(AbstractLogModel clone = null!)
+        /// <exception cref="System.ArgumentNullException">No target was supplied — the base throws (SH-M424); this used
+        /// to return the null target as the "copy".</exception>
+        public AbstractLogModel CopyTo(AbstractLogModel? clone = null)
         {
             base.CopyTo(clone);
-            if (clone != null)
-            {
-                clone.CreatedAt = CreatedAt;
-                clone.UpdatedAt = UpdatedAt;
-                clone.PrevUpdatedAt = PrevUpdatedAt;
-            }
-            return clone!;
+            clone!.CreatedAt = CreatedAt;
+            clone.UpdatedAt = UpdatedAt;
+            clone.PrevUpdatedAt = PrevUpdatedAt;
+            return clone;
         }
 
         public void LoadFrom(LogViewModel data)

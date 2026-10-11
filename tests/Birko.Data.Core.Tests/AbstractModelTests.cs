@@ -24,23 +24,22 @@ public class AbstractModelTests
     }
 
     [Fact]
-    public void CopyTo_without_target_returns_non_null_self()
+    public void CopyTo_without_target_throws_instead_of_returning_self()
     {
-        // CR-M082: CopyTo() returned clone! (null) when called with no argument, violating the
-        // non-null ICopyable<T> contract — model.CopyTo().Guid then NRE'd. It now returns this.
+        // Inverted (rule 56). CR-M082 replaced a null return — model.CopyTo().Guid NRE'd — with `return this`, and this
+        // test pinned that. SH-M424 (TASK-323): returning `this` is an alias, not a copy — mutating the "clone" mutated
+        // the source. The abstract base cannot allocate the concrete type, so it refuses instead.
         var source = new TestModel { Guid = Guid.NewGuid() };
 
-        var result = source.CopyTo();
+        var act = () => source.CopyTo();
 
-        result.Should().NotBeNull();
-        result.Should().BeSameAs(source);
-        result.Guid.Should().Be(source.Guid);
+        act.Should().Throw<ArgumentNullException>().WithParameterName("clone");
     }
 
     [Fact]
-    public void LogModel_CopyTo_without_target_returns_non_null_self()
+    public void LogModel_CopyTo_without_target_throws_instead_of_returning_self()
     {
-        // Same CR-M082 pattern in AbstractLogModel.CopyTo.
+        // Inverted (rule 56) — the same CR-M082 → SH-M424 history in AbstractLogModel.CopyTo.
         var source = new TestLogModel
         {
             Guid = Guid.NewGuid(),
@@ -48,10 +47,9 @@ public class AbstractModelTests
             UpdatedAt = new DateTime(2026, 2, 2, 0, 0, 0, DateTimeKind.Utc),
         };
 
-        var result = source.CopyTo();
+        var act = () => source.CopyTo();
 
-        result.Should().NotBeNull();
-        result.Should().BeSameAs(source);
+        act.Should().Throw<ArgumentNullException>().WithParameterName("clone");
     }
 
     [Fact]

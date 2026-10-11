@@ -13,7 +13,7 @@ finding-ids: SH-M001 … SH-M428
 
 ## Progress
 
-**19 / 428 closed by this story's tasks.** `SH-M425` of `store-lazy-initialization` ([[TASK-324]], done 2026-10-11): fixed. All 3 of `unit-of-work-and-transactions` ([[TASK-325]], done 2026-10-11): `SH-M426`–`SH-M428` fixed. All 15 of `store-crud-contract` ([[TASK-163]], done 2026-10-11): 9 fixed
+**22 / 428 closed by this story's tasks.** All 3 of `core-model-contracts` ([[TASK-323]], done 2026-10-11): `SH-M422`–`SH-M424` fixed. `SH-M425` of `store-lazy-initialization` ([[TASK-324]], done 2026-10-11): fixed. All 3 of `unit-of-work-and-transactions` ([[TASK-325]], done 2026-10-11): `SH-M426`–`SH-M428` fixed. All 15 of `store-crud-contract` ([[TASK-163]], done 2026-10-11): 9 fixed
 (`SH-M302`–`SH-M305`, `SH-M307`, `SH-M308`, `SH-M310`, `SH-M312`, `SH-M316`), 6 confirmed and spawned as fix tasks
 under this story because each is a cross-provider contract decision: [[TASK-555]] (`SH-M306`, `SH-M309`),
 [[TASK-556]] (`SH-M313`, `SH-M314`), [[TASK-557]] (`SH-M311`, `SH-M315`). 0 refuted; 1 confirmed-narrower
@@ -86,7 +86,7 @@ confirm-or-refute step: the work is the fix. That is the one way these differ fr
 | Task | Area | Findings | Priority |
 |---|---|---|---|
 | [[TASK-325]] | `unit-of-work-and-transactions` | 3 (`SH-M426`–`SH-M428`) — **done**, all 3 fixed | **P1** |
-| [[TASK-323]] | `core-model-contracts` | 3 (`SH-M422`–`SH-M424`) | P2 |
+| [[TASK-323]] | `core-model-contracts` | 3 (`SH-M422`–`SH-M424`) — **done**, all 3 fixed | P2 |
 | [[TASK-324]] | `store-lazy-initialization` | 1 (`SH-M425`) — **done**, fixed | **P1** |
 
 **Only 11 of the 16 recovered findings survived**: five were exact duplicates of findings already filed

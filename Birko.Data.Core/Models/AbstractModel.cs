@@ -8,11 +8,18 @@ namespace Birko.Data.Models
     {
         public virtual Guid? Guid { get; set; } = null;
 
+        /// <summary>
+        /// Copies this model's state onto <paramref name="clone"/> and returns it.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">No target was supplied. An abstract base cannot allocate the
+        /// concrete type, and returning <c>this</c> — what it used to do — handed back the source as its own "copy"
+        /// (SH-M424). A concrete model that can allocate overrides this and creates the target itself.</exception>
         public virtual AbstractModel CopyTo(AbstractModel? clone = null)
         {
             if (clone == null)
             {
-                return this;
+                throw new ArgumentNullException(nameof(clone),
+                    $"{GetType().Name}.CopyTo needs a target: the abstract base cannot allocate one. Pass a new instance, or override CopyTo to allocate it.");
             }
             clone.Guid = Guid;
             return clone;
