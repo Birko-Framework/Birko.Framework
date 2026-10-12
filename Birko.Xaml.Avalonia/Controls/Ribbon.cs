@@ -904,6 +904,8 @@ public class Ribbon : ContentControl
         {
             Text = group.Label,
             FontSize = 11,
+            // b-ribbon's .ribbon-group-label is line-height: 1; the default line box added ~4px per group.
+            LineHeight = 11,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 2, 0, 0),
         };
@@ -971,10 +973,11 @@ public class Ribbon : ContentControl
         var button = new Button
         {
             Background = Brushes.Transparent,
-            // BSpaceSm / BSpaceXs — the same pair b-ribbon's .ribbon-item uses
-            // (padding: var(--b-space-xs) var(--b-space-sm)). Was 6/4, which read as visibly tighter
-            // than the web side when the two were compared directly.
-            Padding = new Thickness(8, 4),
+            // b-ribbon's .ribbon-item box is padding var(--b-space-xs) var(--b-space-sm) = 4/8, and its focus
+            // ring is an outline, which takes no space. Here the ring is a permanent 2px border (AddFocusRing),
+            // so the padding is the web pair MINUS that border: border + padding = 8/4, the same content inset.
+            // At 8/4 on top of the border every row was 4px taller than the web's, 12px per three-row group.
+            Padding = new Thickness(6, 2),
         };
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
         button.Click += (_, _) => { item.Run?.Invoke(); onInvoke?.Invoke(); };
@@ -1013,7 +1016,20 @@ public class Ribbon : ContentControl
             return button;
         }
 
-        // Medium — icon then label on one line.
+        // Medium — icon then label on one line. Left-aligned: the button stretches to its column's width
+        // and the shared Button theme centres content, which staggered labels of different lengths.
+        button.HorizontalContentAlignment = HorizontalAlignment.Left;
+        // Centred on one line, as b-ribbon's flex row is: top-aligned, the 11px label sat above the middle of
+        // its 16px icon. The icon also gets a slot at least the icon size wide with the glyph centred in it —
+        // emoji glyphs vary in width, and a narrow one (an arrow) pulled its label left of its neighbours'.
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        icon.TextAlignment = TextAlignment.Center;
+        icon.Bind(MinWidthProperty, button.GetResourceObservable("BRibbonIconSmall"));
+        // CSS line-height: normal is ~1.2em; emoji glyphs come from a fallback font whose own line box is ~1.4em,
+        // which made each Medium row ~3px taller than b-ribbon's for no visible gain.
+        icon.Bind(TextBlock.LineHeightProperty, button.GetResourceObservable(
+            "BRibbonIconSmall", v => v is double px ? System.Math.Round(px * 1.2) : double.NaN));
+        label.VerticalAlignment = VerticalAlignment.Center;
         var inline = new StackPanel
         {
             Orientation = Orientation.Horizontal,

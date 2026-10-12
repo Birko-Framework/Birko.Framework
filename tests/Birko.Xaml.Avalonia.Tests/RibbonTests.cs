@@ -144,6 +144,31 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
+    public void Medium_items_left_align_their_icon_and_label()
+    {
+        // The Button theme centres content and a column stretches its buttons, so labels of different
+        // lengths started at different x — a staggered column instead of a list.
+        var ribbon = Show(Build(out _));
+        var mediumItems = ribbon.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Content is StackPanel { Orientation: Orientation.Horizontal } row
+                        && row.Children.OfType<TextBlock>().Any(t => t.Text is "Paste" or "Cut"))
+            .ToList();
+        mediumItems.Should().NotBeEmpty();
+        mediumItems.Should().OnlyContain(b => b.HorizontalContentAlignment == HorizontalAlignment.Left);
+
+        // Icon and label share one centre line (top-aligned, the 11px label sat above its 16px icon), and the
+        // icon gets a slot at least the icon size wide so a narrow glyph does not pull its label left.
+        foreach (var row in mediumItems.Select(b => (StackPanel)b.Content!))
+        {
+            var icon = (TextBlock)row.Children[0];
+            var label = (TextBlock)row.Children[1];
+            icon.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+            label.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+            icon.MinWidth.Should().Be(icon.FontSize);
+        }
+    }
+
+    [AvaloniaFact]
     public void Clicking_an_item_runs_its_action()
     {
         var ribbon = Show(Build(out var ran));
