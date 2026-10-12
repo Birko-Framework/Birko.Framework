@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
 using Birko.Xaml.Avalonia.Theming;
@@ -50,6 +51,48 @@ public class TreeTests
         window.Arrange(new Rect(0, 0, 300, 300));
         // The child's items presenter is collapsed; the child is no longer effectively visible.
         parent.IsExpanded.Should().BeFalse();
+    }
+
+    private static (TreeViewItem Parent, ToggleButton Chevron) ShowWithChevron(bool expanded)
+    {
+        var parent = new TreeViewItem { Header = "Reports", IsExpanded = expanded };
+        parent.Items.Add(new TreeViewItem { Header = "Sales" });
+        var tree = new TreeView();
+        tree.Items.Add(parent);
+        var window = new Window { Content = tree, Width = 300, Height = 300 };
+        window.Show();
+        window.Measure(new Size(300, 300));
+        window.Arrange(new Rect(0, 0, 300, 300));
+        var chevron = parent.GetVisualDescendants().OfType<ToggleButton>()
+            .First(t => t.Name == "PART_ExpandCollapseChevron");
+        return (parent, chevron);
+    }
+
+    [AvaloniaFact]
+    public void Chevron_reflects_the_initial_expanded_state()
+    {
+        // Unbound, an expanded node drew the collapsed ">" chevron.
+        ShowWithChevron(expanded: true).Chevron.IsChecked.Should().BeTrue();
+        ShowWithChevron(expanded: false).Chevron.IsChecked.Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public void Toggling_the_chevron_expands_and_collapses_the_item()
+    {
+        // Unbound, clicking the chevron only rotated the arrow; the node never opened or closed.
+        var (parent, chevron) = ShowWithChevron(expanded: false);
+        chevron.IsChecked = true;
+        parent.IsExpanded.Should().BeTrue();
+        chevron.IsChecked = false;
+        parent.IsExpanded.Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public void Header_part_is_named_for_double_tap_expansion()
+    {
+        // TreeViewItem hooks header double-tap only on a template part called PART_Header.
+        var (parent, _) = ShowWithChevron(expanded: false);
+        parent.GetVisualDescendants().OfType<Border>().Should().Contain(b => b.Name == "PART_Header");
     }
 
     [AvaloniaFact]

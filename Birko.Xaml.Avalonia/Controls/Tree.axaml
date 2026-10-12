@@ -23,11 +23,13 @@
     <Setter Property="Template">
       <ControlTemplate>
         <StackPanel>
-          <Border x:Name="header" Background="Transparent"
+          <!-- PART_Header: TreeViewItem wires header double-tap (expand/collapse) to this name only. -->
+          <Border x:Name="PART_Header" Background="Transparent"
                   CornerRadius="{DynamicResource BRadiusSm}" Padding="{TemplateBinding Padding}">
             <Grid ColumnDefinitions="16,*">
               <ToggleButton x:Name="PART_ExpandCollapseChevron" Grid.Column="0"
                             Focusable="False" Background="Transparent"
+                            IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
                             RenderTransformOrigin="50%,50%">
                 <ToggleButton.Template>
                   <ControlTemplate>
@@ -55,10 +57,12 @@
     <Style Selector="^ /template/ ToggleButton#PART_ExpandCollapseChevron:checked">
       <Setter Property="RenderTransform" Value="rotate(90deg)" />
     </Style>
-    <Style Selector="^:pointerover /template/ Border#header">
+    <!-- On the header, not ^:pointerover: the item stays pointer-over while the mouse is on any
+         descendant row, which lit up every ancestor along with the hovered node. -->
+    <Style Selector="^ /template/ Border#PART_Header:pointerover">
       <Setter Property="Background" Value="{DynamicResource BRowHoverBgBrush}" />
     </Style>
-    <Style Selector="^:selected /template/ Border#header">
+    <Style Selector="^:selected /template/ Border#PART_Header">
       <Setter Property="Background" Value="{DynamicResource BColorPrimaryLightBrush}" />
     </Style>
     <Style Selector="^:selected /template/ ContentPresenter">
