@@ -15,9 +15,9 @@ which this regeneration never touches._
 | planned      | 10    | 27      | —     |
 | todo         | —     | —       | 185   |
 | in-progress  | 8     | 11      | 0     |
-| verify       | —     | —       | 2     |
+| verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 236   |
+| done         | 1     | 23      | 238   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -30,8 +30,7 @@ _None._
 
 ## Awaiting verification
 
-- [ ] [TASK-554](EPIC-001-web-components-ui-polish/TASK-554-validation-refusals-never-reach-the-screen.md) A validator's refusal never reaches the screen — problem+json was read as text, and its entries printed as [object Object] (P1)
-- [ ] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
+_None._
 
 ## Blocked
 
@@ -39,7 +38,7 @@ _None._
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (25/37 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (27/37 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -58,9 +57,9 @@ _None._
   - [x] [TASK-550](EPIC-001-web-components-ui-polish/TASK-550-b-gallery.md) b-gallery — product image gallery with thumbnails, swipe and an accessible zoom (P1)
   - [x] [TASK-551](EPIC-001-web-components-ui-polish/TASK-551-i18n-t-interpolates-one-placeholder-at-a-time.md) I18n.t() fills placeholders one after another, so a value holding "{other}" is rewritten by the next one (P3)
   - [ ] [TASK-552](EPIC-001-web-components-ui-polish/TASK-552-b-editable-table-shows-stale-typed-values-after-setdata.md) b-editable-table shows stale typed values after setData or a row removal (P2)
-  - [ ] [TASK-554](EPIC-001-web-components-ui-polish/TASK-554-validation-refusals-never-reach-the-screen.md) A validator's refusal never reaches the screen — problem+json was read as text, and its entries printed as [object Object] (P1)
+  - [x] [TASK-554](EPIC-001-web-components-ui-polish/TASK-554-validation-refusals-never-reach-the-screen.md) A validator's refusal never reaches the screen — problem+json was read as text, and its entries printed as [object Object] (P1)
   - [x] [TASK-562](EPIC-001-web-components-ui-polish/TASK-562-muted-text-and-dark-primary-below-aa.md) `--b-text-muted` and the dark primary button fall below WCAG AA in light and dark (P2)
-  - [ ] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
+  - [x] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
   - [ ] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
   - [ ] [TASK-568](EPIC-001-web-components-ui-polish/TASK-568-modal-focus-trap-ignores-slotted-content.md) b-modal's focus trap ignores slotted content, so Tab is stuck on Close (P1)
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)

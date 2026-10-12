@@ -2,7 +2,7 @@
 id: TASK-554
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-11
@@ -45,8 +45,14 @@ as plain `application/json`); this is the validator half.
       is on the field and visible, is not the raw JSON and not `[object Object]`, and that nothing is stored.
       Mutation-checked: reverting either fix alone turns it red. `form-level-error.spec.ts` stays green.
 - [x] Symbio's gate 3 green with the change (every page's error handling goes through it): 475 tests, 0 failed, 0 flaky (2026-10-11).
-- [ ] Tag on the next push (README § Versions: a fix → PATCH).
+- [x] Tag on the next push (README § Versions: a fix → PATCH). — `v0.1.1` on Birko.Web `bb89c49`, pushed to origin.
 
 ## Out of scope
 
 - Unit tests inside Birko.Web. The repo has none for `core/http`; the consumer specs are the guard today.
+
+## Human test plan
+
+- [x] In Symbio, tenant settings → save an invalid order-tracking URL. Expected: the Slovak validation sentence shows
+      under the field, no raw JSON, no `[object Object]`, nothing stored.
+  - **Passed 2026-10-12:** signed off by the user.

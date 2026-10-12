@@ -2,7 +2,7 @@
 id: TASK-563
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-11
@@ -43,8 +43,9 @@ They were left out of TASK-562 because its acceptance named the two controls Pre
 
 ## Human test plan
 
-- [ ] In dark: a selected day in each date picker, the active markdown-editor mode, a selected option and a
+- [x] In dark: a selected day in each date picker, the active markdown-editor mode, a selected option and a
       tour's primary button all read as dark text on blue
+  - **Passed 2026-10-12:** signed off by the user.
 
 ## Progress log
 
