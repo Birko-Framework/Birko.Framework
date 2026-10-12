@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-11. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-12. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 182   |
-| in-progress  | 8     | 11      | 1     |
+| todo         | —     | —       | 185   |
+| in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 2     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 235   |
+| done         | 1     | 23      | 236   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 22× P1 · 116× P2 · 44× P3.
+`todo` by priority: 23× P1 · 118× P2 · 44× P3.
 
 ## In progress now
 
@@ -39,7 +39,7 @@ _None._
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (25/36 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (25/37 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -62,6 +62,7 @@ _None._
   - [x] [TASK-562](EPIC-001-web-components-ui-polish/TASK-562-muted-text-and-dark-primary-below-aa.md) `--b-text-muted` and the dark primary button fall below WCAG AA in light and dark (P2)
   - [ ] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
   - [ ] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
+  - [ ] [TASK-568](EPIC-001-web-components-ui-polish/TASK-568-modal-focus-trap-ignores-slotted-content.md) b-modal's focus trap ignores slotted content, so Tab is stuck on Close (P1)
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
@@ -154,7 +155,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (136/221 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (137/223 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [ ] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -329,7 +330,7 @@ _None._
     - [x] [TASK-559](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-559-sql-rule-converter-empty-group-is-every-row.md) The SQL `RuleConditionConverter` turns a disabled rule or an empty group into no condition — every row — where the other engines match nothing (P2) · FEATURE-014
     - [ ] [TASK-560](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-560-reindex-without-waiting-reports-success.md) `ReindexHelper.Reindex(…, waitForCompletion: false)` reports `Successful` for a reindex that has only started (P3) · FEATURE-014
     - [x] [TASK-561](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-561-redis-unnamed-jobs-only-on-literal-default-queue.md) Redis serves an unnamed job only to a queue literally named `"default"` (P2) · FEATURE-014
-  - STORY-053 Spec-harvest — medium findings — planned (7/29 done)
+  - STORY-053 Spec-harvest — medium findings — planned (8/31 done)
     - [ ] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
     - [ ] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
     - [ ] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
@@ -358,6 +359,8 @@ _None._
     - [x] [TASK-555](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-555-update-of-a-missing-entity-reports-success.md) `Update` of an entity that is not stored reports success on every backend, and `Save` hands back its Guid (P2) · FEATURE-014
     - [x] [TASK-556](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-556-store-assigned-identity-has-three-policies.md) Store-assigned identity follows three different policies across backends — one of them overwrites the caller's Guid (P2) · FEATURE-014
     - [x] [TASK-557](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-557-store-delegate-return-value-and-in-memory-snapshots.md) The store delegate's return value is discarded everywhere, and the in-memory store keeps the caller's live object (P2) · FEATURE-014
+    - [x] [TASK-565](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-565-in-process-bus-resolves-handlers-from-the-root-provider.md) The in-process bus resolves event handlers from the root provider — scoped handler dependencies throw or are shared forever (P1) · FEATURE-014
+    - [ ] [TASK-566](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-566-distributed-bus-resolves-handlers-from-the-root-provider.md) The distributed bus resolves event handlers from the root provider too — the same defect as TASK-565 on the message-queue path (P2) · FEATURE-014
     - [ ] [TASK-567](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-567-sql-table-without-declared-key-accepts-duplicate-guids.md) A SQL table for a model with no declared key accepts a second row with the same Guid — create never refuses it (P2) · FEATURE-014
   - STORY-054 Spec-harvest — low findings — planned (0/24 done)
     - [ ] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
