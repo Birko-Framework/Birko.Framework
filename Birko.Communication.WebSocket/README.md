@@ -126,6 +126,30 @@ app.MapWebSocketEndpoint("/ws/realtime", RealtimeHandler.HandleAsync, requireAut
 app.MapWebSocketEndpointNoAuth("/ws/display", DisplayHandler.HandleAsync);
 ```
 
+### Reverse proxy
+
+`MapWebSocketProxy(pattern, upstream, configure)` relays each client connection to an upstream WebSocket server
+(TASK-542). Frames are forwarded as they arrive, with their type and `EndOfMessage`, so memory stays at one buffer per
+direction. A close is forwarded with its status and description; a side that drops without one leaves the other
+closed with `EndpointUnavailable`.
+
+- The upstream is connected **before** the client is accepted, so an upstream that refuses or is unreachable answers
+  the client **502** without an upgrade. A request that is not an upgrade gets 400.
+- TLS certificates are validated. `DangerousAcceptAnyServerCertificate = true` turns that off, for a local
+  development certificate only.
+- `Credential` is sent as an `Authorization: Bearer …` header by default, or URL-encoded as `?token=` with
+  `CredentialTransport = QueryString` (Birko's own static-token gate reads the query).
+- The endpoint has no authentication of its own: chain `.RequireAuthorization()`. A constant `Credential` gives every
+  admitted client the upstream access of that credential.
+
+```csharp
+app.MapWebSocketProxy("/dragon", new Uri("wss://server.example/dragon"), o =>
+{
+    o.Credential = context => context.Request.Query["token"];
+    o.CredentialTransport = WebSocketProxyCredentialTransport.QueryString;
+}).RequireAuthorization();
+```
+
 ## API Reference
 
 ### Classes
@@ -139,6 +163,8 @@ app.MapWebSocketEndpointNoAuth("/ws/display", DisplayHandler.HandleAsync);
 | `WebSocketEndpointExtensions` | Extension methods for endpoint routing |
 | `WebSocketAuthenticationService` | Authentication service for WebSocket connections |
 | `WebSocketAuthenticationConfiguration` | Authentication configuration |
+| `WebSocketProxyEndpointExtensions` | `MapWebSocketProxy` — WebSocket reverse-proxy endpoint |
+| `WebSocketProxyOptions` | Upstream, credential transport, certificate policy, close timeout |
 
 ### Namespaces
 
@@ -146,6 +172,7 @@ app.MapWebSocketEndpointNoAuth("/ws/display", DisplayHandler.HandleAsync);
 - `Birko.Communication.WebSocket.Servers` - Standalone server
 - `Birko.Communication.WebSocket.Middleware` - ASP.NET Core middleware
 - `Birko.Communication.WebSocket.Services` - Authentication services
+- `Birko.Communication.WebSocket.Proxy` - WebSocket reverse proxy
 
 ## Related Projects
 

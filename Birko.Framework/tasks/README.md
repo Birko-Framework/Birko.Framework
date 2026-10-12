@@ -13,22 +13,18 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 185   |
+| todo         | —     | —       | 184   |
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 238   |
+| done         | 1     | 23      | 240   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 23× P1 · 118× P2 · 44× P3.
+`todo` by priority: 22× P1 · 118× P2 · 44× P3.
 
 ## In progress now
-
-_None._
-
-## Awaiting verification
 
 _None._
 
@@ -38,7 +34,7 @@ _None._
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (27/37 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (28/37 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -61,7 +57,7 @@ _None._
   - [x] [TASK-562](EPIC-001-web-components-ui-polish/TASK-562-muted-text-and-dark-primary-below-aa.md) `--b-text-muted` and the dark primary button fall below WCAG AA in light and dark (P2)
   - [x] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
   - [ ] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
-  - [ ] [TASK-568](EPIC-001-web-components-ui-polish/TASK-568-modal-focus-trap-ignores-slotted-content.md) b-modal's focus trap ignores slotted content, so Tab is stuck on Close (P1)
+  - [x] [TASK-568](EPIC-001-web-components-ui-polish/TASK-568-modal-focus-trap-ignores-slotted-content.md) b-modal's focus trap ignores slotted content, so Tab is stuck on Close (P1)
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
@@ -456,7 +452,7 @@ _None._
   - [x] [TASK-493](EPIC-018-birko-web-core-runtime/TASK-493-apiclient-getheaders-and-patch.md) `ApiClient` had no generic request-header hook and no `patch()` (P1) · FEATURE-018
   - [x] [TASK-508](EPIC-018-birko-web-core-runtime/TASK-508-apiclient-postform-multipart-upload.md) `ApiClient` cannot send a multipart upload (P1) · FEATURE-018
   - [x] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P1)
-- **EPIC-019** Birko framework backports from DraCode — in-progress (8/29 tasks done)
+- **EPIC-019** Birko framework backports from DraCode — in-progress (9/30 tasks done)
   - STORY-058 Security / OAuth backports from DraCode — planned (0/6 done)
     - [ ] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
     - [ ] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)
@@ -482,14 +478,15 @@ _None._
     - [x] [TASK-544](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-544-streaming-fallback-reruns-executed-tools.md) The streaming fallback re-runs tools that already executed (P1)
     - [x] [TASK-546](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-546-consecutive-user-turns-from-hook-injection.md) A hook-injected message after a tool-result turn makes two consecutive user turns (P2)
     - [x] [TASK-554](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-554-gemini-function-response-carries-a-guid-not-the-function-name.md) GeminiProvider sends a GUID as functionResponse.name, not the function's name (P2)
-  - STORY-061 KoboldLair server backports from DraCode — in-progress (2/7 done)
+  - STORY-061 KoboldLair server backports from DraCode — in-progress (3/8 done)
     - [x] [TASK-536](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-536-websocket-require-authentication-fails-open.md) `MapWebSocketEndpoint(requireAuthentication: true)` accepts anonymous upgrades when no auth service is registered (P1)
     - [x] [TASK-537](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-537-websocket-connection-send-queue-and-framed-receive.md) Birko.Communication.WebSocket: one capped whole-message receive, used by WebSocketServer and offered to handlers (P1)
     - [ ] [TASK-538](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-538-background-jobs-hosting-and-di.md) Birko.BackgroundJobs: hosted-service bridges and DI registration (P2)
     - [ ] [TASK-539](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-539-websocket-server-command-router.md) Birko.Communication.WebSocket: a server-side command router (the server half of TASK-523) (P2)
     - [ ] [TASK-540](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-540-aspnetcore-sse-result-with-heartbeat.md) Birko.Communication.SSE: an ASP.NET Core minimal-API result with heartbeat and terminal stop (P3)
     - [ ] [TASK-541](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-541-owner-or-admin-access-predicate.md) Birko.Communication.AspNetCore: an owner-or-admin access check usable outside MapOwnedCrud (P3)
-    - [ ] [TASK-542](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-542-websocket-reverse-proxy-endpoint.md) A WebSocket reverse-proxy endpoint mapper (P3)
+    - [x] [TASK-542](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-542-websocket-reverse-proxy-endpoint.md) A WebSocket reverse-proxy endpoint mapper (P3)
+    - [ ] [TASK-569](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-569-websocket-proxy-forwards-subprotocols.md) MapWebSocketProxy drops the client's requested sub-protocols, so a client that asks for one fails its handshake (P3)
 
 ## Loose tasks
 

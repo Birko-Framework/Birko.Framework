@@ -36,6 +36,13 @@ WebSocket communication implementation for real-time bidirectional communication
   `WebSocketAuthenticationService` is not registered, 401 per request as backstop (TASK-536). Per-user auth:
   `requireAuthentication: false` + `.RequireAuthorization()`
 
+### Proxy
+- `MapWebSocketProxy(pattern, upstream, configure)` (TASK-542) — reverse proxy. **Connects upstream before accepting the
+  client** (refusal → 502, no upgrade); relays frame by frame via internal `WebSocketRelay` (type, `EndOfMessage`, close
+  status/description forwarded; a drop → `EndpointUnavailable`; unfinished handshake → abort after `CloseTimeout`).
+  It never reassembles, so it is not a second receive loop. Certificates validated unless
+  `DangerousAcceptAnyServerCertificate`; credential as a Bearer header (default) or URL-encoded query. No auth of its own
+
 ### Services
 - Connection management
 - Message routing

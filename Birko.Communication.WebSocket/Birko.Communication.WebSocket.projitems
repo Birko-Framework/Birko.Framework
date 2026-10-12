@@ -31,5 +31,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Middleware\WebSocketAuthenticationGate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Middleware\WebSocketEndpointExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Middleware\WebSocketMiddleware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Proxy\WebSocketProxyEndpointExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Proxy\WebSocketProxyOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Proxy\WebSocketRelay.cs" />
   </ItemGroup>
 </Project>

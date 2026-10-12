@@ -239,6 +239,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A WebSocket reverse proxy ships (2026-10-12)
+
+[[TASK-542]]. `MapWebSocketProxy(pattern, upstream, configure)` in `Birko.Communication.WebSocket/Proxy/`. It connects
+upstream **before** accepting the client (refusal → 502, no upgrade), relays frame by frame (type, `EndOfMessage`,
+close status forwarded), validates TLS unless `DangerousAcceptAnyServerCertificate`, and sends the credential as a
+Bearer header or URL-encoded query. No auth of its own: chain `.RequireAuthorization()`.
+
 ### A negated rule group is honoured (2026-10-11)
 
 [[TASK-320]] (SH-H045). `RuleSpecification` and `RuleEvaluator` ignored `RuleGroup.IsNegated`, so a negated group
