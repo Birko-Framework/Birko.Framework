@@ -1,24 +1,24 @@
 ---
 area: entity-tagging
-generated-at: 04d65750a08aa37e7f6ef0d323ad305b07584cec
-generated-on: 2026-08-07
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.Tagging/Extensions/TaggingExtensions.cs
   - ../Birko.Data.Tagging/Models/EntityTag.cs
   - ../Birko.Data.Tagging/Models/ITaggable.cs
   - ../Birko.Data.Tagging/Models/Tag.cs
+  - ../Birko.Data.Tagging/Services/CrossTenantTagAccessException.cs
   - ../Birko.Data.Tagging/Services/ITagService.cs
   - ../Birko.Data.Tagging/Services/TagService.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-08-07 16:16:09,
-                  # commit 4dbef72). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Tagging: 75c9500
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: []
-# false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
-# glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here.
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Polymorphic, tenant-scoped entity tagging
 
 ## Purpose
@@ -26,7 +26,7 @@ shaped-by-unresolved: 80
 `Birko.Data.Tagging` provides a reusable, free-form labelling capability that any entity type can opt
 into without schema changes of its own. A `Tag` is a named, optionally coloured and grouped label that
 belongs to one tenant; an `EntityTag` is a junction record that links one tag to one entity, identified
-by a `(EntityType, EntityId)` pair where `EntityType` is a plain string discriminator — so a single
+by a `(EntityType, EntityGuid)` pair where `EntityType` is a plain string discriminator — so a single
 junction collection serves every taggable entity in the application.
 
 The capability ships **no persistence of its own**. `TagServiceBase` is an abstract template that owns
@@ -69,7 +69,7 @@ declaration and no index declaration of its own.
 ### Requirement: Polymorphic junction record keyed by a string discriminator
 
 The system SHALL model the tag-to-entity link as `EntityTag : AbstractLogModel` carrying `TenantGuid`,
-`TagId`, `EntityId` (both `Guid`) and `EntityType` (non-nullable `string`, defaulting to
+`TagGuid`, `EntityGuid` (both `Guid`) and `EntityType` (non-nullable `string`, defaulting to
 `string.Empty`), so that one junction collection serves all entity types, and SHALL NOT constrain
 `EntityType` to any enumeration, registry or set of known values.
 
@@ -77,8 +77,8 @@ The system SHALL model the tag-to-entity link as `EntityTag : AbstractLogModel` 
 
 - **Given** an entity of type `"Building"` with id `B` and an entity of type `"Device"` with id `D`
 - **When** both are tagged with the same tag `T`
-- **Then** two `EntityTag` records exist, distinguished only by their `EntityType` / `EntityId` values,
-  both referencing `TagId = T`
+- **Then** two `EntityTag` records exist, distinguished only by their `EntityType` / `EntityGuid` values,
+  both referencing `TagGuid = T`
 
 #### Scenario: Arbitrary discriminator string is accepted
 
@@ -259,8 +259,8 @@ as two independent awaited calls with no surrounding transaction or compensation
 
 The system SHALL, in `AttachTagAsync`, read the entity's existing links via
 `GetEntityTagLinksAsync(entityType, entityId)` and return without writing when any link already has the
-given `TagId`; otherwise it SHALL create an `EntityTag` stamped with
-`TenantGuid = GetCurrentTenantId()`, `TagId`, `EntityId` and `EntityType`. It SHALL NOT verify that the
+given `TagGuid`; otherwise it SHALL create an `EntityTag` stamped with
+`TenantGuid = GetCurrentTenantId()`, `TagGuid`, `EntityGuid` and `EntityType`. It SHALL NOT verify that the
 tag exists, nor that it belongs to the current tenant.
 
 #### Scenario: Attaching a tag twice
@@ -273,7 +273,7 @@ tag exists, nor that it belongs to the current tenant.
 
 - **Given** no tag with id `X` exists anywhere
 - **When** a caller invokes `AttachTagAsync("Building", B, X)`
-- **Then** an `EntityTag` referencing `TagId = X` is created — the dangling link is accepted and is only
+- **Then** an `EntityTag` referencing `TagGuid = X` is created — the dangling link is accepted and is only
   filtered out later, at read time, by `GetEntityTagsAsync` / `GetEntityTagsBatchAsync`
 
 #### Scenario: Concurrent attaches of the same tag
@@ -286,7 +286,7 @@ tag exists, nor that it belongs to the current tenant.
 
 ### Requirement: Detaching removes at most one link
 
-The system SHALL, in `DetachTagAsync`, read the entity's links, select the **first** whose `TagId`
+The system SHALL, in `DetachTagAsync`, read the entity's links, select the **first** whose `TagGuid`
 matches via `FirstOrDefault`, and delete only that one via `DeleteEntityTagAsync`; when no link matches
 it SHALL return silently.
 
@@ -312,7 +312,7 @@ it SHALL return silently.
 ### Requirement: Set-entity-tags reconciles to exactly the desired set
 
 The system SHALL, in `SetEntityTagsAsync`, read the current links once, materialise the current and
-desired tag ids as hash sets, delete every link whose `TagId` is not in the desired set, and then create
+desired tag ids as hash sets, delete every link whose `TagGuid` is not in the desired set, and then create
 one `EntityTag` (stamped with a single `GetCurrentTenantId()` reading) for each desired id not present in
 the current set — creating links directly rather than routing through `AttachTagAsync`, and without any
 enclosing transaction.
@@ -418,7 +418,7 @@ then attach the resulting id and return the created DTO. It SHALL NOT pass a tag
 
 The system SHALL, in `GetEntityTagsBatchAsync`, return an empty dictionary immediately when `entityIds`
 is empty (issuing no query at all); otherwise it SHALL fetch links via `GetEntityTagLinksBatchAsync`,
-load each **distinct** `TagId` once via `GetTagByIdAsync`, group the links by `EntityId`, project each
+load each **distinct** `TagGuid` once via `GetTagByIdAsync`, group the links by `EntityGuid`, project each
 group's resolvable tags to DTOs, and finally add an empty list for every requested entity id absent from
 the grouping.
 
@@ -452,7 +452,7 @@ the grouping.
 
 ### Requirement: DTO projection requires a persisted identity
 
-The system SHALL project a `Tag` to the immutable `sealed record TagDto(Guid Id, string Name, string?
+The system SHALL project a `Tag` to the immutable `sealed record TagDto(Guid Guid, string Name, string?
 Color, string? TagGroup)` by dereferencing `t.Guid!.Value`, exposing neither `TenantGuid` nor any
 timestamp, and SHALL therefore throw when a tag whose inherited `Guid` is still `null` is projected.
 
@@ -460,7 +460,7 @@ timestamp, and SHALL therefore throw when a tag whose inherited `Guid` is still 
 
 - **Given** a `Tag` whose `Guid` has been assigned by the store
 - **When** any service method projects it
-- **Then** a `TagDto` carrying that `Guid` as `Id`, plus `Name`, `Color` and `TagGroup`, is returned, with
+- **Then** a `TagDto` carrying that `Guid` as `Guid`, plus `Name`, `Color` and `TagGroup`, is returned, with
   `TenantGuid`, `CreatedAt`, `UpdatedAt` and `PrevUpdatedAt` deliberately not exposed
 
 #### Scenario: Implementation hook returns a tag with no assigned Guid
@@ -555,7 +555,7 @@ failure mode.
 
 - **Given** current tenant `A` and a tag id `T` owned by tenant `B`
 - **When** a caller invokes `AttachTagAsync("Building", B_entity, T)`
-- **Then** an `EntityTag` with `TenantGuid = A` and `TagId = T` is created — attach still validates
+- **Then** an `EntityTag` with `TenantGuid = A` and `TagGuid = T` is created — attach still validates
   neither the tag's existence nor its ownership. Reading that entity's tags afterwards raises, because the
   link survives the tenant filter and then resolves a foreign tag by identity
 

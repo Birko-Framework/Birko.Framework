@@ -1,7 +1,7 @@
 ---
 area: security-and-authorization
-generated-at: 96738ef
-generated-on: 2026-08-16
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Security.AspNetCore/Authentication/JwtAuthenticationOptions.cs
   - ../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs
@@ -46,19 +46,15 @@ sources:
   - ../Birko.Security/Core/ITokenProvider.cs
   - ../Birko.Security/Encryption/AesEncryptionProvider.cs
   - ../Birko.Security/Hashing/Pbkdf2PasswordHasher.cs
-source-commits:   # recorded at this regen, not reconstructed
-  ../Birko.Security: 2a19150
-  ../Birko.Security.AspNetCore: 0c4a494
-  ../Birko.Security.AzureKeyVault: fc64ec7
-  ../Birko.Security.BCrypt: 835427c
-  ../Birko.Security.Jwt: c476230
-  ../Birko.Security.Vault: 02a7f07
-  ../Birko.Security.Vault.Configuration: 9e39e40
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: []
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Hashing, encryption, tokens, secrets and permission enforcement
 
 ## Purpose
@@ -409,11 +405,11 @@ The system SHALL make `GenerateRefreshToken` return the Base64 encoding of 32 by
 ### Requirement: Structured token claims are joined into single claim values
 
 The system SHALL make `TokenServiceAdapter.GenerateAccessToken` emit `ClaimTypes.NameIdentifier` for
-`TokenRequest.UserId` and `ClaimTypes.Email` for `TokenRequest.Email`, the configured
+`TokenRequest.UserGuid` and `ClaimTypes.Email` for `TokenRequest.Email`, the configured
 `ClaimMappingOptions.TenantGuidClaim` only when `TenantGuid` has a value, and — because `ITokenProvider`
 takes a single-valued dictionary — the roles and permissions sets as **one** claim each whose value is the
 members joined by `';'`, emitted only when the set is non-empty. `ValidateToken` SHALL invert this,
-splitting the role and permission claim values on `';'` with `RemoveEmptyEntries`, parsing `UserId` and
+splitting the role and permission claim values on `';'` with `RemoveEmptyEntries`, parsing `UserGuid` and
 `TenantGuid` with `Guid.TryParse` (null when absent or unparseable), and returning
 `new TokenValidationInfo(false)` — all other fields null — when the underlying validation failed.
 
@@ -427,7 +423,7 @@ splitting the role and permission claim values on `';'` with `RemoveEmptyEntries
 
 - **Given** a validated token whose `ClaimTypes.NameIdentifier` claim is `"abc"`
 - **When** `ValidateToken` is called
-- **Then** `IsValid` is true but `UserId` is null
+- **Then** `IsValid` is true but `UserGuid` is null
 
 #### Scenario: Invalid token yields an all-null info
 
@@ -440,14 +436,14 @@ splitting the role and permission claim values on `';'` with `RemoveEmptyEntries
 The system SHALL resolve `ICurrentUser` from `IHttpContextAccessor.HttpContext?.User` using
 `ClaimMappingOptions` — `UserIdClaim` (default `ClaimTypes.NameIdentifier`), `EmailClaim` (default
 `ClaimTypes.Email`), `TenantGuidClaim` (default `"tenant_id"`), `RoleClaim` (default `ClaimTypes.Role`) and
-`PermissionClaim` (default `"permission"`). `UserId` and `TenantGuid` SHALL be null when the claim is absent
+`PermissionClaim` (default `"permission"`). `UserGuid` and `TenantGuid` SHALL be null when the claim is absent
 or fails `Guid.TryParse`. `IsAuthenticated` SHALL be false when there is no `HttpContext`, no identity, or an
 unauthenticated identity. `GetClaim` SHALL return the first value of an arbitrary claim type, or null.
 
 #### Scenario: No ambient HttpContext
 
 - **Given** a `ClaimsCurrentUser` whose accessor returns a null `HttpContext`
-- **When** `IsAuthenticated`, `UserId` and `Permissions` are read
+- **When** `IsAuthenticated`, `UserGuid` and `Permissions` are read
 - **Then** they are `false`, `null` and an empty set respectively — no `NullReferenceException`
 
 #### Scenario: Malformed tenant claim
@@ -476,7 +472,7 @@ as a set. Multiple same-named claims and a single joined claim are therefore equ
 
 ### Requirement: Permissions may instead be resolved per request and read from HttpContext.Items
 
-The system SHALL provide `ResolvedPermissionsCurrentUser`, which reads `UserId`, `Email` and `TenantGuid`
+The system SHALL provide `ResolvedPermissionsCurrentUser`, which reads `UserGuid`, `Email` and `TenantGuid`
 from claims exactly as `ClaimsCurrentUser` does, but takes `Permissions` **only** from
 `HttpContext.Items["birko:resolved-permissions"]`, falling back to an empty set when the item is absent or
 not an `IReadOnlySet<string>` — claim-borne permissions are ignored entirely on this path. `Roles` SHALL
@@ -557,7 +553,7 @@ consulted here.
 ### Requirement: The claims permission checker only answers for the current caller
 
 The system SHALL make `ClaimsPermissionChecker.HasPermissionAsync(userId, permission)` return `false`, and
-`GetPermissionsAsync(userId)` return an empty list, whenever `userId` differs from `ICurrentUser.UserId`
+`GetPermissionsAsync(userId)` return an empty list, whenever `userId` differs from `ICurrentUser.UserGuid`
 (including when the latter is null). For the matching user it SHALL return true when the permission set
 contains the permission or `"*"`. No store or database is consulted.
 
@@ -569,7 +565,7 @@ contains the permission or `"*"`. No store or database is consulted.
 
 #### Scenario: Unauthenticated caller
 
-- **Given** a request with no principal, so `ICurrentUser.UserId` is null
+- **Given** a request with no principal, so `ICurrentUser.UserGuid` is null
 - **When** `GetPermissionsAsync(someGuid)` is called
 - **Then** an empty list is returned
 
@@ -1105,6 +1101,38 @@ expiry (defaulting to 3600 seconds when the response omits it), guarding the ref
 - **Given** a list response whose `id` is a relative or malformed URI
 - **When** `ListSecretsAsync()` is called
 - **Then** that entry is skipped (name resolves to null) instead of a `UriFormatException` escaping
+
+### Requirement: Azure Key Vault secret ids are recognised only as https URLs unless explicitly widened
+
+The system SHALL treat a secret `id` returned by the vault as a secret id only when it parses as an absolute
+URI **and** its scheme is `https`; `http` SHALL additionally be accepted only when
+`AzureKeyVaultSettings.AllowInsecureSecretIds` is true (default `false`). Any other id — relative, malformed,
+`file:`, `ftp:`, or `http:` with the switch off — SHALL yield a null secret name (the entry is skipped by
+`ListSecretsAsync`) and a null `Version` (from `GetSecretWithMetadataAsync`), rather than an exception. When
+`AllowInsecureSecretIds` is true the provider SHALL emit a `Trace.TraceWarning` at construction and SHALL
+report it through `AzureKeyVaultSecretProvider.InsecureSecretIdsAllowed`. The switch affects only id parsing;
+it does not change which URI the vault is reached over.
+
+#### Scenario: A leading-slash id is not a secret id on any platform
+
+- **Given** a list response whose `id` is `/secrets/relative-only`, which parses as an absolute `file:` URI on
+  Linux
+- **When** `ListSecretsAsync()` is called
+- **Then** the entry is skipped, because its scheme is not `https` — the name `relative-only` is never
+  returned
+
+#### Scenario: An http secret id is rejected by default
+
+- **Given** default settings and a list response whose `id` is `http://vault.local/secrets/name`
+- **When** `ListSecretsAsync()` is called
+- **Then** the entry is skipped
+
+#### Scenario: The insecure switch opens http ids and announces itself
+
+- **Given** settings with `AllowInsecureSecretIds = true`
+- **When** the provider is constructed and `ListSecretsAsync()` returns an `http://…/secrets/name` id
+- **Then** a trace warning was written at construction, `InsecureSecretIdsAllowed` is true, and `name` is
+  returned
 
 ### Requirement: Secret listing scoping differs between the Vault and Azure Key Vault providers
 

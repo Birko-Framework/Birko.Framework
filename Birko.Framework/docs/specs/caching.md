@@ -1,7 +1,7 @@
 ---
 area: caching
-generated-at: 2f8675abb8c68e81c9cefb5455db97a5425ee369
-generated-on: 2026-08-12
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Caching.Hybrid/HybridCache.cs
   - ../Birko.Caching.Hybrid/HybridCacheOptions.cs
@@ -16,23 +16,15 @@ sources:
   - ../Birko.Data.SQL.Caching/Caching/SqlCacheKeyBuilder.cs
   - ../Birko.Data.SQL.Caching/Caching/SqlCacheOptions.cs
   - ../Birko.Data.SQL.Caching/Stores/CachedAsyncDataBaseBulkStore.cs
-# FEATURE-014 comes from the triggering task (TASK-117), NOT from the evidence pass.
-# The evidence pass structurally cannot run from this aggregator: every `sources:` glob points into a
-# sibling repo with its own history, so no task's `pr:` sha resolves under `git show` here (verified —
-# TASK-113's `86c8247` is an unknown revision in this repo). Hence derived: false, and
-# shaped-by-unresolved is omitted because nothing ran to count. Per-sub-repo spec trees (TASK-131) are
-# the fix.
-source-commits:   # sibling HEADs when this spec was last written (2026-08-12 14:42:55,
-                  # commit 715caf9). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Caching: 26e6a3f
-  ../Birko.Caching.Hybrid: 74deeb8
-  ../Birko.Caching.Redis: 333ba76
-  ../Birko.Data.SQL.Caching: f9bbc81
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: []
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Cache abstraction, tiering and query-cache decoration
 
 ## Purpose
@@ -1075,7 +1067,7 @@ overrides.
 
 - **Given** cached results for three different filters on table `User`
 - **When** `CreateAsync(user)` is awaited
-- **Then** all three entries are removed by the `"sql:User:"` prefix sweep and the next read re-queries the database
+- **Then** all three entries are removed by the `"sql:{scopeHash}:User:"` prefix sweep and the next read re-queries the database
 
 #### Scenario: A native filter update also invalidates
 
@@ -1137,9 +1129,3 @@ falling back to `typeof(T).Name` when no table is found or its `Name` is empty, 
 - **Given** `new CachedAsyncDataBaseBulkStore<DB, T>(null)`
 - **When** the constructor runs
 - **Then** an `ArgumentNullException` naming `cache` is thrown
-
-#### Scenario: Keys carry no connection identity
-
-- **Given** two `CachedAsyncDataBaseBulkStore<DB, T>` instances configured (via `SetSettings`) against two different databases but sharing one `ICache`
-- **When** each caches a read for the same filter
-- **Then** both compute the same key, because `ResolveTableName()` depends only on `T`'s mapping and the key format has no database, connection or tenant component — each store can serve the other's rows

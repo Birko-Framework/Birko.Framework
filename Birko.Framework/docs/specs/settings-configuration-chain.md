@@ -1,7 +1,7 @@
 ---
 area: settings-configuration-chain
-generated-at: 96738ef
-generated-on: 2026-08-16
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Configuration/Settings.cs
   - ../Birko.Data.CosmosDB/Stores/Settings.cs
@@ -16,25 +16,15 @@ sources:
   - ../Birko.Data.SQL/Stores/SqlSettings.cs
   - ../Birko.Data.TimescaleDB/Stores/Settings.cs
   - ../Birko.Redis/RedisSettings.cs
-source-commits:   # recorded at this regen, not reconstructed
-  ../Birko.Configuration: 31f7355
-  ../Birko.Data.CosmosDB: 9e94ace
-  ../Birko.Data.ElasticSearch: 9b523e2
-  ../Birko.Data.InfluxDB: 14fa370
-  ../Birko.Data.MongoDB: 0b60ac3
-  ../Birko.Data.RavenDB: eedaa09
-  ../Birko.Data.SQL: 7b60044
-  ../Birko.Data.SQL.MSSql: 64a4932
-  ../Birko.Data.SQL.MySQL: 72cac6d
-  ../Birko.Data.SQL.PostgreSQL: 6f7a12f
-  ../Birko.Data.SQL.SqLite: ef71921
-  ../Birko.Data.TimescaleDB: 4978d7a
-  ../Birko.Redis: 5902d08
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Settings inheritance chain and connection-string contract
 
 ## Purpose
@@ -153,23 +143,41 @@ The system SHALL exclude `PasswordSettings.Password`, `InfluxDB` `Token`, and `R
 - **When** `GetId()` is called on each
 - **Then** both return the same `"{Location}:{Organization}:{Bucket}"` string
 
-### Requirement: The identity string is the store-cache key, so two configurations it cannot tell apart share one store
+### Requirement: The identity string is the store-cache key, and a cache hit whose settings differ outside it is refused
 
 The system SHALL key the `StoreLocator.GetStore<TStore, TSettings>` cache on `settings.GetId()` plus
 the store type, and SHALL call `SetSettings` only on the branch that constructs the store — never on
-a cache hit, so the second caller's settings object is discarded. Consequently every field a
-`GetId()` implementation leaves out SHALL be incapable of distinguishing two configurations:
-`CosmosDB.Stores.Settings` leaves out `PartitionKeyPath`, `RequestTimeout` and `AllowBulkExecution`;
-`MongoDB.Stores.Settings` leaves out `AuthDatabase`, `ReplicaSet` and `UseSecure` (all three of which
-`GetConnectionString()` does encode); `RedisSettings` leaves out `RawConnectionString` and
-`KeyPrefix`; `SqlSettings` and all four SQL providers leave out both timeouts and every
-provider-specific field; and `ElasticSearch.Stores.Settings` leaves out `IndexSettings`.
+a cache hit. Every field a `GetId()` implementation leaves out SHALL be incapable of distinguishing two
+configurations by identity: `CosmosDB.Stores.Settings` leaves out `PartitionKeyPath`, `RequestTimeout`,
+`AllowBulkExecution` and `ConnectionMode`; `MongoDB.Stores.Settings` leaves out `AuthDatabase`,
+`ReplicaSet`, `UseSecure` (all three of which `GetConnectionString()` does encode) and
+`RawConnectionString`; `RedisSettings` leaves out `RawConnectionString` and `KeyPrefix`; `SqlSettings`
+and all four SQL providers leave out both timeouts and every provider-specific field; `SqLiteSettings`
+leaves out `CommandTimeout` and `JournalMode`; and `ElasticSearch.Stores.Settings` leaves out
+`IndexSettings`. On a cache hit with a non-empty identity, the system SHALL compare the cached and the
+requested settings — same runtime type, and equal values for every public readable instance property
+of a value-like type (primitives, enums, strings, `decimal`, `TimeSpan`, `DateTime`, `DateTimeOffset`,
+`Guid` and their nullable forms) — and SHALL throw `InvalidOperationException` when they differ, rather
+than hand back a store configured with the first caller's values. Properties of any other type are not
+compared.
 
-#### Scenario: A second request with equal identity receives the first store, settings unapplied
+#### Scenario: A second request with equal identity and equal values receives the first store
 
 - **Given** a store already constructed through `StoreLocator.GetStore<TStore, TSettings>` for a settings object whose `GetId()` is `"srv:0:db:u"`
-- **When** `GetStore` is called again for the same store type with a different settings instance whose `GetId()` is also `"srv:0:db:u"`
-- **Then** the cached instance is returned and `SetSettings` is not called, so the store keeps running on the first settings object
+- **When** `GetStore` is called again for the same store type with a different settings instance whose `GetId()` is also `"srv:0:db:u"` and whose value-like properties are all equal
+- **Then** the cached instance is returned and `SetSettings` is not called
+
+#### Scenario: A second request with equal identity but a different password is refused
+
+- **Given** a store already constructed through `StoreLocator.GetStore<TStore, TSettings>` for a settings object whose `GetId()` is `"srv:0:db:u"` and whose `Password` is `"a"`
+- **When** `GetStore` is called again for the same store type with a settings instance of the same type whose `GetId()` is also `"srv:0:db:u"` but whose `Password` is `"b"`
+- **Then** an `InvalidOperationException` is thrown naming the store type and the settings id, and no store is returned
+
+#### Scenario: Two ElasticSearch settings differing only in IndexSettings still share one store
+
+- **Given** a store located for an `ElasticSearch.Stores.Settings` with one `IndexSettings` collection
+- **When** `GetStore` is called again for the same store type with an `ElasticSearch.Stores.Settings` of equal `Location` and `Name` but a different `IndexSettings` collection
+- **Then** the cached instance is returned without an exception, because `IndexSettings` is an `IEnumerable<IndexSettings>` — not a value-like type — and is not compared
 
 #### Scenario: Two Cosmos settings differing only in partition key path are one identity
 
@@ -468,6 +476,30 @@ only when `Password` is non-empty, and always append `;Default Timeout={CommandT
 - **Given** a `SqLiteSettings`, which extends `PasswordSettings` rather than `SqlSettings`
 - **When** its members are enumerated
 - **Then** it has `CommandTimeout` (default 30) but no `ConnectionTimeout`, no `Port`, no `UserName` and no `UseSecure`
+
+### Requirement: SqLiteSettings carries a journal mode defaulting to WAL, outside the connection string and the identity
+
+The system SHALL expose `SqLiteSettings.JournalMode` as a nullable string defaulting to `"WAL"`, SHALL
+copy it (together with `CommandTimeout`) in `LoadFrom`, and SHALL include it in neither
+`GetConnectionString()` nor `GetId()`.
+
+#### Scenario: Default journal mode
+
+- **Given** a default-constructed `SqLiteSettings`
+- **When** `JournalMode` is read
+- **Then** it is `"WAL"`, and the connection string contains no journal-mode keyword
+
+#### Scenario: The journal mode is copied by LoadFrom
+
+- **Given** a target `SqLiteSettings` and a source `SqLiteSettings { JournalMode = "DELETE", CommandTimeout = 60 }`
+- **When** `target.LoadFrom((Birko.Configuration.Settings)source)` is called
+- **Then** `target.JournalMode == "DELETE"` and `target.CommandTimeout == 60`
+
+#### Scenario: Two SQLite settings differing only in journal mode share an identity
+
+- **Given** two `SqLiteSettings("C:\\data", "app.db")`, one with `JournalMode = "WAL"` and one with `JournalMode = "DELETE"`
+- **When** `GetId()` is called on each
+- **Then** both return `"C:\data:app.db"`
 
 ### Requirement: MongoDB prefers an explicit raw connection string and otherwise composes a mongodb:// URI
 

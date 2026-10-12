@@ -1,10 +1,11 @@
 ---
 area: views-and-aggregation
-generated-at: fe229ec
-generated-on: 2026-09-16
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
   - ../Birko.Data.CosmosDB.Views/CosmosViewStore.cs
+  - ../Birko.Data.CosmosDB/Aggregation/CosmosAggregationHelper.cs
   - ../Birko.Data.ElasticSearch.Views/ElasticSearchViewIndexResolver.cs
   - ../Birko.Data.ElasticSearch.Views/ElasticSearchViewManager.cs
   - ../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs
@@ -13,13 +14,16 @@ sources:
   - ../Birko.Data.MongoDB.Views/MongoViewSerialization.cs
   - ../Birko.Data.MongoDB.Views/MongoViewStore.cs
   - ../Birko.Data.MongoDB.Views/MongoViewTranslator.cs
+  - ../Birko.Data.MongoDB/Aggregation/AggregationPipelineBuilder.cs
+  - ../Birko.Data.MongoDB/Aggregation/StoreAggregationHelper.cs
   - ../Birko.Data.RavenDB.Views/RavenViewManager.cs
   - ../Birko.Data.RavenDB.Views/RavenViewStore.cs
   - ../Birko.Data.RavenDB.Views/RavenViewTranslator.cs
-  - ../Birko.Data.SQL.Views/SqlViewManager.cs
+  - ../Birko.Data.RavenDB/Aggregation/FacetAggregationHelper.cs
   - ../Birko.Data.SQL.View/SQL/Connectors/AbstractAsyncConnector_SelectView.cs
   - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_SelectView.cs
   - ../Birko.Data.SQL.View/SQL/DataBase_ViewOrderBy.cs
+  - ../Birko.Data.SQL.Views/SqlViewManager.cs
   - ../Birko.Data.SQL.Views/SqlViewStore.cs
   - ../Birko.Data.SQL.Views/SqlViewTranslator.cs
   - ../Birko.Data.Stores/AggregateHelper.cs
@@ -44,32 +48,15 @@ sources:
   - ../Birko.Data.Views/ViewMapRegistry.cs
   - ../Birko.Data.Views/ViewQueryMode.cs
   - ../Birko.Data.Views/ViewResult.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-08-16 16:17:32,
-                  # commit c78cfca). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.CosmosDB.Views: d85ae23
-  ../Birko.Data.ElasticSearch: 9b523e2
-  ../Birko.Data.ElasticSearch.Views: 3881649
-  ../Birko.Data.MongoDB.Views: 1a69f29
-  ../Birko.Data.RavenDB.Views: 3b3f9dd
-  ../Birko.Data.SQL.View: 6fa64c5
-  ../Birko.Data.SQL.Views: 6095b16
-  ../Birko.Data.Stores: c828ef1
-  ../Birko.Data.Views: cd516af
-  # Baselines below added 2026-08-18 without a re-harvest, and that is a measurement rather
-  # than an assumption: each of these repos has NO commit touching this area's sources since
-  # generated-on, so its current HEAD is an equivalent baseline. Repos that HAVE drifted were
-  # deliberately left unstamped, so DV7 keeps reporting them until the content is regenerated.
-  ../Birko.Data.CosmosDB: 3d383fb
-  ../Birko.Data.MongoDB: 032ed3d
-  ../Birko.Data.RavenDB: fd51546
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
-# false, not an empty answer: every source glob in this area points into a sibling repo, so no
-# task's pr: sha resolves under `git show` in this aggregator and the evidence pass cannot run
-# here at all. Treat shaped-by as unknown rather than as "no feature shaped this area".
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Fluent view definitions and aggregation queries
 
 ## Purpose
@@ -1019,7 +1006,7 @@ API with no caller text in them.
 #### Scenario: An operand that cannot be evaluated is reported as a translation failure
 
 - **Given** a column-vs-column filter such as `v => v.TenantGuid == v.OwnerGuid`
-- **When** `TranslateValue` compiles the right operand and `Compile()` throws because the lambda parameter is not in scope
+- **When** `EvaluateValue` compiles the right operand and `Compile()` throws because the lambda parameter is not in scope
 - **Then** a `NotSupportedException` naming the operand's node type is thrown with the original exception as its inner — one exception type selects every "this filter cannot be translated" case, and the message carries the node's shape rather than the rendered expression
 
 #### Scenario: Constant on the left of a comparison is refused

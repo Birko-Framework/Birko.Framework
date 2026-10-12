@@ -1,12 +1,14 @@
 ---
 area: schema-index-and-ddl
-generated-at: 5e214e7
-generated-on: 2026-08-18
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
+  - ../Birko.Data.CosmosDB/IndexManagement/CosmosDBIndexManager.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/IndexInfo.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/IndexManager.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/ReindexHelper.cs
+  - ../Birko.Data.MongoDB/IndexManagement/MongoDBIndexManager.cs
   - ../Birko.Data.Patterns/IndexManagement/IIndexManager.cs
   - ../Birko.Data.Patterns/IndexManagement/IndexDefinition.cs
   - ../Birko.Data.Patterns/IndexManagement/IndexInfo.cs
@@ -16,6 +18,8 @@ sources:
   - ../Birko.Data.Patterns/Schema/ICollectionBuilder.cs
   - ../Birko.Data.Patterns/Schema/IIndexBuilder.cs
   - ../Birko.Data.Patterns/Schema/ISchemaBuilder.cs
+  - ../Birko.Data.Patterns/Schema/IndexBuilderSupport.cs
+  - ../Birko.Data.RavenDB/IndexManagement/RavenDBIndexManager.cs
   - ../Birko.Data.SQL.MSSql/IndexManagement/MSSqlIndexManager.cs
   - ../Birko.Data.SQL.MySQL/IndexManagement/MySqlIndexManager.cs
   - ../Birko.Data.SQL.PostgreSQL/IndexManagement/PostgreSqlIndexManager.cs
@@ -25,9 +29,9 @@ sources:
   - ../Birko.Data.SQL/SQL/DataBase_Field.cs
   - ../Birko.Data.SQL/SQL/DataBase_Table.cs
   - ../Birko.Data.SQL/SQL/Fields/AbstractField.cs
+  - ../Birko.Data.SQL/SQL/Fields/BinaryField.cs
   - ../Birko.Data.SQL/SQL/Fields/BooleanField.cs
   - ../Birko.Data.SQL/SQL/Fields/CharField.cs
-  - ../Birko.Data.SQL/SQL/Fields/BinaryField.cs
   - ../Birko.Data.SQL/SQL/Fields/DateTimeField.cs
   - ../Birko.Data.SQL/SQL/Fields/DecimalField.cs
   - ../Birko.Data.SQL/SQL/Fields/DoubleField.cs
@@ -37,32 +41,20 @@ sources:
   - ../Birko.Data.SQL/SQL/Fields/LongField.cs
   - ../Birko.Data.SQL/SQL/Fields/ShortField.cs
   - ../Birko.Data.SQL/SQL/Fields/StringField.cs
+  - ../Birko.Data.SQL/SQL/Fields/TimeOnlyField.cs
+  - ../Birko.Data.SQL/SQL/Fields/UtcDateTimeField.cs
   - ../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs
   - ../Birko.Data.SQL/SQL/Tables/IndexDefinition.cs
   - ../Birko.Data.SQL/SQL/Tables/Table.cs
-source-commits:   # recorded at this regen, not reconstructed
-  ../Birko.Data.ElasticSearch: 9b523e2
-  ../Birko.Data.Patterns: 87c0ed3
-  ../Birko.Data.SQL: 022c67c8c48386b9e6e746adb5926d78371e7352
-  ../Birko.Data.SQL.MSSql: c5a3a8a760468f723c43e9826a2ed12b814df162
-  ../Birko.Data.SQL.MySQL: 73e1cfd0feb8b5daf745474f89f69e6d6e56c19a
-  ../Birko.Data.SQL.PostgreSQL: d0959f31e139d56d6d2708eae95b219ad0adb3d1
-  ../Birko.Data.SQL.SqLite: ef71921
-  # Baselines below added 2026-08-18 without a re-harvest, and that is a measurement rather
-  # than an assumption: each of these repos has NO commit touching this area's sources since
-  # generated-on, so its current HEAD is an equivalent baseline. Repos that HAVE drifted were
-  # deliberately left unstamped, so DV7 keeps reporting them until the content is regenerated.
-  ../Birko.Data.CosmosDB: 3d383fb
-  ../Birko.Data.MongoDB: 032ed3d
-  ../Birko.Data.RavenDB: fd51546
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
-# false, not an empty answer: every source glob in this area points into a sibling repo, so no
-# task's pr: sha resolves under `git show` in this aggregator and the evidence pass cannot run
-# here at all. Treat shaped-by as unknown rather than as "no feature shaped this area".
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Schema descriptors, index management and attribute-driven DDL
 
 ## Purpose
@@ -89,7 +81,9 @@ Third, **provider index managers**: one `SqlIndexManager` with per-dialect catal
 PostgreSQL, SQLite) and an ElasticSearch pair where "index" means a *container*, not a secondary index —
 `IndexManager` (native: aliases, templates, settings, refresh/flush) plus
 `ElasticSearchIndexManagerAdapter` that squeezes it into the portable `IIndexManager` shape, and
-`ReindexHelper` for server-side and zero-downtime alias-swap reindexing.
+`ReindexHelper` for server-side and zero-downtime alias-swap reindexing. The document backends carry their
+own `IIndexManager` implementations — `MongoDBIndexManager`, `RavenDBIndexManager` and
+`CosmosDBIndexManager` — each translating the portable definition into that backend's native index shape.
 
 The layers are deliberately *not* isomorphic, and the divergences below are load-bearing: the portable
 `FieldType` enum names types the SQL field factory cannot map, and the portable `IndexDefinition` carries
@@ -190,6 +184,23 @@ left unterminated by `Build()` therefore SHALL silently perform no work on those
 - **Then** each returns the same builder type for chaining, and `WithField` defaults to
   `descending: false` and `fieldType: IndexFieldType.Standard`
 
+### Requirement: Index builder refusals have one producer
+
+The system SHALL provide `IndexBuilderSupport` as the single producer of the refusals an index builder or
+index lane raises when it cannot honour part of a declaration: `Unsupported(backend, what, why, instead)`
+SHALL return a `NotSupportedException` whose message is `"{backend}: {what} cannot be honoured here —
+{why}. {instead}"`, and `NotImplementedHere(backend, indexName, instead)` SHALL return a
+`NotSupportedException` stating that index `'{indexName}'` was declared through a migration but the
+backend's schema builder does not create indexes and would silently do nothing, followed by `instead`.
+Both return the exception for the caller to throw.
+
+#### Scenario: A refusal names the backend, the declaration, the reason and the way out
+
+- **Given** `IndexBuilderSupport.Unsupported("SQL", "a TTL index ('IX_A', ExpireAfter = 01:00:00)", "SQL has no TTL index", "Delete expired rows on a schedule instead.")`
+- **When** its `Message` is read
+- **Then** it is `"SQL: a TTL index ('IX_A', ExpireAfter = 01:00:00) cannot be honoured here — SQL has no TTL
+  index. Delete expired rows on a schedule instead."`
+
 ### Requirement: Portable index definition and field factories
 
 The system SHALL describe an index portably as `IndexDefinition` with `Name`, an `IReadOnlyList<IndexField>`
@@ -210,7 +221,7 @@ optional provider-specific `Properties` dictionary; and SHALL provide the static
 - **Then** the first has `IsDescending = true` and `FieldType = IndexFieldType.Standard`, and the second has
   `IsDescending = false` and `FieldType = IndexFieldType.Geo2dSphere`
 
-#### Scenario: Specialised field types are declared but unused by the shipped managers
+#### Scenario: Specialised field types are declared but unused by the SQL and ElasticSearch managers
 
 - **Given** `IndexFieldType` declares `Standard`, `Text`, `Geo2d`, `Geo2dSphere` and `Hashed`
 - **When** such a definition is passed to `SqlIndexManager.CreateAsync` or
@@ -572,19 +583,49 @@ supplying decimal precision/scale.
 - **When** the field is created
 - **Then** a `CharField` with `Lenght == 32` is produced
 
+### Requirement: Cross-assembly field attributes are rebuilt by short type name
+
+The system SHALL, when a property carries no directly castable `Birko.Data.SQL.Attributes.Field`, collect
+the attributes whose full type name starts with `"Birko.Data.SQL.Attributes."` and rebuild local equivalents
+by short type name: `PrimaryField`, `UniqueField`, `RequiredField`, `IncrementField`, `IgnoreField`,
+`NamedField` (only with a non-empty `Name`), `PrecisionField`, `ScaleField`, `MaxLengthField` and
+`IndexedField` (name, order, descending); any other subtype — including `UtcField` — SHALL be skipped
+without error. The numeric values of `PrecisionField`, `ScaleField` and `MaxLengthField` SHALL be read with
+`GetProperty(...)`, and because those attributes declare them as public fields rather than properties the
+rebuilt attribute SHALL carry `0`.
+
+#### Scenario: A foreign-assembly UtcField is dropped
+
+- **Given** a `DateTime` property carrying a `UtcField` compiled into a different assembly
+- **When** `LoadField` runs
+- **Then** the attribute is not rebuilt, and the property maps to a plain wall-clock `DateTimeField`
+
+#### Scenario: A foreign-assembly MaxLengthField loses its width
+
+- **Given** a `string` property carrying `[MaxLengthField(50)]` compiled into a different assembly
+- **When** `LoadField` runs
+- **Then** the rebuilt `MaxLengthField` has `MaxLength == 0` and an unbounded `StringField` is produced
+
 ### Requirement: CLR-type to SQL field mapping
 
 The system SHALL map property CLR types to field classes as: `bool`/`bool?` → `BooleanField` /
-`NullableBooleanField`; `DateTime`/`DateTime?` → `DateTimeField` / `NullableDateTimeField`;
+`NullableBooleanField`; `DateTime`/`DateTime?` → `DateTimeField` / `NullableDateTimeField`, or — when the
+property carries `[UtcField]` — `UtcDateTimeField` / `NullableUtcDateTimeField` carrying
+`DbType.DateTimeOffset`; `TimeOnly`/`TimeOnly?` → `TimeOnlyField` / `NullableTimeOnlyField` carrying
+`DbType.String`;
 `decimal`/`decimal?` → `DecimalField` / `NullableDecimalField` (carrying precision and scale);
 `Guid`/`Guid?` → `GuidField` / `NullableGuidField`; `int`/`int?` → `IntegerField` /
 `NullableIntegerField`; `long`/`long?` → `LongField` / `NullableLongField`; `short`/`short?` →
 `ShortField` / `NullableShortField`; `double`/`double?` → `DoubleField` / `NullableDoubleField`;
-`float`/`float?` → `FloatField` / `NullableFloatField`; `byte[]` → `BinaryField`; `char` → `CharField` of
+`float`/`float?` → `FloatField` / `NullableFloatField`; `byte[]` → `BinaryField`, whose `MaxLength` is the
+`[MaxLengthField]` width when greater than zero, else the `[PrecisionField]` value when greater than zero,
+else `null`; `char` → `CharField` of
 length 1; `string` → `CharField` when an effective length greater than zero is known else `StringField`;
 any enum or `Nullable<enum>` → `IntegerField` / `NullableIntegerField`; and SHALL throw
 `Exceptions.FieldAttributeException` naming the declaring type, the property and its CLR type — rather
-than returning `null` and silently skipping the property — for every other type.
+than returning `null` and silently skipping the property — for every other type. A `[UtcField]` on any
+property whose type is not `DateTime` / `DateTime?` SHALL raise `FieldAttributeException` instead of being
+ignored.
 
 #### Scenario: Enums are stored as integers
 
@@ -636,13 +677,47 @@ than returning `null` and silently skipping the property — for every other typ
   underlying type is not an enum, and `FieldAttributeException` is thrown — where the property was
   previously skipped in silence, its absence from the table is now reported
 
+#### Scenario: UtcField makes a DateTime column an instant
+
+- **Given** `[UtcField] public DateTime CreatedAt { get; set; }` and `public DateTime NoticeDate { get; set; }`
+  on the same model
+- **When** the fields are created
+- **Then** `CreatedAt` is a `UtcDateTimeField` with `DbType.DateTimeOffset` and `NoticeDate` a plain
+  `DateTimeField` with `DbType.DateTime`; on write the instant field converts a `Local` value to UTC, treats an
+  `Unspecified` one as UTC, and stores a `DateTimeOffset`
+
+#### Scenario: UtcField on a non-DateTime property is refused
+
+- **Given** `[UtcField] public string Stamp { get; set; }`
+- **When** the field is created
+- **Then** `FieldAttributeException` is thrown stating that `[UtcField]` is only valid on a `DateTime` or
+  `DateTime?` property and naming the declaring type, the property and its CLR type
+
+#### Scenario: TimeOnly is stored as fixed-width text
+
+- **Given** `public TimeOnly OpensAt { get; set; }` holding `08:05:00`
+- **When** the field writes it
+- **Then** a `TimeOnlyField` with `DbType.String` stores the invariant-culture text `"08:05:00"` (format
+  `HH:mm:ss`)
+
+#### Scenario: A byte[] column carries a declared width
+
+- **Given** `[MaxLengthField(16)] public byte[] Hash { get; set; }`
+- **When** the field is created
+- **Then** a `BinaryField` with `MaxLength == 16` is produced; without a positive `[MaxLengthField]` or
+  `[PrecisionField]` its `MaxLength` is `null`
+
 ### Requirement: Reader materialisation per field type
 
 The system SHALL materialise a column into its property through a type-specific `Read` override —
 `GetBoolean`, `GetDateTime`, `GetDecimal`, `GetGuid`, `GetInt32`, `GetInt64`, `GetInt16`, `GetDouble`,
-`GetFloat`, `GetFieldValue<byte[]>`, `GetString` — where the nullable variants first test
+`GetFloat`, `GetFieldValue<byte[]>`, `GetString`, `GetFieldValue<DateTimeOffset>(…).UtcDateTime` for the
+instant fields — where the nullable variants first test
 `reader.IsDBNull(index)` and assign `null`, while the non-nullable variants perform no null test at all;
-and `AbstractField.Read` SHALL by default assign `reader.GetValue(index)` unconverted.
+and `AbstractField.Read` SHALL by default assign `reader.GetValue(index)` unconverted. `TimeOnlyField` SHALL
+instead parse whatever the provider returns (`TimeOnly`, `DateTime`, `TimeSpan`, or text in `HH:mm:ss` or
+any invariant time format), its non-nullable variant assigning `default(TimeOnly)` for a NULL or unparseable
+value rather than throwing.
 
 #### Scenario: Nullable field reads a database NULL
 
@@ -684,6 +759,18 @@ and `AbstractField.Read` SHALL by default assign `reader.GetValue(index)` unconv
 - **Then** a `string` is assigned to a `char` property and reflection raises an argument/type mismatch at
   runtime — `CharField` only round-trips `string` properties, not `char` ones
 
+#### Scenario: An instant reads back as UTC
+
+- **Given** a `UtcDateTimeField` over a stored timestamp
+- **When** `Read` is called
+- **Then** the column is read as `DateTimeOffset` and its `UtcDateTime` — `DateTimeKind.Utc` — is assigned
+
+#### Scenario: A NULL in a non-nullable TimeOnly column reads as midnight
+
+- **Given** a `TimeOnlyField` (non-nullable) and a NULL column
+- **When** `Read` is called
+- **Then** `default(TimeOnly)` (`00:00:00`) is assigned and no exception is raised
+
 ### Requirement: Row write projection
 
 The system SHALL project an entity to a column-name → value dictionary by calling each field's `Write`, and
@@ -703,6 +790,25 @@ rather than being skipped.
 - **When** they run
 - **Then** `LoadFields` serves the field list from the static `_fieldsCache` `ConcurrentDictionary`, which is
   never invalidated for the process lifetime
+
+### Requirement: A field reports the stored form of an unassigned value
+
+The system SHALL route both `AbstractField.Write` and `AbstractField.DefaultStoredValue` through the
+overridable `ToStorage` conversion, and SHALL compute `DefaultStoredValue` as `ToStorage(default(T))` of the
+property's underlying (non-nullable) type when that type is a value type, `null` for a reference type, and
+`null` for a field without a CLR property.
+
+#### Scenario: A TimeOnly default is stored text, not an empty string
+
+- **Given** a `TimeOnlyField`
+- **When** `DefaultStoredValue` is read
+- **Then** it is `"00:00:00"`, the same form `Write` produces for an unassigned property
+
+#### Scenario: A required nullable value type defaults to its underlying default
+
+- **Given** `[Required] public int? Count { get; set; }`
+- **When** `DefaultStoredValue` is read
+- **Then** it is `0`; for a `string` property it is `null`
 
 ### Requirement: Primary-key resolution with a Guid fallback
 
@@ -727,6 +833,32 @@ back to the field whose property is named `"Guid"`, returning an empty sequence 
 - **Given** a `[Table]` model with no `[PrimaryField]` and no `Guid` property
 - **When** `GetPrimaryFields` is called
 - **Then** an empty array is returned (callers must handle "no key" themselves)
+
+### Requirement: Index-key and inline-constraint placement is computed per field
+
+The system SHALL expose on `AbstractField` three computed answers: `IsInIndexKey` = `IsIndexed || IsUnique
+|| IsPrimary`; `UsesInlineUniqueConstraint` = `IsUnique && (IsNotNull || IsPrimary)`, so a nullable unique
+column does not carry an inline `UNIQUE`; and `UsesInlinePrimaryConstraint` = `IsPrimary` and the field's
+`Table` has at most one primary field (a null `Table` counting as one), so a table with several primary
+fields renders one table-level composite key rather than one inline `PRIMARY KEY` per column.
+
+#### Scenario: A unique column is an index key even when no index names it
+
+- **Given** `[UniqueField] public string Code { get; set; }` with no `[IndexedField]`
+- **When** `IsIndexed` and `IsInIndexKey` are read
+- **Then** `IsIndexed` is `false` while `IsInIndexKey` is `true`
+
+#### Scenario: Two primary fields form a composite key
+
+- **Given** a table whose fields `A` and `B` both carry `[PrimaryField]`
+- **When** `UsesInlinePrimaryConstraint` is read for either
+- **Then** it is `false`; a table with a single primary field answers `true` for it
+
+#### Scenario: A field outside any table keeps the inline primary key
+
+- **Given** a primary field whose `Table` is null (the migrations path)
+- **When** `UsesInlinePrimaryConstraint` is read
+- **Then** it is `true`
 
 ### Requirement: Field resolution from a lambda expression
 
@@ -866,10 +998,74 @@ contributions are collected; `[IndexedField]` supplies `Order` from the attribut
 - **Then** both contributions accumulate into the single `"IX_A"` definition, with the composite's positional
   orders competing against the per-property orders — the columns are appended, not deduplicated
 
+### Requirement: Partial index predicates are declared as column lists
+
+The system SHALL read `WhereNotNull` and `WhereNull` property-name lists from both `[IndexedField]` and
+`[CompositeIndex]` (directly and cross-assembly by reflection), merge them across every attribute
+contributing to the same index name with duplicates collapsed, and resolve them once after both attribute
+forms have contributed: each name SHALL resolve to a mapped column, else `TableAttributeException`; a name in
+both lists SHALL throw `TableAttributeException` because the index would contain no rows; and a name whose
+field is `IsNotNull` or `IsPrimary` SHALL throw `TableAttributeException`. Resolved predicates SHALL be
+appended to `IndexDefinition.Predicates` as all `IS NOT NULL` terms then all `IS NULL` terms, each group
+sorted ordinally by property name.
+
+#### Scenario: Unique among live rows only
+
+- **Given** `[CompositeIndex("UX_TN", nameof(TenantGuid), nameof(Number), IsUnique = true, WhereNull = new[] { nameof(DeletedAt) })]`
+  where `DeletedAt` is a nullable `DateTime?`
+- **When** `LoadIndexes` runs
+- **Then** the definition carries one predicate `{ ColumnName = "DeletedAt", RequireNull = true }`, and
+  `DeletedAt` need not be a key column
+
+#### Scenario: A contradiction is visible only after the merge
+
+- **Given** two `[IndexedField("IX_A")]` contributors, one listing `Code` in `WhereNotNull` and the other in
+  `WhereNull`
+- **When** `LoadIndexes` runs
+- **Then** `TableAttributeException` is thrown naming `Code` as being in both lists
+
+#### Scenario: A predicate over a NOT NULL column is refused
+
+- **Given** `WhereNotNull = new[] { nameof(Count) }` where `Count` is a non-nullable `int`
+- **When** `LoadIndexes` runs
+- **Then** `TableAttributeException` is thrown stating that the column is declared NOT NULL and that the
+  predicate would exclude nothing
+
+### Requirement: A nullable unique column is constrained by a synthesised filtered unique index
+
+The system SHALL, when `LoadIndexes` receives a table name, give every field that is `IsUnique`, not
+`IsPrimary` and not `UsesInlineUniqueConstraint` (i.e. nullable) a unique index named
+`ux_{table}_{column}` over that single column, with a `WhereNotNull` predicate on the same column routed
+through the declared-predicate path, and SHALL set that field's `IsIndexed`. An existing index with that
+name that is already unique over exactly that one column SHALL be kept; any other index already using the
+name SHALL raise `TableAttributeException`. When no table name is supplied no such index is synthesised.
+
+#### Scenario: A nullable unique business key
+
+- **Given** table `Invoice` and `[UniqueField] public string ExternalId { get; set; }` without `[RequiredField]`
+- **When** the table is loaded
+- **Then** its indexes contain `ux_Invoice_ExternalId`, unique over `ExternalId` with the predicate
+  `ExternalId IS NOT NULL`, and the field carries `IsIndexed == true` and `UsesInlineUniqueConstraint == false`
+
+#### Scenario: A required unique column stays inline
+
+- **Given** `[UniqueField] [RequiredField] public string Code { get; set; }`
+- **When** the table is loaded
+- **Then** no `ux_…` index is synthesised, because `UsesInlineUniqueConstraint` is `true`
+
+#### Scenario: A declared index squatting on the synthesised name is refused
+
+- **Given** a declared `[IndexedField("ux_Invoice_ExternalId")]` on another property
+- **When** the table is loaded
+- **Then** `TableAttributeException` is thrown advising to rename the declared index or mark the column
+  `[RequiredField]`
+
 ### Requirement: SQL index definition shape
 
-The system SHALL represent a SQL index as `Tables.IndexDefinition` with a `Name`, a `Unique` flag, and an
-always-initialised `Columns` list of `IndexColumn` (column name, `Order`, `IsDescending`).
+The system SHALL represent a SQL index as `Tables.IndexDefinition` with a `Name`, a `Unique` flag, an
+always-initialised `Columns` list of `IndexColumn` (column name, `Order`, `IsDescending`), and an
+always-initialised `Predicates` list of `IndexPredicate` (column name, `RequireNull`) that is empty for an
+ordinary index.
 
 #### Scenario: Columns list is never null
 
@@ -882,7 +1078,11 @@ always-initialised `Columns` list of `IndexColumn` (column name, `Order`, `IsDes
 The system SHALL, on `SqlIndexManager.CreateAsync`, validate that a scope, a non-empty definition name and
 at least one field are present, translate the portable definition to a `Tables.IndexDefinition` preserving
 field order, descending flags **and the `Unique` flag**, validate each field name as a plain unqualified
-identifier, delegate unconditionally to the connector's `CreateIndexSql`, tolerate a provider report that the
+identifier, carry `Sparse` on a single-field definition as a `WhereNotNull` predicate over that field and
+refuse every portable flag the SQL emitter cannot express (`ExpireAfter`, non-empty `Properties`, `Sparse` on
+a multi-field definition) with `NotSupportedException` from `IndexBuilderSupport.Unsupported`, refuse a
+predicate the connector can neither express nor drop through `RequireExpressiblePredicates` before building
+the statement, delegate to the connector's `CreateIndexSql`, tolerate a provider report that the
 index is already present, and wrap any other execution failure in `IndexManagementException`.
 
 #### Scenario: Index field names are validated before interpolation
@@ -949,6 +1149,28 @@ index is already present, and wrap any other execution failure in `IndexManageme
 - **When** translation runs
 - **Then** the SQL columns are `CreatedAt` (Order 0, descending) and `Number` (Order 1, ascending) in that
   order
+
+#### Scenario: A sparse single-field index becomes a partial index
+
+- **Given** `new IndexDefinition { Name = "IX_Ext", Fields = [Ascending("ExternalId")], Sparse = true }`
+- **When** `ToSqlIndexDefinition` runs
+- **Then** the SQL definition carries the predicate `ExternalId IS NOT NULL`, its column name checked by
+  `DataBase.ValidateIndexFieldIdentifier`
+
+#### Scenario: Flags SQL cannot express are refused, not dropped
+
+- **Given** a definition with `ExpireAfter` set, or with any `Properties`, or with `Sparse = true` over two
+  fields
+- **When** `CreateAsync` translates it
+- **Then** `NotSupportedException` is thrown before any SQL is built or executed — a TTL index, index
+  properties and a sparse composite index each name a different reason and alternative
+
+#### Scenario: A sparse index on a provider without partial indexes
+
+- **Given** a sparse single-field definition and a MySQL connector, which supports no partial index
+- **When** `CreateAsync` runs
+- **Then** `Connector.RequireExpressiblePredicates` passes it, because the `WhereNotNull` term is over the
+  index's own key column and so can be dropped without changing what the index enforces
 
 ### Requirement: SQL index drop
 
@@ -1120,9 +1342,9 @@ branch and the class-level `[CompositeIndex]` branch — before any DDL is emitt
 
 ### Requirement: Index-management SQL is composed by string interpolation
 
-The system SHALL guard interpolated values by doubling single quotes for string literals
-(`name.Replace("'", "''")`) and by the connector's `QuoteIdentifier` for identifiers; no index-management
-statement SHALL use a `DbParameter`.
+The system SHALL guard interpolated values by doubling single quotes for string literals through the
+shared `SqlLiteral.EscapeLiteral`, which refuses a null value with `ArgumentNullException`, and by the
+connector's `QuoteIdentifier` for identifiers; no index-management statement SHALL use a `DbParameter`.
 
 #### Scenario: Quotes in a table name are escaped for the literal
 
@@ -1360,7 +1582,7 @@ entirely.
 
 - **Given** a definition with `Unique == true`
 - **When** `CreateAsync` runs against ES
-- **Then** the flag is silently dropped — unlike `SqlIndexManager`, which branches on it
+- **Then** the flag is silently dropped — unlike `SqlIndexManager`, which carries it onto the SQL definition
 
 #### Scenario: Native escape hatch is exposed
 
@@ -1566,3 +1788,90 @@ returning a successful result whose `SourceIndex` is the resolved old index.
 - **When** it runs
 - **Then** the generic overload delegates to the descriptor-based one with a descriptor applying
   `NumberOfShards(2)` and `Map<Invoice>(m => m.AutoMap())`
+
+### Requirement: MongoDB index manager maps the portable definition onto native index options
+
+The system SHALL require a collection-name scope on every `MongoDBIndexManager` operation, throwing
+`ArgumentException("Collection name (scope) is required for MongoDB index management.")` otherwise, and on
+`CreateAsync` SHALL require a name and at least one field, build keys per field (`Text`, `Hashed`, `Geo2d`,
+`Geo2dSphere`, else ascending/descending), and pass `Name`, `Background = true`, `Unique`, `Sparse` and
+`ExpireAfter` as native options; `Properties` SHALL be ignored. A create failure SHALL be wrapped in
+`IndexManagementException`; a drop of an absent index (`IndexNotFound`) SHALL succeed silently and other
+drop failures SHALL be wrapped.
+
+#### Scenario: Listing reports options and key types
+
+- **Given** a collection with a unique sparse TTL index over a descending key and a text index
+- **When** `ListAsync(collection)` runs
+- **Then** each `IndexInfo` reports `Unique`, `Sparse`, `ExpireAfter` from `expireAfterSeconds`, fields with
+  `IsDescending` from a negative numeric key and `FieldType` from a string key (`text`, `hashed`, `2d`,
+  `2dsphere`), and `State == "ready"`
+
+#### Scenario: Size comes from collStats when available
+
+- **Given** `GetInfoAsync("IX_A", collection)`
+- **When** the index exists
+- **Then** its `SizeInBytes` is read from `collStats.indexSizes` when the command succeeds, and stays `-1`
+  when it fails
+
+#### Scenario: Convenience creators
+
+- **Given** `CreateTtlIndexAsync("events", "CreatedAt", TimeSpan.FromDays(7))`
+- **When** it runs
+- **Then** an index named `ttl_CreatedAt` over `CreatedAt` ascending with that expiry is created
+
+### Requirement: RavenDB index manager deploys map definitions database-wide
+
+The system SHALL implement `RavenDBIndexManager.CreateAsync` by building a RavenDB index definition named
+after the portable definition whose map is, in order of precedence, `Properties["Map"]` (a string),
+`Properties["Maps"]` (strings), or an auto-generated
+`from doc in docs.{scope ?? "docs"} select new { F = doc.F, … }` interpolating the scope and field names,
+with an optional `Properties["Reduce"]`, marking `Text` fields for full-text search, and sending it with
+`PutIndexesOperation`; `Unique`, `Sparse` and `ExpireAfter` SHALL be ignored. Create and drop failures SHALL
+be wrapped in `IndexManagementException`. Existence SHALL be a case-insensitive match over all index names in
+the database; listing and info SHALL come from index statistics, reporting `State` as `"stale"` or the
+lower-cased index state and the type, priority, entry count and map/reduce counters in `Properties`, with no
+`Fields`.
+
+#### Scenario: Scope names the collection only in the generated map
+
+- **Given** `CreateAsync(new IndexDefinition { Name = "Invoices/ByNumber", Fields = [Ascending("Number")] }, "Invoices")`
+- **When** it runs
+- **Then** the deployed map is `from doc in docs.Invoices select new { Number = doc.Number }`
+
+#### Scenario: A unique flag is silently ignored
+
+- **Given** a definition with `Unique = true`
+- **When** `CreateAsync` runs
+- **Then** the index is deployed without any uniqueness enforcement and no error is raised
+
+### Requirement: Cosmos DB index manager edits the container's indexing policy
+
+The system SHALL require a container-name scope (`ArgumentException("Scope (container name) is required for
+Cosmos DB.")`) and implement `CosmosDBIndexManager.CreateAsync` by reading the container, adding a
+single-field definition as an included path `/{name}/?` (unless present) or a multi-field definition as a
+composite index with per-field sort order, and replacing the container; the definition's `Name`, `Unique`,
+`Sparse`, `ExpireAfter`, `Properties` and `FieldType` SHALL NOT be stored. `DropAsync` SHALL move a matching
+included path to the excluded paths and replace the container; composite indexes SHALL NOT be dropped.
+Failures other than `ArgumentException` SHALL be wrapped in `IndexManagementException`.
+
+#### Scenario: Listing names indexes by path
+
+- **Given** a policy with included path `/Number/?` and one composite index
+- **When** `ListAsync(container)` runs
+- **Then** it returns `IndexInfo { Name = "/Number/?", State = "active" }` with `Properties` type
+  `IncludedPath` and the indexing mode, and `IndexInfo { Name = "composite_0" }` with the joined paths and
+  orders
+
+#### Scenario: Existence matches a path, not a declared name
+
+- **Given** an index created from a definition named `IX_Number` over field `Number`
+- **When** `ExistsAsync("IX_Number", container)` is called
+- **Then** it returns `false` — existence matches included paths (`/Number/?`) and composite field paths, so
+  only `ExistsAsync("Number", container)` finds it
+
+#### Scenario: Dropping a composite index does nothing
+
+- **Given** a composite index over `/TenantGuid` and `/Number`
+- **When** `DropAsync("TenantGuid", container)` is called
+- **Then** no included path matches, the policy is replaced unchanged, and the composite index remains

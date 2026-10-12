@@ -10,6 +10,23 @@ before the first full regeneration. Each keeps its own date. Nothing below was r
 
 ---
 
+## Feature drift — latest measurement (2026-10-12, `/roadmap --check`)
+
+Measured from the files, not incremented. **Supersedes the 2026-09-19 figures below**, which stay as history.
+
+- **DV7 ×0** — was ×25 earlier the same day: 22 areas carried pre-monorepo `generated-at` shas that no longer
+  exist in this history (so staleness was unknowable) and 3 had real source drift. All 25 were regenerated and
+  re-stamped at `c50ed580`; the 13 suspected defects the regen surfaced are filed under EPIC-014 (its § Sweep 2,
+  *Re-harvest*). DV8, DV10, DV11 clean.
+- **DV9 ×104 over 5 features** — FEATURE-014 ×90 (was ×74; +5 are today's TASK-574–578), FEATURE-001 ×3,
+  FEATURE-015 ×3 (TASK-570–572), FEATURE-018 ×2, FEATURE-013 ×1. Closes and intakes keep adding tasks that no
+  `decisions.md` row names.
+- **DV3 ×29** — tasks with `feature: null` under an epic whose feature their siblings link: EPIC-001 ×15,
+  EPIC-014 ×8 (TASK-285–288, TASK-500–503), EPIC-011 ×4, EPIC-005 ×1, EPIC-018 ×1.
+- **DV5 ×5** — all one hole: EPIC-019 (DraCode backports, STORY-058–061) has no feature. The old ×33 counted
+  `_loose/` tasks, which the rule no longer counts — a rule change, not a cleanup.
+- DV1, DV2, DV4, DV6, DV12: none.
+
 ## Standing callouts (moved verbatim from README.md, as of its 2026-09-20 refresh)
 
 > ⚠ **Feature drift (3 groups, 111 items)** — **all three re-measured 2026-09-19**, and two grew

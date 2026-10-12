@@ -10,7 +10,7 @@ created: 2026-08-09
 depends-on: []
 blocks: []
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
-findings: [SH-M317, SH-M318, SH-M319, SH-M320, SH-M321, SH-M322, SH-M323, SH-M324, SH-M325, SH-M326, SH-M327, SH-M328, SH-M329, SH-M330, SH-M331, SH-M332, SH-M333, SH-M334, SH-M335, SH-M336]
+findings: [SH-M317, SH-M318, SH-M319, SH-M320, SH-M321, SH-M322, SH-M323, SH-M324, SH-M325, SH-M326, SH-M327, SH-M328, SH-M329, SH-M330, SH-M331, SH-M332, SH-M333, SH-M334, SH-M335, SH-M336, SH-M435]
 pr: null
 github-issue: null
 jira-key: null
@@ -45,9 +45,13 @@ silently dropped is one the next sweep re-raises and someone re-litigates from s
 what the code *does*, defects included, which is exactly what let it find them. So a behavioural fix leaves
 `docs/specs/store-decorator-composition.md` lying until `/specs regen store-decorator-composition` runs, and **that spec diff is the fix's evidence**.
 
+### Added by the 2026-10-12 spec regen (harvester claims, not reproduced)
+
+- **SH-M435** — Save routing (`Birko.Data.Stores/StoreSave.cs:25-82`, `Birko.Data.Patterns/Concurrency/VersionedStoreWrapper.cs:42-58`): on a versioned wrapper a missing row throws `ConcurrentUpdateException`, not `EntityNotFoundException`, so StoreSave's create fallback for an unstored Guid never runs — contrary to TASK-555's comment
+
 ## Acceptance criteria
 
-- [ ] All 20 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [ ] All 21 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
 - [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.

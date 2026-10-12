@@ -1,19 +1,21 @@
 ---
 area: store-lazy-initialization
-generated-at: 58cd3bf
-generated-on: 2026-09-09
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.Stores/AbstractAsyncBulkStore.cs
   - ../Birko.Data.Stores/AbstractAsyncStore.cs
   - ../Birko.Data.Stores/AbstractBulkStore.cs
   - ../Birko.Data.Stores/AbstractStore.cs
-source-commits:   # recorded at this regen, not reconstructed
-  ../Birko.Data.Stores: c1af713
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Lazy store initialization (EnsureInitialized double-checked locking)
 
 ## Purpose
@@ -27,7 +29,7 @@ caller never has to remember to call `Init()`. The mechanism is a private boolea
 double-checked locking: a `Monitor` (`lock`) on the sync side, a `SemaphoreSlim` on the async side.
 
 This document records what those four files actually do. The two sides are *not* symmetric: they
-differ in cancellation handling, in re-entrancy failure mode, and in what a caller can observe. Those
+differ in cancellation handling and in what a caller can observe. Those
 divergences are the point of this spec, because every concrete store in the framework inherits them.
 
 ## Requirements
@@ -71,15 +73,16 @@ so that a concrete store's `InitCore` / `InitCoreAsync` has completed before any
 ### Requirement: InitCore runs exactly once per store instance on success
 
 The system SHALL call `InitCore()` / `InitCoreAsync(ct)` at most once per store instance for as long
-as that call succeeds, by setting the private `_initialized` flag to `true` immediately after the core
-initialization returns and short-circuiting all subsequent `EnsureInitialized` / `EnsureInitializedAsync`
-calls on the flag.
+as that call succeeds and the store keeps the default answers of `CanRememberInitialization` and
+`CanTrustRememberedInitialization` (both `true`), by setting the private `_initialized` flag to
+`CanRememberInitialization` immediately after the core initialization returns and short-circuiting all
+subsequent `EnsureInitialized` / `EnsureInitializedAsync` calls on `_initialized && CanTrustRememberedInitialization`.
 
 #### Scenario: A hundred sequential operations initialize once
 
 - **Given** a concrete `AbstractStore<T>` subclass whose `InitCore()` increments a counter
 - **When** the caller performs `Create`, then `Read`, then `Count`, then `Update`, then `Delete`
-- **Then** the counter is `1` — the first call took the `lock`, ran `InitCore()`, and set `_initialized = true`; the four later calls returned at the un-locked `if (_initialized) return;` guard
+- **Then** the counter is `1` — the first call took the `lock`, ran `InitCore()`, and set `_initialized = CanRememberInitialization` (`true`); the four later calls returned at the un-locked `if (_initialized && CanTrustRememberedInitialization) return;` guard
 
 #### Scenario: Concurrent first-touch initializes once
 
@@ -110,7 +113,7 @@ one flag with the automatic path — an explicit `Init()` before the first CRUD 
 
 - **Given** a store on which `Init()` has already succeeded
 - **When** `Init()` is called again
-- **Then** it returns at the `if (_initialized) return;` guard without taking the lock and without calling `InitCore()`
+- **Then** it returns at the `if (_initialized && CanTrustRememberedInitialization) return;` guard without taking the lock and without calling `InitCore()`
 
 #### Scenario: InitAsync awaited twice
 
@@ -121,7 +124,7 @@ one flag with the automatic path — an explicit `Init()` before the first CRUD 
 ### Requirement: Failed initialization leaves the store uninitialized and is retried
 
 The system SHALL leave `_initialized` at `false` when `InitCore()` / `InitCoreAsync(ct)` throws,
-because the assignment `_initialized = true` sits after the core call. The lock is still released (the
+because the assignment `_initialized = CanRememberInitialization` sits after the core call. The lock is still released (the
 sync `lock` block unwinds; the async `finally` calls `_initLock.Release()`), so the exception propagates
 to the caller and the *next* data operation attempts initialization again. There is no cached failure,
 no failure count, and no backoff.
@@ -149,6 +152,34 @@ no failure count, and no backoff.
 - **Given** a concrete `AbstractAsyncStore<T>` subclass whose `InitCoreAsync` throws
 - **When** one task awaits `CountAsync()` and fails, and a second task then awaits `CountAsync()`
 - **Then** the second task acquires `_initLock` — the `finally` released it — and runs its own `InitCoreAsync` attempt rather than hanging
+
+### Requirement: A store may decline to remember, or to trust, a completed initialization
+
+The system SHALL expose two `protected virtual bool` hooks on both `AbstractStore<T>` and
+`AbstractAsyncStore<T>`, each defaulting to `true`: `CanRememberInitialization`, read once after
+`InitCore` / `InitCoreAsync` returns and assigned to `_initialized` (TASK-244), and
+`CanTrustRememberedInitialization`, read on every operation alongside `_initialized` both at the
+un-locked fast path and at the re-check inside the lock (TASK-288). A store answering `false` to either
+re-runs `InitCore` / `InitCoreAsync` on its next operation instead of short-circuiting — the design errs
+toward an idempotent re-run over a store that stays broken for the life of the process.
+
+#### Scenario: An initialization that is not remembered is re-run
+
+- **Given** a concrete store whose `CanRememberInitialization` returns `false` (for example a SQL store whose schema-ensure ran inside a caller's transaction that may still roll back)
+- **When** `InitCore()` completes and a second data operation runs
+- **Then** `_initialized` was assigned `false`, so the second operation takes the lock and invokes `InitCore()` again
+
+#### Scenario: A remembered initialization that can no longer be trusted is re-run
+
+- **Given** an initialized store whose `_initialized` is `true` and whose `CanTrustRememberedInitialization` now returns `false` (for example a SQL store whose table was dropped underneath it)
+- **When** the next data operation calls `EnsureInitialized()` / `EnsureInitializedAsync(ct)`
+- **Then** neither the fast path nor the re-check inside the lock returns, and `InitCore()` / `InitCoreAsync(CancellationToken.None)` runs again under the lock
+
+#### Scenario: Default stores pay no re-check cost
+
+- **Given** a store that overrides neither hook
+- **When** it is initialized and used
+- **Then** both hooks answer `true` and the store behaves as a remember-once store
 
 ### Requirement: Cancellation is observed on every async operation, including already-initialized stores
 
@@ -213,36 +244,39 @@ caller's timeout governed the DDL).
 - **When** `InitCoreAsync(ct)` runs
 - **Then** `ct.CanBeCanceled` is `false`; the initialization is bounded by the backend's own timeouts, since a store has no cancellation of its own
 
-### Requirement: Recursive initialization fails differently on the sync and async sides
+### Requirement: A data operation made from inside initialization passes straight through
 
-The system SHALL guard sync initialization with a re-entrant `Monitor` (`lock (_initLock)`) and async
-initialization with a non-re-entrant `SemaphoreSlim(1, 1)`. Because `_initialized` is set only *after*
-`InitCore` / `InitCoreAsync` returns, a concrete store whose initialization calls back into one of its
-own public data operations fails — but the two hierarchies fail in different, backend-visible ways.
+The system SHALL mark the call flow that is running a store instance's `InitCore` / `InitCoreAsync` with
+a per-instance `AsyncLocal<bool>` (`_initializingHere`), and SHALL make `EnsureInitialized()` /
+`EnsureInitializedAsync(ct)` return immediately on that flow — before the `_initialized` check and before
+taking `lock (_initLock)` / awaiting `_initLock.WaitAsync(ct)` — so that a concrete store whose
+initialization calls one of its own public data operations (to seed defaults) proceeds instead of
+recursing or deadlocking (TASK-163, SH-M316). The mark is per call flow and per instance: other threads
+and tasks still wait on the lock.
 
 #### Scenario: Sync InitCore seeds data through a public CRUD method
 
 - **Given** an `AbstractStore<T>` subclass whose `InitCore()` calls `this.Create(seedRow)` to seed defaults
 - **When** the first data operation triggers `EnsureInitialized()`
-- **Then** `Create` calls `EnsureInitialized()` again on the same thread, the `lock` is re-entered because `Monitor` is re-entrant, `_initialized` is still `false`, and `InitCore()` is invoked recursively — the recursion is unbounded and terminates in a `StackOverflowException`
+- **Then** the nested `Create` calls `EnsureInitialized()`, sees `_initializingHere.Value == true` and returns at once, and `CreateCore(seedRow, …)` runs — `InitCore()` is invoked once, with no recursion; the mark is cleared in a `finally` after `InitCore()` returns or throws
 
 #### Scenario: Async InitCoreAsync seeds data through a public CRUD method
 
 - **Given** an `AbstractAsyncStore<T>` subclass whose `InitCoreAsync()` awaits `this.CreateAsync(seedRow)` to seed defaults
 - **When** the first data operation awaits `EnsureInitializedAsync()`
-- **Then** the nested `EnsureInitializedAsync` sees `_initialized == false` and awaits `_initLock.WaitAsync(ct)` on a semaphore already held by the outer call — `SemaphoreSlim` has no owner-thread affinity, so the wait never completes and the operation deadlocks until the token is cancelled
+- **Then** the nested `EnsureInitializedAsync` checks the token, sees `_initializingHere.Value == true` and returns without awaiting the semaphore the outer call holds, so `CreateCoreAsync` runs and no deadlock occurs
 
-#### Scenario: Initialization that talks to the backend directly is safe
+#### Scenario: Another caller still waits for the initialization
 
-- **Given** an `InitCoreAsync` that seeds data via its own connection or via the `protected *CoreAsync` methods rather than the public `CreateAsync` wrappers
-- **When** initialization runs
-- **Then** no nested `EnsureInitializedAsync` occurs and initialization completes normally — bypassing the public wrappers is the only supported way for `InitCore` to touch the store's own data
+- **Given** task A running `InitCoreAsync` with `_initializingHere` set on its own flow
+- **When** task B, on a different flow, awaits `CountAsync()` on the same store
+- **Then** B's `_initializingHere.Value` is `false`, so B queues on `_initLock` and does not observe the store before A's initialization finishes
 
 ### Requirement: The initialization flag is read without synchronization
 
 The system SHALL declare `_initialized` as a private, non-`volatile` `bool` in both `AbstractStore<T>`
 and `AbstractAsyncStore<T>`, and SHALL read it once outside the lock as the fast path of the
-double-checked lock (`if (_initialized) return;` before `lock (_initLock)` / before
+double-checked lock (`if (_initialized && CanTrustRememberedInitialization) return;` before `lock (_initLock)` / before
 `await _initLock.WaitAsync(ct)`). No `volatile`, `Interlocked`, `Thread.MemoryBarrier`, or
 `Lazy<T>`/`LazyInitializer` is used.
 
@@ -250,12 +284,12 @@ double-checked lock (`if (_initialized) return;` before `lock (_initLock)` / bef
 
 - **Given** an initialized store
 - **When** any data operation calls `EnsureInitialized()`
-- **Then** the method returns after a single plain field read, taking no lock — this is the intended performance property of the design
+- **Then** the method returns after reading the `_initializingHere` async-local, the plain `_initialized` field and the virtual `CanTrustRememberedInitialization`, taking no lock — this is the intended performance property of the design
 
 #### Scenario: The write is published from inside the critical section
 
 - **Given** a thread completing `InitCore()`
-- **When** it assigns `_initialized = true`
+- **When** it assigns `_initialized = CanRememberInitialization`
 - **Then** the assignment happens inside `lock (_initLock)` (sync) or between `WaitAsync` and the `finally`'s `Release()` (async), but the *reading* side has no matching acquire barrier — correctness of the unsynchronized read rests on the runtime's memory model rather than on any explicit annotation in the code
 
 ### Requirement: Filter-based bulk operations initialize only through their delegated reads
@@ -334,31 +368,39 @@ initializing through `AbstractStore<T>.Read` / `AbstractAsyncStore<T>.ReadAsync`
 - **When** `Read(guid)` (sync) or `ReadAsync(guid, ct)` (async) is called
 - **Then** it builds `new Filters.ModelByGuid<T>(guid).Filter()` and forwards to the single-result `Read(filter)` / `ReadAsync(filter, ct)`, which performs the initialization — the GUID overloads contain no `EnsureInitialized` call of their own
 
-### Requirement: Destroy is not wrapped and cannot reset the initialization flag
+### Requirement: Destroy is a non-virtual wrapper that re-arms initialization
 
-The system SHALL declare `Destroy()` and `DestroyAsync(ct)` as bare `public abstract` members with no
-base-class wrapper: they do not call `EnsureInitialized` / `EnsureInitializedAsync`, and they cannot
-clear `_initialized` because the field is `private` with no protected accessor or reset method. A store
-therefore remains permanently flagged as initialized after being destroyed, and no subsequent operation
-will re-run `InitCore` / `InitCoreAsync`.
+The system SHALL implement `Destroy()` and `DestroyAsync(ct)` as non-virtual public wrappers around the
+`protected abstract` `DestroyCore()` / `DestroyCoreAsync(ct)` seams, and SHALL clear `_initialized` in a
+`finally` after the core call — whether it returned or threw — so that the next data operation runs
+`InitCore` / `InitCoreAsync` again and re-provisions the backing storage (TASK-163, SH-M307). The wrapper
+does not call `EnsureInitialized` / `EnsureInitializedAsync` and takes no init lock. A `DestroyCore`
+override that calls back into the public `Destroy` / `DestroyAsync` on the same call flow is refused with
+`InvalidOperationException` instead of recursing.
 
-#### Scenario: Destroy then reuse skips re-initialization
+#### Scenario: Destroy then reuse re-initializes
 
-- **Given** an initialized store whose `Destroy()` drops its backing table
+- **Given** an initialized store whose `DestroyCore()` drops its backing table
 - **When** the caller calls `Destroy()` and then `Create(data)`
-- **Then** `EnsureInitialized()` returns immediately because `_initialized` is still `true`, `InitCore()` is not re-run, the table is not recreated, and `CreateCore` runs against the destroyed backend
+- **Then** `_initialized` is `false` after `Destroy()`, so `EnsureInitialized()` takes the lock and re-runs `InitCore()`, which recreates the table before `CreateCore` runs
+
+#### Scenario: A throwing DestroyCore still clears the flag
+
+- **Given** an initialized store whose `DestroyCore()` throws
+- **When** the caller calls `Destroy()`
+- **Then** the exception propagates and `_initialized` is nevertheless `false`, so the next operation re-runs initialization rather than trusting storage in an unknown state
 
 #### Scenario: Destroy on a never-initialized store
 
 - **Given** a store on which no data operation has ever run
 - **When** `Destroy()` (or `await DestroyAsync(ct)`) is called
-- **Then** the concrete implementation executes with the backend never having been set up, because no base-class wrapper initializes first
+- **Then** `DestroyCore()` / `DestroyCoreAsync(ct)` executes with the backend never having been set up, because the wrapper does not initialize first
 
-#### Scenario: A subclass cannot re-arm initialization
+#### Scenario: A DestroyCore override that calls the public Destroy is refused
 
-- **Given** a concrete store that wants `Destroy()` to make the next operation re-initialize
-- **When** it looks for a way to reset the flag
-- **Then** none exists — `_initialized` and `_initLock` are private in both `AbstractStore<T>` and `AbstractAsyncStore<T>`, and no `protected` `IsInitialized` property, reset method, or virtual hook is exposed
+- **Given** a concrete store whose `DestroyCore()` calls `Destroy()` (or whose `DestroyCoreAsync` awaits `DestroyAsync()`) — the pre-TASK-163 `base.Destroy()` shape
+- **When** the caller calls `Destroy()`
+- **Then** the nested call sees the per-instance `_destroyingHere` async-local set and throws `InvalidOperationException` naming the store type and directing the override to call `base.DestroyCore` instead
 
 ### Requirement: Non-data members never initialize the store
 
@@ -381,7 +423,7 @@ the supplied entity is `null`.
 
 - **Given** a never-initialized store
 - **When** `Save(entity)` is called with `entity.Guid` `null` or `Guid.Empty`
-- **Then** it delegates to `Create(entity, storeDelegate)`, which is the call that initializes; when `entity.Guid` has a non-empty value it delegates to `Update(entity, storeDelegate)` instead and returns `entity.Guid.Value`
+- **Then** it delegates (through `StoreSave.Save`) to `Create(entity, storeDelegate)`, which is the call that initializes; when `entity.Guid` has a non-empty value it delegates to `Update(entity, …)` instead and returns `entity.Guid.Value`, and if that update throws `EntityNotFoundException` naming that Guid it falls through to `Create(entity, …)` under the same Guid, with the store delegate wrapped to run at most once across both calls
 
 ### Requirement: The async initialization lock is never disposed
 
@@ -400,4 +442,4 @@ releases the semaphore.
 
 - **Given** an async store that has finished its lifetime
 - **When** `await DestroyAsync(ct)` completes
-- **Then** `_initLock` is still undisposed — `DestroyAsync` is abstract with no base-class behaviour and the field is private and inaccessible to the subclass
+- **Then** `_initLock` is still undisposed — the `DestroyAsync` wrapper only runs `DestroyCoreAsync` and clears `_initialized`, and the field is private and inaccessible to the subclass

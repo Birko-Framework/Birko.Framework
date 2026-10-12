@@ -1,25 +1,28 @@
 ---
 area: unit-of-work-and-transactions
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
+  - ../Birko.Data.CosmosDB/UnitOfWork/CosmosDbUnitOfWork.cs
   - ../Birko.Data.ElasticSearch/UnitOfWork/ElasticSearchUnitOfWork.cs
+  - ../Birko.Data.InfluxDB/UnitOfWork/InfluxDbUnitOfWork.cs
+  - ../Birko.Data.MongoDB/UnitOfWork/MongoDbUnitOfWork.cs
+  - ../Birko.Data.Patterns/UnitOfWork/ITransactionCapabilities.cs
   - ../Birko.Data.Patterns/UnitOfWork/IUnitOfWork.cs
   - ../Birko.Data.Patterns/UnitOfWork/UnitOfWorkException.cs
+  - ../Birko.Data.RavenDB/UnitOfWork/RavenDbUnitOfWork.cs
   - ../Birko.Data.SQL/Stores/SqlTransactionContext.cs
   - ../Birko.Data.SQL/UnitOfWork/SqlUnitOfWork.cs
   - ../Birko.Data.Stores/ITransactionalStore.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-07-30 10:48:14,
-                  # commit 3728969). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.ElasticSearch: bfe668f
-  ../Birko.Data.Patterns: 4663f80
-  ../Birko.Data.SQL: a8f06a9
-  ../Birko.Data.Stores: c164f94
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Unit of work and transactional store boundaries
 
 ## Purpose
@@ -27,11 +30,13 @@ shaped-by-unresolved: 80
 This capability lets a caller group several store operations into one transactional boundary. A
 `IUnitOfWork` owns the boundary (`BeginAsync` / `CommitAsync` / `RollbackAsync`) and, in its generic
 form, hands out a backend-specific *transaction context* that individual stores enlist in via
-`ITransactionalStore.SetTransactionContext`. Two backends implement the boundary, and they are not
+`ITransactionalStore.SetTransactionContext`. Six backends implement the boundary, and they are not
 equivalent: `SqlUnitOfWork` wraps a real ADO.NET `DbTransaction` on a dedicated connection, so it is
 genuinely atomic; `ElasticSearchUnitOfWork` merely buffers operations in memory and flushes them as
-one Elasticsearch Bulk call on commit, which is neither atomic nor isolated. Anything that needs
-"these writes land together" depends on this capability, and needs to know which of those two shapes
+one Elasticsearch Bulk call on commit, which is neither atomic nor isolated. `MongoDbUnitOfWork`,
+`RavenDbUnitOfWork`, `CosmosDbUnitOfWork` and `InfluxDbUnitOfWork` sit between those two shapes, and every
+unit of work states which shape it is through `IUnitOfWork.Capabilities`. Anything that needs
+"these writes land together" depends on this capability, and needs to know which of those shapes
 it is actually getting.
 
 ## Requirements
@@ -40,7 +45,8 @@ it is actually getting.
 
 The system SHALL expose the transactional boundary as `IUnitOfWork`, which extends both
 `IAsyncDisposable` and `IDisposable`, and SHALL expose the boundary state as a read-only `bool
-IsActive` property alongside the three lifecycle methods `BeginAsync(CancellationToken)`,
+IsActive` property and the boundary's guarantees as a read-only `ITransactionCapabilities Capabilities`
+property, alongside the three lifecycle methods `BeginAsync(CancellationToken)`,
 `CommitAsync(CancellationToken)` and `RollbackAsync(CancellationToken)`, each returning `Task` and
 each defaulting its cancellation token.
 
@@ -158,8 +164,9 @@ transaction.
 
 The system SHALL root all unit-of-work failures at `UnitOfWorkException : Exception`, offering a
 message-only and a message-plus-inner-exception constructor, and SHALL derive
-`NoActiveTransactionException` and `TransactionAlreadyActiveException` from it, each supplying its
-own fixed message via a parameterless constructor.
+`NoActiveTransactionException`, `TransactionAlreadyActiveException` and
+`TransactionRollbackOnlyException` from it, each supplying its own fixed message via a parameterless
+constructor.
 
 #### Scenario: Catching the base type catches the state errors
 
@@ -174,6 +181,13 @@ own fixed message via a parameterless constructor.
 - **Then** they are exactly `"No active transaction. Call BeginAsync() first."` and `"A transaction
   is already active. Commit or rollback before starting a new one."` — neither type exposes a
   constructor overload that lets the caller customise the message
+
+#### Scenario: Rollback-only exception names the remedy
+
+- **Given** `new TransactionRollbackOnlyException()`
+- **When** its `Message` is read
+- **Then** it is exactly `"The transaction was marked rollback-only by a nested unit of work and cannot be
+  committed. Call RollbackAsync() instead."`
 
 ### Requirement: Transactional store enlistment contract
 
@@ -227,10 +241,11 @@ namespace `Birko.Data.SQL.Stores`, exposing get-only `DbConnection Connection` a
 
 ### Requirement: SQL unit of work owns a dedicated connection per transaction
 
-The system SHALL, on `SqlUnitOfWork.BeginAsync`, create a connection via
-`_connector.CreateConnection(_settings)`, open it with `OpenAsync(ct)`, begin a transaction with
-`BeginTransactionAsync(ct)`, and publish both on a new `SqlTransactionContext`; `IsActive` SHALL be
-derived solely from whether that `DbTransaction` field is non-null.
+The system SHALL, on `SqlUnitOfWork.BeginAsync` when no enclosing boundary for the same settings id is
+found, create a connection via `_connector.CreateConnection(_settings)`, open it with `OpenAsync(ct)`,
+begin a transaction with `BeginTransactionAsync(ct)`, and publish both on a new `SqlTransactionContext`;
+`IsActive` SHALL be derived from whether that `DbTransaction` field is non-null or the unit of work has
+joined an enclosing boundary.
 
 #### Scenario: Begin produces an open connection carrying a live transaction
 
@@ -244,7 +259,8 @@ derived solely from whether that `DbTransaction` field is non-null.
 - **Given** a `SqlUnitOfWork` built with any `AbstractConnectorBase` (PostgreSQL, MSSql, MySQL or
   SQLite)
 - **When** `BeginAsync()` runs
-- **Then** the only connector member invoked is `CreateConnection(settings)`; the transaction
+- **Then** the only connector member invoked is `CreateConnection(settings)` (the settings id is read
+  from the settings via `GetId()`); the transaction
   lifecycle itself goes through the ADO.NET `DbConnection` / `DbTransaction` API, so the behaviour is
   provider-independent
 
@@ -318,10 +334,11 @@ release the created connection before rethrowing, leaving `IsActive` `false` and
 ### Requirement: SQL disposal releases resources without an explicit rollback call
 
 The system SHALL make `SqlUnitOfWork` disposal idempotent through a `_disposed` flag, with
-`DisposeAsync` delegating to `CleanupAsync` and `Dispose` performing the synchronous equivalent
-(`_transaction?.Dispose()`, `_connection?.Close()`, `_connection?.Dispose()`, `Context = null`);
-neither path calls `RollbackAsync`, so an uncommitted transaction is ended by disposing the
-`DbTransaction` rather than by an explicit rollback.
+`DisposeAsync` delegating to `CleanupAsync` and then releasing the ambient cell installed at
+construction, and `Dispose` performing the synchronous equivalent (leaving the ambient scope, releasing
+the ambient cell, clearing any joined boundary, `_transaction?.Dispose()`, `_connection?.Close()`,
+`_connection?.Dispose()`, `Context = null`); neither path calls `RollbackAsync`, so an uncommitted
+transaction is ended by disposing the `DbTransaction` rather than by an explicit rollback.
 
 #### Scenario: Disposing an uncommitted unit of work
 
@@ -375,6 +392,74 @@ connector and the connector's own `Settings`.
 - **Then** the type resolves from the global namespace, because its source file declares no
   `namespace` — unlike `SqlTransactionContext` (`Birko.Data.SQL.Stores`) and
   `ElasticSearchUnitOfWork` (`Birko.Data.ElasticSearch.UnitOfWork`)
+
+### Requirement: SQL unit of work publishes its transaction as an ambient boundary
+
+The system SHALL install an ambient `AmbientSqlTransaction` cell in the `SqlUnitOfWork` constructor —
+synchronously, because an `AsyncLocal` set inside an awaited `BeginAsync` would not flow back to the
+awaiting caller — and SHALL, after a successful owning `BeginAsync`, enter the new connection and
+transaction into that ambient scope keyed by the settings' `GetId()`, so that stores in the same flow
+participate without each being handed the context. The ambient entry SHALL be left before the
+`DbTransaction` is committed or rolled back, and on cleanup and disposal; the cell SHALL be released on
+disposal.
+
+#### Scenario: A store in the same flow sees the boundary
+
+- **Given** a `SqlUnitOfWork` constructed and begun in the caller's flow
+- **When** code in that flow looks up `AmbientSqlTransaction.Find(settings.GetId())`
+- **Then** it finds an entry carrying the unit of work's connection and transaction
+
+#### Scenario: The ambient entry is withdrawn before commit
+
+- **Given** an owning, active `SqlUnitOfWork`
+- **When** `CommitAsync()` runs
+- **Then** the ambient entry is exited before `DbTransaction.CommitAsync` is awaited, so a store used
+  during the commit cannot enlist in the transaction being ended
+
+### Requirement: A nested SQL unit of work joins the enclosing boundary
+
+The system SHALL, when `SqlUnitOfWork.BeginAsync` finds a live enclosing ambient boundary for the same
+settings id, join it instead of opening a second connection: the unit of work becomes a participant
+(`IsParticipant == true`, `IsActive == true`) whose `Context` wraps the enclosing connection and
+transaction. A participant's `CommitAsync` SHALL commit nothing and detach; a participant's
+`RollbackAsync` SHALL undo nothing, mark the enclosing boundary rollback-only and detach. The owner's
+`CommitAsync` on a boundary marked rollback-only SHALL throw `TransactionRollbackOnlyException` without
+committing, and a participant asked to commit a boundary already marked rollback-only SHALL throw it too.
+
+#### Scenario: Nested begin against the same database
+
+- **Given** an owning `SqlUnitOfWork` begun on settings with id `X`, and a second `SqlUnitOfWork` for
+  settings with the same id constructed and begun in the same flow
+- **When** the second unit of work's `BeginAsync()` completes
+- **Then** no connection was created for it, `IsParticipant` is `true`, and its `Context.Connection` /
+  `Context.Transaction` are the owner's
+
+#### Scenario: Nested begin against a different database opens its own transaction
+
+- **Given** an active owning boundary for settings id `X`
+- **When** a unit of work for settings id `Y` begins in the same flow
+- **Then** it finds no enclosing boundary for `Y` and opens its own connection and transaction
+
+#### Scenario: Participant commit defers to the owner
+
+- **Given** a participant `SqlUnitOfWork` on a boundary not marked rollback-only
+- **When** its `CommitAsync()` is called
+- **Then** no database commit is issued, its `Context` becomes `null` and `IsActive` becomes `false`;
+  the writes are committed only when the owner commits
+
+#### Scenario: Participant rollback poisons the owner's commit
+
+- **Given** a participant that called `RollbackAsync()` inside an owner's boundary
+- **When** the owner then calls `CommitAsync()`
+- **Then** `TransactionRollbackOnlyException` is thrown, nothing is committed, and the owner is still
+  active so it can call `RollbackAsync()`
+
+#### Scenario: Disposing a participant without commit or rollback
+
+- **Given** a participant `SqlUnitOfWork` that is disposed while still joined
+- **When** `Dispose()` / `DisposeAsync()` runs
+- **Then** the join is cleared without marking the boundary rollback-only, and the owner's transaction
+  is untouched
 
 ### Requirement: Elasticsearch unit of work buffers operations instead of transacting
 
@@ -572,6 +657,137 @@ where individual items may succeed or fail independently and rollback of applied
 - **Then** under SQL the write exists inside the transaction (visible to the enlisted stores,
   isolated from others per the provider's isolation level), while under Elasticsearch the write does
   not exist anywhere yet — it is only a delegate in a local list
+
+### Requirement: Every unit of work declares its transactional capabilities
+
+The system SHALL describe what a boundary promises with `ITransactionCapabilities` — `Atomicity`
+(`TransactionAtomicity`: `None` 0, `BestEffort` 1, `Atomic` 2), `Scope` (`TransactionBoundaryScope`:
+`None` 0, `SingleDocument` 1, `SinglePartition` 2, `Database` 3, `Cluster` 4),
+`ReadsSeeUncommittedWrites`, `RequiresServerTopology` and a nullable `Limitations` text — implemented by
+the immutable `TransactionCapabilities`, which also offers a static `TransactionCapabilities.None`
+(no atomicity, no scope, reads do not see own writes, with a "no transaction concept" limitation). Each
+unit of work SHALL expose a fixed instance:
+
+| Unit of work | Atomicity | Scope | Reads see own writes | Requires topology |
+|---|---|---|---|---|
+| `SqlUnitOfWork` | `Atomic` | `Database` | true | false |
+| `MongoDbUnitOfWork` | `Atomic` | `Cluster` | true | true |
+| `RavenDbUnitOfWork` | `Atomic` | `Cluster` | false | false |
+| `CosmosDbUnitOfWork` | `Atomic` | `SinglePartition` | false | false |
+| `ElasticSearchUnitOfWork` | `BestEffort` | `None` | false | false |
+| `InfluxDbUnitOfWork` | `BestEffort` | `None` | false | false |
+
+#### Scenario: A caller inspects a boundary before relying on it
+
+- **Given** a `CosmosDbUnitOfWork`
+- **When** the caller reads `Capabilities`
+- **Then** `Scope` is `SinglePartition`, `ReadsSeeUncommittedWrites` is `false`, and `Limitations`
+  states that reads inside the batch do not see the batch's own writes
+
+#### Scenario: Capabilities render as a sentence
+
+- **Given** the `SqlUnitOfWork` capabilities
+- **When** `ToString()` is called
+- **Then** it returns `"Atomic within Database, reads see own writes"`; a capabilities object with
+  `RequiresServerTopology` appends `", requires a specific server topology"`, and one whose reads do not
+  see own writes says `", reads do NOT see own writes"`
+
+### Requirement: MongoDB unit of work wraps a client session transaction
+
+The system SHALL implement `MongoDbUnitOfWork` as `IUnitOfWork<IClientSessionHandle>`, constructed from
+an `IMongoClient` or a Birko `MongoDBClient` (null → `ArgumentNullException`), with
+`FromStore<T>(AsyncMongoDBStore<T>)` throwing
+`InvalidOperationException("Store client is not initialized. Call SetSettings() first.")` when the store
+has no client. `BeginAsync` SHALL start a session with `StartSessionAsync(ct)` and call
+`StartTransaction()`; `IsActive` SHALL be `_session?.IsInTransaction ?? false`; `CommitAsync` and
+`RollbackAsync` SHALL call `CommitTransactionAsync(ct)` / `AbortTransactionAsync(ct)` on the session and
+SHALL NOT dispose it — only `Dispose` / `DisposeAsync` dispose the session.
+
+#### Scenario: Begin against a standalone server
+
+- **Given** a `MongoDbUnitOfWork` over a standalone `mongod`
+- **When** `BeginAsync()` is awaited
+- **Then** it succeeds; the transaction fails only at the first write, as `Capabilities.Limitations` states
+
+#### Scenario: Commit then begin again keeps the old session undisposed
+
+- **Given** a `MongoDbUnitOfWork` that has begun and committed
+- **When** `BeginAsync()` is called again
+- **Then** `IsActive` was `false` (the session is no longer in a transaction), so a new session is started
+  and assigned over the old one, which is never disposed
+
+### Requirement: RavenDB unit of work wraps a cluster-wide session
+
+The system SHALL implement `RavenDbUnitOfWork` as `IUnitOfWork<IAsyncDocumentSession>`, constructed from
+an `IDocumentStore` (null → `ArgumentNullException`), with `FromStore<T>(AsyncRavenDBStore<T>)` throwing
+`InvalidOperationException("Store DocumentStore is not initialized. Call SetSettings() first.")` when the
+store has no document store. `BeginAsync` SHALL open an async session with
+`TransactionMode = TransactionMode.ClusterWide` without contacting the server; `IsActive` SHALL be
+whether a session is held; `CommitAsync` SHALL await `SaveChangesAsync(ct)` and then dispose and drop the
+session; `RollbackAsync` SHALL dispose and drop the session without saving.
+
+#### Scenario: Rollback discards unsaved changes
+
+- **Given** an active `RavenDbUnitOfWork` whose session tracks stored documents
+- **When** `RollbackAsync()` is called
+- **Then** the session is disposed without `SaveChangesAsync`, nothing reaches the server, and `IsActive`
+  becomes `false`
+
+#### Scenario: A failed SaveChanges leaves the unit of work active
+
+- **Given** an active `RavenDbUnitOfWork` whose `SaveChangesAsync` throws (for example a concurrency
+  conflict)
+- **When** `CommitAsync()` is called
+- **Then** the exception propagates unchanged and the session is still held, so `IsActive` is `true`
+  and `RollbackAsync()` can discard it
+
+### Requirement: Cosmos DB unit of work wraps a single-partition transactional batch
+
+The system SHALL implement `CosmosDbUnitOfWork` as `IUnitOfWork<TransactionalBatch>`, constructed from a
+`Container` (null → `ArgumentNullException`) and one `PartitionKey`, with
+`FromStore<T>(AsyncCosmosDBStore<T>, PartitionKey)` throwing
+`InvalidOperationException("Store Container is not initialized. Call SetSettings() and InitAsync() first.")`
+when the store has no container. `BeginAsync` SHALL create a `TransactionalBatch` for that partition key
+without I/O; `CommitAsync` SHALL await `ExecuteAsync(ct)`, drop the batch, and throw
+`InvalidOperationException("Cosmos DB transactional batch failed with status {StatusCode}.")` when the
+response is not a success status; `RollbackAsync` and disposal SHALL drop the batch without sending it.
+
+#### Scenario: A refused batch is reported with its status
+
+- **Given** an active `CosmosDbUnitOfWork` whose batch execution returns a non-success status
+- **When** `CommitAsync()` is called
+- **Then** an `InvalidOperationException` — not a `UnitOfWorkException` — is thrown naming the status,
+  and the unit of work is inactive
+
+#### Scenario: A throwing execute leaves the batch in place
+
+- **Given** an active `CosmosDbUnitOfWork` whose `ExecuteAsync` throws
+- **When** `CommitAsync()` is called
+- **Then** the exception propagates before the batch is dropped, so `IsActive` remains `true`
+
+### Requirement: InfluxDB unit of work buffers points for one write
+
+The system SHALL implement `InfluxDbUnitOfWork` as `IUnitOfWork<BatchPointContext>`, constructed from an
+`InfluxDBClient`, a bucket and an organization (each null → `ArgumentNullException`), with
+`FromStore<T>(AsyncInfluxDBStore<T>)` reading the store's client and public `Settings` (bucket,
+organization) and throwing `InvalidOperationException` when either is missing. `BeginAsync` SHALL
+allocate a `BatchPointContext` (exposing `Bucket`, `Organization`, `AddPoint`, `AddPoints`) without I/O;
+`CommitAsync` SHALL write all buffered points in one `WritePointsAsync(points, bucket, organization, ct)`
+call when there is at least one, and only then drop the context; `RollbackAsync` and disposal SHALL drop
+the context without writing.
+
+#### Scenario: Empty commit writes nothing
+
+- **Given** an active `InfluxDbUnitOfWork` with no points added
+- **When** `CommitAsync()` is called
+- **Then** no write API call is made and the unit of work becomes inactive
+
+#### Scenario: A failed write leaves the points queued
+
+- **Given** an active `InfluxDbUnitOfWork` with buffered points whose write throws
+- **When** `CommitAsync()` is called
+- **Then** the exception propagates and the context is not dropped, so the unit of work stays active
+  with the same points — unlike `ElasticSearchUnitOfWork`, a retried commit re-sends every point
 
 ### Requirement: Cancellation tokens are honoured only where I/O occurs
 

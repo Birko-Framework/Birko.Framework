@@ -1,7 +1,7 @@
 ---
 area: entity-localization
-generated-at: 8f370b6efeb7a6e489f011b490724767c85e746b
-generated-on: 2026-09-26
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedStoreWrapper.cs
@@ -17,17 +17,14 @@ sources:
   - ../Birko.Data.Localization/Models/IEntityLocalizationContext.cs
   - ../Birko.Data.Localization/Models/ILocalizable.cs
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling sha no longer resolves here.
-shaped-by: []
-# The evidence pass RAN at this regen, over 311 feature-linked tasks. 274 unresolved: 115 carry a
-# polyrepo-era `pr:` sha the history import rewrote (dangling, so no evidence under step 5a) — among
-# them TASK-313 (FEATURE-014), whose `pr: e4e208b…` is the pre-import sha of 8b43813d, the commit that
-# carries its fix to these sources; the rest have no commit whose subject leads with their id, and 8
-# are refused by the state gate (todo/cancelled). The 37 that resolved touch none of these sources.
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 274
+shaped-by-unresolved: 266
 ---
-
 # Entity-level localization via store decoration
 
 ## Purpose
@@ -755,8 +752,11 @@ translation store is called.
 
 ### Requirement: Save dispatches on GUID presence
 
-The system SHALL treat a null or `Guid.Empty` GUID as a create and anything else as an update, and SHALL
-return a GUID whose source differs between the sync and async wrappers.
+The system SHALL treat a null or `Guid.Empty` GUID as a create and anything else as an update, SHALL
+create the entity under its own GUID when that update reports `EntityNotFoundException` for it, and SHALL
+return the GUID the create path returned on both the sync and async wrappers. The decision is delegated
+to the shared `StoreSave.Save` / `StoreSave.SaveAsync`, passed the wrapper's own `Create` / `Update`, so
+translation persistence runs on whichever path is taken.
 
 #### Scenario: Empty GUID creates
 
@@ -770,11 +770,24 @@ return a GUID whose source differs between the sync and async wrappers.
 - **When** `Save(data)` / `SaveAsync(data)` runs
 - **Then** the update path runs and the method returns `data.Guid ?? Guid.Empty`
 
-#### Scenario: Return value on create diverges between sync and async
+#### Scenario: Populated GUID that is not stored is created under that GUID
+
+- **Given** `data.Guid` is a non-empty GUID with no stored row, and an inner store whose update throws `EntityNotFoundException` naming that GUID
+- **When** `Save(data)` / `SaveAsync(data)` runs
+- **Then** the exception is caught and the wrapper's create path runs with the same `data` (persisting translations), the store delegate is applied at most once across the update and create attempts, and the create path's GUID is returned
+- **And** an `EntityNotFoundException` that does not name `data.Guid` propagates
+
+#### Scenario: Return value on create is the inner store's GUID on both wrappers
 
 - **Given** an inner store that returns a new GUID from `Create`/`CreateAsync` without assigning it to the passed instance
-- **When** `Save(data)` returns versus `SaveAsync(data)` returns
-- **Then** the sync wrappers return the inner store's GUID (`return Create(data, storeDelegate);`), while the async wrappers discard it and return `data.Guid ?? Guid.Empty` — i.e. `Guid.Empty`
+- **When** `Save(data)` or `SaveAsync(data)` runs on an entity with an empty GUID
+- **Then** both the sync and async wrappers return the inner store's GUID
+
+#### Scenario: Null data is a no-op
+
+- **Given** `data == null`
+- **When** `Save(null)` / `SaveAsync(null)` runs
+- **Then** `Guid.Empty` is returned and neither the inner store nor the translation store is touched
 
 ### Requirement: Translation filter composition
 

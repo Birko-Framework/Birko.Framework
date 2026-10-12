@@ -1,8 +1,10 @@
 ---
 area: filter-expression-translation
-generated-at: 90194b9
-generated-on: 2026-09-09
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
+  - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
+  - ../Birko.Data.Core/Expressions/DateTruncation.cs
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
   - ../Birko.Data.Core/Expressions/ExpressionParameterReplacer.cs
   - ../Birko.Data.Core/Expressions/PredicateScope.cs
@@ -17,6 +19,7 @@ sources:
   - ../Birko.Data.SQL.MySQL/Database/Connectors/MySQLConnector.cs
   - ../Birko.Data.SQL.PostgreSQL/Database/Connectors/PostgreSQLConnector.cs
   - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteConnector.cs
+  - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteDecimal.cs
   - ../Birko.Data.SQL/SQL/Conditions/Condition.cs
   - ../Birko.Data.SQL/SQL/Conditions/Join.cs
   - ../Birko.Data.SQL/SQL/Conditions/RuleConditionConverter.cs
@@ -29,39 +32,19 @@ sources:
   - ../Birko.Data.SQL/SQL/Connectors/Strategies/LikeConditionStrategy.cs
   - ../Birko.Data.SQL/SQL/Connectors/Strategies/NullConditionStrategy.cs
   - ../Birko.Data.SQL/SQL/DataBase.cs
+  - ../Birko.Data.SQL/SQL/DataBase_Field.cs
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/SQL/DataBase_RuleField.cs
-source-commits:   # recorded at each regen; Birko.Data.SQL and Birko.Data.ElasticSearch
-                  # re-recorded 2026-09-09 by TASK-308, the two siblings it changed
-  ../Birko.Data.Core: fd3103c
-  ../Birko.Data.ElasticSearch: ac13bba
-  ../Birko.Data.SQL: 505c31c
-  ../Birko.Data.SQL.MSSql: 64a4932
-  ../Birko.Data.SQL.MySQL: 72cac6d
-  ../Birko.Data.SQL.PostgreSQL: 6f7a12f
-  ../Birko.Data.SQL.SqLite: ef71921
-shaped-by:
-  # TASK-111 / SH-H023 — rule fields resolve against table metadata. The evidence pass cannot run from this
-  # aggregator: every source above is in a sibling repo, so the sha resolves under no `git show` here.
-  - TASK-111
-  # TASK-137 — the empty NOT IN's `1 = 1` was both an injection lookalike and a tautology that satisfied
-  # the whole-table write guard; always-true terms are now reduced away instead of rendered.
-  - TASK-137
-  # TASK-213 — a COMPUTED operand inside a set Contains was recursed into as a predicate, fabricating a
-  # subcondition that replaced the IN with a different predicate. Now resolved via RenderValueFragment.
-  - TASK-213
-  # TASK-212 — PredicateScope.cs lands in this area's Expressions glob; its behaviour is specced in
-  # bulk-filter-operations, beside the guards that consume it.
-  - TASK-212
-  # TASK-211 — a SELECT's FROM/JOIN now aliases the table bare, so the bare Table.Column qualifiers every
-  # other clause emits resolve on a case-folding provider; and the missing-relation seam was narrowed so a
-  # rejected statement stops reading as an empty result.
-  - TASK-211
-shaped-by-derived: true
+  - ../Birko.Data.SQL/SQL/DataBase_Table.cs
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
-shaped-by-unresolved: 80
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+shaped-by-derived: true
+shaped-by-unresolved: 266
 ---
-
 # LINQ filter expression translation to backend queries
 
 ## Purpose
@@ -262,8 +245,8 @@ produced when an AND/OR tree short-circuits to a constant.
 #### Scenario: AND with a false operand short-circuits
 
 - **Given** `x => false && x.Active`
-- **When** `TryGetLiteralBool` resolves both operands without allocating conditions
-- **Then** `MakeFalseCondition` is returned and `x.Active` is never parsed
+- **When** `TryGetLiteralBool` resolves the left operand to `false` without allocating a condition, and returns `null` for the parameter-bound right operand
+- **Then** `MakeFalseCondition` is returned — but only after `x.Active` has been parsed into a condition that is then discarded, so an operand the parser refuses still throws beside a constant `false`
 
 #### Scenario: OR with a true operand widens to no filter
 
@@ -937,7 +920,9 @@ parameter, the right fragment SHALL be emitted verbatim with `IsField = true`.
 The SQL translator SHALL wrap a resolved column in `LOWER(...)` for `ToLower`/`ToLowerInvariant`,
 `UPPER(...)` for `ToUpper`/`ToUpperInvariant`, and `DATE(...)` for a `DateTime.Date` member access
 whose inner expression resolves to a column; a `DateTime.Date` access that does not resolve to a column
-SHALL be evaluated as a constant.
+SHALL be evaluated as a constant. The `DATE(...)` wrapper SHALL be reached only by a `.Date` comparison
+that is not rewritten to a range (§ *A `.Date` comparison against a value is a half-open range on the raw
+column*): column-versus-column, or a value side that does not evaluate to a `DateTime`.
 
 #### Scenario: Case-insensitive comparison via LOWER
 
@@ -947,15 +932,64 @@ SHALL be evaluated as a constant.
 
 #### Scenario: Date truncation on the column side
 
-- **Given** `x => x.OpenedAt.Date == someDate`
-- **When** the `.Date` member is parsed and the inner member contains the parameter
-- **Then** the condition name becomes `DATE(Table.OpenedAt)`
+- **Given** `x => x.OpenedAt.Date == x.ClosedAt.Date` — both sides a column `.Date`, so no range rewrite applies
+- **When** each side's `.Date` member is parsed into the same comparison condition and its inner member contains the parameter
+- **Then** the condition name becomes `DATE(Table.OpenedAt)` and is then overwritten by the right side's
+  `DATE(Table.ClosedAt)`, with no value bound — the rendered clause is `DATE(Table.ClosedAt) = NULL`, which
+  matches no row (and `DATE()` is not a T-SQL function)
 
 #### Scenario: Date truncation on the constant side
 
 - **Given** the right-hand side `filter.From.Date` where `filter` is a closure
-- **When** the `.Date` branch finds no parameter
-- **Then** the evaluated `DateTime` is bound as the parent's value and an EMPTY condition sequence is returned
+- **When** it is parsed — the normalizer has already folded it to a constant at the lambda boundary, and the
+  non-parameter member branch claims any parameter-free member before the `.Date` branch is consulted
+- **Then** the evaluated `DateTime` is bound as the parent's value like any other constant; the `.Date`
+  branch's constant arm is reached only when a parameter-bound `.Date`'s inner member resolves to no column
+
+### Requirement: A `.Date` comparison against a value is a half-open range on the raw column
+
+`DataBase.ParseConditionExpression` SHALL rewrite a comparison in which exactly one side (after stripping
+`Convert`) is a parameter-bound column's `.Date` and the other side is parameter-free and evaluates to a
+`DateTime` into a half-open range over the **raw** column, with `d` the value's `.Date` and `d+1` the next
+day: `==` becomes `col >= d AND col < d+1`; `!=` becomes `col < d OR col >= d+1`; `<` becomes `col < d`;
+`<=` becomes `col < d+1`; `>` becomes `col >= d+1`; `>=` becomes `col >= d`. When the column is on the right
+the operator SHALL be mirrored first. The range SHALL be nested as a sub-condition of an enclosing parent
+rather than merged into it, so the `!=` arm's own `IsOr` survives. Column-versus-column, a value that does
+not evaluate to a `DateTime`, and a column that does not resolve SHALL fall back to the ordinary path.
+
+`Birko.Data.Expressions.DateTruncation.Rewrite` SHALL perform the same rewrite at expression level, with the
+same operator table, for backends that hand the raw tree to a driver; it SHALL return the filter unchanged
+(by reference) when there is nothing to rewrite. It is applied by the CosmosDB stores (TASK-224), whose
+driver translates `.Date` as a JSON sub-property of the stored string and silently matches nothing.
+
+#### Scenario: Equality on a date becomes a range
+
+- **Given** `x => x.OpenedAt.Date == d` where `d` is `2026-08-07 14:30`
+- **When** the comparison is parsed
+- **Then** the condition is an AND group of `Table.OpenedAt >= @p` (bound `2026-08-07 00:00`) and
+  `Table.OpenedAt < @p` (bound `2026-08-08 00:00`) — no `DATE()` call, so the predicate is sargable and valid
+  on every provider. The previous `DATE(col) = @p` compared a 10-character date with a full timestamp on
+  SQLite and matched nothing (Symbio TASK-355)
+
+#### Scenario: Inequality keeps its OR inside an enclosing AND
+
+- **Given** `x => x.OpenedAt.Date != d && x.Amount > 5`
+- **When** the `!=` arm is parsed under the AND's operand condition
+- **Then** it is nested as an OR group `(OpenedAt < d OR OpenedAt >= d+1)` rather than having its `IsOr`
+  overwritten by the enclosing node's flag, which would turn it into an unsatisfiable AND
+
+#### Scenario: A column on the right mirrors the operator
+
+- **Given** `x => d < x.OpenedAt.Date`
+- **When** the comparison is parsed
+- **Then** it becomes `OpenedAt >= d+1`, the translation of `x.OpenedAt.Date > d`
+
+#### Scenario: The expression-level rewrite feeds the CosmosDB driver a plain range
+
+- **Given** `x => x.CreatedAt.Date == d` passed to a CosmosDB store
+- **When** `DateTruncation.Rewrite` runs before the driver sees the filter
+- **Then** the driver receives `x.CreatedAt >= d && x.CreatedAt < d+1`; a filter with no column `.Date`
+  comparison is returned as the same instance
 
 ### Requirement: SQL condition rendering strategy dispatch
 
@@ -1039,6 +1073,14 @@ funnel its value through it because those overrides do not chain to the base imp
 - **When** the value is normalised
 - **Then** it is additionally converted with `ToString()`, because SQLite stores `DbType.Guid` as TEXT
 
+#### Scenario: PostgreSQL additionally strips DateTimeKind
+
+- **Given** a `DateTime` with `Kind = Utc` bound through `PostgreSQLConnector.AddParameter`
+- **When** the value is normalised
+- **Then** it is re-specified as `DateTimeKind.Unspecified` before binding, so Npgsql infers `timestamp` rather
+  than `timestamptz` and the server does not shift the instant by the session's time zone into the
+  timezone-less column (TASK-256)
+
 #### Scenario: Null becomes DBNull
 
 - **Given** a `null` value
@@ -1077,8 +1119,12 @@ not exist*. The base SHALL match SQLite's `no such table`; `PostgreSQLConnector`
 `42P01` and SHALL EXCLUDE the `missing FROM-clause entry` shape that shares that SQLSTATE; `MySQLConnector`
 SHALL require error `1146`; each SHALL walk the exception chain, and SHALL keep an untyped fallback
 narrowed to its own missing-**table** wording (`relation … does not exist`, `table … doesn't exist`).
-`PostgreSQLConnector_OnException` and `MySQLConnector_OnException` SHALL consult that same predicate before
-running `DoInit()` and returning, and SHALL rethrow otherwise.
+`MSSqlConnector` SHALL match SQL Server error `208` or the `Invalid object name` wording.
+`PostgreSQLConnector_OnException`, `MySQLConnector_OnException` and `MSSqlConnector_OnException` SHALL route
+through the shared `EnsureSchemaAndReport`, which consults that same predicate: a missing table runs
+`DoInit()` (unless the connector is already initialising) and is then reported by **throwing**, never by
+returning, so a write against a missing table does not report success (TASK-277); any other error SHALL be
+rethrown as itself, its type and stack trace preserved and the statement text carried on `Exception.Data`.
 
 An error answered with an empty result is a wrong answer rather than a degraded one, so the width of this
 seam bounds what any read can silently misreport.
@@ -1103,7 +1149,8 @@ seam bounds what any read can silently misreport.
 - **Given** a read against a table that has not been created yet
 - **When** the reader runs
 - **Then** it yields an empty sequence and no exception, and the write path's `OnException` runs `DoInit()`
-  — the lazy create-on-first-use and view-existence probing that this seam exists for
+  and then throws, so the failed write is reported rather than discarded — the lazy create-on-first-use and
+  view-existence probing that this seam exists for
 
 #### Scenario: The positive case does not depend on the server's language
 
@@ -1117,10 +1164,11 @@ seam bounds what any read can silently misreport.
 `AbstractConnectorBase.AddWhere` SHALL append ` WHERE ` plus the rendered clause only when both the
 command and the condition sequence are non-null AND the rendered clause is non-empty.
 `LimitOffsetDefinition` SHALL emit ` LIMIT @LIMIT[ OFFSET @OFFSET]` by default and `MSSqlConnector`
-SHALL override it to `[ OFFSET @OFFSET ROWS] FETCH NEXT @LIMIT ROWS ONLY` — appending the
-` OFFSET @OFFSET ROWS` half only when `offset` is non-null, so a limit-only read renders a bare
-` FETCH NEXT @LIMIT ROWS ONLY`, which T-SQL rejects without a preceding `OFFSET`; both SHALL emit
-nothing when `limit` is null.
+SHALL override it to ` OFFSET @OFFSET ROWS FETCH NEXT @LIMIT ROWS ONLY` — always emitting the `OFFSET`
+half and binding `@OFFSET` to `0` when `offset` is null, because T-SQL has no standalone `FETCH`; both SHALL
+emit nothing when `limit` is null. A provider whose paging is legal only beside a sort declares
+`RequiresOrderByForPaging` (SQL Server alone), and for it `CreateSelectCommand` SHALL append
+` ORDER BY (SELECT NULL)` to a limited SELECT the caller did not sort, before the paging clause (TASK-278).
 
 #### Scenario: Empty rendered clause appends nothing
 
@@ -1140,11 +1188,19 @@ nothing when `limit` is null.
 - **When** `LimitOffsetDefinition` runs
 - **Then** the fragment is ` OFFSET @OFFSET ROWS FETCH NEXT @LIMIT ROWS ONLY` with both parameters bound
 
-#### Scenario: MSSQL limit without offset omits the OFFSET T-SQL requires
+#### Scenario: MSSQL limit without offset still emits the OFFSET T-SQL requires
 
 - **Given** `limit = 10`, `offset = null` on `MSSqlConnector`
 - **When** `LimitOffsetDefinition` runs
-- **Then** the fragment is ` FETCH NEXT @LIMIT ROWS ONLY` with only `@LIMIT` bound — no ` OFFSET @OFFSET ROWS` precedes it, so the statement is invalid T-SQL
+- **Then** the fragment is ` OFFSET @OFFSET ROWS FETCH NEXT @LIMIT ROWS ONLY` with `@OFFSET` bound to `0` and `@LIMIT` to `10` — a bare `FETCH NEXT` is `Msg 153` on SQL Server
+
+#### Scenario: An unsorted limited MSSQL read gets a placeholder sort
+
+- **Given** a limited SELECT with no order fields on `MSSqlConnector`
+- **When** `CreateSelectCommand` builds it
+- **Then** ` ORDER BY (SELECT NULL)` precedes the paging clause, since `OFFSET`/`FETCH` without a sort is
+  `Msg 102`; on SQLite, PostgreSQL and MySQL no sort is synthesised, and the rows returned are arbitrary on
+  every provider alike
 
 ### Requirement: SQL table references in a SELECT carry a bare alias
 
@@ -1221,7 +1277,8 @@ dictionary under keys `@Const{count}`. It SHALL render a `ConditionalExpression`
 constant as `(operand IS NULL)` / `(operand IS NOT NULL)`, arithmetic and comparison operators inside
 parentheses, `Replace` as `REPLACE(...)`, `ToLower`/`ToLowerInvariant` as `LOWER(...)`,
 `ToUpper`/`ToUpperInvariant` as `UPPER(...)`, and `DateTime.Date` on a column as `DATE(column)`. Any
-other method call SHALL be evaluated and bound as a constant.
+other parameter-free method call SHALL be evaluated and bound as a constant; a parameter-bound one is
+refused (§ *An unrecognised call in an UPDATE SET value is refused, never invoked*).
 
 #### Scenario: Ternary SET value
 
@@ -1544,8 +1601,9 @@ removed and the capability gained rather than lost.
 ### Requirement: ElasticSearch comparison translation
 
 `ParseComparison` SHALL derive the field from whichever operand yielded an `ITermQuery` with a
-non-null `Field` and the value from whichever yielded a non-null `Value`, and SHALL emit
-`NumericRangeQuery` for `>`/`>=`/`<`/`<=`, `TermQuery` for `==`, and a `BoolQuery.MustNot` wrapping a
+non-null `Field` and the value from whichever yielded a non-null `Value`, and SHALL route
+`>`/`>=`/`<`/`<=` through `BuildRangeComparison` (§ *An ElasticSearch ordering comparison never emits a range
+it could not bound*), emit `TermQuery` for `==`, and a `BoolQuery.MustNot` wrapping a
 `TermQuery` for `!=`. When the field is known and the value is null it SHALL emit
 `BoolQuery.MustNot(ExistsQuery)` for `==` and `ExistsQuery` for `!=`, and `null` for any other
 operator. It SHALL return `null` when either field or value is unavailable.
@@ -1579,12 +1637,6 @@ operator. It SHALL return `null` when either field or value is unavailable.
 - **Given** `x => 18 > x.Age`
 - **When** `ParseComparison` takes `field` from the right operand and `value` from the left, then switches on `binary.NodeType`
 - **Then** a `NumericRangeQuery { Field = "age", GreaterThan = 18 }` is produced, meaning `Age > 18` — the operator is not flipped to compensate for the swapped operands
-
-#### Scenario: A value that will not convert to double yields an unbounded range
-
-- **Given** `x => x.CreatedAt > someDateTime`
-- **When** `TryConvertToDouble` catches the `InvalidCastException` and returns `null`
-- **Then** a `NumericRangeQuery` with `GreaterThan = null` is produced — a range with no bound
 
 ### Requirement: ElasticSearch field naming
 
@@ -1664,8 +1716,9 @@ mirroring SQL `LIKE '%x%'`, which `query_string` over a keyword field never did.
 ### Requirement: ElasticSearch string and collection methods
 
 `ParseMethodCall` SHALL translate `IsNullOrEmpty` to `BoolQuery.MustNot(WildcardQuery value "*")`,
-`StartsWith` to `PrefixQuery`, `EndsWith` to `WildcardQuery` with value `"*" + value`,
-`String.Contains` to `QueryStringQuery` on the field, `MultiMatch` to `MultiMatchQuery`, `Any` to
+`StartsWith` to `PrefixQuery`, `EndsWith` to `WildcardQuery` with value `"*" + EscapeWildcardValue(value)`,
+`String.Contains` to `WildcardQuery` with value `"*" + EscapeWildcardValue(value) + "*"` on the field
+(§ *ElasticSearch substring matching uses a query type with no grammar*), `MultiMatch` to `MultiMatchQuery`, `Any` to
 `NestedQuery`, `Property(name)` to a field-only `TermQuery`, and `ToLower`/`ToLowerInvariant`/
 `ToUpper`/`ToUpperInvariant` transparently to the wrapped expression. Any other method SHALL be
 evaluated as a constant, yielding a value-only `TermQuery` or `null`.
@@ -1796,7 +1849,7 @@ it cannot script. A field on the left of `??` SHALL be scripted as
 
 - **Given** `x => (x.Vip ? x.Premium : x.Score) > 100`
 - **When** `ScriptValue` handles the `ConditionalExpression`
-- **Then** the body is `((doc['vip'].value) ? doc['premium'].value : doc['score'].value) > 100` with the boolean test rendered by `ScriptBool`
+- **Then** the body is `((doc['vip'].value ? doc['premium'].value : doc['score'].value) > 100)` with the boolean test rendered by `ScriptBool`, guarded on the existence of `vip`, `premium` and `score`
 
 #### Scenario: Null check inside a script
 
@@ -1845,7 +1898,7 @@ evaluating their argument, and SHALL cache compiled fallback delegates keyed by 
 
 `DataBase.EvaluateExpression` SHALL read `ConstantExpression` values directly, read field/property
 values reflectively (falling through to lambda compilation when a `TargetException` says the container
-was null), invoke method calls reflectively on evaluated operands, make `Convert` transparent,
+was null), invoke parameter-free method calls reflectively on evaluated operands, make `Convert` transparent,
 materialise `NewArrayInit` into a typed array, and compile a cached parameterless lambda only when the
 expression contains no parameter — returning `null` otherwise. `DataBase.ContainsParameter` SHALL be
 memoized per expression instance via a `ConditionalWeakTable` and SHALL treat any

@@ -1,16 +1,16 @@
 ---
 area: bulk-filter-operations
-generated-at: 2b8663c1404a6eaac3ee64da2b2c6fa5630bca90
-generated-on: 2026-09-26
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
-  - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
-  - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
-  - ../Birko.Data.MongoDB/Stores/MongoPropertyUpdateTranslator.cs
+  - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
+  - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
   - ../Birko.Data.ElasticSearch/Stores/AsyncElasticSearchStore.cs
   - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs
   - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStoreHelper.cs
-  - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
-  - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
+  - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
+  - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
+  - ../Birko.Data.MongoDB/Stores/MongoPropertyUpdateTranslator.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Delete.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Update.cs
@@ -31,16 +31,12 @@ sources:
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
 # repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
-# The evidence pass RAN at this regen (the monorepo made sibling commits reachable), over 311
-# feature-linked tasks. 274 unresolved: 115 carry a polyrepo-era `pr:` sha the history import rewrote
-# (dangling, so no evidence under step 5a), the rest have no commit whose subject leads with their id,
-# and 8 are refused by the state gate (todo/cancelled). The 37 that resolved touch none of these
-# sources. FEATURE-014 is kept append-only; a subject-rule read of the dangling tasks also gives only
-# FEATURE-014 (TASK-212/218/240), so the list is not thin in practice, only in proof.
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 274
+shaped-by-unresolved: 266
 ---
-
 # Bulk filter-based Update/Delete and Read semantics
 
 ## Purpose
@@ -137,6 +133,16 @@ the under-coverage the notes above describe: the three new translator/assignment
 any area. The resolved `sources:` list also lacked the two ElasticSearch stores the map had listed since
 TASK-215; both are now in it. The MongoDB and ElasticSearch native translations had no requirement here until
 this regen, and now have one.
+
+Full regen on 2026-10-12, after **TASK-513** (an increment's right-hand side is the connector's
+`IncrementExpression`, so a SQLite decimal adds through `birko_decimal_add`), **TASK-555** (the SQL bulk stores'
+per-item `UpdateCore` collects each item's `EntityNotFoundException` and throws one after writing the stored
+items, and a single-entity `Update` of an unstored entity now throws — which the read-then-loop action path
+does not catch) and **TASK-163** (the in-memory stores no longer override the public `Delete(filter)`; they
+inherit the base's, guards included). TASK-331 and TASK-556 / TASK-557 also touched these sources without
+changing a requirement here: the connector's expression-path `UPDATE` is now gated on its SET fragments rather
+than its bound values (every `PropertyUpdate` assignment binds one, so the bulk path cannot observe it), and the
+identity and delegate changes are specified in `store-crud-contract`.
 
 ## Requirements
 
@@ -386,6 +392,16 @@ persisting each one individually through the single-entity `Update(item)`.
 - **Then** the matching entities are awaited from `ReadAsync(filter, null, null, null, ct)`,
   materialised, and each is awaited through `UpdateAsync(item, ct: ct)` in sequence — never in parallel
 
+#### Scenario: A match deleted between the read and its write ends the loop part-way
+
+- **Given** a bulk store whose filter matches three entities, the second of which is deleted by another caller
+  after the read has materialised the list
+- **When** `Update(filter, action)` / `UpdateAsync(filter, action, ct)` reaches it
+- **Then** the single-entity `Update` throws `EntityNotFoundException` for it (TASK-555 — it used to write nothing
+  and report success), the loop does not catch it, so the first entity has been written and the third is not —
+  unlike the in-memory, SQL and MongoDB bulk `Update(IEnumerable<T>)`, which write every stored item before
+  reporting the misses
+
 #### Scenario: The SQL bulk store keeps the same read-modify-save action path
 
 - **Given** a `DataBaseBulkStore<DB,T>`
@@ -546,7 +562,8 @@ allowed.
 The system SHALL override `Update(filter, PropertyUpdate<T>)` in `DataBaseBulkStore<DB,T>` and
 `AsyncDataBaseBulkStore<DB,T>` to render the assignments through the shared
 `PropertyUpdateSqlTranslator` — each column resolved through `DataBase.GetFieldFromLambda` and emitted
-bare, a set as `col = @SETcol` and an increment as `col = col + @SETcol` — translate the filter through
+bare, a set as `col = @SETcol` and an increment as `col = ` followed by the store `Connector`'s
+`IncrementExpression(field, col, @SETcol)` — `col + @SETcol` by default — translate the filter through
 `DataBase.ParseConditionExpression`, and issue one connector
 `Update(tableName, fields, values, conditions, isExpressionValues: true, allowAllRows)` — reading no
 entities and invoking no per-entity update path. The `@SET…` parameter name SHALL have one producer,
@@ -571,6 +588,17 @@ fragments and by the connector's own non-expression SET rendering.
   WHERE …`, with the column names unquoted and the delta bound as `@SETCount`
 - **And** the addition happens on the server, so N concurrent `Increment(x => x.Count, 1)` calls on one
   row leave it exactly N higher
+
+#### Scenario: A SQLite decimal increment adds through the exact-decimal function
+
+- **Given** a SQLite store and `new PropertyUpdate<T>().Increment(x => x.Amount, 0.1m)` on a `decimal` property
+  (a `Decimal`, `VarNumeric` or `Currency` field)
+- **When** `Update(filter, updates)` is called
+- **Then** the fragment is `Amount = birko_decimal_add(Amount, @SETAmount)` — `SqLiteConnector` overrides
+  `IncrementExpression` for a decimal column, because SQLite's own `+` goes through a double (TASK-513); every
+  other column, and every other provider, keeps `col + @SETcol`
+- **And** on the async store the fragment is rendered by the sync `Connector` even when the statement runs on
+  the `AsyncConnector`
 
 #### Scenario: A null assignment value becomes DBNull
 
@@ -1017,13 +1045,14 @@ emptiness varies per entity), a null collection, or a collection it cannot evalu
   reached the base, the delete left **0 of 3** and the update rewrote **3 of 3**, in both cases with no
   exception and no log entry
 
-#### Scenario: A backend's Update paths are guarded even when only its Delete is overridden
+#### Scenario: A backend that overrides none of the six gets every guard from the base
 
-- **Given** `AbstractInMemoryStore<T>`, which overrides `Delete(filter)` but inherits all four
-  `Update(filter, …)` paths
+- **Given** `AbstractInMemoryStore<T>` / `AbstractAsyncInMemoryStore<T>`, which override none of the six
+  filter-based destructive methods — until TASK-163 (SH-M312) they overrode the public `Delete(filter)` and
+  repeated the guard there
 - **When** an unbounded filter is passed to any of the six
-- **Then** every one refuses — the override repeats the guard and the inherited paths get it from the
-  base, so the store cannot present a `Delete` that refuses beside an `Update` that rewrites every row
+- **Then** every one refuses through the base wrappers, so the store cannot present a `Delete` that refuses
+  beside an `Update` that rewrites every row, and a filter-based delete reaches `DeleteCore`
 
 #### Scenario: An empty negated Contains is refused on all four ElasticSearch overrides
 
@@ -1098,16 +1127,15 @@ distinction is load-bearing rather than stylistic: an override which inlined the
 call would silently lose the guard while its own tests stayed green, so where such an override exists the
 delegation SHALL be pinned by a test.
 
-#### Scenario: The InMemory store repeats the guard in its overriding Delete
+#### Scenario: The InMemory store no longer overrides Delete, so it repeats nothing
 
-- **Given** `AbstractInMemoryStore<T>` / `AbstractAsyncInMemoryStore<T>`, which override the public
-  `Delete(filter)`
-- **When** `Delete(null!)` is called
-- **Then** the override throws `ArgumentNullException` itself rather than deleting the whole collection —
-  reaching the base's guard is not possible from an override of the public method
-- **And** it repeats `RequireBoundedFilter` too, because the predicate here is compiled and run as a C#
-  delegate: `!empty.Contains(x.Field)` is true of every entity by definition, and there is no translation
-  layer that could ever have noticed
+- **Given** `AbstractInMemoryStore<T>` / `AbstractAsyncInMemoryStore<T>`, which since TASK-163 (SH-M312) inherit
+  the public `Delete(filter)` instead of overriding it
+- **When** `Delete(null!)` or `Delete(x => !empty.Contains(x.Field))` is called
+- **Then** the base wrapper's `RequireFilter` / `RequireBoundedFilter` refuse it (`ArgumentNullException` /
+  `WholeTableWriteException`) and nothing is removed — the obligation this requirement places on an
+  overriding store no longer applies to it. The scope guard still matters most here: the predicate is
+  compiled and run as a C# delegate, so `!empty.Contains(x.Field)` is true of every entity by definition
 
 #### Scenario: The MongoDB store repeats the guard on all four overrides
 
@@ -1135,7 +1163,8 @@ delegation SHALL be pinned by a test.
 The system SHALL run `EnsureInitialized()` / `EnsureInitializedAsync(ct)` at the entry of every public
 bulk collection operation before delegating to its `*Core` method, and the SQL bulk stores' default
 `*Core` implementations SHALL loop over the collection invoking the corresponding single-entity
-operation.
+operation. The default bulk update SHALL catch each item's `EntityNotFoundException`, keep going, and throw one
+`EntityNotFoundException` naming every missed `Guid` after the loop (TASK-555).
 
 #### Scenario: Bulk create initialises then delegates
 
@@ -1155,6 +1184,15 @@ operation.
 - **When** `UpdateAsync(items, storeDelegate, ct)` is called
 - **Then** `EnsureInitializedAsync(ct)` is awaited and then `UpdateAsync(item, storeDelegate, ct)` is
   awaited once per item, in order
+
+#### Scenario: SQL bulk update writes the stored items and reports the rest once
+
+- **Given** a `DataBaseBulkStore<DB,T>` / `AsyncDataBaseBulkStore<DB,T>` that does not override `UpdateCore` /
+  `UpdateCoreAsync`, and a batch of three entities of which the second is not stored
+- **When** `Update(items)` / `UpdateAsync(items, storeDelegate, ct)` is called
+- **Then** the per-item update of the second throws `EntityNotFoundException`, which the loop catches, the third
+  is still updated, and after the loop one `EntityNotFoundException` naming the second's `Guid` is thrown —
+  before TASK-555 the miss wrote nothing and reported success
 
 #### Scenario: The action-based filter update initialises indirectly
 

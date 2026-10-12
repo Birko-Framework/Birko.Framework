@@ -1,7 +1,7 @@
 ---
 area: validation-and-rules
-generated-at: 804f0b7619d3e502e6a0a9d33119a3e62097c562
-generated-on: 2026-08-07
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Rules/Context/DictionaryRuleContext.cs
   - ../Birko.Rules/Context/IRuleContext.cs
@@ -36,18 +36,15 @@ sources:
   - ../Birko.Validation/Rules/RangeRule.cs
   - ../Birko.Validation/Rules/RegexRule.cs
   - ../Birko.Validation/Rules/RequiredRule.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-08-07 13:16:35,
-                  # commit 55e37bd). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Rules: 839d712
-  ../Birko.Validation: 0455677
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
-# false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
-# glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes
-# from the regenerating task's own `feature:` field, not from evidence.
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Fluent validation, rule engine and validating store wrappers
 
 ## Purpose
@@ -529,8 +526,9 @@ operators as `Expression.MakeBinary`; `Equal` / `NotEqual` on a `string` propert
 `string.Equals(member, constant, StringComparison.OrdinalIgnoreCase)`; `Between` as
 `member >= lower && member <= upper`; `Contains` / `StartsWith` / `EndsWith` as a null-guarded
 `string` method call with `OrdinalIgnoreCase`; `Like` by rewriting the `%` pattern onto those string
-methods; `In` as an `OrElse` chain of equality tests; and any unrecognised operator as the constant
-`false`. Leaf `IsNegated` SHALL wrap the operator body in `Expression.Not` before the nested null
+methods; `In` as an `OrElse` chain of equality tests; and any unrecognised operator as match-nothing —
+not a constant `false` body, so neither the leaf's own `IsNegated` nor an enclosing negated group inverts
+it into a match. Leaf `IsNegated` SHALL wrap the operator body in `Expression.Not` before the nested null
 guards are prepended.
 
 #### Scenario: String equality is case-insensitive
@@ -558,6 +556,12 @@ guards are prepended.
 - **Then** the body is the constant `false` (matching nothing)
 - **When** the operator is `NotIn` with the same empty set
 - **Then** the body is `Not(false)`, matching every row
+
+#### Scenario: A negated unrecognised operator still matches nothing
+
+- **Given** a leaf whose `Operator` is a value the converter has no case for, with `IsNegated = true`
+- **When** `ToExpression<T>` is called
+- **Then** the predicate selects no rows (`x => false`); inside an `Or` group the leaf vanishes, and inside an `And` group the group matches nothing
 
 #### Scenario: Bare "%" LIKE pattern matches everything instead of throwing
 

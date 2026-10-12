@@ -10,7 +10,7 @@ created: 2026-08-09
 depends-on: []
 blocks: []
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
-findings: [SH-M049, SH-M050, SH-M051, SH-M052, SH-M053, SH-M054, SH-M055, SH-M056, SH-M057, SH-M058, SH-M059, SH-M060, SH-M061, SH-M062, SH-M063, SH-M064, SH-M065, SH-M066, SH-M067, SH-M068, SH-M069]
+findings: [SH-M049, SH-M050, SH-M051, SH-M052, SH-M053, SH-M054, SH-M055, SH-M056, SH-M057, SH-M058, SH-M059, SH-M060, SH-M061, SH-M062, SH-M063, SH-M064, SH-M065, SH-M066, SH-M067, SH-M068, SH-M069, SH-M436]
 pr: null
 github-issue: null
 jira-key: null
@@ -45,9 +45,13 @@ silently dropped is one the next sweep re-raises and someone re-litigates from s
 what the code *does*, defects included, which is exactly what let it find them. So a behavioural fix leaves
 `docs/specs/data-sync.md` lying until `/specs regen data-sync` runs, and **that spec diff is the fix's evidence**.
 
+### Added by the 2026-10-12 spec regen (harvester claims, not reproduced)
+
+- **SH-M436** — `CosmosSyncKnowledgeItem` (`Birko.Data.Sync.CosmosDB/Models/CosmosSyncKnowledgeItem.cs:91-104`): a pass-through item gets its Guid from `EnsureGuid()` (TASK-556), but a foreign item is still copied with `item.Guid ?? NewGuid()`, so a foreign `Guid.Empty` is kept as a key
+
 ## Acceptance criteria
 
-- [ ] All 21 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [ ] All 22 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
 - [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.

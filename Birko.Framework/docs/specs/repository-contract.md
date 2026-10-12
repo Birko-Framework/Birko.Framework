@@ -1,12 +1,26 @@
 ---
 area: repository-contract
-generated-at: 7ba8942
-generated-on: 2026-09-17
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.Core/ViewModels/AbstractLogViewModel.cs
   - ../Birko.Data.Core/ViewModels/LogViewModel.cs
   - ../Birko.Data.Core/ViewModels/ModelViewModel.cs
   - ../Birko.Data.Core/ViewModels/ViewModel.cs
+  - ../Birko.Data.CosmosDB/Repositories/AsyncCosmosDBModelRepository.cs
+  - ../Birko.Data.CosmosDB/Repositories/CosmosDBModelRepository.cs
+  - ../Birko.Data.InfluxDB/Repositories/AsyncInfluxDBModelRepository.cs
+  - ../Birko.Data.InfluxDB/Repositories/AsyncInfluxDBRepository.cs
+  - ../Birko.Data.InfluxDB/Repositories/InfluxDBModelRepository.cs
+  - ../Birko.Data.InfluxDB/Repositories/InfluxDBRepository.cs
+  - ../Birko.Data.MongoDB/Repositories/AsyncMongoDBModelRepository.cs
+  - ../Birko.Data.MongoDB/Repositories/AsyncMongoDBRepository.cs
+  - ../Birko.Data.MongoDB/Repositories/MongoDBModelRepository.cs
+  - ../Birko.Data.MongoDB/Repositories/MongoDBRepository.cs
+  - ../Birko.Data.RavenDB/Repositories/AsyncRavenDBModelRepository.cs
+  - ../Birko.Data.RavenDB/Repositories/AsyncRavenDBRepository.cs
+  - ../Birko.Data.RavenDB/Repositories/RavenDBModelRepository.cs
+  - ../Birko.Data.RavenDB/Repositories/RavenDBRepository.cs
   - ../Birko.Data.Repositories/AbstractAsyncBulkRepository.cs
   - ../Birko.Data.Repositories/AbstractAsyncRepository.cs
   - ../Birko.Data.Repositories/AbstractBulkRepository.cs
@@ -22,6 +36,9 @@ sources:
   - ../Birko.Data.SQL.ViewModel/Repositories/AsyncDataBaseRepository.cs
   - ../Birko.Data.SQL.ViewModel/Repositories/DataBaseRepository.cs
   - ../Birko.Data.SQL.ViewModel/Repositories/IDataBaseRepository.cs
+  - ../Birko.Data.SQL/Repositories/AsyncDataBaseModelRepository.cs
+  - ../Birko.Data.SQL/Repositories/DataBaseModelRepository.cs
+  - ../Birko.Data.SQL/Repositories/IDataBaseRepository.cs
   - ../Birko.Data.ViewModel/Repositories/AbstractAsyncBulkViewModelRepository.cs
   - ../Birko.Data.ViewModel/Repositories/AbstractAsyncViewModelRepository.cs
   - ../Birko.Data.ViewModel/Repositories/AbstractBulkViewModelRepository.cs
@@ -30,29 +47,15 @@ sources:
   - ../Birko.Data.ViewModel/Repositories/IAsyncViewModelRepository.cs
   - ../Birko.Data.ViewModel/Repositories/IBulkViewModelRepository.cs
   - ../Birko.Data.ViewModel/Repositories/IViewModelRepository.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-08-07 14:22:58,
-                  # commit 04d6575). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Core: 11da2ac
-  ../Birko.Data.Repositories: 005f140
-  ../Birko.Data.SQL.ViewModel: 6017a4d
-  ../Birko.Data.ViewModel: 093c15b
-  # Baselines below added 2026-08-18 without a re-harvest, and that is a measurement rather
-  # than an assumption: each of these repos has NO commit touching this area's sources since
-  # generated-on, so its current HEAD is an equivalent baseline. Repos that HAVE drifted were
-  # deliberately left unstamped, so DV7 keeps reporting them until the content is regenerated.
-  ../Birko.Data.CosmosDB: 3d383fb
-  ../Birko.Data.InfluxDB: 8a7d6c6
-  ../Birko.Data.MongoDB: 032ed3d
-  ../Birko.Data.RavenDB: fd51546
-  ../Birko.Data.SQL: 022c67c
-shaped-by: []
-# false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
-# glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes
-# from the regenerating task's own `feature:` field, not from evidence.
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Repository and ViewModel-repository abstractions
 
 ## Purpose
@@ -240,6 +243,18 @@ implementation already destroys it.
 - **When** `await DestroyAsync()` is awaited
 - **Then** only the base `AbstractAsyncViewModelRepository.DestroyAsync` runs, calling
   `Store.DestroyAsync(ct)` once
+
+#### Scenario: Several per-backend repositories still destroy their store twice
+
+- **Given** a `MongoDBModelRepository`, `MongoDBRepository`, `AsyncMongoDBModelRepository`,
+  `AsyncMongoDBRepository`, any of the four InfluxDB repositories, `AsyncRavenDBModelRepository`,
+  `AsyncRavenDBRepository` or `AsyncCosmosDBModelRepository`
+- **When** `Destroy()` / `await DestroyAsync()` is called
+- **Then** the override first runs `base.Destroy()` / `base.DestroyAsync(ct)` — which destroys `Store` —
+  and then destroys the unwrapped backend store (`MongoDBStore`, `InfluxDBStore`, `RavenDBStore`,
+  `CosmosStore`) a second time, directly or through `Drop()` / `DropAsync(ct)`; when `Store` is that
+  backend store undecorated, the same instance is destroyed twice. The sync `RavenDBModelRepository`,
+  `RavenDBRepository` and `CosmosDBModelRepository` do not override and destroy once
 
 ### Requirement: Destroy forwards to the store, which for the SQL family drops the table
 
@@ -673,6 +688,16 @@ instance produced there would be discarded and the pre-transform model persisted
   transform — preserving what the delegate had when it ran inside the store's own callback, where
   `CreateCore` assigns the key first
 
+#### Scenario: An empty key is replaced before the transform runs
+
+- **Given** a single-item `Create(vm, processDelegate)` / `CreateAsync(vm, processDelegate, ct)` whose
+  `MapToModel` leaves the model's `Guid` as `null` or `Guid.Empty`
+- **When** the call runs
+- **Then** `item.EnsureGuid()` assigns a new `Guid` before the transform and the store call, so
+  `Guid.Empty` is never persisted as a key; a non-empty `Guid` assigned by `MapToModel` is kept unchanged.
+  The bulk `Create(IEnumerable<TViewModel>, processDelegate)` path does not call `EnsureGuid`, so a bulk
+  transform runs before any key is assigned
+
 #### Scenario: The async bulk path takes a store delegate instead
 
 - **Given** `IAsyncBulkViewModelCreateRepository<TViewModel, TModel>.CreateAsync`
@@ -745,10 +770,19 @@ from every async bulk write when `BulkStore` or `data` is `null`.
 
 #### Scenario: Models are projected lazily
 
+- **Given** `CreateAsync(IEnumerable<TViewModel> data, storeDelegate, ct)` or
+  `DeleteAsync(IEnumerable<TViewModel> data, ct)`
+- **When** it runs
+- **Then** `data.Select(LoadModelInstance)` is passed to `BulkStore.CreateAsync` / `BulkStore.DeleteAsync`
+  unmaterialised — no intermediate `ToList()` — and the store drives the enumeration
+
+#### Scenario: The bulk update materialises the merged models before writing
+
 - **Given** `UpdateAsync(IEnumerable<TViewModel> data, storeDelegate, ct)`
 - **When** it runs
-- **Then** `data.Select(LoadModelInstance)` is passed to `BulkStore.UpdateAsync` unmaterialised — no
-  intermediate `ToList()` — and the store drives the enumeration
+- **Then** each ViewModel is awaited through `LoadModelInstanceForUpdateAsync` (one stored-row read per
+  entity) into a `List<TModel>`, and only after every read has completed is the list passed to
+  `BulkStore.UpdateAsync(items, storeDelegate, ct)`
 
 ### Requirement: SQL ViewModel repositories validate the store type through wrappers and expose the connector
 
@@ -839,6 +873,71 @@ hook; only the sync family declares these members on an interface
 - **Then** it implements only `AbstractAsyncBulkViewModelRepository<TViewModel, TModel>` — no
   `IDataBaseRepository`-style async interface exists, so `Connector`, `DataBaseStore`, `AddOnInit` and
   `RemoveOnInit` are reachable only through the concrete class
+
+### Requirement: Per-backend repositories validate the store type and substitute a default backend store
+
+The system SHALL provide model and ViewModel repositories per backend — `MongoDBModelRepository<T>` /
+`MongoDBRepository<TViewModel, TModel>`, `RavenDBModelRepository<T>` / `RavenDBRepository<TViewModel, TModel>`,
+`CosmosDBModelRepository<T>`, `InfluxDBModelRepository<T>` / `InfluxDBRepository<TViewModel, TModel>`, each with
+an `Async…` sibling, plus the SQL model repositories `DataBaseModelRepository<TConnector, T>` and
+`AsyncDataBaseModelRepository<T>` — deriving from the matching abstract bulk repository. Each store-taking
+constructor SHALL reject a non-null store that fails `IsStoreOfType<T, XStore<T>>` with
+`ArgumentException` (paramName `store`, message `Store must be of type … or a wrapper around it…`), and SHALL
+reach the backend through a property resolved by `GetUnwrappedStore` (`MongoDBStore`, `RavenDBStore`,
+`CosmosStore`, `InfluxDBStore`, `Connector` / `DataBaseStore`). The MongoDB, RavenDB, CosmosDB and InfluxDB
+repositories SHALL replace a `null` store (and the parameterless constructor) with a new default backend store
+(`Store = store ?? new XStore<T>()`), whereas the SQL model repositories SHALL leave `Store` `null` when given
+`null`.
+
+#### Scenario: A null store is replaced by a default backend store
+
+- **Given** `new MongoDBModelRepository<T>(store: null)` (or the RavenDB, CosmosDB or InfluxDB equivalent,
+  sync or async)
+- **When** construction completes
+- **Then** `Store` is a newly constructed backend store, so the null-store tolerance of the abstract
+  repositories never engages for these types
+
+#### Scenario: An unrelated store is rejected by a backend repository
+
+- **Given** an `InMemoryStore<T>`
+- **When** it is passed to `RavenDBModelRepository<T>(IStore<T>?)`
+- **Then** `ArgumentException` is thrown with message
+  `Store must be of type RavenDBStore<T> or a wrapper around it.`
+
+#### Scenario: Settings and health go to the unwrapped backend store
+
+- **Given** a backend repository over a wrapped backend store
+- **When** `SetSettings(settings)` or `IsHealthy()` is called
+- **Then** the call reaches the unwrapped store; `SetSettings(null)` and a store that does not unwrap to the
+  backend type are ignored, and `IsHealthy()` then returns `false`
+
+#### Scenario: RavenDB and CosmosDB repositories build their own store from connection details
+
+- **Given** `new RavenDBModelRepository<T>(connectionString, databaseName)` /
+  `new RavenDBModelRepository<T>(documentStore)`, or
+  `new CosmosDBModelRepository<T>(connectionString, databaseName, containerName)` /
+  `new CosmosDBModelRepository<T>(container)` (and the async and ViewModel siblings where declared)
+- **When** construction completes
+- **Then** `Store` is a new backend store built from those arguments, with no type validation
+
+#### Scenario: The SQL model repository exposes the connector and init hooks
+
+- **Given** a `DataBaseModelRepository<TConnector, T>` (which implements
+  `IDataBaseRepository<TConnector, T> : IRepository<T>`)
+- **When** `Connector`, `AddOnInit(hook)` or `RemoveOnInit(hook)` is used
+- **Then** the unwrapped `DataBaseBulkStore<TConnector, T>` supplies the connector and receives the hook; a
+  `null` hook or a missing store is ignored; the parameterless constructor chains to
+  `this(new DataBaseBulkStore<TConnector, T>())`
+
+#### Scenario: The async SQL model repository is fixed to the abstract connector type
+
+- **Given** `AsyncDataBaseModelRepository<T>`, whose type check is
+  `IsStoreOfType<T, AsyncDataBaseBulkStore<AbstractConnector, T>>`
+- **When** it is constructed with a store typed `AsyncDataBaseBulkStore<SqLiteConnector, T>` (or any other
+  concrete connector)
+- **Then** generic invariance makes the check fail and `ArgumentException` is thrown, so only a store
+  closed over `AbstractConnector` itself is accepted; the class has no parameterless constructor and no
+  `TConnector` parameter
 
 ### Requirement: An ordered single read goes through the decorated store, never through the connector
 

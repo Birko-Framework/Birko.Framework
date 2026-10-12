@@ -1,7 +1,7 @@
 ---
 area: background-jobs
-generated-at: b7bfb63
-generated-on: 2026-08-18
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueue.cs
   - ../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueueSchema.cs
@@ -29,7 +29,9 @@ sources:
   - ../Birko.BackgroundJobs.XML/XmlJobQueueSchema.cs
   - ../Birko.BackgroundJobs/Core/IJob.cs
   - ../Birko.BackgroundJobs/Core/IJobExecutor.cs
+  - ../Birko.BackgroundJobs/Core/IJobLockProvider.cs
   - ../Birko.BackgroundJobs/Core/IJobQueue.cs
+  - ../Birko.BackgroundJobs/Core/IJobQueueCounts.cs
   - ../Birko.BackgroundJobs/Core/JobContext.cs
   - ../Birko.BackgroundJobs/Core/JobDescriptor.cs
   - ../Birko.BackgroundJobs/Core/JobQueueOptions.cs
@@ -37,6 +39,7 @@ sources:
   - ../Birko.BackgroundJobs/Core/JobStatus.cs
   - ../Birko.BackgroundJobs/Core/RetryPolicy.cs
   - ../Birko.BackgroundJobs/Processing/BackgroundJobProcessor.cs
+  - ../Birko.BackgroundJobs/Processing/FileJobLockProvider.cs
   - ../Birko.BackgroundJobs/Processing/InMemoryJobQueue.cs
   - ../Birko.BackgroundJobs/Processing/JobDispatcher.cs
   - ../Birko.BackgroundJobs/Processing/JobExecutor.cs
@@ -45,23 +48,15 @@ sources:
   - ../Birko.BackgroundJobs/Serialization/JobSerializationHelper.cs
   - ../Birko.BackgroundJobs/Serialization/JsonJobSerializer.cs
   - ../Birko.Contracts/Retry/RetryPolicy.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:07:38,
-                  # commit acbbe9d). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.BackgroundJobs: 1be4e59d494f56f79f213a832b9f86acd88e43b0
-  ../Birko.BackgroundJobs.CosmosDB: beb9c68
-  ../Birko.BackgroundJobs.ElasticSearch: 7317cdd
-  ../Birko.BackgroundJobs.JSON: 5d38962
-  ../Birko.BackgroundJobs.MongoDB: d34d67c
-  ../Birko.BackgroundJobs.RavenDB: 2af4814
-  ../Birko.BackgroundJobs.Redis: 896667c
-  ../Birko.BackgroundJobs.SQL: 0b71709
-  ../Birko.BackgroundJobs.XML: ccd3960
-  ../Birko.Contracts: dc3575c
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Job queue, retry policy, processing and scheduling
 
 ## Purpose
@@ -89,7 +84,7 @@ worker coordination; nothing in this area uses them internally.
 
 ### Requirement: Job descriptor shape and defaults
 
-The system SHALL represent an enqueued unit of work as a `JobDescriptor` whose `Id` defaults to a
+The system SHALL represent an enqueued unit of work as a `JobDescriptor` whose `Guid` defaults to a
 new `Guid`, whose `EnqueuedAt` defaults to `DateTime.UtcNow` at construction, whose `Status`
 defaults to `JobStatus.Pending`, whose `MaxRetries` defaults to `3`, whose `Priority` defaults to
 `0`, and whose `Metadata` defaults to an empty `Dictionary<string, string>`.
@@ -98,7 +93,7 @@ defaults to `JobStatus.Pending`, whose `MaxRetries` defaults to `3`, whose `Prio
 
 - **Given** no property is assigned
 - **When** `new JobDescriptor()` is evaluated
-- **Then** `Id` is a fresh non-empty `Guid`, `Status` is `JobStatus.Pending`, `MaxRetries` is `3`, `Priority` is `0`, `JobType` is `string.Empty`, `Metadata` is an empty dictionary, and `EnqueuedAt` is the UTC clock reading at construction time
+- **Then** `Guid` is a fresh non-empty `Guid`, `Status` is `JobStatus.Pending`, `MaxRetries` is `3`, `Priority` is `0`, `JobType` is `string.Empty`, `Metadata` is an empty dictionary, and `EnqueuedAt` is the UTC clock reading at construction time
 
 #### Scenario: Nullable fields default to null
 
@@ -123,7 +118,7 @@ The system SHALL define the job lifecycle as the `JobStatus` enum `Pending = 0`,
 
 - **Given** a stored job whose status was set to `JobStatus.Failed` by external means
 - **When** `DequeueAsync` runs on any shipped backend
-- **Then** the job is not returned, because every eligibility predicate admits only `Pending` or (`Scheduled` and due)
+- **Then** the job is not returned, because every eligibility predicate admits only `Pending`, (`Scheduled` and due) or — on SQL only — (`Processing` and abandoned past the claim timeout)
 
 ### Requirement: BackgroundJobs retry-delay computation
 
@@ -208,9 +203,9 @@ queue name, priority, retry budget, status, attempt count, timestamps and serial
 
 #### Scenario: Redis enqueue writes three keys
 
-- **Given** a `RedisJobQueue` with `KeyPrefix = "birko:jobs"` and a descriptor with `Id = g`, `QueueName = null`, `Status = Pending`
+- **Given** a `RedisJobQueue` with `KeyPrefix = "birko:jobs"` and a descriptor with `Guid = g`, `QueueName = null`, `Status = Pending`
 - **When** `EnqueueAsync(descriptor)` is called
-- **Then** the hash `birko:jobs:job:{g}` holds the descriptor fields, the sorted set `birko:jobs:queue:default` gains member `{g}` scored from `ScheduledAt ?? EnqueuedAt` and priority, the set `birko:jobs:status:0` gains `{g}`, and `descriptor.Id` is returned
+- **Then** the hash `birko:jobs:job:{g}` holds the descriptor fields, the sorted set `birko:jobs:queue:default` gains member `{g}` scored from `ScheduledAt ?? EnqueuedAt` and priority, the set `birko:jobs:status:0` gains `{g}`, and `descriptor.Guid` is returned
 
 #### Scenario: InMemory enqueue restamps EnqueuedAt from the injected clock
 
@@ -228,7 +223,8 @@ queue name, priority, retry budget, status, attempt count, timestamps and serial
 
 The system SHALL return from `DequeueAsync` the single highest-priority, then oldest-enqueued job
 that is either `Pending`, or `Scheduled` with a non-null `ScheduledAt` at or before the current
-time, and SHALL return `null` when no such job exists.
+time — or, on SQL only, `Processing` past the claim timeout (see the SQL reclaim requirement) — and SHALL
+return `null` when no such job exists.
 
 #### Scenario: Priority wins over enqueue order
 
@@ -257,8 +253,8 @@ time, and SHALL return `null` when no such job exists.
 #### Scenario: A Processing job is never re-offered
 
 - **Given** a job left in `Status = Processing` (for example by a worker that crashed)
-- **When** `DequeueAsync()` is called
-- **Then** it is not returned; no backend implements a visibility timeout or lease expiry, and `PurgeAsync` does not remove `Processing` jobs either, so the job is stranded permanently
+- **When** `DequeueAsync()` is called on any backend other than SQL
+- **Then** it is not returned; no backend other than SQL implements a visibility timeout or lease expiry, and `PurgeAsync` does not remove `Processing` jobs either, so the job is stranded permanently
 
 #### Scenario: Dequeue marks the job Processing and consumes an attempt
 
@@ -377,6 +373,48 @@ provide **no** concurrency protection at all on Cosmos DB.
 - **Given** two `CosmosDBJobQueue` workers polling the same eligible document
 - **When** both read it and both then call `UpdateAsync(model)` with `Status = Processing`
 - **Then** both return the same `JobDescriptor` — there is no `ClaimToken`, no conditional filter, no retry loop and no lock in the Cosmos implementation
+
+### Requirement: SQL reclaims a job abandoned in Processing, bounded by its retry budget
+
+The system SHALL, on `SqlJobQueue<DB>` only, additionally treat as a dequeue candidate a job in
+`Processing` whose `LastAttemptAt` is non-null and earlier than `now - claimTimeout`, where
+`claimTimeout` is a constructor argument defaulting to 30 minutes (the default `JobQueueOptions.JobTimeout`),
+and SHALL claim it through the same `ClaimToken` conditional update as any other candidate. When such
+a stale candidate's `AttemptCount` is already `>= MaxRetries` (the row's own value, with no queue-policy
+fallback), the system SHALL instead mark it `Dead`, stamp `CompletedAt`, set `LastError` to an
+`"Abandoned: held in Processing for longer than {claimTimeout} after {AttemptCount} attempt(s), and the attempt budget is spent."`
+message, and move on to the next candidate within the same `MaxClaimAttempts` budget. No other backend
+reclaims a `Processing` job.
+
+#### Scenario: A job held in Processing past the claim timeout is re-offered
+
+- **Given** a `SqlJobQueue<DB>` with the default 30-minute claim timeout and a job in `Processing` with `AttemptCount = 1`, `MaxRetries = 3` and `LastAttemptAt` 31 minutes ago
+- **When** `DequeueAsync()` is called
+- **Then** the job is returned with a new `ClaimToken`, `AttemptCount = 2` and `LastAttemptAt = now`
+
+#### Scenario: A recently claimed Processing job is not reclaimed
+
+- **Given** a `SqlJobQueue<DB>` and a job in `Processing` whose `LastAttemptAt` is 5 minutes ago
+- **When** `DequeueAsync()` is called
+- **Then** the job is not returned
+
+#### Scenario: An abandoned job with no attempts left is buried
+
+- **Given** a `SqlJobQueue<DB>` and a job in `Processing` past the claim timeout with `AttemptCount = 3` and `MaxRetries = 3`
+- **When** `DequeueAsync()` reaches it
+- **Then** it is updated to `Dead` with `CompletedAt` stamped and an `"Abandoned: …"` `LastError`, is not returned, and the loop continues to the next candidate
+
+#### Scenario: A job still running past the claim timeout is handed to a second worker
+
+- **Given** a host that raised `JobQueueOptions.JobTimeout` above the queue's `claimTimeout`, and a job still genuinely running after `claimTimeout`
+- **When** another worker calls `DequeueAsync()`
+- **Then** the job is claimed a second time — nothing distinguishes a dead holder from a slow one, so reclaiming is safe only for idempotent jobs
+
+#### Scenario: Two workers that read the same stale job can both reclaim it
+
+- **Given** two `SqlJobQueue<DB>` workers that both read the same stale `Processing` candidate before either writes
+- **When** worker A's conditional update and re-read complete, and then worker B issues its own update filtered on `j.Guid == claimId && j.Status == Processing`
+- **Then** B's filter still matches — reclaiming leaves `Status` at `Processing`, so the status guard cannot exclude the second reclaimer — B's `ClaimToken` verifies on its re-read, and both workers return the same job
 
 ### Requirement: Completing a job
 
@@ -636,6 +674,12 @@ implement, rather than adding a member to the queue contract.
   would break every implementation for a capability only some can serve efficiently, so a caller feature-
   detects instead
 
+#### Scenario: Only the in-memory and SQL queues advertise counts
+
+- **Given** the nine shipped queues
+- **When** each is tested for `IJobQueueCounts`
+- **Then** only `InMemoryJobQueue` (grouping its dictionary by status) and `SqlJobQueue<DB>` (one `COUNT` per `JobStatus` value) implement it, and both leave statuses with no jobs out of the result
+
 ### Requirement: Clock source differs per backend
 
 The system SHALL derive "now" from an injected `IDateTimeProvider` in the in-memory, JSON and XML
@@ -733,7 +777,7 @@ and `SerializedInput` are non-null, or `IJob.ExecuteAsync(context, ct)` otherwis
 
 - **Given** a descriptor with `AttemptCount = 2` and `Metadata { ["recurring.name"] = "nightly" }`
 - **When** the executor builds the `JobContext`
-- **Then** `context.AttemptNumber == 2`, `context.JobId == descriptor.Id`, `context.EnqueuedAt == descriptor.EnqueuedAt`, and `context.Metadata["recurring.name"] == "nightly"`; a null metadata argument yields an empty dictionary rather than null
+- **Then** `context.AttemptNumber == 2`, `context.JobGuid == descriptor.Guid`, `context.EnqueuedAt == descriptor.EnqueuedAt`, and `context.Metadata["recurring.name"] == "nightly"`; a null metadata argument yields an empty dictionary rather than null
 
 ### Requirement: Job input serialization
 
@@ -808,7 +852,7 @@ stored `Guid` is null.
 
 - **Given** a stored job row whose `Guid` is null
 - **When** `ToDescriptor()` is called
-- **Then** `descriptor.Id` is a brand-new random `Guid`, so a subsequent `CompleteAsync(descriptor.Id)` or `FailAsync(descriptor.Id, …)` finds no job and silently no-ops
+- **Then** `descriptor.Guid` is a brand-new random `Guid`, so a subsequent `CompleteAsync(descriptor.Guid)` or `FailAsync(descriptor.Guid, …)` finds no job and silently no-ops
 
 ### Requirement: Descriptor Delay is advisory and never persisted
 
@@ -872,13 +916,13 @@ rethrows cancellation.
 
 - **Given** an executor returning `JobResult.Succeeded`
 - **When** the processor handles the job
-- **Then** `CompleteAsync(descriptor.Id, ct)` is called
+- **Then** `CompleteAsync(descriptor.Guid, ct)` is called
 
 #### Scenario: A failed job is reported with its error text
 
 - **Given** an executor returning `JobResult.Failed(elapsed, "bad input")`
 - **When** the processor handles the job
-- **Then** `FailAsync(descriptor.Id, "bad input", ct)` is called; a failure with a null `Error` reports `"Unknown error"`
+- **Then** `FailAsync(descriptor.Guid, "bad input", ct)` is called; a failure with a null `Error` reports `"Unknown error"`
 
 #### Scenario: A job exceeding JobTimeout is failed
 
@@ -895,8 +939,8 @@ rethrows cancellation.
 #### Scenario: A job that succeeded is recorded as a failed attempt when the processor stops mid-completion
 
 - **Given** a store-backed queue and a job whose body has just returned `JobResult.Succeeded`
-- **When** `Stop()` fires so that `CompleteAsync(descriptor.Id, cancellationToken)` throws `OperationCanceledException` before writing anything
-- **Then** the shutdown catch calls `FailAsync(descriptor.Id, "Job cancelled due to processor shutdown", CancellationToken.None)`, so a job that succeeded is rescheduled for a re-run — or marked `Dead` when it was on its last attempt; an `InMemoryJobQueue`, which ignores the token, completes normally and never enters that path
+- **When** `Stop()` fires so that `CompleteAsync(descriptor.Guid, cancellationToken)` throws `OperationCanceledException` before writing anything
+- **Then** the shutdown catch calls `FailAsync(descriptor.Guid, "Job cancelled due to processor shutdown", CancellationToken.None)`, so a job that succeeded is rescheduled for a re-run — or marked `Dead` when it was on its last attempt; an `InMemoryJobQueue`, which ignores the token, completes normally and never enters that path
 
 #### Scenario: Stop cancels the loop and in-flight work is awaited
 
@@ -995,7 +1039,7 @@ advancing `NextRunAt` to the loop's observed `now + interval`.
 
 - **Given** an `IJobQueue` whose `EnqueueAsync` throws
 - **When** a definition becomes due
-- **Then** the exception propagates out of `RunAsync` and the loop stops; only `Task.Delay` is wrapped in a `try`/`catch`
+- **Then** the exception propagates out of `RunAsync` (after the `finally` releases any held leadership lock) and the loop stops; the enqueue is not wrapped in any `catch` — only the leadership check and `Task.Delay` catch `OperationCanceledException`
 
 #### Scenario: Cancellation exits the loop cleanly
 
@@ -1025,7 +1069,7 @@ connector.
 
 #### Scenario: The PostgreSQL path ignores the timeout
 
-- **Given** a PostgreSQL provider called with `timeout = TimeSpan.FromMinutes(1)`
+- **Given** a PostgreSQL provider called with `acquireTimeout = TimeSpan.FromMinutes(1)`
 - **When** another session already holds the lock
 - **Then** `pg_try_advisory_lock` returns immediately with `false` — the timeout only shapes `cmd.CommandTimeout`, it does not make the acquisition wait
 
@@ -1059,27 +1103,57 @@ connector.
 - **When** `ReleaseAsync(lockName)` is called
 - **Then** it returns without issuing a statement; a `DbException` during a real release is swallowed (the lock ends when the connection closes) and the connection is disposed regardless
 
+#### Scenario: A SQL advisory lock refuses a lease duration
+
+- **Given** `SqlJobLockProvider<DB>`, whose `IsLeaseBased` is `false`
+- **When** `TryAcquireAsync` is called with a non-null `leaseDuration`
+- **Then** an `ArgumentException` is thrown stating that SQL advisory locks are session-scoped and cannot expire, before any connection is opened
+
 ### Requirement: Redis distributed-lock provider
 
-The system SHALL provide `RedisJobLockProvider` which takes a lock as `SET {prefix}:lock:{name}
-{token} EX {timeout} NX` and releases it only when the stored value still equals the caller's token,
-via a check-and-delete Lua script shared by `ReleaseAsync`, `DisposeAsync` and `Dispose`.
+The system SHALL provide `RedisJobLockProvider`, whose `IsLeaseBased` is `true`, which takes a lock as
+`SET {prefix}:lock:{name} {token} NX` with an expiry equal to the lease — the caller's `leaseDuration`,
+or `DefaultLeaseDuration` (30 seconds) when it is null, with a non-positive lease rejected by
+`ArgumentException` — retrying after a backoff that starts at 50 ms and grows by 50 ms up to 500 ms until
+`acquireTimeout` has elapsed. While the lock is held the system SHALL renew the lease every half lease
+with a script that re-applies the expiry only while the key still holds the caller's token, and SHALL
+clear `IsLocked` when a renewal finds the key gone or holding another token. The system SHALL release the
+lock only when the stored value still equals the caller's token, via a check-and-delete Lua script shared
+by `ReleaseAsync`, `DisposeAsync` and `Dispose`.
 
 #### Scenario: The lock is taken only when the key is absent
 
 - **Given** no existing `birko:jobs:lock:jobs` key
-- **When** `TryAcquireAsync("jobs", TimeSpan.FromMinutes(1))` is called
-- **Then** `StringSetAsync(..., When.NotExists)` succeeds, `IsLocked` becomes `true`, and the key carries a fresh random token that expires after one minute
+- **When** `TryAcquireAsync("jobs", TimeSpan.Zero, TimeSpan.FromMinutes(1))` is called
+- **Then** `StringSetAsync(..., When.NotExists)` succeeds, `IsLocked` becomes `true`, the key carries a fresh random token that expires after one minute, and a renewal loop starts
+
+#### Scenario: A null lease uses the provider default
+
+- **Given** no existing lock key
+- **When** `TryAcquireAsync("jobs", TimeSpan.Zero)` is called with no `leaseDuration`
+- **Then** the key is set with the 30-second `DefaultLeaseDuration` rather than without an expiry
 
 #### Scenario: A held lock blocks a second holder
 
 - **Given** the key already exists
 - **When** another provider calls `TryAcquireAsync`
-- **Then** `false` is returned and `IsLocked` stays `false`
+- **Then** it keeps retrying with backoff until `acquireTimeout` elapses, then returns `false`, `IsLocked` stays `false`, and its key and token are cleared
+
+#### Scenario: The lease is renewed while the holder works
+
+- **Given** a provider holding a lock with a 30-second lease
+- **When** 15 seconds pass and the key still holds its token
+- **Then** the renewal script re-applies a 30-second expiry, so the lock outlives its original lease for as long as the holder is alive; a renewal that throws is swallowed and retried on the next tick
+
+#### Scenario: A lost lease clears IsLocked
+
+- **Given** a provider whose key expired or now holds another provider's token
+- **When** the next renewal runs
+- **Then** the script returns `0`, the provider sets `IsLocked = false` and stops renewing — a subsequent `ReleaseAsync` then returns at its `!IsLocked` guard without running the release script
 
 #### Scenario: Release never deletes another holder's lock
 
-- **Given** provider A's lock expired and provider B re-acquired the same key with a new token
+- **Given** provider A's lock expired and provider B re-acquired the same key with a new token, before A's renewal noticed
 - **When** provider A calls `ReleaseAsync`
 - **Then** the script's `GET == ARGV[1]` comparison fails, `DEL` is not issued, and B keeps its lock; A still clears its own `IsLocked`, `_lockKey` and `_lockToken`
 

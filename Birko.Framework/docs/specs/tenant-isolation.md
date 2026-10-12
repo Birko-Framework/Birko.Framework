@@ -1,7 +1,7 @@
 ---
 area: tenant-isolation
-generated-at: 42297caabceb8d5a0114e9bc235bba6f0a24ffcf
-generated-on: 2026-08-03
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.Sync.Tenant/Models/ITenantSyncKnowledgeItem.cs
   - ../Birko.Data.Sync.Tenant/Models/TenantSyncKnowledgeItem.cs
@@ -35,17 +35,15 @@ sources:
   - ../Birko.Security.AspNetCore/Tenant/TenantContextAdapter.cs
   - ../Birko.Security.AspNetCore/Tenant/TenantHeaderClaimGuardMiddleware.cs
   - ../Birko.Security.AspNetCore/Tenant/TenantMiddleware.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-08-03 12:58:04,
-                  # commit 8bd8e8a). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Sync.Tenant: 86c8247
-  ../Birko.Data.Tenant: c4dd307
-  ../Birko.EventBus.Tenant: 6967992
-  ../Birko.Security.AspNetCore: 0c4a494
-shaped-by: []
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Multi-tenant isolation across stores, HTTP and events
 
 ## Purpose
@@ -554,7 +552,10 @@ sync and async bulk wrappers.
 
 The system SHALL, in `Save` / `SaveAsync`, return `Guid.Empty` for a null `data`, call
 `Create`/`CreateAsync` and return its result when `data.Guid` is null or `Guid.Empty`, and otherwise
-call `Update`/`UpdateAsync` and return `data.Guid ?? Guid.Empty`.
+call `Update`/`UpdateAsync` and return `data.Guid`; when that update throws `EntityNotFoundException`
+naming `data.Guid`, it SHALL call `Create`/`CreateAsync` with the same item and return its result. The
+decision is delegated to the shared `StoreSave.Save` / `StoreSave.SaveAsync`, passed the wrapper's own
+`Create` / `Update`, so the tenant guards and stamping run on whichever path is taken.
 
 #### Scenario: New item is created and its allocated guid returned
 
@@ -567,6 +568,13 @@ call `Update`/`UpdateAsync` and return `data.Guid ?? Guid.Empty`.
 - **Given** an item whose `Guid` is a non-empty guid and whose `TenantGuid` is `u`, with the wrapper's tenant being `t`
 - **When** `Save(item)` is called
 - **Then** the update path runs, `BelongsToCurrentTenant` fails, and `TenantMismatchException` is thrown
+
+#### Scenario: An item with an unstored guid is created under that guid
+
+- **Given** an item whose `Guid` is non-empty, no row is stored under it, its payload passes the tenant check, and the inner store's `Update` throws `EntityNotFoundException` naming that guid
+- **When** `Save(item)` / `SaveAsync(item)` is called
+- **Then** the exception is caught, the wrapper's `Create` path runs (stamping the tenant onto the item), the process delegate is applied at most once across both attempts, and the create result is returned
+- **And** a `TenantMismatchException` from the update path's guard is not caught, so no create is attempted
 
 #### Scenario: Null data is a silent no-op
 

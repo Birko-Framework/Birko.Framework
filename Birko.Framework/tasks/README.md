@@ -5,15 +5,15 @@ _Generated 2026-10-12. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
 
-> ℹ **Feature drift was not re-measured by this refresh** (triage step 8b needs the roadmap cross-tree
-> pass). This is not a clean result: the last measured figures are in NOTES.md, and `/roadmap --check` re-measures them.
+> ⚠ **Feature drift, measured 2026-10-12 by `/roadmap --check`:** DV9 ×104, DV3 ×29, DV5 ×5, DV7 ×0 (after a
+> full spec regen). Breakdown and history in [NOTES.md](NOTES.md).
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 184   |
+| todo         | —     | —       | 189   |
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
@@ -22,7 +22,7 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 22× P1 · 118× P2 · 44× P3.
+`todo` by priority: 25× P1 · 120× P2 · 44× P3.
 
 ## In progress now
 
@@ -151,7 +151,7 @@ _None.
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (137/223 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (137/228 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [ ] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -274,7 +274,7 @@ _None.
   - STORY-027 Low findings — done (0/0 done) (done)
   - STORY-042 Integration-test tier — the Docker-gated remediation findings — planned (0/0 done)
   - STORY-043 Workflow backends — unify the serialization seam (ISerializer everywhere) — done (0/0 done) (done)
-  - STORY-051 Spec-harvest — high findings — in-progress (49/51 done)
+  - STORY-051 Spec-harvest — high findings — in-progress (49/55 done)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0) · FEATURE-014
     - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0) · FEATURE-014
@@ -326,7 +326,11 @@ _None.
     - [x] [TASK-559](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-559-sql-rule-converter-empty-group-is-every-row.md) The SQL `RuleConditionConverter` turns a disabled rule or an empty group into no condition — every row — where the other engines match nothing (P2) · FEATURE-014
     - [ ] [TASK-560](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-560-reindex-without-waiting-reports-success.md) `ReindexHelper.Reindex(…, waitForCompletion: false)` reports `Successful` for a reindex that has only started (P3) · FEATURE-014
     - [x] [TASK-561](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-561-redis-unnamed-jobs-only-on-literal-default-queue.md) Redis serves an unnamed job only to a queue literally named `"default"` (P2) · FEATURE-014
-  - STORY-053 Spec-harvest — medium findings — planned (8/31 done)
+    - [ ] [TASK-574](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-574-date-column-vs-column-renders-equals-null.md) `x.A.Date == x.B.Date` renders `DATE(B) = NULL` and matches no row (P1)
+    - [ ] [TASK-575](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-575-two-workers-reclaim-the-same-stale-job.md) Two SQL job workers can both reclaim the same stale Processing job and run it twice (P1)
+    - [ ] [TASK-576](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-576-async-database-model-repository-rejects-concrete-stores.md) `AsyncDataBaseModelRepository<T>` rejects every store built with a concrete connector (P2)
+    - [ ] [TASK-577](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-577-cross-assembly-field-attributes-lose-values.md) A cross-assembly SQL field attribute is rebuilt without its value: lengths, precision and scale become 0, and `[UtcField]` is dropped (P1)
+  - STORY-053 Spec-harvest — medium findings — planned (8/32 done)
     - [ ] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
     - [ ] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
     - [ ] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
@@ -358,6 +362,7 @@ _None.
     - [x] [TASK-565](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-565-in-process-bus-resolves-handlers-from-the-root-provider.md) The in-process bus resolves event handlers from the root provider — scoped handler dependencies throw or are shared forever (P1) · FEATURE-014
     - [ ] [TASK-566](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-566-distributed-bus-resolves-handlers-from-the-root-provider.md) The distributed bus resolves event handlers from the root provider too — the same defect as TASK-565 on the message-queue path (P2) · FEATURE-014
     - [ ] [TASK-567](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-567-sql-table-without-declared-key-accepts-duplicate-guids.md) A SQL table for a model with no declared key accepts a second row with the same Guid — create never refuses it (P2) · FEATURE-014
+    - [ ] [TASK-578](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-578-non-sql-units-of-work-leave-state-after-commit.md) The MongoDB, Cosmos DB and InfluxDB units of work leave state behind after a commit or a failed commit (P2)
   - STORY-054 Spec-harvest — low findings — planned (0/24 done)
     - [ ] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
     - [ ] [TASK-174](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-174-triage-low-event-bus-and-messaging.md) Triage the 29 low spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014

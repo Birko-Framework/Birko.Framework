@@ -1,7 +1,7 @@
 ---
 area: data-sync
-generated-at: 4e06ecdf3d905d2835d5b1ff45c4d1fa4990b14d
-generated-on: 2026-09-16
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.Aggregates/Core/AggregateDefinition.cs
   - ../Birko.Data.Aggregates/Core/ExpressionHelper.cs
@@ -55,22 +55,15 @@ sources:
   - ../Birko.Data.Sync/Stores/ISyncKnowledgeStore.cs
   - ../Birko.Data.Sync/SyncProvider.cs
   - ../Birko.Data.Sync/SyncQueue.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:07:38,
-                  # commit acbbe9d). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Aggregates: 8988d3b
-  ../Birko.Data.Sync: 981530f
-  ../Birko.Data.Sync.CosmosDB: 34cf848
-  ../Birko.Data.Sync.ElasticSearch: ecdb2b7
-  ../Birko.Data.Sync.Json: 655e991
-  ../Birko.Data.Sync.MongoDb: 8e6bc94
-  ../Birko.Data.Sync.RavenDB: fa93f5f
-  ../Birko.Data.Sync.Sql: 60d30a6
-  ../Birko.Data.Sync.Xml: a56a3ff
-shaped-by: []
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Bidirectional data sync, conflict resolution and aggregate mapping
 
 ## Purpose
@@ -713,14 +706,14 @@ guards each query with `if (tenantId.HasValue)`.
 
 - **Given** the same distribution in CosmosDB
 - **When** `GetKnowledgeAsync("Products", null, ct)` is called on `AsyncCosmosSyncKnowledgeStore`
-- **Then** the rendered query carries no `TenantId` term at all, so rows from both tenants and any untenanted rows are returned
-- **And** in particular no `root["TenantId"] = null` is emitted, which in the Cosmos SQL dialect evaluates to Undefined and would match no document
+- **Then** the rendered query carries no `TenantGuid` term at all, so rows from both tenants and any untenanted rows are returned
+- **And** in particular no `root["TenantGuid"] = null` is emitted, which in the Cosmos SQL dialect evaluates to Undefined and would match no document
 
 #### Scenario: A supplied tenant still narrows the CosmosDB query
 
 - **Given** scope `"Products"` holds rows for tenants `A` and `B`
 - **When** `GetKnowledgeAsync("Products", A, ct)` is called
-- **Then** the rendered query carries the `TenantId` term and only tenant `A`'s rows are returned
+- **Then** the rendered query carries the `TenantGuid` term and only tenant `A`'s rows are returned
 
 #### Scenario: Null tenant delete is scope-wide in RavenDB
 
@@ -764,21 +757,30 @@ natural key upserts one document rather than accumulating duplicates; SHALL copy
 
 The system SHALL map any `ISyncKnowledgeItem` to a `CosmosSyncKnowledgeItem` through
 `FromInterface(item, tenantId)`, which SHALL populate a `Guid` with `Guid.NewGuid()` when the source has
-none, SHALL let an explicit non-null `tenantId` overwrite the `TenantId` of an item that is already a
-`CosmosSyncKnowledgeItem`, and SHALL leave that item's existing `TenantId` intact when `tenantId` is null.
+none (an item that is already a `CosmosSyncKnowledgeItem` goes through `AbstractModel.EnsureGuid()`, so a
+`Guid.Empty` is replaced as well; a foreign item is copied with `item.Guid ?? Guid.NewGuid()`, so its
+`Guid.Empty` is kept), SHALL let an explicit non-null `tenantId` overwrite the `TenantGuid` of an item that is already a
+`CosmosSyncKnowledgeItem`, and SHALL leave that item's existing `TenantGuid` intact when `tenantId` is null.
 Upsert and replace SHALL use the item's own `Guid` string as both document id and partition key.
 
 #### Scenario: Passthrough item gets a Guid so the partition key dereference is safe
 
 - **Given** an existing `CosmosSyncKnowledgeItem` with `Guid = null`
 - **When** `UpdateKnowledgeAsync` maps and upserts it
-- **Then** `FromInterface` assigns a fresh `Guid` via `??=` and `new PartitionKey(cosmosItem.Guid!.Value.ToString())` is well-defined
+- **Then** `FromInterface` assigns a fresh `Guid` via `EnsureGuid()` and `new PartitionKey(cosmosItem.Guid!.Value.ToString())` is well-defined
 
 #### Scenario: Null tenant argument does not erase a carried tenant
 
-- **Given** a `CosmosSyncKnowledgeItem` with `TenantId = T`
+- **Given** a `CosmosSyncKnowledgeItem` with `TenantGuid = T`
 - **When** `UpdateKnowledgeAsync(items, tenantId: null, ct)` runs
-- **Then** the stored document still has `TenantId = T`
+- **Then** the stored document still has `TenantGuid = T`
+
+#### Scenario: Passthrough item with an empty Guid gets a fresh one
+
+- **Given** an existing `CosmosSyncKnowledgeItem` with `Guid = Guid.Empty`
+- **When** `FromInterface` maps it
+- **Then** `EnsureGuid()` replaces the empty value with a fresh `Guid`, so the document is not keyed and partitioned under `00000000-0000-0000-0000-000000000000`
+- **And** a foreign `ISyncKnowledgeItem` whose `Guid` is `Guid.Empty` is still copied with that empty value, because the materializing branch only substitutes a null
 
 #### Scenario: Foreign knowledge items produce a new document identity each round
 

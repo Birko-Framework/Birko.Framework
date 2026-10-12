@@ -1,7 +1,7 @@
 ---
 area: serialization
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Serialization.MessagePack/MessagePackBinarySerializer.cs
   - ../Birko.Serialization.Newtonsoft/NewtonsoftJsonSerializer.cs
@@ -11,16 +11,14 @@ sources:
   - ../Birko.Serialization/Core/SerializationFormat.cs
   - ../Birko.Serialization/Json/SystemJsonSerializer.cs
   - ../Birko.Serialization/Xml/SystemXmlSerializer.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-07-30 10:48:14,
-                  # commit 3728969). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Serialization: f852468
-  ../Birko.Serialization.MessagePack: a52501a
-  ../Birko.Serialization.Newtonsoft: befecef
-  ../Birko.Serialization.Protobuf: 158da6c
-  ../Birko.Serialization.Yaml: ee94017
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: []
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
 
 # Serializer abstraction and format round-trip guarantees

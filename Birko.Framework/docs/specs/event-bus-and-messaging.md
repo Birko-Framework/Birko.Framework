@@ -1,7 +1,7 @@
 ---
 area: event-bus-and-messaging
-generated-at: b7bfb63
-generated-on: 2026-08-18
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.EventBus.EventSourcing/DomainEventPublished.cs
   - ../Birko.EventBus.EventSourcing/EventReplayService.cs
@@ -83,21 +83,15 @@ sources:
   - ../Birko.MessageQueue/Serialization/IMessageSerializer.cs
   - ../Birko.MessageQueue/Serialization/JsonMessageSerializer.cs
   - ../Birko.MessageQueue/Transactions/ITransactionalProducer.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:07:38,
-                  # commit acbbe9d). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.EventBus: e2eab6c
-  ../Birko.EventBus.EventSourcing: 23cc837
-  ../Birko.EventBus.MessageQueue: cfa3d21
-  ../Birko.EventBus.Outbox: bbd93890d9274cfe069fa2e084021b9deca2d66e
-  ../Birko.MessageQueue: f40961a
-  ../Birko.MessageQueue.InMemory: 106f689
-  ../Birko.MessageQueue.MQTT: 23a9f74
-  ../Birko.MessageQueue.Redis: fef0353
-shaped-by: []
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Event publication, handlers, outbox and message-queue transport
 
 ## Purpose
@@ -124,7 +118,7 @@ application modules reacting to each other's domain events.
 
 ### Requirement: Event identity and timestamp defaults
 
-The system SHALL give every `EventBase`-derived event a fresh `EventId` (`Guid.NewGuid()`) and an
+The system SHALL give every `EventBase`-derived event a fresh `EventGuid` (`Guid.NewGuid()`) and an
 `OccurredAt` read from the static, replaceable `EventBase.DefaultClock` at construction, and SHALL
 require each concrete event to supply `Source` via an abstract override.
 
@@ -132,7 +126,7 @@ require each concrete event to supply `Source` via an abstract override.
 
 - **Given** a sealed record deriving from `EventBase`
 - **When** two instances are constructed
-- **Then** their `EventId` values differ, and each `OccurredAt` equals the value
+- **Then** their `EventGuid` values differ, and each `OccurredAt` equals the value
   `EventBase.DefaultClock.UtcNow` returned at construction time
 
 #### Scenario: Test clock substituted
@@ -144,27 +138,27 @@ require each concrete event to supply `Source` via an abstract override.
 #### Scenario: Caller overrides the defaults
 
 - **Given** an event type with `init` accessors inherited from `EventBase`
-- **When** it is constructed with explicit `EventId` and `OccurredAt` values
+- **When** it is constructed with explicit `EventGuid` and `OccurredAt` values
 - **Then** the supplied values are kept and no new Guid or clock read replaces them
 
 ### Requirement: EventContext construction from an event
 
-The system SHALL build an `EventContext` from an `IEvent` via `EventContext.From`, copying `EventId`
-and `Source`, copying `CorrelationId` **only when the event is an `EventBase`** (otherwise null),
+The system SHALL build an `EventContext` from an `IEvent` via `EventContext.From`, copying `EventGuid`
+and `Source`, copying `CorrelationGuid` **only when the event is an `EventBase`** (otherwise null),
 defaulting `DeliveryCount` to 1 and `Metadata` to an empty dictionary when none is supplied.
 
 #### Scenario: Event derives from EventBase with a correlation id
 
-- **Given** an `EventBase` event whose `CorrelationId` is set
+- **Given** an `EventBase` event whose `CorrelationGuid` is set
 - **When** `EventContext.From(@event)` is called
-- **Then** `context.CorrelationId` equals the event's `CorrelationId`
+- **Then** `context.CorrelationGuid` equals the event's `CorrelationGuid`
 
 #### Scenario: Event implements IEvent directly
 
 - **Given** a type that implements `IEvent` without deriving from `EventBase`, even if it declares its
-  own `CorrelationId` property
+  own `CorrelationGuid` property
 - **When** `EventContext.From(@event)` is called
-- **Then** `context.CorrelationId` is null
+- **Then** `context.CorrelationGuid` is null
 
 #### Scenario: Tenant is never inferred
 
@@ -215,9 +209,9 @@ collected handler list is empty, so no `IEventPipelineBehavior` runs for that pu
 #### Scenario: Deduplication behaviour registered but no handler for the event type
 
 - **Given** `AddEventDeduplication()` is registered and no handler exists for `OrderPlaced`
-- **When** `OrderPlaced` with a given `EventId` is published
-- **Then** `DeduplicationBehavior` is not invoked and the `EventId` is **not** recorded in the
-  deduplication store, so a later publish of the same `EventId` (once a handler exists) is treated as
+- **When** `OrderPlaced` with a given `EventGuid` is published
+- **Then** `DeduplicationBehavior` is not invoked and the `EventGuid` is **not** recorded in the
+  deduplication store, so a later publish of the same `EventGuid` (once a handler exists) is treated as
   first-seen
 
 #### Scenario: Enrichers still run
@@ -334,21 +328,21 @@ The system SHALL return an `IEventSubscription` from `Subscribe` that reports it
 
 ### Requirement: Deduplication is mark-before-handle (at-most-once)
 
-The system SHALL, in `DeduplicationBehavior`, atomically reserve the event's `EventId` via
+The system SHALL, in `DeduplicationBehavior`, atomically reserve the event's `EventGuid` via
 `IDeduplicationStore.TryMarkProcessedAsync` **before** invoking the rest of the pipeline, and skip the
 event entirely when the reservation fails. A handler failure SHALL NOT release the reservation.
 
-#### Scenario: Same EventId published twice
+#### Scenario: Same EventGuid published twice
 
 - **Given** a `DeduplicationBehavior` over an `InMemoryDeduplicationStore`
-- **When** the same event instance (same `EventId`) is published twice
+- **When** the same event instance (same `EventGuid`) is published twice
 - **Then** handlers run on the first publish only; the second returns without calling `next()`
 
-#### Scenario: Two concurrent publishes of one EventId
+#### Scenario: Two concurrent publishes of one EventGuid
 
 - **Given** the `InMemoryDeduplicationStore` (whose `TryMarkProcessedAsync` is a
   `ConcurrentDictionary.TryAdd`)
-- **When** two threads publish the same `EventId` simultaneously
+- **When** two threads publish the same `EventGuid` simultaneously
 - **Then** exactly one wins the `TryAdd` and runs handlers; the other is dropped
 
 #### Scenario: Handler throws after the mark
@@ -361,19 +355,19 @@ event entirely when the reservation fails. A handler failure SHALL NOT release t
 
 - **Given** an `IDeduplicationStore` that does not override the interface's default
   `TryMarkProcessedAsync`
-- **When** two callers publish the same `EventId` concurrently
+- **When** two callers publish the same `EventGuid` concurrently
 - **Then** the default composed `ExistsAsync`-then-`MarkProcessedAsync` implementation is not atomic and
   both callers may observe "not seen" and both run handlers
 
 ### Requirement: In-memory deduplication expiry is swept lazily under a claimed interval
 
-The system SHALL retain processed `EventId`s in `InMemoryDeduplicationStore` for a TTL (default 1
+The system SHALL retain processed `EventGuid`s in `InMemoryDeduplicationStore` for a TTL (default 1
 hour) and SHALL sweep entries older than `now - ttl` at most once per 5-minute interval, with the
 sweep slot claimed atomically via `Interlocked.CompareExchange`.
 
 #### Scenario: Entry older than the TTL
 
-- **Given** an `EventId` marked more than the TTL ago and at least 5 minutes since the last sweep
+- **Given** an `EventGuid` marked more than the TTL ago and at least 5 minutes since the last sweep
 - **When** `ExistsAsync` or `TryMarkProcessedAsync` is next called
 - **Then** the stale entry is removed and the id is treated as first-seen
 
@@ -399,25 +393,25 @@ sweep slot claimed atomically via `Interlocked.CompareExchange`.
 
 ### Requirement: Correlation enrichment fills the context but never the event
 
-The system SHALL, in `CorrelationEventEnricher`, leave a non-null `context.CorrelationId` untouched,
-otherwise copy the event's `EventBase.CorrelationId` when it has a value, and otherwise generate a
+The system SHALL, in `CorrelationEventEnricher`, leave a non-null `context.CorrelationGuid` untouched,
+otherwise copy the event's `EventBase.CorrelationGuid` when it has a value, and otherwise generate a
 fresh `Guid`.
 
 #### Scenario: Event carries a correlation id
 
-- **Given** an `EventBase` event with `CorrelationId` set and a context whose `CorrelationId` is null
+- **Given** an `EventBase` event with `CorrelationGuid` set and a context whose `CorrelationGuid` is null
 - **When** the enricher runs
 - **Then** the context adopts the event's value
 
 #### Scenario: Neither event nor context carries one
 
-- **Given** an event with a null `CorrelationId`
+- **Given** an event with a null `CorrelationGuid`
 - **When** the enricher runs
 - **Then** the context receives a newly generated `Guid` and the event itself is unmodified
 
 #### Scenario: Context already enriched by an earlier enricher
 
-- **Given** a preceding enricher set `context.CorrelationId`
+- **Given** a preceding enricher set `context.CorrelationGuid`
 - **When** `CorrelationEventEnricher` runs
 - **Then** the existing value is preserved
 
@@ -444,8 +438,8 @@ handlers.
 
 - **Given** no `contextFactory` was supplied
 - **When** the behaviour builds its rule context
-- **Then** the context contains `EventId`, `OccurredAt`, `Source`, `DeliveryCount`, plus `TenantGuid`
-  and `CorrelationId` when present, then every readable public instance property of the event, then
+- **Then** the context contains `EventGuid`, `OccurredAt`, `Source`, `DeliveryCount`, plus `TenantGuid`
+  and `CorrelationGuid` when present, then every readable public instance property of the event, then
   the context metadata — later keys added with `TryAdd`, so the fixed keys win on collision
 
 #### Scenario: Event exposes an indexer or a throwing property getter
@@ -495,8 +489,8 @@ lower-cased `Source` when it is non-empty (`GetTopic(IEvent)`).
 ### Requirement: Distributed publication serialises an envelope onto a type-derived topic
 
 The system SHALL, on `DistributedEventBus.PublishAsync`, run enrichers, build an `EventEnvelope`
-carrying `EventId`, the event's `AssemblyQualifiedName`, `Source`, `OccurredAt`, the context's
-`CorrelationId`/`TenantGuid`/`Metadata` and the serialized event as `Payload`, and send the serialized
+carrying `EventGuid`, the event's `AssemblyQualifiedName`, `Source`, `OccurredAt`, the context's
+`CorrelationGuid`/`TenantGuid`/`Metadata` and the serialized event as `Payload`, and send the serialized
 envelope as a `QueueMessage` to `TopicConvention.GetTopic(@event.GetType())`.
 
 #### Scenario: Event published to the transport
@@ -558,8 +552,8 @@ when any of those steps yields null or an incompatible type.
 
 - **Given** an envelope whose `EventType` resolves to `OrderPlaced` and whose payload deserializes
 - **When** the message is delivered
-- **Then** handlers receive the event and an `EventContext` carrying the envelope's `EventId`,
-  `Source`, `CorrelationId`, `TenantGuid` and `Headers`
+- **Then** handlers receive the event and an `EventContext` carrying the envelope's `EventGuid`,
+  `Source`, `CorrelationGuid`, `TenantGuid` and `Headers`
 
 #### Scenario: Event type not present in the consuming process
 
@@ -709,8 +703,8 @@ subscriber on `StartAsync` only when `DistributedEventBusOptions.AutoSubscribe` 
 ### Requirement: Outbox publication persists instead of dispatching
 
 The system SHALL, in `OutboxEventBus.PublishAsync`, run enrichers and then save an `OutboxEntry`
-(new `Id`, the event's `EventId`, assembly-qualified `EventType`, serialized `Payload`, `Source`,
-context `CorrelationId`/`TenantGuid`, copied `Headers`, `Status = Pending`) to the `IOutboxStore`
+(new `Guid`, the event's `EventGuid`, assembly-qualified `EventType`, serialized `Payload`, `Source`,
+context `CorrelationGuid`/`TenantGuid`, copied `Headers`, `Status = Pending`) to the `IOutboxStore`
 without invoking the inner bus, and SHALL delegate `Subscribe` to the inner bus.
 
 #### Scenario: Event published through the outbox decorator
@@ -778,7 +772,7 @@ processed count.
 ### Requirement: Outbox scope restoration is opt-in and no-op by default
 
 The system SHALL build a scope context from each entry (`EventContext.From` with the entry's
-`TenantGuid` and `Headers`, plus the entry's `CorrelationId`) and run the publish inside
+`TenantGuid` and `Headers`, plus the entry's `CorrelationGuid`) and run the publish inside
 `IEventScopeAccessor.RunWithScopeAsync`, defaulting to `NullEventScopeAccessor` which invokes the body
 with no scope established.
 
@@ -794,7 +788,7 @@ with no scope established.
 - **Given** an `IEventScopeAccessor` registered in DI
 - **When** `AddOutbox<TStore>()` builds the processor
 - **Then** the accessor is passed in and receives the entry's persisted `TenantGuid` and
-  `CorrelationId` on every publish
+  `CorrelationGuid` on every publish
 
 #### Scenario: Message-queue delivery path
 
@@ -969,15 +963,15 @@ The system SHALL, in `EventStoreEventBus`, delegate all read operations to the i
 
 ### Requirement: Domain-event wrapping preserves original identity and time
 
-The system SHALL, in the `DomainEventPublished(DomainEvent)` constructor, copy `AggregateId`,
-`Version`, `EventType`, `EventData`, `Metadata` and `UserId`, and overwrite the `EventBase` defaults
-with the domain event's `OccurredAt` and `EventId`; `Source` SHALL always be `"event-sourcing"`.
+The system SHALL, in the `DomainEventPublished(DomainEvent)` constructor, copy `AggregateGuid`,
+`Version`, `EventType`, `EventData`, `Metadata` and `UserGuid`, and overwrite the `EventBase` defaults
+with the domain event's `OccurredAt` and `EventGuid`; `Source` SHALL always be `"event-sourcing"`.
 
 #### Scenario: Wrapping a historical domain event
 
-- **Given** a domain event with `OccurredAt` two years ago and a known `EventId`
+- **Given** a domain event with `OccurredAt` two years ago and a known `EventGuid`
 - **When** it is wrapped
-- **Then** the wrapper reports that same `EventId` and `OccurredAt`, not `Guid.NewGuid()` and now
+- **Then** the wrapper reports that same `EventGuid` and `OccurredAt`, not `Guid.NewGuid()` and now
 
 #### Scenario: Null domain event
 
@@ -989,7 +983,7 @@ with the domain event's `OccurredAt` and `EventId`; `Source` SHALL always be `"e
 
 - **Given** the parameterless constructor is used (for deserialization)
 - **When** the instance is created
-- **Then** `EventId`/`OccurredAt` take the `EventBase` defaults and `DomainEventType`/`EventData`
+- **Then** `EventGuid`/`OccurredAt` take the `EventBase` defaults and `DomainEventType`/`EventData`
   remain null until set
 
 ### Requirement: Event replay re-publishes stored events and reports the count
@@ -1015,7 +1009,7 @@ publish, and return the number published.
 
 - **Given** a `DeduplicationBehavior` and events already processed once
 - **When** the same aggregate is replayed
-- **Then** every event is dropped as a duplicate, because the wrapper preserves the original `EventId`
+- **Then** every event is dropped as a duplicate, because the wrapper preserves the original `EventGuid`
 
 ### Requirement: Message queue transport surface
 
@@ -1140,14 +1134,14 @@ manual-ack messages in a local dictionary keyed by message id; the MQTT consumer
 #### Scenario: In-memory manual ack
 
 - **Given** an in-memory subscription with `AckMode = ManualAck`
-- **When** the handler completes and `AcknowledgeAsync(message.Id)` is called
+- **When** the handler completes and `AcknowledgeAsync(message.Guid)` is called
 - **Then** the pending entry is removed; nothing else in the transport depends on the ack
 
 #### Scenario: In-memory manual ack, handler throws
 
 - **Given** the same subscription and a handler that throws
 - **When** the wrapped handler catches, removes the pending entry and rethrows
-- **Then** a subsequent `RejectAsync(message.Id, requeue: true)` finds nothing to requeue and the
+- **Then** a subsequent `RejectAsync(message.Guid, requeue: true)` finds nothing to requeue and the
   message is lost
 
 #### Scenario: In-memory reject with requeue after a successful handler
@@ -1475,9 +1469,9 @@ properties (`payload_type`, `headers`) when present, and on receipt rebuild `Pay
 
 #### Scenario: Message identity is not carried
 
-- **Given** a producer-side `QueueMessage.Id`
+- **Given** a producer-side `QueueMessage.Guid`
 - **When** the message is received
-- **Then** the consumer constructs a new `QueueMessage` with a freshly generated `Id`, and `CreatedAt`
+- **Then** the consumer constructs a new `QueueMessage` with a freshly generated `Guid`, and `CreatedAt`
   is the receive time rather than the send time
 
 #### Scenario: Empty payload

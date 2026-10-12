@@ -1,7 +1,7 @@
 ---
 area: specifications-and-paging
-generated-at: 804f0b7619d3e502e6a0a9d33119a3e62097c562
-generated-on: 2026-08-07
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.Patterns/Paging/AsyncPagedRepositoryWrapper.cs
   - ../Birko.Data.Patterns/Paging/IPagedRepository.cs
@@ -13,17 +13,15 @@ sources:
   - ../Birko.Data.Patterns/Specification/OrSpecification.cs
   - ../Birko.Data.Patterns/Specification/RuleSpecification.cs
   - ../Birko.Data.Patterns/Specification/Specification.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-08-07 13:16:35,
-                  # commit 55e37bd). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Patterns: 87c0ed3
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
-# false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
-# glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes
-# from the regenerating task's own `feature:` field, not from evidence.
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Specification composition and paged results
 
 ## Purpose
@@ -553,7 +551,7 @@ SHALL produce `RuleGroup(LogicOperator.And, ruleSet.Rules)` carrying `IsEnabled 
 
 - **Given** a `RuleSet` with `IsEnabled = false` and two rules
 - **When** `ToExpression()` is built
-- **Then** the empty wrapper group has no enabled children and yields `Expression.Constant(false)` — the rules are discarded and the specification matches nothing (the opposite outcome to a disabled *root rule*, which yields match-all)
+- **Then** the empty wrapper group has no enabled children and yields `Expression.Constant(false)` — the rules are discarded and the specification matches nothing (the same outcome as a disabled *root rule*, which also yields match-none)
 
 ### Requirement: Rule expression uses a single parameter named "x"
 

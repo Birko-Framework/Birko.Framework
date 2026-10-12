@@ -1,7 +1,7 @@
 ---
 area: migrations
-generated-at: 283dbff
-generated-on: 2026-09-17
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBMigrationContext.cs
@@ -41,8 +41,8 @@ sources:
   - ../Birko.Data.Migrations.SQL/SqlMigrationRunner.cs
   - ../Birko.Data.Migrations.SQL/SqlMigrationStore.cs
   - ../Birko.Data.Migrations.SQL/SqlScriptMigration.cs
-  - ../Birko.Data.Migrations.TimescaleDB/ContinuousAggregateParts.cs
   - ../Birko.Data.Migrations.TimescaleDB/Context/TimescaleDBMigrationContext.cs
+  - ../Birko.Data.Migrations.TimescaleDB/ContinuousAggregateParts.cs
   - ../Birko.Data.Migrations.TimescaleDB/TimescaleDBMigration.cs
   - ../Birko.Data.Migrations.TimescaleDB/TimescaleDBMigrationRunner.cs
   - ../Birko.Data.Migrations/AbstractMigration.cs
@@ -56,21 +56,15 @@ sources:
   - ../Birko.Data.Migrations/IMigrationStore.cs
   - ../Birko.Data.Migrations/MigrationDirection.cs
   - ../Birko.Data.Migrations/MigrationResult.cs
-source-commits:   # sibling HEADs carrying TASK-314's fixes, read after they were committed
-                  # and before this aggregator commit, so the staleness baseline is exact.
-  ../Birko.Data.Migrations: 8b18f2f
-  ../Birko.Data.Migrations.CosmosDB: 955ca0e
-  ../Birko.Data.Migrations.ElasticSearch: 4add7c8
-  ../Birko.Data.Migrations.InfluxDB: d875843
-  ../Birko.Data.Migrations.MongoDB: 9bfa718
-  ../Birko.Data.Migrations.RavenDB: e0725e2
-  ../Birko.Data.Migrations.SQL: f278fdb
-  ../Birko.Data.Migrations.TimescaleDB: c16509f
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 151
+shaped-by-unresolved: 266
 ---
-
 # Schema/data migration runner and backend contexts
 
 ## Purpose
@@ -955,6 +949,21 @@ contains `"Sqlite"` and `INFORMATION_SCHEMA.TABLES` otherwise.
   `FormatColumn` were deleted with the fallback that was their only caller, so a provider-specific
   mapping (for example MySQL bounding an indexed string to `VARCHAR(255)`) applies here too rather
   than being approximated
+
+#### Scenario: A decimal declaring only one of precision and scale keeps the half it declared
+
+- **Given** a connector-backed `AddField` or `CreateCollection(...).Build()` over a `FieldType.Decimal`
+  descriptor that sets `Precision` or `Scale` but not both
+- **When** the column is built through `SchemaField.For`
+- **Then** it becomes a `SchemaDecimalField` carrying the declared half — either half is enough (TASK-512;
+  both used to be required, so a lone declared precision was dropped and the column built as an
+  unbounded `SchemaField`)
+- **And** on MySQL and SQL Server the connector's `BoundedDecimalType` fills the missing half with the
+  canonical `22` / `6`, so `Precision = 10` alone emits `DECIMAL(10,6)` and a declaration with neither half
+  emits `DECIMAL(22,6)`; a resulting scale greater than the precision (for example `Precision = 4` alone)
+  throws `FieldAttributeException`
+- **And** on PostgreSQL a lone half still emits a bare `NUMERIC`, because that connector bounds the column
+  only when both halves are present
 
 #### Scenario: DropField discards the real field type
 

@@ -4,7 +4,7 @@ status: in-progress
 created: 2026-06-18
 owner: ai
 affects: [Birko.Framework]
-source: [CODE-REVIEW-AUDIT-2026-06-17.md, SPEC-HARVEST-FINDINGS-2026-07-30.md]
+source: [CODE-REVIEW-AUDIT-2026-06-17.md, SPEC-HARVEST-FINDINGS-2026-07-30.md, "specs regen 2026-10-12 @ c50ed580"]
 kind: review-intake
 ---
 
@@ -37,6 +37,14 @@ specs record behaviour **as-is, defects included**, so the harvest surfaced what
 **A standing constraint unique to this sweep:** the specs currently document these defects as shipped
 behaviour, so any fix must be followed by a `/specs regen` of its area with the spec diff reviewed —
 that diff is the fix's evidence.
+
+**Re-harvest, 2026-10-12** (`/specs regen` of all 25 areas at `c50ed580`). Every area's baseline predated the
+monorepo, so roadmap DV7 could not tell fresh from stale; the regen re-based all 25. Of 112 spec changes, 99 were
+behaviour that had landed through closed tasks; **13 were suspected defects**, filed into this sweep's id space
+(`SH-H058…H061`, `SH-M429…M436`, `SH-L392`). The 4 highs were traced in the code before promotion (STORY-051's
+rule): TASK-574 … TASK-577. The 3 unit-of-work mediums share a cause and became TASK-578 (their area task, TASK-325,
+is done). The other 6 joined their open area tasks: TASK-154 (×2), TASK-157, TASK-159, TASK-170, TASK-193. None
+dropped.
 
 ## Structure
 

@@ -1,7 +1,7 @@
 ---
 area: llm-provider-and-agents
-generated-at: 3e0132c7e76de40a9b31da9a9661515e3175556d
-generated-on: 2026-10-09
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.AI.Contracts/AgentOptions.cs
   - ../Birko.AI.Contracts/LlmProviderFactory.cs
@@ -26,9 +26,14 @@ sources:
   - ../Birko.AI/Tools/RunCommandTool.cs
   - ../Birko.AI/Tools/SearchCodeTool.cs
   - ../Birko.AI/Tools/WriteFileTool.cs
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-006]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 275
+shaped-by-unresolved: 266
 ---
 
 # LLM provider contract, agent run loop and tool execution

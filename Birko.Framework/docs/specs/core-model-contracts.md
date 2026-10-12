@@ -1,7 +1,7 @@
 ---
 area: core-model-contracts
-generated-at: 8f57e5eec1505d1dc829e5a3be28e6f7eb449b93
-generated-on: 2026-08-16
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Contracts/Models/ICopyable.cs
   - ../Birko.Contracts/Models/IDefault.cs
@@ -17,16 +17,15 @@ sources:
   - ../Birko.Data.Core/Models/ITimestamped.cs
   - ../Birko.Data.MongoDB/Models/MongoDBModel.cs
   - ../Birko.Data.MongoDB/Serialization/MongoSerialization.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-08-16 16:17:32,
-                  # commit c78cfca). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Contracts: dc3575c
-  ../Birko.Data.Core: 1ee0793
-  ../Birko.Data.MongoDB: 4f5e095
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Zero-dependency model contracts (loadable, copyable, default, timestamped)
 
 ## Purpose
@@ -71,6 +70,37 @@ The system SHALL expose entity identity as a nullable `Guid?` named `Guid` throu
 - **Given** a class deriving from `AbstractModel`
 - **When** it declares `public override Guid? Guid { get; set; }` with backing logic of its own
 - **Then** the override compiles and is dispatched to, because the base property is declared `virtual`
+
+### Requirement: Store-assigned identity is produced by one method that keeps a caller's Guid
+
+The system SHALL expose `AbstractModel.EnsureGuid()`, a public non-virtual method that assigns
+`System.Guid.NewGuid()` to `Guid` when `Guid` is `null` or `Guid.Empty`, leaves a caller-supplied non-empty
+`Guid` unchanged, and returns the resulting non-null value (TASK-556). `Guid.Empty` SHALL therefore never be
+kept as an identity by this method.
+
+#### Scenario: A model with no identity is given a new one
+
+- **Given** a model deriving from `AbstractModel` whose `Guid` is `null`
+- **When** `EnsureGuid()` is called
+- **Then** `Guid` is set to a newly generated, non-empty value and that same value is returned
+
+#### Scenario: Guid.Empty is treated as no identity
+
+- **Given** a model whose `Guid` is `Guid.Empty`
+- **When** `EnsureGuid()` is called
+- **Then** `Guid` is replaced with a newly generated value — `Guid.Empty` is not kept as a key
+
+#### Scenario: A caller-supplied identity is kept
+
+- **Given** a model whose `Guid` was set by the caller to a non-empty value `g`
+- **When** `EnsureGuid()` is called, once or repeatedly
+- **Then** `Guid` remains `g` and `g` is returned each time
+
+#### Scenario: The identity is read and written through the virtual property
+
+- **Given** a derived model that overrides `Guid` with backing logic of its own
+- **When** `EnsureGuid()` runs
+- **Then** both the null/empty test and the assignment go through the overridden property, because the method accesses `Guid` rather than a backing field
 
 ### Requirement: Timestamp tracking contract
 

@@ -1,7 +1,7 @@
 ---
 area: store-crud-contract
-generated-at: 7ba8942
-generated-on: 2026-09-17
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.Core/Exceptions/StoreException.cs
   - ../Birko.Data.InMemory/Stores/AbstractAsyncInMemoryStore.cs
@@ -15,18 +15,15 @@ sources:
   - ../Birko.Data.Stores/IStoreWrapper.cs
   - ../Birko.Data.Stores/StoreExtensions.cs
   - ../Birko.Data.Stores/StoreLocator.cs
-source-commits:   # recorded at this regen, not reconstructed
-  ../Birko.Data.Core: 0308617
-  ../Birko.Data.InMemory: 89e3ed5
-  ../Birko.Data.Stores: 8058810
-shaped-by: []
-# false, and NOT because nobody tried — see the identical note in bulk-filter-operations.md: every
-# source glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` in this
-# aggregator. FEATURE-014 comes from the regenerating task's `feature:` field, not from evidence.
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Store CRUD contract and template-method hierarchy
 
 ## Purpose
@@ -463,14 +460,15 @@ create of the same key also throws), and return `data.Guid.Value`. A create neve
 ### Requirement: In-memory read by identifier is an O(1) lookup that rejects the empty Guid
 
 The system SHALL override the public `Read(Guid)` / `ReadAsync(Guid, ct)` in the in-memory stores to open the
-initialization gate and then return `_items[guid]` only when `guid != Guid.Empty` and the key exists,
-otherwise `null` — bypassing the base classes' `ModelByGuid` filter path.
+initialization gate and then return a `Snapshot` of `_items[guid]` only when `guid != Guid.Empty` and the key
+exists, otherwise `null` — bypassing the base classes' `ModelByGuid` filter path.
 
 #### Scenario: Existing entity fetched by key
 
 - **Given** `_items` contains an entity under `g`
 - **When** `Read(g)` is called
-- **Then** `TryGetValue` returns it directly, with no predicate compilation or scan
+- **Then** `TryGetValue` finds it directly, with no predicate compilation or scan, and a detached copy of it is
+  returned (the stored instance itself when `SnapshotEntities` is `false`)
 
 #### Scenario: Unknown identifier
 
@@ -478,19 +476,21 @@ otherwise `null` — bypassing the base classes' `ModelByGuid` filter path.
 - **When** `Read(g)` is called
 - **Then** `null` is returned
 
-#### Scenario: Empty Guid diverges from the base implementation
+#### Scenario: Empty Guid is answered without a lookup
 
-- **Given** an entity stored under the `Guid.Empty` key
+- **Given** an in-memory store, whose create paths give an entity carrying `Guid.Empty` a fresh `Guid`
+  (`EnsureGuid`, TASK-556), so no entity is stored under the `Guid.Empty` key through the store's API
 - **When** `Read(Guid.Empty)` is called on the in-memory store
-- **Then** the `guid != Guid.Empty` guard short-circuits and `null` is returned, whereas the base
-  `AbstractStore<T>.Read(Guid)` — which builds `x => x.Guid == Guid.Empty` — would have found that entity;
-  the entity is reachable in-memory only through `Read(filter)`
+- **Then** the `guid != Guid.Empty` guard short-circuits and `null` is returned without consulting `_items` —
+  the same answer the base `AbstractStore<T>.Read(Guid)` reaches by filtering on `x => x.Guid == Guid.Empty`,
+  which no stored entity satisfies. (Before TASK-556 an entity could be stored under that key, and the two
+  diverged: the base found it, the in-memory override did not)
 
 ### Requirement: In-memory single-entity read returns the first match in dictionary order
 
 The system SHALL implement `ReadCore(filter)` / `ReadCoreAsync(filter, ct)` as
 `_items.Values.FirstOrDefault(x => predicate?.Invoke(x) ?? true)`, compiling the filter expression with
-`filter?.Compile()`.
+`filter?.Compile()`, and returning a `Snapshot` of the match.
 
 #### Scenario: Filter matches several entities
 
@@ -574,7 +574,7 @@ otherwise `_items.Values.Count(filter.Compile())`.
 The system SHALL implement the bulk `ReadCore(filter, orderBy, limit, offset)` /
 `ReadCoreAsync(filter, orderBy, limit, offset, ct)` as: optional `Where` on the compiled predicate, then
 `OrderByHelper.ApplyTo(result, orderBy)`, then `Skip(offset)` when supplied, then `Take(limit)` when
-supplied, then `ToList()` so the result is materialized before return.
+supplied, then `Select(Snapshot).ToList()` so the result is materialized, as detached copies, before return.
 
 #### Scenario: Paging request
 
@@ -599,8 +599,10 @@ supplied, then `ToList()` so the result is materialized before return.
 ### Requirement: In-memory bulk write operations skip null and unusable items instead of failing
 
 The system SHALL treat a `null` collection as a no-op in bulk `CreateCore`, `UpdateCore` and `DeleteCore`
-(and their async twins); SHALL skip `null` items in bulk create; SHALL restrict bulk update to items with
-`Guid.HasValue` whose key already exists in `_items`, replacing each as the single-item update does; SHALL
+(and their async twins); SHALL skip `null` items in bulk create and bulk update; SHALL restrict bulk update's
+writes to items with `Guid.HasValue` whose key already exists in `_items`, replacing each as the single-item update
+does, and SHALL then throw one `EntityNotFoundException` naming every other item (an item with no `Guid` is named
+as `Guid.Empty`) — so bulk update does fail, after writing the stored items (TASK-555); SHALL
 refuse a bulk create containing a key already stored, or a key repeated inside the batch, with `StoreException`
 **before writing anything**; and SHALL restrict bulk delete to items with `Guid.HasValue`.
 
@@ -921,12 +923,13 @@ constructor delegating to `(string message, Exception? innerException)` with a `
 - **When** it is rethrown as `new StoreException("Insert failed", ex)`
 - **Then** the message and `InnerException` are both preserved by the base `Exception` constructor
 
-#### Scenario: The one CRUD path in this contract that raises it
+#### Scenario: The two CRUD paths in this contract that raise it
 
 - **Given** the abstract bases, the in-memory stores, `StoreLocator` and `StoreExtensions`
 - **When** invalid input is supplied
-- **Then** only an in-memory create of a key already stored throws `StoreException`; `null` entities, missing
-  identifiers and unknown keys are still answered with `Guid.Empty`, `null`, `false` or a silent no-op
-  ([[TASK-555]] owns the update half). `StoreLocator` refuses with `ArgumentException` (not a store) and
+- **Then** an in-memory create of a key already stored throws `StoreException`, and an in-memory update (single or
+  bulk) of an entity with no `Guid` or an unstored one throws its subclass `EntityNotFoundException` ([[TASK-555]]);
+  a `null` entity, a read or delete of an unknown key, and a delete with no identifier are still answered with
+  `Guid.Empty`, `null`, `false` or a silent no-op. `StoreLocator` refuses with `ArgumentException` (not a store) and
   `InvalidOperationException` (colliding settings); reflection failures (`MissingMethodException`) and
   cancellation (`OperationCanceledException`) surface as before

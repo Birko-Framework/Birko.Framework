@@ -10,7 +10,7 @@ created: 2026-08-09
 depends-on: []
 blocks: []
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
-findings: [SH-L197, SH-L198, SH-L199, SH-L200, SH-L201, SH-L202, SH-L203, SH-L204, SH-L205, SH-L206]
+findings: [SH-L197, SH-L198, SH-L199, SH-L200, SH-L201, SH-L202, SH-L203, SH-L204, SH-L205, SH-L206, SH-L392]
 pr: null
 github-issue: null
 jira-key: null
@@ -45,9 +45,13 @@ silently dropped is one the next sweep re-raises and someone re-litigates from s
 what the code *does*, defects included, which is exactly what let it find them. So a behavioural fix leaves
 `docs/specs/repository-contract.md` lying until `/specs regen repository-contract` runs, and **that spec diff is the fix's evidence**.
 
+### Added by the 2026-10-12 spec regen (harvester claims, not reproduced)
+
+- **SH-L392** — Repositories that override `Destroy`/`DestroyAsync` — the four MongoDB and four InfluxDB repositories, `AsyncRavenDBModelRepository`, `AsyncRavenDBRepository`, `AsyncCosmosDBModelRepository` — call `base.Destroy` (which destroys `Store`) and then destroy the unwrapped backend store again, so an undecorated store is destroyed twice
+
 ## Acceptance criteria
 
-- [ ] All 10 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [ ] All 11 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
 - [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.

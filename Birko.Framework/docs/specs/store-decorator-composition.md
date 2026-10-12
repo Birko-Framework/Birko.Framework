@@ -1,7 +1,7 @@
 ---
 area: store-decorator-composition
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Data.Composition/StoreWrapperBuilder.cs
   - ../Birko.Data.Patterns/Concurrency/AsyncVersionedStoreWrapper.cs
@@ -35,16 +35,15 @@ sources:
   - ../Birko.Time.Abstractions/Core/IDateTimeProvider.cs
   - ../Birko.Time.Abstractions/Providers/SystemDateTimeProvider.cs
   - ../Birko.Time.Abstractions/Providers/TestDateTimeProvider.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:19:33,
-                  # commit d40aba2). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Composition: dfdb6fb
-  ../Birko.Data.Patterns: 4663f80
-  ../Birko.Time.Abstractions: 47fa6a9
-shaped-by: []
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Store decorator wrappers and runtime composition
 
 ## Purpose
@@ -331,24 +330,24 @@ SHALL — on the `PropertyUpdate<T>` overload only — append an `UpdatedAt` ass
 
 ### Requirement: Audit stamping
 
-The system SHALL set both `CreatedBy` and `UpdatedBy` to `_auditContext.CurrentUserId` on create, set only
+The system SHALL set both `CreatedBy` and `UpdatedBy` to `_auditContext.CurrentUserGuid` on create, set only
 `UpdatedBy` on update (leaving `CreatedBy` as-is), and SHALL NOT stamp anything on delete.
 
 #### Scenario: Create stamps both audit fields
 
-- **Given** an `IAuditContext` whose `CurrentUserId` is a known Guid
+- **Given** an `IAuditContext` whose `CurrentUserGuid` is a known Guid
 - **When** `AuditStoreWrapper.Create(data)` is called
 - **Then** `data.CreatedBy` and `data.UpdatedBy` are both that Guid
 
 #### Scenario: Update preserves the creator
 
-- **Given** a stored entity whose `CreatedBy` is user A, and an audit context whose `CurrentUserId` is user B
+- **Given** a stored entity whose `CreatedBy` is user A, and an audit context whose `CurrentUserGuid` is user B
 - **When** `AsyncAuditStoreWrapper.UpdateAsync(data)` is called
 - **Then** `UpdatedBy` becomes user B and `CreatedBy` is left untouched
 
 #### Scenario: Unauthenticated context stamps null
 
-- **Given** an `IAuditContext` whose `CurrentUserId` is null
+- **Given** an `IAuditContext` whose `CurrentUserGuid` is null
 - **When** an entity is created through the audit decorator
 - **Then** `CreatedBy` and `UpdatedBy` are both set to null, overwriting any value the caller had assigned
 
@@ -546,8 +545,10 @@ while it reports the candidate taken, append an incrementing numeric suffix that
 The system SHALL, before every single-entity create and update, choose the slug source as the entity's own
 `Slug` when it is not null-or-whitespace and otherwise `GetSlugSource()`, normalize it, and resolve
 uniqueness by reading the inner store with the predicate `entity => entity.Slug == slug`, treating a
-candidate as taken only when a row exists AND its `Guid` differs from the excluded id (null on create, the
-entity's own `Guid` on update).
+candidate as taken when a row exists AND its `Guid` differs from the excluded id (null on create, the
+entity's own `Guid` on update). A candidate for which the entity's `ISluggable.IsReservedSlug(candidate)`
+returns true SHALL also be treated as taken, before the inner store is probed; the interface's default
+implementation reserves nothing.
 
 #### Scenario: Slug derived from the source when unset
 
@@ -572,6 +573,12 @@ entity's own `Guid` on update).
 - **Given** an entity with `Slug` null and `GetSlugSource()` returning null
 - **When** the entity is created
 - **Then** the base slug normalizes to empty and the resolved slug is `"item"` (or `"item-2"`, `"item-3"`, … if already taken)
+
+#### Scenario: A reserved slug is de-duplicated like a taken one
+
+- **Given** an entity whose `GetSlugSource()` returns `"Facets"` and whose `IsReservedSlug` returns true for `"facets"`, and no stored row holding `"facets"` or `"facets-2"`
+- **When** the entity is created through `SluggableStoreWrapper` or `AsyncSluggableStoreWrapper`
+- **Then** `IsReservedSlug` receives the normalized candidate `"facets"`, reports it taken without a store probe, and the resolved slug is `"facets-2"`
 
 ### Requirement: Slug batch uniqueness tracking
 
@@ -727,7 +734,7 @@ check is a non-atomic read-check-write at the decorator level.
 
 - **Given** a stored entity whose `Version` has advanced to `4` and an in-memory copy with `Version = 3`
 - **When** `UpdateAsync(data)` is called
-- **Then** a `ConcurrentUpdateException` is thrown whose `EntityType` is `typeof(T)`, `EntityId` is the entity's Guid, `ExpectedVersion` is `3`, and whose message reads `Concurrency conflict on {TypeName} (Id: {guid}). Expected version 3 but the entity has been modified.`; `data.Version` is left at `3` and no inner update is issued
+- **Then** a `ConcurrentUpdateException` is thrown whose `EntityType` is `typeof(T)`, `EntityGuid` is the entity's Guid, `ExpectedVersion` is `3`, and whose message reads `Concurrency conflict on {TypeName} (Id: {guid}). Expected version 3 but the entity has been modified.`; `data.Version` is left at `3` and no inner update is issued
 
 #### Scenario: Missing row is treated as a conflict
 
@@ -755,12 +762,14 @@ check is a non-atomic read-check-write at the decorator level.
 
 ### Requirement: Save routing and return value
 
-The system SHALL treat a null or `Guid.Empty` `Guid` as "create" and any other value as "update" on every
-decorator's `Save`/`SaveAsync`, and SHALL return the created Guid differently per decorator:
-`AuditStoreWrapper`, `TimestampStoreWrapper`, `SoftDeleteStoreWrapper`, `SluggableStoreWrapper`,
-`DefaultStoreWrapper`, `AsyncSluggableStoreWrapper`, `AsyncDefaultStoreWrapper` and both versioned
-decorators return the value the inner create produced, while `AsyncAuditStoreWrapper`,
-`AsyncTimestampStoreWrapper` and `AsyncSoftDeleteStoreWrapper` discard it and return `data.Guid ?? Guid.Empty`.
+The system SHALL route every decorator's `Save`/`SaveAsync` through the shared `StoreSave.Save` /
+`StoreSave.SaveAsync` helper, passing the decorator's own create and update (the Default decorators pass
+the inner store's create and update instead). The helper SHALL return `Guid.Empty` for a null entity,
+SHALL treat a null or `Guid.Empty` `Guid` as "create" and return the value the create produced, and SHALL
+otherwise run the update and return the entity's `Guid` — except that when the update throws an
+`EntityNotFoundException` whose `Guids` contain that Guid, it SHALL create the entity under that Guid and
+return the create's value. The caller's store delegate SHALL be wrapped so it runs at most once across an
+update that missed and the create that follows it.
 
 #### Scenario: Save with an empty Guid creates
 
@@ -774,11 +783,23 @@ decorators return the value the inner create produced, while `AsyncAuditStoreWra
 - **When** `AsyncTimestampStoreWrapper.SaveAsync(data)` is called
 - **Then** the decorator's `UpdateAsync` path runs, stamping `PrevUpdatedAt`/`UpdatedAt`
 
-#### Scenario: Async audit/timestamp/soft-delete Save loses the created Guid
+#### Scenario: Async audit/timestamp/soft-delete Save returns the created Guid
 
 - **Given** an inner store that returns a newly generated Guid from `CreateAsync` without assigning it to the passed entity
 - **When** `AsyncAuditStoreWrapper.SaveAsync(data)`, `AsyncTimestampStoreWrapper.SaveAsync(data)` or `AsyncSoftDeleteStoreWrapper.SaveAsync(data)` is called with `data.Guid == null`
-- **Then** the returned value is `Guid.Empty`, because the create result is awaited and discarded and `data.Guid ?? Guid.Empty` is returned instead — whereas the synchronous `AuditStoreWrapper.Save`, `TimestampStoreWrapper.Save` and `SoftDeleteStoreWrapper.Save` return the inner create's Guid for the same input
+- **Then** the inner create's Guid is returned, exactly as the synchronous `AuditStoreWrapper.Save`, `TimestampStoreWrapper.Save` and `SoftDeleteStoreWrapper.Save` return it for the same input
+
+#### Scenario: Save of an unstored Guid creates it
+
+- **Given** an entity with a non-empty `Guid` that no stored row holds, and an inner store whose update throws `EntityNotFoundException` naming that Guid
+- **When** `TimestampStoreWrapper.Save(data)` is called
+- **Then** the decorator's `Update` runs and misses, then its `Create` runs under the same Guid (re-stamping `CreatedAt`/`UpdatedAt` and clearing `PrevUpdatedAt`), and the create's Guid is returned; a store delegate passed to `Save` is applied at most once
+
+#### Scenario: Versioned Save of an unstored Guid is a conflict, not a create
+
+- **Given** an `IVersioned` entity with a non-empty `Guid` that no stored row holds
+- **When** `VersionedStoreWrapper.Save(data)` or `AsyncVersionedStoreWrapper.SaveAsync(data)` is called
+- **Then** the versioned update throws `ConcurrentUpdateException` for the missing row, which `StoreSave` does not catch, so the exception propagates and nothing is created
 
 #### Scenario: Default decorator's Save bypasses its own Create/Update
 
@@ -812,7 +833,7 @@ The system SHALL supply the current instant to the decorators through `IDateTime
 
 ### Requirement: Concurrency exception surface
 
-The system SHALL expose `ConcurrentUpdateException` with nullable `EntityType`, `EntityId` and
+The system SHALL expose `ConcurrentUpdateException` with nullable `EntityType`, `EntityGuid` and
 `ExpectedVersion` properties that are populated only by the `(Type, Guid, long)` constructor, and SHALL
 default the parameterless constructor's message to `"The entity has been modified by another process."`.
 
@@ -820,10 +841,10 @@ default the parameterless constructor's message to `"The entity has been modifie
 
 - **Given** `new ConcurrentUpdateException(typeof(Order), id, 3)`
 - **When** the exception is inspected
-- **Then** `EntityType`, `EntityId` and `ExpectedVersion` are `typeof(Order)`, `id` and `3`
+- **Then** `EntityType`, `EntityGuid` and `ExpectedVersion` are `typeof(Order)`, `id` and `3`
 
 #### Scenario: Message-only constructor leaves the properties null
 
 - **Given** `new ConcurrentUpdateException("custom message")` or `new ConcurrentUpdateException()`
 - **When** the exception is inspected
-- **Then** `EntityType`, `EntityId` and `ExpectedVersion` are all null
+- **Then** `EntityType`, `EntityGuid` and `ExpectedVersion` are all null

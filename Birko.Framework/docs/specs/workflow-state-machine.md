@@ -1,7 +1,7 @@
 ---
 area: workflow-state-machine
-generated-at: b4a7f070002d12b6a6b81544d4414021294f8a58
-generated-on: 2026-09-16
+generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
+generated-on: 2026-10-12
 sources:
   - ../Birko.Workflow.CosmosDB/CosmosDBWorkflowInstanceSchema.cs
   - ../Birko.Workflow.CosmosDB/CosmosDBWorkflowInstanceStore.cs
@@ -45,21 +45,15 @@ sources:
   - ../Birko.Workflow/Visualization/DotDiagramGenerator.cs
   - ../Birko.Workflow/Visualization/IWorkflowDiagramGenerator.cs
   - ../Birko.Workflow/Visualization/MermaidDiagramGenerator.cs
-source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:07:38,
-                  # commit acbbe9d). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Workflow: d8fc1ea
-  ../Birko.Workflow.CosmosDB: f5c4f6a
-  ../Birko.Workflow.ElasticSearch: 6c0f5e3
-  ../Birko.Workflow.JSON: a77cc6c
-  ../Birko.Workflow.MongoDB: 6cf4a45
-  ../Birko.Workflow.RavenDB: 040f2c2
-  ../Birko.Workflow.SQL: c279867
-  ../Birko.Workflow.XML: d357d38
+# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
+# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: []
+# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 80
+shaped-by-unresolved: 266
 ---
-
 # Workflow state machine, guards, actions and persistence
 
 ## Purpose
@@ -250,7 +244,7 @@ and without consulting any instance.
 ### Requirement: Instances are created in the definition's initial state and Active
 
 The system SHALL, in `WorkflowInstance<TData>.Create(definition, data)`, mint a new `Guid` as
-`InstanceId`, set `CurrentState` to `definition.InitialState`, set `Status` to
+`InstanceGuid`, set `CurrentState` to `definition.InitialState`, set `Status` to
 `WorkflowStatus.Active`, keep the supplied `data` reference as `Data`, and start with an empty
 `History`.
 
@@ -258,13 +252,13 @@ The system SHALL, in `WorkflowInstance<TData>.Create(definition, data)`, mint a 
 
 - **Given** a definition whose `InitialState` is `"Draft"`
 - **When** `WorkflowInstance<OrderData>.Create(definition, data)` is called
-- **Then** `CurrentState == "Draft"`, `Status == WorkflowStatus.Active`, `History` is empty, `Data` is reference-equal to `data`, and `InstanceId != Guid.Empty`
+- **Then** `CurrentState == "Draft"`, `Status == WorkflowStatus.Active`, `History` is empty, `Data` is reference-equal to `data`, and `InstanceGuid != Guid.Empty`
 
 #### Scenario: Two creates never share an id
 
 - **Given** the same definition and payload
 - **When** `Create` is called twice
-- **Then** the two instances have different `InstanceId` values
+- **Then** the two instances have different `InstanceGuid` values
 
 ### Requirement: Instances can be restored with an explicit state, status and history
 
@@ -320,14 +314,14 @@ through internal setters.
 
 The system SHALL throw `WorkflowCompletedException` when `instance.Status` is
 `WorkflowStatus.Completed` and `WorkflowFaultedException` when it is `WorkflowStatus.Faulted`, both
-carrying the definition's `Name` and the instance's `InstanceId`, and SHALL accept triggers for both
+carrying the definition's `Name` and the instance's `InstanceGuid`, and SHALL accept triggers for both
 `Active` and `NotStarted`.
 
 #### Scenario: Trigger on a completed instance
 
 - **Given** an instance whose `Status` is `Completed`
 - **When** `FireAsync(definition, instance, "reopen")` is awaited
-- **Then** a `WorkflowCompletedException` is thrown with message "Workflow '{name}' instance '{id}' is already completed and cannot accept new triggers." and `WorkflowName`/`InstanceId` populated
+- **Then** a `WorkflowCompletedException` is thrown with message "Workflow '{name}' instance '{id}' is already completed and cannot accept new triggers." and `WorkflowName`/`InstanceGuid` populated
 
 #### Scenario: Trigger on a faulted instance
 
@@ -465,7 +459,7 @@ appended.
 
 The system SHALL invoke the optional `Action<StateChangeRecord, string, Guid>` supplied to the
 `WorkflowEngine` constructor once per successful transition, after the history record is appended,
-passing the record, the definition's `Name` and the instance's `InstanceId`; the invocation happens
+passing the record, the definition's `Name` and the instance's `InstanceGuid`; the invocation happens
 inside the engine's try block, so an exception from the callback is treated as an action failure.
 
 #### Scenario: Callback receives the record
@@ -532,7 +526,7 @@ reasons, and `DenialReasons` is an empty array rather than null whenever no reas
 
 ### Requirement: Workflow exceptions carry the workflow name and instance id
 
-The system SHALL expose `WorkflowName` and `InstanceId` on `WorkflowException` and on all three
+The system SHALL expose `WorkflowName` and `InstanceGuid` on `WorkflowException` and on all three
 subclasses (`WorkflowCompletedException`, `WorkflowFaultedException`, `WorkflowActionException`),
 with `WorkflowActionException` additionally exposing `State` and `Trigger`.
 
@@ -540,7 +534,7 @@ with `WorkflowActionException` additionally exposing `State` and `Trigger`.
 
 - **Given** a `WorkflowActionException` caught by the caller
 - **When** its properties are read
-- **Then** `WorkflowName`, `InstanceId`, `State`, `Trigger` and `InnerException` identify the workflow, the instance, the phase and the root cause
+- **Then** `WorkflowName`, `InstanceGuid`, `State`, `Trigger` and `InnerException` identify the workflow, the instance, the phase and the root cause
 
 ### Requirement: DI registration provides a singleton engine and the Mermaid generator
 
@@ -634,8 +628,8 @@ as a stored definition, because definitions hold `Func` delegates.
 #### Scenario: Round-tripping an instance
 
 - **Given** any of the seven backends and an instance advanced to `Submitted` with one history record
-- **When** `SaveAsync("OrderApproval", instance)` then `LoadAsync(instance.InstanceId)` are awaited
-- **Then** the loaded instance has the same `InstanceId`, `CurrentState`, `Status`, deserialized `Data` and one history record
+- **When** `SaveAsync("OrderApproval", instance)` then `LoadAsync(instance.InstanceGuid)` are awaited
+- **Then** the loaded instance has the same `InstanceGuid`, `CurrentState`, `Status`, deserialized `Data` and one history record
 
 #### Scenario: Rebuilding the definition is the caller's job
 
@@ -646,7 +640,7 @@ as a stored definition, because definitions hold `Func` delegates.
 ### Requirement: Save is a non-atomic read-then-write upsert keyed on the instance id
 
 The system SHALL, in every backend's `SaveAsync`, first read the persisted record whose `Guid`
-equals `instance.InstanceId`; when found it SHALL call
+equals `instance.InstanceGuid`; when found it SHALL call
 `WorkflowInstanceOwnership.RequireSameWorkflow(existing.WorkflowName, workflowName, instanceId)`
 before any mutation, then apply `UpdateFromInstance(instance)`, call the underlying store's update
 and return the instance id; when not found it SHALL build a new model via
@@ -658,18 +652,18 @@ no transaction or optimistic concurrency, so concurrent saves of the same instan
 
 - **Given** an instance never saved before
 - **When** `SaveAsync("OrderApproval", instance)` is awaited
-- **Then** a new record is created with `Guid == instance.InstanceId`, `CreatedAt` and `UpdatedAt` set to `DateTime.UtcNow`, and the create result is returned
+- **Then** a new record is created with `Guid == instance.InstanceGuid`, `CreatedAt` and `UpdatedAt` set to `DateTime.UtcNow`, and the create result is returned
 
 #### Scenario: Second save under the same name updates in place
 
 - **Given** an already-persisted instance and a save under the same `workflowName`
 - **When** `SaveAsync("OrderApproval", instance)` is awaited
-- **Then** `CurrentState`, `Status`, the serialized data/history and `UpdatedAt` are refreshed, `CreatedAt` and `WorkflowName` are left untouched, and `instance.InstanceId` is returned
+- **Then** `CurrentState`, `Status`, the serialized data/history and `UpdatedAt` are refreshed, `CreatedAt` and `WorkflowName` are left untouched, and `instance.InstanceGuid` is returned
 
 ### Requirement: A save aimed at another workflow's instance is refused, not applied
 
 The system SHALL throw `WorkflowInstanceOwnershipException` — a `WorkflowException` carrying
-`WorkflowName`, `PersistedWorkflowName` and `InstanceId` — from every backend's `SaveAsync` when
+`WorkflowName`, `PersistedWorkflowName` and `InstanceGuid` — from every backend's `SaveAsync` when
 the persisted record's `WorkflowName` is not ordinally equal to the supplied one, and SHALL leave
 that record completely unmodified. Because all workflows and all `TData` types share one
 table/collection, an instance id identifies a row rather than a workflow; the rule is stated once in
@@ -721,7 +715,7 @@ table/collection, an instance id identifies a row rather than a workflow; the ru
 
 - **Given** an existing Cosmos document for the instance
 - **When** `SaveAsync` takes the update branch
-- **Then** it returns `existing.Guid ?? instance.InstanceId`, whereas the other six backends return `instance.InstanceId` directly
+- **Then** it returns `existing.Guid ?? instance.InstanceGuid`, whereas the other six backends return `instance.InstanceGuid` directly
 
 ### Requirement: Load returns null and Delete is a no-op for an unknown instance
 
@@ -744,7 +738,7 @@ deleting a non-existent instance therefore completes silently.
 #### Scenario: Deleting an existing instance
 
 - **Given** a persisted instance
-- **When** `DeleteAsync(instance.InstanceId)` is awaited and `LoadAsync` is retried
+- **When** `DeleteAsync(instance.InstanceGuid)` is awaited and `LoadAsync` is retried
 - **Then** the record is gone and `LoadAsync` returns `null`
 
 ### Requirement: Find queries order by UpdatedAt descending and cap at 100 by default
@@ -916,7 +910,7 @@ models, and `Birko.Serialization.Xml.SystemXmlSerializer` for the XML model.
 ### Requirement: Backend-specific storage mapping is fixed per provider
 
 The system SHALL persist instances to a provider-specific shape: the SQL model maps to table
-`__WorkflowInstances` with `Guid` as `[PrimaryField]` named `Id` and named columns
+`__WorkflowInstances` with `Guid` as `[PrimaryField]` named `Guid` and named columns
 `WorkflowName`, `CurrentState`, `Status`, `DataJson`, `HistoryJson`, `CreatedAt`, `UpdatedAt`; the
 JSON model uses camelCase `[JsonPropertyName]`s; the XML model uses `[XmlRoot("WorkflowInstance")]`
 with PascalCase `[XmlElement]`s and a `DataXml`/`HistoryXml` pair; the ElasticSearch model maps
@@ -929,7 +923,7 @@ and CosmosDB models use plain unannotated properties.
 
 - **Given** the SQL backend
 - **When** the schema is created for `WorkflowInstanceModel`
-- **Then** the table is `__WorkflowInstances` and the instance id column is `Id`, declared as the primary field
+- **Then** the table is `__WorkflowInstances` and the instance id column is `Guid`, declared as the primary field
 
 #### Scenario: ElasticSearch payload fields are not searchable
 
