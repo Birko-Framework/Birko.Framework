@@ -13,7 +13,7 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 189   |
+| todo         | —     | —       | 192   |
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
@@ -22,7 +22,7 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 25× P1 · 120× P2 · 44× P3.
+`todo` by priority: 25× P1 · 122× P2 · 45× P3.
 
 ## In progress now
 
@@ -34,7 +34,7 @@ _None.
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (29/38 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (29/40 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -59,6 +59,8 @@ _None.
   - [ ] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
   - [x] [TASK-568](EPIC-001-web-components-ui-polish/TASK-568-modal-focus-trap-ignores-slotted-content.md) b-modal's focus trap ignores slotted content, so Tab is stuck on Close (P1)
   - [x] [TASK-573](EPIC-001-web-components-ui-polish/TASK-573-modal-open-refocuses-when-already-open.md) b-modal's open() on an already-open modal steals focus and forgets the opener (P1)
+  - [ ] [TASK-579](EPIC-001-web-components-ui-polish/TASK-579-b-rating.md) `b-rating` — a form-associated star-rating input (P2) · FEATURE-001
+  - [ ] [TASK-580](EPIC-001-web-components-ui-polish/TASK-580-b-modal-title-as-heading.md) `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading (P3) · FEATURE-001
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
@@ -453,7 +455,7 @@ _None.
   - STORY-045 Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped — done (0/0 done) (done)
   - STORY-046 Restore ambient (tenant) scope for background event dispatch — in-progress (0/1 done)
     - [ ] [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3) ⚠ blocked: on an external condition, not on another task · FEATURE-017
-- **EPIC-018** Birko.Web.Core — the browser-side runtime — in-progress (7/7 tasks done)
+- **EPIC-018** Birko.Web.Core — the browser-side runtime — in-progress (7/8 tasks done)
   - [x] [TASK-198](EPIC-018-birko-web-core-runtime/TASK-198-fetch-has-no-timeout-so-a-dead-connection-hangs-forever.md) `fetch` has no timeout, so a dead connection hung the app forever — and a stalled body reported success (P0) · FEATURE-018
   - [x] [TASK-199](EPIC-018-birko-web-core-runtime/TASK-199-syncmanager-misreads-a-write-that-already-landed.md) `SyncManager` had no name for a write that had already landed (P1) · FEATURE-018
   - [x] [TASK-202](EPIC-018-birko-web-core-runtime/TASK-202-apiclient-get-corrupted-an-inline-query-string.md) `ApiClient.get` corrupted any endpoint that already carried a query string (P1) · FEATURE-018
@@ -461,6 +463,7 @@ _None.
   - [x] [TASK-493](EPIC-018-birko-web-core-runtime/TASK-493-apiclient-getheaders-and-patch.md) `ApiClient` had no generic request-header hook and no `patch()` (P1) · FEATURE-018
   - [x] [TASK-508](EPIC-018-birko-web-core-runtime/TASK-508-apiclient-postform-multipart-upload.md) `ApiClient` cannot send a multipart upload (P1) · FEATURE-018
   - [x] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P1)
+  - [ ] [TASK-581](EPIC-018-birko-web-core-runtime/TASK-581-syncmanager-backoff-cap-dead-letter.md) `SyncManager` retries a failing write every cycle forever: no backoff, no cap, no dead letter (P2) · FEATURE-018
 - **EPIC-019** Birko framework backports from DraCode — in-progress (9/30 tasks done)
   - STORY-058 Security / OAuth backports from DraCode — planned (0/6 done)
     - [ ] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)

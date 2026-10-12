@@ -1,6 +1,6 @@
 ---
 id: FEATURE-001
-generated: 2026-09-19
+generated: 2026-10-12
 ---
 
 # Birko.Web.Components — UI polish — Status
@@ -21,7 +21,7 @@ generated: 2026-09-19
 
 ## Build progress
 
-9 / 15 tasks done.
+18 / 27 tasks done.
 
 - [x] TASK-001 Add `bare` attribute to all form controls
 - [x] TASK-002 Benchmark + migrate b-editable-table to bare components
@@ -32,12 +32,24 @@ generated: 2026-09-19
 - [x] TASK-041 Extract a shared `coerceCssLength` helper and fix the unitless-length bug across components
 - [x] TASK-053 b-range: vertical orientation (equalizer-style slider)
 - [x] TASK-091 `description` — a persistent help-text row on the form controls
-- [x] TASK-136 Forms now catch text that isn't a number, instead of accepting it and saving nothing
-- [ ] TASK-132 "Required" on a tick box or toggle currently does nothing — an unticked box counts as answered
-- [ ] TASK-133 A multiple-choice (radio) question's answer is never saved, and marking it required makes the form impossible to submit
-- [ ] TASK-134 Decide whether the form should start rejecting more kinds of invalid input than it does today — **awaiting decision**
+- [ ] TASK-132 `b-form`: `required` on a checkbox / switch is inert — an unchecked toggle counts as filled
+- [ ] TASK-133 `b-form`: a `radio` field's value is never collected, and a `required` radio group can never validate
+- [ ] TASK-134 Decide whether `b-form.validate()` adopts the remaining validity flags, starting with `typeMismatch`
+- [x] TASK-136 `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()`
 - [ ] TASK-466 Firefox shows no validation bubble for an invalid `b-*` control, and logs an error instead
 - [ ] TASK-467 Borrowed validity enforces nothing, silently, where the engine lacks the input type
+- [x] TASK-484 b-input: `prefix` / `suffix` slots + `clearable`
+- [ ] TASK-485 Extend adornment slots to the other text-like controls; move `b-search-input` onto them
+- [x] TASK-486 The select-all header rendered as literal HTML, so "select all" was unusable
+- [x] TASK-488 `b-select` ignored `creatable`, so a `b-form` single select could not take a new value
+- [x] TASK-489 `b-select`'s searchable combo has no combobox semantics and no arrow-key navigation
+- [x] TASK-490 A `creatable` multi-select in `b-form` shows a create row that does nothing unless the page wires it
+- [x] TASK-494 A labelled `b-*` control has no accessible name: its `<label>` labels nothing
+- [x] TASK-495 `b-file-upload` and `b-date-range-picker` drop the field's label from their accessible names
+- [x] TASK-496 Picker inputs don't announce their popup, and `b-select`'s clear button has no name
+- [x] TASK-497 `b-range` in range mode draws its thumbs below the track
+- [ ] TASK-579 `b-rating` — a form-associated star-rating input
+- [ ] TASK-580 `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading
 
 ## What can be tested now
 
@@ -65,3 +77,6 @@ waits for a decision (D8) rather than being built.
 Two more were added since this file was last generated — TASK-466 (a browser shows no validation message and
 logs an error instead) and TASK-467 (a validity rule that silently enforces nothing where the browser lacks
 the input type). Both are faults in what already ships.
+
+**Added 2026-10-12:** TASK-579, a star-rating input the shop's review form needs (the last piece the shop is waiting on), and TASK-580, dialog titles that screen readers can navigate to as headings (found in Presenter's accessibility audit).
+

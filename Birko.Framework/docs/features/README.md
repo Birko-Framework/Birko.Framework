@@ -29,7 +29,7 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 
 | Feature | Title | Phase | Decisions (a/c/d/r/p) | Tasks | Prototype | Source |
 |---------|-------|-------|-----------------------|-------|-----------|--------|
-| [FEATURE-001](FEATURE-001-web-components-ui-polish/) | Birko.Web.Components — UI polish | building | 7/0/0/0/**1** | 9/15 | n/a (backfilled) | [EPIC-001](../../tasks/EPIC-001-web-components-ui-polish/EPIC.md) |
+| [FEATURE-001](FEATURE-001-web-components-ui-polish/) | Birko.Web.Components — UI polish | building | 7/0/0/0/**1** | 18/27 | n/a (backfilled) | [EPIC-001](../../tasks/EPIC-001-web-components-ui-polish/EPIC.md) |
 | [FEATURE-002](FEATURE-002-birko-data-redis/) | Birko.Data.Redis | building | 1/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-002](../../tasks/EPIC-002-birko-data-redis/EPIC.md) |
 | [FEATURE-003](FEATURE-003-birko-caching-ncache/) | Birko.Caching.NCache | building | 1/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-003](../../tasks/EPIC-003-birko-caching-ncache/EPIC.md) |
 | [FEATURE-004](FEATURE-004-storage-cloud-providers/) | Birko.Storage — Cloud providers | building | 3/0/0/0/0 | 0/3 | n/a (backfilled) | [EPIC-004](../../tasks/EPIC-004-storage-cloud-providers/EPIC.md) |
@@ -46,7 +46,7 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 | [FEATURE-015](FEATURE-015-birko-xaml-ui-framework/) | Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web | building | 12/0/0/0/0 | 10/22 | n/a (backfilled) | [EPIC-015](../../tasks/EPIC-015-birko-xaml-ui-framework/EPIC.md) |
 | [FEATURE-016](FEATURE-016-birko-backports-from-reps/) | Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) | **review** | 6/0/0/0/0 | 14/14 | n/a (backfilled) | [EPIC-016](../../tasks/EPIC-016-birko-backports-from-reps/EPIC.md) |
 | [FEATURE-017](FEATURE-017-tenant-isolation-hardening/) | Tenant isolation hardening | building | 3/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-017](../../tasks/EPIC-017-tenant-isolation-hardening/EPIC.md) |
-| [FEATURE-018](FEATURE-018-birko-web-core-runtime/) | Birko.Web.Core — the browser-side runtime | **review** | 1/0/0/0/0 | 4/4 | n/a (already ships) | [EPIC-018](../../tasks/EPIC-018-birko-web-core-runtime/EPIC.md) |
+| [FEATURE-018](FEATURE-018-birko-web-core-runtime/) | Birko.Web.Core — the browser-side runtime | building | 1/0/0/0/0 | 6/7 | n/a (already ships) | [EPIC-018](../../tasks/EPIC-018-birko-web-core-runtime/EPIC.md) |
 
 Phase ∈ idea · prototyping · deciding · building · review · done · dropped · superseded.
 Decisions column = approved/changed/deferred/removed/proposed counts.

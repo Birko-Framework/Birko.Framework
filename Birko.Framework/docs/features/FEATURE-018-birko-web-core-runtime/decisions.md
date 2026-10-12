@@ -11,7 +11,7 @@ created: 2026-08-17
 
 | ID | Decision | State | Rationale | Date | By | → Tasks |
 |----|----------|-------|-----------|------|----|---------|
-| D1 | Track the browser-side runtime as its own area of concern | approved | Four fixed defects had no feature and were invisible to every stakeholder view; two had shipped with no tracking commit at all. Being listed in four epics' `affects:` is not ownership. | 2026-08-17 | user | [[TASK-198]], [[TASK-199]], [[TASK-202]], [[TASK-203]] |
+| D1 | Track the browser-side runtime as its own area of concern | approved | Four fixed defects had no feature and were invisible to every stakeholder view; two had shipped with no tracking commit at all. Being listed in four epics' `affects:` is not ownership. | 2026-08-17 | user | [[TASK-198]], [[TASK-199]], [[TASK-202]], [[TASK-203]], [[TASK-581]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -41,3 +41,4 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-08-17 — **[[TASK-130]] deliberately excluded.** Theme colour-contrast gating spans
   `Birko.Web.Components` **and** `Birko.Xaml.Avalonia`, so it belongs to FEATURE-001 or FEATURE-015.
   Left in `tasks/_loose/` rather than filed here, because a wrong home is less visible than no home.
+- 2026-10-12 — D1: TASK-581 added (Symbio TASK-151 filed upstream: SyncManager backoff, retry cap and dead letter). No state change.
