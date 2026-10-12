@@ -41,6 +41,16 @@ regen.
 aggregator) and **0** consumer `.cs` files construct a sync provider — the same measurement TASK-309 recorded.
 Hence P3: real, but nothing can hit it today.
 
+## Decision (2026-10-12, by the user)
+
+**(a) Refuse.** A resolver that returns `Merge` gets a `SyncError` naming the unsupported resolution, so a merge is no
+longer indistinguishable from a dropped item. The opt-out is trivial (return any other resolution). Rejected: (b) a
+merge hook — feature work with no consumer asking for it, and (a) is exactly what (b) does when no hook is set, so it
+can be added later on top; (c) removing the member — breaking, for no gain over (a). Re-run the reach measurement
+before the change, per the third acceptance row.
+
+The task is no longer a decision task: it is runnable by [[fix-next]].
+
 ## Acceptance criteria
 
 - [ ] A decision is taken and recorded between: (a) **refuse** — throw or record a `SyncError` naming the

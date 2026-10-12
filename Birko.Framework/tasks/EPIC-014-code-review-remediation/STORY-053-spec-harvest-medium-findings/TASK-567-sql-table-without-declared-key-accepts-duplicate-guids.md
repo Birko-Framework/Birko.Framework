@@ -37,6 +37,19 @@ and Elasticsearch (`Create` op) reject it natively; RavenDB's `Store` overwrites
 Single create always had this. TASK-556 widened the reach: before it, SQL **bulk** create overwrote every caller Guid, so a
 bulk batch could not collide — now it can, exactly like a single create.
 
+## Decision (2026-10-12, by the user)
+
+- **A SQL model that declares no key gets `Guid` as its `PRIMARY KEY`** — the identity every read, update and delete
+  already assumes (`DataBase.GetPrimaryFields` falls back to it). Not a bare `UNIQUE`: a table with a unique index and no
+  key is a shape few tools expect.
+- **Existing key-less tables are reported, never altered.** `DetectDrift` reports the missing key; the CHANGELOG gives
+  the migration (remove duplicate rows, then add the key). No ALTER on `Init`, which would alter production schema
+  unasked and fail on a table that already holds duplicates.
+- **RavenDB refuses too.** Create stores with an empty change vector so an existing id is rejected, and throws the same
+  `StoreException` as the in-memory store and the SQL providers. Every provider means the same thing by Create.
+
+The task is no longer a decision task: it is runnable by [[fix-next]].
+
 ## Acceptance criteria
 
 - [ ] Decide how a SQL table gets a unique identity when the model declares no key: `Guid` as `PRIMARY KEY`, or a

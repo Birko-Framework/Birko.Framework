@@ -28,6 +28,15 @@ follow it up either.
 Not destructive today: `ReindexWithAlias` always waits, so it never acts on a started-only result. Reach: 0 consumer
 references. Hence P3.
 
+## Decision (2026-10-12, by the user)
+
+**Keep `waitForCompletion`, and make a started reindex visibly pending.** `ReindexResult` gains a pending state that
+carries Elasticsearch's task id (`response.Task`), so the caller can follow the reindex up; it is never `Successful`,
+and the helper does not refresh a target that is still being written. Rejected: dropping the parameter — a breaking
+signature change that also removes the only way to run a long reindex in the background.
+
+The task is no longer a decision task: it is runnable by [[fix-next]].
+
 ## Acceptance criteria
 
 - [ ] Decide: drop the parameter (always wait), or make a started reindex visibly not-a-success — e.g. a result that
