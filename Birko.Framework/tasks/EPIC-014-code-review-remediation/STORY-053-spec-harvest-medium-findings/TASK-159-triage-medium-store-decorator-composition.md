@@ -16,7 +16,7 @@ github-issue: null
 jira-key: null
 ---
 
-# Triage the 20 medium spec-harvest findings in `store-decorator-composition`
+# Triage the 21 medium spec-harvest findings in `store-decorator-composition`
 
 ## Context
 

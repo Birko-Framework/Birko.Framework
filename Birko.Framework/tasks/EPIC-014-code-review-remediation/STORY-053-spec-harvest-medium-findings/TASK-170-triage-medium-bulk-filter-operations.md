@@ -16,7 +16,7 @@ github-issue: null
 jira-key: null
 ---
 
-# Triage the 13 medium spec-harvest findings in `bulk-filter-operations`
+# Triage the 14 medium spec-harvest findings in `bulk-filter-operations`
 
 ## Context
 

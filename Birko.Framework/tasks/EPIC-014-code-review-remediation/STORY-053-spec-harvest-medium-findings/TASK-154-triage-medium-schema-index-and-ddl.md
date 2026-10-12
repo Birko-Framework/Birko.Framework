@@ -16,7 +16,7 @@ github-issue: null
 jira-key: null
 ---
 
-# Triage the 25 medium spec-harvest findings in `schema-index-and-ddl`
+# Triage the 27 medium spec-harvest findings in `schema-index-and-ddl`
 
 ## Context
 

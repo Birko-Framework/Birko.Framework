@@ -16,7 +16,7 @@ github-issue: null
 jira-key: null
 ---
 
-# Triage the 10 low spec-harvest findings in `repository-contract`
+# Triage the 11 low spec-harvest findings in `repository-contract`
 
 ## Context
 

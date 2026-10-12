@@ -16,7 +16,7 @@ github-issue: null
 jira-key: null
 ---
 
-# Triage the 21 medium spec-harvest findings in `data-sync`
+# Triage the 22 medium spec-harvest findings in `data-sync`
 
 ## Context
 
