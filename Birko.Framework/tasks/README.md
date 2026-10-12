@@ -17,7 +17,7 @@ which this regeneration never touches._
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 240   |
+| done         | 1     | 23      | 244   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -26,7 +26,7 @@ which this regeneration never touches._
 
 ## In progress now
 
-_None._
+_None.
 
 ## Blocked
 
@@ -34,7 +34,7 @@ _None._
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (28/37 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (29/38 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -58,6 +58,7 @@ _None._
   - [x] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
   - [ ] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
   - [x] [TASK-568](EPIC-001-web-components-ui-polish/TASK-568-modal-focus-trap-ignores-slotted-content.md) b-modal's focus trap ignores slotted content, so Tab is stuck on Close (P1)
+  - [x] [TASK-573](EPIC-001-web-components-ui-polish/TASK-573-modal-open-refocuses-when-already-open.md) b-modal's open() on an already-open modal steals focus and forgets the opener (P1)
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
@@ -384,7 +385,7 @@ _None._
     - [ ] [TASK-327](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-327-fix-low-unit-of-work-and-transactions.md) Fix the 3 verified low findings in `unit-of-work-and-transactions` (P2) · FEATURE-014
   - STORY-055 Spec-harvest — the three unrated areas — done (1/1 done) (done)
     - [x] [TASK-195](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/TASK-195-rate-id-and-fold-the-16-recovered-findings.md) Rate, ID and fold the 16 recovered findings into the severity backlog (P1) · FEATURE-014
-- **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (10/22 tasks done)
+- **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (13/25 tasks done)
   - [x] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Xaml restyled Slider (Tier-1 gap) + `Range` Form field type (P3) · FEATURE-015
   - [x] [TASK-055](EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md) Xaml Form field-type parity with b-form (wire existing controls + FormField props) (P2) · FEATURE-015
   - [x] [TASK-056](EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md) Xaml date & time picker controls + field types (P2) · FEATURE-015
@@ -392,6 +393,9 @@ _None._
   - [x] [TASK-101](EPIC-015-birko-xaml-ui-framework/TASK-101-avalonia-ribbon-pinned-temporary-reveal.md) Avalonia `Ribbon`: pinned vs temporary-reveal collapse, to match `b-ribbon` and Office (P2) · FEATURE-015
   - [x] [TASK-102](EPIC-015-birko-xaml-ui-framework/TASK-102-avalonia-ribbon-narrow-fallback.md) Avalonia `Ribbon`: a narrow fallback, mirroring `b-ribbon`'s hamburger (P2) · FEATURE-015
   - [ ] [TASK-103](EPIC-015-birko-xaml-ui-framework/TASK-103-focus-visual-for-all-avalonia-buttons.md) Every Avalonia control needs a focus visual — `Buttons.axaml` has none (P2) · FEATURE-015
+  - [x] [TASK-570](EPIC-015-birko-xaml-ui-framework/TASK-570-avalonia-tree-chevron-header-hover.md) The restyled TreeViewItem cannot be expanded or collapsed by the user (P2) · FEATURE-015
+  - [x] [TASK-571](EPIC-015-birko-xaml-ui-framework/TASK-571-avalonia-ribbon-item-alignment-and-row-height.md) Avalonia ribbon items are staggered, off-centre and taller than b-ribbon's (P2) · FEATURE-015
+  - [x] [TASK-572](EPIC-015-birko-xaml-ui-framework/TASK-572-avalonia-ribbon-tab-strip-slots.md) Let an app fold its title bar into the ribbon's tab row (P3) · FEATURE-015
   - STORY-029 Tier 0 — single-source design tokens + multi-target generator — done (0/0 done) (done)
   - STORY-030 Tier 0 — Avalonia theme system + runtime ThemeVariant swap — done (0/0 done) (done)
   - STORY-031 Tier 0 validation — Avalonia gallery app + first restyled controls — done (0/0 done) (done)
