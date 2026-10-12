@@ -65,8 +65,40 @@ public class Ribbon : ContentControl
     /// </remarks>
     public double NarrowThreshold { get => GetValue(NarrowThresholdProperty); set => SetValue(NarrowThresholdProperty, value); }
 
+    public static readonly StyledProperty<object?> LeadingContentProperty =
+        AvaloniaProperty.Register<Ribbon, object?>(nameof(LeadingContent));
+
+    public static readonly StyledProperty<object?> TrailingContentProperty =
+        AvaloniaProperty.Register<Ribbon, object?>(nameof(TrailingContent));
+
+    /// <summary>
+    /// Content at the start of the tab strip, before the first tab — typically the app's name. With
+    /// <see cref="TrailingContent"/> it lets an app fold its title bar into the ribbon's tab row, as Office does,
+    /// instead of stacking a separate header above it.
+    /// </summary>
+    public object? LeadingContent { get => GetValue(LeadingContentProperty); set => SetValue(LeadingContentProperty, value); }
+
+    /// <summary>
+    /// Content at the end of the tab strip, between the tabs and the collapse/pin buttons — typically app-level
+    /// commands (search, settings, account). Also shown on the narrow ☰ chrome, so it never disappears.
+    /// </summary>
+    public object? TrailingContent { get => GetValue(TrailingContentProperty); set => SetValue(TrailingContentProperty, value); }
+
+    // The chrome is rebuilt on every tab/size change, but a control can have only one parent, so the slot content
+    // lives in hosts that persist across rebuilds and are only re-parented. Content changes never rebuild.
+    private readonly ContentControl _leadingHost = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly ContentControl _trailingHost = new() { VerticalAlignment = VerticalAlignment.Center };
+
+    private static ContentControl Reparent(ContentControl host)
+    {
+        (host.Parent as Panel)?.Children.Remove(host);
+        return host;
+    }
+
     static Ribbon()
     {
+        LeadingContentProperty.Changed.AddClassHandler<Ribbon>((r, e) => r._leadingHost.Content = e.NewValue);
+        TrailingContentProperty.Changed.AddClassHandler<Ribbon>((r, e) => r._trailingHost.Content = e.NewValue);
         TabsProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         SelectedIndexProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         IsCollapsedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
@@ -225,11 +257,17 @@ public class Ribbon : ContentControl
         pin.Click += (_, _) => IsPinned = !IsPinned;
         AddFocusRing(pin);
 
-        var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(8, 4, 8, 0) };
-        Grid.SetColumn(tabScroller, 0);
-        Grid.SetColumn(chevron, 1);
-        Grid.SetColumn(pin, 2);
+        var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto"), Margin = new Thickness(8, 4, 8, 0) };
+        var leading = Reparent(_leadingHost);
+        var trailing = Reparent(_trailingHost);
+        Grid.SetColumn(leading, 0);
+        Grid.SetColumn(tabScroller, 1);
+        Grid.SetColumn(trailing, 2);
+        Grid.SetColumn(chevron, 3);
+        Grid.SetColumn(pin, 4);
+        strip.Children.Add(leading);
         strip.Children.Add(tabScroller);
+        strip.Children.Add(trailing);
         strip.Children.Add(chevron);
         strip.Children.Add(pin);
 
@@ -355,9 +393,17 @@ public class Ribbon : ContentControl
 
         burger.Click += (_, _) => OpenNarrowMenu(tabs, selected, burger);
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 2) };
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), Margin = new Thickness(4, 2) };
+        var leading = Reparent(_leadingHost);
+        var trailing = Reparent(_trailingHost);
+        Grid.SetColumn(leading, 0);
+        Grid.SetColumn(burger, 1);
+        Grid.SetColumn(active, 2);
+        Grid.SetColumn(trailing, 3);
+        row.Children.Add(leading);
         row.Children.Add(burger);
         row.Children.Add(active);
+        row.Children.Add(trailing);
 
         var chrome = new Border { Child = row, BorderThickness = new Thickness(0, 0, 0, 1) };
         chrome.Bind(Border.BackgroundProperty, chrome.GetResourceObservable("BBgBrush"));

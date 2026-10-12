@@ -192,6 +192,42 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
+    public void Leading_and_trailing_content_sit_in_the_tab_strip_and_survive_rebuilds()
+    {
+        var ribbon = Build(out _);
+        ribbon.LeadingContent = new TextBlock { Text = "AppName" };
+        var settings = new Button { Content = "Settings" };
+        ribbon.TrailingContent = settings;
+        Show(ribbon);
+        Texts(ribbon).Should().Contain(new[] { "AppName", "Settings" });
+
+        // Tab switch, collapse and expand each rebuild the chrome; the same control must be re-parented, not lost
+        // (a control re-added to a second parent throws).
+        ribbon.SelectedIndex = 1;
+        ribbon.IsCollapsed = true;
+        ribbon.IsCollapsed = false;
+        Dispatcher.UIThread.RunJobs();
+        Texts(ribbon).Should().Contain(new[] { "AppName", "Settings" });
+        settings.GetVisualAncestors().Should().Contain(ribbon);
+
+        // Swapping the content does not need a rebuild.
+        ribbon.LeadingContent = new TextBlock { Text = "Renamed" };
+        Texts(ribbon).Should().Contain("Renamed").And.NotContain("AppName");
+    }
+
+    [AvaloniaFact]
+    public void Trailing_content_stays_on_the_narrow_chrome()
+    {
+        var ribbon = Build(out _);
+        ribbon.NarrowThreshold = 10_000; // force the ☰ chrome at the test window's width
+        ribbon.TrailingContent = new Button { Content = "Settings" };
+        Show(ribbon);
+        Dispatcher.UIThread.RunJobs();
+        Texts(ribbon).Should().Contain("☰");
+        Texts(ribbon).Should().Contain("Settings");
+    }
+
+    [AvaloniaFact]
     public void Collapsing_hides_the_groups_but_keeps_the_tab_strip()
     {
         var ribbon = Show(Build(out _));
