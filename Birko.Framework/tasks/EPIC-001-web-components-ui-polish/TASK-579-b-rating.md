@@ -3,12 +3,12 @@ id: TASK-579
 parent: EPIC-001
 feature: FEATURE-001
 priority: P2
-status: in-progress
+status: verify
 assignee: ai
 created: 2026-10-12
 depends-on: []
 blocks: []
-pr: null
+pr: null  # Birko.Web ddef16e, Playground 75bd14d (not pushed; ships in v0.1.4)
 github-issue: null
 jira-key: null
 ---
@@ -27,14 +27,14 @@ No rating control exists in `Birko.Web.Components` today; `b-radio` is the neare
 
 ## Acceptance criteria
 
-- [ ] `b-rating` with `value`, `max` (default 5), `name`, `required`, `disabled` and `readonly`; whole stars only
-- [ ] Keyboard-operable as a radio group: arrows move and select, Home/End go to the ends, one tab stop; each
+- [x] `b-rating` with `value`, `max` (default 5), `name`, `required`, `disabled` and `readonly`; whole stars only
+- [x] Keyboard-operable as a radio group: arrows move and select, Home/End go to the ends, one tab stop; each
       star has an accessible name ("3 of 5"), translatable through `bwc.rating.*`
-- [ ] Form-associated like the other `b-*` controls: the value submits with a form, `required` validates,
+- [x] Form-associated like the other `b-*` controls: the value submits with a form, `required` validates,
       a form reset restores the initial value
-- [ ] `readonly` shows the value with no interaction and no tab stop, and is announced as a value, not a control
-- [ ] Theming through `--b-*` tokens; the filled star meets WCAG AA non-text contrast (3:1) in light and dark
-- [ ] A Playground page and its smoke test; README and component catalogue entries
+- [x] `readonly` shows the value with no interaction and no tab stop, and is announced as a value, not a control
+- [x] Theming through `--b-*` tokens; the filled star meets WCAG AA non-text contrast (3:1) in light and dark
+- [x] A Playground page and its smoke test; README and component catalogue entries
 
 ## Out of scope
 
@@ -75,3 +75,26 @@ Drafted 2026-10-13 at pick. Code in `Birko\Web` (`Birko.Web.Components/src/input
    Home/End, one tab stop), names, `change`, `FormData`, `required` validity, reset, read-only without inputs or
    tab stop, disabled, and contrast in every theme. Prove it fails against a broken build. `entry-points-check` must
    still pass.
+
+## Progress log
+
+- 2026-10-13 — Built: Birko.Web `ddef16e`, Playground `75bd14d`.
+  - **Measured contrast changed the plan:** `--b-text-muted` fails as the empty-star outline in finstat (2.3) and neon
+    (2.9), so the outline is `--b-text-secondary`. finstat's brand yellow is 1.7:1 on white, so finstat sets
+    `--b-rating-color: #a77400`. Rendered in the browser, every theme clears 3:1 on `--b-bg` and `--b-bg-secondary`;
+    the lowest is the light fill on `--b-bg-secondary`, 3.04.
+  - **Tests:** `rating-smoke` 50/50 inside `verify.mjs` (exit 0). A new `keyboard-check.mjs`, 14/14, uses trusted
+    puppeteer input, because an in-page `KeyboardEvent` neither tabs nor moves a radio group. `entry-points-check`
+    403/403; real `tsc` 0.
+  - **Proved red:** dropping the finstat override (fill 1.75:1); focusable star labels (3 tab-stop checks); and each of
+    the four review fixes reverted (see below).
+  - **Close gate**, independent reviewer: no blockers. Fixed, each with a test that fails without it:
+    - a read-only rating's name went stale when `.value` was set by script;
+    - hover previewed a read-only rating;
+    - a value set before a larger `max` arrived was lost;
+    - after `form.reset()` the control ignored later `value` attribute changes; it now hands control back to the
+      attribute, as a native input does.
+    The attribute-versus-pick semantics are in the README for the storefront.
+  - Spawned TASK-591: the Playground's alias map predates TASK-564, so a smoke cannot import a component by its own path.
+  - **Status `verify`:** the human test plan (keyboard, then NVDA or Narrator) is not run. The reviewer flagged
+    `aria-required` on the group plus `required` on each radio as a possible double "required"; listen for it then.
