@@ -21,7 +21,7 @@ generated: 2026-10-13
 
 ## Build progress
 
-18 / 29 tasks done.
+19 / 30 tasks done.
 
 - [x] TASK-001 Add `bare` attribute to all form controls
 - [x] TASK-002 Benchmark + migrate b-editable-table to bare components
@@ -52,6 +52,7 @@ generated: 2026-10-13
 - [ ] TASK-580 `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading
 - [ ] TASK-582 `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group
 - [ ] TASK-583 `base-list-page` cannot refresh when another user changes its entities
+- [x] TASK-584 `input-adornment-smoke` sleeps 60 ms and hopes `b-input`'s ResizeObserver has fired
 
 ## What can be tested now
 

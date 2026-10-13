@@ -17,7 +17,7 @@ which this regeneration never touches._
 | in-progress  | 8     | 11      | 1     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 244   |
+| done         | 1     | 23      | 245   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -34,7 +34,7 @@ which this regeneration never touches._
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (29/42 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (30/43 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -63,6 +63,7 @@ which this regeneration never touches._
   - [ ] [TASK-580](EPIC-001-web-components-ui-polish/TASK-580-b-modal-title-as-heading.md) `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading (P3) · FEATURE-001
   - [~] [TASK-582](EPIC-001-web-components-ui-polish/TASK-582-page-tour-button-beside-the-title.md) `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group (P3) · FEATURE-001
   - [ ] [TASK-583](EPIC-001-web-components-ui-polish/TASK-583-base-list-page-live-refresh-on-entity-changed.md) `base-list-page` cannot refresh when another user changes its entities (P3) · FEATURE-001
+  - [x] [TASK-584](EPIC-001-web-components-ui-polish/TASK-584-input-adornment-smoke-races-the-resize-observer.md) `input-adornment-smoke` sleeps 60 ms and hopes `b-input`'s ResizeObserver has fired (P3) · FEATURE-001
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
