@@ -55,6 +55,10 @@ var email = new EmailMessage
 var result = await sender.SendAsync(email);
 ```
 
+With both `Body` (HTML) and `PlainTextBody`, the mail is `multipart/alternative`: a UTF-8 text/plain part, then the
+UTF-8 text/html part that clients prefer. An inline attachment (`isInline: true` with a `contentId`) is related to
+the HTML part, so `<img src="cid:...">` resolves.
+
 ## Templates
 
 ```csharp

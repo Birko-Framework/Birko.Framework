@@ -13,6 +13,7 @@ Test suite for the Birko.Messaging library. Validates core message types (addres
 - **Email/EmailMessageTests.cs** — Tests EmailMessage default values and full property round-trip (From, Recipients, Cc, Bcc, ReplyTo, Headers, Metadata, Priority).
 - **Email/EmailSettingsTests.cs** — Tests EmailSettings constructors, default values (UseSecure, Timeout), and LoadFrom property copying.
 - **Email/SmtpEmailSenderTests.cs** — Tests SmtpEmailSender constructor validation, null/empty recipient handling, convenience SendAsync overload, SendBatchAsync edge cases, and Dispose behavior. Uses localhost SMTP (no real server required).
+- **Email/SmtpEmailSenderWireTests.cs** — TASK-585: the MIME on the wire. Sends through a real SmtpClient into a pickup directory and parses the `.eml` (part types, order, charsets, decoded text, `multipart/related` for inline images). Asserts on the wire, never on `MailMessage` properties.
 - **Templates/StringTemplateEngineTests.cs** — Tests StringTemplateEngine simple/multi/nested placeholder replacement, missing property errors, null template/model guards, empty template handling, null property values, and IMessageTemplate rendering.
 
 ## Dependencies

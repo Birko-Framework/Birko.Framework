@@ -44,6 +44,7 @@ Core messaging framework providing unified interfaces for email, SMS, and push n
 - MessageResult uses static factory pattern (Succeeded/Failed), not constructors
 - EmailSettings extends RemoteSettings for host/port/credentials consistency
 - SmtpEmailSender is IDisposable (wraps SmtpClient)
+- SmtpEmailSender MIME shape (TASK-585): `IsHtml` + `PlainTextBody` → `multipart/alternative`, text/plain first and text/html last, both UTF-8; an inline attachment with a `ContentId` is a `LinkedResource` of the HTML view (`multipart/related`). One body → one part. Never mix `Body`/`IsBodyHtml` with an `AlternateView`: System.Net.Mail then sends the body as text/plain. `SmtpEmailSenderWireTests` asserts the `.eml`, not `MailMessage`
 - StringTemplateEngine uses GeneratedRegex for performance
 - All senders return MessageResult (never throw for delivery failures)
 

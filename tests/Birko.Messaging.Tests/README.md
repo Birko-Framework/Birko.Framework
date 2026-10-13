@@ -13,6 +13,7 @@ Unit tests for the Birko.Messaging library covering core message types, email se
 - **Email/EmailMessageTests.cs** — Tests for `EmailMessage` default values and full property round-tripping (recipients, CC, BCC, headers, metadata, priority).
 - **Email/EmailSettingsTests.cs** — Tests for `EmailSettings` constructor, credential handling, secure/timeout defaults, and `LoadFrom` copy behavior.
 - **Email/SmtpEmailSenderTests.cs** — Tests for `SmtpEmailSender` argument validation, empty-recipient and missing-sender guard logic, batch operations, and disposal.
+- **Email/SmtpEmailSenderWireTests.cs** — The MIME `SmtpEmailSender` writes, read from a pickup-directory `.eml`: alternative part order and charsets, single-part bodies, inline images related to the HTML part.
 - **Templates/StringTemplateEngineTests.cs** — Tests for `StringTemplateEngine` placeholder replacement, nested property resolution, null handling, and `IMessageTemplate` rendering.
 
 ## Dependencies

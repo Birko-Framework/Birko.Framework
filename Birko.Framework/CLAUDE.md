@@ -239,6 +239,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### An HTML mail with a text part is HTML on the wire (2026-10-13)
+
+[[TASK-585]]. With `PlainTextBody` set, `SmtpEmailSender` sent two `text/plain` parts, the HTML first: System.Net.Mail
+ignores `IsBodyHtml` once an `AlternateView` exists. Now `multipart/alternative`, text/plain then text/html, both UTF-8;
+an inline image is a `LinkedResource` of the HTML view. One body is unchanged. Tests read the pickup `.eml`.
+
 ### A WebSocket reverse proxy ships (2026-10-12)
 
 [[TASK-542]]. `MapWebSocketProxy(pattern, upstream, configure)` in `Birko.Communication.WebSocket/Proxy/`. It connects

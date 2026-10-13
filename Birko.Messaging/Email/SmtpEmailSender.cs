@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Mail;
+using System.Net.Mime;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -185,15 +187,31 @@ public sealed class SmtpEmailSender : IEmailSender, IDisposable
             mail.ReplyToList.Add(ToMailAddress(message.ReplyTo));
         }
 
+        // TASK-585: with any AlternateView present, System.Net.Mail ignores IsBodyHtml and sends Body as text/plain,
+        // first. So both bodies go out as views: plain, then HTML (RFC 2046: the last alternative is preferred).
+        AlternateView? htmlView = null;
         if (message.IsHtml && !string.IsNullOrEmpty(message.PlainTextBody))
         {
-            var plainView = AlternateView.CreateAlternateViewFromString(
-                message.PlainTextBody, null, "text/plain");
-            mail.AlternateViews.Add(plainView);
+            mail.Body = string.Empty;
+            mail.IsBodyHtml = false;
+            mail.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(
+                message.PlainTextBody, Encoding.UTF8, MediaTypeNames.Text.Plain));
+            htmlView = AlternateView.CreateAlternateViewFromString(message.Body, Encoding.UTF8, MediaTypeNames.Text.Html);
+            mail.AlternateViews.Add(htmlView);
         }
 
         foreach (var attachment in message.Attachments)
         {
+            // An inline image belongs to the HTML view, so the part is multipart/related and cid: resolves there.
+            if (htmlView != null && attachment.IsInline && !string.IsNullOrEmpty(attachment.ContentId))
+            {
+                htmlView.LinkedResources.Add(new LinkedResource(attachment.Content, attachment.ContentType)
+                {
+                    ContentId = attachment.ContentId,
+                });
+                continue;
+            }
+
             var mailAttachment = new Attachment(attachment.Content, attachment.FileName, attachment.ContentType);
             if (attachment.IsInline && !string.IsNullOrEmpty(attachment.ContentId))
             {
