@@ -13,20 +13,24 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 192   |
-| in-progress  | 8     | 11      | 1     |
-| verify       | —     | —       | 0     |
+| todo         | —     | —       | 194   |
+| in-progress  | 8     | 11      | 0     |
+| verify       | —     | —       | 1     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 247   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 25× P1 · 121× P2 · 46× P3.
+`todo` by priority: 25× P1 · 121× P2 · 48× P3.
 
 ## In progress now
 
-- [TASK-585](_loose/TASK-585-smtp-sender-mislabels-html-when-a-plain-text-part-is-set.md) — SmtpEmailSender sends the HTML part labelled text/plain, and first, when `PlainTextBody` is set (P2, ai)
+_None._
+
+## Awaiting verification
+
+- [ ] [TASK-585](_loose/TASK-585-smtp-sender-mislabels-html-when-a-plain-text-part-is-set.md) SmtpEmailSender sends the HTML part labelled text/plain, and first, when `PlainTextBody` is set (P2)
 
 ## Blocked
 
@@ -556,7 +560,9 @@ which this regeneration never touches._
 - [ ] [TASK-514](_loose/TASK-514-sqlite-view-decimal-aggregates-exact.md) SQLite views aggregate a `decimal` column with the built-in `SUM` / `AVG`, which go through a double (P3)
 - [ ] [TASK-515](_loose/TASK-515-sqlite-ignores-declared-decimal-scale.md) SQLite accepts a declared decimal precision / scale and does nothing with it (P3)
 - [x] [TASK-516](_loose/TASK-516-zai-glm53-output-cap-and-truncation.md) ZAiProvider caps glm-5.3 at 4096 output tokens and reports a truncated reply as a normal end (P1)
-- [~] [TASK-585](_loose/TASK-585-smtp-sender-mislabels-html-when-a-plain-text-part-is-set.md) SmtpEmailSender sends the HTML part labelled text/plain, and first, when `PlainTextBody` is set (P2)
+- [ ] [TASK-585](_loose/TASK-585-smtp-sender-mislabels-html-when-a-plain-text-part-is-set.md) SmtpEmailSender sends the HTML part labelled text/plain, and first, when `PlainTextBody` is set (P2)
+- [ ] [TASK-586](_loose/TASK-586-template-engine-value-encoding-hook.md) `ITemplateEngine` has no way to encode a merged value for the template's target format (P3)
+- [ ] [TASK-587](_loose/TASK-587-html-only-mail-inline-image-not-related.md) An HTML-only mail puts its inline image beside the HTML, where `cid:` has no defined resolution (P3)
 
 ## Completed
 
