@@ -60,8 +60,10 @@ Today `BasePage.renderPageHeader()` (`Birko.Web.Shell/src/pages/base-page.ts:59`
 
 ## Human test plan
 
-- [ ] In the Playground, open a read-only list page and a CRUD page that both declare tour steps, side by side.
-      *Judgement:* does the `?` look like it belongs beside the title on both, and is it clear what it does?
+- [ ] In the Playground (published, or `node build.js` + `node serve.mjs`), open **Layout → Page tour button
+      (BasePage)**: a read-only page (Orders) above one with a Create action (Products), both with a tour. Check light
+      and dark. *Judgement:* does the `?` look like it belongs beside the title on both, and is it clear what it does?
+      Press it: the tour starts, and pressing again replays it.
 
 ## Implementation plan
 
@@ -122,3 +124,8 @@ Drafted 2026-10-13 at pick. The code lands in `Birko\Web` (`Birko.Web.Shell`); t
   `birko-web-components/layout` barrel as a value, so a consumer using only `BasePage` now pulls the layout barrel
   in. The package edge already existed, and there is no narrower subpath export.
   Status `verify`: the human test plan's visual judgement has not been run.
+- 2026-10-13 — The test plan had no surface: the Playground gallery shows components, not pages, so the `?` only existed
+  in the hidden smoke run. Added the Layout card `pg-page-tour` (Playground `6d3e63c`), two real
+  `BasePage` pages. Checked in a real browser: both buttons sit in `.page-title-group`, both are named "Take a tour",
+  and a click starts the tour. Verify exit 0, no EMPTY card. **Noticed, for the judgement:** the `?` (ghost, `sm`)
+  is small and faint next to a 2xl title.
