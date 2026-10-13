@@ -1,6 +1,6 @@
 ---
 id: FEATURE-001
-generated: 2026-10-12
+generated: 2026-10-13
 ---
 
 # Birko.Web.Components — UI polish — Status
@@ -21,7 +21,7 @@ generated: 2026-10-12
 
 ## Build progress
 
-18 / 27 tasks done.
+18 / 29 tasks done.
 
 - [x] TASK-001 Add `bare` attribute to all form controls
 - [x] TASK-002 Benchmark + migrate b-editable-table to bare components
@@ -50,6 +50,8 @@ generated: 2026-10-12
 - [x] TASK-497 `b-range` in range mode draws its thumbs below the track
 - [ ] TASK-579 `b-rating` — a form-associated star-rating input
 - [ ] TASK-580 `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading
+- [ ] TASK-582 `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group
+- [ ] TASK-583 `base-list-page` cannot refresh when another user changes its entities
 
 ## What can be tested now
 
@@ -79,4 +81,6 @@ logs an error instead) and TASK-467 (a validity rule that silently enforces noth
 the input type). Both are faults in what already ships.
 
 **Added 2026-10-12:** TASK-579, a star-rating input the shop's review form needs (the last piece the shop is waiting on), and TASK-580, dialog titles that screen readers can navigate to as headings (found in Presenter's accessibility audit).
+
+**Added 2026-10-13:** TASK-582, a place for a page's "take a tour" button beside its title, and TASK-583, lists that refresh themselves when someone else changes their data (both asked for by Symbio).
 

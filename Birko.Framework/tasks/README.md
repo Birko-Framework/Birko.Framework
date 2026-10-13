@@ -13,7 +13,7 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 192   |
+| todo         | —     | —       | 194   |
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
@@ -22,7 +22,7 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 25× P1 · 122× P2 · 45× P3.
+`todo` by priority: 25× P1 · 122× P2 · 47× P3.
 
 ## In progress now
 
@@ -34,7 +34,7 @@ _None.
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (29/40 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (29/42 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -61,6 +61,8 @@ _None.
   - [x] [TASK-573](EPIC-001-web-components-ui-polish/TASK-573-modal-open-refocuses-when-already-open.md) b-modal's open() on an already-open modal steals focus and forgets the opener (P1)
   - [ ] [TASK-579](EPIC-001-web-components-ui-polish/TASK-579-b-rating.md) `b-rating` — a form-associated star-rating input (P2) · FEATURE-001
   - [ ] [TASK-580](EPIC-001-web-components-ui-polish/TASK-580-b-modal-title-as-heading.md) `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading (P3) · FEATURE-001
+  - [ ] [TASK-582](EPIC-001-web-components-ui-polish/TASK-582-page-tour-button-beside-the-title.md) `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group (P3) · FEATURE-001
+  - [ ] [TASK-583](EPIC-001-web-components-ui-polish/TASK-583-base-list-page-live-refresh-on-entity-changed.md) `base-list-page` cannot refresh when another user changes its entities (P3) · FEATURE-001
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
