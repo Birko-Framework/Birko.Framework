@@ -3,7 +3,7 @@ id: TASK-582
 parent: EPIC-001
 feature: FEATURE-001
 priority: P3
-status: todo
+status: in-progress
 assignee: ai
 created: 2026-10-13
 depends-on: []
@@ -40,12 +40,14 @@ Today `BasePage.renderPageHeader()` (`Birko.Web.Shell/src/pages/base-page.ts:59`
       `this.listen` is aborted on every `update()`, so a listener wired in `onMount` dies after the first render
 - [ ] A launch always replays the tour (`once: false`)
 - [ ] The button is keyboard reachable and has an accessible name from a Shell i18n key (`bws.tour.button`,
-      en + sk). A bare `?` with no name fails
+      English default in code like every other `bws.*` key; the Shell ships no locale files, so a consumer's bundle
+      supplies other languages). A bare `?` with no name fails
 - [ ] It reads correctly both on a page **with no** header actions and on one **with** a Create button. Check
       the read-only case first, because it is the reported symptom
-- [ ] Works for `base-list-page`, `base-crud-page`, `base-detail-page` and `base-split-page` through the
-      shared header. A page that overrides `renderPageHeader()` can still render the button through a
-      protected helper
+- [ ] Works for `BasePage`, `BaseCrudPage`, `BaseListPage` and `BaseSplitPage` through the shared header. A page
+      that overrides `renderPageHeader()` can still render the button through a protected helper.
+      (`BaseDetailPage` was listed here at filing; it does not extend `BasePage` and renders no page header, so it
+      has nowhere to put the button. Corrected at planning, 2026-10-13.)
 - [ ] README documents the hook. Record the Birko.Web tag in Symbio TASK-677 so Symbio can drop its eight
       overrides
 
@@ -59,3 +61,42 @@ Today `BasePage.renderPageHeader()` (`Birko.Web.Shell/src/pages/base-page.ts:59`
 
 - [ ] In the Playground, open a read-only list page and a CRUD page that both declare tour steps, side by side.
       *Judgement:* does the `?` look like it belongs beside the title on both, and is it clear what it does?
+
+## Implementation plan
+
+Drafted 2026-10-13 at pick. The code lands in `Birko\Web` (`Birko.Web.Shell`); the regression suite lands in
+`Birko.Web.Playground`, which is the Web packages' only test vehicle (no unit runner). This repo carries only the task.
+
+1. **`Birko.Web.Shell/src/pages/base-page.ts`.** Add the hook and the helper:
+   - `protected tourSteps(): TourStep[] | null` (default `null`), and `protected get tourId(): string`
+     (default `this.localName`, which is stable per page and overridable).
+   - `protected renderTourButton(): string`: `''` when there are no steps, otherwise a ghost, small `b-button` with
+     `data-b-page-tour` and `aria-label` and `title` set from `bws.tour.button` (default "Take a tour"), via
+     `birko-web-core`'s global `t`, as the other base pages resolve their keys.
+   - `renderPageHeader()` wraps `<h1>` + `renderTourButton()` in `.page-title-group` (flex, centred, small gap,
+     `min-width: 0` so a long title still wraps). `.header-actions` is unchanged.
+2. **Wiring, once.** In the constructor, after `BaseComponent` has attached the shadow root, add **one raw,
+   delegated** `click` listener on the shadow root that matches `[data-b-page-tour]` and calls
+   `tour.start(this.tourSteps() ?? [], { id: this.tourId, once: false })`. It is not `this.listen`, which is
+   aborted on every `update()`, and not `onMount`, which a subclass may override without calling `super`. A
+   morph that replaces the button keeps working because the listener is delegated. Steps are read at click time,
+   so a page whose steps depend on loaded state is current.
+3. **Imports.** `tour` and `TourStep` come from `birko-web-components/layout`, the barrel `BaseCrudPage`'s
+   `b-modal` already needs, so no new package edge and nothing new in a consumer's bundle.
+4. **Docs.** Shell `README.md` (the hook, the helper, the key) and `Birko.Web.Shell/CLAUDE.md` (the "wire once,
+   raw and delegated" reason, so nobody moves it to `onMount`). A `CHANGELOG.md` entry and a tag at push time,
+   per `Birko\Web/CLAUDE.md`; the push itself is the user's call.
+5. **Regression suite: Playground `src/page-tour-smoke.ts`**, registered in `app.ts` and in `verify.mjs`'s suite
+   list. Checks, each named with what it measured:
+   - a page with steps and **no** header actions: the button is inside `.page-title-group` beside the `h1`,
+     **not** in `.header-actions`, and `.header-actions` is absent;
+   - a page with steps **and** a header action: same placement, action group unchanged;
+   - a page with `tourSteps()` returning `null`, and one returning `[]`: no button;
+   - accessible name equals the `bws.tour.button` default, and the button is focusable;
+   - a click after `this.update()` starts the tour (a `b-tour` overlay appears), and a second click replays it
+     (`once: false`);
+   - `renderTourButton()` used from an overridden `renderPageHeader()` still launches.
+   Prove the guard can fail: run the suite once against the old `renderPageHeader()` (button in actions) and once
+   with the listener moved to `this.listen`, and record both reds.
+6. **Close out.** Record the Birko.Web tag in Symbio TASK-677 once pushed; Symbio's migration of its eight pages
+   stays there.
