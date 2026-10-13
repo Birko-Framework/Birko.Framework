@@ -28,9 +28,6 @@ which this regeneration never touches._
 
 _None._
 
-## Awaiting verification
-
-
 ## Blocked
 
 - [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) — `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3, ai) ⚠ blocked: on an external condition, not on another task
