@@ -24,6 +24,11 @@ override and no string owners — and DraCode can't use `MapOwnedCrud` anyway (s
 
 Adopted in the consumer by DraCode TASK-139 (`Consumers/DraCode/tasks/EPIC-018-adopt-birko-upstreams/STORY-040`).
 
+**The 404 here is one row of the framework's visibility rule** (settled 2026-10-13 in [[STORY-062]],
+decision 2b): if the caller may read the resource, a denied action is 403; if not, it is 404. Owned data
+is private, so a non-owner gets 404, as this task already says. Keep the predicate's 404 consistent with
+that rule; don't introduce a 403 here for a caller who cannot read the entity.
+
 ## Acceptance criteria
 
 - [ ] A predicate taking `ICurrentUser`, the owner, and an optional "sees everything" permission
