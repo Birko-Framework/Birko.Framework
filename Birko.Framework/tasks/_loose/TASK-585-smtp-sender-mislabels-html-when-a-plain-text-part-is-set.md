@@ -2,13 +2,13 @@
 id: TASK-585
 parent: null
 feature: null
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-10-13
 depends-on: []
 blocks: []
-findings: []
+findings: [FIELD-031]
 pr: null
 github-issue: null
 jira-key: null
@@ -57,8 +57,24 @@ the source view shows a text/plain part followed by a text/html part.
 
 ## Implementation plan
 
-1. In `BuildMailMessage`, when `IsHtml` and `PlainTextBody` are both set, leave `Body` empty. Add an `AlternateView`
-   for the plain text, then one for the HTML, each with `Encoding.UTF8` and an explicit media type.
-2. Wire test via `SmtpDeliveryMethod.SpecifiedPickupDirectory`.
+Refined at pick, 2026-10-13. Code: `Birko.Messaging/Email/SmtpEmailSender.cs` `BuildMailMessage`. Tests:
+`tests/Birko.Messaging.Tests/Email/SmtpEmailSenderTests.cs`.
+
+1. **Both bodies** (`IsHtml` and a non-empty `PlainTextBody`): leave `Body` empty, then add two `AlternateView`s,
+   plain first and HTML last, each `Encoding.UTF8` with an explicit media type (`text/plain`, `text/html`).
+2. **One body:** unchanged (`Body` + `IsBodyHtml`), so a single `text/html` or `text/plain` part. Set
+   `BodyEncoding = UTF8` only if the wire shows the single part losing non-ASCII today; measure, don't assume.
+3. **Inline attachments (decision, to be confirmed on the wire):** in the both-bodies case, an inline attachment with
+   a `ContentId` becomes a `LinkedResource` on the HTML view, so the HTML part is `multipart/related{text/html, image}`
+   and `cid:` resolves by the RFC 2387 rule. As a sibling `Attachment` it would sit in `multipart/mixed` next to the
+   alternative, where `cid:` resolution is undefined. Non-inline attachments stay `Attachments`, and the one-body case
+   keeps today's structure (criterion 2).
+4. **Wire tests** through the existing internal constructor: the send delegate hands the `MailMessage` to an
+   `SmtpClient` with `SpecifiedPickupDirectory`, and the test parses the `.eml`'s MIME headers, never `MailMessage`
+   properties. Cases: both bodies (types, order, charsets), HTML only, plain only, both bodies with an inline image
+   (the related part holds the HTML and the `Content-ID`), and non-ASCII text surviving.
+5. **Mutation check:** put the old construction back, and the both-bodies test goes red.
+6. Docs: `Birko.Messaging` CLAUDE.md/README if they describe the MIME shape; a CHANGELOG/Recent Updates note per the
+   framework's rules (behaviour on the wire changes for callers who set `PlainTextBody`).
 
 ## Progress log
