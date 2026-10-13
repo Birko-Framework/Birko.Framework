@@ -2,14 +2,14 @@
 id: TASK-564
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-11
 depends-on: []
 blocks: []
 findings: []
-pr: null  # Birko.Web 0ddd458, Playground 0884d39 (not pushed; ships in the next PATCH tag)
+pr: null  # Birko.Web 0ddd458 (v0.1.3) + 3bb1d3a (README sizes); Playground 0884d39
 github-issue: null
 jira-key: null
 ---
@@ -41,10 +41,10 @@ importing its file: a side-effect import per component works without any new API
       own children), so a lean import never leaves an undefined `b-*` tag inside a shadow root. Measure
       it rather than assume: a playground or Testing check that imports each entry alone and asserts no
       `:not(:defined)` element in its render
-- [ ] `README.md` gets an "Import only what you use" section. It names the full barrel as the convenient
+- [x] `README.md` gets an "Import only what you use" section. It names the full barrel as the convenient
       default and the per-component imports as the lean option, with a measured before/after from one
-      real consumer (Presenter TASK-035) — ⚠ PARTLY MET: section, default-vs-lean wording and framework-only sizes done (`0ddd458`); the whole-app
-      before/after waits for Presenter TASK-035
+      real consumer (Presenter TASK-035) — section `0ddd458`; Presenter's whole-app before/after added in `3bb1d3a`
+      (`app.js` 642,859 → 170,662 B minified, 149,545 → 45,670 B served brotli)
 - [x] Consumers' path config documented: an esbuild alias prefix and a `tsconfig` `paths` pattern, since
       consumers resolve Birko from source rather than as a package
 - [x] The existing barrels and `.` keep working unchanged (not breaking → PATCH)
@@ -56,7 +56,10 @@ importing its file: a side-effect import per component works without any new API
 
 ## Human test plan
 
-- [ ] In Presenter, after TASK-035 adopts it: every surface renders with no bare `b-*` tags, and the bundle
+- [x] In Presenter, after TASK-035 adopts it: every surface renders with no bare `b-*` tags, and the bundle
+  - **Passed 2026-10-13:** Presenter TASK-035 (done, `f2cb8c2`): its headless check found no undefined custom element on
+    any surface through every shadow root, and the user clicked through every surface in dark and light, every
+    overlay, a paired phone and the code-block slide with nothing rendered as a bare tag.
       shrinks by the amount recorded in that task
 
 ## Implementation plan
@@ -128,3 +131,6 @@ Steps:
       every mount ran, and reads only the README table;
     - the duplicated comments are trimmed, and the checker is listed in the Playground docs.
   - **Status `verify`:** the README's whole-app before/after and the human test plan both run in Presenter TASK-035.
+- 2026-10-13 — Shipped in Birko.Web `v0.1.3`. Presenter TASK-035 adopted it (done): `app.js` 642,859 → 170,662 B minified,
+  149,545 → 45,670 B served with brotli, human test passed there. The sizes are in the Components README (`3bb1d3a`,
+  docs only, so no tag). Done.

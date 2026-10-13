@@ -15,9 +15,9 @@ which this regeneration never touches._
 | planned      | 10    | 27      | —     |
 | todo         | —     | —       | 192   |
 | in-progress  | 8     | 11      | 0     |
-| verify       | —     | —       | 1     |
+| verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 246   |
+| done         | 1     | 23      | 247   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -30,7 +30,6 @@ _None._
 
 ## Awaiting verification
 
-- [ ] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
 
 ## Blocked
 
@@ -38,7 +37,7 @@ _None._
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (31/43 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (32/43 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -60,7 +59,7 @@ _None._
   - [x] [TASK-554](EPIC-001-web-components-ui-polish/TASK-554-validation-refusals-never-reach-the-screen.md) A validator's refusal never reaches the screen — problem+json was read as text, and its entries printed as [object Object] (P1)
   - [x] [TASK-562](EPIC-001-web-components-ui-polish/TASK-562-muted-text-and-dark-primary-below-aa.md) `--b-text-muted` and the dark primary button fall below WCAG AA in light and dark (P2)
   - [x] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
-  - [ ] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
+  - [x] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
   - [x] [TASK-568](EPIC-001-web-components-ui-polish/TASK-568-modal-focus-trap-ignores-slotted-content.md) b-modal's focus trap ignores slotted content, so Tab is stuck on Close (P1)
   - [x] [TASK-573](EPIC-001-web-components-ui-polish/TASK-573-modal-open-refocuses-when-already-open.md) b-modal's open() on an already-open modal steals focus and forgets the opener (P1)
   - [ ] [TASK-579](EPIC-001-web-components-ui-polish/TASK-579-b-rating.md) `b-rating` — a form-associated star-rating input (P2) · FEATURE-001
