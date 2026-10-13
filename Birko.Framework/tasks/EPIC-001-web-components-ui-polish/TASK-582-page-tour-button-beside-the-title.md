@@ -3,12 +3,12 @@ id: TASK-582
 parent: EPIC-001
 feature: FEATURE-001
 priority: P3
-status: verify
+status: done
 assignee: ai
 created: 2026-10-13
 depends-on: [TASK-584]
 blocks: []
-pr: null  # Birko.Web eec672b, Playground aa8aa24 (not pushed, no tag yet)
+pr: null  # Birko.Web eec672b, shipped in v0.1.3; Playground aa8aa24 + 6d3e63c
 github-issue: null
 jira-key: null
 ---
@@ -48,8 +48,8 @@ Today `BasePage.renderPageHeader()` (`Birko.Web.Shell/src/pages/base-page.ts:59`
       that overrides `renderPageHeader()` can still render the button through a protected helper.
       (`BaseDetailPage` was listed here at filing; it does not extend `BasePage` and renders no page header, so it
       has nowhere to put the button. Corrected at planning, 2026-10-13.)
-- [ ] README documents the hook. Record the Birko.Web tag in Symbio TASK-677 so Symbio can drop its eight
-      overrides — ⚠ PARTLY MET: README done (`eec672b`); no tag exists until the push, which is the user's call
+- [x] README documents the hook. Record the Birko.Web tag in Symbio TASK-677 so Symbio can drop its eight
+      overrides — README `eec672b`; `v0.1.3` recorded in Symbio TASK-677 (`1d52094f`)
 
 ## Out of scope
 
@@ -60,10 +60,12 @@ Today `BasePage.renderPageHeader()` (`Birko.Web.Shell/src/pages/base-page.ts:59`
 
 ## Human test plan
 
-- [ ] In the Playground (published, or `node build.js` + `node serve.mjs`), open **Layout → Page tour button
+- [x] In the Playground (published, or `node build.js` + `node serve.mjs`), open **Layout → Page tour button
       (BasePage)**: a read-only page (Orders) above one with a Create action (Products), both with a tour. Check light
       and dark. *Judgement:* does the `?` look like it belongs beside the title on both, and is it clear what it does?
       Press it: the tour starts, and pressing again replays it.
+  - **Passed 2026-10-13:** the user checked the published Playground (v0.1.3, Pages run 38381573155): the `?` sits
+    beside the title on both pages, in light and dark, and the tour starts and replays.
 
 ## Implementation plan
 
@@ -129,3 +131,5 @@ Drafted 2026-10-13 at pick. The code lands in `Birko\Web` (`Birko.Web.Shell`); t
   `BasePage` pages. Checked in a real browser: both buttons sit in `.page-title-group`, both are named "Take a tour",
   and a click starts the tour. Verify exit 0, no EMPTY card. **Noticed, for the judgement:** the `?` (ghost, `sm`)
   is small and faint next to a 2xl title.
+- 2026-10-13 — Shipped in Birko.Web `v0.1.3` (`63d085c`, pushed with the Playground; Pages run 38381573155 green).
+  The user signed off the human test plan on the published Playground. Tag recorded in Symbio TASK-677. Done.

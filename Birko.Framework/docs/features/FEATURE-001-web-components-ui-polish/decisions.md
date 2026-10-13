@@ -64,3 +64,4 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-10-12 — D7: TASK-579, TASK-580 added (consumer asks filed from the storefront (b-rating, its TASK-012) and Presenter (b-modal title as a heading, its TASK-032)). No state change.
 - 2026-10-13 — D7: TASK-582, TASK-583 added (Symbio asks, filed once Symbio decided them: the page tour button beside the title (its TASK-677), and a `base-list-page` live-refresh opt-in on the `entity-changed` contract (its TASK-898)). No state change.
 - 2026-10-13 — D7: TASK-584 spawned from TASK-582 and done (a Playground smoke raced `b-input`'s ResizeObserver; FIELD-030). No state change.
+- 2026-10-13 — D7: TASK-582 done, shipped in Birko.Web v0.1.3 and signed off on the published Playground. No state change.
