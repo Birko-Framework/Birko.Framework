@@ -2,7 +2,7 @@
 id: TASK-585
 parent: null
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-13
@@ -53,8 +53,13 @@ It sets the property again once this lands.
 
 ## Human test plan
 
-Send with both bodies to a local SMTP catcher, then open the mail in a real client. Expected: the HTML renders, and
-the source view shows a text/plain part followed by a text/html part.
+- [x] Send with both bodies to a local SMTP catcher, then open the mail in a real client. Expected: the HTML renders,
+      and the source view shows a text/plain part followed by a text/html part.
+  - **Passed 2026-10-13:** sent over real SMTP through the public `SmtpEmailSender` constructor to Mailpit v1.31.5
+    (Docker, `localhost:1025`), with both bodies and an inline PNG. The user checked the Mailpit UI: the HTML tab
+    renders the heading, the Slovak diacritics and the inline image in the body; the Text tab shows the plain part; the
+    raw source has text/plain before text/html. Mailpit's own parse: HTML and text parts present, the image inline
+    (CID `logo`), 0 attachments.
 
 ## Implementation plan
 
@@ -94,3 +99,5 @@ Refined at pick, 2026-10-13. Code: `Birko.Messaging/Email/SmtpEmailSender.cs` `B
   - Docs: Messaging CLAUDE.md/README, the tests' CLAUDE.md/README, framework Recent Updates.
   - Status `verify`: the human test plan (a real mail client) has not been run. Symbio re-enabling `PlainTextBody` is
     a separate Symbio change.
+- 2026-10-13 — Human test passed on Mailpit (real SMTP, see the test plan). Done. Symbio re-enabling `PlainTextBody`
+  (removing its TASK-585 workaround) is a Symbio change.

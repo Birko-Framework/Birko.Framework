@@ -15,9 +15,9 @@ which this regeneration never touches._
 | planned      | 10    | 27      | —     |
 | todo         | —     | —       | 194   |
 | in-progress  | 8     | 11      | 0     |
-| verify       | —     | —       | 1     |
+| verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 247   |
+| done         | 1     | 23      | 248   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -27,10 +27,6 @@ which this regeneration never touches._
 ## In progress now
 
 _None._
-
-## Awaiting verification
-
-- [ ] [TASK-585](_loose/TASK-585-smtp-sender-mislabels-html-when-a-plain-text-part-is-set.md) SmtpEmailSender sends the HTML part labelled text/plain, and first, when `PlainTextBody` is set (P2)
 
 ## Blocked
 
@@ -560,7 +556,7 @@ _None._
 - [ ] [TASK-514](_loose/TASK-514-sqlite-view-decimal-aggregates-exact.md) SQLite views aggregate a `decimal` column with the built-in `SUM` / `AVG`, which go through a double (P3)
 - [ ] [TASK-515](_loose/TASK-515-sqlite-ignores-declared-decimal-scale.md) SQLite accepts a declared decimal precision / scale and does nothing with it (P3)
 - [x] [TASK-516](_loose/TASK-516-zai-glm53-output-cap-and-truncation.md) ZAiProvider caps glm-5.3 at 4096 output tokens and reports a truncated reply as a normal end (P1)
-- [ ] [TASK-585](_loose/TASK-585-smtp-sender-mislabels-html-when-a-plain-text-part-is-set.md) SmtpEmailSender sends the HTML part labelled text/plain, and first, when `PlainTextBody` is set (P2)
+- [x] [TASK-585](_loose/TASK-585-smtp-sender-mislabels-html-when-a-plain-text-part-is-set.md) SmtpEmailSender sends the HTML part labelled text/plain, and first, when `PlainTextBody` is set (P2)
 - [ ] [TASK-586](_loose/TASK-586-template-engine-value-encoding-hook.md) `ITemplateEngine` has no way to encode a merged value for the template's target format (P3)
 - [ ] [TASK-587](_loose/TASK-587-html-only-mail-inline-image-not-related.md) An HTML-only mail puts its inline image beside the HTML, where `cid:` has no defined resolution (P3)
 
