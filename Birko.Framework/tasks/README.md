@@ -14,8 +14,8 @@ which this regeneration never touches._
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
 | todo         | —     | —       | 193   |
-| in-progress  | 8     | 11      | 1     |
-| verify       | —     | —       | 0     |
+| in-progress  | 8     | 11      | 0     |
+| verify       | —     | —       | 1     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 245   |
 | cancelled    | 0     | 0       | 5     |
@@ -26,7 +26,11 @@ which this regeneration never touches._
 
 ## In progress now
 
-- [TASK-582](EPIC-001-web-components-ui-polish/TASK-582-page-tour-button-beside-the-title.md) — `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group (P3, ai)
+_None._
+
+## Awaiting verification
+
+- [ ] [TASK-582](EPIC-001-web-components-ui-polish/TASK-582-page-tour-button-beside-the-title.md) `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group (P3)
 
 ## Blocked
 
@@ -61,7 +65,7 @@ which this regeneration never touches._
   - [x] [TASK-573](EPIC-001-web-components-ui-polish/TASK-573-modal-open-refocuses-when-already-open.md) b-modal's open() on an already-open modal steals focus and forgets the opener (P1)
   - [ ] [TASK-579](EPIC-001-web-components-ui-polish/TASK-579-b-rating.md) `b-rating` — a form-associated star-rating input (P2) · FEATURE-001
   - [ ] [TASK-580](EPIC-001-web-components-ui-polish/TASK-580-b-modal-title-as-heading.md) `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading (P3) · FEATURE-001
-  - [~] [TASK-582](EPIC-001-web-components-ui-polish/TASK-582-page-tour-button-beside-the-title.md) `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group (P3) · FEATURE-001
+  - [ ] [TASK-582](EPIC-001-web-components-ui-polish/TASK-582-page-tour-button-beside-the-title.md) `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group (P3) · FEATURE-001
   - [ ] [TASK-583](EPIC-001-web-components-ui-polish/TASK-583-base-list-page-live-refresh-on-entity-changed.md) `base-list-page` cannot refresh when another user changes its entities (P3) · FEATURE-001
   - [x] [TASK-584](EPIC-001-web-components-ui-polish/TASK-584-input-adornment-smoke-races-the-resize-observer.md) `input-adornment-smoke` sleeps 60 ms and hopes `b-input`'s ResizeObserver has fired (P3) · FEATURE-001
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)

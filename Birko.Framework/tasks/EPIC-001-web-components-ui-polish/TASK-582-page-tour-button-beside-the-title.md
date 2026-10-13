@@ -3,12 +3,12 @@ id: TASK-582
 parent: EPIC-001
 feature: FEATURE-001
 priority: P3
-status: in-progress
+status: verify
 assignee: ai
 created: 2026-10-13
-depends-on: []
+depends-on: [TASK-584]
 blocks: []
-pr: null
+pr: null  # Birko.Web eec672b, Playground aa8aa24 (not pushed, no tag yet)
 github-issue: null
 jira-key: null
 ---
@@ -34,28 +34,29 @@ Today `BasePage.renderPageHeader()` (`Birko.Web.Shell/src/pages/base-page.ts:59`
 
 ## Acceptance criteria
 
-- [ ] `BasePage` gains one opt-in hook, e.g. `protected tourSteps(): TourStep[] | null` (default `null`) plus a
+- [x] `BasePage` gains one opt-in hook, e.g. `protected tourSteps(): TourStep[] | null` (default `null`) plus a
       stable tour id, and renders the button **beside the `<h1>`**, inside the header, only when steps exist
-- [ ] It is wired once in the shell and survives re-renders. Note the trap Symbio's `wireTourButton` documents:
+- [x] It is wired once in the shell and survives re-renders. Note the trap Symbio's `wireTourButton` documents:
       `this.listen` is aborted on every `update()`, so a listener wired in `onMount` dies after the first render
-- [ ] A launch always replays the tour (`once: false`)
-- [ ] The button is keyboard reachable and has an accessible name from a Shell i18n key (`bws.tour.button`,
+- [x] A launch always replays the tour (`once: false`)
+- [x] The button is keyboard reachable and has an accessible name from a Shell i18n key (`bws.tour.button`,
       English default in code like every other `bws.*` key; the Shell ships no locale files, so a consumer's bundle
       supplies other languages). A bare `?` with no name fails
-- [ ] It reads correctly both on a page **with no** header actions and on one **with** a Create button. Check
+- [x] It reads correctly both on a page **with no** header actions and on one **with** a Create button. Check
       the read-only case first, because it is the reported symptom
-- [ ] Works for `BasePage`, `BaseCrudPage`, `BaseListPage` and `BaseSplitPage` through the shared header. A page
+- [x] Works for `BasePage`, `BaseCrudPage`, `BaseListPage` and `BaseSplitPage` through the shared header. A page
       that overrides `renderPageHeader()` can still render the button through a protected helper.
       (`BaseDetailPage` was listed here at filing; it does not extend `BasePage` and renders no page header, so it
       has nowhere to put the button. Corrected at planning, 2026-10-13.)
 - [ ] README documents the hook. Record the Birko.Web tag in Symbio TASK-677 so Symbio can drop its eight
-      overrides
+      overrides — ⚠ PARTLY MET: README done (`eec672b`); no tag exists until the push, which is the user's call
 
 ## Out of scope
 
 - Tour content, or which pages have a tour
 - Symbio's own migration of its eight pages and its custom-header pages (POS, dashboard): tracked by Symbio
   TASK-677
+- The racing `input-adornment-smoke` this change exposed: TASK-584 (fixed first, `depends-on`)
 
 ## Human test plan
 
@@ -100,3 +101,24 @@ Drafted 2026-10-13 at pick. The code lands in `Birko\Web` (`Birko.Web.Shell`); t
    with the listener moved to `this.listen`, and record both reds.
 6. **Close out.** Record the Birko.Web tag in Symbio TASK-677 once pushed; Symbio's migration of its eight pages
    stays there.
+
+## Progress log
+
+- 2026-10-13 — Steps 1–4 done (uncommitted in `Birko\Web`: `base-page.ts`, Shell `README.md`, `CLAUDE.md`). Step 5:
+  Playground `page-tour-smoke` 18/18 green (uncommitted in `Birko.Web.Playground`). Proved it can fail: against the
+  old `renderPageHeader()` 2/7 then a throw; with the click on `this.listen` in `onMount`, 11/18 (every launch
+  check red).
+- 2026-10-13 — **Side effect found:** with this change `input-adornment-smoke`'s `md: text starts after the prefix`
+  fails on every run (4/4), and passes on every run without it (3/3). Bisected to the `.page-title-group` wrapper,
+  which only exists in pages other suites mount briefly. Cause: that check sleeps a fixed 60 ms and hopes `b-input`'s
+  `ResizeObserver` has applied the padding. Waiting for the padding (up to 1 s) makes it pass 50/50 on this build,
+  so `b-input` is correct and the smoke is racing. Not this task's defect; the fix is to the smoke.
+- 2026-10-13 — (The "up to 1 s" above was the diagnostic probe; TASK-584's fix waits up to 2 s.) Committed: Birko.Web
+  `eec672b` (`base-page.ts`, Shell README + CLAUDE.md), Playground `aa8aa24` (`page-tour-smoke`). Full verify exit 0
+  on two runs with TASK-584. Close gate, independent reviewer: standards pass (the missing `bws.tour.button` in the
+  Shell CLAUDE.md key list was fixed before the commit); intent: all met except the Symbio tag, which waits for the
+  push; correctness: no blockers; comments: nits only (API docs and the line-guarding constructor comment kept).
+  Plan step 3 was wrong to say "nothing new in a consumer's bundle": `BasePage` now imports `tour` from the
+  `birko-web-components/layout` barrel as a value, so a consumer using only `BasePage` now pulls the layout barrel
+  in. The package edge already existed, and there is no narrower subpath export.
+  Status `verify`: the human test plan's visual judgement has not been run.
