@@ -14,8 +14,8 @@ which this regeneration never touches._
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
 | todo         | —     | —       | 192   |
-| in-progress  | 8     | 11      | 1     |
-| verify       | —     | —       | 1     |
+| in-progress  | 8     | 11      | 0     |
+| verify       | —     | —       | 2     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 245   |
 | cancelled    | 0     | 0       | 5     |
@@ -26,10 +26,11 @@ which this regeneration never touches._
 
 ## In progress now
 
-- [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) — A consumer can't import just the components it uses: the only entry points are whole barrels (P2, ai)
+_None._
 
 ## Awaiting verification
 
+- [ ] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
 - [ ] [TASK-582](EPIC-001-web-components-ui-polish/TASK-582-page-tour-button-beside-the-title.md) `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group (P3)
 
 ## Blocked

@@ -2,14 +2,14 @@
 id: TASK-564
 parent: EPIC-001
 feature: null
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-10-11
 depends-on: []
 blocks: []
 findings: []
-pr: null
+pr: null  # Birko.Web 0ddd458, Playground 0884d39 (not pushed; ships in the next PATCH tag)
 github-issue: null
 jira-key: null
 ---
@@ -34,19 +34,20 @@ importing its file: a side-effect import per component works without any new API
 
 ## Acceptance criteria
 
-- [ ] A per-component entry point: `exports` maps `./b-button` → `./src/inputs/b-button.ts` (or a
+- [x] A per-component entry point: `exports` maps `./b-button` → `./src/inputs/b-button.ts` (or a
       `./components/*` pattern). Decide the shape and record it. Every shipped component is reachable,
       and a test or script fails when a new component file has no entry
-- [ ] Importing one component also registers the components it renders internally (e.g. `b-modal`'s
+- [x] Importing one component also registers the components it renders internally (e.g. `b-modal`'s
       own children), so a lean import never leaves an undefined `b-*` tag inside a shadow root. Measure
       it rather than assume: a playground or Testing check that imports each entry alone and asserts no
       `:not(:defined)` element in its render
 - [ ] `README.md` gets an "Import only what you use" section. It names the full barrel as the convenient
       default and the per-component imports as the lean option, with a measured before/after from one
-      real consumer (Presenter TASK-035)
-- [ ] Consumers' path config documented: an esbuild alias prefix and a `tsconfig` `paths` pattern, since
+      real consumer (Presenter TASK-035) — ⚠ PARTLY MET: section, default-vs-lean wording and framework-only sizes done (`0ddd458`); the whole-app
+      before/after waits for Presenter TASK-035
+- [x] Consumers' path config documented: an esbuild alias prefix and a `tsconfig` `paths` pattern, since
       consumers resolve Birko from source rather than as a package
-- [ ] The existing barrels and `.` keep working unchanged (not breaking → PATCH)
+- [x] The existing barrels and `.` keep working unchanged (not breaking → PATCH)
 
 ## Out of scope
 
@@ -104,3 +105,26 @@ Steps:
 5. **Components `CLAUDE.md`:** a component imports every component it renders (register-on-introduce), and the checker
    enforces it.
 6. **Release:** a Birko.Web `CHANGELOG.md` entry and a PATCH tag at push time; the push is the user's call.
+
+## Progress log
+
+- 2026-10-13 — Done in Birko.Web `0ddd458` (Components) and Playground `0884d39`.
+  - **Gaps the checker found beyond the plan's scan:** `label-hint.ts` renders the hint's `b-tooltip` for every
+    labelled control (17 components). The plan's Python scan missed it; one import there covers all of them.
+    Final set: `label-hint`, `b-checkbox`, `b-switch` (`b-tooltip`), `b-command-palette` (`b-spinner`),
+    `b-confirm-dialog` (`b-button`), `b-form` (its 17 controls).
+  - **Checker** `entry-points-check.mjs`: 397/397. Proved red: with the `label-hint` import, the `./command/*` export
+    and one README row removed together, 311/331, each caught by its own check. After hardening, the `label-hint`
+    removal alone gives 379/397. Full Playground verify exit 0. Real `tsc` 5.9.3 with the documented paths and
+    `noUncheckedSideEffectImports` type-checks Presenter's eight lean imports, a barrel and `/dialogs` (exit 0).
+  - **Measured** (framework code only, esbuild minify): full barrel 539,955 B / 125,335 gzip; Presenter's eight
+    67,836 / 20,069; `b-form` alone 237,410 / 54,628.
+  - **Close gate**, independent reviewer: standards pass (PATCH; CHANGELOG, versions and tag due with the push);
+    intent: AC 1, 2, 4, 5 met and AC 3 partly met (waits for Presenter); correctness: no blockers. Fixed before the commit:
+    - the tsconfig block now shows Core's paths;
+    - the README says only `b-*` files are supported entry points (the pattern also reaches internal helpers);
+    - the component count is corrected (54 → 64), and the wrong `b-modal` example is replaced;
+    - the checker skips `import type`, leaves `'image/*'` strings alone, asserts each `b-form` control and that
+      every mount ran, and reads only the README table;
+    - the duplicated comments are trimmed, and the checker is listed in the Playground docs.
+  - **Status `verify`:** the README's whole-app before/after and the human test plan both run in Presenter TASK-035.
