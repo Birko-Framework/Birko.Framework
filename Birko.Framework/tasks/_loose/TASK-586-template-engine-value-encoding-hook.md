@@ -2,14 +2,14 @@
 id: TASK-586
 parent: null
 feature: null
-status: in-progress
+status: done
 priority: P3
 assignee: ai
 created: 2026-10-13
 depends-on: []
 blocks: []
 findings: []
-pr: null
+pr: null  # see the TASK-586 commit
 github-issue: null
 jira-key: null
 ---
@@ -34,18 +34,18 @@ value, and Symbio relies on the renderer autolinking it as a bare URL. A Markdow
 
 ## Acceptance criteria
 
-- [ ] A decision recorded on the shape. Candidates:
+- [x] A decision recorded on the shape. Candidates:
   - a per-call encoder, `RenderAsync(template, model, IValueEncoder? encoder, ct)`, with a per-placeholder opt-out
     (e.g. `{{{Raw.Path}}}`, Mustache's triple braces);
   - a per-placeholder opt-in (e.g. `{{Note|md}}`);
   - a per-property attribute on the model.
   Record why the others were not chosen, and which one keeps the tracking-link case working.
-- [ ] Opt-in: with no encoder chosen, output is byte-identical to today (existing templates and tests unchanged).
-- [ ] A Markdown escaper ships, covering at least `\ * _ [ ] ( ) # + - ! ` > |` where they would be interpreted, with
+- [x] Opt-in: with no encoder chosen, output is byte-identical to today (existing templates and tests unchanged).
+- [x] A Markdown escaper ships, covering at least `\ * _ [ ] ( ) # + - ! ` > |` where they would be interpreted, with
       tests that render the escaped text through a Markdown renderer and find no formatting in it.
-- [ ] A test shows a bare URL merged without the encoder still autolinks while a neighbouring encoded value does not
+- [x] A test shows a bare URL merged without the encoder still autolinks while a neighbouring encoded value does not
       gain formatting, in one template.
-- [ ] `IMessageTemplate` rendering gets the same choice, and the `Birko.Messaging.Razor` engine documents whether it
+- [x] `IMessageTemplate` rendering gets the same choice, and the `Birko.Messaging.Razor` engine documents whether it
       needs it (Razor encodes HTML by default).
 
 ## Out of scope
@@ -79,11 +79,8 @@ var body = await engine.RenderAsync(tpl.Body, model, md, ct);
 
 **Measured** in Symbio's pipeline (Markdig 1.4.0, `DisableHtml`, autolinks with `AllowDomainWithoutPeriod`, soft line
 break as hard):
-- **Raw today:** a name `# Ján
-- Novák
-1) Third
-> quote` becomes a list, a numbered list and a blockquote that
-  swallows the rest of the mail; a note becomes bold text, links and a remote image.
+- **Raw today:** a name whose lines are `# Ján`, `- Novák`, `1) Third` and `> quote` becomes a list, a numbered list
+  and a blockquote that swallows the rest of the mail; a note becomes bold text, links and a remote image.
 - **Escaped (every ASCII punctuation character backslash-escaped), with the tracking link raw:** all literal, and the
   tracking link still autolinks.
 - **Tracking link escaped too:** plain text, not a link, which is why escaping cannot be global.
@@ -107,3 +104,22 @@ rendered Markdown. That is Symbio's choice.
    pipeline case (escaped name and note, raw tracking link autolinks) in one template; the default method refuses an
    encoder and delegates without one; the `IMessageTemplate` overload.
 5. Docs: Messaging and Razor CLAUDE.md/README, the tests' docs, Recent Updates (roll if over budget).
+
+## Progress log
+
+- 2026-10-13 — Built per the decision.
+  - **API:** `TemplateRenderOptions` (`Encoder`, `RawPaths`), `ITemplateValueEncoder`, `MarkdownValueEncoder`, and
+    `ITemplateEngine.RenderAsync(…, TemplateRenderOptions, ct)` for a string and for an `IMessageTemplate`, as default
+    interface methods that refuse an encoder. `StringTemplateEngine` implements both; `RazorTemplateEngine` inherits the
+    refusal.
+  - **Tests** `TemplateValueEncodingTests`, Markdig 1.4.0 test-only: Messaging 80/80, Razor 39/39. Mutation checks
+    each red: the engine ignoring the encoder (5 fail), ignoring `RawPaths` (2), the encoder skipping `:` and `.` (3,
+    including the Symbio-pipeline autolink test), the default method not refusing (1), the encoder not normalising lines (1).
+  - **Close gate**, independent reviewer: all five criteria met, no blockers. Fixed from its should-fix list:
+    - `StringTemplateEngine` gets an explicit `using System.Collections.Generic` (a shared project compiles under the
+      consumer's settings, implicit usings or not);
+    - a value's blank line plus 4-space or tab indentation still made a code block, so the encoder now drops leading
+      indentation and blank lines, with a Markdig test that fails without it.
+    Nits applied: the `RawPaths` doc names the set's comparer; the `IMessageTemplate` overload faults its task on null,
+    like the existing one.
+  - **Docs:** the Messaging, Razor and test docs; a Recent Updates entry (the oldest, TASK-511, rolled to CHANGELOG.md).

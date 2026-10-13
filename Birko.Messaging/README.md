@@ -78,6 +78,29 @@ await engine.RenderAsync("Order {{Number}}.{{#if TrackingUrl}} Track it: {{Track
 Sections do not nest and have no else branch. An unbalanced, nested or unknown `{{#…}}` / `{{/…}}` marker throws
 `TemplateRenderException` instead of reaching the recipient.
 
+**Encoding merged values.** When the rendered text is a markup format, pass an encoder for the call, so merged data
+cannot become markup. Every value is encoded except the paths the calling code declares raw:
+
+```csharp
+var markdown = new TemplateRenderOptions
+{
+    Encoder = new MarkdownValueEncoder(),                 // backslash-escapes ASCII punctuation
+    RawPaths = new HashSet<string> { "TrackingUrl" },     // a link the system built: merged as is, so it autolinks
+};
+var subject = await engine.RenderAsync(template.Subject, model, ct);            // plain text: no encoder
+var body    = await engine.RenderAsync(template.BodyTemplate, model, markdown, ct);
+```
+
+- Without an encoder the output is exactly what the overload without options gives.
+- `RawPaths` are exact, case-sensitive paths; a misspelt one fails safe (the value is encoded and shows as text).
+- `{{#if}}` sections are decided on the raw value.
+- `MarkdownValueEncoder` also drops a value's leading indentation and blank lines (they would start a code block
+  or end the paragraph); its line breaks are kept.
+- The encoded text carries backslashes. Do not send it as a plain-text alternative; render the template again
+  without the encoder for that.
+- An engine that cannot encode (`RazorTemplateEngine`, which HTML-encodes on its own) throws `NotSupportedException`
+  when given an encoder, rather than merging the values unencoded.
+
 ## SMS / Push (Interface Only)
 
 SMS and push notification sender interfaces are defined in core. Provider implementations are in separate projects:

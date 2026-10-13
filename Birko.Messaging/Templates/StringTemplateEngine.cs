@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -30,6 +31,26 @@ public sealed partial class StringTemplateEngine : ITemplateEngine
     private static partial Regex SectionMarkerPattern();
 
     public Task<string> RenderAsync(string template, object model, CancellationToken ct = default)
+        => Task.FromResult(Render(template, model, encoder: null, rawPaths: null));
+
+    /// <summary>
+    /// Renders with <paramref name="options"/>: each merged value goes through <see cref="TemplateRenderOptions.Encoder"/>
+    /// unless its path is in <see cref="TemplateRenderOptions.RawPaths"/>. <c>{{#if}}</c> presence is decided on the raw
+    /// value, so encoding never changes which sections are kept.
+    /// </summary>
+    public Task<string> RenderAsync(string template, object model, TemplateRenderOptions options, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return Task.FromResult(Render(template, model, options.Encoder, options.RawPaths));
+    }
+
+    public async Task<string> RenderAsync(IMessageTemplate messageTemplate, object model, TemplateRenderOptions options, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(messageTemplate);
+        return await RenderAsync(messageTemplate.BodyTemplate, model, options, ct).ConfigureAwait(false);
+    }
+
+    private static string Render(string template, object model, ITemplateValueEncoder? encoder, IReadOnlySet<string>? rawPaths)
     {
         if (template == null)
         {
@@ -56,14 +77,16 @@ public sealed partial class StringTemplateEngine : ITemplateEngine
             throw new TemplateRenderException("inline", "Unbalanced '{{#if}}' / '{{/if}}' section.");
         }
 
-        var result = PlaceholderPattern().Replace(withSections, match =>
+        return PlaceholderPattern().Replace(withSections, match =>
         {
             var path = match.Groups[1].Value;
-            var value = ResolvePropertyPath(model, path);
-            return value?.ToString() ?? string.Empty;
+            var text = ResolvePropertyPath(model, path)?.ToString() ?? string.Empty;
+            if (encoder == null || text.Length == 0 || (rawPaths != null && rawPaths.Contains(path)))
+            {
+                return text;
+            }
+            return encoder.Encode(text);
         });
-
-        return Task.FromResult(result);
     }
 
     public async Task<string> RenderAsync(IMessageTemplate messageTemplate, object model, CancellationToken ct = default)

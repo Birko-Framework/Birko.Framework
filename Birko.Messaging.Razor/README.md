@@ -103,7 +103,8 @@ await emailSender.SendAsync(email);
 
 ### RazorTemplateEngine
 
-Implements `ITemplateEngine` and `IDisposable`.
+Implements `ITemplateEngine` and `IDisposable`. Razor HTML-encodes `@` expressions itself, so it does not take a
+`TemplateRenderOptions` encoder: passing one throws `NotSupportedException` rather than merging values unencoded.
 
 | Method | Description |
 |--------|-------------|

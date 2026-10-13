@@ -32,7 +32,8 @@ Core messaging framework providing unified interfaces for email, SMS, and push n
 - **IPushSender** - Interface only, implementations in provider projects
 
 ### Templates (`Birko.Messaging.Templates`)
-- **ITemplateEngine** - RenderAsync(template, model) and RenderAsync(IMessageTemplate, model)
+- **ITemplateEngine** - RenderAsync(template, model) and RenderAsync(IMessageTemplate, model); TASK-586 overloads take `TemplateRenderOptions` (per-call `ITemplateValueEncoder` + caller-declared `RawPaths`). They are default interface methods that refuse an encoder, so an engine that cannot encode never merges unencoded values silently
+- **TemplateRenderOptions / ITemplateValueEncoder / MarkdownValueEncoder** - per-call value encoding; with an encoder set every value is encoded except the exact `RawPaths` (fails closed). Chosen per call, not per placeholder or attribute: one model renders a plain subject and a Markdown body, and templates are tenant-authored (decision in TASK-586)
 - **StringTemplateEngine** - `{{Property.SubProperty}}` replacement via reflection, GeneratedRegex; `{{#if Path}}…{{/if}}` optional sections (present = not null / blank / `false`; no nesting, no else; any leftover `{{#`/`{{/` marker throws)
 
 ## Dependencies

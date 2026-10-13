@@ -15,6 +15,7 @@ Razor template engine for the Birko Messaging framework. Implements `ITemplateEn
 
 ### RazorTemplateEngine.cs
 - Implements `ITemplateEngine` and `IDisposable`
+- Does not implement the `TemplateRenderOptions` overloads: it inherits `ITemplateEngine`'s defaults, which render normally without an encoder and throw `NotSupportedException` with one (Razor HTML-encodes `@Model` values itself). Implement them here only if a Razor template ever renders Markdown
 - Uses `RazorLightEngine` for Razor compilation and rendering
 - `RenderAsync(string, object, CancellationToken)` — inline Razor string rendering; cache key is a content hash (CR-L298)
 - `RenderAsync(IMessageTemplate, object, CancellationToken)` — file lookup by `Name`, falls back to `BodyTemplate` inline ONLY on a genuine `TemplateNotFoundException`; other failures (e.g. path-traversal rejection) propagate (CR-L299)

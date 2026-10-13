@@ -239,6 +239,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A template engine can encode merged values, per call (2026-10-13)
+
+[[TASK-586]]. `RenderAsync(template, model, TemplateRenderOptions, ct)`: an `Encoder` (`MarkdownValueEncoder` escapes
+ASCII punctuation) applies to every merged value except the `RawPaths` the calling code declares, so it fails closed.
+No encoder = today's output. Engines without encoding (Razor) throw on an encoder instead of ignoring it (rule 55).
+
 ### An HTML mail with a text part is HTML on the wire (2026-10-13)
 
 [[TASK-585]]. With `PlainTextBody` set, `SmtpEmailSender` sent two `text/plain` parts, the HTML first: System.Net.Mail
@@ -334,17 +340,6 @@ missing half of precision/scale now takes the canonical 22 / 6 (`BoundedDecimalT
 PostgreSQL and SQLite are unchanged. Existing tables are reported by `DetectDrift`, not altered — migration in
 [CHANGELOG.md](CHANGELOG.md). **⚠ TASK-511's comparison hook was deleted the same day** (rule 53): it made a bare
 column look clean, and once nothing declares one it could only hide an old lossy table.
-
-### A clean drift report is a statement about the schema, not about the data (2026-10-03)
-
-[[TASK-511]]. `DetectDrift` reported every unprecisioned `decimal` as drifted on a table the framework had just
-created — MySQL stores a bare `DECIMAL` as `decimal(10,0)`, SQL Server as `DECIMAL(18,0)`. Fixed on the comparison
-side: `DeclaredAsStored` states each server's documented default, the report's `Declared` stays the DDL's text,
-and `DECIMAL(18,2)` against a bare declaration is still drift. The TASK-269 control tables never had an
-unprecisioned decimal, which is how it went unseen. **⚠ The noise was hiding a real loss:** that column has
-**scale 0**, so `7.5` is stored as `8` on both servers, measured. Now the report is quiet about it, correctly,
-because the schema is what the DDL made. The declaration is [[TASK-512]]. The framework's own SQL-mapped decimals
-all carry `HasPrecision(22).HasScale(6)`; consumers' plain `decimal` properties do not.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

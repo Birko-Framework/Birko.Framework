@@ -31,6 +31,9 @@
     <!-- Templates -->
     <Compile Include="$(MSBuildThisFileDirectory)Templates\ITemplateEngine.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Templates\StringTemplateEngine.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Templates\ITemplateValueEncoder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Templates\MarkdownValueEncoder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Templates\TemplateRenderOptions.cs" />
   </ItemGroup>
 
 </Project>

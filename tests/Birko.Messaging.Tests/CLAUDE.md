@@ -15,12 +15,14 @@ Test suite for the Birko.Messaging library. Validates core message types (addres
 - **Email/SmtpEmailSenderTests.cs** — Tests SmtpEmailSender constructor validation, null/empty recipient handling, convenience SendAsync overload, SendBatchAsync edge cases, and Dispose behavior. Uses localhost SMTP (no real server required).
 - **Email/SmtpEmailSenderWireTests.cs** — TASK-585: the MIME on the wire. Sends through a real SmtpClient into a pickup directory and parses the `.eml` (part types, order, charsets, decoded text, `multipart/related` for inline images). Asserts on the wire, never on `MailMessage` properties.
 - **Templates/StringTemplateEngineTests.cs** — Tests StringTemplateEngine simple/multi/nested placeholder replacement, missing property errors, null template/model guards, empty template handling, null property values, and IMessageTemplate rendering.
+- **Templates/TemplateValueEncodingTests.cs** — TASK-586: per-call encoding with caller-declared raw paths; no encoder is byte-identical to before; every printable ASCII character renders as itself through Markdig; in Symbio's Markdig pipeline escaped customer values render as text while a raw tracking link still autolinks, with the unencoded template as the control; engines without encoding refuse an encoder. Uses Markdig 1.4.0, test-only.
 
 ## Dependencies
 - Birko.Messaging (shared project import — core types, email, templates)
 - Birko.Time (shared project import)
 - Birko.Data.Core (shared project import)
 - Birko.Data.Stores (shared project import)
+- Markdig (1.4.0, test-only: renders encoded template values)
 - xUnit (2.9.3)
 - FluentAssertions (7.0.0)
 - Microsoft.NET.Test.Sdk (18.0.1)
