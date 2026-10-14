@@ -3,7 +3,7 @@ id: TASK-594
 parent: STORY-062
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: in-progress
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -76,4 +76,17 @@ against the database itself.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-594` — leave empty until then._
+_Drafted at pick, 2026-10-14._
+
+1. **Measure first.** In the new test project, register `IModelMapping`s for both models, `ApplyToDatabase`, and
+   `CreateSchemaAsync` an `AsyncSQLiteStore<T>`. Read `sqlite_master` and `PRAGMA table_info`: are all properties
+   columns? Do `HasIndex` / `HasMaxLength` reach the DDL? Round-trip one entity of each.
+2. **Shape the mapping on what was measured.** Namespaced table names, primary key `Guid`. Declare only what is
+   applied; anything the fluent API drops is recorded, and spawned against `Birko.Models.SQL` if it matters
+   (the lookup indexes do).
+3. **Stores.** `SqlResourceGrantStore<DB>` / `SqlInvitationStore<DB>` over `AsyncDataBaseBulkStore<DB, T>`, so one
+   pair serves every SQL provider, if that type composes; otherwise per-provider one-liners in the README.
+4. **Project and registrations:** shproj / projitems, CLAUDE.md and README, slnx, workspace, aggregator,
+   CLAUDE-projects (catalog + flow), README rows, docs/security.md, the maintenance folder list.
+5. **Tests:** schema, round trip, and the DDL assertions. Run them, then `/verify-birko-conventions`, and commit
+   framework + Sandbox.

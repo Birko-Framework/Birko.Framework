@@ -13,8 +13,8 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 195   |
-| in-progress  | 9     | 12      | 0     |
+| todo         | —     | —       | 194   |
+| in-progress  | 9     | 12      | 1     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 254   |
@@ -22,11 +22,11 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 25× P1 · 122× P2 · 48× P3.
+`todo` by priority: 25× P1 · 121× P2 · 48× P3.
 
 ## In progress now
 
-_None._
+- [TASK-594](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-594-birko-security-grants-sql-mappings.md) Birko.Security.Grants.SQL — fluent SQL mappings for ResourceGrant and Invitation (P2, ai)
 
 ## Blocked
 
