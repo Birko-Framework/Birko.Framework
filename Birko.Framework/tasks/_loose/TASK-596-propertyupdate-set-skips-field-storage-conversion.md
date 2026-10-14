@@ -3,7 +3,8 @@ id: TASK-596
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: in-progress
+picked-by: fix-next
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -65,3 +66,7 @@ N/A — fully covered by automated tests. What is stored is read from the databa
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-596` — leave empty until then._
+
+## Progress log
+
+- step 2 — picked; ranked above TASK-595 because silent data corruption through the documented native write path (key 1, key 3) outranks a missing index / unique constraint

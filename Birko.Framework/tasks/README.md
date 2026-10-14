@@ -13,8 +13,8 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 195   |
-| in-progress  | 8     | 11      | 0     |
+| todo         | —     | —       | 194   |
+| in-progress  | 8     | 11      | 1     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
 | done         | 2     | 24      | 256   |
@@ -22,11 +22,11 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 25× P1 · 122× P2 · 48× P3.
+`todo` by priority: 25× P1 · 121× P2 · 48× P3.
 
 ## In progress now
 
-_None._
+- [TASK-596](_loose/TASK-596-propertyupdate-set-skips-field-storage-conversion.md) A filtered `PropertyUpdate.Set` on SQL binds the raw value, skipping the field's storage conversion (P2, ai)
 
 ## Blocked
 
