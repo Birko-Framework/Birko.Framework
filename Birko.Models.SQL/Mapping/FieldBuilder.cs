@@ -73,13 +73,29 @@ namespace Birko.Models.SQL.Mapping
             return this;
         }
 
-        /// <summary>Mapping metadata only — NOT applied by <c>ModelMapRegistry.ApplyToDatabase()</c>
-        /// (define indexes via migrations / the model's SQL attributes). Readable via GetPropertyMaps.</summary>
+        /// <summary>
+        /// Adds this column to the index <paramref name="indexName"/> at <paramref name="order"/>. Columns sharing a
+        /// name form one composite index. <c>ModelMapRegistry.ApplyToDatabase()</c> writes it into the table's index
+        /// declarations, so the store's schema-ensure creates it (TASK-595; before that it was metadata nothing read).
+        /// </summary>
         public FieldBuilder<T> HasIndex(string indexName, int order = 0, bool descending = false)
         {
             _field.IndexName = indexName;
             _field.IndexOrder = order;
             _field.IndexDescending = descending;
+            return this;
+        }
+
+        /// <summary>
+        /// Like <see cref="HasIndex"/>, but the index is UNIQUE across every column that names it, which is how a
+        /// composite natural key such as (Provider, ProviderKey) is declared. <see cref="IsUnique"/> is single-column.
+        /// Every column of one index must agree: mixing <c>HasIndex</c> and <c>HasUniqueIndex</c> under one name is
+        /// refused by <c>ApplyToDatabase</c>.
+        /// </summary>
+        public FieldBuilder<T> HasUniqueIndex(string indexName, int order = 0, bool descending = false)
+        {
+            HasIndex(indexName, order, descending);
+            _field.IndexUnique = true;
             return this;
         }
 

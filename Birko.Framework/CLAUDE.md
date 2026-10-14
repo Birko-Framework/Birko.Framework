@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A fluent `HasIndex` creates the index; `HasUniqueIndex` declares a unique composite (2026-10-14)
+
+[[TASK-595]]. `ModelMapRegistry.ApplyToDatabase` ignored `HasIndex`, so every `Birko.Models.Users.SQL` table had zero
+indexes, `UserLogins (Provider, ProviderKey)` included. It now writes fluent indexes into the table's declarations,
+marks their columns `IsIndexed` (rule 37), and `HasUniqueIndex` makes `UX_UserLogin_Provider_ProviderKey` unique.
+**Migration:** existing duplicate logins block that index; it is reported in `IndexCreationFailures` until resolved.
 ### A SQL query binds values in the column's stored form, so `[UtcField]` filters match (2026-10-14)
 
 [[TASK-596]]. A filtered `PropertyUpdate` Set and a filter's compared value were bound raw, skipping `ToStorage`. On

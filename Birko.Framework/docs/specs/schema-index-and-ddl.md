@@ -1340,6 +1340,30 @@ branch and the class-level `[CompositeIndex]` branch — before any DDL is emitt
 - **When** the table is created on MySQL
 - **Then** the indexed column is `VARCHAR(255)` and the unindexed one remains `LONGTEXT`
 
+### Requirement: A fluent index reaches the table's index declarations, and marks its columns
+
+`ModelMapRegistry.ApplyToDatabase` SHALL write every fluent `HasIndex` / `HasUniqueIndex` into the loaded table's
+`Indexes` (the declarations schema-ensure creates), with columns ordered by `IndexOrder` and named by their physical
+column. It SHALL set `IsIndexed` on each of those fields, as `DataBase.LoadIndexes` does for the attribute path,
+so a provider bounds the column type. `FieldDescriptor.IndexUnique` SHALL make the index UNIQUE across all its
+columns. One index whose columns disagree on uniqueness SHALL be refused. Applying the registry twice SHALL NOT
+duplicate a column. (TASK-595: before this, the fluent index was metadata nothing read, and every
+`Birko.Models.Users.SQL` table had zero indexes.)
+
+#### Scenario: A composite natural key is unique on SQLite
+
+- **Given** `UserLoginMapping`, which declares `HasUniqueIndex("UX_UserLogin_Provider_ProviderKey")` on Provider (0)
+  and ProviderKey (1)
+- **When** the mapping is applied and two logins with the same (Provider, ProviderKey) are created
+- **Then** the second create throws, and `sqlite_master` lists `UX_UserLogin_Provider_ProviderKey` and
+  `IX_UserLogins_UserGuid`
+
+#### Scenario: A fluent index column is an index key for the provider
+
+- **Given** the same mapping, whose `Provider` is an unbounded `string` (`HasPrecision` is metadata only)
+- **Then** after `ApplyToDatabase`, `Provider`, `ProviderKey` and `UserGuid` have `IsIndexed = true`, and an
+  unindexed column does not
+
 ### Requirement: Index-management SQL is composed by string interpolation
 
 The system SHALL guard interpolated values by doubling single quotes for string literals through the

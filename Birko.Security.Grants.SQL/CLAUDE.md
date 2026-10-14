@@ -28,9 +28,9 @@ Birko.Security.Grants.SQL/
 ## Rules the code keeps
 - **Every property is a column**, measured on SQLite: the fluent mapping gives a plain model its columns.
   `IsRequired` becomes NOT NULL, and `IsUnique` becomes a real UNIQUE constraint (the token hash).
-- **Indexes are created, never declared with `HasIndex`.** The fluent `HasIndex` is applied by nothing:
-  `ApplyToDatabase` doesn't emit it and no migration reads it (measured, TASK-595). So `GrantSqlIndexes.EnsureAsync`
-  creates them through the **provider's** `IIndexManager`:
+- **Indexes are created through the provider's `IIndexManager`** (`GrantSqlIndexes.EnsureAsync`). When this project
+  was written, the fluent `HasIndex` was applied by nothing. TASK-595 fixed that, so a `HasIndex` declaration would
+  now work too. Moving these to `HasIndex` is optional and would drop the `EnsureAsync` step. The indexes:
   - `IX_BirkoResourceGrants_User` on (UserGuid, ResourceType): `CanAsync` and listing.
   - `IX_BirkoResourceGrants_Resource` on (ResourceType, ResourceId): grantees and the last-owner count.
   - `IX_BirkoInvitations_Email` on (Email): sign-in.

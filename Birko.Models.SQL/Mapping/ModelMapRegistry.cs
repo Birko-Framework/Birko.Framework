@@ -79,15 +79,17 @@ namespace Birko.Models.SQL.Mapping
 
         /// <summary>
         /// Patches table names and the applicable field flags onto the loaded SQL schema.
-        /// Applied: table name, <c>HasColumnName</c> (→ column name), and the
-        /// <c>IsPrimaryKey</c>/<c>IsUnique</c>/<c>IsRequired</c>/<c>IsAutoIncrement</c> flags.
+        /// Applied: table name, <c>HasColumnName</c> (→ column name), the
+        /// <c>IsPrimaryKey</c>/<c>IsUnique</c>/<c>IsRequired</c>/<c>IsAutoIncrement</c> flags, and
+        /// <c>HasIndex</c> / <c>HasUniqueIndex</c>, which are written into the table's <c>Indexes</c>, the same declarations
+        /// the attribute path fills and schema-ensure creates (TASK-595). Measured before it: every
+        /// <c>Birko.Models.Users.SQL</c> table had zero indexes after this call, though the mappings declared seven.
         /// <para>
-        /// <b>Not applied</b> — <c>HasMaxLength</c>, <c>HasPrecision</c>, <c>HasScale</c> and
-        /// <c>HasIndex</c> are mapping metadata only. The concrete SQL field type (length/precision/
-        /// scale) is fixed at construction from the model's SQL field attributes when the table is
-        /// loaded, and <see cref="Birko.Data.SQL.Fields.AbstractField"/> has no length/precision/index
-        /// members to assign afterwards. Declare those on the model (SQL field attributes) instead;
-        /// the fluent options remain readable via <see cref="GetPropertyMaps"/> for other consumers.
+        /// <b>Not applied</b> — <c>HasMaxLength</c>, <c>HasPrecision</c> and <c>HasScale</c> are mapping metadata only. The
+        /// concrete SQL field type (length/precision/scale) is fixed at construction from the model's SQL field attributes
+        /// when the table is loaded, and <see cref="Birko.Data.SQL.Fields.AbstractField"/> has no length/precision members
+        /// to assign afterwards. Declare those on the model (SQL field attributes) instead; the fluent options remain
+        /// readable via <see cref="GetPropertyMaps"/> for other consumers.
         /// </para>
         /// </summary>
         public void ApplyToDatabase()
@@ -116,8 +118,56 @@ namespace Birko.Models.SQL.Mapping
                     if (field.IsRequired) sqlField.IsNotNull = true;
                     if (field.IsAutoIncrement) sqlField.IsAutoincrement = true;
 
-                    // MaxLength / Precision / Scale / index are intentionally not applied here — see
-                    // the method doc. They cannot be assigned onto an already-loaded AbstractField.
+                    // MaxLength / Precision / Scale are intentionally not applied here — see the method doc. They
+                    // cannot be assigned onto an already-loaded AbstractField.
+                }
+
+                ApplyIndexes(table, properties);
+            }
+        }
+
+        /// <summary>
+        /// Writes each fluent index into <paramref name="table"/>'s index declarations, its columns ordered by
+        /// <c>IndexOrder</c> and named by their (possibly renamed) physical column. Idempotent: a column already in the
+        /// index is not added twice, so applying the registry again changes nothing.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// The columns of one index disagree on uniqueness (<c>HasIndex</c> and <c>HasUniqueIndex</c> under one name), or
+        /// name a property the table does not map. A declaration that cannot be honoured is refused, never dropped.
+        /// </exception>
+        private static void ApplyIndexes(Birko.Data.SQL.Tables.Table table, IReadOnlyList<FieldDescriptor> properties)
+        {
+            foreach (var group in properties.Where(p => !string.IsNullOrEmpty(p.IndexName)).GroupBy(p => p.IndexName!))
+            {
+                if (group.Select(p => p.IndexUnique).Distinct().Count() > 1)
+                    throw new InvalidOperationException(
+                        $"Index '{group.Key}' on table '{table.Name}' mixes HasIndex and HasUniqueIndex across its columns; declare every column of it the same way.");
+
+                table.Indexes ??= new Dictionary<string, Birko.Data.SQL.Tables.IndexDefinition>();
+                if (!table.Indexes.TryGetValue(group.Key, out var index))
+                {
+                    index = new Birko.Data.SQL.Tables.IndexDefinition { Name = group.Key };
+                    table.Indexes[group.Key] = index;
+                }
+                index.Unique = group.First().IndexUnique;
+
+                foreach (var property in group.OrderBy(p => p.IndexOrder))
+                {
+                    var sqlField = table.GetFieldByPropertyName(property.Name)
+                        ?? throw new InvalidOperationException(
+                            $"Index '{group.Key}' names property '{property.Name}', which table '{table.Name}' does not map.");
+                    // Rule 37: an index key's column type depends on it being an index key. MySQL and SQL Server emit an
+                    // unbounded string as TEXT unless IsIndexed is set, and refuse TEXT as an index key (ERROR 1170 /
+                    // Msg 1919). DataBase.LoadIndexes sets it for the attribute path; a fluent index must too.
+                    sqlField.IsIndexed = true;
+                    if (index.Columns.Any(c => c.ColumnName == sqlField.Name))
+                        continue;
+                    index.Columns.Add(new Birko.Data.SQL.Tables.IndexColumn
+                    {
+                        ColumnName = sqlField.Name,
+                        Order = property.IndexOrder,
+                        IsDescending = property.IndexDescending,
+                    });
                 }
             }
         }

@@ -487,7 +487,8 @@ seam — code-review-verified; the reorder is covered by the 115 unchanged exist
 (membership lookups would table-scan). Added `HasIndex` on `UserRole.UserGuid`/`RoleGuid`,
 `UserTenant.UserGuid`, `RolePermission.RoleGuid`, `UserLogin.UserGuid` (`IX_{Table}_{Column}` naming). Index
 metadata is advisory (not emitted by `ApplyToDatabase`, consumed by migrations — same as the existing
-UserLogin composite index); UserProfile.UserGuid is already unique (indexed) so left as-is. **L325**
+UserLogin composite index) — **corrected 2026-10-14 by TASK-595: no migration read it either, so none of these
+indexes existed; `ApplyToDatabase` now emits them**; UserProfile.UserGuid is already unique (indexed) so left as-is. **L325**
 (test-gap — **project already existed**): the `Birko.Models.Users.SQL.Tests` project existed with the
 CR-M229 UserLogin composite-index tests; added `UserMappingTests` covering all 8 mappings' table names, Guid
 primary/unique, UserProfile.UserGuid uniqueness, and the L324 FK indexes. **Tests:** Users.SQL.Tests 3 → 9.

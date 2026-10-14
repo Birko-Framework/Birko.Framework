@@ -10,7 +10,7 @@ Fluent SQL mapping framework for Birko domain models. Replaces attribute-based m
 
 ## Components (`Birko.Models.SQL.Mapping`)
 - **ModelMap\<T\>** — Fluent configuration: `ToTable()`, `HasUnique()`, `HasPrimary()`, `Ignore()`, `Property()`
-- **FieldBuilder\<T\>** — Fluent field builder wrapping `FieldDescriptor` from Birko.Data.Patterns: `HasColumnName()`, `HasPrecision()`, `HasScale()`, `IsUnique()`, `IsPrimary()`, `IsAutoIncrement()`, `IsIgnored()`, `HasMaxLength()`, `HasIndex()`, `And()`
+- **FieldBuilder\<T\>** — Fluent field builder wrapping `FieldDescriptor` from Birko.Data.Patterns: `HasColumnName()`, `HasPrecision()`, `HasScale()`, `IsUnique()`, `IsPrimary()`, `IsAutoIncrement()`, `IsIgnored()`, `HasMaxLength()`, `HasIndex()`, `HasUniqueIndex()`, `And()`
 - **IModelMapping\<T\>** — Implement to define SQL mappings for a model type
 - **ModelMapRegistry** — Central registry with assembly scanning (`RegisterFromAssembly`), `GetMap<T>()`, `GetPropertyMaps()`, `ApplyToDatabase()`
 
@@ -25,7 +25,7 @@ Mapping/
 
 ## Dependencies
 - **Birko.Data.Patterns** — `FieldDescriptor` (shared type for both mapping and migrations)
-- **Birko.Data.SQL** — `ApplyToDatabase()` registers table names and applies the column name + primary/unique/required/auto-increment flags to the SQL layer. `HasMaxLength`/`HasPrecision`/`HasScale`/`HasIndex` are mapping metadata only (not applied — declare them via the model's SQL field attributes / migrations); they stay readable through `GetPropertyMaps()`
+- **Birko.Data.SQL** — `ApplyToDatabase()` registers table names and applies the column name, the primary/unique/required/auto-increment flags, and `HasIndex` / `HasUniqueIndex`, written into the table's index declarations so schema-ensure creates them (TASK-595: before that they were metadata nothing read, and every `Birko.Models.Users.SQL` table had zero indexes). `HasMaxLength`/`HasPrecision`/`HasScale` stay mapping metadata only (not applied — declare them via the model's SQL field attributes / migrations); they remain readable through `GetPropertyMaps()`. Mixing `HasIndex` and `HasUniqueIndex` under one index name is refused
 
 ## Sibling Projects (canonical mappings)
 | Sibling | Contains |

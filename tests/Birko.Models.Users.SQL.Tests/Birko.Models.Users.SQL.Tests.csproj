@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -33,5 +33,12 @@
   <Import Project="..\..\Birko.Models.SQL\Birko.Models.SQL.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Models.Users\Birko.Models.Users.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Models.Users.SQL\Birko.Models.Users.SQL.projitems" Label="Shared" />
+  <!-- TASK-595: the SQLite stack, so an applied index is measured in a real database, not only in metadata. -->
+  <Import Project="..\..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.ViewModel\Birko.Data.ViewModel.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.ViewModel\Birko.Data.SQL.ViewModel.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems" Label="Shared" />
 
 </Project>

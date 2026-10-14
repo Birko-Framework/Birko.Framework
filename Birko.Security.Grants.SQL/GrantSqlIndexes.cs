@@ -12,9 +12,8 @@ namespace Birko.Security.Grants.SQL;
 
 /// <summary>
 /// Creates the indexes the grant lookups read by. They are created through the provider's <see cref="IIndexManager"/> rather than
-/// declared with the fluent <c>HasIndex</c>, which <c>ModelMapRegistry.ApplyToDatabase</c> does not emit and no
-/// migration reads (measured 2026-10-14, TASK-594). A declaration nothing applies would leave every grant check a
-/// table scan while the mapping claimed otherwise.
+/// declared with the fluent <c>HasIndex</c>, which at the time <c>ModelMapRegistry.ApplyToDatabase</c> did not emit
+/// (measured 2026-10-14, TASK-594; fixed by TASK-595). Either producer now creates them.
 /// </summary>
 public static class GrantSqlIndexes
 {

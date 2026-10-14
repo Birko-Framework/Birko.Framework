@@ -9,8 +9,8 @@ namespace Birko.Models.Users.SQL.Tests;
 
 /// <summary>
 /// CR-M229: UserLogin's natural key (Provider, ProviderKey) had no constraint (only Guid was unique).
-/// The mapping now records the pair as a shared composite index (uniqueness itself must be enforced by a
-/// migration — index/unique mapping metadata is advisory and there is no composite-UNIQUE primitive).
+/// The mapping declares the pair as one composite UNIQUE index (<c>HasUniqueIndex</c>). <c>AppliedIndexTests</c> shows it
+/// reaches the table and rejects a duplicate on SQLite (TASK-595; before that this metadata reached nothing).
 /// </summary>
 public class UserLoginMappingTests
 {

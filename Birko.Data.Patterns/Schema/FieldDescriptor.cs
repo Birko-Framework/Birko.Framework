@@ -17,6 +17,8 @@ namespace Birko.Data.Patterns.Schema
         public string? IndexName { get; set; }
         public int IndexOrder { get; set; }
         public bool IndexDescending { get; set; }
+        /// <summary>The index named <see cref="IndexName"/> is UNIQUE across all its columns (TASK-595).</summary>
+        public bool IndexUnique { get; set; }
 
         public FieldDescriptor() { }
 

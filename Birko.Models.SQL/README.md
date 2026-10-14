@@ -8,7 +8,7 @@ Fluent SQL mapping framework for Birko domain models. Framework only — canonic
 - Expression-based property configuration (type-safe)
 - `ModelMapRegistry` with assembly scanning for auto-discovery
 - Supports: table name, column name, unique, primary, precision, scale, max length, index, ignore
-- Bridges to `Birko.Data.SQL` via `ApplyToDatabase()` — registers table names + patches the column name and primary/unique/required/auto-increment flags onto the SQL layer (`HasMaxLength`/`HasPrecision`/`HasScale`/`HasIndex` are mapping metadata only, not applied — see CLAUDE.md)
+- Bridges to `Birko.Data.SQL` via `ApplyToDatabase()` — registers table names + patches the column name, the primary/unique/required/auto-increment flags and the `HasIndex` / `HasUniqueIndex` indexes onto the SQL layer (`HasMaxLength`/`HasPrecision`/`HasScale` are mapping metadata only, not applied — see CLAUDE.md)
 
 ## Installation
 
@@ -92,6 +92,7 @@ Console.WriteLine(map?.TableName); // "Customers"
 | `[IgnoreField]` | `map.Ignore(x => x.Prop)` |
 | `[MaxLengthField(N)]` | `.HasMaxLength(N)` |
 | `[IndexedField("idx", order)]` | `.HasIndex("idx", order)` |
+| `[CompositeIndex]` unique across columns | `.HasUniqueIndex("ux", order)` on each column |
 | `[IncrementField]` | `.IsIncrement()` |
 
 ## Sibling projects
