@@ -12,9 +12,9 @@ which this regeneration never touches._
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
-| planned      | 11    | 28      | —     |
-| todo         | —     | —       | 197   |
-| in-progress  | 8     | 11      | 0     |
+| planned      | 10    | 27      | —     |
+| todo         | —     | —       | 196   |
+| in-progress  | 9     | 12      | 1     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 250   |
@@ -22,11 +22,11 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 28× P1 · 120× P2 · 49× P3.
+`todo` by priority: 27× P1 · 120× P2 · 49× P3.
 
 ## In progress now
 
-_None._
+- [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1, ai)
 
 ## Blocked
 
@@ -505,8 +505,8 @@ _None._
     - [x] [TASK-542](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-542-websocket-reverse-proxy-endpoint.md) A WebSocket reverse-proxy endpoint mapper (P3)
     - [ ] [TASK-569](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-569-websocket-proxy-forwards-subprotocols.md) MapWebSocketProxy drops the client's requested sub-protocols, so a client that asks for one fails its handshake (P3)
 
-- **EPIC-020** Security — access control — planned (0/3 tasks done)
-  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — planned (0/3 done)
+- **EPIC-020** Security — access control — in-progress (0/3 tasks done)
+  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — in-progress (0/3 done)
     - [ ] [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1)
     - [ ] [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1)
     - [ ] [TASK-590](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-590-grants-aspnetcore-requiregrant-and-wiring.md) Birko.Security.Grants.AspNetCore — RequireGrant, resolver decorator, DI, end-to-end README (P1)
