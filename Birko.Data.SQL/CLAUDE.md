@@ -354,7 +354,10 @@ column the table does not have (consumer DraCode lost two months of rows this wa
   startup or from a migration, and it **throws** on a refusal (rule 49). Sync only, like the `DetectDrift` it is
   built on.
 - **Additive and idempotent.** Adds `Missing` columns only; never drops, never retypes (`TypeMismatch` /
-  `CaseMismatch` / `Unexpected` stay reported). A second call returns empty. A table that does not exist yet is left for
+  `CaseMismatch` / `Unexpected` stay reported). A second call returns empty.
+- **Name matching follows the database** (TASK-610/611). `StoredColumnNameComparer` is exact where identifiers fold
+  (PostgreSQL), and asked of the database where the collation decides: a provider supplies
+  `IdentifierCaseSensitivitySql` (MSSQL: `'a' = 'A'`), run once per connector. Elsewhere it is case-insensitive. A table that does not exist yet is left for
   `CREATE TABLE`.
 - **Old rows read back as `default(T)`.** A NOT NULL column is added with `DEFAULT <AbstractField.DefaultStoredValue>`
   — the field's own writer applied to the underlying type's default, so `TimeOnly` back-fills `'00:00:00'`,

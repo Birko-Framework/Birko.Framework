@@ -189,6 +189,49 @@ namespace Birko.Data.SQL.Connectors
             return new SchemaDriftReport(table.Name, supported: true, tableExists: true, drifts);
         }
 
+        /// <summary>
+        /// A statement returning one integer, non-zero when this database resolves identifiers case-sensitively. It is
+        /// for a provider where that is the database's configuration rather than the dialect's; null means "the dialect
+        /// decides" (<see cref="AbstractConnectorBase.FoldsUnquotedIdentifiers"/>).
+        /// </summary>
+        /// <remarks>
+        /// TASK-611. SQL Server resolves a column reference by the database collation: under <c>Latin1_General_CS_AS</c>
+        /// the bare <c>SupplierVatin</c> this framework emits does not reach <c>suppliervatin</c> (measured:
+        /// "Invalid column name"), so a case-insensitive drift match reported clean a table no query could read.
+        /// </remarks>
+        protected virtual string? IdentifierCaseSensitivitySql => null;
+
+        private StringComparer? _storedColumnNameComparer;
+
+        /// <inheritdoc />
+        /// <remarks>
+        /// Asked of the database once per connector and remembered: a collation is the database's state, not a
+        /// caller's, so the process-wide connector is the right place to keep it (unlike rule 36's per-caller state).
+        /// </remarks>
+        public override StringComparer StoredColumnNameComparer
+            => _storedColumnNameComparer ??= ResolveStoredColumnNameComparer();
+
+        private StringComparer ResolveStoredColumnNameComparer()
+        {
+            var sql = IdentifierCaseSensitivitySql;
+            if (string.IsNullOrEmpty(sql))
+            {
+                return base.StoredColumnNameComparer;
+            }
+
+            var caseSensitive = false;
+            foreach (var row in RunReaderCommand(
+                command => { command.CommandText = sql; },
+                reader => new List<object> { Convert.ToInt32(reader.GetValue(0)) != 0 }))
+            {
+                foreach (var item in row)
+                {
+                    caseSensitive = item is true;
+                }
+            }
+            return caseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+        }
+
         private Dictionary<string, StoredColumn> ReadStoredColumns(string sql)
         {
             var result = new Dictionary<string, StoredColumn>(StoredColumnNameComparer);

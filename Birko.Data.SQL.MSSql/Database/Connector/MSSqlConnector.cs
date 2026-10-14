@@ -229,6 +229,12 @@ namespace Birko.Data.SQL.Connectors
         /// <c>OBJECT_ID</c> resolves the name in the current schema, so the literal is escaped
         /// (§ Conventions, TASK-253) rather than quoted as an identifier.
         /// </remarks>
+        /// <summary>
+        /// Literals compare under the current database's default collation, which is also the one column references
+        /// resolve under, so <c>'a' = 'A'</c> answers whether <c>SupplierVatin</c> reaches <c>suppliervatin</c> (TASK-611).
+        /// </summary>
+        protected override string? IdentifierCaseSensitivitySql => "SELECT CASE WHEN N'a' = N'A' THEN 0 ELSE 1 END";
+
         protected override string? StoredColumnsSql(string tableName)
             => string.Format(
                 "SELECT c.name, t.name, c.max_length, c.precision, c.scale " +

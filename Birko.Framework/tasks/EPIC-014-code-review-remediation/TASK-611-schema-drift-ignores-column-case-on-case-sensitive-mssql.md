@@ -2,7 +2,7 @@
 id: TASK-611
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-10-14
@@ -35,10 +35,10 @@ once per connection string. It must not be a per-call round-trip on a process-wi
 
 ## Acceptance criteria
 
-- [ ] Live MSSQL test: on a database created `COLLATE Latin1_General_CS_AS`, a column renamed to differ only in
+- [x] Live MSSQL test: on a database created `COLLATE Latin1_General_CS_AS`, a column renamed to differ only in
       case is reported `CaseMismatch` and `EnsureColumns` adds nothing. Red before.
-- [ ] On the default (CI) collation the same table stays clean. That is the control.
-- [ ] The comparer is resolved from the database, not configured. A wrong setting is the silent option rule 55 forbids.
+- [x] On the default (CI) collation the same table stays clean. That is the control.
+- [x] The comparer is resolved from the database, not configured. A wrong setting is the silent option rule 55 forbids.
 
 ## Out of scope
 
@@ -50,4 +50,16 @@ N/A — covered by the live provider test.
 
 ## Implementation plan
 
-_Drafted when picked._
+1. `AbstractConnector.IdentifierCaseSensitivitySql` (virtual, null by default): the base runs it once per connector
+   and caches the comparer. A collation is database state, not per-caller state, so caching it on the shared
+   connector is safe. Null falls back to the dialect rule (fold → exact, else case-insensitive).
+2. MSSQL supplies `SELECT CASE WHEN N'a' = N'A' THEN 0 ELSE 1 END`. Literals compare under the database default
+   collation, which is the one identifiers resolve under.
+3. Live tests on a `Latin1_General_CS_AS` database and on the default `SQL_Latin1_General_CP1_CI_AS` one.
+
+## Progress log
+
+- 2026-10-14 — `mssql/server:2022` in Docker. Red, measured: on the CS database the renamed column fails every select
+  with "Invalid column name" and drift was empty; re-proved with only the MSSQL override reverted. Green: MSSql 183/183
+  live; PostgreSQL 148/148 live (it now reaches its comparer through the new base override); SQL core 710, SQLite 504,
+  MySQL 167, Health.SQL 20, TimescaleDB 86.

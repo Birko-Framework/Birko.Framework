@@ -248,8 +248,8 @@ var result = await check.CheckAsync(ct);
 ```
 
 It reports four kinds of disagreement — `TypeMismatch`, `Missing` (declared but absent), `Unexpected`
-(present but undeclared) and `CaseMismatch` (on PostgreSQL, present only under a spelling that differs in case,
-which no query of the framework reaches) — and folds in `AbstractConnector.IndexCreationFailures`, the indexes
+(present but undeclared) and `CaseMismatch` (present only under a spelling that differs in case, on a database where
+that makes it unreachable: PostgreSQL always, SQL Server under a case-sensitive collation) — and folds in `AbstractConnector.IndexCreationFailures`, the indexes
 schema-ensure recorded rather than threw on, which nothing else reads.
 
 **Degraded, never Unhealthy.** Drift means the database disagrees with the models, not that it is

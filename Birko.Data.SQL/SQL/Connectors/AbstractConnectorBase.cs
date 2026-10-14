@@ -773,7 +773,8 @@ namespace Birko.Data.SQL.Connectors
         /// not the column a bare <c>SupplierVatin</c> reaches, so matching it case-insensitively reported a
         /// table clean that every query on it failed against (<c>42703</c>, TASK-610). Elsewhere the
         /// provider resolves the reference case-insensitively, and so does this. Virtual for a provider whose
-        /// resolution depends on configuration rather than on the dialect.
+        /// resolution depends on configuration rather than on the dialect; the SQL connectors answer it from
+        /// <c>IdentifierCaseSensitivitySql</c> (TASK-611).
         /// </remarks>
         public virtual StringComparer StoredColumnNameComparer
             => FoldsUnquotedIdentifiers ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
