@@ -3,7 +3,7 @@ id: TASK-593
 parent: STORY-062
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: in-progress
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -79,4 +79,17 @@ exactly.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-593` — leave empty until then._
+_Drafted at pick, 2026-10-14._ The tests live in `tests/Birko.Security.Grants.SQL.Tests` (TASK-594's project): it
+already carries the SQLite stack, and adding that stack to `Birko.Security.Grants.Tests` would put a native SQLite
+dependency under the core suite.
+
+1. **Parity.** Seed one dataset (users × tenants × exact / type-wide / admin grants) into an InMemory store and the SQL
+   store. Run every `IResourceGrantStore` lookup over a grid of arguments (null and set tenant, null and set resource)
+   and compare the returned Guid sets. Any mismatch is a translation defect, fixed in `GrantPredicates`.
+2. **Tenant isolation** stated explicitly on SQL: no tenant in scope, another tenant.
+3. **The claim across instances.** Two `InvitationService`s with separate `KeyedLock`s, two users, one verified
+   email. A read-delay test double over the SQL invitation store forces both to read before either claims, and the
+   SQL `UPDATE … WHERE` must give one winner. Prove it fails with the claim check removed.
+4. **The `PropertyUpdate` path.** `RedeemedAt` / `RedeemedBy` / `RevokedAt` / `Role` written by the services read back
+   identical (ticks and `Kind`) to an entity-written row. A `[UtcField]`-on-PostgreSQL difference cannot show on SQLite;
+   record that.
