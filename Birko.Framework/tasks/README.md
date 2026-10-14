@@ -13,8 +13,8 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 196   |
-| in-progress  | 9     | 12      | 0     |
+| todo         | —     | —       | 195   |
+| in-progress  | 9     | 12      | 1     |
 | verify       | —     | —       | 1     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 251   |
@@ -22,11 +22,11 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 27× P1 · 121× P2 · 48× P3.
+`todo` by priority: 26× P1 · 121× P2 · 48× P3.
 
 ## In progress now
 
-_None._
+- [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1, ai)
 
 ## Awaiting verification
 
