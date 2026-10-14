@@ -8,7 +8,7 @@ assignee: ai
 created: 2026-10-14
 depends-on: []
 blocks: []
-pr: null  # Birko.Web d7aa962 + release 9735a71 (v0.1.5, tagged, not pushed); Playground efba1df
+pr: null  # Birko.Web d7aa962 (pushed, untagged: ships in the next release); Playground efba1df
 github-issue: null
 jira-key: null
 ---
@@ -100,7 +100,7 @@ Drafted 2026-10-14 at pick. Code in `Birko.Web.Components/src/inputs/b-rating.ts
 
 ## Progress log
 
-- 2026-10-14 — Built: Birko.Web `d7aa962` (+ release commit `9735a71`, tag `v0.1.5`), Playground `efba1df`.
+- 2026-10-14 — Built: Birko.Web `d7aa962`, Playground `efba1df`.
   - **Measured:** author CSS outranks SVG presentation attributes and stripping `style` worked, but the close-gate
     reviewer showed a **denylist** sanitiser was the wrong shape. A `javascript:` link (also a tab stop per star),
     `<set attributeName="href">`, a `<style>` restyling the whole component, remote `<image>`/`<use>` and `fill-opacity`
@@ -114,4 +114,7 @@ Drafted 2026-10-14 at pick. Code in `Birko.Web.Components/src/inputs/b-rating.ts
   - **Proved red:** the earlier paint rule and style-stripping, each removed (filled/empty paint and contrast); the
     `slotchange` listener removed (swap tests); the allowlist replaced by a plain clone (9 distinct failures); link
     unwrapping removed (the heart vanishes).
-  - **Status `verify`:** the human test plan (the heart card on the published Playground) needs v0.1.5 pushed.
+  - **Status `verify`:** the human test plan (the heart card on the published Playground) is not run yet.
+- 2026-10-14 — Pushed at the user's request **without a release**: Birko.Web `d7aa962` on `main`, no tag, versions
+  still 0.1.4; the local v0.1.5 release commit and tag were dropped. The CHANGELOG entry and the tag come with the next
+  release. The storefront (building from `main`) and the Playground get the slot now.
