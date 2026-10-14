@@ -3,7 +3,7 @@ id: TASK-552
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: in-progress
+status: verify
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -61,8 +61,8 @@ N/A — fully covered by automated tests (the defect is a value read off a DOM p
 
 ## Progress
 
-**2026-10-14 — fixed in Birko.Web, not yet released.** It ships in **v0.1.9** together with [[TASK-580]] (same
-library); the status moves to `verify` when that tag is pushed, and the last criterion waits on Symbio.
+**2026-10-14 — released in Birko.Web v0.1.9** with [[TASK-580]] (Web `76ff38f`, Playground `30d0701`). In `verify`:
+the last criterion waits on Symbio removing `syncCellValues` once it consumes v0.1.9.
 
 - **Removal reproduced** (criterion 2's step one): type rows 0–2, remove row 1, and row 1 still showed `second`.
   Selects and checkboxes are affected the same way as text inputs: a changed `selected` / `checked` attribute does
