@@ -17,5 +17,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Authorization\UserPermissionResolverAdminSource.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authorization\GrantAwareUserPermissionResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\GrantServiceExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\GrantEndpointExtensions.cs" />
   </ItemGroup>
 </Project>

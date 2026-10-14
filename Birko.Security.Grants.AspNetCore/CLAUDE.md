@@ -13,10 +13,13 @@ REST / REST.Server.
 Birko.Security.Grants.AspNetCore/
 ├── GrantsAspNetCoreOptions.cs                         — ReadAction (default "read"): the action meaning "may see it"
 ├── Authorization/
-│   ├── RequireGrantEndpointFilter.cs                  — the filter + GrantEndpointExtensions.RequireGrant (an endpoint-filter FACTORY)
+│   ├── RequireGrantEndpointFilter.cs                  — the filter
 │   ├── GrantAwareUserPermissionResolver.cs            — decorates the host resolver: "*" for admins, "{type}:{action}" per type-wide grant
 │   └── UserPermissionResolverAdminSource.cs           — IGrantAdminSource: admin grant OR the host resolver's "*"
-└── Extensions/GrantServiceExtensions.cs               — AddBirkoGrants(...) → BirkoGrantsBuilder; .WithGrantPermissions()
+└── Extensions/
+    ├── GrantServiceExtensions.cs                      — AddBirkoGrants(...) → BirkoGrantsBuilder; .WithGrantPermissions()
+    └── GrantEndpointExtensions.cs                     — RequireGrant (an endpoint-filter FACTORY + a route-pattern convention);
+                                                         root namespace, like AddBirkoGrants, so no extra using
 ```
 
 ## Dependencies
