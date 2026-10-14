@@ -596,7 +596,25 @@ bool canEdit = await grants.CanAsync(colleague, "presentation", id, "edit"); // 
 - **Invitations** are offered to an email and redeemed at sign-in only when the provider marked that email verified (pass the provider's `email_verified`, never `UserLogin.IsVerified`). Redemption re-checks that the inviter may still grant the role, and only ever adds actions.
 - **The first admin** comes from `GrantSignInOptions.BootstrapAdmins` as `provider:subject`, never from an email or "the first user". `IAdminGrantService.RevokeAdminAsync` removes an admin but never the last.
 
-`RequireGrant` and the ASP.NET wiring: TASK-590.
+### ASP.NET Core (Birko.Security.Grants.AspNetCore)
+
+```csharp
+builder.Services.AddBirkoGrants(grants => grants
+        .DefineRole("owner", "read", "edit", "delete", "share")
+        .DefineRole("viewer", "read")
+        .ResourceType("presentation", ResourceVisibility.Public),
+    signIn => signIn.BootstrapAdmins.Add("github:4821337"))
+    .WithGrantPermissions();   // admin grant → "*", type-wide grants → "{type}:{action}"
+
+app.MapGet("/presentations/{id}", ...);                                   // public read
+app.MapPut("/presentations/{id}", ...).RequireGrant("presentation", "edit");
+```
+
+- **Denials follow the visibility rule** (rulebook rule 65): **403** when the caller may read the resource, **404**
+  when they may not, identical to a missing one. Not signed in is 401, decided before any lookup.
+- **Your token's subject must be your user's Guid.** `RequireGrant` answers 401 `Grant.UnmappedSubject` to a token
+  carrying the provider's raw subject.
+- The end-to-end external-login wiring is in the project README.
 
 ## See Also
 

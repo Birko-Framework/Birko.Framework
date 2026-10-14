@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Data.Stores;
 using Birko.Security.Grants.Internal;
 using Birko.Security.Grants.Models;
 using Birko.Security.Grants.Stores;
@@ -146,7 +147,7 @@ public sealed class GrantService : IGrantService
         var key = GrantPredicates.Exact(userGuid, resourceType, resourceId, tenantGuid);
         var previousRole = existing.Role;
         var previousGrantedBy = existing.GrantedBy;
-        await _store.UpdateAsync(key, g => { g.Role = role; g.GrantedBy = callerGuid; }, ct).ConfigureAwait(false);
+        await _store.UpdateAsync(key, new PropertyUpdate<ResourceGrant>().Set(g => g.Role, role).Set(g => g.GrantedBy, (Guid?)callerGuid), ct).ConfigureAwait(false);
         existing.Role = role;
         existing.GrantedBy = callerGuid;
 
@@ -154,7 +155,7 @@ public sealed class GrantService : IGrantService
         if (demotesOwner && await OwnerCountAsync(resourceType, resourceId!.Value, tenantGuid, CancellationToken.None).ConfigureAwait(false) == 0)
         {
             // Another process demoted or removed the other owner between our count and our write.
-            await _store.UpdateAsync(key, g => { g.Role = previousRole; g.GrantedBy = previousGrantedBy; }, CancellationToken.None).ConfigureAwait(false);
+            await _store.UpdateAsync(key, new PropertyUpdate<ResourceGrant>().Set(g => g.Role, previousRole).Set(g => g.GrantedBy, previousGrantedBy), CancellationToken.None).ConfigureAwait(false);
             throw LastOwner(resourceType, resourceId.Value);
         }
         return existing;
@@ -214,7 +215,7 @@ public sealed class GrantService : IGrantService
         if (existing != null)
         {
             await _store.UpdateAsync(GrantPredicates.Exact(userGuid, resourceType, resourceId, tenantGuid),
-                g => g.Role = _table.OwnerRole, ct).ConfigureAwait(false);
+                new PropertyUpdate<ResourceGrant>().Set(g => g.Role, _table.OwnerRole), ct).ConfigureAwait(false);
             existing.Role = _table.OwnerRole;
             return existing;
         }

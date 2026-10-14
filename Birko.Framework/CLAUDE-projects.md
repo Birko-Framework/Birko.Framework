@@ -55,7 +55,9 @@ Birko.Health (IHealthCheck, HealthCheckResult, HealthCheckRunner — zero deps)
 
 Birko.Security.Grants (GrantRoleTable, ResourceGrant, IResourceGrantStore, IGrantService — per-resource grants)
   <- Birko.Data.Core + Birko.Data.Stores + Birko.Time.Abstractions only: no ASP.NET, no Birko.Models.Users
-     (the host maps its login to a user Guid; the web integration is a separate companion, TASK-590)
+     (the host maps its login to a user Guid)
+  -> Birko.Security.Grants.AspNetCore (RequireGrant, GrantAwareUserPermissionResolver, AddBirkoGrants)
+     <- Birko.Security.AspNetCore; Microsoft.AspNetCore.App consumer-supplied
 
 Birko.Communication.OAuth (IOAuthClient, OAuthClient, OAuthSettings)
   -> Birko.Communication.OAuth.Providers (GitHubOAuthProvider — pre-configured device flow)
@@ -184,6 +186,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Security.NFC** - NFC-based authentication (tag-to-user mapping, enrollment, revocation)
 - **Birko.Security.OAuth.Server** - OAuth2 authorization server (token/authorize/device_authorization/dynamic-client-registration endpoints, all four grant types, PKCE, refresh-token rotation, persistence via Birko.Data.Stores)
 - **Birko.Security.Grants** - Per-resource access grants: a validated role → action table, resource types with declared visibility (drives 403 vs 404), `ResourceGrant` (exact or type-wide, optional tenant) persisted via Birko.Data.Stores, `IGrantService` (CanAsync, list resources / grantees, Grant / Revoke with share + no-escalation rules, last-owner refusal, owner-on-create); email invitations redeemed at sign-in for a provider-verified email (`IInvitationService`, `IGrantSignInService`); bootstrap admins by `provider:subject` and `IAdminGrantService.RevokeAdminAsync` (never the last). No ASP.NET dependency
+- **Birko.Security.Grants.AspNetCore** - ASP.NET Core over Birko.Security.Grants: `RequireGrant(type, action, routeParam)` endpoint filter (401 / 401 `Grant.UnmappedSubject` / 404 unparseable / 403 if the caller can read, else 404 on `Granted` types), `GrantAwareUserPermissionResolver` (admin grant → `*`, type-wide grants → `{type}:{action}`), `AddBirkoGrants(...)` + `.WithGrantPermissions()`
 
 ## Background Jobs & Message Queue
 - **Birko.BackgroundJobs** - Job interfaces, in-memory queue, processor, dispatcher, scheduler

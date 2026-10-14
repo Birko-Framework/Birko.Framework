@@ -189,7 +189,8 @@ three-task split**. Not grilled yet._
     - Per-resource grants are **not** surfaced, because there are unboundedly many; that is `RequireGrant`'s
       job.
 15. **`RequireGrant(type, action, routeParam = "id")`.** `routeParam: null` means a type-wide check.
-    - The action is validated when the filter is built, at app start.
+    - The action is validated when the filter is built, which happens when the endpoints are built (normally the
+      first request, not `app.Run()`). So is the route pattern: a missing or optional `routeParam` throws there.
     - Unauthenticated → **401**. Authenticated but with `UserGuid == null` (a raw external sub) → **401**
       with code `Grant.UnmappedSubject`, which points at the README.
     - A missing route value is a configuration bug and throws `InvalidOperationException`.

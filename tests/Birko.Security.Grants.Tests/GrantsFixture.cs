@@ -41,7 +41,10 @@ public sealed class GrantsFixture
         Service = new GrantService(Store, Table, Clock, adminSource: null, new KeyedLock());
     }
 
-    public static GrantOptions DefaultOptions() => new GrantOptions()
+    public static GrantOptions DefaultOptions() => Configure(new GrantOptions());
+
+    /// <summary>Declares the test roles and types on <paramref name="options"/> — what <c>AddBirkoGrants</c>' configure delegate receives.</summary>
+    public static GrantOptions Configure(GrantOptions options) => options
         .DefineRole("owner", "read", "edit", "delete", "share")
         .DefineRole("editor", "read", "edit")
         .DefineRole("sharer", "read", "share")

@@ -15,6 +15,26 @@ public class InMemoryInvitationStore : AsyncInMemoryStore<Invitation>, IInvitati
     /// </summary>
     public TimeSpan ReadDelay { get; set; }
 
+    private readonly SemaphoreSlim _statement = new(1, 1);
+
+    // Models the backends the claim is documented for: on SQL a filtered property update is ONE conditional
+    // statement. The portable fallback this store inherits reads then writes, so without this two claims could both
+    // match before either writes and the two-instance test failed under parallel load (measured 2026-10-14) — a
+    // property of the in-memory store, not of the claim. Test double only.
+    public override async Task UpdateAsync(System.Linq.Expressions.Expression<Func<Invitation, bool>> filter,
+        Birko.Data.Stores.PropertyUpdate<Invitation> updates, CancellationToken ct = default)
+    {
+        await _statement.WaitAsync(ct);
+        try
+        {
+            await base.UpdateAsync(filter, updates, ct);
+        }
+        finally
+        {
+            _statement.Release();
+        }
+    }
+
     // The public method, not a *Core seam: Birko.Data.InMemory overrides ReadAsync(Guid) itself and never reaches
     // ReadCoreAsync for it, so a delay there never runs (measured 2026-10-14). A test double only — never do this in a store.
     public override async Task<Invitation?> ReadAsync(Guid guid, CancellationToken ct = default)

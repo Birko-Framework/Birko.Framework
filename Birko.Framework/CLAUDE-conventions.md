@@ -1,6 +1,6 @@
 # Birko Framework — Conventions
 
-The full rulebook: 64 rules, each carrying the measurement that earned it.
+The full rulebook: 65 rules, each carrying the measurement that earned it.
 
 Extracted from `CLAUDE.md` on 2026-09-19. That file is auto-loaded into every session and had reached
 4,359 lines, of which this section was 2,488 — so the reasoning moved here and the *statements* stayed
@@ -2576,3 +2576,24 @@ Rules are in their original order; `CLAUDE.md` indexes them 1—63.
     breaking change* exists). A provider-specific expression the translator needs — here the increment —
     is likewise a connector hook (`IncrementExpression`) with a portable default, never a provider check
     inside the translator.
+
+- **A denied action answers 403 when the caller may read the resource and 404 when they may not — and
+  "unauthenticated" is 401, decided before anything is looked up.** STORY-062 decision 2b; TASK-590. Two
+  producers chose a code by taste and got opposite answers: `OwnedCrudResults` returns 404 for a foreign
+  entity (owned data is private: do not reveal it exists), `PermissionEndpointFilter` returns 403 (an
+  operation, nothing to hide). Both were right in their own setting, and wrong as a framework answer, which
+  became visible the moment a consumer had public reads and gated writes: a 404 on `PUT /presentations/{id}`
+  for a presentation anyone can `GET` hides nothing and tells the UI "not found" about something on screen.
+  Three parts generalise:
+  - **The code is decided by readability, not by the endpoint.** Ask "may this caller see it?" — a public
+    type, or a read grant — and answer 403 if yes, 404 if no. The 404 is bare and identical to a missing
+    resource; a body that differs is the leak the 404 exists to prevent.
+  - **Readability is DECLARED per resource type, and the default fails closed.** `ResourceVisibility.Granted`
+    is the default, so a forgotten declaration hides existence rather than revealing it; an undeclared type
+    refuses when the endpoints are built (rule 55's builder rule) — normally the first request, not `app.Run()`. Visibility never changes the authorization answer — only
+    which refusal is spoken.
+  - **The extra lookup runs only on the deny path.** The happy path pays one check; deciding 403-vs-404
+    costs a second `CanAsync` only when the answer is already "no".
+  Current producers: `RequireGrantEndpointFilter` (Birko.Security.Grants.AspNetCore) and `OwnedCrudResults`
+  (Birko.Communication.AspNetCore), which is this rule's private-data row; TASK-541 adopts it for its
+  owner-or-admin predicate.

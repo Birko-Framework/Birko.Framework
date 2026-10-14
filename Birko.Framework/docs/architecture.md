@@ -185,6 +185,7 @@ Unified caching interface:
 - `ITokenProvider` - GenerateToken/ValidateToken with `TokenResult`, `TokenValidationResult`, `TokenOptions`
 - **Birko.Security.Jwt** - JWT implementation of ITokenProvider (`JwtTokenProvider`)
 - **Birko.Security.Grants** - Per-resource access grants: role → action table, owners / editors / viewers on one resource or a whole type, tenant-scoped, with share, no-escalation and last-owner rules; persistence via `Birko.Data.Stores`. No ASP.NET dependency
+- **Birko.Security.Grants.AspNetCore** - ASP.NET Core over the grants: the `RequireGrant` endpoint filter (403 when the caller can read the resource, otherwise 404), the grant-aware permission resolver, `AddBirkoGrants` DI
 - **Birko.Security.OAuth.Server** - OAuth2 authorization server (issuer side): token / authorize / device_authorization / dynamic client registration endpoints; all four standard grant types (`client_credentials`, `authorization_code` + PKCE, `refresh_token`, RFC 8628 device code); persistence via `Birko.Data.Stores`. Companion to `Birko.Communication.OAuth` (consumer side)
 - Static token authentication (moved from Birko.Communication.Authentication)
 - RBAC interfaces

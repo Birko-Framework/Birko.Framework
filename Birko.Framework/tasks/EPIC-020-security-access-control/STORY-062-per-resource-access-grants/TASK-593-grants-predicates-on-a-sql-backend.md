@@ -51,6 +51,14 @@ cannot express).
 - [ ] A tenant-bound grant is not returned with no tenant in scope, and not in another tenant (rules 38/39), on SQLite.
 - [ ] The tests run in the default `dotnet test` (SQLite needs no Docker). If they live outside
       `Birko.Security.Grants.Tests` because of the extra imports, say where and why.
+- [ ] The invitation **claim** is single-use across two `InvitationService` instances (separate `KeyedLock`s) on
+      SQLite: two users with one verified email, redeeming at once, yield one grant. TASK-589/590 document that this
+      rests on the SQL bulk store running a filtered `PropertyUpdate` as one `UPDATE … WHERE`. The in-memory test
+      double only models that, so this is the measurement (added 2026-10-14).
+- [ ] The SQL `PropertyUpdate` path binds values raw, skipping `AbstractField.ToStorage`: `Birko.Data.SQL/Stores/PropertyUpdateSqlTranslator.cs:27`,
+      found at TASK-590's close review. Check that `RedeemedAt` / `RevokedAt` / `Role` written through it read back
+      identical to the `Action<T>` path, including a consumer mapping with `[UtcField]` on PostgreSQL semantics if the
+      SQLite run cannot show it. A difference there is its own defect task against `Birko.Data.SQL`, not a grants fix.
 - [ ] Any predicate a translator refuses or mistranslates is fixed in `GrantPredicates` (the one producer), and its
       test fails without the fix.
 

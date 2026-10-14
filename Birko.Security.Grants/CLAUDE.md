@@ -86,9 +86,11 @@ No NuGet packages, no ASP.NET, no `Birko.Models.Users`: the host maps its login 
   so one who has since lost `share` invites nobody. It also only ever adds actions: a user who already holds them
   keeps their role, a lesser role is upgraded, and an incomparable role is `Grant.RoleConflict`. The decision is
   made under the resource lock, so a concurrent promotion is never overwritten.
-- **Single use across processes is a claim.** A filtered update sets `RedeemedAt` / `RedeemedBy` only where the
-  invitation is still unredeemed and unrevoked, and a re-read shows whose claim stuck. On SQL that filtered update
-  is one statement, so there is one winner. A claim whose grant then fails is released. Revoke claims the same way,
+- **Single use across processes is a claim.** A filtered `PropertyUpdate` sets `RedeemedAt` / `RedeemedBy` only
+  where the invitation is still unredeemed and unrevoked, and a re-read shows whose claim stuck. That gives one winner
+  only where the backend runs it as **one conditional statement**: SQL (`UPDATE … WHERE`) and MongoDB (per-document
+  `$set`). `AbstractAsyncBulkStore`'s portable fallback reads and then writes, so file and in-memory stores get single
+  use within one process only, from the lock. SQL is measured by TASK-593. A claim whose grant then fails is released. Revoke claims the same way,
   so a revoke and a redemption can't both succeed. The per-invitation `KeyedLock` covers a single process.
 - **A stale invitation never breaks sign-in.** If its role or type has been retired, it is reported as
   `Invitation.Invalid` and nothing is thrown. Redemptions found by email report failures. Only the explicit token

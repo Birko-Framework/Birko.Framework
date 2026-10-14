@@ -127,5 +127,9 @@ public sealed class GrantRoleTable
             throw new GrantConfigurationException($"{what} name is empty.");
         if (name == Wildcard)
             throw new GrantConfigurationException($"{what} name '{Wildcard}' is reserved for the global admin grant.");
+        // Type-wide grants surface as "{type}:{action}" permission strings; a ':' inside a name would let type "a" with
+        // action "b:c" produce the same string as type "a:b" with action "c", and so grant the other type's rights.
+        if (name.Contains(':'))
+            throw new GrantConfigurationException($"{what} name '{name}' contains ':', the separator of the permission strings grants surface as.");
     }
 }

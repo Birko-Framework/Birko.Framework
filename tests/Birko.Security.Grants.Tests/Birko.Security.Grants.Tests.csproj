@@ -25,4 +25,15 @@
   <Import Project="..\..\Birko.Data.InMemory\Birko.Data.InMemory.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Security.Grants\Birko.Security.Grants.projitems" Label="Shared" />
 
+  <!-- The ASP.NET companion (TASK-590). Birko.Data.Tenant is what brings the Microsoft.AspNetCore.App
+       FrameworkReference: declaring it here as well would be NETSDK1087, a hard error (TASK-234). -->
+  <Import Project="..\..\Birko.Time\Birko.Time.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Tenant\Birko.Data.Tenant.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Security\Birko.Security.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Security.Jwt\Birko.Security.Jwt.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Security.AspNetCore\Birko.Security.AspNetCore.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Security.Grants.AspNetCore\Birko.Security.Grants.AspNetCore.projitems" Label="Shared" />
+
 </Project>

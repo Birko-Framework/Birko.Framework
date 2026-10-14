@@ -20,7 +20,13 @@ Birko.Security.Grants.Tests/
 ├── SignInFixture.cs           — GrantsFixture + InMemoryInvitationStore + invitation / admin / sign-in services (one private lock map)
 ├── InvitationTests.cs         — create (hash only, authorization), verified-only redemption, token paths, expiry / reuse / revoke,
 │                                inviter lost share, never-downgrade / role conflict, concurrent double redeem, tenant
-└── BootstrapAdminTests.cs     — provider:subject matching, idempotence, no first-user path, malformed entries, RevokeAdmin + last admin
+├── BootstrapAdminTests.cs     — provider:subject matching, idempotence, no first-user path, malformed entries, RevokeAdmin + last admin
+└── AspNetCore/                — Birko.Security.Grants.AspNetCore (TASK-590)
+    ├── AspNetCoreTestSupport.cs  — TestCurrentUser, FixedPermissionResolver, StatusOf(result)
+    ├── RequireGrantFilterTests.cs — 401 / UnmappedSubject / 404 / 403-vs-404 by visibility / tenant / build-time validation
+    ├── PermissionResolverTests.cs — decorator union, admin "*", per-resource not surfaced, admin source, guards
+    └── WiringTests.cs            — AddBirkoGrants, WithGrantPermissions (instance / factory / type), RequireGrant on a real
+                                    WebApplication endpoint (the factory path and its build-time refusal)
 ```
 
 ## Test Patterns
@@ -32,6 +38,11 @@ Birko.Security.Grants.Tests/
   both instances read the invitation before either claims it. It overrides the **public** `ReadAsync(Guid)` because
   `Birko.Data.InMemory` overrides that method itself and never reaches `ReadCoreAsync` for it. Without the delay,
   the two-users test passed with the claim check removed (measured 2026-10-14).
+- **`InvitationStore`'s filtered `PropertyUpdate` is one atomic step**, modelling the SQL `UPDATE … WHERE` the
+  invitation claim is documented for. The inherited fallback reads and then writes, and the two-instance test failed
+  under parallel load without it (measured 2026-10-14). Real SQL behaviour is TASK-593's.
+- **The ASP.NET tests get `Microsoft.AspNetCore.App` through `Birko.Data.Tenant`'s FrameworkReference.** Declaring it
+  in this csproj too is NETSDK1087, a hard error (TASK-234).
 - **Race tests set `Store.CountDelay`.** The in-memory store completes synchronously, so without the delay two
   "concurrent" revokes never interleave and the test passes with the lock removed (measured 2026-10-14). With 50 ms
   both race tests fail against a lock-less `RevokeAsync`, and the no-shared-lock test fails with the post-write

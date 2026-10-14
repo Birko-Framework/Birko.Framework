@@ -597,6 +597,10 @@
 			"path": "../Birko.Security.Grants"
 		},
 		{
+			"name": "Security / Birko.Security.Grants.AspNetCore",
+			"path": "../Birko.Security.Grants.AspNetCore"
+		},
+		{
 			"name": "Security / Birko.Security.Jwt",
 			"path": "../Birko.Security.Jwt"
 		},

@@ -3,7 +3,7 @@
 Modular .NET framework with data access, communication, AI, and model infrastructure. General-purpose across enterprise back-office, e-commerce, presentation/CMS, desktop, IoT, and real-time domains.
 
 See also:
-- [CLAUDE-conventions.md](CLAUDE-conventions.md) — **the rulebook (64 rules with their measurements); § Conventions below indexes it and is not a substitute for it**
+- [CLAUDE-conventions.md](CLAUDE-conventions.md) — **the rulebook (65 rules with their measurements); § Conventions below indexes it and is not a substitute for it**
 - [CLAUDE-projects.md](CLAUDE-projects.md) — Full project catalog
 - [CLAUDE-maintenance.md](CLAUDE-maintenance.md) — Maintenance guidelines, new project checklist, solution registration
 - [CHANGELOG.md](CHANGELOG.md) — Historical architectural changes
@@ -82,7 +82,7 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 ## Conventions
 
-Day-to-day API conventions are below. **The rulebook proper — 64 rules, each with the measurement that
+Day-to-day API conventions are below. **The rulebook proper — 65 rules, each with the measurement that
 earned it — lives in [CLAUDE-conventions.md](CLAUDE-conventions.md).** The index after these bullets carries
 each rule's opening statement so you can tell whether one applies; open that file for the reasoning,
 the counter-examples and the measurements. They are not optional: every one exists because the defect
@@ -166,6 +166,7 @@ Search that file for the phrase to reach the full rule.
 62. A process-wide cached object keeps attracting per-caller state, and the only thing that stops the next instance is a test
 63. A check that compares DECLARED against STORED asks the schema for the stored side, never the driver — and the declared side is the method that emits the DDL
 64. DDL that names something only a registration provides makes every connection a participant — the connector is its one producer, and any other connection must register or it fails
+65. A denied action answers 403 when the caller may read the resource and 404 when they may not — and "unauthenticated" is 401, decided before anything is looked up
 
 ## Task tracking — this directory is the monorepo's aggregator
 
@@ -239,13 +240,14 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
-### Per-resource grants ship: Birko.Security.Grants (2026-10-14)
+### Per-resource grants ship: Birko.Security.Grants + .AspNetCore (2026-10-14)
 
 [[TASK-588]] ([[STORY-062]]). Owners / editors / viewers of one resource or a whole type, optionally tenant-bound,
 on any store. Undeclared roles, actions or types throw. Grant and revoke need `share` and can't escalate; the last
 owner can't be removed (in-process lock + post-write recount). [[TASK-589]] adds email invitations, redeemed only
 when the provider says the email is verified (**never** `UserLogin.IsVerified`), and bootstrap admins listed as
-`provider:subject`. `RequireGrant`: [[TASK-590]].
+`provider:subject`. [[TASK-590]]: `Birko.Security.Grants.AspNetCore`, with `RequireGrant`. A denial is 403 if the caller
+can read the resource, otherwise 404 (**rule 65**, also `OwnedCrudResults`' 404).
 
 ### A template engine can encode merged values, per call (2026-10-13)
 

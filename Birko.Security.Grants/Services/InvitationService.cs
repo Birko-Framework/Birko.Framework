@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Data.Stores;
 using Birko.Security.Grants.Internal;
 using Birko.Security.Grants.Models;
 using Birko.Security.Grants.Stores;
@@ -10,10 +11,12 @@ namespace Birko.Security.Grants.Services;
 
 /// <summary>Default <see cref="IInvitationService"/>; also redeems invitations for <see cref="GrantSignInService"/>.</summary>
 /// <remarks>
-/// <b>Single use across processes</b> rests on a <i>claim</i>: a filtered update that sets <c>RedeemedBy</c> only where
-/// the invitation is still unredeemed and unrevoked, followed by a re-read to see whose claim stuck. A backend that runs
-/// a filtered update as one statement (every SQL provider) gives one winner; the in-process lock covers the rest. Revoke
-/// claims the same way, so a revoke and a redemption racing on two instances cannot both succeed.
+/// <b>Single use across processes</b> rests on a <i>claim</i>: a filtered <see cref="PropertyUpdate{T}"/> that sets
+/// <c>RedeemedBy</c> only where the invitation is still unredeemed and unrevoked, then a re-read to see whose claim stuck.
+/// That holds across instances only on a backend that runs a filtered property update as <b>one conditional statement</b>:
+/// the SQL providers (<c>UPDATE … WHERE</c>) and MongoDB (per-document <c>$set</c>). The portable fallback in
+/// <c>AbstractAsyncBulkStore</c> reads and then writes, so file and in-memory stores get single use within one process,
+/// from the per-invitation lock, and nothing more; they are single-process stores anyway. Revoke claims the same way.
 /// </remarks>
 public sealed class InvitationService : IInvitationService
 {
@@ -86,7 +89,7 @@ public sealed class InvitationService : IInvitationService
 
         var now = _clock.UtcNow;
         await _invitations.UpdateAsync(i => i.Guid == invitationGuid && i.RedeemedAt == null && i.RevokedAt == null,
-            i => i.RevokedAt = now, ct).ConfigureAwait(false);
+            new PropertyUpdate<Invitation>().Set(i => i.RevokedAt, (DateTime?)now), ct).ConfigureAwait(false);
 
         // A redemption on another instance may have claimed it first: report what the store says, not what we meant.
         var after = await _invitations.ReadAsync(invitationGuid, CancellationToken.None).ConfigureAwait(false);
@@ -114,7 +117,7 @@ public sealed class InvitationService : IInvitationService
         // Claim it. Only an unredeemed, unrevoked invitation accepts the claim; the re-read says whose claim stuck.
         var now = _clock.UtcNow;
         await _invitations.UpdateAsync(i => i.Guid == invitationGuid && i.RedeemedAt == null && i.RevokedAt == null,
-            i => { i.RedeemedAt = now; i.RedeemedBy = userGuid; }, ct).ConfigureAwait(false);
+            new PropertyUpdate<Invitation>().Set(i => i.RedeemedAt, (DateTime?)now).Set(i => i.RedeemedBy, (Guid?)userGuid), ct).ConfigureAwait(false);
         var claimed = await _invitations.ReadAsync(invitationGuid, CancellationToken.None).ConfigureAwait(false);
         if (claimed == null)
             return (null, GrantErrorCodes.InvitationNotFound);
@@ -192,7 +195,7 @@ public sealed class InvitationService : IInvitationService
 
     private Task ReleaseClaimAsync(Guid invitationGuid, Guid userGuid)
         => _invitations.UpdateAsync(i => i.Guid == invitationGuid && i.RedeemedBy == userGuid && i.RevokedAt == null,
-            i => { i.RedeemedAt = null; i.RedeemedBy = null; }, CancellationToken.None);
+            new PropertyUpdate<Invitation>().Set(i => i.RedeemedAt, (DateTime?)null).Set(i => i.RedeemedBy, (Guid?)null), CancellationToken.None);
 
     private static string LockKey(Guid invitationGuid) => $"invitation\n{invitationGuid}";
 }

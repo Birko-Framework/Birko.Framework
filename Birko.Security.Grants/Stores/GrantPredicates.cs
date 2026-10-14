@@ -28,6 +28,16 @@ internal static class GrantPredicates
         return g => g.UserGuid == userGuid && g.ResourceType == resourceType && (g.TenantGuid == null || g.TenantGuid == tenant);
     }
 
+    /// <summary>The user's type-wide grants on any declared type (never the admin grant), in tenant scope.</summary>
+    public static Expression<Func<ResourceGrant, bool>> TypeWideForUser(Guid userGuid, Guid? tenantGuid)
+    {
+        const string wildcard = GrantRoleTable.Wildcard;
+        if (tenantGuid is not Guid tenant)
+            return g => g.UserGuid == userGuid && g.ResourceId == null && g.ResourceType != wildcard && g.TenantGuid == null;
+        return g => g.UserGuid == userGuid && g.ResourceId == null && g.ResourceType != wildcard
+            && (g.TenantGuid == null || g.TenantGuid == tenant);
+    }
+
     /// <summary>Every grant that applies to one resource — on it, or type-wide — in tenant scope.</summary>
     public static Expression<Func<ResourceGrant, bool>> ForResource(string resourceType, Guid resourceId, Guid? tenantGuid)
     {

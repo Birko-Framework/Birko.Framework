@@ -271,6 +271,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.NFC | NFC-based authentication (tag-to-user mapping, JWT integration) |
 | Birko.Security.OAuth.Server | OAuth2 authorization server (token/authorize/device/registration endpoints; client-credentials, authcode+PKCE, refresh, device-code; persists via Birko.Data.Stores) |
 | Birko.Security.Grants | Per-resource access grants (role → action table, owners / editors / viewers on one resource or a whole type, tenant-scoped; share + no-escalation + last-owner rules; email invitations redeemed on verified sign-in; bootstrap admins by provider:subject; persists via Birko.Data.Stores) |
+| Birko.Security.Grants.AspNetCore | ASP.NET Core for grants: `RequireGrant` endpoint filter (404 vs 403 by visibility), grant-aware permission resolver, `AddBirkoGrants` DI |
 | Birko.BackgroundJobs | Background job processing framework |
 | Birko.BackgroundJobs.SQL | SQL-based persistent job queue |
 | Birko.BackgroundJobs.ElasticSearch | Elasticsearch-based persistent job queue |
@@ -335,7 +336,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.Vault.Tests | Vault secret provider tests |
 | Birko.Security.AzureKeyVault.Tests | Azure Key Vault secret provider tests |
 | Birko.Security.OAuth.Server.Tests | OAuth2 authorization server tests (43 tests; all four grant types + PKCE/consent/registration paths) |
-| Birko.Security.Grants.Tests | Per-resource grants tests (134 tests; role table, CanAsync, grant/revoke rules, last owner under concurrency, tenant scope, listing, invitations (verified-only, single use), bootstrap and last admin) |
+| Birko.Security.Grants.Tests | Per-resource grants and ASP.NET companion tests (177 tests; role table, CanAsync, grant/revoke rules, last owner under concurrency, tenant scope, listing, invitations (verified-only, single use), bootstrap and last admin) |
 | Birko.Rules.Tests | Rule engine tests (core types, contexts, evaluator) |
 | Birko.Data.Processors.Tests | Data processor tests (CSV parser, XML/CSV/ZIP processors, HTTP transport) |
 | Birko.Telemetry.OpenTelemetry.Tests | OpenTelemetry integration tests (options, DI, providers) |

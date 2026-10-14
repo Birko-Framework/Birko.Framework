@@ -3,7 +3,7 @@ id: TASK-590
 parent: STORY-062
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: in-progress
+status: verify
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P1
 assignee: ai
@@ -40,11 +40,11 @@ numeric id, Google's opaque string) doesn't parse and resolves **nothing**. The 
 
 ## Acceptance criteria
 
-- [ ] New shared project `Birko.Security.Grants.AspNetCore` (`.shproj` + `.projitems`, `CLAUDE.md`,
+- [x] New shared project `Birko.Security.Grants.AspNetCore` (`.shproj` + `.projitems`, `CLAUDE.md`,
       `README.md`) depends on Grants + Security.AspNetCore, with `Microsoft.AspNetCore.App` supplied by the
       consumer. It is registered in `.slnx`, `.code-workspace`, the aggregator `.csproj`, `CLAUDE-projects.md`
       (catalog + Dependency Flow), `README.md` and `docs/security.md`.
-- [ ] A Minimal API endpoint filter, `RequireGrant(resourceType, action, routeParam: "id")`:
+- [x] A Minimal API endpoint filter, `RequireGrant(resourceType, action, routeParam: "id")`:
       - it validates the action at build time;
       - unauthenticated → 401;
       - authenticated with no local Guid → 401 `Grant.UnmappedSubject`;
@@ -55,14 +55,19 @@ numeric id, Google's opaque string) doesn't parse and resolves **nothing**. The 
         - a `Granted` type the caller cannot read → a bare 404, indistinguishable from a missing resource;
       - a missing route value is a configuration bug and throws;
       - endpoints without the filter are untouched.
-- [ ] `GrantAwareUserPermissionResolver` decorates the host's `IUserPermissionResolver`, so bootstrap
+- [x] `GrantAwareUserPermissionResolver` decorates the host's `IUserPermissionResolver`, so bootstrap
       admins surface as `*` and type-wide grants as `{type}:{action}` through the existing middleware.
       Per-resource grants are not surfaced. `UserPermissionResolverAdminSource` wraps the **inner**
       resolver, and wiring it to the decorated one is refused, so it cannot recurse.
-- [ ] DI: `AddBirkoGrants(o => …)` registers options, table and services, and `.WithGrantPermissions()`
+      _As built: the decorator never calls the admin source, so no recursion was possible; the guard refuses the
+      crossed wiring (the source would only re-read the admin grant). Retired roles or types are skipped, not thrown,
+      because the decorator runs on every request (close review, 2026-10-14)._
+- [x] DI: `AddBirkoGrants(o => …)` registers options, table and services, and `.WithGrantPermissions()`
       installs the decorator and **throws** when no `IUserPermissionResolver` is registered (no silent
       no-op).
-- [ ] The README shows the end-to-end wiring:
+      _Also throws when applied twice, or over a host's own `IGrantAdminSource`. Keeps the host resolver's lifetime,
+      and disposes a resolver it built (close review)._
+- [x] The README shows the end-to-end wiring:
       - external OIDC login (`AddOpenIdConnect` / `AddGitHub`, with a cookie as the temporary scheme);
       - the `UserLogin` lookup by `(Provider, ProviderKey = sub)`, never by email alone;
       - setting `EmailVerified` from the provider's `email_verified` claim, never from `UserLogin.IsVerified`;
@@ -71,13 +76,14 @@ numeric id, Google's opaque string) doesn't parse and resolves **nothing**. The 
       - anonymous reads, `RequirePermission` for global writes, `RequireGrant` for per-resource writes, and
         `GrantOwnerOnCreateAsync` in the create handler;
       - the last-owner compensation caveat.
-- [ ] Tests (added to `tests/Birko.Security.Grants.Tests`, with `FrameworkReference Microsoft.AspNetCore.App`):
+- [x] Tests (added to `tests/Birko.Security.Grants.Tests`, with `FrameworkReference Microsoft.AspNetCore.App`):
+      _The FrameworkReference arrives through `Birko.Data.Tenant`'s projitems; declaring it again is NETSDK1087._
       - every filter outcome above;
       - the decorator's union;
       - the decorator's refusal when unregistered;
       - the recursion guard.
-- [ ] `Birko.Framework/CLAUDE.md` Recent Updates entry for the shipped story.
-- [ ] The visibility rule (403 if the caller can read, otherwise 404; 401 before any lookup) recorded as a
+- [x] `Birko.Framework/CLAUDE.md` Recent Updates entry for the shipped story.
+- [x] The visibility rule (403 if the caller can read, otherwise 404; 401 before any lookup) recorded as a
       new rule in `CLAUDE-conventions.md` plus its index line in `CLAUDE.md`, naming `OwnedCrudResults` and
       `RequireGrant` as its two current producers.
 

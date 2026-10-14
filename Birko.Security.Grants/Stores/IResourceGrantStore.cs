@@ -23,6 +23,10 @@ public interface IResourceGrantStore : IAsyncBulkStore<ResourceGrant>
     Task<IEnumerable<ResourceGrant>> ListForUserAsync(Guid userGuid, string resourceType, Guid? tenantGuid, CancellationToken ct = default)
         => ReadAsync(GrantPredicates.ForUser(userGuid, resourceType, tenantGuid), null, null, null, ct);
 
+    /// <summary>The user's type-wide grants across every resource type (the admin grant excluded), in tenant scope.</summary>
+    Task<IEnumerable<ResourceGrant>> ListTypeWideForUserAsync(Guid userGuid, Guid? tenantGuid, CancellationToken ct = default)
+        => ReadAsync(GrantPredicates.TypeWideForUser(userGuid, tenantGuid), null, null, null, ct);
+
     /// <summary>Every grant applying to one resource — on it or type-wide — in tenant scope.</summary>
     Task<IEnumerable<ResourceGrant>> ListForResourceAsync(string resourceType, Guid resourceId, Guid? tenantGuid, CancellationToken ct = default)
         => ReadAsync(GrantPredicates.ForResource(resourceType, resourceId, tenantGuid), null, null, null, ct);

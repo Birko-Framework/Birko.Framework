@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>9af4b3af-6bbc-4aee-bdfd-7ebaa09a7e60</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Security.Grants.AspNetCore</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- Framework dependency: Microsoft.AspNetCore.App — CONSUMER-SUPPLIED, exactly as for
+       Birko.Security.AspNetCore (see the comment in its projitems, TASK-234): a duplicate
+       FrameworkReference is NETSDK1087, a hard error, so no Birko projitems declares it. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)GrantsAspNetCoreOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authorization\RequireGrantEndpointFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authorization\UserPermissionResolverAdminSource.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authorization\GrantAwareUserPermissionResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\GrantServiceExtensions.cs" />
+  </ItemGroup>
+</Project>
