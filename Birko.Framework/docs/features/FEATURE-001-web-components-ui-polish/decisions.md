@@ -68,3 +68,4 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-10-13 — D7: TASK-591 spawned from TASK-579 (the Playground alias map predates the per-component entry points). No state change.
 - 2026-10-14 — D7: TASK-579 done, shipped in Birko.Web v0.1.4 and signed off on the published Playground. No state change.
 - 2026-10-14 — D7: TASK-592 added (b-rating icon slot, asked for by the user after the TASK-579 sign-off; slot chosen over a built-in icon set and an app-wide setter). No state change.
+- 2026-10-14 — D7: TASK-592 done (b-rating icon slot), signed off on the published Playground; ships in the next Birko.Web release. No state change.

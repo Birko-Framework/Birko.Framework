@@ -21,7 +21,7 @@ generated: 2026-10-13
 
 ## Build progress
 
-21 / 32 tasks done.
+22 / 32 tasks done.
 
 - [x] TASK-001 Add `bare` attribute to all form controls
 - [x] TASK-002 Benchmark + migrate b-editable-table to bare components
@@ -54,7 +54,7 @@ generated: 2026-10-13
 - [ ] TASK-583 `base-list-page` cannot refresh when another user changes its entities
 - [x] TASK-584 `input-adornment-smoke` sleeps 60 ms and hopes `b-input`'s ResizeObserver has fired
 - [ ] TASK-591 The Playground cannot import a component by its own path: its alias map predates TASK-564
-- [ ] TASK-592 `b-rating` draws only a star: let a consumer supply the icon through a slot
+- [x] TASK-592 `b-rating` draws only a star: let a consumer supply the icon through a slot
 
 ## What can be tested now
 

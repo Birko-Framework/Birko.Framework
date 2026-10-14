@@ -3,7 +3,7 @@ id: TASK-592
 parent: EPIC-001
 feature: FEATURE-001
 priority: P3
-status: verify
+status: done
 assignee: ai
 created: 2026-10-14
 depends-on: []
@@ -71,8 +71,10 @@ What makes it more than a slot:
 
 ## Human test plan
 
-- [ ] On the published Playground, the Rating card's heart variant: filled and empty hearts are clearly different in
+- [x] On the published Playground, the Rating card's heart variant: filled and empty hearts are clearly different in
       light, dark and finstat; keyboard and a screen reader behave as with the star (TASK-579's checks)
+  - **Passed 2026-10-14:** the user checked the published Playground (Pages run 38524168268): filled and empty hearts
+    clearly different in light, dark and finstat; keyboard and screen reader as with the star.
 
 ## Implementation plan
 
@@ -118,3 +120,5 @@ Drafted 2026-10-14 at pick. Code in `Birko.Web.Components/src/inputs/b-rating.ts
 - 2026-10-14 — Pushed at the user's request **without a release**: Birko.Web `d7aa962` on `main`, no tag, versions
   still 0.1.4; the local v0.1.5 release commit and tag were dropped. The CHANGELOG entry and the tag come with the next
   release. The storefront (building from `main`) and the Playground get the slot now.
+- 2026-10-14 — Human test passed on the published Playground. Done. Ships in the next Birko.Web release (CHANGELOG entry
+  and tag then).
