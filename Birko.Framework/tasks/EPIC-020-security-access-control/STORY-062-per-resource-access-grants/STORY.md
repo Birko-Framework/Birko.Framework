@@ -32,7 +32,8 @@ Split from one task at planning (2026-10-13). Each is one commit:
 | [[TASK-588]] | Core project: role table, `ResourceGrant`, store, `CanAsync`, List, Grant / Revoke, owner-on-create | — |
 | [[TASK-589]] | Invitations + bootstrap admins + `OnSignInAsync` | TASK-588 |
 | [[TASK-590]] | `Birko.Security.Grants.AspNetCore`: `RequireGrant`, resolver decorator, DI, README wiring, Recent Updates | TASK-588, TASK-589 |
-| [[TASK-593]] | Grant predicates verified on a SQL backend (SQLite) — spawned at TASK-588's close | TASK-588 |
+| [[TASK-593]] | Grant predicates verified on a SQL backend (SQLite) — spawned at TASK-588's close | TASK-588, TASK-594 |
+| [[TASK-594]] | `Birko.Security.Grants.SQL`: fluent SQL mappings for `ResourceGrant` / `Invitation` (grants had no SQL schema) — spawned when TASK-593 was picked | — |
 
 ## Related work elsewhere in the tree
 

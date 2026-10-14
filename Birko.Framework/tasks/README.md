@@ -13,7 +13,7 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 194   |
+| todo         | —     | —       | 195   |
 | in-progress  | 9     | 12      | 0     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
@@ -22,7 +22,7 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 25× P1 · 121× P2 · 48× P3.
+`todo` by priority: 25× P1 · 122× P2 · 48× P3.
 
 ## In progress now
 
@@ -505,12 +505,13 @@ _None._
     - [x] [TASK-542](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-542-websocket-reverse-proxy-endpoint.md) A WebSocket reverse-proxy endpoint mapper (P3)
     - [ ] [TASK-569](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-569-websocket-proxy-forwards-subprotocols.md) MapWebSocketProxy drops the client's requested sub-protocols, so a client that asks for one fails its handshake (P3)
 
-- **EPIC-020** Security — access control — in-progress (3/4 tasks done)
-  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — in-progress (3/4 done)
+- **EPIC-020** Security — access control — in-progress (3/5 tasks done)
+  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — in-progress (3/5 done)
     - [x] [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1)
     - [x] [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1)
     - [x] [TASK-590](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-590-grants-aspnetcore-requiregrant-and-wiring.md) Birko.Security.Grants.AspNetCore — RequireGrant, resolver decorator, DI, end-to-end README (P1)
     - [ ] [TASK-593](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-593-grants-predicates-on-a-sql-backend.md) Grants: run the grant predicates against a SQL backend, not only InMemory (P2)
+    - [ ] [TASK-594](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-594-birko-security-grants-sql-mappings.md) Birko.Security.Grants.SQL — fluent SQL mappings for ResourceGrant and Invitation (P2)
 
 ## Loose tasks
 

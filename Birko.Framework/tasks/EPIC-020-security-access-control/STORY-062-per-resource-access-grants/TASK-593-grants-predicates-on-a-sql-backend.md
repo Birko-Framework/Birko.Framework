@@ -8,7 +8,7 @@ status: todo
 priority: P2
 assignee: ai
 created: 2026-10-14
-depends-on: [TASK-588]
+depends-on: [TASK-588, TASK-594]
 blocks: []
 # findings: ids this task remediates — from a review/audit/harvest/drill pass, or from ordinary
 # field use with no pass behind it at all. Prefixes: see /tasks intake
@@ -39,6 +39,10 @@ What could differ on SQL:
 
 Any of these may translate differently, or be refused by the translator (rule 42: a translator refuses what it
 cannot express).
+
+**Depends on [[TASK-594]]** (found when this task was picked, 2026-10-14): grants have no SQL mapping, so they
+cannot be stored on SQL at all yet. Run every check below on TASK-594's shipped `Birko.Security.Grants.SQL`
+mapping, the way a consumer would, not on a test-local one.
 
 ## Acceptance criteria
 
