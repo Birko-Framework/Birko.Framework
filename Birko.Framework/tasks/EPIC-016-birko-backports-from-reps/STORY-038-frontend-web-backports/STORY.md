@@ -1,11 +1,13 @@
 ---
 id: STORY-038
 parent: EPIC-016
-status: done
+status: in-progress
 created: 2026-07-06
 ---
 
 # Frontend Birko.Web backports (shipped)
+
+> Reopened 2026-10-14 — TASK-599 to TASK-605 are todo (moved from WorkoutTracker STORY-009, where they were filed as Birko.Web work the framework's pick never saw).
 
 ## User story
 
