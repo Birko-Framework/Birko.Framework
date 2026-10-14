@@ -2,7 +2,7 @@
 id: TASK-130
 parent: null
 feature: null
-status: todo
+status: verify
 priority: P1
 assignee: ai
 created: 2026-08-01
@@ -75,24 +75,24 @@ for the rest:
 
 ## Acceptance criteria
 
-- [ ] A contrast scan exists over the shipped themes, resolving tokens through the real cascade so a
+- [x] A contrast scan exists over the shipped themes, resolving tokens through the real cascade so a
       PARTIAL theme (`inverse`) is checked **as composed over each page theme**, not as a standalone file
-- [ ] It covers the pair families listed above, for every theme in `Birko.Web.Components/css/themes/` plus
+- [x] It covers the pair families listed above, for every theme in `Birko.Web.Components/css/themes/` plus
       the base `:root`
-- [ ] Thresholds are per pair kind and justified in code (AA 4.5:1 body text; 3:1 for large/bold badge
+- [x] Thresholds are per pair kind and justified in code (AA 4.5:1 body text; 3:1 for large/bold badge
       text), not one magic constant
-- [ ] Each reported pair carries its **measured ratio and both hex values** in the message — a bare
+- [x] Each reported pair carries its **measured ratio and both hex values** in the message — a bare
       pass/fail is not actionable and hides a near-miss
-- [ ] ALL failing pairs are reported in one run (a per-pair assert that throws on the first hid an
+- [x] ALL failing pairs are reported in one run (a per-pair assert that throws on the first hid an
       identical `warning` failure behind `success` while this was being written)
-- [ ] Known-accepted pairs are recorded **with their numbers and a reason** and are re-measured (so a
+- [x] Known-accepted pairs are recorded **with their numbers and a reason** and are re-measured (so a
       recorded exception that silently gets *worse* still fails), not suppressed by name
-- [ ] The scan runs from `Birko.DesignTokens.Tests`, not only as a CLI verb
-- [ ] The 12 failing pairs above are each either fixed or recorded as a measured exception — the
+- [x] The scan runs from `Birko.DesignTokens.Tests`, not only as a CLI verb
+- [x] The 12 failing pairs above are each either fixed or recorded as a measured exception — the
       `base`/`warning` badge one first, since it is the default theme
-- [ ] The generated AXAML dictionaries are covered too, or a line in the task records why the CSS scan is
+- [x] The generated AXAML dictionaries are covered too, or a line in the task records why the CSS scan is
       sufficient for them (they emit from the same `tokens.json`)
-- [ ] `Birko.DesignTokens/CLAUDE.md` documents the new verb + gate next to the drift-gate section
+- [x] `Birko.DesignTokens/CLAUDE.md` documents the new verb + gate next to the drift-gate section
 
 ## Out of scope
 
@@ -113,11 +113,35 @@ for the rest:
       theme, and confirm by eye that the verdicts match what you see — a contrast number that disagrees with
       the screen means the wrong pair is being measured (this is exactly how the `b-stale-banner` defect was
       first noticed, and how the "measuring the light theme" harness bug was caught).
-- [ ] Verify the gate FAILS when it should: revert one of the four `dark.css` tint tokens to its pastel and
+- [x] Verify the gate FAILS when it should: revert one of the four `dark.css` tint tokens to its pastel and
       confirm the scan goes red naming that token. A gate never seen failing is not known to work.
-- [ ] Check a recorded exception still reports its measured number in the output, so a silently worsening
+- [x] Check a recorded exception still reports its measured number in the output, so a silently worsening
       exception is visible rather than merely tolerated.
 
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-130` — leave empty until then._
+
+## Progress
+
+**2026-10-14 — built, and every pair fixed rather than excepted; in Birko.Web v0.1.10.** In `verify` for the one
+human check left: confirm two verdicts by eye in the Playground.
+
+- **`Birko.DesignTokens/Contrast.cs`** + the `contrast` verb + `ContrastTests` (replacing the 8-pair test it covers).
+  232 pairs: 29 pairs × 8 compositions (the four page themes, and `inverse` over each). `Resolve` models the
+  cascade, so `inverse` is measured as composed: a `var()` resolves on the element that declares it.
+- **The real count was 98, not 12.** The 12 in Context were what a one-off saw; the scan found muted text on every
+  neon/finstat surface, `text-muted` on light's and dark's `bg-tertiary`, finstat's `text-on-primary` (white on brand
+  green, 2.50), and white toast text on success/warning/info in every theme. 14 of the 98 were the new tokens being
+  undefined, reported as failures in the same list.
+- **Owner's decision (2026-10-14): fix them all in this release**, finstat included, so `Contrast.Exceptions` is empty.
+  The mechanism stays, unit-tested: accepted at its ratio, fails if it worsens, fails once it passes (stale).
+  Out of scope above said finstat and the toast pair would be recorded, not fixed; the owner chose otherwise.
+- **Thresholds:** 4.5:1 for every kind. The "3:1 for badge text" in the criteria does not hold: a badge is 11px
+  medium, and WCAG's large-text allowance starts at 18.66px bold. Justified in `Contrast.Required`.
+- **AXAML:** no separate scan; emitted from the same tokens.json with the same per-theme resolution (recorded in
+  CLAUDE.md). `inverse` is not emitted to AXAML.
+- **Red:** the gate failed with all 98 before the palette change; 59/59 after. The rendered half
+  (`device-fix-check.mjs` § 3b) failed on the old CSS and components and passes 140/140 now. Avalonia suite 202/202,
+  theme round-trip 11/11, `verify.mjs` green.
+- The values and the component changes are [[TASK-599]]'s; see there.

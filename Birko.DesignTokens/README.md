@@ -22,6 +22,9 @@ dotnet run --project Birko.DesignTokens -- verify
 
 # Bootstrap / re-derive tokens.json from the current hand-authored CSS (rarely needed):
 dotnet run --project Birko.DesignTokens -- extract
+
+# Measure every theme's text pairs against WCAG AA (4.5:1); exit 1 on a failure:
+dotnet run --project Birko.DesignTokens -- contrast
 ```
 
 Path resolution follows the Birko `$(BirkoSrc)` convention: `--root <birkoRoot>` wins, then the

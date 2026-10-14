@@ -55,6 +55,32 @@ pinned down, both now closed:
 Still open: nothing runs `CssParityTests` when `Birko.Web.Components` changes — none of the three
 repos has CI. The banner is a human signal, not a gate.
 
+## `contrast` — every theme's text pairs, gated from the suite (TASK-130)
+
+`Contrast.cs` measures each text pair a component renders (`Contrast.Pairs`: text on surfaces, `--b-text` and
+`--b-color-<x>-text` on `--b-color-<x>-light`, `--b-text-on-<x>` on a fill, the tooltip) in **eight compositions**:
+the four page themes, and `inverse` over each of them. The verb prints the report; `ContrastTests` is the gate.
+
+- **A partial theme is checked as composed, never as a file.** `inverse` declares 30-odd tokens and inherits the
+  rest, so it was correct read alone and put white text on light's pastel tints at 1.10:1 in use. `Resolve` models
+  the cascade: levels are elements (inverse box, then html), a page theme beats `:root` on the same element, and a
+  `var()` resolves on the element that **declares** it, so an inherited `--b-color-danger-text: var(--b-color-danger)`
+  is the page's value, not one re-read through inverse.
+- **Every floor is 4.5:1, by kind.** All of these are normal-size text (11–14px); the 3:1 large-text allowance needs
+  24px or 18.66px bold. `Required(kind)` keeps kinds apart so a genuinely large use can get 3:1 without loosening the
+  rest.
+- **One run reports everything**, each line with both hex values and the ratio, and an undefined token is a failure
+  in that list rather than an exception that hides the others.
+- **Exceptions are measurements, not suppressions.** `Contrast.Exceptions` records a pair with its ratio and reason;
+  it fails again if the pair gets worse, and fails once it passes, until removed. It is empty: v0.1.10 fixed all 98.
+- **The AXAML needs no scan of its own**: it is emitted from the same `tokens.json`, resolving the same `var()` chain
+  per theme. `inverse` is not emitted to AXAML at all.
+- **Tokens are not the whole story.** A component that reads `--b-color-x` where it should read `--b-color-x-text`
+  passes here. The Playground's `device-fix-check.mjs` § 3b measures the rendered badges and toasts in all eight
+  compositions for that half.
+
+Adding a pair: a component that paints a new token pair as text adds it to `Contrast.Pairs` in the same change.
+
 ## Convention deviations (deliberate — do not "fix")
 
 1. **A real `.csproj`, not `.shproj`/`.projitems`.** It is the first buildable assembly in the

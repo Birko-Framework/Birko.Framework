@@ -29,19 +29,23 @@
   <SolidColorBrush x:Key="BColorInfoAlphaBgBrush" Color="{DynamicResource BColorInfoAlphaBg}" />
   <SolidColorBrush x:Key="BColorInfoAlphaBorderBrush" Color="{DynamicResource BColorInfoAlphaBorder}" />
   <SolidColorBrush x:Key="BColorInfoLightBrush" Color="{DynamicResource BColorInfoLight}" />
+  <SolidColorBrush x:Key="BColorInfoTextBrush" Color="{DynamicResource BColorInfoText}" />
   <SolidColorBrush x:Key="BColorPrimaryBrush" Color="{DynamicResource BColorPrimary}" />
   <SolidColorBrush x:Key="BColorPrimaryHoverBrush" Color="{DynamicResource BColorPrimaryHover}" />
   <SolidColorBrush x:Key="BColorPrimaryLightBrush" Color="{DynamicResource BColorPrimaryLight}" />
+  <SolidColorBrush x:Key="BColorPrimaryTextBrush" Color="{DynamicResource BColorPrimaryText}" />
   <SolidColorBrush x:Key="BColorSecondaryBrush" Color="{DynamicResource BColorSecondary}" />
   <SolidColorBrush x:Key="BColorSecondaryHoverBrush" Color="{DynamicResource BColorSecondaryHover}" />
   <SolidColorBrush x:Key="BColorSuccessBrush" Color="{DynamicResource BColorSuccess}" />
   <SolidColorBrush x:Key="BColorSuccessAlphaBgBrush" Color="{DynamicResource BColorSuccessAlphaBg}" />
   <SolidColorBrush x:Key="BColorSuccessAlphaBorderBrush" Color="{DynamicResource BColorSuccessAlphaBorder}" />
   <SolidColorBrush x:Key="BColorSuccessLightBrush" Color="{DynamicResource BColorSuccessLight}" />
+  <SolidColorBrush x:Key="BColorSuccessTextBrush" Color="{DynamicResource BColorSuccessText}" />
   <SolidColorBrush x:Key="BColorWarningBrush" Color="{DynamicResource BColorWarning}" />
   <SolidColorBrush x:Key="BColorWarningAlphaBgBrush" Color="{DynamicResource BColorWarningAlphaBg}" />
   <SolidColorBrush x:Key="BColorWarningAlphaBorderBrush" Color="{DynamicResource BColorWarningAlphaBorder}" />
   <SolidColorBrush x:Key="BColorWarningLightBrush" Color="{DynamicResource BColorWarningLight}" />
+  <SolidColorBrush x:Key="BColorWarningTextBrush" Color="{DynamicResource BColorWarningText}" />
   <SolidColorBrush x:Key="BInputThumbBgBrush" Color="{DynamicResource BInputThumbBg}" />
   <SolidColorBrush x:Key="BOverlayLightBrush" Color="{DynamicResource BOverlayLight}" />
   <SolidColorBrush x:Key="BOverlayMediumBrush" Color="{DynamicResource BOverlayMedium}" />
@@ -54,7 +58,11 @@
   <SolidColorBrush x:Key="BTextBrush" Color="{DynamicResource BText}" />
   <SolidColorBrush x:Key="BTextInverseBrush" Color="{DynamicResource BTextInverse}" />
   <SolidColorBrush x:Key="BTextMutedBrush" Color="{DynamicResource BTextMuted}" />
+  <SolidColorBrush x:Key="BTextOnDangerBrush" Color="{DynamicResource BTextOnDanger}" />
+  <SolidColorBrush x:Key="BTextOnInfoBrush" Color="{DynamicResource BTextOnInfo}" />
   <SolidColorBrush x:Key="BTextOnPrimaryBrush" Color="{DynamicResource BTextOnPrimary}" />
+  <SolidColorBrush x:Key="BTextOnSuccessBrush" Color="{DynamicResource BTextOnSuccess}" />
+  <SolidColorBrush x:Key="BTextOnWarningBrush" Color="{DynamicResource BTextOnWarning}" />
   <SolidColorBrush x:Key="BTextSecondaryBrush" Color="{DynamicResource BTextSecondary}" />
   <SolidColorBrush x:Key="BTooltipBgBrush" Color="{DynamicResource BTooltipBg}" />
   <SolidColorBrush x:Key="BTooltipBorderBrush" Color="{DynamicResource BTooltipBorder}" />

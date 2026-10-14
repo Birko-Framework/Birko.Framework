@@ -3,10 +3,10 @@ id: TASK-599
 parent: STORY-038
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: verify
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P1
-assignee: unassigned
+assignee: ai
 created: 2026-10-14
 depends-on: []
 blocks: []
@@ -87,15 +87,15 @@ palette decision with a visual consequence in two consumers, so it should be *ch
 
 ## Acceptance criteria
 
-- [ ] The decision above is settled and recorded here before any values are written.
-- [ ] All five semantic pairings measure **≥ 4.5:1** in **both** themes, asserted by an automated sweep rather
+- [x] The decision above is settled and recorded here before any values are written.
+- [x] All five semantic pairings measure **≥ 4.5:1** in **both** themes, asserted by an automated sweep rather
       than by eye — the numbers above came from a script and the fix should be held to the same standard.
-- [ ] The sweep **fails against the current palette first**, proving it measures the thing that is broken.
-- [ ] The light theme is included. It is currently the worse of the two (2.86:1 measured) and was nearly
+- [x] The sweep **fails against the current palette first**, proving it measures the thing that is broken.
+- [x] The light theme is included. It is currently the worse of the two (2.86:1 measured) and was nearly
       overlooked because the dark sweep is the one that exists.
-- [ ] `--b-color-danger-text` is folded into the new family rather than left as a special case, so the next
+- [x] `--b-color-danger-text` is folded into the new family rather than left as a special case, so the next
       person finds one pattern instead of one token plus a rule.
-- [ ] Symbio is checked, or the risk is explicitly recorded as unassessed — a palette change is visible in
+- [x] Symbio is checked, or the risk is explicitly recorded as unassessed — a palette change is visible in
       every consumer and this repo cannot run it.
 
 ## Out of scope
@@ -113,3 +113,27 @@ palette decision with a visual consequence in two consumers, so it should be *ch
 ## Implementation plan
 
 _Populated when picked up._
+
+## Progress
+
+**2026-10-14 — done in Birko.Web v0.1.10, with [[TASK-130]]'s gate.** In `verify` for the human test plan (a danger
+and a warning badge read on a phone, in daylight, both themes).
+
+- **Decision (owner, 2026-10-14): darken the text, keep the tints.** `--b-color-<x>-text` for all five colours in
+  every theme; `--b-color-danger-text` was already that token and is now one of the family (light gets an explicit
+  value instead of `var(--b-color-danger)`). Each value is the smallest step toward black (light surfaces) or white
+  (dark) that clears 4.5:1, so the hue stays: light warning `#d97706` → `#a65b05` (2.86 → 4.5+), dark danger keeps
+  `#f87171`. finstat (owner: fix with the rest): primary/success `#18794f`, warning `#8b6712`, info `#33708c`.
+- **Wider than the five pairs**, by the same decision: text on solid fills (`--b-text-on-<x>`, dark text on
+  success/warning/info and on every finstat fill), muted/secondary text in neon, finstat and inverse, and `inverse`'s
+  tints (dark.css's; white text on the page's pastels was 1.10:1).
+- **Components:** `b-badge`, `b-stat`, the ribbon / sidebar / shell active items and the tree-menu danger hover read
+  `--b-color-<x>-text`; `b-toast`, `b-button` danger and the danger counters read `--b-text-on-<x>`. Every reference
+  falls back to the old token.
+- **Sweep:** `device-fix-check.mjs` § 3b measures the rendered badges and toasts in all eight compositions at 4.5:1;
+  it replaced the dark-only "≥ 3:1 stays readable" check. **Failed on the old palette** (light warning badge 2.86,
+  toasts 3.19–3.68), passes now.
+- **Symbio: not run, risk recorded.** Symbio forks its own `tokens.css`. With the fallbacks it renders exactly as
+  before until it adds the new tokens, so nothing changes for it on upgrade; adopting the fix means copying the new
+  tokens into its fork. The visual change (darker badge text, dark text on toasts) is unassessed in Symbio.
+- Reps needs no change for the badges, which the components own; its TASK-123 can re-measure against v0.1.10.

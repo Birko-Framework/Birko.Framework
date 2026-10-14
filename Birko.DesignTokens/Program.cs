@@ -5,6 +5,7 @@ using Birko.DesignTokens;
 //   extract    Bootstrap/refresh tokens.json FROM the hand-authored CSS (one-time / verification).
 //   generate   Emit all targets FROM tokens.json: the web CSS (byte-identical) + Avalonia AXAML.
 //   verify     Regenerate CSS in-memory and diff against the on-disk files; non-zero exit on drift.
+//   contrast   Measure every theme's text pairs (WCAG AA); non-zero exit on a failure (TASK-130).
 //
 // tokens.json is the source of truth; `generate` is the everyday command.
 
@@ -16,20 +17,29 @@ return verb switch
     "extract" => Extract(),
     "generate" => Generate(),
     "verify" => Verify(),
+    "contrast" => ContrastCheck(),
     _ => Help(),
 };
 
 int Help()
 {
     Console.WriteLine("Birko.DesignTokens — design-token generator");
-    Console.WriteLine("Usage: dotnet run --project Birko.DesignTokens -- <extract|generate|verify> [--root <birkoRoot>]");
+    Console.WriteLine("Usage: dotnet run --project Birko.DesignTokens -- <extract|generate|verify|contrast> [--root <birkoRoot>]");
     Console.WriteLine();
     Console.WriteLine("  extract    (re)build tokens.json from the current CSS files (bootstrap/verification)");
     Console.WriteLine("  generate   emit CSS (byte-identical) + Avalonia AXAML from tokens.json");
     Console.WriteLine("  verify     diff regenerated CSS against on-disk files; exit 1 on any drift");
+    Console.WriteLine("  contrast   measure every theme's text pairs against WCAG AA; exit 1 on a failure");
     Console.WriteLine();
     Console.WriteLine($"Resolved Birko root: {paths.Root}");
     return 0;
+}
+
+int ContrastCheck()
+{
+    var report = Contrast.Evaluate(Contrast.Measure(TokenSet.Load(paths.TokensJson)), Contrast.Exceptions);
+    Console.WriteLine(report.Describe());
+    return report.Clean ? 0 : 1;
 }
 
 int Extract()
