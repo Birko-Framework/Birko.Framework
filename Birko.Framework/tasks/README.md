@@ -13,20 +13,24 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 196   |
+| todo         | —     | —       | 195   |
 | in-progress  | 9     | 12      | 1     |
-| verify       | —     | —       | 0     |
+| verify       | —     | —       | 1     |
 | blocked      | —     | —       | 1     |
 | done         | 1     | 23      | 250   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 27× P1 · 120× P2 · 49× P3.
+`todo` by priority: 27× P1 · 120× P2 · 48× P3.
 
 ## In progress now
 
 - [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1, ai)
+
+## Awaiting verification
+
+- [ ] [TASK-592](EPIC-001-web-components-ui-polish/TASK-592-b-rating-icon-slot.md) `b-rating` draws only a star: let a consumer supply the icon through a slot (P3)
 
 ## Blocked
 

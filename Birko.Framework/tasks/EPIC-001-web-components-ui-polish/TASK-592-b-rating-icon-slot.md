@@ -3,12 +3,12 @@ id: TASK-592
 parent: EPIC-001
 feature: FEATURE-001
 priority: P3
-status: in-progress
+status: verify
 assignee: ai
 created: 2026-10-14
 depends-on: []
 blocks: []
-pr: null
+pr: null  # Birko.Web d7aa962 + release 9735a71 (v0.1.5, tagged, not pushed); Playground efba1df
 github-issue: null
 jira-key: null
 ---
@@ -50,17 +50,17 @@ What makes it more than a slot:
 
 ## Acceptance criteria
 
-- [ ] An `icon` slot: a slotted SVG replaces the star in every position, in the operable and read-only modes; with
+- [x] An `icon` slot: a slotted SVG replaces the star in every position, in the operable and read-only modes; with
       nothing slotted, the built-in star renders exactly as today
-- [ ] The clone follows the component's colours whatever the slotted SVG declares: filled and empty are visibly
+- [x] The clone follows the component's colours whatever the slotted SVG declares: filled and empty are visibly
       different, and the contrast stays 3:1 or more in every shipped theme on `--b-bg` and `--b-bg-secondary` (the
       existing rating-smoke contrast checks run against a slotted icon too)
-- [ ] Changing or removing the slotted icon at runtime re-renders the stars (`slotchange`); no duplicate or stale
+- [x] Changing or removing the slotted icon at runtime re-renders the stars (`slotchange`); no duplicate or stale
       clones, and keyboard focus and the value survive it
-- [ ] The slotted original is not visible and not announced; the clones are `aria-hidden` and not focusable; the
+- [x] The slotted original is not visible and not announced; the clones are `aria-hidden` and not focusable; the
       accessible names and keyboard behaviour are unchanged (keyboard-check still passes)
-- [ ] A non-SVG or empty slot is ignored (the star is used), not rendered as text
-- [ ] README (b-rating section) shows the slot and its colouring contract; CLAUDE.md inventory row lists the slot;
+- [x] A non-SVG or empty slot is ignored (the star is used), not rendered as text
+- [x] README (b-rating section) shows the slot and its colouring contract; CLAUDE.md inventory row lists the slot;
       the Playground Rating card offers a heart variant; rating-smoke covers the slot; a PATCH release note
 
 ## Out of scope
@@ -97,3 +97,21 @@ Drafted 2026-10-14 at pick. Code in `Birko.Web.Components/src/inputs/b-rating.ts
    - Prove red against the old component.
 5. **Docs and release:** README section (slot + colouring contract), CLAUDE.md inventory row, a heart variant on the
    Playground Rating card, CHANGELOG at release (v0.1.5).
+
+## Progress log
+
+- 2026-10-14 — Built: Birko.Web `d7aa962` (+ release commit `9735a71`, tag `v0.1.5`), Playground `efba1df`.
+  - **Measured:** author CSS outranks SVG presentation attributes and stripping `style` worked, but the close-gate
+    reviewer showed a **denylist** sanitiser was the wrong shape. A `javascript:` link (also a tab stop per star),
+    `<set attributeName="href">`, a `<style>` restyling the whole component, remote `<image>`/`<use>` and `fill-opacity`
+    all survived it. Replaced with an **allowlist** that builds a fresh SVG from shape elements and geometry attributes
+    only (links unwrapped, everything else dropped), so the copy carries no paint and the extra `.star svg *` paint rule
+    was removed as redundant.
+  - **Tests:** `rating-smoke` 107/107 (a hostile icon carrying every vector above: only its geometry survives, nothing
+    focusable, the component's styles intact, painted exactly like the built-in star; the contrast loop for star and
+    heart in 5 themes x 2 backgrounds; swap/removal keep the value). `keyboard-check` 17/17 (keys and focus with a
+    slotted icon and across a swap). `entry-points-check` 403/403. `tsc` 0. Full verify exit 0.
+  - **Proved red:** the earlier paint rule and style-stripping, each removed (filled/empty paint and contrast); the
+    `slotchange` listener removed (swap tests); the allowlist replaced by a plain clone (9 distinct failures); link
+    unwrapping removed (the heart vanishes).
+  - **Status `verify`:** the human test plan (the heart card on the published Playground) needs v0.1.5 pushed.
