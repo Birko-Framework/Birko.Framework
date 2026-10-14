@@ -3,7 +3,7 @@ id: TASK-592
 parent: EPIC-001
 feature: FEATURE-001
 priority: P3
-status: todo
+status: in-progress
 assignee: ai
 created: 2026-10-14
 depends-on: []
@@ -73,3 +73,27 @@ What makes it more than a slot:
 
 - [ ] On the published Playground, the Rating card's heart variant: filled and empty hearts are clearly different in
       light, dark and finstat; keyboard and a screen reader behave as with the star (TASK-579's checks)
+
+## Implementation plan
+
+Drafted 2026-10-14 at pick. Code in `Birko.Web.Components/src/inputs/b-rating.ts`; tests in the Playground.
+
+1. **Source of the icon:** `render()` reads the host's first light-DOM child `svg[slot="icon"]`. A
+   `<slot name="icon">` in the shadow root is `display: none`, so the original is neither shown nor in the
+   accessibility tree, and its `slotchange` triggers `update()` (a replaced or removed icon re-renders; the morph keeps
+   the radios, so the value and focus survive). Nothing slotted, or no SVG among it, means the built-in star.
+2. **The copy:** the slotted SVG is cloned once per render and serialised into each star: `aria-hidden="true"`,
+   `focusable="false"`, no `style` attribute anywhere in it, no `on*` attributes, no `<script>` or `<foreignObject>`
+   (consumer markup re-parsed into the shadow root must not run anything).
+3. **Colouring:** `.star svg * { fill: inherit; stroke: inherit; stroke-width: inherit }`. Author CSS outranks SVG
+   presentation attributes, so a path's own `fill="#e11d48"` yields to the component's filled/empty paint. Only an inline
+   `style` would outrank it, hence step 2. Measure in the browser, don't assume.
+4. **Tests:**
+   - `rating-smoke`: slotted icon in every star, operable and read-only; built-in star when empty or non-SVG; an icon
+     with hard-coded `fill`/`stroke`/`style` still paints filled and empty differently; the contrast loop repeated with
+     the slotted icon; a runtime swap and a removal re-render without duplicate clones and keep the value; the original
+     not rendered; clones `aria-hidden`; `on*` stripped.
+   - `keyboard-check`: tab and arrows with a slotted icon, and focus surviving an icon swap.
+   - Prove red against the old component.
+5. **Docs and release:** README section (slot + colouring contract), CLAUDE.md inventory row, a heart variant on the
+   Playground Rating card, CHANGELOG at release (v0.1.5).
