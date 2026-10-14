@@ -291,66 +291,6 @@ per-worker assignment and metrics. `StepDependencyAnalyzer` gains `ValidateOrder
 (`StepStatus.Skipped` 3 / `Failed` 4; `PlanStatus` gains `Ready` 1): never renumber them. The migration and the
 DraCode mapping are in [CHANGELOG.md](CHANGELOG.md) and `Birko.AI.Orchestration/CLAUDE.md`.
 
-### A SQL event store ships (2026-10-10)
-
-[[TASK-529]]. `Birko.Data.EventSourcing.SQL`: `SqlEventStore<DB>` on any provider — UNIQUE (aggregate, version) as the
-concurrency guard (typed `EventStoreConcurrencyException`), atomic append-range, `MAX` for the version. New connector
-hook `IsUniqueViolationException`. ⚠ The generic `AsyncDataBaseBulkStore`'s bulk create is **not** atomic (row by
-row); the provider stores' is.
-
-### BREAKING: stores override `DestroyCore`; `Destroy` re-arms init (2026-10-10)
-
-[[TASK-163]]. `Destroy` is a non-virtual base wrapper that clears the init latch, so a destroyed store re-provisions
-on its next call (it used to run against the dropped table / file). Override `DestroyCore` / `DestroyCoreAsync`;
-**never call `base.Destroy*` from them** — that recursed, and now throws. A `Create` inside `InitCore` passes
-through instead of a stack overflow (sync) or deadlock (async). Migration in [CHANGELOG.md](CHANGELOG.md).
-
-### The streaming fallback retries one model call, not the run (2026-10-10)
-
-[[TASK-544]]. `StreamingFallbackToSync` wrapped the whole streaming run, so a later-iteration provider error or a
-throwing tool replayed the task from a snapshot and **every executed tool ran twice**. It now retries only iteration
-1's streaming request without streaming. **Observable:** a later failure throws out of `RunAsync` instead of a silent
-full re-run — migration in [CHANGELOG.md](CHANGELOG.md); transient retries belong to `Birko.AI.Resilience`.
-
-### The agent loop has hooks; `CheckpointInterval` is gone (2026-10-09)
-
-[[TASK-527]]. `Agent.Hooks` (`IAgentHooks`: per-iteration with `AppendUserMessage` / `Stop`, tool-call started /
-finished with structured data), `CurrentSystemPrompt`, `ResumeAsync`. **One loop serves both paths** — don't
-reintroduce a streaming copy. **Breaking:** `AgentOptions.CheckpointInterval` removed (nothing read it, rule 51);
-migration in [CHANGELOG.md](CHANGELOG.md). The streaming fallback replaying tools was [[TASK-544]], fixed 2026-10-10.
-
-### A WebSocket message is capped, and concurrent sends need no queue (2026-10-08)
-
-[[TASK-537]]. `WebSocketServer` buffered a multi-frame message without limit; it now receives through
-`ReceiveMessageAsync` (Messaging/), capped by `MaxMessageBytes` (**default 4 MiB**, over-cap → `MessageTooBig`).
-**⚠ Filed as a send queue, falsified before code:** .NET 10's `ManagedWebSocket` serializes concurrent `SendAsync`
-(3 × 200 × 100 KB: 0 threw, 0 corrupt) — a test pins it; don't add a send gate without that test going red.
-
-### WebSocket `requireAuthentication: true` fails closed (2026-10-08)
-
-[[TASK-536]]. Both WebSocket mapping paths skipped the token check when `WebSocketAuthenticationService` was not
-registered, and nothing registers it — so the **default** accepted anonymous upgrades (rule 51). Now mapping throws, and
-a request that still reaches the gate gets 401. The flag means **static tokens**, not per-user auth: for JWT use
-`requireAuthentication: false` + `.RequireAuthorization()`. No consumer was affected; migration in [CHANGELOG.md](CHANGELOG.md).
-
-### A SQLite `decimal` is exact TEXT ordered by a collation, not a float (2026-10-04)
-
-[[TASK-513]]. SQLite keeps `REAL` and `NUMERIC(p,s)` alike as an 8-byte float: a 22-digit value came back cut to 16,
-`decimal.MaxValue` wrote and then threw on read, and an increment stored `10.299999999999999`, all measured. A decimal
-is now `TEXT COLLATE BIRKO_DECIMAL`, and `SqLiteDecimal` registers the collation, `birko_decimal_add` (what Increment
-emits, via the new `IncrementExpression` hook) and exact `SUM`/`AVG` on every connector connection. **⚠ A raw
-`SqliteConnection` without `SqLiteDecimal.Register` cannot `ORDER BY` a decimal column or write an indexed one.**
-Old tables are reported by `DetectDrift`, not altered. The rebuild migration in [CHANGELOG.md](CHANGELOG.md) keeps
-already-drifted values as they are. Views still use the float `SUM`/`AVG`: [[TASK-514]].
-
-### An unprecisioned `decimal` is `DECIMAL(22,6)`, not an integer (2026-10-03)
-
-[[TASK-512]]. On MySQL and SQL Server a bare `DECIMAL` has scale 0, so `7.5` was stored as `8`, measured. The
-missing half of precision/scale now takes the canonical 22 / 6 (`BoundedDecimalType`, one producer for both);
-PostgreSQL and SQLite are unchanged. Existing tables are reported by `DetectDrift`, not altered — migration in
-[CHANGELOG.md](CHANGELOG.md). **⚠ TASK-511's comparison hook was deleted the same day** (rule 53): it made a bare
-column look clean, and once nothing declares one it could only hide an old lossy table.
-
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
