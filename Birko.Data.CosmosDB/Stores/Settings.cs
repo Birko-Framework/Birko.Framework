@@ -19,6 +19,29 @@ namespace Birko.Data.CosmosDB.Stores
         public string PartitionKeyPath { get; set; } = "/id";
 
         /// <summary>
+        /// Refuses a <see cref="PartitionKeyPath"/> the stores cannot address.
+        /// </summary>
+        /// <remarks>
+        /// TASK-614. Every point operation passes <c>new PartitionKey(entity.Guid)</c>, which is the document's
+        /// partition key value only when the container is partitioned on <c>/id</c>. Any other path was accepted, the
+        /// container was created on it, and then every write failed. Supporting another path means deriving the value
+        /// from the entity, and a read or delete by Guid alone could no longer name its partition. That is a feature,
+        /// so the knob refuses what the mechanism cannot deliver (rule 10).
+        /// </remarks>
+        /// <exception cref="NotSupportedException">The path is anything but <c>/id</c>.</exception>
+        internal void RequireAddressablePartitionKeyPath()
+        {
+            if (string.IsNullOrEmpty(PartitionKeyPath) || PartitionKeyPath == "/id")
+            {
+                return;
+            }
+            throw new NotSupportedException(
+                $"Settings.PartitionKeyPath '{PartitionKeyPath}' is not supported: the Cosmos DB stores address every "
+                + "document by its Guid as both id and partition key, which only a container partitioned on '/id' "
+                + "accepts. Leave PartitionKeyPath at '/id'.");
+        }
+
+        /// <summary>
         /// Gets or sets the request timeout for Cosmos DB operations. Default is 30 seconds.
         /// </summary>
         public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);

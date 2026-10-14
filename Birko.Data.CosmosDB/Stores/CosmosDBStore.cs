@@ -71,6 +71,7 @@ public class CosmosDBStore<T>
         }
 
         _settings = settings ?? new Settings();
+        _settings.RequireAddressablePartitionKeyPath();
         _databaseName = databaseName;
         _containerName = containerName ?? typeof(T).Name;
 
@@ -121,6 +122,7 @@ public class CosmosDBStore<T>
             return;
         }
 
+        _settings.RequireAddressablePartitionKeyPath();
         _databaseName = _settings.Name;
         _containerName = !string.IsNullOrWhiteSpace(_settings.UserName) ? _settings.UserName : typeof(T).Name;
 

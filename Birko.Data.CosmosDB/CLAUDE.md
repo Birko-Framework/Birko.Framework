@@ -34,7 +34,10 @@ Azure Cosmos DB (NoSQL API) implementation for the Birko data layer providing do
 
 ### Settings (Birko.Data.CosmosDB.Stores.Settings)
 Typed settings class extending `RemoteSettings`:
-- `PartitionKeyPath` (default: "/id") — Cosmos DB partition key path
+- `PartitionKeyPath` (default: "/id"): **only `/id` is supported**, and any other value throws `NotSupportedException`
+  when settings are applied (TASK-614). Every point operation passes `new PartitionKey(guid)`. Supporting another path
+  would mean deriving the value from the entity, and a read or delete by Guid could no longer name its partition. An
+  existing container on another path is already refused by the SDK at init (measured).
 - `RequestTimeout` (default: 30 seconds) — request timeout
 - `AllowBulkExecution` (default: true) — enables bulk execution mode
 - `GetCosmosClientOptions()` — builds `CosmosClientOptions` from settings
@@ -56,7 +59,7 @@ Settings mapping from `RemoteSettings`:
 
 ## Important Notes
 - Transactional batches are scoped to a single partition key
-- Default partition key path is "/id" — configurable via `Settings.PartitionKeyPath`
+- The partition key path is "/id"; `Settings.PartitionKeyPath` accepts nothing else (TASK-614)
 - Bulk execution is enabled by default via `Settings.AllowBulkExecution = true`
 - Sync store operations use `.GetAwaiter().GetResult()` wrappers; prefer async store for production
 

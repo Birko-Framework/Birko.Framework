@@ -116,8 +116,7 @@ var cosmos = new Settings(
     password: accountKey,
     containerName: "Devices")
 {
-    PartitionKeyPath  = "/tenantId",
-    RequestTimeout    = TimeSpan.FromSeconds(60),
+    RequestTimeout    = TimeSpan.FromSeconds(60),     // PartitionKeyPath stays "/id" (any other is refused, TASK-614)
     AllowBulkExecution = true,                       // SDK bulk mode
 };
 

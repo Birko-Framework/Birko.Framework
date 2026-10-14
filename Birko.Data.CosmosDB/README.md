@@ -180,8 +180,8 @@ var settings = new Birko.Data.CosmosDB.Stores.Settings
 {
     Location = "AccountEndpoint=https://...;AccountKey=...",
     Name = "MyDatabase",
-    PartitionKeyPath = "/tenantId",
     RequestTimeout = TimeSpan.FromSeconds(60)
+    // PartitionKeyPath stays "/id": the stores address documents by Guid, and any other path is refused.
 };
 var store = new AsyncCosmosDBStore<Customer>();
 store.SetSettings(settings);
