@@ -172,7 +172,15 @@ SQL parser delegates to the column collation.
 
 Note: the script-query path needs the referenced fields to be `doc_values`-enabled (the default for
 numeric/keyword/boolean; `text` fields are not — use their `.keyword` sub-field, which the renderer already
-appends for strings). Runtime cost is per-document script evaluation, so scope such filters with other
+appends for dynamically mapped strings).
+
+#### A member is queried under the field it is stored as (TASK-613)
+
+Every member-to-field translation goes through `StoredFieldName` (the NEST attribute's `Name`, else camelCase)
+and, for an exact match, `ExactFieldName`. **Only an unattributed `string` gets `.keyword`**: AutoMap gives it a
+`keyword` sub-field, but a `[Keyword]` member *is* the keyword field and has none. Suffixing every string sent the
+workflow, job-queue and sync lookups to a field that does not exist, and ES answered with zero hits, not an error.
+An exact match on any other mapping (`[Text]`) is refused with `NotSupportedException`. Runtime cost is per-document script evaluation, so scope such filters with other
 term/range clauses where possible.
 
 #### An empty/null collection in `Contains` matches nothing

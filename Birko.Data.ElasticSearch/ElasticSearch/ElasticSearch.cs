@@ -200,7 +200,7 @@ namespace Birko.Data.ElasticSearch
             if (expr is MemberExpression member && member.Type == typeof(bool)
                 && exprType != null && IsDirectMemberOfParameter(member, exprType))
             {
-                var name = FormatFieldName(member.Member.Name, fieldPrefix);
+                var name = StoredFieldName(member.Member, fieldPrefix);
                 return name != null ? new TermQuery { Field = name, Value = true } : null;
             }
 
@@ -557,11 +557,9 @@ namespace Birko.Data.ElasticSearch
             field = string.Empty;
             if (exprType == null || !IsDirectMemberOfParameter(member, exprType))
                 return false;
-            var name = FormatFieldName(member.Member.Name, fieldPrefix);
+            var name = ExactFieldName(member.Member, member.Type, fieldPrefix);
             if (name == null)
                 return false;
-            if (member.Type == typeof(string) && !name.EndsWith(".keyword", StringComparison.OrdinalIgnoreCase))
-                name += ".keyword";
             field = name;
             return true;
         }
@@ -815,23 +813,15 @@ namespace Birko.Data.ElasticSearch
                 && Nullable.GetUnderlyingType(member.Member.ReflectedType) != null
                 && exprType != null && IsDirectMemberOfParameter(hasValueInner, exprType))
             {
-                var name = FormatFieldName(hasValueInner.Member.Name, fieldPrefix);
+                var name = StoredFieldName(hasValueInner.Member, fieldPrefix);
                 return name != null ? new ExistsQuery { Field = name } : null;
             }
 
             // Direct member access (e.g., x => x.Name)
             if (exprType != null && IsDirectMemberOfParameter(member, exprType))
             {
-                var name = FormatFieldName(member.Member.Name, fieldPrefix);
-                if (name == null)
-                    return null;
-
-                // Add .keyword suffix for string fields if not already present
-                if (member.Type == typeof(string) && !name.EndsWith(".keyword", StringComparison.OrdinalIgnoreCase))
-                {
-                    name += ".keyword";
-                }
-                return new TermQuery { Field = name };
+                var name = ExactFieldName(member.Member, member.Type, fieldPrefix);
+                return name != null ? new TermQuery { Field = name } : null;
             }
 
             // Constant, closure, or non-parameter member access — evaluate as value
@@ -886,6 +876,46 @@ namespace Birko.Data.ElasticSearch
                     (member.Expression is UnaryExpression conv
                         && conv.NodeType == ExpressionType.Convert
                         && conv.Operand.NodeType == ExpressionType.Parameter));
+        }
+
+        /// <summary>
+        /// The field <paramref name="member"/> is stored under: the <c>Name</c> its NEST mapping attribute declares,
+        /// else NEST's default camelCase inference. The one producer every member-to-field translation shares.
+        /// </summary>
+        internal static string? StoredFieldName(MemberInfo member, string? prefix)
+        {
+            var declared = member.GetCustomAttribute<ElasticsearchPropertyAttributeBase>(inherit: true)?.Name
+                ?? member.GetCustomAttribute<PropertyNameAttribute>(inherit: true)?.Name;
+            if (string.IsNullOrEmpty(declared))
+                return FormatFieldName(member.Name, prefix);
+            return string.IsNullOrEmpty(prefix) ? declared : $"{prefix}.{declared}";
+        }
+
+        /// <summary>
+        /// The field an exact match (term, wildcard, doc value) on <paramref name="member"/> must target.
+        /// </summary>
+        /// <remarks>
+        /// ⚠ <b>Only a dynamically mapped string has a <c>.keyword</c> sub-field.</b> AutoMap makes an unattributed
+        /// <c>string</c> <c>text</c> with a <c>keyword</c> sub-field, but a <c>[Keyword]</c> member IS the keyword field
+        /// and has no sub-field. Suffixing every string queried a field that does not exist there, and ES answers that
+        /// with zero hits rather than an error, so every workflow, job and sync lookup by name came back empty
+        /// (TASK-613). Any other mapping (<c>[Text]</c>) has no exact form at all, so the match is refused rather
+        /// than sent somewhere it cannot hit.
+        /// </remarks>
+        internal static string? ExactFieldName(MemberInfo member, Type memberType, string? prefix)
+        {
+            var name = StoredFieldName(member, prefix);
+            if (name == null || memberType != typeof(string))
+                return name;
+
+            return member.GetCustomAttribute<ElasticsearchPropertyAttributeBase>(inherit: true) switch
+            {
+                null => name + ".keyword",
+                KeywordAttribute => name,
+                var mapping => throw new NotSupportedException(
+                    $"Cannot match {member.DeclaringType?.Name}.{member.Name} exactly: it is mapped as {mapping.GetType().Name.Replace("Attribute", string.Empty)}, "
+                    + "which has no keyword form. Map it with [Keyword] to filter on it."),
+            };
         }
 
         private static string? FormatFieldName(string? name, string? prefix)

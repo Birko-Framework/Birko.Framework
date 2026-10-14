@@ -2,12 +2,12 @@
 id: TASK-613
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-14
 depends-on: []
-blocks: []
+blocks: [TASK-615]
 related: [TASK-610]
 findings: []
 pr: null
@@ -36,13 +36,19 @@ the name the backend stores). Source read and confirmed; the empty-result conseq
 
 ## Acceptance criteria
 
-- [ ] Live ES test (gate `BIRKO_ES_URL`): a workflow instance saved through the ES workflow store is found by
+- [x] Live ES test (gate `BIRKO_ES_URL`): a workflow instance saved through the ES workflow store is found by
       `FindByWorkflowNameAsync` / `FindByStateAsync`. Measure red first. If it is already green, record why and
-      cancel.
-- [ ] The translator emits `.keyword` only where the mapping has that sub-field. It decides from the mapping or the
+      cancel. → It was red, but because of a different bug: every `orderBy` sends the PascalCase name and gets a 400,
+      before any filter runs. That bug is TASK-615. This task's half is proven at the store level
+      (`MappedFieldNameLiveTests`) and through the sync store, and the workflow-level test lands with TASK-615.
+- [x] The translator emits `.keyword` only where the mapping has that sub-field. It decides from the mapping or the
       member's attributes, not from the CLR type alone. A `text` field with a `.keyword` sub-field (the default dynamic
       mapping) still gets the suffix.
-- [ ] The same check for the BackgroundJobs and Sync ES models, each with a test or a recorded reason it is unaffected.
+- [x] The same check for the BackgroundJobs and Sync ES models, each with a test or a recorded reason it is unaffected.
+      → Sync: `GetLastSyncTimeAsync` filters `Scope` (`[Keyword]`). It answered null ("never synced") and is now
+      correct; proven live in both directions (`ElasticSyncKnowledgeScopeLiveTests`). Jobs: dequeue filters
+      `QueueName` (`[Keyword]`), so it is affected and now translates correctly, but it also sorts, so its live proof
+      belongs to TASK-615.
 
 ## Out of scope
 
@@ -54,4 +60,15 @@ N/A — covered by the live provider test.
 
 ## Implementation plan
 
-_Drafted when picked._
+1. One producer: `ElasticSearch.StoredFieldName(member, prefix)` (the attribute's `Name`, else camelCase) and
+   `ExactFieldName(member, type, prefix)`. `.keyword` is added only for an unattributed string, nothing for
+   `[Keyword]`, and any other string mapping is refused.
+2. Route the four member sites through it: the bare bool, `HasValue`, the direct member, and the script field.
+3. Tests: offline translator tests, a live store round-trip and a live sync scope lookup, each proven red first.
+
+## Progress log
+
+- 2026-10-14 — Live ES 7.17.25 (Docker). Red: `store.Read(x => x.Code == "A-1")` returned an empty collection;
+  without the fix the sync `GetLastSyncTimeAsync` returned null. The workflow repro exposed TASK-615 (sort 400),
+  which I filed and did not fix here. Green: Data.ElasticSearch 222 incl. 6 new, Views 19, ViewModel 6,
+  Migrations.ES 26, Sync.ES 12, BackgroundJobs.ES 6.
