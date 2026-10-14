@@ -3,7 +3,7 @@ id: TASK-597
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: in-progress
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -36,12 +36,12 @@ The action label added by TASK-545 is escaped; the message and icon are not.
 
 ## Acceptance criteria
 
-- [ ] The message renders as text: markup in it is shown, not parsed (`<b>x</b>` reads literally)
-- [ ] `icon` is decided explicitly: escaped as text, or an allowlisted icon form (glyph / known icon name). It must not
+- [x] The message renders as text: markup in it is shown, not parsed (`<b>x</b>` reads literally)
+- [x] `icon` is decided explicitly: escaped as text, or an allowlisted icon form (glyph / known icon name). It must not
       become an HTML sink
-- [ ] If any caller relies on HTML in a message today (search Birko.Web and the consumers: Symbio, FlowerFurStudio,
+- [x] (none does — survey in the plan; no opt-in added) If any caller relies on HTML in a message today (search Birko.Web and the consumers: Symbio, FlowerFurStudio,
       Presenter, DraCode), there is a separate, named opt-in for it. The default stays text
-- [ ] Playground smoke: a message and an icon carrying `<img onerror>` / `<script>` render inert, and the text is visible
+- [x] Playground smoke: a message and an icon carrying `<img onerror>` / `<script>` render inert, and the text is visible
 
 ## Out of scope
 
@@ -68,3 +68,10 @@ nothing would use it (the confirm dialog's `message-html` stays the precedent if
    `notify` — the text is visible, no element is parsed, the handler never runs. Register in `app.ts` / `verify.mjs`.
    Prove red by reverting the escape.
 3. Docs: Components README / API toast section — message and icon are text.
+
+## Progress log
+
+- 2026-10-14 — Done. Web `11b69c6` (escape `message` and `icon` at render; docs), Playground `b0d5d92`
+  (`toast-escape-smoke` 26/26; `verify.mjs` and `keyboard-check` green). Proven red: without the escape 25 of 26 fail
+  and the `onerror` payload **ran** (`__toastPwned = 1`), so the hole was live, not theoretical. Not pushed or tagged;
+  rides the same release as [[TASK-545]].
