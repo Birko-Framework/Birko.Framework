@@ -18,6 +18,10 @@ InfluxDB migration backend using InfluxDBClient. Implements platform-agnostic IM
   case-sensitive, so the match is exact. The lookup is filtered server-side by organization and name, because an
   unlimited listing is one page of 20 (measured). The `organization` these components take is a **name**, resolved
   to an ID for creation. A name filter that matches nothing is a 404, which the helper reads as "absent".
+- **Bookkeeping lives in `birko_migrations`** (`InfluxMigrationStore.DefaultMigrationsBucketName`; override with the
+  `bucketName` / `migrationsBucketName` constructor argument). It was `_migrations`, which InfluxDB 2 refuses
+  (leading underscore is reserved), so no migration could be recorded (TASK-617). A name starting with `_` is refused
+  up front. There is no fallback that adopts an old `_migrations` bucket, because no InfluxDB 2 database can have one.
 - `InfluxDataMigrator` — DeleteDocuments via DeleteApi, CountDocuments via Flux count().
 
 ### Store

@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### InfluxDB migrations can record what they apply (2026-10-14)
+
+[[TASK-617]]. The bookkeeping bucket was `_migrations`, and InfluxDB 2 refuses names starting with `_`, so
+`InfluxMigrationStore.Initialize()` failed on every fresh server. It is now `birko_migrations`, overridable through the
+store and runner constructors, and a name starting with `_` is refused up front. No migration needed, because no
+InfluxDB 2 database can hold the old name.
 ### On a case-sensitive SQL Server database, a column differing only in case is drift (2026-10-14)
 
 [[TASK-611]]. TASK-610's fix for PostgreSQL, extended. SQL Server resolves columns by the database collation, so under

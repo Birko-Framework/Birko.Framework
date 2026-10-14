@@ -25,8 +25,8 @@ namespace Birko.Data.Migrations.InfluxDB
         /// <summary>
         /// Initializes a new instance of the InfluxMigrationRunner class.
         /// </summary>
-        public InfluxMigrationRunner(InfluxDBClient client, string organization)
-            : base(new InfluxMigrationStore(client, organization))
+        public InfluxMigrationRunner(InfluxDBClient client, string organization, string? migrationsBucketName = null)
+            : base(new InfluxMigrationStore(client, organization, migrationsBucketName))
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _organization = organization ?? throw new ArgumentNullException(nameof(organization));

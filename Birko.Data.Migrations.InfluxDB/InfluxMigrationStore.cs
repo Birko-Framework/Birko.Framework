@@ -14,28 +14,58 @@ namespace Birko.Data.Migrations.InfluxDB
     /// </summary>
     public class InfluxMigrationStore : Data.Migrations.IMigrationStore
     {
-        private const string MigrationsBucketName = "_migrations";
+        /// <summary>
+        /// The bucket migration bookkeeping lives in unless the caller names another.
+        /// </summary>
+        /// <remarks>
+        /// TASK-617. This was <c>_migrations</c>, and InfluxDB 2 refuses it (measured: "bucket name _migrations is
+        /// invalid. Buckets may not start with underscore", the prefix being reserved for system buckets). So
+        /// <see cref="Initialize"/> could never create its bucket, and no migration could run on a fresh server.
+        /// There is deliberately no fallback that adopts an old <c>_migrations</c> bucket: the API refuses to create
+        /// one and a 1.x upgrade names buckets <c>database/retention-policy</c>, so no database can have it, and a
+        /// branch nothing can reach would only drift (rule 53).
+        /// </remarks>
+        public const string DefaultMigrationsBucketName = "birko_migrations";
+
         private const string MigrationMeasurement = "migrations";
 
         private readonly InfluxDBClient _client;
         private readonly string _organization;
+        private readonly string _bucketName;
         private Bucket? _migrationsBucket;
 
         /// <summary>
         /// Initializes a new instance of the InfluxMigrationStore class.
         /// </summary>
-        public InfluxMigrationStore(InfluxDBClient client, string organization)
+        /// <param name="client">The InfluxDB client.</param>
+        /// <param name="organization">The organization NAME.</param>
+        /// <param name="bucketName">The bookkeeping bucket; defaults to <see cref="DefaultMigrationsBucketName"/>.</param>
+        /// <exception cref="ArgumentException">The bucket name is blank or starts with '_', which InfluxDB 2 refuses.</exception>
+        public InfluxMigrationStore(InfluxDBClient client, string organization, string? bucketName = null)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _organization = organization ?? throw new ArgumentNullException(nameof(organization));
+            _bucketName = bucketName ?? DefaultMigrationsBucketName;
+            if (string.IsNullOrWhiteSpace(_bucketName) || _bucketName.StartsWith("_", StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"Migration bucket name '{_bucketName}' is not one InfluxDB 2 accepts: it must be non-blank and must not "
+                    + "start with '_' (reserved for system buckets).",
+                    nameof(bucketName));
+            }
         }
+
+        /// <summary>
+        /// The bucket bookkeeping is read from and written to.
+        /// </summary>
+        public string BucketName => _bucketName;
 
         /// <summary>
         /// Initializes the migration store (creates migrations bucket if needed).
         /// </summary>
         public void Initialize()
         {
-            _migrationsBucket = Context.InfluxBucketLookup.Find(_client, _organization, MigrationsBucketName);
+            _migrationsBucket = Context.InfluxBucketLookup.Find(_client, _organization, _bucketName);
 
             if (_migrationsBucket == null)
             {
@@ -49,11 +79,11 @@ namespace Birko.Data.Migrations.InfluxDB
                 // already-migrated database.
                 //
                 // `0` is InfluxDB's spelling for infinite retention. Note this only governs a bucket this
-                // method CREATES -- an existing `_migrations` bucket is adopted as found, so a database
-                // provisioned before this fix keeps its 365-day rule and needs a manual
-                // `influx bucket update --name _migrations --retention 0`.
+                // method CREATES -- an existing bookkeeping bucket is adopted as found, so a database
+                // provisioned before this fix keeps its retention rule and needs a manual
+                // `influx bucket update --name <bucket> --retention 0`.
                 var retentionRule = new BucketRetentionRules(BucketRetentionRules.TypeEnum.Expire, 0L);
-                _migrationsBucket = Context.InfluxBucketLookup.Create(_client, _organization, MigrationsBucketName, retentionRule);
+                _migrationsBucket = Context.InfluxBucketLookup.Create(_client, _organization, _bucketName, retentionRule);
             }
         }
 
@@ -95,7 +125,7 @@ namespace Birko.Data.Migrations.InfluxDB
 
             var queryApi = _client.GetQueryApi();
             var query = $@"
-                from(bucket: ""{MigrationsBucketName}"")
+                from(bucket: ""{EscapeFluxString(BucketName)}"")
                 |> range(start: -10y)
                 |> filter(fn: (r) => r._measurement == ""{MigrationMeasurement}"")
                 |> filter(fn: (r) => r._field == ""version"")
@@ -133,7 +163,7 @@ namespace Birko.Data.Migrations.InfluxDB
                 // loop above handles by yielding no records. So the only reachable causes here are real
                 // failures. The status code is carried through so a caller can still classify it.
                 throw new InvalidOperationException(
-                    $"Cannot read applied migration versions from bucket '{MigrationsBucketName}'. "
+                    $"Cannot read applied migration versions from bucket '{BucketName}'. "
                     + "Refusing to report an empty set, which would replay every registered migration "
                     + $"against an already-migrated database. {ex.Message}",
                     ex);
@@ -169,7 +199,7 @@ namespace Birko.Data.Migrations.InfluxDB
                 .Field("description", migration.Description ?? "")
                 .Timestamp(migration.CreatedAt, WritePrecision.Ms);
 
-            writeApi.WritePointAsync(point, MigrationsBucketName, _organization).GetAwaiter().GetResult();
+            writeApi.WritePointAsync(point, BucketName, _organization).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -199,7 +229,7 @@ namespace Birko.Data.Migrations.InfluxDB
 
             try
             {
-                deleteApi.Delete(start, stop, fluxPredicate, MigrationsBucketName, _migrationsBucket!.OrgID);
+                deleteApi.Delete(start, stop, fluxPredicate, BucketName, _migrationsBucket!.OrgID);
             }
             catch (global::InfluxDB.Client.Core.Exceptions.InfluxException)
             {
