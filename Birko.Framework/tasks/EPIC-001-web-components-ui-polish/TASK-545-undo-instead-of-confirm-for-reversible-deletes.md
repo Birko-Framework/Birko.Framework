@@ -3,10 +3,10 @@ id: TASK-545
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: in-progress
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P3
-assignee: unassigned
+assignee: ai
 created: 2026-10-09
 depends-on: []
 blocks: []
@@ -82,4 +82,33 @@ worse than no setting.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-545` — leave empty until then._
+Drafted at pick, 2026-10-14. Code lands in `Birko\Web` (one commit), the smoke suites in
+`Birko.Web.Playground` (one commit), this file in the framework repo.
+
+1. **`b-toast` action** (`Birko.Web.Components/src/feedback/b-toast.ts`)
+   - `ToastAction { label?: string; onClick: () => void | Promise<void> }`. `show(message, variant, durationMs?,
+     { action })` and `NotifyOptions.action`. Both return the `BToastItem` so a caller can move focus to it.
+   - The item renders the action as `<button type="button" class="action">` inside the existing `role=status`
+     region, so the announcement carries it. Label escaped; default `bwc.common.undo` ("Undo") via `label()`.
+   - Click: stop propagation (no `href` navigation), dismiss, then run the callback (a throw is logged, never
+     swallowed silently).
+   - **Dismissal moves into the item** (`autoDismiss(ms)`): the timer pauses on `pointerenter` / `focusin` and
+     resumes on leave with what was left, never less than 1 s. Applies to every toast (WCAG 2.2.1), not only
+     action ones. Default duration with an action is 10 s (4 s without).
+   - `focusAction()` on the item.
+2. **Undo-delete opt-in** (`Birko.Web.Shell/src/pages/base-crud-page.ts`)
+   - `protected deleteMode: 'confirm' | 'undo' = 'confirm'` and `protected restoreDeleted?(id): Promise<ApiResponse>`.
+   - Guard: `connectedCallback` throws when `deleteMode === 'undo'` and there is no `restoreDeleted`
+     (subclass fields are not set yet in the constructor, so this is the earliest point).
+   - `_confirmDelete` branches: in undo mode it skips the dialog, deletes, runs `onDeleteSuccess` + `_afterDelete`
+     (the row leaves), and shows `bws.common.deleted` with an Undo action. Undo → `restoreDeleted(id)`; ok →
+     `bws.common.restored` toast + `_afterRestore(id)` (default `reload()`); non-ok or throw → error toast, no reload.
+   - A keyboard-initiated delete (`:focus-visible` on the deep active element at the start) moves focus to Undo,
+     because the control that had focus is about to disappear with its row.
+   - `base-list-page` / `base-split-page` route through `_confirmDelete` already; nothing else changes there.
+3. **Tests** (Playground): `undo-delete-smoke.ts` (toast action click, dismissal, label default + i18n, focus
+   holds it open, base page in both modes against a fake `ApiClient`, the missing-restore guard, the failed
+   restore) registered in `verify.mjs`; `keyboard-check.mjs` gains trusted Tab-to-Undo + Enter and hover-holds-open.
+   Prove a guard red by reverting it once.
+4. **Docs**: Components `CLAUDE.md` / `README.md` / `API.md` (action option), Shell `CLAUDE.md` / `README.md`
+   (opt-in, and when not to use it), `locales/en.json`.
