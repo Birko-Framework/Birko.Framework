@@ -25,9 +25,12 @@ Elasticsearch-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncEl
 ## Concurrency
 `DequeueAsync` claims a job with a conditional update guarded on the still-eligible status plus a
 `ClaimToken` re-read verification (CR-M016), so a worker that loses a race skips the row and tries
-the next candidate. **Caveat:** Elasticsearch refreshes its index only ~once per second by default,
-so the post-claim re-read can be briefly stale — this narrows but does not fully eliminate the
-double-dispatch window. **Job handlers must be idempotent.**
+the next candidate. The re-read is a **realtime GET** (`AsyncElasticSearchStore.ReadRealtimeAsync`), never a
+search: a search sees the claim only after the next refresh (~1 s), and TASK-616 measured what that did. Every
+re-read was stale, the token never matched, and one dequeue claimed every eligible job, left them all in
+Processing and returned none. The claim's `update_by_query` writes with the version it matched, so a job another
+worker already claimed is a version conflict and does not land. Concurrent claims were not measured. Delivery is
+still at-least-once (a worker can die after claiming), so **job handlers must be idempotent.**
 
 ## Maintenance
 - Keep in sync with IJobQueue interface changes in Birko.BackgroundJobs

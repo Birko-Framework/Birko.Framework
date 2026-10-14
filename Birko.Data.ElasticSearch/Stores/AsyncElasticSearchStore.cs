@@ -267,6 +267,41 @@ namespace Birko.Data.ElasticSearch.Stores
             }, ct);
         }
 
+        /// <summary>
+        /// Reads an entity by its Guid with a realtime GET, which sees a write before the next index refresh.
+        /// </summary>
+        /// <remarks>
+        /// Every other read here is a search, and a search sees a write only after a refresh (~1 s). That is fine
+        /// for listing and wrong for read-your-write: TASK-616 measured a job queue verifying its own claim with a
+        /// search, getting the pre-claim document every time, and stranding every job it claimed. The document id
+        /// is the entity's Guid (<see cref="CreateCoreAsync"/> indexes with <c>Id(data.Guid)</c>).
+        /// </remarks>
+        public async Task<T?> ReadRealtimeAsync(Guid guid, CancellationToken ct = default)
+        {
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            return await ReadRealtimeCoreAsync(guid, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>Core of <see cref="ReadRealtimeAsync"/>. Null when no document has that id.</summary>
+        protected virtual async Task<T?> ReadRealtimeCoreAsync(Guid guid, CancellationToken ct)
+        {
+            if (Connector == null) return null;
+
+            var response = await Connector.GetAsync<T>(guid, g => g.Index(GetIndexName()).Realtime(), ct).ConfigureAwait(false);
+            if (response.Found)
+            {
+                response.Source.Guid ??= guid;
+                return response.Source;
+            }
+            if (response.ApiCall?.HttpStatusCode == 404)
+            {
+                return null;
+            }
+            throw new InvalidOperationException(
+                $"ElasticSearch realtime get of {guid} failed. Index: {GetIndexName()}. DebugInfo: {response.DebugInformation}",
+                response.OriginalException);
+        }
+
         /// <inheritdoc />
         public override async Task UpdateAsync(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates, CancellationToken ct = default)
         {

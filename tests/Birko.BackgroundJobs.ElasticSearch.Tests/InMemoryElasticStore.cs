@@ -37,6 +37,9 @@ public class InMemoryElasticStore<T> : AsyncElasticSearchStore<T> where T : Abst
         return Task.FromResult(q.FirstOrDefault());
     }
 
+    protected override Task<T?> ReadRealtimeCoreAsync(Guid guid, CancellationToken ct)
+        => Task.FromResult(_items.TryGetValue(guid, out var item) ? item : null);
+
     protected override Task<IEnumerable<T>> ReadCoreAsync(
         Expression<Func<T, bool>>? filter = null,
         OrderBy<T>? orderBy = null,

@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### ElasticSearch job dequeue hands out the job it claims (2026-10-14)
+
+[[TASK-616]]. `ElasticSearchJobQueue.DequeueAsync` verified its claim with a search, which does not see a write until
+the next refresh. Measured live, one dequeue claimed every eligible job, left them all in Processing and returned none.
+The claim is now read back with the new `AsyncElasticSearchStore.ReadRealtimeAsync(guid)`, a realtime GET whose
+`ReadRealtimeCoreAsync` is the seam a test double overrides.
 ### Every ElasticSearch `orderBy` was a 400; sorts now name the stored field (2026-10-14)
 
 [[TASK-615]]. The sync, async and view stores sent `OrderBy` keys verbatim (`UpdatedAt`), while NEST stores `updatedAt`,

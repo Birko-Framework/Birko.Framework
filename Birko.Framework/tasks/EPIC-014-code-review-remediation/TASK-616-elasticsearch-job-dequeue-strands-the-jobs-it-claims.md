@@ -2,7 +2,7 @@
 id: TASK-616
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-14
@@ -39,16 +39,24 @@ The `update_by_query` response is also discarded (TASK-502), so a version confli
 
 ## Acceptance criteria
 
-- [ ] The live test passes: two jobs on one queue are dequeued one per call, highest priority first. It is red today
+- [x] The live test passes: two jobs on one queue are dequeued one per call, highest priority first. It is red today
       (measured).
-- [ ] The claim is verified against state that includes its own write: a realtime GET by id, or a refresh on the
+- [x] The claim is verified against state that includes its own write: a realtime GET by id, or a refresh on the
       claiming `update_by_query`. Decide which on the cost per dequeue, and record the reason.
-- [ ] A dequeue that does not return a job leaves no job it touched in Processing. Live test.
-- [ ] The class comment about stale re-reads is corrected to what was measured.
+      → A realtime GET, as `AsyncElasticSearchStore.ReadRealtimeAsync` (public wrapper with lazy-init over a
+      virtual `ReadRealtimeCoreAsync`). A refresh per claim would force a segment refresh on the whole index for every
+      dequeue on every worker. A GET reads one document from the translog and costs nothing beyond that. The store
+      method also lets the in-memory double take part, and gives other read-your-write callers the same tool.
+- [x] A dequeue that does not return a job leaves no job it touched in Processing. Live test.
+      → The live test asserts the job left behind is still Pending after the other is handed out, and that a third
+      dequeue on the drained queue returns null.
+- [x] The class comment about stale re-reads is corrected to what was measured.
 
 ## Out of scope
 
 - TASK-502 (`update_by_query` conflicts discarded) is its own finding. Note here if this fix closes it.
+  → It does not close it. The claim no longer depends on the conflict count, because the realtime read-back tells a
+  lost race apart, but `UpdateAsync(filter, …)` still discards the response for every other caller.
 
 ## Human test plan
 
@@ -56,4 +64,16 @@ N/A — covered by the live provider test.
 
 ## Implementation plan
 
-_Drafted when picked._
+1. `AsyncElasticSearchStore.ReadRealtimeAsync(guid)` / `ReadRealtimeCoreAsync`: a realtime GET by document id. Not
+   found is null; any other failure throws.
+2. The job queue's claim read-back uses it. The in-memory double overrides the core method.
+3. Tests: the live dequeue test (red first, measured twice), a live store-level realtime read, and the offline queue
+   suite unchanged.
+
+## Progress log
+
+- 2026-10-14 — Red: live `DequeueAsync("mail")` returned null with both mail jobs left in Processing (dumped
+  `_source`); re-proved after the fix by reverting only the queue file. Green: BackgroundJobs.ES 7/7 (incl. the live
+  test), Data.ElasticSearch 229 (incl. `ReadRealtimeTests`), Views 20, Workflow.ES 9, Sync.ES 12, Migrations.ES 26,
+  ViewModel 6. A first attempt put the GET inside the queue; it broke the 5 offline tests that use the in-memory
+  double, which is why the read lives on the store as a seam.

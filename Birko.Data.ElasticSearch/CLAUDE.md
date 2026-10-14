@@ -185,7 +185,10 @@ An exact match on any other mapping (`[Text]`) is refused with `NotSupportedExce
 **Sorts use the same producer** (`ElasticSearch.Sorts(orderBy)`, TASK-615): every `orderBy` on the sync, async and
 view stores sent the CLR member name (`UpdatedAt`), which NEST stores as `updatedAt`, so every sorted read was a 400.
 A key may be the member name or its stored field name. Anything else throws `ArgumentException`, and a string
-sorts on its keyword form. Runtime cost is per-document script evaluation, so scope such filters with other
+sorts on its keyword form.
+
+**Every read is a search except `ReadRealtimeAsync(guid)`** (async store, TASK-616), a realtime GET by document id.
+A search sees a write only after the next refresh (~1 s). Use `ReadRealtimeAsync` whenever code verifies its own write. Runtime cost is per-document script evaluation, so scope such filters with other
 term/range clauses where possible.
 
 #### An empty/null collection in `Contains` matches nothing

@@ -89,10 +89,9 @@ namespace Birko.BackgroundJobs.ElasticSearch
                     return null;
                 }
 
-                // Conditional claim guarded on the still-eligible status + re-read verify via ClaimToken.
-                // NOTE: Elasticsearch's ~1s index refresh means the re-read can be briefly stale, so this
-                // narrows but does not fully eliminate the double-dispatch window — job handlers should be
-                // idempotent (documented in the project CLAUDE.md).
+                // Conditional claim guarded on the still-eligible status, verified by reading the ClaimToken back.
+                // update_by_query writes with the version it matched, so a claim another worker already wrote is a
+                // version conflict and does not land here; the read-back is what tells the two outcomes apart.
                 var claimId = candidate.Guid;
                 var originalStatus = candidate.Status;
                 var claimToken = Guid.NewGuid();
@@ -107,7 +106,8 @@ namespace Birko.BackgroundJobs.ElasticSearch
                     ct: cancellationToken
                 ).ConfigureAwait(false);
 
-                var claimed = await _store.ReadAsync(j => j.Guid == claimId, cancellationToken).ConfigureAwait(false);
+                // TASK-616: realtime, not a search -- a search re-read misses the claim until the next refresh.
+                var claimed = await _store.ReadRealtimeAsync(claimId!.Value, cancellationToken).ConfigureAwait(false);
                 if (claimed != null && claimed.ClaimToken == claimToken)
                 {
                     return claimed.ToDescriptor();
