@@ -30,5 +30,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Context\InfluxDBMigrationContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\InfluxDBSchemaBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\InfluxDBDataMigrator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\InfluxBucketLookup.cs" />
   </ItemGroup>
 </Project>

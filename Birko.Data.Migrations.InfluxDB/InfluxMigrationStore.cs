@@ -35,11 +35,7 @@ namespace Birko.Data.Migrations.InfluxDB
         /// </summary>
         public void Initialize()
         {
-            var bucketsApi = _client.GetBucketsApi();
-            var buckets = bucketsApi.FindBucketsAsync().GetAwaiter().GetResult();
-
-            _migrationsBucket = buckets.FirstOrDefault(b =>
-                b.Name.Equals(MigrationsBucketName, StringComparison.OrdinalIgnoreCase));
+            _migrationsBucket = Context.InfluxBucketLookup.Find(_client, _organization, MigrationsBucketName);
 
             if (_migrationsBucket == null)
             {
@@ -57,7 +53,7 @@ namespace Birko.Data.Migrations.InfluxDB
                 // provisioned before this fix keeps its 365-day rule and needs a manual
                 // `influx bucket update --name _migrations --retention 0`.
                 var retentionRule = new BucketRetentionRules(BucketRetentionRules.TypeEnum.Expire, 0L);
-                _migrationsBucket = bucketsApi.CreateBucketAsync(MigrationsBucketName, retentionRule, _organization).GetAwaiter().GetResult();
+                _migrationsBucket = Context.InfluxBucketLookup.Create(_client, _organization, MigrationsBucketName, retentionRule);
             }
         }
 

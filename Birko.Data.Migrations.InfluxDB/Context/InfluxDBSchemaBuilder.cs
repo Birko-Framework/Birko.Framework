@@ -21,13 +21,10 @@ namespace Birko.Data.Migrations.InfluxDB.Context
 
         public ICollectionBuilder CreateCollection(string name)
         {
-            var bucketsApi = _client.GetBucketsApi();
-
-            var existing = FindBucket(bucketsApi, name);
+            var existing = InfluxBucketLookup.Find(_client, _organization, name);
             if (existing == null)
             {
-                bucketsApi.CreateBucketAsync(name, (BucketRetentionRules?)null, _organization)
-                    .GetAwaiter().GetResult();
+                InfluxBucketLookup.Create(_client, _organization, name, null);
             }
 
             return new InfluxCollectionBuilder(name, _client, _organization);
@@ -35,19 +32,17 @@ namespace Birko.Data.Migrations.InfluxDB.Context
 
         public void DropCollection(string name)
         {
-            var bucketsApi = _client.GetBucketsApi();
-            var bucket = FindBucket(bucketsApi, name);
+            var bucket = InfluxBucketLookup.Find(_client, _organization, name);
 
             if (bucket != null)
             {
-                bucketsApi.DeleteBucketAsync(bucket).GetAwaiter().GetResult();
+                _client.GetBucketsApi().DeleteBucketAsync(bucket).GetAwaiter().GetResult();
             }
         }
 
         public bool CollectionExists(string name)
         {
-            var bucketsApi = _client.GetBucketsApi();
-            return FindBucket(bucketsApi, name) != null;
+            return InfluxBucketLookup.Find(_client, _organization, name) != null;
         }
 
         public IIndexBuilder CreateIndex(string collectionName, string indexName)
@@ -74,14 +69,6 @@ namespace Birko.Data.Migrations.InfluxDB.Context
         public void RenameField(string collectionName, string oldName, string newName)
         {
             // InfluxDB does not support field renaming. Data must be rewritten.
-        }
-
-        private static Bucket? FindBucket(BucketsApi bucketsApi, string bucketNameOrId)
-        {
-            var buckets = bucketsApi.FindBucketsAsync().GetAwaiter().GetResult();
-            return buckets.FirstOrDefault(b =>
-                b.Name.Equals(bucketNameOrId, StringComparison.OrdinalIgnoreCase) ||
-                (b.Id != null && b.Id.Equals(bucketNameOrId, StringComparison.OrdinalIgnoreCase)));
         }
 
         private class InfluxCollectionBuilder : ICollectionBuilder

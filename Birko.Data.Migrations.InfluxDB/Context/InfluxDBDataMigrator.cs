@@ -29,11 +29,7 @@ namespace Birko.Data.Migrations.InfluxDB.Context
         public void DeleteDocuments(string collection, string filterJson)
         {
             var deleteApi = _client.GetDeleteApi();
-            var bucketsApi = _client.GetBucketsApi();
-
-            var buckets = bucketsApi.FindBucketsAsync().GetAwaiter().GetResult();
-            var bucket = buckets.FirstOrDefault(b =>
-                b.Name.Equals(collection, StringComparison.OrdinalIgnoreCase));
+            var bucket = InfluxBucketLookup.Find(_client, _organization, collection);
 
             if (bucket != null)
             {
@@ -45,7 +41,7 @@ namespace Birko.Data.Migrations.InfluxDB.Context
                     ? ""
                     : ConvertFilterToFluxPredicate(filterJson);
 
-                deleteApi.Delete(start, stop, predicate, collection, bucket.OrgID);
+                deleteApi.Delete(start, stop, predicate, bucket.Name, bucket.OrgID);
             }
         }
 

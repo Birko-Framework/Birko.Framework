@@ -14,6 +14,10 @@ InfluxDB migration backend using InfluxDBClient. Implements platform-agnostic IM
 ### Context
 - `InfluxMigrationContext` — Wraps InfluxDBClient + organization. Schema and Data properties. Raw() exposes InfluxDBClient.
 - `InfluxSchemaBuilder` — CreateCollection creates buckets. AddField/DropField/CreateIndex are no-op (time-series).
+- **Every bucket lookup and creation goes through `Context/InfluxBucketLookup`** (TASK-612). Bucket names are
+  case-sensitive, so the match is exact. The lookup is filtered server-side by organization and name, because an
+  unlimited listing is one page of 20 (measured). The `organization` these components take is a **name**, resolved
+  to an ID for creation. A name filter that matches nothing is a 404, which the helper reads as "absent".
 - `InfluxDataMigrator` — DeleteDocuments via DeleteApi, CountDocuments via Flux count().
 
 ### Store

@@ -2,12 +2,12 @@
 id: TASK-612
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-14
 depends-on: []
-blocks: []
+blocks: [TASK-617]
 related: [TASK-610]
 findings: []
 pr: null
@@ -40,13 +40,19 @@ They come from the same lookups, and one fix (an exact `FindBucketByNameAsync` s
 
 ## Acceptance criteria
 
-- [ ] Measured on a live InfluxDB 2: are bucket names case-sensitive? Record the answer here. If they are not,
+- [x] Measured on a live InfluxDB 2: are bucket names case-sensitive? Record the answer here. If they are not,
       cancel this task with that measurement.
-- [ ] If they are: `DropCollection`, `CreateCollection`, `CollectionExists`, `DeleteDocuments` and the migration
+      → **Yes.** On `influxdb:2`, `metrics` and `Metrics` coexist, and `GET /api/v2/buckets?name=Metrics` returns only
+      `Metrics`. A name filter that matches nothing is answered with 404, not an empty list.
+- [x] If they are: `DropCollection`, `CreateCollection`, `CollectionExists`, `DeleteDocuments` and the migration
       store's bucket check match the bucket name exactly. A live test where `metrics` exists and `Metrics` is dropped
       leaves `metrics` intact. Red before.
-- [ ] The lookups are scoped to the configured organization and do not depend on paging. If the same measurement
+- [x] The lookups are scoped to the configured organization and do not depend on paging. If the same measurement
       shows paging or cross-org matching is real, cover each with a test.
+      → Both are real. An unlimited listing returned 20 of 32 buckets, and a same-named bucket in another org was
+      reported as existing. Each has a live test. Bucket creation also passed the org **name** as an org **ID**: a
+      400, "id must have a length of 16 bytes", so `CreateCollection` could not have worked. It now resolves the name
+      (required for the `CreateCollection` half of the criterion above).
 
 ## Out of scope
 
@@ -58,4 +64,16 @@ N/A — covered by the live provider test.
 
 ## Implementation plan
 
-_Drafted when picked._
+1. `Context/InfluxBucketLookup.Find(client, org, name)`: a server-side `org` + `name` filter compared exactly, with
+   404 read as absent. `Create(client, org, name, retention)` resolves the org name to its ID.
+2. Route `CreateCollection`, `DropCollection`, `CollectionExists`, `DeleteDocuments` (now deleting from the found
+   bucket's own name) and `InfluxMigrationStore.Initialize` through it.
+3. Live tests: a case-only drop, case-only exists and create, every bucket of more than 20, and another org's bucket.
+
+## Progress log
+
+- 2026-10-14 — `influxdb:2` in Docker. Red, measured: dropping `Metrics` deleted `metrics`; `CollectionExists`
+  true on case-only and cross-org matches; a bucket off the first page reported missing. The page test first passed
+  by luck of ordering; it now checks all 22 and is red on the old code. Green: Migrations.InfluxDB 27/27 live.
+  Proving the migration store found that `_migrations` is a name InfluxDB 2 refuses (leading underscore), so
+  bookkeeping cannot be created at all. Filed as TASK-617, with its live test held for it.
