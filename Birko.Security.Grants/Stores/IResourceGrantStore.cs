@@ -35,6 +35,10 @@ public interface IResourceGrantStore : IAsyncBulkStore<ResourceGrant>
     Task<long> CountRoleAsync(string resourceType, Guid resourceId, string role, Guid? tenantGuid, CancellationToken ct = default)
         => CountAsync(GrantPredicates.RoleOn(resourceType, resourceId, role, tenantGuid), ct);
 
+    /// <summary>How many admin grants have exactly this tenant (<c>null</c>: the untenanted, global ones).</summary>
+    Task<long> CountAdminsAsync(Guid? tenantGuid, CancellationToken ct = default)
+        => CountAsync(GrantPredicates.AdminsIn(tenantGuid), ct);
+
     /// <summary>Whether the user holds the global admin grant in tenant scope.</summary>
     async Task<bool> HasAdminGrantAsync(Guid userGuid, Guid? tenantGuid, CancellationToken ct = default)
         => await CountAsync(GrantPredicates.Admin(userGuid, tenantGuid), ct).ConfigureAwait(false) > 0;

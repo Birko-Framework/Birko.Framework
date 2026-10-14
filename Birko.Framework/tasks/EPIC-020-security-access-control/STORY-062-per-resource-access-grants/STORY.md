@@ -158,7 +158,7 @@ three-task split**. Not grilled yet._
 12. **Sign-in.** `OnSignInAsync(SignInContext { UserGuid, Provider, Subject, Email?, EmailVerified, TenantGuid?, InvitationToken? })`.
     The host fills `EmailVerified` from the provider's `email_verified` claim. **`UserLogin.IsVerified` is
     never the signal**: it is documented "always true for OAuth" (`Birko.Models.Users/Models/UserLogin.cs:50`).
-    - **Bootstrap.** If `provider:subject` is in `GrantOptions.BootstrapAdmins` (provider part
+    - **Bootstrap.** If `provider:subject` is in `GrantSignInOptions.BootstrapAdmins` (provider part
       case-insensitive), ensure the reserved admin grant exists, so a repeat sign-in is a no-op. Neither
       email nor "first user" is ever consulted.
     - **Invitations.** Runs only when `EmailVerified`. It redeems every pending invitation for the
@@ -169,6 +169,16 @@ three-task split**. Not grilled yet._
     - **Unverified email.** Nothing is redeemed and the result reports it in `SignInResult.Skipped`. An
       explicit token in that case throws `Invitation.EmailNotVerified`; it is never silently ignored
       (rule 51).
+    - **As built in TASK-589 (2026-10-14), amended by its close review:**
+      - `SignInContext` has **no `TenantGuid`**. Each invitation carries its own tenant, so a context tenant would
+        be a parameter nothing reads (rule 51).
+      - The options are `GrantSignInOptions`, not `GrantOptions`.
+      - **The order is bootstrap, then email invitations, then the token, last.** A dead link therefore can't stop
+        the others.
+      - **Single use across processes** is a filtered-update claim plus a re-read. A failed grant releases the claim.
+      - Redemption uses `GrantAtLeastAsync`, so its never-downgrade decision is made under the resource lock.
+      - A retired role or type is reported as `Invitation.Invalid`, never thrown.
+      - Emails are ASCII-only and fold A–Z alone (KELVIN SIGN would otherwise fold to `k`).
 13. **Listing.**
     - `ListResourcesAsync` returns `GrantedResources { AllOfType, Ids }`, so a type-wide grant isn't lost.
     - `ListGranteesAsync` returns exact and type-wide grants, each flagged `IsTypeWide`.

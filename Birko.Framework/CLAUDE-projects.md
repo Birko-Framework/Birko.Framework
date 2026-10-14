@@ -183,7 +183,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Security.AspNetCore** - ASP.NET Core integration (JWT Bearer, ICurrentUser, permissions, tenant middleware)
 - **Birko.Security.NFC** - NFC-based authentication (tag-to-user mapping, enrollment, revocation)
 - **Birko.Security.OAuth.Server** - OAuth2 authorization server (token/authorize/device_authorization/dynamic-client-registration endpoints, all four grant types, PKCE, refresh-token rotation, persistence via Birko.Data.Stores)
-- **Birko.Security.Grants** - Per-resource access grants: a validated role → action table, resource types with declared visibility (drives 403 vs 404), `ResourceGrant` (exact or type-wide, optional tenant) persisted via Birko.Data.Stores, `IGrantService` (CanAsync, list resources / grantees, Grant / Revoke with share + no-escalation rules, last-owner refusal, owner-on-create). No ASP.NET dependency
+- **Birko.Security.Grants** - Per-resource access grants: a validated role → action table, resource types with declared visibility (drives 403 vs 404), `ResourceGrant` (exact or type-wide, optional tenant) persisted via Birko.Data.Stores, `IGrantService` (CanAsync, list resources / grantees, Grant / Revoke with share + no-escalation rules, last-owner refusal, owner-on-create); email invitations redeemed at sign-in for a provider-verified email (`IInvitationService`, `IGrantSignInService`); bootstrap admins by `provider:subject` and `IAdminGrantService.RevokeAdminAsync` (never the last). No ASP.NET dependency
 
 ## Background Jobs & Message Queue
 - **Birko.BackgroundJobs** - Job interfaces, in-memory queue, processor, dispatcher, scheduler

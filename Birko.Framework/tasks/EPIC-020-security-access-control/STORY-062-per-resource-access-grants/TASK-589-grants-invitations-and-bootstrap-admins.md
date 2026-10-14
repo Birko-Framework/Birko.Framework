@@ -3,7 +3,7 @@ id: TASK-589
 parent: STORY-062
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: in-progress
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P1
 assignee: ai
@@ -41,26 +41,30 @@ exists to close. Decided 2026-10-13.
 
 ## Acceptance criteria
 
-- [ ] `Invitation` model + `IInvitationStore : IAsyncBulkStore<Invitation>`. An invitation is created by a
+- [x] `Invitation` model + `IInvitationStore : IAsyncBulkStore<Invitation>`. An invitation is created by a
       granter for `(email, resourceType, resourceId?, role, tenant?)`, with the same authorization as
       `GrantAsync` (share + no escalation). It has an expiry from options (default 7 days, clock via
       `IDateTimeProvider`) and is single use. Only a SHA-256 hash of the token is stored, and the plaintext
       is returned once.
-- [ ] `OnSignInAsync(SignInContext)` redeems invitations **only when `EmailVerified` is true**, and that
+- [x] `OnSignInAsync(SignInContext)` redeems invitations **only when `EmailVerified` is true**, and that
       value comes from the provider claim, not from `UserLogin.IsVerified`.
       - An unverified email redeems nothing and is reported in the result.
       - An explicit token with an unverified email throws `Invitation.EmailNotVerified`.
       - Expired, used and revoked invitations refuse, as do an email mismatch and an inviter who has lost
         `share`.
-- [ ] Bootstrap admins come from `GrantOptions.BootstrapAdmins` as `provider:subject` pairs. They are
+- [x] Bootstrap admins come from `GrantOptions.BootstrapAdmins` as `provider:subject` pairs. They are
       applied on the matching sign-in as the reserved `*` grant, idempotently: two sign-ins give one grant.
       No email and no "first user" path exists.
-- [ ] An admin can be removed through the framework, not only by a raw store delete. `IGrantService.RevokeAsync`
+      _Delivered as `GrantSignInOptions.BootstrapAdmins` (with `InvitationLifetime`), not `GrantOptions`: the role
+      table stays a role table, and the sign-in settings are only read by the sign-in services._
+- [x] An admin can be removed through the framework, not only by a raw store delete. `IGrantService.RevokeAsync`
       cannot do it: it requires a declared resource type, and the reserved type `*` can never be declared (found
       by TASK-588's close review, 2026-10-14). Add `RevokeAdminAsync(caller, user, tenant?)`. Only an admin may
       call it, and removing the **last** admin in scope is refused, the same rule as the last owner.
-- [ ] Redemption is safe under concurrency: the same invitation redeemed twice at once produces one grant.
-- [ ] Tests:
+      _Also: anyone may remove their own admin grant (still never the last), as with `RevokeAsync`; a tenant's
+      count includes the global admins, who administer every tenant (close review, 2026-10-14)._
+- [x] Redemption is safe under concurrency: the same invitation redeemed twice at once produces one grant.
+- [x] Tests:
       - invitation verified / unverified / unverified + explicit token / expired / reused / revoked /
         email mismatch / inviter lost share / concurrent double redeem;
       - bootstrap idempotence, and that a non-listed first user gets nothing;
@@ -71,8 +75,9 @@ exists to close. Decided 2026-10-13.
 - Sending the invitation email: the service returns the token, and delivery is the host's job
   (`Birko.Messaging`).
 - The external login handler and the `UserLogin` lookup: host code, shown in [[TASK-590]]'s README.
-- Revoking a bootstrap admin who was removed from config. Documented as a tradeoff in the story;
-  `RevokeAsync` does it.
+- Revoking a bootstrap admin automatically when they are removed from config. That is a deliberate limit, recorded
+  as a tradeoff in the story: an admin calls `IAdminGrantService.RevokeAdminAsync`, which this task adds, and
+  the identity must also leave `BootstrapAdmins` or the next sign-in writes the grant again.
 
 ## Human test plan
 

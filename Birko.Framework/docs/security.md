@@ -593,7 +593,10 @@ bool canEdit = await grants.CanAsync(colleague, "presentation", id, "edit"); // 
   grant applies everywhere.
 - **Revocation is immediate:** nothing is cached.
 
-Invitations and bootstrap admins: TASK-589. `RequireGrant` and the ASP.NET wiring: TASK-590.
+- **Invitations** are offered to an email and redeemed at sign-in only when the provider marked that email verified (pass the provider's `email_verified`, never `UserLogin.IsVerified`). Redemption re-checks that the inviter may still grant the role, and only ever adds actions.
+- **The first admin** comes from `GrantSignInOptions.BootstrapAdmins` as `provider:subject`, never from an email or "the first user". `IAdminGrantService.RevokeAdminAsync` removes an admin but never the last.
+
+`RequireGrant` and the ASP.NET wiring: TASK-590.
 
 ## See Also
 

@@ -41,6 +41,26 @@ if (!await grants.CanAsync(colleague, "presentation", presentationId, "edit"))
 Refusals throw `GrantRefusedException` with `Code` from `GrantErrorCodes`; configuration errors throw
 `GrantConfigurationException`.
 
+### Invitations and the first admin
+
+```csharp
+var signInOptions = new GrantSignInOptions();
+signInOptions.BootstrapAdmins.Add("github:4821337");          // provider:subject — never an email
+
+var invitations = new InvitationService(invitationStore, grants, table, clock, signInOptions);
+var admins = new AdminGrantService(store, clock);
+var signIn = new GrantSignInService(invitationStore, invitations, admins, clock, signInOptions);
+
+// An owner invites someone who has not signed in yet; send created.Token in a link yourself.
+var created = await invitations.CreateAsync(owner, "jana@example.com", "presentation", presentationId, "editor");
+
+// At every sign-in, after mapping (provider, subject) to your local user:
+var result = await signIn.OnSignInAsync(new SignInContext(
+    localUserGuid, "github", subject, email,
+    EmailVerified: emailVerifiedFromProvider,   // the provider's flag — NOT UserLogin.IsVerified
+    InvitationToken: tokenFromLink));
+```
+
 ## Running tests
 
 ```

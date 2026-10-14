@@ -14,10 +14,10 @@ which this regeneration never touches._
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
 | todo         | —     | —       | 195   |
-| in-progress  | 9     | 12      | 1     |
+| in-progress  | 9     | 12      | 0     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 252   |
+| done         | 1     | 23      | 253   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -26,7 +26,7 @@ which this regeneration never touches._
 
 ## In progress now
 
-- [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1, ai)
+_None._
 
 ## Blocked
 
@@ -505,10 +505,10 @@ which this regeneration never touches._
     - [x] [TASK-542](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-542-websocket-reverse-proxy-endpoint.md) A WebSocket reverse-proxy endpoint mapper (P3)
     - [ ] [TASK-569](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-569-websocket-proxy-forwards-subprotocols.md) MapWebSocketProxy drops the client's requested sub-protocols, so a client that asks for one fails its handshake (P3)
 
-- **EPIC-020** Security — access control — in-progress (1/4 tasks done)
-  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — in-progress (1/4 done)
+- **EPIC-020** Security — access control — in-progress (2/4 tasks done)
+  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — in-progress (2/4 done)
     - [x] [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1)
-    - [ ] [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1)
+    - [x] [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1)
     - [ ] [TASK-590](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-590-grants-aspnetcore-requiregrant-and-wiring.md) Birko.Security.Grants.AspNetCore — RequireGrant, resolver decorator, DI, end-to-end README (P1)
     - [ ] [TASK-593](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-593-grants-predicates-on-a-sql-backend.md) Grants: run the grant predicates against a SQL backend, not only InMemory (P2)
 

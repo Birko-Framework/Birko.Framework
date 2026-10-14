@@ -47,6 +47,13 @@ internal static class GrantPredicates
             && (g.TenantGuid == null || g.TenantGuid == tenant);
     }
 
+    /// <summary>Every admin grant whose tenant is exactly <paramref name="tenantGuid"/> — what the last-admin rule counts.</summary>
+    public static Expression<Func<ResourceGrant, bool>> AdminsIn(Guid? tenantGuid)
+    {
+        const string wildcard = GrantRoleTable.Wildcard;
+        return And(g => g.Role == wildcard, ByKey(wildcard, null, tenantGuid));
+    }
+
     /// <summary>The one grant identified by (user, type, resource, tenant) — every key exact, nulls included.</summary>
     public static Expression<Func<ResourceGrant, bool>> Exact(Guid userGuid, string resourceType, Guid? resourceId, Guid? tenantGuid)
     {

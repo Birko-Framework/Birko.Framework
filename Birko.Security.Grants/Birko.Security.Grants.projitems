@@ -24,5 +24,15 @@
     <Compile Include="$(MSBuildThisFileDirectory)Services\IGrantService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\GrantService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Internal\KeyedLock.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Internal\TokenHasher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrantSignInOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\Invitation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IInvitationStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\IAdminGrantService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\AdminGrantService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\IInvitationService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\InvitationService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\IGrantSignInService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\GrantSignInService.cs" />
   </ItemGroup>
 </Project>

@@ -66,6 +66,14 @@ public sealed class GrantService : IGrantService
         return grants.Select(g => new GrantEntry(g, g.ResourceId == null)).ToList();
     }
 
+    public Task AuthorizeGrantAsync(Guid callerGuid, string resourceType, Guid? resourceId, string role, Guid? tenantGuid = null, CancellationToken ct = default)
+    {
+        _table.RequireResourceType(resourceType);
+        RequireResourceId(resourceId);
+        // Resolved only for a non-admin: an admin may still act on an invitation whose role was retired.
+        return AuthorizeAsync(callerGuid, resourceType, resourceId, tenantGuid, () => _table.ActionsOf(role), ct);
+    }
+
     public async Task<ResourceGrant> GrantAsync(Guid callerGuid, Guid userGuid, string resourceType, Guid? resourceId, string role, Guid? tenantGuid = null, CancellationToken ct = default)
     {
         _table.RequireResourceType(resourceType);
@@ -78,6 +86,39 @@ public sealed class GrantService : IGrantService
         await AuthorizeAsync(callerGuid, resourceType, resourceId, tenantGuid,
             () => existing == null ? newActions : newActions.Union(_table.ActionsOf(existing.Role)).ToHashSet(), ct).ConfigureAwait(false);
 
+        return await WriteLockedAsync(callerGuid, userGuid, resourceType, resourceId, role, tenantGuid, existing, ct).ConfigureAwait(false);
+    }
+
+    public async Task<ResourceGrant> GrantAtLeastAsync(Guid callerGuid, Guid userGuid, string resourceType, Guid? resourceId, string role, Guid? tenantGuid = null, CancellationToken ct = default)
+    {
+        _table.RequireResourceType(resourceType);
+        var newActions = _table.ActionsOf(role);
+        RequireResourceId(resourceId);
+
+        // The coverage decision and the write happen under one resource lock, so a concurrent promotion cannot be
+        // overwritten by a role decided against what the user held a moment earlier.
+        using var _ = await _locks.AcquireAsync(LockKey(resourceType, resourceId, tenantGuid), ct).ConfigureAwait(false);
+
+        var existing = await _store.GetExactAsync(userGuid, resourceType, resourceId, tenantGuid, ct).ConfigureAwait(false);
+        if (existing != null)
+        {
+            var held = _table.ActionsOf(existing.Role);
+            if (held.IsSupersetOf(newActions))
+                return existing;
+            if (!newActions.IsSupersetOf(held))
+                throw new GrantRefusedException(GrantErrorCodes.RoleConflict,
+                    $"The user's role '{existing.Role}' allows actions '{role}' does not; replacing it would take them away.");
+        }
+
+        // From here the new role contains everything held, so authorizing it alone is the GrantAsync rule.
+        await AuthorizeAsync(callerGuid, resourceType, resourceId, tenantGuid, () => newActions, ct).ConfigureAwait(false);
+        return await WriteLockedAsync(callerGuid, userGuid, resourceType, resourceId, role, tenantGuid, existing, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Creates or replaces the grant. Called with the resource lock held and the write already authorized.</summary>
+    private async Task<ResourceGrant> WriteLockedAsync(Guid callerGuid, Guid userGuid, string resourceType, Guid? resourceId, string role,
+        Guid? tenantGuid, ResourceGrant? existing, CancellationToken ct)
+    {
         if (existing == null)
         {
             var grant = new ResourceGrant

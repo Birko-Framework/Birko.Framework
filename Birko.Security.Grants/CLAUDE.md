@@ -7,8 +7,8 @@ Complements the global authorization in `Birko.Security` / `Birko.Security.AspNe
 dependency; persistence flows through `Birko.Data.Stores`, so it runs on any backend.
 
 Design: `Birko.Framework/tasks/EPIC-020-security-access-control/STORY-062-per-resource-access-grants/STORY.md`.
-Invitations and bootstrap admins are TASK-589; `RequireGrant`, the permission-resolver decorator and DI are
-TASK-590 (a separate `Birko.Security.Grants.AspNetCore` companion).
+Core grants: TASK-588. Invitations, bootstrap admins and the sign-in hook: TASK-589. `RequireGrant`, the
+permission-resolver decorator and DI: TASK-590, a separate `Birko.Security.Grants.AspNetCore` companion.
 
 ## Project Location
 `Birko.Security.Grants/`
@@ -30,8 +30,16 @@ Birko.Security.Grants/
 │   ├── IGrantService.cs / GrantService.cs — CanAsync, ListResources, ListGrantees, Grant, Revoke, GrantOwnerOnCreate
 │   ├── IGrantAdminSource.cs        — "admin everywhere?" seam
 │   ├── BootstrapAdminGrantSource.cs — admin = holder of the reserved grant {"*", null, "*"}
-│   └── GrantedResources.cs         — GrantedResources (AllOfType + Ids), GrantEntry (Grant + IsTypeWide)
-└── Internal/KeyedLock.cs           — per-resource async mutex; entries removed on last release
+│   ├── GrantedResources.cs         — GrantedResources (AllOfType + Ids), GrantEntry (Grant + IsTypeWide)
+│   ├── IInvitationService.cs / InvitationService.cs — Create (token returned once), Revoke; internal Redeem
+│   ├── IGrantSignInService.cs / GrantSignInService.cs — OnSignInAsync(SignInContext): bootstrap, then invitations
+│   └── IAdminGrantService.cs / AdminGrantService.cs — RevokeAdminAsync; internal EnsureBootstrapAdmin
+├── GrantSignInOptions.cs           — BootstrapAdmins ("provider:subject"), InvitationLifetime (default 7 days)
+├── Models/Invitation.cs            — Email (normalized), resource, role, tenant, TokenHash, InvitedBy, expiry, redeemed / revoked
+├── Stores/IInvitationStore.cs      — GetByTokenHash, ListPendingForEmail
+└── Internal/
+    ├── KeyedLock.cs                — per-key async mutex; entries removed on last release
+    └── TokenHasher.cs              — 32 random bytes base64url; SHA-256 hex is what is stored
 ```
 
 ## Dependencies
@@ -68,6 +76,34 @@ No NuGet packages, no ASP.NET, no `Birko.Models.Users`: the host maps its login 
   - The count is per exact tenant, so an untenanted owner does not count towards tenant A. That is stricter than
     necessary, and never permissive.
 - **No caching**, so a revoke is effective on the next check.
+
+### Invitations and sign-in (TASK-589)
+- **The verified signal is the provider's, passed in.** `SignInContext.EmailVerified` comes from OIDC's
+  `email_verified` claim, or from GitHub's `/user/emails` `verified` flag. It is **never** `UserLogin.IsVerified`,
+  which is "always true for OAuth". An unverified email redeems nothing. It is reported in `Skipped`, and an explicit
+  token with an unverified email throws.
+- **Redemption goes through `IGrantService.GrantAtLeastAsync` as the inviter.** That re-authorizes the inviter now,
+  so one who has since lost `share` invites nobody. It also only ever adds actions: a user who already holds them
+  keeps their role, a lesser role is upgraded, and an incomparable role is `Grant.RoleConflict`. The decision is
+  made under the resource lock, so a concurrent promotion is never overwritten.
+- **Single use across processes is a claim.** A filtered update sets `RedeemedAt` / `RedeemedBy` only where the
+  invitation is still unredeemed and unrevoked, and a re-read shows whose claim stuck. On SQL that filtered update
+  is one statement, so there is one winner. A claim whose grant then fails is released. Revoke claims the same way,
+  so a revoke and a redemption can't both succeed. The per-invitation `KeyedLock` covers a single process.
+- **A stale invitation never breaks sign-in.** If its role or type has been retired, it is reported as
+  `Invitation.Invalid` and nothing is thrown. Redemptions found by email report failures. Only the explicit token
+  throws, and it is processed **last**, so a dead link costs nothing but its own redemption.
+- **Emails are ASCII, folded A–Z only.** `ToLowerInvariant` would fold KELVIN SIGN U+212A to `k`, letting a
+  different, verified mailbox match someone else's invitation. `CreateAsync` refuses non-ASCII addresses and any
+  address without exactly one `@`.
+- **Bootstrap admins are `provider:subject`**, with the provider compared case-insensitively and the subject
+  exactly. A malformed entry throws at construction. There is no email path and no "first user" path. The admin
+  grant written is untenanted and idempotent.
+- **`RevokeAdminAsync`** may be called by an admin, or by anyone removing themselves. It refuses to remove the last
+  admin of a tenant scope (`Grant.LastAdmin`), with the same lock and post-write recount as the last owner. A
+  tenant's admins include the global (untenanted) ones, because those administer every tenant, while a global admin
+  counts only among the global ones. It counts grants, so admins coming from an `IGrantAdminSource` are invisible
+  to it. That only ever makes the rule stricter.
 
 ## Maintenance
 See `Birko.Framework/CLAUDE-maintenance.md`. Tests: `tests/Birko.Security.Grants.Tests/`.

@@ -243,7 +243,9 @@ immediately).
 
 [[TASK-588]] ([[STORY-062]]). Owners / editors / viewers of one resource or a whole type, optionally tenant-bound,
 on any store. Undeclared roles, actions or types throw. Grant and revoke need `share` and can't escalate; the last
-owner can't be removed (in-process lock + post-write recount). Invitations and `RequireGrant`: [[TASK-589]], [[TASK-590]].
+owner can't be removed (in-process lock + post-write recount). [[TASK-589]] adds email invitations, redeemed only
+when the provider says the email is verified (**never** `UserLogin.IsVerified`), and bootstrap admins listed as
+`provider:subject`. `RequireGrant`: [[TASK-590]].
 
 ### A template engine can encode merged values, per call (2026-10-13)
 
