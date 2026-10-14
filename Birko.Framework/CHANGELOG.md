@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-12 — A WebSocket reverse proxy ships
+
+[[TASK-542]]. `MapWebSocketProxy(pattern, upstream, configure)` in `Birko.Communication.WebSocket/Proxy/`. It connects
+upstream **before** accepting the client (refusal → 502, no upgrade), relays frame by frame (type, `EndOfMessage`,
+close status forwarded), validates TLS unless `DangerousAcceptAnyServerCertificate`, and sends the credential as a
+Bearer header or URL-encoded query. No auth of its own: chain `.RequireAuthorization()`.
+
+---
+
 ## 2026-10-11 — A store persists what the store delegate returns, and the in-memory store keeps copies
 
 [[TASK-557]] (SH-M315, SH-M311). `StoreDataDelegate<T>` returns `T`, but all ~110 invocation sites discarded the result

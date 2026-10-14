@@ -96,15 +96,24 @@ namespace Birko.BackgroundJobs.ElasticSearch
                 var originalStatus = candidate.Status;
                 var claimToken = Guid.NewGuid();
 
-                await _store.UpdateAsync(
-                    filter: j => j.Guid == claimId && j.Status == originalStatus,
-                    updates: new PropertyUpdate<ElasticJobDescriptorModel>()
-                        .Set(j => j.Status, processingStatus)
-                        .Set(j => j.ClaimToken, claimToken)
-                        .Set(j => j.AttemptCount, candidate.AttemptCount + 1)
-                        .Set(j => j.LastAttemptAt, now),
-                    ct: cancellationToken
-                ).ConfigureAwait(false);
+                try
+                {
+                    await _store.UpdateAsync(
+                        filter: j => j.Guid == claimId && j.Status == originalStatus,
+                        updates: new PropertyUpdate<ElasticJobDescriptorModel>()
+                            .Set(j => j.Status, processingStatus)
+                            .Set(j => j.ClaimToken, claimToken)
+                            .Set(j => j.AttemptCount, candidate.AttemptCount + 1)
+                            .Set(j => j.LastAttemptAt, now),
+                        ct: cancellationToken
+                    ).ConfigureAwait(false);
+                }
+                catch (Birko.Data.Exceptions.StoreConcurrencyException)
+                {
+                    // TASK-502 made a conflicted update throw. On a claim a conflict means another worker claimed
+                    // this job first: a lost race, so try the next candidate.
+                    continue;
+                }
 
                 // TASK-616: realtime, not a search -- a search re-read misses the claim until the next refresh.
                 var claimed = await _store.ReadRealtimeAsync(claimId!.Value, cancellationToken).ConfigureAwait(false);

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Birko.BackgroundJobs;
@@ -58,5 +59,35 @@ public sealed class ElasticSearchJobQueueLiveTests : IDisposable
         (await queue.DequeueAsync("mail"))!.JobType.Should().Be("Low");
         await Refresh();
         (await queue.DequeueAsync("mail")).Should().BeNull("both mail jobs are taken and the reports job is on another queue");
+    }
+
+    /// <summary>
+    /// TASK-502 made a conflicted filtered update throw <c>StoreConcurrencyException</c>. For a claim, a conflict means
+    /// another worker won the job, so dequeue treats it as a lost race. Racing dequeuers hand every job out exactly once
+    /// and never throw.
+    /// </summary>
+    [Fact]
+    public async Task Racing_dequeuers_hand_each_job_out_once_and_never_throw()
+    {
+        if (string.IsNullOrWhiteSpace(Url)) return;
+        var settings = new Birko.Data.ElasticSearch.Stores.Settings { Location = Url, Name = _prefix };
+        var queue = new ElasticSearchJobQueue(settings);
+        for (var i = 0; i < 8; i++) await queue.EnqueueAsync(new JobDescriptor { JobType = "J" + i, QueueName = "race" });
+        await Refresh();
+
+        var workers = System.Linq.Enumerable.Range(0, 4).Select(_ => new ElasticSearchJobQueue(settings)).ToList();
+        var handed = new System.Collections.Concurrent.ConcurrentBag<string>();
+        for (var round = 0; round < 6 && handed.Count < 8; round++)
+        {
+            await Task.WhenAll(workers.Select(async w =>
+            {
+                var job = await w.DequeueAsync("race");
+                if (job != null) handed.Add(job.JobType);
+            }));
+            await Refresh();
+        }
+
+        handed.Should().OnlyHaveUniqueItems();
+        handed.Should().HaveCount(8);
     }
 }

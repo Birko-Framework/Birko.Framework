@@ -14,6 +14,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\StoreException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\EntityNotFoundException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\WholeTableWriteException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Exceptions\StoreConcurrencyException.cs" />
     <!-- Expressions -->
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionParameterReplacer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionNormalizer.cs" />

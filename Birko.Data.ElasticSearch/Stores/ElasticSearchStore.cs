@@ -290,10 +290,12 @@ namespace Birko.Data.ElasticSearch.Stores
             if (Connector == null) return;
 
             var indexName = GetIndexName();
-            Connector.DeleteByQuery(new Nest.DeleteByQueryRequest(indexName)
+            var response = Connector.DeleteByQuery(new Nest.DeleteByQueryRequest(indexName)
             {
                 Query = Data.ElasticSearch.ElasticSearch.ParseRequiredFilterQuery(filter)
             });
+            // TASK-502: a conflicted, failed or timed-out delete is partial and must not report success.
+            ElasticSearchStoreHelper.RequireComplete(response, indexName);
         }
 
         /// <inheritdoc />
@@ -309,7 +311,7 @@ namespace Birko.Data.ElasticSearch.Stores
             // CR-L113: the PropertyUpdate -> Painless script builder is shared with the async store.
             var (script, scriptParams) = ElasticSearchStoreHelper.BuildUpdateScript(updates);
 
-            Connector.UpdateByQuery(new Nest.UpdateByQueryRequest(indexName)
+            var response = Connector.UpdateByQuery(new Nest.UpdateByQueryRequest(indexName)
             {
                 Query = Data.ElasticSearch.ElasticSearch.ParseRequiredFilterQuery(filter),
                 Script = new Nest.InlineScript(script)
@@ -317,6 +319,8 @@ namespace Birko.Data.ElasticSearch.Stores
                     Params = scriptParams
                 }
             });
+            // TASK-502: a conflicted, failed or timed-out update is partial and must not report success.
+            ElasticSearchStoreHelper.RequireComplete(response, indexName);
         }
 
         /// <summary>

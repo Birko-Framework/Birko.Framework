@@ -76,6 +76,50 @@ namespace Birko.Data.ElasticSearch.Stores
         }
 
         /// <summary>
+        /// Throws unless a by-query write ran to completion: no version conflict, no failure, no timeout.
+        /// </summary>
+        /// <remarks>
+        /// TASK-502. The response used to be discarded. Measured on 7.17.25: a conflict is a 409 with
+        /// <c>IsValid == false</c> after a PARTIAL write (the rest of the matches never processed, because the default is
+        /// <c>conflicts: abort</c>); a script error is a 400. <c>TimedOut</c> is checked on its own, because TASK-319
+        /// measured the sibling reindex response answering 200 with <c>timed_out: true</c> and <c>IsValid</c> still true.
+        /// </remarks>
+        /// <exception cref="Data.Exceptions.StoreConcurrencyException">Documents changed underneath the write.</exception>
+        /// <exception cref="Data.Exceptions.StoreException">Any other failure, or a timeout.</exception>
+        public static void RequireComplete(Nest.UpdateByQueryResponse response, string index)
+            => RequireComplete("update", index, response.IsValid, response.Updated, response.VersionConflicts,
+                response.Failures?.Count ?? 0, response.TimedOut, response.DebugInformation, response.OriginalException);
+
+        /// <inheritdoc cref="RequireComplete(Nest.UpdateByQueryResponse, string)"/>
+        public static void RequireComplete(Nest.DeleteByQueryResponse response, string index)
+            => RequireComplete("delete", index, response.IsValid, response.Deleted, response.VersionConflicts,
+                response.Failures?.Count ?? 0, response.TimedOut, response.DebugInformation, response.OriginalException);
+
+        private static void RequireComplete(string operation, string index, bool isValid, long applied, long conflicts,
+            int failures, bool timedOut, string debug, Exception? inner)
+        {
+            if (conflicts > 0)
+            {
+                throw new Data.Exceptions.StoreConcurrencyException(
+                    $"ElasticSearch {operation}-by-query on '{index}' stopped on {conflicts} version conflict(s) after applying "
+                    + $"{applied} document(s); the remaining matches were not processed.",
+                    applied, conflicts, inner);
+            }
+            if (!isValid || failures > 0)
+            {
+                throw new Data.Exceptions.StoreException(
+                    $"ElasticSearch {operation}-by-query on '{index}' failed after applying {applied} document(s) "
+                    + $"({failures} failure(s)). {debug}", inner);
+            }
+            if (timedOut)
+            {
+                throw new Data.Exceptions.StoreException(
+                    $"ElasticSearch {operation}-by-query on '{index}' timed out after applying {applied} document(s); "
+                    + "the remaining matches were not processed.");
+            }
+        }
+
+        /// <summary>
         /// Builds the inline Painless script (and its parameters) that applies a
         /// <see cref="Data.Stores.PropertyUpdate{T}"/> as a native UpdateByQuery script.
         /// </summary>

@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### ElasticSearch filtered writes throw instead of reporting a partial write (2026-10-14)
+
+[[TASK-502]]. `Update(filter, PropertyUpdate)` and `Delete(filter)` discarded the by-query response. Measured: three
+concurrent increments over 3,000 documents all "succeeded" and left 1,000 increments of 9,000, and a racing delete left
+2,432 rows. A version conflict now throws `StoreConcurrencyException` (`Applied`, `Conflicts`). Another failure or a
+timeout throws `StoreException`. The job queue treats a conflicted claim as a lost race.
 ### InfluxDB `RemoveMigration` removes the record (2026-10-14)
 
 [[TASK-618]]. The delete predicate named the tag `name`, a keyword in InfluxDB's delete grammar (a 400). The client's
@@ -329,20 +335,6 @@ No encoder = today's output. Engines without encoding (Razor) throw on an encode
 [[TASK-585]]. With `PlainTextBody` set, `SmtpEmailSender` sent two `text/plain` parts, the HTML first: System.Net.Mail
 ignores `IsBodyHtml` once an `AlternateView` exists. Now `multipart/alternative`, text/plain then text/html, both UTF-8;
 an inline image is a `LinkedResource` of the HTML view. One body is unchanged. Tests read the pickup `.eml`.
-
-### A WebSocket reverse proxy ships (2026-10-12)
-
-[[TASK-542]]. `MapWebSocketProxy(pattern, upstream, configure)` in `Birko.Communication.WebSocket/Proxy/`. It connects
-upstream **before** accepting the client (refusal → 502, no upgrade), relays frame by frame (type, `EndOfMessage`,
-close status forwarded), validates TLS unless `DangerousAcceptAnyServerCertificate`, and sends the credential as a
-Bearer header or URL-encoded query. No auth of its own: chain `.RequireAuthorization()`.
-
-### A negated rule group is honoured (2026-10-11)
-
-[[TASK-320]] (SH-H045). `RuleSpecification` and `RuleEvaluator` ignored `RuleGroup.IsNegated`, so a negated group
-selected exactly the rows it meant to exclude. Both now negate **by De Morgan, down to the leaves** — never a `Not`
-around the combined group, which would invert an unevaluable leaf's match-none into match-all. The other two
-translators: [[TASK-558]], [[TASK-559]].
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

@@ -57,7 +57,7 @@ store.Delete(x => x.IsExpired);
 |----------|---------------|-----------|----------------|
 | SQL | Native `UPDATE SET WHERE` | `col = col + @p`, same statement | Native `DELETE WHERE` |
 | MongoDB | `UpdateMany` with `$set` | `$inc` | `DeleteMany` |
-| ElasticSearch | `UpdateByQuery` (Painless) | `ctx._source.f += params.p` — a version conflict aborts and is not yet reported (TASK-502) | `DeleteByQuery` |
+| ElasticSearch | `UpdateByQuery` (Painless) | `ctx._source.f += params.p` — a version conflict aborts the write part-way and throws `StoreConcurrencyException` (TASK-502) | `DeleteByQuery` (same check) |
 | Others | Fallback read-modify-save | Fallback — **not atomic** | Fallback read-then-delete |
 
 **Increment / Decrement** (`short`, `int`, `long`, `float`, `double`, `decimal` properties — the types every provider

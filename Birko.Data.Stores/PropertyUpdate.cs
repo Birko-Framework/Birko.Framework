@@ -50,8 +50,9 @@ namespace Birko.Data.Stores
         /// Adds <paramref name="delta"/> to a numeric property: <c>col = col + delta</c>. A negative delta decrements.
         /// <para>
         /// SQL (<c>col = col + @p</c>) and MongoDB (<c>$inc</c>) apply it atomically on the server. Elasticsearch runs a
-        /// painless <c>+=</c> per document through UpdateByQuery, which aborts on a version conflict — and the store
-        /// does not yet report that (TASK-502), so a contended increment there can be lost. Stores without a native
+        /// painless <c>+=</c> per document through UpdateByQuery, which aborts on a version conflict; the store then
+        /// throws <c>StoreConcurrencyException</c> carrying how many documents were applied (TASK-502), so a contended
+        /// increment is never lost silently, but it is partial and the caller decides. Stores without a native
         /// translation fall back to read-modify-save through <see cref="ApplyTo"/>, which is <b>not</b> atomic.
         /// </para>
         /// <para>
