@@ -3,10 +3,10 @@ id: TASK-598
 parent: EPIC-018
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: in-progress
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
-assignee: unassigned
+assignee: ai
 created: 2026-10-14
 depends-on: []
 blocks: []
@@ -34,13 +34,13 @@ Measured by reading the code, not reproduced in a browser.
 
 ## Acceptance criteria
 
-- [ ] An action found `syncing` when a sync starts (i.e. left over from an interrupted one) is treated as due again,
+- [x] An action found `syncing` when a sync starts (i.e. left over from an interrupted one) is treated as due again,
       keeping its retry count. Decide and record whether that resend is safe for each method: a POST that did land
       would be created twice unless it is `idPinned` — the classification rules for a replay apply
-- [ ] Two tabs: a `syncing` action that another live tab is sending right now must not be sent twice. Either a lock
+- [x] Two tabs: a `syncing` action that another live tab is sending right now must not be sent twice. Either a lock
       (Web Locks API / a lease timestamp) or a documented single-syncer rule
-- [ ] It counts in `pendingCount` while it is due, and it holds its entity like a `failed` one
-- [ ] Playground smoke: an action stored as `syncing` is picked up by a fresh SyncManager; a live lease is respected
+- [x] It counts in `pendingCount` while it is due, and it holds its entity like a `failed` one
+- [x] Playground smoke: an action stored as `syncing` is picked up by a fresh SyncManager; a live lease is respected
 
 ## Out of scope
 
@@ -53,3 +53,30 @@ N/A — covered by automated tests (a stored `syncing` action and a fresh SyncMa
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-598` — leave empty until then._
+
+## Progress
+
+**2026-10-14 — fixed in Birko.Web, release v0.1.10 pending.** Decisions (taken with the owner, 2026-10-14):
+
+- **Resend only where a landed replay is recognisable.** A recovered `PUT`, `DELETE` or `idPinned` `POST` becomes
+  `failed`, due at once, retry count kept: if it had landed, the replay reads as applied (`DELETE` → 404, pinned `POST`
+  → 409, `PUT` is idempotent). A plain `POST` or a `PATCH` becomes **`dead`** with *"Interrupted while sending: it may
+  have been applied. Retry or discard it."*, and `onDead` fires: resending could apply it twice, so the user decides.
+  `PATCH` is not treated as idempotent: an increment or an array append is not.
+- **One drainer: Web Locks, with a lease fallback.** `sync()` runs under `navigator.locks.request('birko-sync:<queue
+  name>', { ifAvailable: true })`; another tab's `sync()` returns a zero result without sending. The holder knows any
+  `syncing` action is orphaned (a closed tab frees its lock), so recovery is immediate. Without Web Locks
+  (`locks: null`, a non-secure context), `syncingSince` is stored with `syncing`, and an action counts as abandoned
+  past `syncLeaseMs` (default 5 min); one with no timestamp (written before this change) counts as abandoned. A
+  `syncing` action inside its lease holds its entity.
+- **The lock also fixes a duplicate send that predates this task:** two managers on one queue both sent the second
+  pending action (`PUT a, PUT b, PUT b` in the red run).
+- `pendingCount` now counts `syncing` too. Needed for recovery, not just display: the periodic sync runs only while
+  the count is above zero, so a reload whose only write was stranded would never have synced.
+
+Gate: `sync-interrupt-smoke` (21 checks: reload count, PUT / DELETE / idPinned POST resent and applied, retries kept
+and backoff from them, plain POST and PATCH dead with onDead and the entity held, two managers send each action once,
+lease respected and reclaimed in order, untimestamped treated as abandoned). **Red 4/21** before the fix, 21/21 after;
+full `verify.mjs` green. `backport-smoke`'s M260 fake queue gained `getAll()` and `locks: null` (it tests the `online`
+listener; a real lock's acquisition outlasts its `setTimeout(0)`).
+
