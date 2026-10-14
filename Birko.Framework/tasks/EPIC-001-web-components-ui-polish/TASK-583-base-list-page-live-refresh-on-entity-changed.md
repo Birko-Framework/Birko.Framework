@@ -3,7 +3,7 @@ id: TASK-583
 parent: EPIC-001
 feature: FEATURE-001
 priority: P3
-status: in-progress
+status: done
 assignee: ai
 created: 2026-10-13
 depends-on: []
@@ -38,19 +38,19 @@ data: { moduleId: string, entityType: string, entityGuid: string | null, kind: '
 
 ## Acceptance criteria
 
-- [ ] A typed `EntityChangedEvent` matching the shape above, exported from Birko.Web.Shell (or Core, if `SseClient`
+- [x] A typed `EntityChangedEvent` matching the shape above, exported from Birko.Web.Shell (or Core, if `SseClient`
       users want it without the Shell)
-- [ ] An **opt-in** on `base-list-page`, e.g. `protected liveRefresh?: { moduleId: string; entityType: string;
+- [x] An **opt-in** on `base-list-page`, e.g. `protected liveRefresh?: { moduleId: string; entityType: string;
       debounceMs?: number }` (default off). It matches on `moduleId` + `entityType` and calls `reload()`,
       debounced, so a burst of events causes one reload
-- [ ] The event source is **injected**, a `subscribe(handler) => unsubscribe` the app provides once (for
+- [x] The event source is **injected**, a `subscribe(handler) => unsubscribe` the app provides once (for
       example from its `SseClient`), so the Shell neither opens a connection nor knows the event's transport
-- [ ] The subscription ends when the page unmounts. No reload is pending after navigation
-- [ ] No reload while the page's create/edit modal is open. Defer it until the modal closes, so an open form
+- [x] The subscription ends when the page unmounts. No reload is pending after navigation
+- [x] No reload while the page's create/edit modal is open. Defer it until the modal closes, so an open form
       is not disturbed
-- [ ] An event for another module or entity type, or a malformed payload, is ignored
-- [ ] Tests: debounce (N events → 1 reload), matching, unmount cleanup, the deferred reload while the modal is open
-- [ ] README documents the opt-in and the contract. Record the Birko.Web tag in Symbio TASK-898
+- [x] An event for another module or entity type, or a malformed payload, is ignored
+- [x] Tests: debounce (N events → 1 reload), matching, unmount cleanup, the deferred reload while the modal is open
+- [x] README documents the opt-in and the contract. Record the Birko.Web tag in Symbio TASK-898
 
 ## Out of scope
 
@@ -81,3 +81,11 @@ Drafted at pick, 2026-10-14.
    other type, malformed, null `entityGuid`), unmount cleanup (no reload after removal, unsubscribed), deferral while
    the modal is open and the single reload on close, the missing-source guard. Prove red.
 4. Shell README + CLAUDE.md; release as a Birko.Web tag; record the tag in Symbio TASK-898.
+
+## Progress log
+
+- 2026-10-14 — Done, released in **Birko.Web v0.1.7** (Web `41fd1b2`; Playground `1acabb3`; tag recorded in Symbio
+  TASK-898, Symbio `a056cba9`). `EntityChangedEvent` lives in the Shell (`pages/live-refresh.ts`); nothing in Core
+  needed it. The injected source's handler takes `unknown`, so validation is the page's and a malformed payload is
+  ignored. Opting in without a registered source throws at connect, like TASK-545's guard. `live-refresh-smoke`
+  21/21, proven red on the debounce, the modal deferral, the unsubscribe and the guard (6 fail).
