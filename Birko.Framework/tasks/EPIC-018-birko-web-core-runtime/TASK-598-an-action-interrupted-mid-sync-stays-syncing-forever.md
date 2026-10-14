@@ -3,7 +3,7 @@ id: TASK-598
 parent: EPIC-018
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: in-progress
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -56,7 +56,7 @@ _Populated by `/tasks plan TASK-598` — leave empty until then._
 
 ## Progress
 
-**2026-10-14 — fixed in Birko.Web, release v0.1.10 pending.** Decisions (taken with the owner, 2026-10-14):
+**2026-10-14 — done, in Birko.Web v0.1.10** (Web `48748a7`, Playground `cb6cdf0`). Decisions (taken with the owner, 2026-10-14):
 
 - **Resend only where a landed replay is recognisable.** A recovered `PUT`, `DELETE` or `idPinned` `POST` becomes
   `failed`, due at once, retry count kept: if it had landed, the replay reads as applied (`DELETE` → 404, pinned `POST`
