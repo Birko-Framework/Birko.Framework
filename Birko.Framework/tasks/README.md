@@ -13,8 +13,8 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
-| todo         | —     | —       | 194   |
-| in-progress  | 8     | 11      | 0     |
+| todo         | —     | —       | 193   |
+| in-progress  | 8     | 11      | 1     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
 | done         | 2     | 24      | 258   |
@@ -22,11 +22,11 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 25× P1 · 120× P2 · 49× P3.
+`todo` by priority: 25× P1 · 120× P2 · 48× P3.
 
 ## In progress now
 
-_None._
+- [TASK-597](_loose/TASK-597-in-list-on-a-converted-column-binds-raw-values.md) An `IN` list on a converted SQL column may still bind raw values (P3, ai)
 
 ## Blocked
 

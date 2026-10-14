@@ -3,7 +3,8 @@ id: TASK-597
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: in-progress
+picked-by: fix-next
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P3
 assignee: ai
@@ -48,3 +49,7 @@ N/A — fully covered by automated tests.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-597` — leave empty until then._
+
+## Progress log
+
+- step 2 — picked; the only defect the user named (same root cause as TASK-596, the Contains/IN branch)
