@@ -3,7 +3,7 @@ id: TASK-590
 parent: STORY-062
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: in-progress
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P1
 assignee: ai
