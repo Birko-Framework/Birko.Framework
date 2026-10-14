@@ -246,4 +246,19 @@ public class SchemaDriftLiveTests
         connector.DetectDrift(typeof(CaseRow)).Drifts.Should().ContainSingle()
             .Which.Kind.Should().Be(ColumnDriftKind.CaseMismatch);
     }
+
+    /// <summary>
+    /// TASK-610, offline: the name a column is stored under is the folded one, and only that spelling matches —
+    /// <c>CatalogueNameLiteral</c> rides on the same producer, so the two cannot disagree.
+    /// </summary>
+    [Fact]
+    public void The_stored_column_name_is_folded_and_matched_exactly()
+    {
+        var connector = new PostgreSQLConnector(new PostgreSqlSettings("localhost", Database, User, Password));
+
+        connector.StoredColumnName("SupplierVatin").Should().Be("suppliervatin");
+        connector.CatalogueNameLiteral("SupplierVatin").Should().Be("suppliervatin");
+        connector.StoredColumnNameComparer.Equals("suppliervatin", "SupplierVatin").Should().BeFalse();
+        connector.StoredColumnNameComparer.Equals("suppliervatin", "suppliervatin").Should().BeTrue();
+    }
 }

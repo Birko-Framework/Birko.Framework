@@ -257,4 +257,14 @@ public class EnsureColumnsEndToEndTests : IDisposable
         connector.DetectDrift(typeof(PascalCaseColumn)).IsClean.Should().BeTrue();
         connector.EnsureColumns(typeof(PascalCaseColumn)).Should().BeEmpty();
     }
+
+    /// <summary>TASK-610, offline: SQLite does not fold and resolves case-insensitively, so the match does too.</summary>
+    [Fact]
+    public void The_stored_column_name_is_as_declared_and_matched_case_insensitively()
+    {
+        var connector = Connector();
+
+        connector.StoredColumnName("SupplierVatin").Should().Be("SupplierVatin");
+        connector.StoredColumnNameComparer.Equals("suppliervatin", "SupplierVatin").Should().BeTrue();
+    }
 }
