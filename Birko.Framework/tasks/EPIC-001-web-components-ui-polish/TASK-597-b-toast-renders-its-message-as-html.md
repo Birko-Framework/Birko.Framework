@@ -3,10 +3,10 @@ id: TASK-597
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: in-progress
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
-assignee: unassigned
+assignee: ai
 created: 2026-10-14
 depends-on: []
 blocks: []
@@ -53,4 +53,18 @@ N/A — covered by automated tests (the rendered text and the absence of parsed 
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-597` — leave empty until then._
+Drafted at pick, 2026-10-14.
+
+**Survey (criterion 3):** of the consumers only Symbio calls toasts (536 calls; FlowerFurStudio, Presenter and DraCode
+none). No call passes markup: the three Symbio locale strings that carry HTML (`dashboard.noWidgets*Hint`,
+`warehouse.slowMoversDefinition`) render into page templates, never a toast, and nothing passes `icon`. Untrusted
+data does reach toasts: tenant names and module labels (`sse-client.ts`), notification titles
+(`notification-store.ts`) and server error text. So text by default breaks nothing, and **no HTML opt-in is added**:
+nothing would use it (the confirm dialog's `message-html` stays the precedent if one is ever needed).
+
+1. `b-toast.ts`: escape `message` and `icon` with `escapeHtml` in `render()`. `icon` becomes a text glyph (emoji /
+   character), which is how its docs describe it.
+2. Playground `toast-escape-smoke.ts`: `<img onerror>`, `<script>`, `<b>` in message and icon through `show` and
+   `notify` — the text is visible, no element is parsed, the handler never runs. Register in `app.ts` / `verify.mjs`.
+   Prove red by reverting the escape.
+3. Docs: Components README / API toast section — message and icon are text.
