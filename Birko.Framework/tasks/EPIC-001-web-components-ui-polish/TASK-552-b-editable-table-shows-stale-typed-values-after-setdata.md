@@ -3,7 +3,7 @@ id: TASK-552
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: in-progress
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -42,10 +42,10 @@ once this lands. `pricing/promotions/promotions-page.ts` also uses the table and
 
 ## Acceptance criteria
 
-- [ ] After `setData(rows)`, every cell control shows `rows`, including cells the user had typed in.
-- [ ] After removing a row, the remaining rows show their own values (reproduce first: type in rows 0-2,
+- [x] After `setData(rows)`, every cell control shows `rows`, including cells the user had typed in.
+- [x] After removing a row, the remaining rows show their own values (reproduce first: type in rows 0-2,
       remove row 1, and check that row 1 shows the old row 2).
-- [ ] A playground or unit-level check fails without the fix (typed value → `setData` → displayed value).
+- [x] A playground or unit-level check fails without the fix (typed value → `setData` → displayed value).
 - [ ] Symbio's `syncCellValues` workaround is removed in a Symbio follow-up once the framework version carrying
       this is consumed.
 
@@ -58,3 +58,22 @@ once this lands. `pricing/promotions/promotions-page.ts` also uses the table and
 ## Human test plan
 
 N/A — fully covered by automated tests (the defect is a value read off a DOM property).
+
+## Progress
+
+**2026-10-14 — fixed in Birko.Web, not yet released.** It ships in **v0.1.9** together with [[TASK-580]] (same
+library); the status moves to `verify` when that tag is pushed, and the last criterion waits on Symbio.
+
+- **Removal reproduced** (criterion 2's step one): type rows 0–2, remove row 1, and row 1 still showed `second`.
+  Selects and checkboxes are affected the same way as text inputs: a changed `selected` / `checked` attribute does
+  not move a control the user has touched.
+- **Fix:** `BEditableTable._syncControls()` writes `_data` into each control's live `.value` / `.checked` after
+  `setData()`, `setConfig()` and a row removal. The morph still keeps the nodes, so the focused remove button stays
+  focused (`forceRender()` would have dropped keyboard focus to the body). It is deliberately not run after
+  `validate()` / `clearErrors()`: the rows did not move, and rewriting a typed `1.50` as `1.5` would edit the input.
+- **Gate:** `editable-table-sync-smoke` in Birko.Web.Playground (10 checks: setData swap, a keystroke after setData,
+  fresh setData clearing a value, row removal; text, number, select and checkbox cells). **Proven red: 2/10 without
+  the fix**, including the keystroke check (`tulips.pngX` written over the roses row). 10/10 with it. Full
+  `verify.mjs` green; one `ribbon-scaling-smoke` flyout flake (3 checks) passed 44/44 on two reruns and with this
+  suite removed.
+

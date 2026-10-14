@@ -29,6 +29,9 @@ titles follow no `h1`/`h2`, because `b-modal` renders the dialog title as
       opened from a deeper context
 - [ ] It still labels the dialog through `aria-labelledby`, and looks exactly as it does today (no visual change)
 - [ ] A dialog with no `title` renders no empty heading
+- [ ] The title is rendered as text, not HTML: `render()` interpolates `${title}` raw today, so a title carrying a
+      server value or tenant name with markup runs in the page — the same defect TASK-597 fixed in `b-toast`
+      (noted 2026-10-14, while re-reading line 68 for this task)
 - [ ] README notes the change: a consumer's own heading inside the dialog now nests under the title
 
 ## Out of scope
