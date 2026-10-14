@@ -252,7 +252,7 @@ marks their columns `IsIndexed` (rule 37), and `HasUniqueIndex` makes `UX_UserLo
 SQLite a `[UtcField]` column then held offset-less text beside entity-written `…+00:00`, and `r.At == instant` matched no
 row an entity had written. Both now go through `AbstractField.ToStoredValue`. **Migration:** a row whose UTC column was
 set by `PropertyUpdate` before this fix still reads back fine but won't match a filter until it is re-saved.
-[[TASK-597]]: an `IN` list (`values.Contains(x.At)`) is bound the same way; it matched nothing before.
+[[TASK-606]]: an `IN` list (`values.Contains(x.At)`) is bound the same way; it matched nothing before.
 ### Per-resource grants ship: Birko.Security.Grants + .AspNetCore (2026-10-14)
 
 [[TASK-588]] ([[STORY-062]]). Owners / editors / viewers of one resource or a whole type, optionally tenant-bound,

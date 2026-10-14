@@ -154,7 +154,7 @@ public class PropertyUpdateStorageConversionTests : IDisposable
     }
 
     /// <summary>
-    /// TASK-597 (FIELD-035). <c>values.Contains(x.At)</c> becomes <c>IN (…)</c>, built by the method-call branch of
+    /// TASK-606 (FIELD-044). <c>values.Contains(x.At)</c> becomes <c>IN (…)</c>, built by the method-call branch of
     /// <c>ParseConditionExpression</c>, which TASK-596's comparison fix did not reach.
     /// </summary>
     [Fact]

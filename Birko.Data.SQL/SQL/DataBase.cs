@@ -336,7 +336,7 @@ namespace Birko.Data.SQL
         /// matched no row an entity had written. The column side of <paramref name="comparison"/> resolves to its
         /// field, and every value goes through <see cref="Fields.AbstractField.ToStoredValue"/>, the one producer an
         /// entity write and a <c>PropertyUpdate</c> Set also use.
-        /// <para>TASK-597: an <c>IN</c> list (<c>values.Contains(x.Col)</c>) goes through the same helper. Its values were
+        /// <para>TASK-606: an <c>IN</c> list (<c>values.Contains(x.Col)</c>) goes through the same helper. Its values were
         /// bound raw too, so on a <c>[UtcField]</c> column <c>IN</c> matched nothing and <c>NOT IN</c> excluded nothing.</para>
         /// </summary>
         private static void StoreComparedValues(Conditions.Condition condition, BinaryExpression comparison, Type? exprType)
@@ -771,7 +771,7 @@ namespace Birko.Data.SQL
                     }
                     if (condition.Type == ConditionType.In)
                     {
-                        // TASK-597: the list is bound in the column's stored form, as a comparison's value is (TASK-596).
+                        // TASK-606: the list is bound in the column's stored form, as a comparison's value is (TASK-596).
                         // The column is an argument (static Enumerable / MemoryExtensions.Contains) or the Object
                         // (List<T>.Contains); the other side is the list.
                         StoreColumnValues(condition, exprType, methodExpression.Arguments.Concat(new[] { methodExpression.Object }).ToArray());

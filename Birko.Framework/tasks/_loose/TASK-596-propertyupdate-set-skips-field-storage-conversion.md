@@ -127,7 +127,7 @@ fix they matched instead of the normal rows). Re-save the entity, or rewrite the
 repair them. `TimeOnly`, enums, `decimal` and plain `DateTime` were measured unaffected on SQLite.
 
 **Flagged, not fixed.** `Contains` / `IN` lists on a converted column are not converted. They go through a different
-branch, and no case is measured → [[TASK-597]] (FIELD-035). Other providers (PostgreSQL `[UtcField]`, MSSql, MySQL) are not live-measured
+branch, and no case is measured → [[TASK-606]] (FIELD-044). Other providers (PostgreSQL `[UtcField]`, MSSql, MySQL) are not live-measured
 here; their offline suites are green.
 
 ## Progress log

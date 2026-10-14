@@ -571,7 +571,7 @@ _None._
 - [ ] [TASK-587](_loose/TASK-587-html-only-mail-inline-image-not-related.md) An HTML-only mail puts its inline image beside the HTML, where `cid:` has no defined resolution (P3)
 - [x] [TASK-595](_loose/TASK-595-fluent-hasindex-is-applied-by-nothing.md) Fluent `HasIndex` is applied by nothing, so `Birko.Models.Users.SQL`'s lookup indexes likely exist on no database (P2)
 - [x] [TASK-596](_loose/TASK-596-propertyupdate-set-skips-field-storage-conversion.md) A filtered `PropertyUpdate.Set` on SQL binds the raw value, skipping the field's storage conversion (P2)
-- [x] [TASK-597](_loose/TASK-597-in-list-on-a-converted-column-binds-raw-values.md) An `IN` list (`values.Contains(x.Col)`) on a converted SQL column may still bind raw values (P3)
+- [x] [TASK-606](_loose/TASK-606-in-list-on-a-converted-column-binds-raw-values.md) An `IN` list (`values.Contains(x.Col)`) on a converted SQL column may still bind raw values (P3)
 
 ## Completed
 

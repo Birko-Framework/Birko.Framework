@@ -1972,7 +1972,7 @@ entity had written.)
 - **When** filtering `r => r.At > instant.AddMinutes(-1) && r.At < instant.AddMinutes(1)`
 - **Then** both rows are returned, and `r => r.At > instant.AddMinutes(1)` returns none
 
-#### Scenario: An IN list on a UTC column (TASK-597)
+#### Scenario: An IN list on a UTC column (TASK-606)
 
 - **Given** the same two rows
 - **When** filtering `r => instants.Contains(r.At)` (an array or a `List<DateTime>`), or its negation

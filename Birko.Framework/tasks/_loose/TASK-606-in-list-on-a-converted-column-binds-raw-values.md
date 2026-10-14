@@ -1,5 +1,5 @@
 ---
-id: TASK-597
+id: TASK-606
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
@@ -13,7 +13,7 @@ depends-on: []
 blocks: []
 # findings: ids this task remediates — from a review/audit/harvest/drill pass, or from ordinary
 # field use with no pass behind it at all. Prefixes: see /tasks intake
-findings: [FIELD-035]
+findings: [FIELD-044]
 pr: null
 github-issue: null
 jira-key: null
@@ -22,6 +22,11 @@ jira-key: null
 # An `IN` list (`values.Contains(x.Col)`) on a converted SQL column may still bind raw values
 
 ## Context
+
+> **Renumbered 2026-10-14 from TASK-597 / FIELD-035**, which another session had already minted for the b-toast
+> escaping task. This spawn took the next number without re-scanning every copy of the tree. The commits made
+> under the old id keep it in their subjects: `1143640c` (new), `8b1c7618` (pick), `117d7aab` (fix). History
+> was not rewritten, because other sessions' commits are interleaved with them on `main`.
 
 Spawned from [[TASK-596]]'s outcome, 2026-10-14. TASK-596 made a comparison's value (`x.At == instant`, `<`, `>`, …)
 bind through the column field's `ToStoredValue`, in `DataBase.StoreComparedValues`. A `Contains` call that becomes
@@ -48,7 +53,7 @@ N/A — fully covered by automated tests.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-597` — leave empty until then._
+_Populated by `/tasks plan TASK-606` — leave empty until then._
 
 ## Outcome
 
