@@ -240,6 +240,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Every ElasticSearch `orderBy` was a 400; sorts now name the stored field (2026-10-14)
+
+[[TASK-615]]. The sync, async and view stores sent `OrderBy` keys verbatim (`UpdatedAt`), while NEST stores `updatedAt`,
+so any sorted read failed with "No mapping found … to sort on". Every workflow `Find*` and job dequeue threw. Sorts now
+resolve through `ElasticSearch.Sorts`, the producer the filter translator uses: the attribute's `Name` or camelCase,
+`.keyword` for dynamic strings, and an `ArgumentException` for an unknown key. Job dequeue still returns nothing
+([[TASK-616]]).
 ### An ElasticSearch filter on a `[Keyword]` member finds its rows (2026-10-14)
 
 [[TASK-613]]. The filter translator appended `.keyword` to every string member, but a `[Keyword]` member has no such

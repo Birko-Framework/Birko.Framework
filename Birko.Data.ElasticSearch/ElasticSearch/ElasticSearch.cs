@@ -879,6 +879,52 @@ namespace Birko.Data.ElasticSearch
         }
 
         /// <summary>
+        /// The sort clauses for <paramref name="orderBy"/>, each naming the field its member is stored under.
+        /// </summary>
+        /// <remarks>
+        /// TASK-615. <see cref="Birko.Data.Stores.OrderByField.PropertyName"/> is the CLR member name (<c>UpdatedAt</c>),
+        /// and NEST stores the document as <c>updatedAt</c>, so sending it verbatim was a 400 ("No mapping found for
+        /// [UpdatedAt] in order to sort on") on every <c>orderBy</c>. A string member sorts on its keyword form, through
+        /// the same <see cref="ExactFieldName"/> the filter translator uses: ES cannot sort on <c>text</c>.
+        /// A key may be the member name or its stored field name, as in SQL's <c>ResolveOrderFields</c>. Anything else
+        /// is refused here rather than sent as a sort on a field the index does not have.
+        /// </remarks>
+        /// <exception cref="ArgumentException">A key names no member of <typeparamref name="T"/>.</exception>
+        /// <exception cref="NotSupportedException">A key names a string member with no keyword form.</exception>
+        public static IList<ISort> Sorts<T>(Birko.Data.Stores.OrderBy<T> orderBy)
+        {
+            if (orderBy == null) throw new ArgumentNullException(nameof(orderBy));
+
+            var sorts = new List<ISort>(orderBy.Fields.Count);
+            foreach (var field in orderBy.Fields)
+            {
+                var member = SortMember(typeof(T), field.PropertyName);
+                sorts.Add(new FieldSort
+                {
+                    Field = ExactFieldName(member, member.PropertyType, null),
+                    Order = field.Descending ? SortOrder.Descending : SortOrder.Ascending
+                });
+            }
+            return sorts;
+        }
+
+        private static PropertyInfo SortMember(Type type, string key)
+        {
+            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            var match = properties.FirstOrDefault(p => p.Name == key)
+                ?? properties.FirstOrDefault(p => StoredFieldName(p, null) == key);
+            if (match == null)
+            {
+                var folded = properties.Where(p => string.Equals(p.Name, key, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (folded.Length == 1)
+                    match = folded[0];
+            }
+            return match ?? throw new ArgumentException(
+                $"Sort key '{key}' does not resolve to a property of {type.Name}. Sort by a property name or its stored field name.",
+                nameof(key));
+        }
+
+        /// <summary>
         /// The field <paramref name="member"/> is stored under: the <c>Name</c> its NEST mapping attribute declares,
         /// else NEST's default camelCase inference. The one producer every member-to-field translation shares.
         /// </summary>

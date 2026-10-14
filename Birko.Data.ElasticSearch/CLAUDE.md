@@ -180,7 +180,12 @@ Every member-to-field translation goes through `StoredFieldName` (the NEST attri
 and, for an exact match, `ExactFieldName`. **Only an unattributed `string` gets `.keyword`**: AutoMap gives it a
 `keyword` sub-field, but a `[Keyword]` member *is* the keyword field and has none. Suffixing every string sent the
 workflow, job-queue and sync lookups to a field that does not exist, and ES answered with zero hits, not an error.
-An exact match on any other mapping (`[Text]`) is refused with `NotSupportedException`. Runtime cost is per-document script evaluation, so scope such filters with other
+An exact match on any other mapping (`[Text]`) is refused with `NotSupportedException`.
+
+**Sorts use the same producer** (`ElasticSearch.Sorts(orderBy)`, TASK-615): every `orderBy` on the sync, async and
+view stores sent the CLR member name (`UpdatedAt`), which NEST stores as `updatedAt`, so every sorted read was a 400.
+A key may be the member name or its stored field name. Anything else throws `ArgumentException`, and a string
+sorts on its keyword form. Runtime cost is per-document script evaluation, so scope such filters with other
 term/range clauses where possible.
 
 #### An empty/null collection in `Contains` matches nothing

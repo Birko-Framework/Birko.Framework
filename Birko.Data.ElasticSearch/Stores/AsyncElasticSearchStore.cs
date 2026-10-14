@@ -460,16 +460,7 @@ namespace Birko.Data.ElasticSearch.Stores
             }
             if (orderBy != null && orderBy.Fields.Count > 0)
             {
-                var sorts = new List<ISort>();
-                foreach (var field in orderBy.Fields)
-                {
-                    sorts.Add(new FieldSort
-                    {
-                        Field = field.PropertyName,
-                        Order = field.Descending ? SortOrder.Descending : SortOrder.Ascending
-                    });
-                }
-                request.Sort = sorts;
+                request.Sort = Birko.Data.ElasticSearch.ElasticSearch.Sorts(orderBy);
             }
 
             await foreach (var item in ReadStreamAsync(request, ct))
@@ -675,16 +666,7 @@ namespace Birko.Data.ElasticSearch.Stores
 
             if (orderBy != null && orderBy.Fields.Count > 0)
             {
-                var sorts = new List<ISort>();
-                foreach (var field in orderBy.Fields)
-                {
-                    sorts.Add(new FieldSort
-                    {
-                        Field = field.PropertyName,
-                        Order = field.Descending ? SortOrder.Descending : SortOrder.Ascending
-                    });
-                }
-                request.Sort = sorts;
+                request.Sort = Birko.Data.ElasticSearch.ElasticSearch.Sorts(orderBy);
             }
 
             // Build highlight configuration

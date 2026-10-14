@@ -128,16 +128,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
         // Apply sorting
         if (orderBy != null && orderBy.Fields.Count > 0)
         {
-            var sorts = new List<ISort>();
-            foreach (var field in orderBy.Fields)
-            {
-                sorts.Add(new FieldSort
-                {
-                    Field = field.PropertyName,
-                    Order = field.Descending ? SortOrder.Descending : SortOrder.Ascending
-                });
-            }
-            searchRequest.Sort = sorts;
+            searchRequest.Sort = Birko.Data.ElasticSearch.ElasticSearch.Sorts(orderBy);
         }
 
         var response = await _connector.SearchAsync<TView>(searchRequest, ct).ConfigureAwait(false);
