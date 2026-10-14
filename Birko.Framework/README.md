@@ -338,7 +338,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.AzureKeyVault.Tests | Azure Key Vault secret provider tests |
 | Birko.Security.OAuth.Server.Tests | OAuth2 authorization server tests (43 tests; all four grant types + PKCE/consent/registration paths) |
 | Birko.Security.Grants.Tests | Per-resource grants and ASP.NET companion tests (177 tests; role table, CanAsync, grant/revoke rules, last owner under concurrency, tenant scope, listing, invitations (verified-only, single use), bootstrap and last admin) |
-| Birko.Security.Grants.SQL.Tests | Grants on SQLite (10 tests; schema, round trips, unique token hash, lookup indexes, GrantService end to end) |
+| Birko.Security.Grants.SQL.Tests | Grants on SQLite (24 tests; schema, round trips, lookup indexes, lookup parity with InMemory, the invitation claim across instances, the PropertyUpdate path) |
 | Birko.Rules.Tests | Rule engine tests (core types, contexts, evaluator) |
 | Birko.Data.Processors.Tests | Data processor tests (CSV parser, XML/CSV/ZIP processors, HTTP transport) |
 | Birko.Telemetry.OpenTelemetry.Tests | OpenTelemetry integration tests (options, DI, providers) |

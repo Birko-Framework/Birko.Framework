@@ -38,6 +38,7 @@
   <Import Project="..\..\Birko.Data.SQL.View\Birko.Data.SQL.View.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.ViewModel\Birko.Data.SQL.ViewModel.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.InMemory\Birko.Data.InMemory.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Security.Grants\Birko.Security.Grants.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Security.Grants.SQL\Birko.Security.Grants.SQL.projitems" Label="Shared" />
 

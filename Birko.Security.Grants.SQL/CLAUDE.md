@@ -45,4 +45,5 @@ Birko.Security.Grants.SQL/
 
 ## Maintenance
 See `Birko.Framework/CLAUDE-maintenance.md`. Tests: `tests/Birko.Security.Grants.SQL.Tests/`, on SQLite.
-TASK-593 runs the grant behaviour, the invitation claim and the `PropertyUpdate` path on these stores.
+TASK-593 measured the grant behaviour on these stores: lookup parity with InMemory, the claim across instances,
+and the `PropertyUpdate` path. All match on SQLite. The raw-bind mechanism for converted fields is TASK-596.
