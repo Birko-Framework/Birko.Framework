@@ -28,9 +28,6 @@ which this regeneration never touches._
 
 - [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1, ai)
 
-## Awaiting verification
-
-
 ## Blocked
 
 - [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) — `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3, ai) ⚠ blocked: on an external condition, not on another task
