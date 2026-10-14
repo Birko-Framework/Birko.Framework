@@ -46,6 +46,7 @@
   <SolidColorBrush x:Key="BOverlayLightBrush" Color="{DynamicResource BOverlayLight}" />
   <SolidColorBrush x:Key="BOverlayMediumBrush" Color="{DynamicResource BOverlayMedium}" />
   <SolidColorBrush x:Key="BOverlaySubtleBrush" Color="{DynamicResource BOverlaySubtle}" />
+  <SolidColorBrush x:Key="BRatingColorBrush" Color="{DynamicResource BRatingColor}" />
   <SolidColorBrush x:Key="BRowHoverBgBrush" Color="{DynamicResource BRowHoverBg}" />
   <SolidColorBrush x:Key="BTableHeaderBgBrush" Color="{DynamicResource BTableHeaderBg}" />
   <SolidColorBrush x:Key="BTableHeaderTextBrush" Color="{DynamicResource BTableHeaderText}" />

@@ -17,7 +17,7 @@ which this regeneration never touches._
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 24      | 260   |
+| done         | 2     | 24      | 261   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -573,6 +573,7 @@ _None._
 - [x] [TASK-596](_loose/TASK-596-propertyupdate-set-skips-field-storage-conversion.md) A filtered `PropertyUpdate.Set` on SQL binds the raw value, skipping the field's storage conversion (P2)
 - [x] [TASK-606](_loose/TASK-606-in-list-on-a-converted-column-binds-raw-values.md) An `IN` list (`values.Contains(x.Col)`) on a converted SQL column may still bind raw values (P3)
 - [x] [TASK-607](_loose/TASK-607-ci-test-loop-runs-dotnet-test-on-shared-sources.md) build-and-test runs `dotnet test` on `tests/Shared`, which has no project (P2)
+- [x] [TASK-608](_loose/TASK-608-finstat-rating-color-hand-edited-into-generated-css.md) `--b-rating-color` was hand-edited into the generated `finstat.css`, so token parity is red (P2)
 
 ## Completed
 

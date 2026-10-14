@@ -54,6 +54,7 @@
       <Color x:Key="BOverlayLight">#0FFFFFFF</Color>
       <Color x:Key="BOverlayMedium">#1FFFFFFF</Color>
       <Color x:Key="BOverlaySubtle">#0AFFFFFF</Color>
+      <Color x:Key="BRatingColor">#D97706</Color>
       <Color x:Key="BRowHoverBg">#334155</Color>
       <Color x:Key="BTableHeaderBg">#0F172A</Color>
       <Color x:Key="BTableHeaderText">#94A3B8</Color>
