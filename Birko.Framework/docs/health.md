@@ -247,8 +247,9 @@ var result = await check.CheckAsync(ct);
 //   ["Invoice.Total: declared TEXT COLLATE BIRKO_DECIMAL, stored REAL"]   (a decimal created before TASK-513)
 ```
 
-It reports three kinds of disagreement — `TypeMismatch`, `Missing` (declared but absent) and `Unexpected`
-(present but undeclared) — and folds in `AbstractConnector.IndexCreationFailures`, the indexes
+It reports four kinds of disagreement — `TypeMismatch`, `Missing` (declared but absent), `Unexpected`
+(present but undeclared) and `CaseMismatch` (on PostgreSQL, present only under a spelling that differs in case,
+which no query of the framework reaches) — and folds in `AbstractConnector.IndexCreationFailures`, the indexes
 schema-ensure recorded rather than threw on, which nothing else reads.
 
 **Degraded, never Unhealthy.** Drift means the database disagrees with the models, not that it is

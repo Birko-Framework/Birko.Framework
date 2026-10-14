@@ -25,6 +25,16 @@ namespace Birko.Data.SQL.SchemaDrift
         /// property and a column another system owns look identical from here.
         /// </summary>
         Unexpected = 2,
+
+        /// <summary>
+        /// The table has the column only under a spelling that differs in case from the one the connector
+        /// emits, on a provider where that makes it a different identifier — PostgreSQL, where a bare
+        /// <c>SupplierVatin</c> resolves as <c>suppliervatin</c> and never reaches a column created quoted as
+        /// <c>"SupplierVatin"</c>. Every query on the column fails (<c>42703</c>), so this is not cosmetic.
+        /// <see cref="ColumnDrift.StoredColumn"/> carries the stored spelling. Reported, never actioned:
+        /// adding the column the connector reads would orphan the values in the stored one (TASK-610).
+        /// </summary>
+        CaseMismatch = 3,
     }
 
     /// <summary>
@@ -38,20 +48,29 @@ namespace Birko.Data.SQL.SchemaDrift
     /// </remarks>
     public sealed class ColumnDrift
     {
-        public ColumnDrift(string table, string column, ColumnDriftKind kind, string? declared, string? stored)
+        public ColumnDrift(string table, string column, ColumnDriftKind kind, string? declared, string? stored, string? storedColumn = null)
         {
             Table = table;
             Column = column;
             Kind = kind;
             Declared = declared;
             Stored = stored;
+            StoredColumn = storedColumn;
         }
 
         /// <summary>The table as the framework names it.</summary>
         public string Table { get; }
 
-        /// <summary>The column name.</summary>
+        /// <summary>
+        /// The column name — the model's spelling, except for <see cref="ColumnDriftKind.Unexpected"/>, where
+        /// there is no model field and this is the stored spelling.
+        /// </summary>
         public string Column { get; }
+
+        /// <summary>
+        /// The spelling the table actually holds, for <see cref="ColumnDriftKind.CaseMismatch"/>; null otherwise.
+        /// </summary>
+        public string? StoredColumn { get; }
 
         /// <summary>What kind of disagreement this is.</summary>
         public ColumnDriftKind Kind { get; }
@@ -72,6 +91,7 @@ namespace Birko.Data.SQL.SchemaDrift
         {
             ColumnDriftKind.Missing => $"{Table}.{Column}: declared {Declared}, not present",
             ColumnDriftKind.Unexpected => $"{Table}.{Column}: present as {Stored}, not declared",
+            ColumnDriftKind.CaseMismatch => $"{Table}.{Column}: declared {Declared}, stored only as \"{StoredColumn}\" ({Stored}), which differs in case and is not reachable",
             _ => $"{Table}.{Column}: declared {Declared}, stored {Stored}",
         };
     }

@@ -147,15 +147,26 @@ namespace Birko.Data.SQL.Connectors
             }
 
             var drifts = new List<ColumnDrift>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seen = new HashSet<string>(StoredColumnNameComparer);
 
             foreach (var field in table.Fields.Values)
             {
-                seen.Add(field.Name);
+                var storedName = StoredColumnName(field.Name);
+                seen.Add(storedName);
 
                 var declared = ConvertType(field.Type, field);
-                if (!stored.TryGetValue(field.Name, out var actual))
+                if (!stored.TryGetValue(storedName, out var actual))
                 {
+                    // TASK-610. Present under another case only, on a provider where that is another
+                    // identifier: no query reaches it, and adding the reachable one would orphan its values.
+                    var other = stored.Values.FirstOrDefault(c => string.Equals(c.Name, storedName, StringComparison.OrdinalIgnoreCase));
+                    if (other != null)
+                    {
+                        seen.Add(other.Name);
+                        drifts.Add(new ColumnDrift(table.Name, field.Name, ColumnDriftKind.CaseMismatch, declared, RenderStoredType(other), other.Name));
+                        continue;
+                    }
+
                     drifts.Add(new ColumnDrift(table.Name, field.Name, ColumnDriftKind.Missing, declared, null));
                     continue;
                 }
@@ -180,7 +191,7 @@ namespace Birko.Data.SQL.Connectors
 
         private Dictionary<string, StoredColumn> ReadStoredColumns(string sql)
         {
-            var result = new Dictionary<string, StoredColumn>(StringComparer.OrdinalIgnoreCase);
+            var result = new Dictionary<string, StoredColumn>(StoredColumnNameComparer);
 
             // ⚠ The transform is invoked ONCE PER ROW with the reader already positioned --
             // RunReaderCommandOn drives reader.Read() itself. A transform that loops internally skips

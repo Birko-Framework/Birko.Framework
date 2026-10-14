@@ -754,7 +754,29 @@ namespace Birko.Data.SQL.Connectors
         /// </para>
         /// </remarks>
         public string CatalogueNameLiteral(string name)
-            => SqlLiteral.EscapeLiteral(FoldsUnquotedIdentifiers ? name.ToLowerInvariant() : name);
+            => SqlLiteral.EscapeLiteral(StoredColumnName(name));
+
+        /// <summary>
+        /// The name a column declared as <paramref name="name"/> is stored under: folded where the provider
+        /// folds the bare identifier this framework emits (<see cref="FoldsUnquotedIdentifiers"/>), else as
+        /// declared. The one producer <see cref="CatalogueNameLiteral"/> and the schema-drift check share.
+        /// </summary>
+        public string StoredColumnName(string name)
+            => FoldsUnquotedIdentifiers ? name.ToLowerInvariant() : name;
+
+        /// <summary>
+        /// How a stored column name is matched against <see cref="StoredColumnName"/>: the way the provider
+        /// resolves the bare identifier this framework emits.
+        /// </summary>
+        /// <remarks>
+        /// ⚠ <b>Exact where the provider folds.</b> On PostgreSQL a column stored as <c>"SupplierVatin"</c> is
+        /// not the column a bare <c>SupplierVatin</c> reaches, so matching it case-insensitively reported a
+        /// table clean that every query on it failed against (<c>42703</c>, TASK-610). Elsewhere the
+        /// provider resolves the reference case-insensitively, and so does this. Virtual for a provider whose
+        /// resolution depends on configuration rather than on the dialect.
+        /// </remarks>
+        public virtual StringComparer StoredColumnNameComparer
+            => FoldsUnquotedIdentifiers ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
 
         /// <summary>
         /// Converts a CLR value into the form the storage layer actually persists, before it is bound

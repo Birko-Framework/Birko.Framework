@@ -224,4 +224,37 @@ public class EnsureColumnsEndToEndTests : IDisposable
 
         Rows<After>(connector).Single(x => x.Guid == existing).Count.Should().Be(42);
     }
+
+    [Table("EnsureColumnsCase")]
+    public class LowerCaseColumn : AbstractModel
+    {
+#pragma warning disable IDE1006 // the stored spelling is the point of this model
+        public string? suppliervatin { get; set; }
+#pragma warning restore IDE1006
+    }
+
+    [Table("EnsureColumnsCase")]
+    public class PascalCaseColumn : AbstractModel
+    {
+        public string? SupplierVatin { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-610's other polarity. SQLite resolves an identifier case-insensitively, so a column differing only in
+    /// case IS the column the connector reaches: it reads and writes through it, and reporting it — or adding a
+    /// second one — would be a false positive. Exact matching is PostgreSQL's, not everyone's.
+    /// </summary>
+    [Fact]
+    public void A_column_differing_only_in_case_is_the_same_column_here_and_reports_clean()
+    {
+        var connector = Connector();
+        connector.CreateTable(new[] { typeof(LowerCaseColumn) });
+
+        var guid = Guid.NewGuid();
+        connector.Insert(new PascalCaseColumn { Guid = guid, SupplierVatin = "SK123" });
+        Rows<PascalCaseColumn>(connector).Single(x => x.Guid == guid).SupplierVatin.Should().Be("SK123");
+
+        connector.DetectDrift(typeof(PascalCaseColumn)).IsClean.Should().BeTrue();
+        connector.EnsureColumns(typeof(PascalCaseColumn)).Should().BeEmpty();
+    }
 }

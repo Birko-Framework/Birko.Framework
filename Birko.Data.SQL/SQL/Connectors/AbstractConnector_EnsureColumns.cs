@@ -21,7 +21,7 @@ namespace Birko.Data.SQL.Connectors
         /// </para>
         /// <para>
         /// <b>Additive only, and idempotent.</b> It never drops a column, never retypes one
-        /// (<see cref="ColumnDriftKind.TypeMismatch"/> and <see cref="ColumnDriftKind.Unexpected"/> stay
+        /// (<see cref="ColumnDriftKind.TypeMismatch"/>, <see cref="ColumnDriftKind.CaseMismatch"/> and <see cref="ColumnDriftKind.Unexpected"/> stay
         /// reported, not acted on), and a second call finds nothing missing. An added NOT NULL column is
         /// back-filled with <see cref="Fields.AbstractField.DefaultStoredValue"/>, so existing rows read back as
         /// an entity that never assigned the property would — see <see cref="AbstractConnectorBase.AddColumnDefinition"/>.
@@ -74,7 +74,7 @@ namespace Birko.Data.SQL.Connectors
 
             foreach (var drift in report.Drifts.Where(d => d.Kind == ColumnDriftKind.Missing))
             {
-                var field = table.Fields.Values.First(f => string.Equals(f.Name, drift.Column, StringComparison.OrdinalIgnoreCase));
+                var field = table.Fields.Values.First(f => f.Name == drift.Column);
                 var reason = WhyColumnCannotBeAdded(field);
                 if (reason != null)
                 {

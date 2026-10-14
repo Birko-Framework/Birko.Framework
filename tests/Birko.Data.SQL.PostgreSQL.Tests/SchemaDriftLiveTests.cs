@@ -30,6 +30,7 @@ public class SchemaDriftLiveTests
 {
     private const string CleanTable = "PgDriftClean";
     private const string DriftedTable = "PgDriftStale";
+    private const string CaseTable = "PgDriftCase";
 
     private static string? Host => Environment.GetEnvironmentVariable("BIRKO_PG_HOST");
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432;
@@ -132,7 +133,7 @@ public class SchemaDriftLiveTests
 
         // What an old database looks like: Amount was widened in the model, the column never was.
         Exec($"DROP TABLE IF EXISTS \"{DriftedTable}\"");
-        Exec($"CREATE TABLE \"{DriftedTable}\" (\"Guid\" uuid, \"Name\" text, \"Amount\" text)");
+        Exec($"CREATE TABLE \"{DriftedTable}\" (Guid uuid, Name text, Amount text)");
 
         var report = new PostgreSQLConnector(Settings()).DetectDrift(typeof(DriftedRow));
 
@@ -154,8 +155,8 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS \"{DriftedTable}\"");
-        Exec($"CREATE TABLE \"{DriftedTable}\" (\"Guid\" uuid, \"Name\" text, \"Amount\" integer, \"Gone\" text)");
-        Exec($"ALTER TABLE \"{DriftedTable}\" DROP COLUMN \"Gone\"");
+        Exec($"CREATE TABLE \"{DriftedTable}\" (Guid uuid, Name text, Amount integer, Gone text)");
+        Exec($"ALTER TABLE \"{DriftedTable}\" DROP COLUMN Gone");
 
         var report = new PostgreSQLConnector(Settings()).DetectDrift(typeof(DriftedRow));
 
@@ -163,5 +164,86 @@ public class SchemaDriftLiveTests
 
         report.Drifts.Should().BeEmpty(
             "a dropped column's tombstone and the system columns must not read as Unexpected");
+    }
+
+    [Table(CaseTable)]
+    public class CaseRow
+    {
+        [PrimaryField]
+        public Guid? Guid { get; set; }
+        public string? SupplierVatin { get; set; }
+    }
+
+    /// <summary>
+    /// A framework-created table whose column was then renamed to its QUOTED PascalCase spelling — what a
+    /// hand-written ledger DDL produced at consumer Symbio (TASK-610).
+    /// </summary>
+    private static PostgreSQLConnector CaseMismatchedTable()
+    {
+        Exec($"DROP TABLE IF EXISTS \"{CaseTable}\"");
+        var connector = new PostgreSQLConnector(Settings());
+        connector.CreateTable(new[] { typeof(CaseRow) });
+        Exec($"ALTER TABLE \"{CaseTable}\" RENAME COLUMN suppliervatin TO \"SupplierVatin\"");
+        return connector;
+    }
+
+    private static string[] StoredColumnNames()
+    {
+        using var conn = new NpgsqlConnection(Settings().GetConnectionString());
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT attname FROM pg_attribute WHERE attrelid = '\"" + CaseTable + "\"'::regclass "
+                        + "AND attnum > 0 AND NOT attisdropped ORDER BY attnum";
+        using var reader = cmd.ExecuteReader();
+        var names = new System.Collections.Generic.List<string>();
+        while (reader.Read()) names.Add(reader.GetString(0));
+        return names.ToArray();
+    }
+
+    /// <summary>
+    /// TASK-610. The connector emits columns bare, so PostgreSQL resolves <c>SupplierVatin</c> as
+    /// <c>suppliervatin</c> — and a column stored as <c>"SupplierVatin"</c> is a different identifier no query
+    /// of this framework can reach. The check matched names case-insensitively and called that table clean.
+    /// </summary>
+    [Fact]
+    public void A_column_differing_only_in_case_is_reported_because_no_query_can_reach_it()
+    {
+        if (!RequireServer()) return;
+
+        var connector = CaseMismatchedTable();
+
+        // The premise, measured rather than asserted: every query of this framework fails on this table.
+        var select = () => connector.Select(typeof(CaseRow), (System.Linq.Expressions.LambdaExpression?)null).Cast<object>().ToList();
+        select.Should().Throw<Exception>().Where(e => e.ToString().Contains("42703"));
+
+        var report = connector.DetectDrift(typeof(CaseRow));
+        foreach (var d in report.Drifts) _output.WriteLine(d.ToString());
+
+        report.IsClean.Should().BeFalse();
+        var drift = report.Drifts.Should().ContainSingle().Subject;
+        drift.Kind.Should().Be(ColumnDriftKind.CaseMismatch);
+        drift.Column.Should().Be("SupplierVatin");
+        drift.StoredColumn.Should().Be("SupplierVatin");
+        drift.Declared.Should().NotBeNullOrEmpty();
+        drift.Stored.Should().NotBeNullOrEmpty();
+        drift.ToString().Should().Contain("case");
+    }
+
+    /// <summary>
+    /// TASK-610. Adding <c>suppliervatin</c> beside <c>"SupplierVatin"</c> would make every query succeed again
+    /// against an empty column and orphan the values in the old one — so the mismatch is reported, never acted on.
+    /// </summary>
+    [Fact]
+    public void EnsureColumns_never_adds_a_second_column_beside_a_case_mismatched_one()
+    {
+        if (!RequireServer()) return;
+
+        var connector = CaseMismatchedTable();
+
+        connector.EnsureColumns(typeof(CaseRow)).Should().BeEmpty();
+
+        StoredColumnNames().Should().BeEquivalentTo(new[] { "guid", "SupplierVatin" });
+        connector.DetectDrift(typeof(CaseRow)).Drifts.Should().ContainSingle()
+            .Which.Kind.Should().Be(ColumnDriftKind.CaseMismatch);
     }
 }
