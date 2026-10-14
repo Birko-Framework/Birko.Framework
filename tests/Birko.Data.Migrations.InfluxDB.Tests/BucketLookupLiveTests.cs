@@ -137,4 +137,38 @@ public sealed class BucketLookupLiveTests : IDisposable
             orgs.DeleteOrganizationAsync(orgs.FindOrganizationsAsync(org: other).GetAwaiter().GetResult().Single()).GetAwaiter().GetResult();
         }
     }
+
+    /// <summary>
+    /// TASK-619. <c>DeleteDocuments</c> discarded the Task <c>DeleteApi.Delete</c> returns, so the server's answer was
+    /// never observed: a refused predicate reported success, and the delete raced whatever ran next.
+    /// </summary>
+    [Fact]
+    public void A_delete_predicate_the_server_refuses_throws()
+    {
+        if (Client() == null) return;
+        Create(Name("docs"));
+
+        // `name` unquoted is a keyword in the delete grammar: the server answers 400 (measured at TASK-618).
+        ((Action)(() => new InfluxDBDataMigrator(_client!, Org).DeleteDocuments(Name("docs"), "_measurement=\"m\" AND name=\"x\"")))
+            .Should().Throw<Exception>();
+    }
+
+    [Fact]
+    public void Deleted_points_are_gone_when_DeleteDocuments_returns()
+    {
+        if (Client() == null) return;
+        var bucket = Name("docs");
+        Create(bucket);
+        var write = _client!.GetWriteApiAsync();
+        for (var i = 0; i < 50; i++)
+        {
+            write.WriteRecordAsync($"m,tag=t{i} value={i}i", global::InfluxDB.Client.Api.Domain.WritePrecision.Ns, bucket, Org).GetAwaiter().GetResult();
+        }
+        var migrator = new InfluxDBDataMigrator(_client, Org);
+        migrator.CountDocuments(bucket).Should().Be(50);
+
+        migrator.DeleteDocuments(bucket, "");
+
+        migrator.CountDocuments(bucket).Should().Be(0);
+    }
 }

@@ -2,7 +2,7 @@
 id: TASK-619
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-14
@@ -27,8 +27,10 @@ before the delete lands.
 
 ## Acceptance criteria
 
-- [ ] Live: a predicate the server refuses throws from `DeleteDocuments`. Red today.
-- [ ] Live: after `DeleteDocuments` returns, the deleted points are gone (count read straight after).
+- [x] Live: a predicate the server refuses throws from `DeleteDocuments`. Red today.
+- [x] Live: after `DeleteDocuments` returns, the deleted points are gone (count read straight after).
+      → Kept as a guard, but **not proven red**: the un-awaited delete happened to land before the count in the
+      pre-fix run.
 
 ## Out of scope
 
@@ -42,3 +44,11 @@ N/A — covered by the live provider test.
 
 1. Wait on the call (`.GetAwaiter().GetResult()`), as the data store's sync deletes already do.
 2. Two live tests, both proven red first.
+
+## Progress log
+
+- 2026-10-14 — `influxdb:2`. Red: the refused predicate (`name` unquoted) did not throw. Fixed by waiting on the call.
+  The first green attempt timed out on every delete (~20 s client timeout), even a plain write: the server was wedged.
+  After a restart, a 100-year delete took 6 ms, and the suite passed 36/36 twice. **Cause of the wedge not
+  identified.** Requests abandoned by the earlier fire-and-forget deletes are a guess, not a measurement, so it is
+  recorded here and not adopted (rule 54). Data.InfluxDB 28/28 unchanged.

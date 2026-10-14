@@ -41,7 +41,9 @@ namespace Birko.Data.Migrations.InfluxDB.Context
                     ? ""
                     : ConvertFilterToFluxPredicate(filterJson);
 
-                deleteApi.Delete(start, stop, predicate, bucket.Name, bucket.OrgID);
+                // TASK-619: waited on. `Delete` returns a Task, and discarding it reported success before the
+                // server answered: a refused predicate went unobserved, and the next step raced the delete.
+                deleteApi.Delete(start, stop, predicate, bucket.Name, bucket.OrgID).GetAwaiter().GetResult();
             }
         }
 
