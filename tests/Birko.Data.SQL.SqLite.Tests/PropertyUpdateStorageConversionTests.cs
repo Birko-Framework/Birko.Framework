@@ -153,6 +153,44 @@ public class PropertyUpdateStorageConversionTests : IDisposable
         excluded.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// TASK-597 (FIELD-035). <c>values.Contains(x.At)</c> becomes <c>IN (…)</c>, built by the method-call branch of
+    /// <c>ParseConditionExpression</c>, which TASK-596's comparison fix did not reach.
+    /// </summary>
+    [Fact]
+    public async Task AnInList_OnAUtcColumn_MatchesRowsWrittenEitherWay()
+    {
+        var (entity, updated) = await WriteBothWaysAsync();
+        var instants = new[] { Instant, Instant.AddDays(1) };
+        var asList = new List<DateTime> { Instant };
+
+        var viaArray = (await _store.ReadAsync(r => instants.Contains(r.At), null, null, null)).Select(r => r.Guid).ToList();
+        var viaList = (await _store.ReadAsync(r => asList.Contains(r.At), null, null, null)).Select(r => r.Guid).ToList();
+
+        viaArray.Should().Contain(entity).And.Contain(updated);
+        viaList.Should().Contain(entity).And.Contain(updated);
+    }
+
+    [Fact]
+    public async Task ANotInList_OnAUtcColumn_ExcludesRowsWrittenEitherWay()
+    {
+        var (entity, updated) = await WriteBothWaysAsync();
+        var instants = new[] { Instant };
+
+        var rest = (await _store.ReadAsync(r => !instants.Contains(r.At), null, null, null)).Select(r => r.Guid).ToList();
+
+        rest.Should().NotContain(entity).And.NotContain(updated);
+    }
+
+    [Fact]
+    public async Task AnEmptyInList_StillMatchesNothing()
+    {
+        await WriteBothWaysAsync();
+        var none = Array.Empty<DateTime>();
+
+        (await _store.ReadAsync(r => none.Contains(r.At), null, null, null)).Should().BeEmpty();
+    }
+
     [Fact]
     public void TheSyncBulkStore_StoresAndFiltersTheSameWay()
     {

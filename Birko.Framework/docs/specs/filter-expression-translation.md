@@ -1972,6 +1972,12 @@ entity had written.)
 - **When** filtering `r => r.At > instant.AddMinutes(-1) && r.At < instant.AddMinutes(1)`
 - **Then** both rows are returned, and `r => r.At > instant.AddMinutes(1)` returns none
 
+#### Scenario: An IN list on a UTC column (TASK-597)
+
+- **Given** the same two rows
+- **When** filtering `r => instants.Contains(r.At)` (an array or a `List<DateTime>`), or its negation
+- **Then** `IN` returns both rows and `NOT IN` returns neither; an empty list still matches nothing
+
 ### Requirement: An expression node the SQL parser cannot claim is refused, not parsed into nothing
 
 `DataBase.ParseConditionExpression` SHALL refuse an expression node for which it has no branch, throwing

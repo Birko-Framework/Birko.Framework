@@ -336,12 +336,21 @@ namespace Birko.Data.SQL
         /// matched no row an entity had written. The column side of <paramref name="comparison"/> resolves to its
         /// field, and every value goes through <see cref="Fields.AbstractField.ToStoredValue"/>, the one producer an
         /// entity write and a <c>PropertyUpdate</c> Set also use.
+        /// <para>TASK-597: an <c>IN</c> list (<c>values.Contains(x.Col)</c>) goes through the same helper. Its values were
+        /// bound raw too, so on a <c>[UtcField]</c> column <c>IN</c> matched nothing and <c>NOT IN</c> excluded nothing.</para>
         /// </summary>
         private static void StoreComparedValues(Conditions.Condition condition, BinaryExpression comparison, Type? exprType)
+            => StoreColumnValues(condition, exprType, comparison.Left, comparison.Right);
+
+        /// <summary>
+        /// Rewrites <paramref name="condition"/>'s values into the stored form of the first plain column among
+        /// <paramref name="candidates"/>. A condition with sub-conditions, no values, or no plain column is left alone.
+        /// </summary>
+        private static void StoreColumnValues(Conditions.Condition condition, Type? exprType, params Expression?[] candidates)
         {
             if (exprType == null || condition.Values == null || condition.SubConditions?.Any() == true)
                 return;
-            var field = ComparedField(comparison.Left, exprType) ?? ComparedField(comparison.Right, exprType);
+            var field = candidates.Where(c => c != null).Select(c => ComparedField(c!, exprType)).FirstOrDefault(f => f != null);
             if (field == null)
                 return;
             condition.Values = condition.Values.Cast<object?>().Select(v => v == null ? null : field.ToStoredValue(v)).ToArray();
@@ -759,6 +768,13 @@ namespace Birko.Data.SQL
                     if (methodExpression.Object != null)
                     {
                         ParseConditionExpression(methodExpression.Object, condition, exprType);
+                    }
+                    if (condition.Type == ConditionType.In)
+                    {
+                        // TASK-597: the list is bound in the column's stored form, as a comparison's value is (TASK-596).
+                        // The column is an argument (static Enumerable / MemoryExtensions.Contains) or the Object
+                        // (List<T>.Contains); the other side is the list.
+                        StoreColumnValues(condition, exprType, methodExpression.Arguments.Concat(new[] { methodExpression.Object }).ToArray());
                     }
                     return new[] { condition };
                 }
