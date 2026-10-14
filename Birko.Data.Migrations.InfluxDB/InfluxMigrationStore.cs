@@ -222,21 +222,19 @@ namespace Birko.Data.Migrations.InfluxDB
             var deleteApi = _client.GetDeleteApi();
             // CR-M111: escape the interpolated name so a value containing a quote/backslash can't break
             // (or alter) the delete predicate.
-            var fluxPredicate = $"_measurement=\"{MigrationMeasurement}\" AND name=\"{EscapeFluxString(migration.Name)}\"";
+            // TASK-618: the tag key is QUOTED. `name` is a keyword in the delete-predicate grammar, and the bare
+            // form was a 400 ("found NAME, expected identifier") on every call.
+            var fluxPredicate = $"_measurement=\"{MigrationMeasurement}\" AND \"name\"=\"{EscapeFluxString(migration.Name)}\"";
 
             var start = migration.CreatedAt.AddMinutes(-1);
             var stop = DateTime.UtcNow;
 
-            try
-            {
-                deleteApi.Delete(start, stop, fluxPredicate, BucketName, _migrationsBucket!.OrgID);
-            }
-            catch (global::InfluxDB.Client.Core.Exceptions.InfluxException)
-            {
-                // CR-L146: only swallow InfluxDB-reported delete failures ("already deleted"); a non-Influx
-                // exception now propagates. Distinguishing already-deleted from a genuine delete failure
-                // within InfluxException needs a live server (deferred to the integration tier).
-            }
+            // Waited on, and not caught. `Delete` returns a Task, and this call used to discard it: the delete
+            // raced the next read and any failure went unobserved, so the CR-L146 catch below it never ran either.
+            // That catch swallowed every InfluxException on the theory that "already deleted" raises one. Measured,
+            // it does not: a predicate that matches nothing is a 204. A refused delete now propagates instead of
+            // reporting a downgrade that left the migration recorded (rule 22).
+            deleteApi.Delete(start, stop, fluxPredicate, BucketName, _migrationsBucket!.OrgID).GetAwaiter().GetResult();
         }
 
         /// <summary>

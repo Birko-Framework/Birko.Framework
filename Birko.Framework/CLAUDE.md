@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### InfluxDB `RemoveMigration` removes the record (2026-10-14)
+
+[[TASK-618]]. The delete predicate named the tag `name`, a keyword in InfluxDB's delete grammar (a 400). The client's
+`Delete` Task was never awaited, and a catch swallowed the error besides, so every downgrade reported success and left
+the migration recorded as applied. The key is quoted, the call awaited, and a refused delete now throws.
 ### InfluxDB migrations can record what they apply (2026-10-14)
 
 [[TASK-617]]. The bookkeeping bucket was `_migrations`, and InfluxDB 2 refuses names starting with `_`, so

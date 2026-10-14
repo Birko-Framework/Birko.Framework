@@ -112,4 +112,38 @@ public sealed class MigrationBucketLiveTests : IDisposable
             .Count(b => b.Name == InfluxMigrationStore.DefaultMigrationsBucketName).Should().Be(1);
 
     }
+
+    /// <summary>
+    /// TASK-618. The delete predicate named the tag <c>name</c> unquoted, and <c>name</c> is a keyword in InfluxDB's
+    /// delete-predicate grammar: every delete was a 400 that the method swallowed, so a downgrade left its migration
+    /// recorded as applied.
+    /// </summary>
+    [Fact]
+    public void A_removed_migration_is_no_longer_applied_and_removing_it_again_is_harmless()
+    {
+        if (Client() == null) return;
+        var store = new InfluxMigrationStore(_client!, _org);
+        var migration = new SampleMigration();
+        store.RecordMigration(migration);
+        store.GetAppliedVersions().Should().Contain(20261014);
+
+        store.RemoveMigration(migration);
+        store.GetAppliedVersions().Should().NotContain(20261014);
+
+        ((System.Action)(() => store.RemoveMigration(migration))).Should().NotThrow("removing what is not recorded is a no-op");
+    }
+
+    /// <summary>TASK-618: a delete the server refuses propagates instead of reporting a successful downgrade.</summary>
+    [Fact]
+    public void A_delete_the_server_refuses_is_not_reported_as_removed()
+    {
+        if (Client() == null) return;
+        var store = new InfluxMigrationStore(_client!, _org);
+        store.Initialize();
+        var buckets = _client!.GetBucketsApi();
+        buckets.DeleteBucketAsync(buckets.FindBucketsAsync(org: _org, name: store.BucketName).GetAwaiter().GetResult().Single())
+            .GetAwaiter().GetResult();
+
+        ((System.Action)(() => store.RemoveMigration(new SampleMigration()))).Should().Throw<System.Exception>();
+    }
 }
