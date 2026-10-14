@@ -2,7 +2,7 @@
 id: TASK-523
 parent: STORY-059
 feature: null
-status: in-progress
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-07
@@ -26,10 +26,10 @@ Consumer side: DraCode `EPIC-018 / STORY-039` (`Consumers/DraCode/tasks/EPIC-018
 
 ## Acceptance criteria
 
-- [ ] `WsClient.request(type, data, { timeoutMs })` (or a small companion) returns a promise resolved by the reply carrying the same correlation id; rejects on timeout and on disconnect
-- [ ] The correlation field name is configurable (DraCode uses `id` / `requestId`)
-- [ ] Unsolicited messages still reach the normal handlers
-- [ ] Tests: reply resolves, timeout rejects, disconnect rejects pending requests
+- [x] `WsClient.request(type, data, { timeoutMs })` (or a small companion) returns a promise resolved by the reply carrying the same correlation id; rejects on timeout and on disconnect
+- [x] The correlation field name is configurable (DraCode uses `id` / `requestId`)
+- [x] Unsolicited messages still reach the normal handlers
+- [x] Tests: reply resolves, timeout rejects, disconnect rejects pending requests
 
 ## Out of scope
 
@@ -52,3 +52,12 @@ so it never matches. So correlation is on the envelope.
    pending request; calling while not open rejects at once. A correlated reply is consumed; everything else is
    dispatched as before.
 2. Playground smoke with a fake socket (the global `WebSocket` swapped only for the synchronous `connect()` call).
+
+## Progress log
+
+- 2026-10-14 — Done, released in **Birko.Web v0.1.8** (Web `ffc40f8`, Playground `bd1de6d`). Correlation is on the
+  envelope's top level both ways, matching DraCode's `WebSocketCommandHandler`; `requestMessage()` covers its
+  `{ id, command, data }` shape. A correlated reply is consumed rather than also dispatched. `ws-request-smoke` 16/16;
+  with correlation, the disconnect rejection and the timeout broken the suite never settles and `verify.mjs` fails it
+  as never reported. DraCode TASK-116 unblocked (DraCode `c5cef08`), with a note that its `api-client.ts` reads the id
+  from inside `data`, so its replies may never match today.
