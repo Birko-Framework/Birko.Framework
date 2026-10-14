@@ -3,7 +3,7 @@ id: TASK-583
 parent: EPIC-001
 feature: FEATURE-001
 priority: P3
-status: todo
+status: in-progress
 assignee: ai
 created: 2026-10-13
 depends-on: []
@@ -62,3 +62,22 @@ data: { moduleId: string, entityType: string, entityGuid: string | null, kind: '
 
 N/A here: the behaviour is asserted by the Shell tests. The two-tab, two-user check is in Symbio TASK-898's
 test plan, where the producer exists.
+
+## Implementation plan
+
+Drafted at pick, 2026-10-14.
+
+1. `Birko.Web.Shell/src/pages/live-refresh.ts`: `EntityChangedEvent`, `parseEntityChangedEvent(unknown)` (object or JSON
+   string; anything else is `null`), and the injected source: `setEntityChangeSource((handler: (payload: unknown) =>
+   void) => unsubscribe)`. The handler takes `unknown` because a malformed payload must be ignored, so the page
+   validates. An app with an `SseClient` wires it as `setEntityChangeSource((h) => sse.on('entity-changed', h))`.
+2. `BaseListPage`: `protected liveRefresh?: { moduleId; entityType; debounceMs? }` (default off, debounce 500 ms).
+   Subscribe in `connectedCallback`, unsubscribe and clear the timer in `disconnectedCallback`. A matching event
+   restarts the debounce; when it fires, `reload()`, or, while `#modal`'s dialog is open, set a pending flag that the
+   modal's `close` event turns into one reload.
+   **Opting in with no source registered throws at connect** (same rule as TASK-545's guard: an opt-in that silently
+   does nothing is worse than none).
+3. Playground `live-refresh-smoke.ts` with a fake source and fake API: N events → 1 reload, matching (other module,
+   other type, malformed, null `entityGuid`), unmount cleanup (no reload after removal, unsubscribed), deferral while
+   the modal is open and the single reload on close, the missing-source guard. Prove red.
+4. Shell README + CLAUDE.md; release as a Birko.Web tag; record the tag in Symbio TASK-898.
