@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>db9a947d-4517-4958-8a39-8d3bb29c9a1a</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Security.Grants</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)ResourceVisibility.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrantOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrantRoleTable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrantErrorCodes.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrantConfigurationException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrantRefusedException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ResourceGrant.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\GrantPredicates.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IResourceGrantStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\IGrantAdminSource.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\BootstrapAdminGrantSource.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\GrantedResources.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\IGrantService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\GrantService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Internal\KeyedLock.cs" />
+  </ItemGroup>
+</Project>

@@ -32,6 +32,7 @@ Split from one task at planning (2026-10-13). Each is one commit:
 | [[TASK-588]] | Core project: role table, `ResourceGrant`, store, `CanAsync`, List, Grant / Revoke, owner-on-create | — |
 | [[TASK-589]] | Invitations + bootstrap admins + `OnSignInAsync` | TASK-588 |
 | [[TASK-590]] | `Birko.Security.Grants.AspNetCore`: `RequireGrant`, resolver decorator, DI, README wiring, Recent Updates | TASK-588, TASK-589 |
+| [[TASK-593]] | Grant predicates verified on a SQL backend (SQLite) — spawned at TASK-588's close | TASK-588 |
 
 ## Related work elsewhere in the tree
 
@@ -139,6 +140,14 @@ three-task split**. Not grilled yet._
    - This is a documented compensation, not a transaction. The README says so.
 10. **`GrantOwnerOnCreateAsync`** skips the share check (the creator has no grant yet), refuses `id == null`,
     and is idempotent.
+    - **It only claims a resource nobody owns yet.** If anyone else owns it, the call refuses
+      `Grant.NotAuthorized`. Otherwise any caller who reached a create or upsert path with an existing id would
+      become its owner. Amended at TASK-588's close review, 2026-10-14.
+    - **Revoke and re-grant act on every row with the exact key**, not on the one entity read. A backend with no
+      unique index can hold two rows for one key, and a revoke that deleted only one would report success while
+      access remained (rule 22).
+    - **`ListResourcesAsync` takes an action**, so a type-wide grant whose role lacks "read" never lists every
+      resource.
 11. **Invitations.**
     - Creating one uses the same authorization as Grant.
     - The token is 32 bytes from `RandomNumberGenerator`, base64url-encoded, and only its SHA-256 hex is
@@ -195,7 +204,7 @@ three-task split**. Not grilled yet._
 - **Escalation by action subset over role ranking.** No ordering config, and custom roles compare
   correctly. Cost: two roles with disjoint actions can't grant each other.
 - **Bootstrap as a reserved persisted grant over a Models.Users `Role "*"`.** No dependency on Users.
-  Cost: removing someone from config doesn't revoke them; the README says to call `RevokeAsync`.
+  Cost: removing someone from config doesn't revoke them; `RevokeAdminAsync` (TASK-589) does. `RevokeAsync` cannot: type `*` is never declared.
 - **Auto-redeem by verified email, with the token optional.** An invited person redeems just by signing
   in, and the token keeps the link flow available.
 - **The visibility rule over always-403 or always-404.** Always-403 reveals that private resources exist

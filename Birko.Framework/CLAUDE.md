@@ -239,6 +239,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Per-resource grants ship: Birko.Security.Grants (2026-10-14)
+
+[[TASK-588]] ([[STORY-062]]). Owners / editors / viewers of one resource or a whole type, optionally tenant-bound,
+on any store. Undeclared roles, actions or types throw. Grant and revoke need `share` and can't escalate; the last
+owner can't be removed (in-process lock + post-write recount). Invitations and `RequireGrant`: [[TASK-589]], [[TASK-590]].
+
 ### A template engine can encode merged values, per call (2026-10-13)
 
 [[TASK-586]]. `RenderAsync(template, model, TemplateRenderOptions, ct)`: an `Encoder` (`MarkdownValueEncoder` escapes

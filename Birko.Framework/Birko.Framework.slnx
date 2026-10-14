@@ -185,6 +185,7 @@
     <Project Path="../Birko.Security.AzureKeyVault/Birko.Security.AzureKeyVault.shproj" />
     <Project Path="../Birko.Security.NFC/Birko.Security.NFC.shproj" />
     <Project Path="../Birko.Security.OAuth.Server/Birko.Security.OAuth.Server.shproj" />
+    <Project Path="../Birko.Security.Grants/Birko.Security.Grants.shproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="../tests/Birko.Data.ElasticSearch.Tests/Birko.Data.ElasticSearch.Tests.csproj" />
@@ -241,6 +242,7 @@
     <Project Path="../tests/Birko.Security.Vault.Tests/Birko.Security.Vault.Tests.csproj" />
     <Project Path="../tests/Birko.Security.AzureKeyVault.Tests/Birko.Security.AzureKeyVault.Tests.csproj" />
     <Project Path="../tests/Birko.Security.OAuth.Server.Tests/Birko.Security.OAuth.Server.Tests.csproj" />
+    <Project Path="../tests/Birko.Security.Grants.Tests/Birko.Security.Grants.Tests.csproj" />
     <Project Path="../tests/Birko.Rules.Tests/Birko.Rules.Tests.csproj" />
     <Project Path="../tests/Birko.Data.Patterns.Tests/Birko.Data.Patterns.Tests.csproj" />
     <Project Path="../tests/Birko.Data.Processors.Tests/Birko.Data.Processors.Tests.csproj" />

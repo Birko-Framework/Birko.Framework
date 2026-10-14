@@ -55,6 +55,10 @@ exists to close. Decided 2026-10-13.
 - [ ] Bootstrap admins come from `GrantOptions.BootstrapAdmins` as `provider:subject` pairs. They are
       applied on the matching sign-in as the reserved `*` grant, idempotently: two sign-ins give one grant.
       No email and no "first user" path exists.
+- [ ] An admin can be removed through the framework, not only by a raw store delete. `IGrantService.RevokeAsync`
+      cannot do it: it requires a declared resource type, and the reserved type `*` can never be declared (found
+      by TASK-588's close review, 2026-10-14). Add `RevokeAdminAsync(caller, user, tenant?)`. Only an admin may
+      call it, and removing the **last** admin in scope is refused, the same rule as the last owner.
 - [ ] Redemption is safe under concurrency: the same invitation redeemed twice at once produces one grant.
 - [ ] Tests:
       - invitation verified / unverified / unverified + explicit token / expired / reused / revoked /

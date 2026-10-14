@@ -557,6 +557,44 @@ The plaintext secret is shown only at registration; subsequent `GetAsync` calls 
 - **OpenID Connect** — `id_token`, UserInfo endpoint, discovery document. A separate `Birko.Security.OIDC.Server` is planned.
 - **SAML 2.0** — different protocol entirely.
 
+## Per-Resource Access Grants (Birko.Security.Grants)
+
+Global roles and permission strings answer "may this user edit presentations?". `Birko.Security.Grants` answers
+"may this user edit **this** presentation?": owners, editors and viewers of one resource, or of every resource of a
+type, optionally bound to a tenant. Pure library: no ASP.NET dependency, persistence through `Birko.Data.Stores`.
+
+```csharp
+using Birko.Security.Grants;
+using Birko.Security.Grants.Services;
+
+var table = new GrantOptions()
+    .DefineRole("owner", "read", "edit", "delete", "share")
+    .DefineRole("editor", "read", "edit")
+    .DefineRole("viewer", "read")
+    .ResourceType("presentation", ResourceVisibility.Public)   // anyone may read: a denied write is 403
+    .ResourceType("draft")                                      // Granted (default): no read grant means 404
+    .Build();
+
+IGrantService grants = new GrantService(grantStore, table, new SystemDateTimeProvider());
+
+await grants.GrantOwnerOnCreateAsync(creator, "presentation", id);           // the creator owns it
+await grants.GrantAsync(creator, colleague, "presentation", id, "editor");   // owner shares it
+bool canEdit = await grants.CanAsync(colleague, "presentation", id, "edit"); // true
+```
+
+- **Undeclared names refuse.** A role, action or resource type missing from the table throws
+  `GrantConfigurationException`; it never quietly answers "no".
+- **Granting:** an admin, or a holder of the share action whose own actions cover the role granted (and the role
+  replaced). Otherwise `GrantRefusedException` with `Grant.NotAuthorized` or `Grant.Escalation`.
+- **A resource never loses its last owner** (`Grant.LastOwner`). Writes on one resource are serialised in-process,
+  and a recount after the write covers several processes: it is a compensation, not a transaction, so for a moment a
+  concurrent revoke can see zero owners before the grant is put back.
+- **Tenant:** every call takes the tenant explicitly. A tenant-bound grant applies only in its tenant; an untenanted
+  grant applies everywhere.
+- **Revocation is immediate:** nothing is cached.
+
+Invitations and bootstrap admins: TASK-589. `RequireGrant` and the ASP.NET wiring: TASK-590.
+
 ## See Also
 
 - [Birko.Security](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security)
@@ -564,6 +602,7 @@ The plaintext secret is shown only at registration; subsequent `GetAsync` calls 
 - [Birko.Security.AspNetCore](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.AspNetCore)
 - [Birko.Security.BCrypt](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.BCrypt)
 - [Birko.Security.OAuth.Server](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.OAuth.Server)
+- [Birko.Security.Grants](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.Grants)
 - [Birko.Security.Vault](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.Vault)
 - [Birko.Security.Vault.Configuration](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security.Vault.Configuration)
 - [Birko.Communication.OAuth](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Communication.OAuth) — client-side flows (companion to the server)

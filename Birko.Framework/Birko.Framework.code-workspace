@@ -593,6 +593,10 @@
 			"path": "../Birko.Security.BCrypt"
 		},
 		{
+			"name": "Security / Birko.Security.Grants",
+			"path": "../Birko.Security.Grants"
+		},
+		{
 			"name": "Security / Birko.Security.Jwt",
 			"path": "../Birko.Security.Jwt"
 		},
@@ -1195,6 +1199,10 @@
 		{
 			"name": "Tests / Birko.Security.BCrypt.Tests",
 			"path": "../tests/Birko.Security.BCrypt.Tests"
+		},
+		{
+			"name": "Tests / Birko.Security.Grants.Tests",
+			"path": "../tests/Birko.Security.Grants.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.Jwt.Tests",

@@ -3,7 +3,7 @@ id: TASK-588
 parent: STORY-062
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: in-progress
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P1
 assignee: ai
@@ -39,33 +39,33 @@ codes).
 
 ## Acceptance criteria
 
-- [ ] New shared project `Birko.Security.Grants` (`.shproj` + `.projitems`, `CLAUDE.md`, `README.md`),
+- [x] New shared project `Birko.Security.Grants` (`.shproj` + `.projitems`, `CLAUDE.md`, `README.md`),
       scaffolded via `/new-birko-subproject`. It is registered in `Birko.Framework.slnx`, `.code-workspace`
       and the aggregator `.csproj`, and in `CLAUDE-projects.md` (catalog + a new Security block in
       § Dependency Flow). Dependencies: Data.Core, Data.Stores, Time.Abstractions only (story decision 1).
-- [ ] `ResourceGrant` model (`AbstractModel`): `UserGuid`, `ResourceType`, `ResourceId?` (**null = all
+- [x] `ResourceGrant` model (`AbstractModel`): `UserGuid`, `ResourceType`, `ResourceId?` (**null = all
       resources of that type**), `Role`, `TenantGuid?`, `GrantedBy?`, `CreatedAt`. Persisted through
       `IResourceGrantStore : IAsyncBulkStore<ResourceGrant>` (any backend).
-- [ ] Roles map to actions through a declared, consumer-configurable `GrantRoleTable`, for example
+- [x] Roles map to actions through a declared, consumer-configurable `GrantRoleTable`, for example
       `owner` → `read, edit, delete, share`. An undeclared role or action **refuses** with
       `GrantConfigurationException`, never silently grants or denies. `*` is reserved.
-- [ ] Each resource type is declared with its visibility,
+- [x] Each resource type is declared with its visibility,
       `GrantOptions.ResourceType(name, Visibility.Public | Visibility.Granted)`, defaulting to `Granted`.
       An undeclared resource type refuses with `GrantConfigurationException` (story decision 2b).
       Visibility does not change what `CanAsync` returns; it is read by TASK-590's filter to pick 403 or 404.
-- [ ] `IGrantService.CanAsync(user, resourceType, resourceId, action, tenant?)` is true when a type-wide
+- [x] `IGrantService.CanAsync(user, resourceType, resourceId, action, tenant?)` is true when a type-wide
       grant or a grant on that exact id allows the action, or when the `IGrantAdminSource` says admin
       (story decisions 6–7). It is never cached. Also `ListResourcesAsync` and `ListGranteesAsync`
       (decision 13).
-- [ ] `GrantAsync` / `RevokeAsync`: only an admin or a caller who can `share` may grant. Nobody grants a
+- [x] `GrantAsync` / `RevokeAsync`: only an admin or a caller who can `share` may grant. Nobody grants a
       role whose actions exceed their own on that resource, and revoke checks the target's role the same
       way. Revoking or demoting the **last owner** refuses, including under two concurrent revokes
       (decisions 8–9). Re-grant replaces, never duplicates.
-- [ ] `GrantOwnerOnCreateAsync(user, resourceType, resourceId, tenant?)` makes the creator the owner. It
+- [x] `GrantOwnerOnCreateAsync(user, resourceType, resourceId, tenant?)` makes the creator the owner. It
       is idempotent and refuses a null id (decision 10).
-- [ ] Tenant: a grant with `TenantGuid` applies only in that tenant, and a check with a tenant in scope
+- [x] Tenant: a grant with `TenantGuid` applies only in that tenant, and a check with a tenant in scope
       never matches another tenant's grant. Untenanted grants match everywhere (decision 5, rules 38/39).
-- [ ] Tests in new `tests/Birko.Security.Grants.Tests` (xUnit + FluentAssertions, InMemory stores):
+- [x] Tests in new `tests/Birko.Security.Grants.Tests` (xUnit + FluentAssertions, InMemory stores):
       - the table's refusals;
       - global vs per-resource allow, and deny on another id;
       - reserved admin grant;
@@ -79,7 +79,7 @@ codes).
 
 - Invitations, bootstrap admins, sign-in: [[TASK-589]].
 - `RequireGrant`, resolver decorator, DI, README wiring, Recent Updates: [[TASK-590]].
-- Running the scoped predicates against a SQL backend: the story's first risk; spawn when this lands.
+- Running the scoped predicates against a SQL backend → deferred to [[TASK-593]] (the story's first risk).
 
 ## Human test plan
 
