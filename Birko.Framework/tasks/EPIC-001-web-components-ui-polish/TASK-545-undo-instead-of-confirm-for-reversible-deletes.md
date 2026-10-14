@@ -3,7 +3,7 @@ id: TASK-545
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: in-progress
+status: verify
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P3
 assignee: ai
@@ -47,20 +47,20 @@ worse than no setting.
 
 ## Acceptance criteria
 
-- [ ] `toast` accepts an **action** (`{ label, onClick }`) on both `show` and `notify` paths; it renders as a real
+- [x] `toast` accepts an **action** (`{ label, onClick }`) on both `show` and `notify` paths; it renders as a real
       `<button>` beside the message, clicking it runs the callback and dismisses the toast
-- [ ] A toast with an action is reachable and operable from the keyboard, is announced to screen readers
+- [x] A toast with an action is reachable and operable from the keyboard, is announced to screen readers
       (live region carries the action's existence), and **does not auto-dismiss while it holds focus or hover**
-- [ ] Action label is translatable — the default Undo text lives in the `bwc.*` key tree, not hard-coded
-- [ ] `base-crud-page` (and through it `base-list-page`, `base-split-page`) gains an **opt-in** undo-delete mode:
+- [x] Action label is translatable — the default Undo text lives in the `bwc.*` key tree, not hard-coded
+- [x] `base-crud-page` (and through it `base-list-page`, `base-split-page`) gains an **opt-in** undo-delete mode:
       the page supplies a restore function; delete runs at once, the row leaves the view, and a toast offers Undo
       that calls the restore and refreshes. **Default stays the confirm dialog** — no existing page changes
-- [ ] A page that opts in without supplying a restore function **fails loudly** (throws at setup), never silently
+- [x] A page that opts in without supplying a restore function **fails loudly** (throws at setup), never silently
       falls back to an Undo that cannot undo
-- [ ] A restore that fails (non-2xx) shows an error toast; the row does not reappear as if it had been restored
-- [ ] Tests: toast action click / keyboard / focus-holds-open; base page in both modes; the missing-restore guard;
+- [x] A restore that fails (non-2xx) shows an error toast; the row does not reappear as if it had been restored
+- [x] Tests: toast action click / keyboard / focus-holds-open; base page in both modes; the missing-restore guard;
       the failed-restore path
-- [ ] `Birko.Web.Components/CLAUDE.md` and `Birko.Web.Shell/CLAUDE.md` document the action option and the opt-in,
+- [x] `Birko.Web.Components/CLAUDE.md` and `Birko.Web.Shell/CLAUDE.md` document the action option and the opt-in,
       including *when not to use it* (hard deletes, money, permissions — keep the confirm)
 
 ## Out of scope
@@ -73,6 +73,10 @@ worse than no setting.
   (tab closed mid-window); only if a consumer without soft-delete asks for it
 
 ## Human test plan
+
+Automated: Playground `undo-delete-smoke` 41/41 and `keyboard-check` 27/27 (10 new, trusted input), `verify.mjs` and
+`entry-points-check` green; the guard, the focus/hover pause and the keyboard-only focus move each proven red by
+breaking them. What is left needs a real backend and a screen reader:
 
 - [ ] In a consumer page with the opt-in: delete a row, click Undo — the row is back, and a reload confirms it
       was restored server-side, not just redrawn
@@ -112,3 +116,13 @@ Drafted at pick, 2026-10-14. Code lands in `Birko\Web` (one commit), the smoke s
    Prove a guard red by reverting it once.
 4. **Docs**: Components `CLAUDE.md` / `README.md` / `API.md` (action option), Shell `CLAUDE.md` / `README.md`
    (opt-in, and when not to use it), `locales/en.json`.
+
+## Progress log
+
+- 2026-10-14 — Built. Web `7b5d213` (b-toast action + pause; base-crud-page `deleteMode`/`restoreDeleted`; docs;
+  `bwc.common.undo`, `bws.common.restored`), Playground `d1969ec` (smoke + keyboard-check). Not pushed or tagged: the
+  Web repo tags on push (its CLAUDE.md § Versioning), so this rides the next release.
+- Behaviour change for **every** toast, recorded here because it is wider than the opt-in: dismissal now pauses while
+  a toast is hovered or holds focus, and resumes with what was left (never under 1 s). `show()` / `notify()` return the
+  item instead of `void`, which no caller can observe.
+- Spawned [[TASK-597]]: the toast's `message` and `icon` are rendered as HTML, and pages pass server error text to it.
