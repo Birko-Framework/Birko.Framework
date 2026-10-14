@@ -15,9 +15,9 @@ which this regeneration never touches._
 | planned      | 11    | 28      | —     |
 | todo         | —     | —       | 196   |
 | in-progress  | 8     | 11      | 0     |
-| verify       | —     | —       | 1     |
+| verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 249   |
+| done         | 1     | 23      | 250   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -28,17 +28,13 @@ which this regeneration never touches._
 
 _None._
 
-## Awaiting verification
-
-- [ ] [TASK-579](EPIC-001-web-components-ui-polish/TASK-579-b-rating.md) `b-rating` — a form-associated star-rating input (P2)
-
 ## Blocked
 
 - [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) — `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3, ai) ⚠ blocked: on an external condition, not on another task
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (32/44 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (33/44 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -63,7 +59,7 @@ _None._
   - [x] [TASK-564](EPIC-001-web-components-ui-polish/TASK-564-per-component-entry-points.md) A consumer can't import just the components it uses: the only entry points are whole barrels (P2)
   - [x] [TASK-568](EPIC-001-web-components-ui-polish/TASK-568-modal-focus-trap-ignores-slotted-content.md) b-modal's focus trap ignores slotted content, so Tab is stuck on Close (P1)
   - [x] [TASK-573](EPIC-001-web-components-ui-polish/TASK-573-modal-open-refocuses-when-already-open.md) b-modal's open() on an already-open modal steals focus and forgets the opener (P1)
-  - [ ] [TASK-579](EPIC-001-web-components-ui-polish/TASK-579-b-rating.md) `b-rating` — a form-associated star-rating input (P2) · FEATURE-001
+  - [x] [TASK-579](EPIC-001-web-components-ui-polish/TASK-579-b-rating.md) `b-rating` — a form-associated star-rating input (P2) · FEATURE-001
   - [ ] [TASK-591](EPIC-001-web-components-ui-polish/TASK-591-playground-aliases-per-component-paths.md) The Playground cannot import a component by its own path: its alias map predates TASK-564 (P3) · FEATURE-001
   - [ ] [TASK-580](EPIC-001-web-components-ui-polish/TASK-580-b-modal-title-as-heading.md) `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading (P3) · FEATURE-001
   - [x] [TASK-582](EPIC-001-web-components-ui-polish/TASK-582-page-tour-button-beside-the-title.md) `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group (P3) · FEATURE-001

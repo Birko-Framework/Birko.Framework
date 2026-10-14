@@ -3,12 +3,12 @@ id: TASK-579
 parent: EPIC-001
 feature: FEATURE-001
 priority: P2
-status: verify
+status: done
 assignee: ai
 created: 2026-10-12
 depends-on: []
 blocks: []
-pr: null  # Birko.Web ddef16e, Playground 75bd14d (not pushed; ships in v0.1.4)
+pr: null  # Birko.Web ddef16e, shipped in v0.1.4; Playground 75bd14d
 github-issue: null
 jira-key: null
 ---
@@ -43,8 +43,11 @@ No rating control exists in `Birko.Web.Components` today; `b-radio` is the neare
 
 ## Human test plan
 
-- [ ] Rate with the keyboard only, then with a screen reader (NVDA or Narrator): each star is announced with its
+- [x] Rate with the keyboard only, then with a screen reader (NVDA or Narrator): each star is announced with its
       position, and the chosen value is announced on change
+  - **Passed 2026-10-14:** the user tested the published Playground (Birko.Web v0.1.4, Inputs → Rating): keyboard only
+    (one tab stop, arrows, Home/End), a screen reader (each star "n of 5", the value announced on change), and the
+    size, disabled and finstat theme variants.
 
 ## Implementation plan
 
@@ -98,3 +101,5 @@ Drafted 2026-10-13 at pick. Code in `Birko\Web` (`Birko.Web.Components/src/input
   - Spawned TASK-591: the Playground's alias map predates TASK-564, so a smoke cannot import a component by its own path.
   - **Status `verify`:** the human test plan (keyboard, then NVDA or Narrator) is not run. The reviewer flagged
     `aria-required` on the group plus `required` on each radio as a possible double "required"; listen for it then.
+- 2026-10-14 — Shipped in Birko.Web v0.1.4 (pushed; Pages run 38520833926 green). The user signed off the human test
+  plan on the published Playground. Done. The storefront (builds from Birko.Web `main`) can take TASK-012 and TASK-025.

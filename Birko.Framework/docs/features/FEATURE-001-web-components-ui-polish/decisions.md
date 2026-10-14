@@ -66,3 +66,4 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-10-13 — D7: TASK-584 spawned from TASK-582 and done (a Playground smoke raced `b-input`'s ResizeObserver; FIELD-030). No state change.
 - 2026-10-13 — D7: TASK-582 done, shipped in Birko.Web v0.1.3 and signed off on the published Playground. No state change.
 - 2026-10-13 — D7: TASK-591 spawned from TASK-579 (the Playground alias map predates the per-component entry points). No state change.
+- 2026-10-14 — D7: TASK-579 done, shipped in Birko.Web v0.1.4 and signed off on the published Playground. No state change.

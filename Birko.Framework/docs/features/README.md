@@ -29,7 +29,7 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 
 | Feature | Title | Phase | Decisions (a/c/d/r/p) | Tasks | Prototype | Source |
 |---------|-------|-------|-----------------------|-------|-----------|--------|
-| [FEATURE-001](FEATURE-001-web-components-ui-polish/) | Birko.Web.Components — UI polish | building | 7/0/0/0/**1** | 20/31 | n/a (backfilled) | [EPIC-001](../../tasks/EPIC-001-web-components-ui-polish/EPIC.md) |
+| [FEATURE-001](FEATURE-001-web-components-ui-polish/) | Birko.Web.Components — UI polish | building | 7/0/0/0/**1** | 21/31 | n/a (backfilled) | [EPIC-001](../../tasks/EPIC-001-web-components-ui-polish/EPIC.md) |
 | [FEATURE-002](FEATURE-002-birko-data-redis/) | Birko.Data.Redis | building | 1/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-002](../../tasks/EPIC-002-birko-data-redis/EPIC.md) |
 | [FEATURE-003](FEATURE-003-birko-caching-ncache/) | Birko.Caching.NCache | building | 1/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-003](../../tasks/EPIC-003-birko-caching-ncache/EPIC.md) |
 | [FEATURE-004](FEATURE-004-storage-cloud-providers/) | Birko.Storage — Cloud providers | building | 3/0/0/0/0 | 0/3 | n/a (backfilled) | [EPIC-004](../../tasks/EPIC-004-storage-cloud-providers/EPIC.md) |

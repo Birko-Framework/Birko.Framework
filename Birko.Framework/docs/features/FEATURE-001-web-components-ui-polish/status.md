@@ -21,7 +21,7 @@ generated: 2026-10-13
 
 ## Build progress
 
-20 / 31 tasks done.
+21 / 31 tasks done.
 
 - [x] TASK-001 Add `bare` attribute to all form controls
 - [x] TASK-002 Benchmark + migrate b-editable-table to bare components
@@ -48,7 +48,7 @@ generated: 2026-10-13
 - [x] TASK-495 `b-file-upload` and `b-date-range-picker` drop the field's label from their accessible names
 - [x] TASK-496 Picker inputs don't announce their popup, and `b-select`'s clear button has no name
 - [x] TASK-497 `b-range` in range mode draws its thumbs below the track
-- [ ] TASK-579 `b-rating` — a form-associated star-rating input
+- [x] TASK-579 `b-rating` — a form-associated star-rating input
 - [ ] TASK-580 `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading
 - [x] TASK-582 `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group
 - [ ] TASK-583 `base-list-page` cannot refresh when another user changes its entities
