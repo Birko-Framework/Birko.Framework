@@ -333,22 +333,6 @@ selected exactly the rows it meant to exclude. Both now negate **by De Morgan, d
 around the combined group, which would invert an unevaluable leaf's match-none into match-all. The other two
 translators: [[TASK-558]], [[TASK-559]].
 
-### The in-memory store refuses a duplicate create; StoreLocator refuses colliding settings (2026-10-11)
-
-[[TASK-163]]. In-memory `Create` of a stored key throws `StoreException` (it upserted, so the canonical test double
-passed code a primary key would reject); an update cannot resurrect a concurrently deleted entity. `StoreLocator`
-serves async stores and **throws on a hit whose settings differ outside `GetId()`** (a password, a token) instead of
-handing back the first caller's store. `IsStoreOfType` sees through any wrapper depth. Migration in
-[CHANGELOG.md](CHANGELOG.md); the cross-provider halves are [[TASK-555]]–[[TASK-557]].
-
-### BREAKING: orchestration plans gain behaviour; status enums pinned (2026-10-11)
-
-[[TASK-528]]. `ImplementationPlan` / `ImplementationStep` gain lifecycle, `RetryOrFail`, the current step,
-per-worker assignment and metrics. `StepDependencyAnalyzer` gains `ValidateOrdering` / `Reorder`, and the new
-`Validation/` validators check `ExpectedContent`. **Status enums are renumbered to DraCode's values and pinned**
-(`StepStatus.Skipped` 3 / `Failed` 4; `PlanStatus` gains `Ready` 1): never renumber them. The migration and the
-DraCode mapping are in [CHANGELOG.md](CHANGELOG.md) and `Birko.AI.Orchestration/CLAUDE.md`.
-
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
