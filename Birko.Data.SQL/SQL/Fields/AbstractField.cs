@@ -184,6 +184,14 @@ namespace Birko.Data.SQL.Fields
         protected virtual object? ToStorage(object? raw) => raw;
 
         /// <summary>
+        /// The stored form of <paramref name="raw"/>, a value of this field's property that did not come from a model
+        /// instance. TASK-596: a filtered <c>PropertyUpdate</c> Set binds through here, so it stores what
+        /// <see cref="Write"/> stores. It bound the raw value before, which dropped a <c>[UtcField]</c>'s offset, and an
+        /// equality filter on the column then missed the row.
+        /// </summary>
+        public object? ToStoredValue(object? raw) => ToStorage(raw);
+
+        /// <summary>
         /// What this column holds for a property nobody assigned: <c>default(T)</c> of the property's
         /// underlying type, in stored form. Null for a reference type, and for a field with no CLR property
         /// (the migrations path).

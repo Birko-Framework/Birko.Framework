@@ -330,6 +330,35 @@ namespace Birko.Data.SQL
         }
 
         /// <summary>
+        /// TASK-596. The values a column is compared with are bound in the column's <b>stored</b> form, or the comparison
+        /// runs against a shape the column never holds. Measured on SQLite: <c>r.At == instant</c> on a <c>[UtcField]</c>
+        /// column bound <c>'2026-10-14 09:30:15.123'</c> against the stored <c>'2026-10-14 09:30:15.123+00:00'</c>, and
+        /// matched no row an entity had written. The column side of <paramref name="comparison"/> resolves to its
+        /// field, and every value goes through <see cref="Fields.AbstractField.ToStoredValue"/>, the one producer an
+        /// entity write and a <c>PropertyUpdate</c> Set also use.
+        /// </summary>
+        private static void StoreComparedValues(Conditions.Condition condition, BinaryExpression comparison, Type? exprType)
+        {
+            if (exprType == null || condition.Values == null || condition.SubConditions?.Any() == true)
+                return;
+            var field = ComparedField(comparison.Left, exprType) ?? ComparedField(comparison.Right, exprType);
+            if (field == null)
+                return;
+            condition.Values = condition.Values.Cast<object?>().Select(v => v == null ? null : field.ToStoredValue(v)).ToArray();
+        }
+
+        private static Fields.AbstractField? ComparedField(Expression side, Type exprType)
+        {
+            while (side is UnaryExpression { NodeType: ExpressionType.Convert } convert)
+                side = convert.Operand;
+            if (side is not MemberExpression member || !ContainsParameter(member))
+                return null;
+            var isParameterAccess = member.Expression?.NodeType == ExpressionType.Parameter
+                || (member.Expression is UnaryExpression { NodeType: ExpressionType.Convert } c && c.Operand.NodeType == ExpressionType.Parameter);
+            return isParameterAccess ? LoadTable(exprType)?.GetFieldByPropertyName(member.Member.Name) : null;
+        }
+
+        /// <summary>
         /// True when the filter is an <b>explicit</b> "every row" predicate — the caller-facing synonym for
         /// <c>DeleteAll()</c> / <c>UpdateAll(updates)</c> (SH-H002).
         /// </summary>
@@ -597,6 +626,7 @@ namespace Birko.Data.SQL
                         };
                         var left = ParseConditionExpression(binaryExpression.Left, basecondition, exprType);
                         var right = ParseConditionExpression(binaryExpression.Right, basecondition, exprType);
+                        StoreComparedValues(basecondition, binaryExpression, exprType);
                         if (parent != null)
                         {
                             var subs = parent.SubConditions as List<Condition> ?? new List<Condition>(parent.SubConditions ?? []);

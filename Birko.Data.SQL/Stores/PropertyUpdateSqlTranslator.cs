@@ -24,7 +24,8 @@ namespace Birko.Data.SQL.Stores
                 var column = field.Name;
                 var parameter = Connectors.AbstractConnector.SetParameterName(column);
                 var (fragment, value) = assignment.Match(
-                    set => ($"{column} = {parameter}", set.Value),
+                    // Through the field's own conversion, exactly as an entity write (TASK-596).
+                    set => ($"{column} = {parameter}", field.ToStoredValue(set.Value)),
                     increment => ($"{column} = {connector.IncrementExpression(field, column, parameter)}", (object?)increment.Delta));
                 fields.Add(i, fragment);
                 values.Add(parameter, value ?? DBNull.Value);

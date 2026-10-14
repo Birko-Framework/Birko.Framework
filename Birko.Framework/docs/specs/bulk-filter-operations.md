@@ -1298,6 +1298,25 @@ be non-virtual while their `*Core` counterparts are `virtual` with a working def
   by calling `RequireFilter` and `RequireBoundedFilter` itself, since these three are the public methods
   and the guards live in them rather than in a `*Core`
 
+### Requirement: A filtered PropertyUpdate Set stores what an entity write stores
+
+On a SQL bulk store, `UpdateAsync(filter, PropertyUpdate)` / `Update(filter, PropertyUpdate)` SHALL bind each Set's
+value through the target field's `ToStoredValue`, the same `ToStorage` conversion an entity write goes through. It
+SHALL NOT bind the raw value. (TASK-596: a `[UtcField]` Set bound the raw `DateTime`, so the stored text lost its
+offset and an equality filter on the column missed the row.) An Increment / Decrement keeps going through the
+connector's `IncrementExpression`.
+
+#### Scenario: A UTC column set by PropertyUpdate is stored with its offset
+
+- **Given** `[UtcField] public DateTime At` on SQLite, and one row created with `At = 2026-10-14 09:30:15.123Z`
+- **And** a second row whose `At` is written by `UpdateAsync(r => r.Guid == id, new PropertyUpdate<T>().Set(r => r.At, sameInstant))`
+- **Then** both rows store `2026-10-14 09:30:15.123+00:00`, with the same storage class
+
+#### Scenario: Fields whose stored form is their CLR value are unaffected
+
+- **Given** a `TimeOnly`, an enum, a `decimal` and a plain `DateTime` set both ways
+- **Then** each column stores the same value and storage class either way, as it did before
+
 ### Requirement: Cancellation tokens flow through every async bulk path
 
 The system SHALL accept a `CancellationToken` on every async bulk operation, default it to `default`,

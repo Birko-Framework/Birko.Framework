@@ -14,10 +14,10 @@ which this regeneration never touches._
 |--------------|-------|---------|-------|
 | planned      | 10    | 27      | —     |
 | todo         | —     | —       | 194   |
-| in-progress  | 8     | 11      | 1     |
+| in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 0     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 24      | 256   |
+| done         | 2     | 24      | 257   |
 | cancelled    | 0     | 0       | 5     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -26,7 +26,7 @@ which this regeneration never touches._
 
 ## In progress now
 
-- [TASK-596](_loose/TASK-596-propertyupdate-set-skips-field-storage-conversion.md) A filtered `PropertyUpdate.Set` on SQL binds the raw value, skipping the field's storage conversion (P2, ai)
+_None._
 
 ## Blocked
 
@@ -570,7 +570,7 @@ which this regeneration never touches._
 - [x] [TASK-586](_loose/TASK-586-template-engine-value-encoding-hook.md) `ITemplateEngine` has no way to encode a merged value for the template's target format (P3)
 - [ ] [TASK-587](_loose/TASK-587-html-only-mail-inline-image-not-related.md) An HTML-only mail puts its inline image beside the HTML, where `cid:` has no defined resolution (P3)
 - [ ] [TASK-595](_loose/TASK-595-fluent-hasindex-is-applied-by-nothing.md) Fluent `HasIndex` is applied by nothing, so `Birko.Models.Users.SQL`'s lookup indexes likely exist on no database (P2)
-- [ ] [TASK-596](_loose/TASK-596-propertyupdate-set-skips-field-storage-conversion.md) A filtered `PropertyUpdate.Set` on SQL binds the raw value, skipping the field's storage conversion (P2)
+- [x] [TASK-596](_loose/TASK-596-propertyupdate-set-skips-field-storage-conversion.md) A filtered `PropertyUpdate.Set` on SQL binds the raw value, skipping the field's storage conversion (P2)
 
 ## Completed
 

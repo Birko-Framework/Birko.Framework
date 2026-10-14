@@ -1952,6 +1952,26 @@ otherwise.
 - **When** `InvokeExpression` runs
 - **Then** only `g1` and `g2` survive, and an all-null collection materialises empty
 
+### Requirement: A value compared with a SQL column is bound in the column's stored form
+
+When `ParseConditionExpression` builds a comparison (`==`, `!=`, `<`, `<=`, `>`, `>=`) between a mapped property and
+a value, each value SHALL pass through that property's field `ToStoredValue`. That holds whichever side the
+property is on. A comparison therefore runs against the shape the column actually holds. (TASK-596: a
+`[UtcField]` filter bound the raw `DateTime` against stored offset text, so `r.At == instant` matched no row an
+entity had written.)
+
+#### Scenario: An equality filter on a UTC column finds rows written either way
+
+- **Given** two rows with the same `[UtcField]` instant, one created as an entity and one set by `PropertyUpdate`
+- **When** filtering `r => r.At == instant`, or `r => instant == r.At`
+- **Then** both rows are returned
+
+#### Scenario: A range on a UTC column
+
+- **Given** the same two rows
+- **When** filtering `r => r.At > instant.AddMinutes(-1) && r.At < instant.AddMinutes(1)`
+- **Then** both rows are returned, and `r => r.At > instant.AddMinutes(1)` returns none
+
 ### Requirement: An expression node the SQL parser cannot claim is refused, not parsed into nothing
 
 `DataBase.ParseConditionExpression` SHALL refuse an expression node for which it has no branch, throwing
