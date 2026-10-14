@@ -601,6 +601,10 @@
 			"path": "../Birko.Security.Grants.AspNetCore"
 		},
 		{
+			"name": "Security / Birko.Security.Grants.SQL",
+			"path": "../Birko.Security.Grants.SQL"
+		},
+		{
 			"name": "Security / Birko.Security.Jwt",
 			"path": "../Birko.Security.Jwt"
 		},
@@ -1207,6 +1211,10 @@
 		{
 			"name": "Tests / Birko.Security.Grants.Tests",
 			"path": "../tests/Birko.Security.Grants.Tests"
+		},
+		{
+			"name": "Tests / Birko.Security.Grants.SQL.Tests",
+			"path": "../tests/Birko.Security.Grants.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.Jwt.Tests",

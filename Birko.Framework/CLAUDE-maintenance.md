@@ -278,7 +278,7 @@ Existing folder groups:
 - **Helpers/** — Birko.Helpers, Birko.Structures, Birko.Random
 - **Models/** — Birko.Models.*
 - **Redis/** — Birko.Redis
-- **Security/** — Birko.Security, Birko.Security.Jwt/AspNetCore/BCrypt/Vault/AzureKeyVault/NFC/OAuth.Server/Grants/Grants.AspNetCore
+- **Security/** — Birko.Security, Birko.Security.Jwt/AspNetCore/BCrypt/Vault/AzureKeyVault/NFC/OAuth.Server/Grants/Grants.AspNetCore/Grants.SQL
 - **Serialization/** — Birko.Serialization, .Newtonsoft, .MessagePack, .Protobuf, .Yaml
 - **Storage/** — Birko.Storage, Birko.Storage.AzureBlob
 - **Telemetry/** — Birko.Telemetry, Birko.Telemetry.OpenTelemetry

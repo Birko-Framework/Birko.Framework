@@ -415,6 +415,7 @@ areas:
       - ../Birko.Security.Vault.Configuration/**/*.cs
       - ../Birko.Security.AzureKeyVault/**/*.cs
       - ../Birko.Security.Grants/**/*.cs
+      - ../Birko.Security.Grants.SQL/**/*.cs
       - ../Birko.Security.AspNetCore/Authentication/*.cs
       - ../Birko.Security.AspNetCore/Authorization/*.cs
       - ../Birko.Security.AspNetCore/User/*.cs

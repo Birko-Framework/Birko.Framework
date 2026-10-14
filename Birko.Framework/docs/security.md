@@ -616,6 +616,18 @@ app.MapPut("/presentations/{id}", ...).RequireGrant("presentation", "edit");
   carrying the provider's raw subject.
 - The end-to-end external-login wiring is in the project README.
 
+### SQL backends (Birko.Security.Grants.SQL)
+
+Schemaless stores need nothing. On SQL, register the mappings once, then ensure the tables and lookup indexes:
+
+```csharp
+GrantSqlMappings.Register(new ModelMapRegistry()).ApplyToDatabase();
+await GrantSqlIndexes.EnsureAsync(grantStore, invitationStore, c => new SqLiteIndexManager(c));
+```
+
+`SqlResourceGrantStore<DB>` / `SqlInvitationStore<DB>` work on any provider. Pass that provider's index manager:
+the base `SqlIndexManager` speaks only MySQL's `information_schema`.
+
 ## See Also
 
 - [Birko.Security](https://github.com/Birko-Framework/Birko.Framework/tree/main/Birko.Security)

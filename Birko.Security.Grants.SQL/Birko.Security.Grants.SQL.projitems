@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>65f50e43-17bc-4bb1-b8f8-ca5fa0025e19</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Security.Grants.SQL</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)GrantSqlMappings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrantSqlIndexes.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\ResourceGrantMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\InvitationMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\SqlGrantStores.cs" />
+  </ItemGroup>
+</Project>

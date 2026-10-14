@@ -247,7 +247,7 @@ on any store. Undeclared roles, actions or types throw. Grant and revoke need `s
 owner can't be removed (in-process lock + post-write recount). [[TASK-589]] adds email invitations, redeemed only
 when the provider says the email is verified (**never** `UserLogin.IsVerified`), and bootstrap admins listed as
 `provider:subject`. [[TASK-590]]: `Birko.Security.Grants.AspNetCore`, with `RequireGrant`. A denial is 403 if the caller
-can read the resource, otherwise 404 (**rule 65**, also `OwnedCrudResults`' 404).
+can read the resource, otherwise 404 (**rule 65**, also `OwnedCrudResults`' 404). [[TASK-594]]: `.SQL` mappings + `GrantSqlIndexes`.
 
 ### A template engine can encode merged values, per call (2026-10-13)
 

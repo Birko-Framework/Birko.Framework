@@ -3,7 +3,7 @@ id: TASK-594
 parent: STORY-062
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: in-progress
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -43,22 +43,25 @@ index that is silently dropped (rule 51).
 
 ## Acceptance criteria
 
-- [ ] New shared project `Birko.Security.Grants.SQL` (`.shproj` + `.projitems`, `CLAUDE.md`, `README.md`), with
+- [x] New shared project `Birko.Security.Grants.SQL` (`.shproj` + `.projitems`, `CLAUDE.md`, `README.md`), with
       `IModelMapping<ResourceGrant>` and `IModelMapping<Invitation>`. Its dependencies are Grants + Birko.Models.SQL,
       following `Birko.Models.Users.SQL`. It is registered in `.slnx`, `.code-workspace`, the aggregator `.csproj`,
       `CLAUDE-projects.md` (catalog + Dependency Flow), `README.md` and `docs/security.md`.
-- [ ] Measured on SQLite: after registering the mappings and calling `ApplyToDatabase`, an `AsyncSQLiteStore<ResourceGrant>`
+- [x] Measured on SQLite: after registering the mappings and calling `ApplyToDatabase`, an `AsyncSQLiteStore<ResourceGrant>`
       and an `AsyncSQLiteStore<Invitation>` create their tables with **every** model property as a column, and a written
       grant and invitation read back field for field: nullable Guids, the nullable `DateTime`s, and `Email`.
-- [ ] Table names are namespaced so they cannot collide with an app's own tables, e.g. `BirkoResourceGrants` /
+- [x] Table names are namespaced so they cannot collide with an app's own tables, e.g. `BirkoResourceGrants` /
       `BirkoInvitations`; the README states them.
-- [ ] Whatever the mapping declares is applied, or not declared. Each index or length either reaches the DDL
+- [x] Whatever the mapping declares is applied, or not declared. Each index or length either reaches the DDL
       (asserted against `sqlite_master`), or is absent with a line saying why. A fluent-API gap found here is spawned
       against `Birko.Models.SQL`.
-- [ ] A thin store pair a SQL consumer can register as the grants stores (e.g. `SqlResourceGrantStore :
+      _Measured: `IsRequired` and `IsUnique` are applied, but the fluent `HasIndex` is applied by nothing → [[TASK-595]]
+      (FIELD-033). The three lookup indexes are created through the provider's `IIndexManager`
+      (`GrantSqlIndexes.EnsureAsync`), and asserted with `PRAGMA index_info`._
+- [x] A thin store pair a SQL consumer can register as the grants stores (e.g. `SqlResourceGrantStore :
       AsyncSQLiteStore<…>, IResourceGrantStore`), or a documented one-liner per provider. Chosen and stated in the
       README with the registration code.
-- [ ] Tests (a new `tests/Birko.Security.Grants.SQL.Tests` with the SQLite imports, kept out of the dependency-light
+- [x] Tests (a new `tests/Birko.Security.Grants.SQL.Tests` with the SQLite imports, kept out of the dependency-light
       `Birko.Security.Grants.Tests`): table and column creation, round trip, and the DDL assertions.
 
 ## Out of scope
