@@ -2,7 +2,7 @@
 id: TASK-526
 parent: STORY-059
 feature: null
-status: todo
+status: in-progress
 priority: P3
 assignee: ai
 created: 2026-10-07
@@ -38,3 +38,12 @@ Consumer side: DraCode `EPIC-018 / STORY-039` (`Consumers/DraCode/tasks/EPIC-018
 N/A — covered by unit tests.
 
 ## Implementation plan
+
+Drafted at pick, 2026-10-14.
+
+1. `Birko.Web.Core/src/config/runtime-config.ts`: `new RuntimeConfig<T>({ defaults, storageKey?, fetchServer? |
+   serverUrl?, secretKeys?, storage? })`. `get()` returns a merged snapshot (defaults < server < local); `load()`
+   fetches the server layer (non-fatal, returns false, retryable); `set(partial)` writes the local layer; `reset(keys?)`
+   clears it; `onChange(fn)`. Only keys the defaults declare, with the default's type, are taken from the server or
+   storage. `secretKeys` are held in memory only, never written, and a stored copy is scrubbed on load.
+2. Playground smoke with a fake Storage and a fake server fetch.

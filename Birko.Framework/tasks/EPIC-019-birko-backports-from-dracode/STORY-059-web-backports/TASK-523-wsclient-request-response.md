@@ -2,7 +2,7 @@
 id: TASK-523
 parent: STORY-059
 feature: null
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-10-07
@@ -40,3 +40,15 @@ Consumer side: DraCode `EPIC-018 / STORY-039` (`Consumers/DraCode/tasks/EPIC-018
 N/A — covered by unit tests.
 
 ## Implementation plan
+
+Drafted at pick, 2026-10-14. DraCode's server replies `{ id, type: 'response', data }` / `{ id, type: 'error',
+error }` (`WebSocketCommandHandler.cs`), id at the envelope's top level; its client reads the id from inside `data`,
+so it never matches. So correlation is on the envelope.
+
+1. `WsClientOptions.requestIdField` (default `'id'`). `request<T>(type, data, { timeoutMs = 30000, errorTypes =
+   ['error'] })` sends `{ type, [idField]: id, data }`; `requestMessage<T>(body, opts)` sends any object with the id
+   added (DraCode's `{ id, command, data }`). A reply with that id resolves with its `data`, or rejects when its `type`
+   is an error type (message from `error` / `message`). Timeout rejects; a socket close or `disconnect()` rejects every
+   pending request; calling while not open rejects at once. A correlated reply is consumed; everything else is
+   dispatched as before.
+2. Playground smoke with a fake socket (the global `WebSocket` swapped only for the synchronous `connect()` call).
