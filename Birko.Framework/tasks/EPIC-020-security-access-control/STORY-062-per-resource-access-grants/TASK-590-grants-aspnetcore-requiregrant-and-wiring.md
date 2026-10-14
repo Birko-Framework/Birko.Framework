@@ -3,7 +3,7 @@ id: TASK-590
 parent: STORY-062
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P1
 assignee: ai
@@ -95,17 +95,26 @@ numeric id, Google's opaque string) doesn't parse and resolves **nothing**. The 
 
 ## Human test plan
 
-- [ ] In a scratch consumer wired per the README, sign in with GitHub as the configured bootstrap admin.
+- [x] In a scratch consumer wired per the README, sign in with GitHub as the configured bootstrap admin.
       Expected: the admin can create, edit and delete any resource. An anonymous browser can read, and
       every write returns 401.
-- [ ] Sign in as a second GitHub account with no grants. Expected: reads work, and writes return 403.
+      - **Passed 2026-10-14:** run with **Google** OIDC instead of GitHub (GitHub isn't OIDC, and its verified-email
+        signal needs TASK-521). Scratch app `Consumers/GrantsSmoke`; admin `frantisek.beren@finstat.sk` as bootstrap
+        `google:<sub>`. Admin create 201, edit 204, delete 204; anonymous GET 200, anonymous PUT / DELETE / POST 401.
+- [x] Sign in as a second GitHub account with no grants. Expected: reads work, and writes return 403.
       Invite that account's (verified) email as `owner` of one resource and sign in again. Expected: it
       can edit that resource and gets 403 on a different one.
-- [ ] Declare a second resource type as `Granted` (private). As the second account, with no grant, edit
+      - **Passed 2026-10-14:** B = `malybirko@gmail.com` (Google). Edit of A's deck 403; owner invitation
+        redeemed on the next verified sign-in; then that deck 204, the other deck 403.
+- [x] Declare a second resource type as `Granted` (private). As the second account, with no grant, edit
       one of its resources by id. Expected: 404, the same as for an id that does not exist. Give that
       account `viewer` on it and retry the edit. Expected: 403.
-- [ ] Revoke the grant while the second user is signed in. Expected: the very next write returns 403,
+      - **Passed 2026-10-14:** `draft` type. B editing A's draft 404, and a non-existent draft id 404, both with an
+        empty body; after a `viewer` invitation, 403 `{"required":"draft:edit"}`.
+- [x] Revoke the grant while the second user is signed in. Expected: the very next write returns 403,
       without signing out (no stale token).
+      - **Passed 2026-10-14:** A revoked B's ownership (`revoked: true`); B's very next edit, with the **same** token,
+        403.
 
 ## Implementation plan
 
