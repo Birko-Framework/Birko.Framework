@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Rules and validation: exact numbers, safe rule reloads, validated filtered updates (2026-10-15)
+
+[[TASK-156]]. In memory, distinct longs and decimals compared equal through double, and "007" equalled "7". Editing a
+`RuleSet` while it was evaluated threw; `Rules` is now a copy-on-write `RuleList`. `Range(-50, 150)` on a double threw,
+a nested `RuleFor` threw on a null parent, and the validating bulk store skipped validation on filtered updates.
 ### One rule-to-LINQ translator (2026-10-15)
 
 [[TASK-144]]. `RuleSpecification` had its own copy of `RuleExpressionConverter`, and the two drifted both ways. The
@@ -333,11 +338,6 @@ null-safe, as C# is. A `.Date` of one column against another throws `NotSupporte
 [[TASK-575]]. A reclaim updated `WHERE Status = Processing`, the status it writes, so two workers could both reclaim and
 run one job, and the Dead burial overwrote a job its slow worker had completed (both measured). Reclaim and burial now
 also require `LastAttemptAt < staleBefore`.
-### Birko.Health.Data.ElasticSearch: a health check for mapping drift (2026-10-15)
-
-[[TASK-624]]. New project. `ElasticSearchMappingDriftHealthCheck` runs one `DetectMappingDriftAsync` probe per store
-([[TASK-621]]): Degraded on drift or on a store it could not ask, Healthy only for what it verified. Its own project
-because `Birko.Health.Data` stays dependency-free.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using Birko.Rules;
 
@@ -53,8 +54,8 @@ public class RuleSpecification<T> : Specification<T> where T : class
     private static IRule WrapRuleSet(RuleSet ruleSet)
     {
         if (!ruleSet.IsEnabled)
-            return new RuleGroup(LogicOperator.And, new List<IRule>());
+            return new RuleGroup(LogicOperator.And);
 
-        return new RuleGroup(LogicOperator.And, ruleSet.Rules) { IsEnabled = ruleSet.IsEnabled };
+        return new RuleGroup(LogicOperator.And, ruleSet.Rules.Snapshot()) { IsEnabled = ruleSet.IsEnabled };
     }
 }

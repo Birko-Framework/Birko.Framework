@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Birko.Rules;
@@ -11,7 +12,17 @@ public class RuleSet
     public string Name { get; set; }
     public string? Description { get; set; }
     public bool IsEnabled { get; set; } = true;
-    public List<IRule> Rules { get; set; } = [];
+    /// <remarks>
+    /// SH-M370 (TASK-156): a <see cref="RuleList"/>, safe to edit while requests evaluate the set. Assigning a list copies
+    /// it, so later edits go through this property, not through the caller's original list.
+    /// </remarks>
+    public RuleList Rules
+    {
+        get => _rules;
+        set => _rules = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    private RuleList _rules = new();
 
     public RuleSet(string name)
     {
@@ -21,6 +32,6 @@ public class RuleSet
     public RuleSet(string name, params IRule[] rules)
     {
         Name = name;
-        Rules = new List<IRule>(rules);
+        Rules = new RuleList(rules);
     }
 }

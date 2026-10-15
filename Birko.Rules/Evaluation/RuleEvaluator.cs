@@ -46,7 +46,8 @@ public class RuleEvaluator : IRuleEvaluator
         if (!ruleSet.IsEnabled)
             return [];
 
-        return EvaluateMatches(ruleSet.Rules, context);
+        // SH-M370 (TASK-156): a snapshot, so a reload mutating the list does not throw mid-enumeration.
+        return EvaluateMatches(RuleExpressionConverter.Snapshot(ruleSet.Rules), context);
     }
 
     private static RuleResult EvaluateLeaf(Rule rule, IRuleContext context, bool negate)
@@ -79,7 +80,7 @@ public class RuleEvaluator : IRuleEvaluator
         // not apply to this member" must NOT invert to a match — that is how a string operator on an int
         // became "every row" on the expression side (SH-H043/SH-H044, TASK-116), and this engine had the
         // identical hole: `IsNegated ? !match : match` treated both kinds of false alike.
-        if (negated && ComparisonHelper.CanEvaluate(actual, rule.Operator))
+        if (negated && ComparisonHelper.CanEvaluate(actual, rule.Operator, rule.Value))
             match = !match;
 
         return match ? RuleResult.Match(rule, actual) : RuleResult.NoMatch(rule, actual);
@@ -105,7 +106,7 @@ public class RuleEvaluator : IRuleEvaluator
 
         if (conjunction)
         {
-            foreach (var child in group.Rules)
+            foreach (var child in RuleExpressionConverter.Snapshot(group.Rules))
             {
                 if (!child.IsEnabled)
                     continue;
@@ -121,7 +122,7 @@ public class RuleEvaluator : IRuleEvaluator
         }
         else // Or
         {
-            foreach (var child in group.Rules)
+            foreach (var child in RuleExpressionConverter.Snapshot(group.Rules))
             {
                 if (!child.IsEnabled)
                     continue;

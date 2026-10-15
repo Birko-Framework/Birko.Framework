@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Birko.Health.Data.ElasticSearch: a health check for mapping drift
+
+[[TASK-624]]. New project. `ElasticSearchMappingDriftHealthCheck` runs one `DetectMappingDriftAsync` probe per store
+([[TASK-621]]): Degraded on drift or on a store it could not ask, Healthy only for what it verified. Its own project
+because `Birko.Health.Data` stays dependency-free.
+
 ## 2026-10-15 — Schema drift reports a declared index the table lacks
 
 [[TASK-622]]. Drift compared columns only. Measured on all four SQL providers: a dropped index, or a unique one made plain,

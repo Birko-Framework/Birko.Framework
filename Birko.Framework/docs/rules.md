@@ -68,7 +68,7 @@ var negated = new Rule("Temperature", ComparisonOperator.GreaterThan, 100)
 | NotContains | String does not contain substring |
 | StartsWith | String starts with prefix |
 | EndsWith | String ends with suffix |
-| Like | SQL-style LIKE with % wildcards |
+| Like | `%` at the start and/or end only (`%x%`, `x%`, `%x`, `%`); an interior `%` matches nothing, and `_` is a literal |
 | In | Value is in a collection |
 | NotIn | Value is not in a collection |
 
@@ -190,7 +190,10 @@ result.Metadata     // optional metadata
 ## Type Handling
 
 ComparisonHelper handles type-safe comparisons:
-- **Numeric promotion**: int, long, float, double, decimal, short, byte all compare correctly across types
+- **Numeric promotion**: int, long, float, double, decimal, short, byte all compare correctly across types; two exact
+  numbers (integers, decimal) compare exactly, so large longs and high-precision decimals do not collide through double
+- **Text against a number**: a string is read as a number only when the other side is numeric; two strings compare as
+  text (`"007"` is not `"7"`)
 - **DateTime**: direct comparison
 - **IComparable**: fallback for custom types
 - **String**: case-insensitive comparison as last resort

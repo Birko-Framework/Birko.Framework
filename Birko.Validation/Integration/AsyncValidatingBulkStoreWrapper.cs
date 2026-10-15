@@ -28,22 +28,64 @@ public class AsyncValidatingBulkStoreWrapper<TStore, T> : AsyncValidatingStoreWr
 
     public async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
-        await ValidateBatchAndThrowAsync(data, ct);
-        await _innerStore.CreateAsync(data, storeDelegate, ct);
+        // SH-M374 (TASK-156): materialised once, so the entities validated are the entities written; a lazy sequence was
+        // enumerated twice (a single-pass one was validated, then written empty).
+        var items = data.ToList();
+        await ValidateBatchAndThrowAsync(items, ct);
+        await _innerStore.CreateAsync(items, storeDelegate, ct);
     }
 
     public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
-        await ValidateBatchAndThrowAsync(data, ct);
-        await _innerStore.UpdateAsync(data, storeDelegate, ct);
+        var items = data.ToList(); // SH-M374
+        await ValidateBatchAndThrowAsync(items, ct);
+        await _innerStore.UpdateAsync(items, storeDelegate, ct);
     }
 
+    /// <remarks>
+    /// SH-M373 (TASK-156): validated. It forwarded unvalidated, so switching from UpdateAsync(entities) to the filtered
+    /// form lost validation silently. The matches are read, changed, validated, and written as one collection update (one
+    /// transaction on SQL, TASK-629); a filter that names no rows is refused like the inner store's.
+    /// </remarks>
     public async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
     {
-        await _innerStore.UpdateAsync(filter, updateAction, ct);
+        RequireFilter(filter);
+        var items = (await _innerStore.ReadAsync(filter, null, null, null, ct)).ToList();
+        foreach (var item in items)
+        {
+            updateAction(item);
+        }
+        await ValidateBatchAndThrowAsync(items, ct);
+        if (items.Count > 0)
+        {
+            await _innerStore.UpdateAsync(items, null, ct);
+        }
     }
 
-    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default) => _innerStore.UpdateAsync(filter, updates, ct);
+    /// <remarks>
+    /// SH-M373 (TASK-156): validated against a preview, then run natively. The matches are read and the update applied to
+    /// those copies only to validate them; the write itself stays the inner store's native filtered update, so an
+    /// <c>Increment</c> keeps its atomicity (TASK-498). A row changed between the preview and the write is validated as it
+    /// was read.
+    /// </remarks>
+    public async Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
+    {
+        RequireFilter(filter);
+        var preview = (await _innerStore.ReadAsync(filter, null, null, null, ct)).ToList();
+        foreach (var item in preview)
+        {
+            updates.ApplyTo(item);
+        }
+        await ValidateBatchAndThrowAsync(preview, ct);
+        await _innerStore.UpdateAsync(filter, updates, ct);
+    }
+
+    private static void RequireFilter(Expression<Func<T, bool>> filter)
+    {
+        if (filter is null)
+            throw new ArgumentNullException(nameof(filter), $"A filtered update of {typeof(T).Name} needs a filter.");
+        Birko.Data.Expressions.BoundedFilterGuard.Require(filter, "update", typeof(T).Name, "UpdateAllAsync(updateAction)");
+    }
 
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default) => _innerStore.DeleteAsync(data, ct);
 

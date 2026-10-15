@@ -16,6 +16,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Core\IRule.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\Rule.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\RuleGroup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\RuleList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\RuleSet.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\RuleResult.cs" />
     <!-- Context -->

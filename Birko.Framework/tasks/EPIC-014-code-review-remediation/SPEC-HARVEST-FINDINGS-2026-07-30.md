@@ -3683,17 +3683,23 @@ The option is read exclusively by TenantHeaderClaimGuardMiddleware, which nothin
 
 `../Birko.Rules/Evaluation/RuleEvaluator.cs:66`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed earlier** (TASK-156, measured 2026-10-15, by reading). `RuleEvaluator.EvaluateGroup` negates by De Morgan (`negated = group.IsNegated != negate`, connective flipped) since TASK-558, as the translator does.
+
 EvaluateGroup (66-105) handles Logic, child IsEnabled and the empty case but never consults group.IsNegated, while RuleExpressionConverter.BuildGroupExpression applies it via Expression.Not (RuleExpressionConverter.cs:173-174). RuleGroup.And(new Rule("A",Equal,1)){IsNegated=true} against A==1 yields Match in memory and false as a pushed-down predicate — the opposite answer. The comment at RuleEvaluator.cs:71-73 asserts the two paths 'must agree', and Birko.Rules/CLAUDE.md:25 documents the evaluator as respecting IsNegated. Because IsNegated is declared on Rule and RuleGroup but NOT on IRule, every consumer must type-switch to see it, which is how the group case was missed.
 
 #### SH-M356 — A negated leaf rule on an absent field returns NoMatch instead of Match
 
 `../Birko.Rules/Evaluation/RuleEvaluator.cs:57`  ·  _restates a first-pass finding_
 
+**Verdict: REFUTED by design** (TASK-156, measured 2026-10-15). An absent field has no value to compare, so it matches nothing, negated or not: TASK-116's invariant (a non-evaluable leaf is never negated), which the translator applies too, and which TASK-144 extended to every operator on a typed context. Reading `NOT(Temp > 80)` as true for a missing Temp is the match-all this framework has removed on purpose.
+
 EvaluateLeaf returns RuleResult.NoMatch(rule) the moment TryGetValue fails, before rule.IsNegated is applied at line 61. So `Temp > 80` with IsNegated=true evaluates true when Temp is 10 but false when Temp is missing — the field's absence swallows the negation. The IsNull/IsNotNull branch at 48-54 deliberately ignores TryGetValue's result, showing the missing-field case was considered only for those two operators. The expression path has no equivalent hole (a null/absent member still flows into Not(...)).
 
 #### SH-M357 — An all-disabled or empty group is a non-match in memory but is dropped (vacuously true) by the converter
 
 `../Birko.Rules/Evaluation/RuleEvaluator.cs:88`
+
+**Verdict: CONFIRMED, fixed earlier** (TASK-156, measured 2026-10-15, by reading). An empty or all-disabled group is `Constant(false)` in the translator (TASK-558, kept by TASK-144) and NoMatch in the evaluator: they agree.
 
 EvaluateGroup returns NoMatch when no child was enabled (line 90) and for Rules.Count==0 (line 69). BuildGroupExpression returns null for both cases (RuleExpressionConverter.cs:147-148, 170-171), and every caller — ToExpression(RuleSet) line 54-55, ToExpression(IEnumerable) line 81-82, BuildGroupExpression line 155-156 — `continue`s past a null child, so the group silently contributes nothing to the AndAlso chain, i.e. behaves as TRUE. Same RuleSet, same data: the group is a non-match in RuleBasedValidator and a satisfied conjunct when pushed to a store. The in-code comment at RuleEvaluator.cs:71-73 claims the two paths agree on exactly this case.
 
@@ -3707,11 +3713,15 @@ BuildLeafExpression returns null when ResolveProperty cannot find the field (109
 
 `../Birko.Rules/Evaluation/ComparisonHelper.cs:121`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). `LikeString("%")` sliced `pattern[1..^1]` on a one-character string and threw. A lone `%` is now "any value" in both engines. Red.
+
 A one-char "%" satisfies both StartsWith('%') and EndsWith('%'), so the both-ends branch evaluates pattern[1..^1] (start 1, end 0) on a length-1 string and throws out of Evaluate. RuleExpressionConverter.BuildLike guards the same branch with `&& pattern.Length > 1` (line 322) and falls through to EndsWith(""), i.e. matches every non-null value. The same rule therefore throws on one path and matches all rows on the other.
 
 #### SH-M360 — decimal/long promoted to double, so distinct values compare equal — contradicting the CR-L333 comment
 
 `../Birko.Rules/Evaluation/ComparisonHelper.cs:154`
+
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). Two exact numbers (integers, decimal) now compare exactly as decimal in `AreEqual` and `CompareValues`; `9007199254740993L` no longer equals `...992L`, nor `1.0000000000000000001m` equal `1.0`. Doubles keep the CR-L333 tolerance. Red.
 
 TryToDouble converts decimal via (double)m (line 154) and long via implicit widening (152), and AreEqual compares only the promoted doubles (46-65). Verified in this environment: (double)9007199254740993L == (double)9007199254740992L is true, and (double)1.0000000000000000001m == 1.0d is true. In both cases diff==0 so the `bothIntegral` guard at 60-64 never fires. The comment at 50-54 explicitly promises 'integral values (int/long/whole decimals) stay exact so two distinct integers never falsely match' and the spec restates it — the promise holds only below 2^53. decimal is the money type and this engine is advertised for pricing/stock rules; CompareValues (78-79) has the same loss, so ordering on high-precision decimals is wrong too.
 
@@ -3719,11 +3729,15 @@ TryToDouble converts decimal via (double)m (line 154) and long via implicit wide
 
 `../Birko.Rules/Evaluation/ComparisonHelper.cs:158`
 
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). A string is read as a number only against a numeric side, and only as a plain finite number (`NumberStyles.Float`): two string codes compare as text ("007" is not "7", "(5)" is not "-5"); a text value against a numeric field still works. Red.
+
 TryToDouble's last resort is double.TryParse(value.ToString(), NumberStyles.Any, InvariantCulture). Verified: "007"→7, "1,000"→1000, "(5)"→-5 (Any includes AllowParentheses/AllowThousands), "NaN"→NaN, "Infinity"→∞. So for a string-typed field (SKU, invoice number, code) AreEqual takes the numeric branch and "007" == "7" is true, while RuleExpressionConverter.BuildComparison emits string.Equals(member, constant, OrdinalIgnoreCase) (275-282) which is false. Ordering is likewise numeric in memory (CompareValues 78-79) — a rule comparing string codes gets a different answer depending on whether it was evaluated or translated.
 
 #### SH-M362 — LIKE pattern with an interior % silently degrades to literal equality in both paths; _ is not a wildcard
 
 `../Birko.Rules/Evaluation/ComparisonHelper.cs:121`
+
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). An interior `%` now matches nothing in both engines, negated or not (it matched the literal); `_` is a literal in both, documented. Red.
 
 LikeString only recognises a leading and/or trailing '%' (121-126); anything else falls through to string.Equals against the raw pattern (128). RuleExpressionConverter.BuildLike does the same (322-330). So `new Rule("Name", Like, "A%B")` matches only the literal text "A%B" and `"A_C"` only the literal "A_C" — a pattern any SQL user expects to match many rows silently matches none, with no exception. The comment 'Simple % wildcard matching (SQL LIKE style)' and README.md:146's 'Supports all 16 comparison operators' give no hint that only three pattern shapes are honoured.
 
@@ -3731,11 +3745,15 @@ LikeString only recognises a leading and/or trailing '%' (121-126); anything els
 
 `../Birko.Rules/Expressions/RuleExpressionConverter.cs:272`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed earlier** (TASK-156, measured 2026-10-15, by reading). The translator's `TryConvertConstant` degrades a null against a non-nullable type to match-nothing (TASK-116, the one translator since TASK-144).
+
 ConvertValue returns null early for a null value (367-368) without consulting targetType, then Expression.Constant(null, typeof(int)) throws ArgumentException 'Argument types do not match' — confirmed in this environment. Reached from BuildComparison (271-272), BuildBetween (291-292, also when only UpperValue is left null) and each element of BuildIn (354-355). The in-memory path evaluates the same rule to a plain non-match, so a data-driven rule row with a NULL value column is a hard crash on one path and a silent non-match on the other.
 
 #### SH-M364 — Ordering operators and Between throw InvalidOperationException on a string property
 
 `../Birko.Rules/Expressions/RuleExpressionConverter.cs:286`
+
+**Verdict: CONFIRMED, fixed earlier; divergence documented** (TASK-156, measured 2026-10-15). The translator no longer throws on string ordering; it degrades (TASK-171 / TASK-144). The evaluator still orders strings (case-insensitively), which no store reproduces: recorded in the translator's docs.
 
 BuildComparison falls through to Expression.MakeBinary(comparison, member, constant) for every non-equality operator; verified that MakeBinary(GreaterThan, stringMember, stringConstant) throws InvalidOperationException 'The binary operator GreaterThan is not defined for the types System.String and System.String'. Same for BuildBetween (294-296). ComparisonHelper.CompareValues handles the identical rule via string.Compare OrdinalIgnoreCase (93), so `new Rule("Name", GreaterThanOrEqual, "M")` works in RuleBasedValidator and hard-throws the moment the same rule set is converted for a store. This is the one operator family the spec's per-operator requirement does not warn about.
 
@@ -3743,11 +3761,15 @@ BuildComparison falls through to Expression.MakeBinary(comparison, member, const
 
 `../Birko.Rules/Expressions/RuleExpressionConverter.cs:301`
 
+**Verdict: CONFIRMED, fixed earlier** (TASK-156, measured 2026-10-15, by reading). The translator degrades a string operator on a non-string member and the evaluator answers no match for it in both polarities (`IsStringMember`, TASK-116): they agree.
+
 BuildStringMethod throws InvalidOperationException when propertyType != typeof(string) (301-302), and BuildLike likewise (316-317). ComparisonHelper.ContainsString/StartsWithString/EndsWithString/LikeString call actual.ToString() unconditionally (99, 105, 111, 118-119), so `new Rule("Code", Contains, "234")` against an int Code matches in memory and throws when converted. The spec documents the divergence but it was not in the prior findings; the practical consequence is that a rule set authored and tested against ObjectRuleContext cannot be safely pushed down.
 
 #### SH-M366 — In/NotIn on a string property is case-sensitive while Equal on the same property is case-insensitive
 
 `../Birko.Rules/Expressions/RuleExpressionConverter.cs:356`
+
+**Verdict: CONFIRMED, resolved by TASK-144** (TASK-156, measured 2026-10-15). Within each engine `In` and `Equal` now agree (both `==` in the translator, both case-insensitive in the evaluator); between the engines the case difference is SH-M295's, documented.
 
 BuildIn builds `Expression.Equal(member, constant)` per element (356), which for string compiles to ordinal op_Equality. BuildComparison special-cases Equal/NotEqual on a string to string.Equals(..., OrdinalIgnoreCase) (275-282), and the in-memory IsIn delegates to AreEqual which ends in an OrdinalIgnoreCase ToString comparison (ComparisonHelper.cs:68, 139). So `new Rule("Status", In, new[]{"active"})` matches a row whose Status is "Active" in memory but not when pushed to a store, and is inconsistent with the Equal rule for the same value inside the same converter.
 
@@ -3755,11 +3777,15 @@ BuildIn builds `Expression.Equal(member, constant)` per element (356), which for
 
 `../Birko.Rules/Expressions/RuleExpressionConverter.cs:136`
 
+**Verdict: CONFIRMED, decided by TASK-144** (TASK-156, measured 2026-10-15). A null intermediate never matches, negated or not, in both engines (the translator's guards follow the negation; the evaluator's fixed contexts answer no match), so the two engines agree. A negated nested rule therefore does not partition rows with a null parent; that is the documented contract, not an accident.
+
 BuildLeafExpression wraps the body in Expression.Not at 136-137 and only then prepends the guards at 140, producing `x.Address != null && !(x.Address.City == "x")`. For a row whose Address is null the rule and its negation are BOTH false, so negating the rule does not partition the row set — a customer with no address is returned neither by 'city is x' nor by 'city is not x'. Contrast the leaf NotContains/NotEqual/NotIn forms (127, 132) which negate the whole guarded call and therefore DO include null rows: the converter uses two negation mechanisms that disagree about nulls. **Still open — narrowed by [[TASK-558]] (2026-10-11):** group negation is now pushed to the leaves, so it lands inside the null guard exactly like the leaf's `IsNegated` (a negated group over a nested field no longer includes null-parent rows; pinned as agreement, not as the answer). The partition question, and the NotContains/NotEqual/NotIn forms that still include them, remain for [[TASK-156]].
 
 #### SH-M368 — ObjectRuleContext does not split nested field paths, so RuleBasedValidator never flags a nested rule
 
 `../Birko.Rules/Context/ObjectRuleContext.cs:39`
+
+**Verdict: CONFIRMED, fixed by TASK-144** (TASK-156, measured 2026-10-15). `ObjectRuleContext` resolves nested paths.
 
 GetProperty performs a single typeof(T).GetProperty("Address.City") with no '.' splitting, so TryGetValue returns false and EvaluateLeaf returns NoMatch (RuleEvaluator.cs:57-58) for every operator except IsNull/IsNotNull. RuleExpressionConverter.ResolveProperty/BuildMemberAccess DO split on '.' (190, 208) and README.md:137-139 advertises nested rules as a headline feature. The result: a nested rule loaded from the rule table is enforced when the rule set is pushed to a store and silently ignored when the same rule set is used through RuleBasedValidator — a validation rule that never fires. Note IsNull on such a field matches everything, because the null-operator branch ignores TryGetValue's false.
 
@@ -3767,11 +3793,15 @@ GetProperty performs a single typeof(T).GetProperty("Address.City") with no '.' 
 
 `../Birko.Rules/Context/DictionaryRuleContext.cs:19`
 
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). `DictionaryRuleContext` resolves a field case-insensitively (exact first, then a case-insensitive key), as the other resolvers do; `From()` builds an `OrdinalIgnoreCase` dictionary. Red.
+
 TryGetValue/HasField delegate to the caller's Dictionary (retained by reference at line 16), and From() builds one with the default ordinal comparer (27), so "temp" does not resolve "Temp". ObjectRuleContext.GetProperty uses BindingFlags.IgnoreCase (ObjectRuleContext.cs:39) and RuleExpressionConverter.ResolveProperty likewise (196). The same rule row therefore matches or silently NoMatches depending purely on which IRuleContext the caller happened to use — and the dictionary miss is indistinguishable from a field that is legitimately absent.
 
 #### SH-M370 — RuleSet.Rules and IsEnabled are public mutable state read unsynchronised on every evaluation
 
 `../Birko.Rules/Core/RuleSet.cs:14`
+
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). Measured: editing a `RuleSet` while it is evaluated threw, and so did copying a `List` during the edit ("Destination array was not long enough", or a cleared slot). `RuleSet.Rules` and `RuleGroup.Rules` are now `RuleList`, a copy-on-write list: edits publish a new array under a lock, reads enumerate the current array. Red; stable over repeated runs.
 
 Rules is a public settable List<IRule> and IsEnabled a public setter. RuleEvaluator.Evaluate(RuleSet,...) enumerates ruleSet.Rules (line 42 → EvaluateMatches 31-34) and RuleBasedValidator holds one RuleSet for the lifetime of the validator, re-reading it on every Validate (RuleBasedValidator.cs:32). RuleExpressionConverter.ToExpression(RuleSet) enumerates it too (48). The library's whole premise is rules loaded from a DB/config so they can change without a deploy, and the evaluator is documented 'stateless, singleton-safe' — but a reload thread calling ruleSet.Rules.Add/Clear while a request evaluates throws InvalidOperationException ('Collection was modified') mid-enumeration, or drops rules silently if the list is replaced between the IsEnabled check and the enumeration.
 
@@ -3779,11 +3809,15 @@ Rules is a public settable List<IRule> and IsEnabled a public setter. RuleEvalua
 
 `../Birko.Validation/Rules/RangeRule.cs:30`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). `RangeRule` compares a value and a bound of different numeric types by value (decimal, or double when one is floating); a bound not comparable at all throws `InvalidOperationException` naming the property. Red.
+
 comparable.CompareTo(_min) at 30 (and _max at 33) is unguarded. RuleBuilder.Range takes IComparable (RuleBuilder.cs:69), so int literals are the natural call shape, and AbstractValidator's own XML doc example teaches it: `RuleFor(x => x.Temperature).Range(-50, 150)` (AbstractValidator.cs:20) on a double/decimal property makes Double.CompareTo(object) throw ArgumentException 'Object must be of type Double.' at validation time instead of reporting OUT_OF_RANGE. ComparisonHelper.CompareValues guards the identical call with try/catch (ComparisonHelper.cs:88-89); RangeRule does not. Note Birko.Validation/CLAUDE.md:47 quietly uses -50m/150m while the XML doc and README.md:33 do not.
 
 #### SH-M372 — PropertyRule's compiled accessor dereferences a null intermediate on a nested RuleFor path
 
 `../Birko.Validation/Fluent/PropertyRule.cs:30`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). A nested `RuleFor` path reads null through a null intermediate (no NRE), and the property name is the whole path (`Address.City`): DraCode's `Wyrm.MaxParallel` and `Wyvern.MaxParallel` both reported as `MaxParallel` before. Red.
 
 _valueAccessor is expression.Compile() (21) with no null guarding, so RuleFor(x => x.Address.City) throws NullReferenceException out of AbstractValidator.Validate (AbstractValidator.cs:53) whenever Address is null — a validator cannot check a nested property of an optional child at all, and the throw aborts the whole result rather than producing one error. RuleExpressionConverter.WrapWithNullGuards solves exactly this for the rules engine; the fluent path has no equivalent. GetPropertyName additionally reports such a rule as 'City', losing the parent segment (50-51).
 
@@ -3791,11 +3825,15 @@ _valueAccessor is expression.Compile() (21) with no null guarding, so RuleFor(x 
 
 `../Birko.Validation/Integration/AsyncValidatingBulkStoreWrapper.cs:41`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). The filtered `Action<T>` update reads, applies, validates and writes one collection update; the filtered `PropertyUpdate` validates a preview (the matches with the update applied) and then runs natively, keeping `Increment` atomic (TASK-498). Both check the caller's filter. Red 2 of 2.
+
 UpdateAsync(filter, Action<T>) (41-44) and UpdateAsync(filter, PropertyUpdate<T>) (46) forward straight to the inner store, so the decorator's stated guarantee ('validates entities before Create/Update', class doc 12-15) holds only for the enumerable overloads. The Action<T> overload is documented in IAsyncBulkStore as read-modify-save — the entities ARE materialised, so validating them is possible there and simply is not done. A caller who switches from UpdateAsync(entities) to the native filter-based update, the pattern the framework's conventions actively encourage for performance, silently loses validation on a write path with no compile-time or runtime signal.
 
 #### SH-M374 — AsyncValidatingBulkStoreWrapper enumerates the input batch twice
 
 `../Birko.Validation/Integration/AsyncValidatingBulkStoreWrapper.cs:55`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). The batch is materialised once before validation and the write. Red.
 
 ValidateBatchAndThrowAsync foreach-es `data` (55), then the same IEnumerable<T> is handed to the inner store (32, 38). A lazily generated or side-effecting sequence — a LINQ projection over a store read, a yield-return generator — is re-run, so the entities validated are not necessarily the entities persisted, and a single-pass sequence is validated and then persisted empty. Materialising once with ToList before both uses would fix it.
 
@@ -3803,11 +3841,15 @@ ValidateBatchAndThrowAsync foreach-es `data` (55), then the same IEnumerable<T> 
 
 `../Birko.Validation/Fluent/RuleBuilder.cs:154`
 
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). `In` lets null through (the rule convention) and has an overload with a message. Not red-checkable as written (the overload is new); the null half fails on the old code.
+
 The predicate is `value is TProp typed && set.Contains(typed)` (154), so a null value fails with NOT_IN_SET. Birko.Validation/CLAUDE.md:75 states the design decision 'Rules skip null values (use RequiredRule for null checks) — composable, no false positives', and EmailRule/LengthRule/RangeRule/RegexRule all honour it. So `RuleFor(x => x.Status).In("A","B")` on an optional field reports a spurious error that cannot be suppressed — In is the only builder method with no `message` parameter (142), so the wording cannot even be corrected. The HashSet at 151 also uses the default comparer, making string membership case-sensitive while Birko.Rules' Equal on strings is case-insensitive.
 
 #### SH-M376 — RegexRule compiles a caller-supplied pattern with no match timeout and RegexOptions.Compiled by default
 
 `../Birko.Validation/Rules/RegexRule.cs:19`
+
+**Verdict: CONFIRMED, fixed** (TASK-156, measured 2026-10-15). `RegexRule` runs with a match timeout (`DefaultMatchTimeout`, 1 s, overridable) and treats a timeout as invalid; the default options are no longer `Compiled`. New API, so its tests do not compile against the old code.
 
 `_regex = new Regex(pattern, options)` with `options = RegexOptions.Compiled` as the default (16) and no matchTimeout overload anywhere. Two consequences. (1) ReDoS: patterns reach here from RuleBuilder.Matches(pattern) (RuleBuilder.cs:96-99) and are exactly the kind of thing configured per deployment; a catastrophically backtracking pattern makes IsMatch (35) spin on the request thread with no timeout to break it. (2) Compiled emits IL into a dynamic assembly that is never reclaimed, and the Regex is built per RegexRule instance, i.e. per validator instance — a validator registered transient/scoped in DI leaks generated code for the process lifetime. Regex.CacheSize does not help because the instance constructor bypasses the static cache.
 

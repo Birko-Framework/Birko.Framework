@@ -43,8 +43,9 @@ internal static class ComparisonHelper
             ComparisonOperator.StartsWith => IsStringMember(actual) && StartsWithString(actual, expected),
             ComparisonOperator.EndsWith => IsStringMember(actual) && EndsWithString(actual, expected),
             ComparisonOperator.Like => IsStringMember(actual) && LikeString(actual, expected),
+            // TASK-156: a null set is no predicate (the translator degrades it), so NotIn does not invert it into match-ALL.
             ComparisonOperator.In => IsIn(actual, expected),
-            ComparisonOperator.NotIn => !IsIn(actual, expected),
+            ComparisonOperator.NotIn => expected is not null && !IsIn(actual, expected),
             _ => false
         };
     }
@@ -72,23 +73,44 @@ internal static class ComparisonHelper
     /// behind SH-H041…SH-H044. Mirrors <c>RuleSpecification.Leaf.Degraded</c> on the expression side, so the
     /// two engines enforce the invariant the same way rather than agreeing by coincidence.
     /// </summary>
-    public static bool CanEvaluate(object? actual, ComparisonOperator op) => op switch
+    /// <remarks>
+    /// TASK-156: also false for what the rule-to-LINQ translator degrades, so a NEGATED rule does not invert "cannot be
+    /// evaluated" into match-all in memory while the store matches nothing: a null needle, a null set, and a
+    /// <c>Like</c> pattern with an interior <c>%</c>.
+    /// </remarks>
+    public static bool CanEvaluate(object? actual, ComparisonOperator op, object? expected = null) => op switch
     {
         ComparisonOperator.Contains
             or ComparisonOperator.NotContains
             or ComparisonOperator.StartsWith
-            or ComparisonOperator.EndsWith
-            or ComparisonOperator.Like => IsStringMember(actual),
+            or ComparisonOperator.EndsWith => IsStringMember(actual) && expected is not null,
+        ComparisonOperator.Like => IsStringMember(actual) && IsSupportedLikePattern(expected),
+        ComparisonOperator.In or ComparisonOperator.NotIn => expected is not null,
         _ => true
     };
+
+    /// <summary>
+    /// A <c>Like</c> pattern this engine and the translator both read: <c>%</c> only at the start and/or the end. An
+    /// interior <c>%</c> has no string-method form, so neither engine guesses (SH-M362); <c>_</c> is a literal in both.
+    /// </summary>
+    private static bool IsSupportedLikePattern(object? expected)
+    {
+        var pattern = expected?.ToString();
+        return !string.IsNullOrEmpty(pattern) && !pattern!.Trim('%').Contains('%');
+    }
 
     private static bool AreEqual(object? a, object? b)
     {
         if (a is null && b is null) return true;
         if (a is null || b is null) return false;
 
+        // SH-M360 (TASK-156): two exact numbers (integers, decimal) compare exactly, as decimal. Promoting both to
+        // double equated 9007199254740993L with ...992L and 1.0000000000000000001m with 1.0.
+        if (TryToExact(a, out var ea) && TryToExact(b, out var eb))
+            return ea == eb;
+
         // Try numeric comparison (handles int vs double, decimal vs long, etc.)
-        if (TryToDouble(a, out var da) && TryToDouble(b, out var db))
+        if (TryNumeric(a, b, out var da, out var db))
         {
             // CR-L333: the old `< double.Epsilon` (~4.9e-324) was effectively strict equality and gave no
             // room for float→double promotion error — the float 0.1f promoted via TryToDouble did not
@@ -119,8 +141,12 @@ internal static class ComparisonHelper
         if (a is null) return -1;
         if (b is null) return 1;
 
+        // SH-M360 (TASK-156): exact numbers order exactly.
+        if (TryToExact(a, out var ea) && TryToExact(b, out var eb))
+            return ea.CompareTo(eb);
+
         // Numeric comparison with promotion
-        if (TryToDouble(a, out var da) && TryToDouble(b, out var db))
+        if (TryNumeric(a, b, out var da, out var db))
             return da.CompareTo(db);
 
         // DateTime
@@ -158,18 +184,20 @@ internal static class ComparisonHelper
 
     private static bool LikeString(object? actual, object? expected)
     {
-        // Simple % wildcard matching (SQL LIKE style)
-        if (actual is null || expected is null) return false;
-        var pattern = expected.ToString()!;
+        // % at the start and/or the end only, as the translator reads it (TASK-156). A lone "%" is "any value": it used
+        // to slice pattern[1..^1] on a length-1 string and throw (SH-M359). An interior % matches nothing (SH-M362).
+        if (actual is null || !IsSupportedLikePattern(expected)) return false;
+        var pattern = expected!.ToString()!;
         var value = actual.ToString()!;
-
-        if (pattern.StartsWith('%') && pattern.EndsWith('%'))
-            return value.Contains(pattern[1..^1], StringComparison.OrdinalIgnoreCase);
-        if (pattern.StartsWith('%'))
-            return value.EndsWith(pattern[1..], StringComparison.OrdinalIgnoreCase);
-        if (pattern.EndsWith('%'))
-            return value.StartsWith(pattern[..^1], StringComparison.OrdinalIgnoreCase);
-
+        var starts = pattern.StartsWith('%');
+        var ends = pattern.EndsWith('%');
+        var core = pattern.Trim('%');
+        if (starts && ends)
+            return value.Contains(core, StringComparison.OrdinalIgnoreCase);
+        if (starts)
+            return value.EndsWith(core, StringComparison.OrdinalIgnoreCase);
+        if (ends)
+            return value.StartsWith(core, StringComparison.OrdinalIgnoreCase);
         return string.Equals(value, pattern, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -190,16 +218,61 @@ internal static class ComparisonHelper
         return AreEqual(actual, expected);
     }
 
+    /// <summary>An integer or a decimal, as an exact decimal (SH-M360).</summary>
+    private static bool TryToExact(object value, out decimal result)
+    {
+        switch (value)
+        {
+            case decimal m: result = m; return true;
+            case int i: result = i; return true;
+            case long l: result = l; return true;
+            case short s: result = s; return true;
+            case byte b: result = b; return true;
+            case sbyte sb: result = sb; return true;
+            case ushort us: result = us; return true;
+            case uint ui: result = ui; return true;
+            case ulong ul: result = ul; return true;
+            default: result = 0; return false;
+        }
+    }
+
     private static bool TryToDouble(object value, out double result)
     {
-        if (value is double d) { result = d; return true; }
-        if (value is int i) { result = i; return true; }
-        if (value is long l) { result = l; return true; }
-        if (value is float f) { result = f; return true; }
-        if (value is decimal m) { result = (double)m; return true; }
-        if (value is short s) { result = s; return true; }
-        if (value is byte b) { result = b; return true; }
-
-        return double.TryParse(value.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out result);
+        switch (value)
+        {
+            case double d: result = d; return true;
+            case float f: result = f; return true;
+            case decimal m: result = (double)m; return true;
+            case int i: result = i; return true;
+            case long l: result = l; return true;
+            case short s: result = s; return true;
+            case byte b: result = b; return true;
+            case sbyte sb: result = sb; return true;
+            case ushort us: result = us; return true;
+            case uint ui: result = ui; return true;
+            case ulong ul: result = ul; return true;
+            default: result = 0; return false;
+        }
     }
+
+    /// <summary>
+    /// Both sides as doubles, for a numeric comparison. A string is read as a number only when the OTHER side is a number
+    /// (a rule value typed as text against a numeric field), and only as a plain finite number.
+    /// </summary>
+    /// <remarks>
+    /// SH-M361 (TASK-156): every string was tried as a number with <c>NumberStyles.Any</c>, so two string codes compared
+    /// numerically ("007" == "7", "(5)" == "-5", "1,000" == "1000"), where the store compares them as text.
+    /// </remarks>
+    private static bool TryNumeric(object a, object b, out double da, out double db)
+    {
+        var aNumber = TryToDouble(a, out da);
+        var bNumber = TryToDouble(b, out db);
+        if (aNumber && bNumber) return true;
+        if (aNumber && b is string bs) return TryParseNumber(bs, out db);
+        if (bNumber && a is string @as) return TryParseNumber(@as, out da);
+        return false;
+    }
+
+    private static bool TryParseNumber(string text, out double result)
+        => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out result) && double.IsFinite(result);
 }

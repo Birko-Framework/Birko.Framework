@@ -9,7 +9,8 @@ namespace Birko.Rules;
 public class RuleGroup : IRule
 {
     public LogicOperator Logic { get; set; }
-    public List<IRule> Rules { get; set; }
+    /// <remarks>SH-M370 (TASK-156): a <see cref="RuleList"/>, safe to edit while the group is evaluated.</remarks>
+    public RuleList Rules { get; set; }
 
     // ── IRule ──
     public string? Name { get; set; }
@@ -22,16 +23,16 @@ public class RuleGroup : IRule
     /// </summary>
     public bool IsNegated { get; set; }
 
-    public RuleGroup(LogicOperator logic, List<IRule> rules)
+    public RuleGroup(LogicOperator logic, IEnumerable<IRule> rules)
     {
         Logic = logic;
-        Rules = rules;
+        Rules = new RuleList(rules);
     }
 
     public RuleGroup(LogicOperator logic, params IRule[] rules)
     {
         Logic = logic;
-        Rules = new List<IRule>(rules);
+        Rules = new RuleList(rules);
     }
 
     public static RuleGroup And(params IRule[] rules) => new(LogicOperator.And, rules);

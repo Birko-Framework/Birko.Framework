@@ -16,15 +16,34 @@ public class DictionaryRuleContext : IRuleContext
         _values = values ?? throw new ArgumentNullException(nameof(values));
     }
 
-    public bool TryGetValue(string field, out object? value) => _values.TryGetValue(field, out value);
-    public bool HasField(string field) => _values.ContainsKey(field);
+    /// <remarks>
+    /// SH-M369 (TASK-156): a field resolves case-insensitively, as on <see cref="ObjectRuleContext{T}"/> and in the
+    /// translator. The caller's dictionary keeps its own comparer; an exact miss falls back to a case-insensitive key.
+    /// </remarks>
+    public bool TryGetValue(string field, out object? value)
+    {
+        if (_values.TryGetValue(field, out value))
+            return true;
+        foreach (var pair in _values)
+        {
+            if (string.Equals(pair.Key, field, StringComparison.OrdinalIgnoreCase))
+            {
+                value = pair.Value;
+                return true;
+            }
+        }
+        value = null;
+        return false;
+    }
+
+    public bool HasField(string field) => TryGetValue(field, out _);
 
     /// <summary>
     /// Fluent builder for quick context creation.
     /// </summary>
     public static DictionaryRuleContext From(params (string field, object? value)[] values)
     {
-        var dict = new Dictionary<string, object?>(values.Length);
+        var dict = new Dictionary<string, object?>(values.Length, StringComparer.OrdinalIgnoreCase);
         foreach (var (field, value) in values)
             dict[field] = value;
         return new DictionaryRuleContext(dict);

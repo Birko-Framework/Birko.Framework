@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Birko.Validation.Rules;
 
@@ -139,21 +141,31 @@ public class RuleBuilder<T, TProp>
     /// <summary>
     /// Value must be one of the specified allowed values.
     /// </summary>
-    public RuleBuilder<T, TProp> In(params TProp[] allowedValues)
+    public RuleBuilder<T, TProp> In(params TProp[] allowedValues) => In((IEnumerable<TProp>)allowedValues);
+
+    /// <summary>
+    /// Value must be one of the specified allowed values, with a custom message.
+    /// </summary>
+    /// <remarks>
+    /// SH-M375 (TASK-156): a null value passes, as in every other rule (a missing value is <c>Required</c>'s to report),
+    /// and the message can be set like any other rule's.
+    /// </remarks>
+    public RuleBuilder<T, TProp> In(IEnumerable<TProp> allowedValues, string? message = null)
     {
+        var allowed = allowedValues?.ToArray();
         // CR-L389: an empty set would make the property unsatisfiable (every value fails NOT_IN_SET with an
         // empty allowed-values list) — a silent misconfiguration trap. Reject it up front instead.
-        if (allowedValues == null || allowedValues.Length == 0)
+        if (allowed == null || allowed.Length == 0)
         {
             throw new ArgumentException("At least one allowed value must be provided.", nameof(allowedValues));
         }
 
-        var set = new System.Collections.Generic.HashSet<TProp>(allowedValues);
+        var set = new System.Collections.Generic.HashSet<TProp>(allowed);
         _propertyRule.AddRule(new CustomRule(
             _propertyRule.PropertyName,
-            (value, _) => value is TProp typed && set.Contains(typed),
+            (value, _) => value is null || (value is TProp typed && set.Contains(typed)),
             "NOT_IN_SET",
-            $"'{_propertyRule.PropertyName}' must be one of: {string.Join(", ", allowedValues)}."));
+            message ?? $"'{_propertyRule.PropertyName}' must be one of: {string.Join(", ", allowed)}."));
         return this;
     }
 

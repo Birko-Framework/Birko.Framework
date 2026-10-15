@@ -14,6 +14,7 @@ Birko.Rules/
 │   ├── Rule.cs                  - Leaf rule: Field + Operator + Value (+ UpperValue for Between, IsNegated)
 │   ├── RuleGroup.cs             - Composite: LogicOperator + List<IRule>, static And()/Or() factories
 │   ├── RuleSet.cs               - Named collection with enable/disable toggle
+│   ├── RuleList.cs              - Copy-on-write rule list (RuleSet.Rules, RuleGroup.Rules): safe to edit while evaluated (TASK-156)
 │   └── RuleResult.cs            - Evaluation outcome: IsMatch, Rule, Severity, ActualValue, Metadata
 ├── Context/
 │   ├── IRuleContext.cs           - Interface: TryGetValue(field, out value), HasField(field)

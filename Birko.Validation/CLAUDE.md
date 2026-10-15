@@ -72,7 +72,12 @@ await validated.CreateAsync(device);
 ```
 
 ## Key Design Decisions
-- Rules skip null values (use RequiredRule for null checks) — composable, no false positives
+- Rules skip null values (use RequiredRule for null checks) — composable, no false positives. `In` included (TASK-156)
+- `RangeRule` compares bounds of another numeric type by value; a bound not comparable at all throws naming the property
+- `RegexRule`: match timeout (`DefaultMatchTimeout`, 1 s) treated as invalid; default options no longer `Compiled`
+- `PropertyRule`: a nested path is null-safe and named by its whole path (`Address.City`)
+- `AsyncValidatingBulkStoreWrapper`: validates filtered updates (Action: read, apply, validate, one collection write;
+  PropertyUpdate: validate a preview, then the native update); batches are materialised once
 - ValidationResult.ToDictionary() groups errors by property — ready for API problem details
 - Store wrappers follow same pattern as SoftDeleteStoreWrapper/AuditStoreWrapper (IStoreWrapper<T>)
 - CustomRule<T> receives full model instance for cross-property validation

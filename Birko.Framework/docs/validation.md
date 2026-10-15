@@ -55,11 +55,16 @@ public class DeviceValidator : AbstractValidator<Device>
 | `MaxLength(n)` | String max length |
 | `MinLength(n)` | String min length |
 | `Length(min, max)` | String length range |
-| `Range(min, max)` | Numeric range |
-| `Regex(pattern)` | Regex pattern match |
-| `Custom(Func)` | Custom validation logic |
+| `Range(min, max)` | Range; bounds of another numeric type compare by value (`Range(-50, 150)` on a `double` works) |
+| `GreaterThanOrEqual(v)` / `LessThanOrEqual(v)` / `NotEqual(v)` | Comparisons |
+| `In(values)` / `In(values, message)` | One of the allowed values |
+| `Matches(pattern)` / `Matches(regex)` | Regex match; a pattern runs with a 1 s match timeout (a timeout is invalid) and is not `Compiled` by default |
+| `Must(predicate)` / `MustSatisfy(predicate)` | Custom logic on the value / the whole model |
 
-Rules skip null values by default — use `Required()` explicitly to enforce non-null.
+Rules skip null values by default — use `Required()` explicitly to enforce non-null. `In` follows this too.
+
+A nested `RuleFor(x => x.Address.City)` reads a null `Address` as a null `City` (no exception) and reports errors under
+the whole path, `Address.City` (TASK-156).
 
 ## Manual Validation
 
@@ -98,6 +103,11 @@ var validatedBulk = new AsyncValidatingBulkStoreWrapper<IAsyncBulkStore<Device>,
 ```
 
 Validation wrappers throw `ValidationException` with the `ValidationResult` attached.
+
+The bulk wrapper validates its filtered updates too (TASK-156). `UpdateAsync(filter, action)` reads the matches, applies
+the action, validates, and writes them as one collection update. `UpdateAsync(filter, PropertyUpdate)` validates the
+matches with the update applied, then runs the native filtered update, so an `Increment` stays atomic; a row changed
+between the two is validated as it was read.
 
 ## Custom Rules
 

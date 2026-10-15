@@ -64,7 +64,7 @@ public static class RuleExpressionConverter
         var param = Expression.Parameter(typeof(T), "x");
         if (!ruleSet.IsEnabled)
             return Expression.Lambda<Func<T, bool>>(Expression.Constant(false), param);
-        return Expression.Lambda<Func<T, bool>>(BuildConjunction(ruleSet.Rules, param), param);
+        return Expression.Lambda<Func<T, bool>>(BuildConjunction(Snapshot(ruleSet.Rules), param), param);
     }
 
     /// <summary>
@@ -75,6 +75,11 @@ public static class RuleExpressionConverter
         var param = Expression.Parameter(typeof(T), "x");
         return Expression.Lambda<Func<T, bool>>(BuildConjunction(rules, param), param);
     }
+
+    /// <summary>
+    /// The rules as they are now (SH-M370, TASK-156): a <see cref="RuleList"/>'s current array, which no edit changes.
+    /// </summary>
+    internal static IRule[] Snapshot(IEnumerable<IRule> rules) => rules is RuleList list ? list.Snapshot() : rules.ToArray();
 
     private static Expression BuildConjunction(IEnumerable<IRule> rules, ParameterExpression param)
     {
@@ -118,7 +123,7 @@ public static class RuleExpressionConverter
 
     private static Expression BuildGroupExpression(RuleGroup group, ParameterExpression param, bool negate)
     {
-        var enabled = group.Rules.Where(r => r.IsEnabled).ToList();
+        var enabled = Snapshot(group.Rules).Where(r => r.IsEnabled).ToList();
         if (enabled.Count == 0)
             return Expression.Constant(false);
 
