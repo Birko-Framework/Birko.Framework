@@ -50,10 +50,7 @@ public class CosmosMigrationRunner : Data.Migrations.AbstractMigrationRunner
             foreach (var migration in migrations)
             {
                 var context = new Context.CosmosDBMigrationContext(_database);
-                if (direction == Data.Migrations.MigrationDirection.Up)
-                    migration.Up(context);
-                else
-                    migration.Down(context);
+                ApplyMigration(migration, direction, context);
 
                 if (direction == Data.Migrations.MigrationDirection.Up)
                 {

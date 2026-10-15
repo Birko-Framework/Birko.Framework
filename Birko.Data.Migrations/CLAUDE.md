@@ -16,7 +16,7 @@ Platform-agnostic database migration framework. Write migrations once and run th
 
 ### Base Classes
 - `AbstractMigration` — Base class implementing IMigration
-- `AbstractMigrationRunner` — Template method pattern for migration execution
+- `AbstractMigrationRunner` — Template method pattern for migration execution. Every runner runs a migration through its `ApplyMigration`, which fails a migration that left a `CreateCollection` / `CreateIndex` chain without `Build()` (`ISchemaBuilder.PendingBuilds`, kept by `SchemaBuildLedger` in Birko.Data.Patterns), before it is recorded (TASK-627)
 
 ### Context Abstractions
 - `IMigrationContext` — Platform-agnostic context (Schema, Data, Raw, ProviderName)

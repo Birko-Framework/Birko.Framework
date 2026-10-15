@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A migration that forgets `Build()` fails instead of being recorded (2026-10-15)
+
+[[TASK-627]]. `CreateIndex(...).WithField(...)` without `Build()` emitted nothing, and the runner recorded the migration
+as applied. Every runner now fails it with a `MigrationException` naming each unbuilt chain, before recording. The rule
+holds on all six providers, for collections too, even where `CreateCollection` creates eagerly.
 ### Security: forwarding headers from trusted proxies only; `?token=` only where a header cannot be set (2026-10-15)
 
 [[TASK-165]]. **BREAKING behind a proxy:** a token binding's address came from `X-Forwarded-For` written by anyone; set
@@ -332,12 +337,6 @@ given foreign settings throws instead of answering empty. Join rendering is [[TA
 `TenantContext`, so every tenant event was dispatched across ALL tenants, silently. The first resolve of the bridge now
 throws unless the app's `ITenantContext` is the same object. `AddBirkoSecurity` (scoped `_ => Tenant.Current`) passes.
 `AllTenantsDispatches` records each all-tenants dispatch by event source. System events still widen.
-### SQL attributes from another assembly keep their values (2026-10-15)
-
-[[TASK-577]]. In the split-aggregator layout, attributes from a second compilation of `Birko.Data.SQL` are rebuilt by
-name. The rebuild read `MaxLength`, `Precision` and `Scale` as properties, though they are fields, so a
-`[MaxLengthField(64)]` column was unbounded and `decimal(18,4)` lost its precision. It also skipped `[UtcField]`, making
-an instant a wall clock. All values are now read, and an attribute the build cannot rebuild throws.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

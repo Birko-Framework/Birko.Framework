@@ -74,10 +74,7 @@ namespace Birko.Data.Migrations.MongoDB
                 {
                     // Thread the session so the migration's operations join the transaction (CR-C09).
                     var context = new Context.MongoMigrationContext(_database, session);
-                    if (direction == Data.Migrations.MigrationDirection.Up)
-                        migration.Up(context);
-                    else
-                        migration.Down(context);
+                    ApplyMigration(migration, direction, context);
 
                     // Update store record
                     if (direction == Data.Migrations.MigrationDirection.Up)

@@ -10,6 +10,12 @@ namespace Birko.Data.Migrations.SQL.Context
 {
     public class SqlSchemaBuilder : ISchemaBuilder
     {
+        // TASK-627: the chains handed out, so the runner can fail a migration that never called Build().
+        private readonly SchemaBuildLedger _ledger = new();
+
+        /// <inheritdoc />
+        public System.Collections.Generic.IReadOnlyList<string> PendingBuilds => _ledger.Pending;
+
         private readonly DbConnection _connection;
         private readonly DbTransaction? _transaction;
         private readonly AbstractConnector _connector;
@@ -59,7 +65,7 @@ namespace Birko.Data.Migrations.SQL.Context
 
         public ICollectionBuilder CreateCollection(string name)
         {
-            return new SqlCollectionBuilder(name, _connection, _transaction, _connector);
+            return _ledger.Track(new SqlCollectionBuilder(name, _connection, _transaction, _connector), name);
         }
 
         public void DropCollection(string name)
@@ -91,7 +97,7 @@ namespace Birko.Data.Migrations.SQL.Context
 
         public IIndexBuilder CreateIndex(string collectionName, string indexName)
         {
-            return new SqlIndexBuilder(collectionName, indexName, _connection, _transaction, _connector);
+            return _ledger.Track(new SqlIndexBuilder(collectionName, indexName, _connection, _transaction, _connector), collectionName, indexName);
         }
 
         public void DropIndex(string collectionName, string indexName)

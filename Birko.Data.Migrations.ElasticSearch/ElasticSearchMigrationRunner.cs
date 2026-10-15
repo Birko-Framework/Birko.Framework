@@ -46,10 +46,7 @@ namespace Birko.Data.Migrations.ElasticSearch
                 foreach (var migration in migrations)
                 {
                     var context = new Context.ElasticSearchMigrationContext(_client);
-                    if (direction == Data.Migrations.MigrationDirection.Up)
-                        migration.Up(context);
-                    else
-                        migration.Down(context);
+                    ApplyMigration(migration, direction, context);
 
                     // Update store record
                     if (direction == Data.Migrations.MigrationDirection.Up)

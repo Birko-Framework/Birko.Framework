@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — SQL attributes from another assembly keep their values
+
+[[TASK-577]]. In the split-aggregator layout, attributes from a second compilation of `Birko.Data.SQL` are rebuilt by
+name. The rebuild read `MaxLength`, `Precision` and `Scale` as properties, though they are fields, so a
+`[MaxLengthField(64)]` column was unbounded and `decimal(18,4)` lost its precision. It also skipped `[UtcField]`, making
+an instant a wall clock. All values are now read, and an attribute the build cannot rebuild throws.
+
 ## 2026-10-15 — A SQL filter comparing two columns finds its rows
 
 [[TASK-574]]. `x.A == x.B` (any operator) parsed both sides into one condition, the right overwriting the left with no

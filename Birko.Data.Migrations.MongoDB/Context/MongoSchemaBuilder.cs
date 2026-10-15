@@ -10,6 +10,12 @@ namespace Birko.Data.Migrations.MongoDB.Context
 {
     public class MongoSchemaBuilder : ISchemaBuilder
     {
+        // TASK-627: the chains handed out, so the runner can fail a migration that never called Build().
+        private readonly SchemaBuildLedger _ledger = new();
+
+        /// <inheritdoc />
+        public System.Collections.Generic.IReadOnlyList<string> PendingBuilds => _ledger.Pending;
+
         private readonly IMongoDatabase _database;
         private readonly IClientSessionHandle? _session;
 
@@ -26,7 +32,7 @@ namespace Birko.Data.Migrations.MongoDB.Context
         {
             if (_session != null) _database.CreateCollection(_session, name);
             else _database.CreateCollection(name);
-            return new MongoCollectionBuilder(name, _database);
+            return _ledger.Track(new MongoCollectionBuilder(name, _database), name);
         }
 
         public void DropCollection(string name)
@@ -45,7 +51,7 @@ namespace Birko.Data.Migrations.MongoDB.Context
 
         public IIndexBuilder CreateIndex(string collectionName, string indexName)
         {
-            return new MongoIndexBuilder(collectionName, indexName, _database, _session);
+            return _ledger.Track(new MongoIndexBuilder(collectionName, indexName, _database, _session), collectionName, indexName);
         }
 
         public void DropIndex(string collectionName, string indexName)

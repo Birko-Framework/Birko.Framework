@@ -31,15 +31,17 @@ public class CreateUsersTable : AbstractMigration
 
     public override void Up(IMigrationContext context)
     {
-        context.Schema.CreateCollection("Users", b => b
-            .WithField("Id", FieldType.Guid, f => f.IsPrimary = true)
-            .WithField("Email", FieldType.String, f => f.MaxLength = 256)
-            .WithField("Name", FieldType.String, f => f.MaxLength = 256)
-            .WithField("CreatedAt", FieldType.DateTime));
+        context.Schema.CreateCollection("Users")
+            .WithField("Id", FieldType.Guid, isPrimary: true)
+            .WithField("Email", FieldType.String, maxLength: 256)
+            .WithField("Name", FieldType.String, maxLength: 256)
+            .WithField("CreatedAt", FieldType.DateTime)
+            .Build();
 
-        context.Schema.CreateIndex("Users", "IX_Users_Email", ib => ib
+        context.Schema.CreateIndex("Users", "IX_Users_Email")
             .WithField("Email")
-            .Unique());
+            .Unique()
+            .Build();
     }
 
     public override void Down(IMigrationContext context)
@@ -48,6 +50,13 @@ public class CreateUsersTable : AbstractMigration
     }
 }
 ```
+
+**Every `CreateCollection` / `CreateIndex` chain ends with `Build()`.** The builders emit nothing until it is called
+(every provider defers an index, SQL defers a table), and the omission compiles. So the runner checks when a
+migration's `Up` / `Down` returns: a chain that was never built fails the migration with a `MigrationException` naming
+it (`CreateIndex("Users", "IX_Users_Email")`), and the migration is **not recorded**. Before TASK-627 it emitted
+nothing and was recorded as applied, a schema change missed for good. The rule holds on providers that create a
+collection eagerly too, so a migration that passes on one provider passes on all.
 
 ### IMigrationContext
 
@@ -64,13 +73,13 @@ The context provides three capabilities:
 
 | Method | SQL Translation | NoSQL Behavior |
 |--------|----------------|----------------|
-| `CreateCollection(name, builder)` | CREATE TABLE | Create collection/container/index |
+| `CreateCollection(name)...Build()` | CREATE TABLE | Create collection/container/index |
 | `DropCollection(name)` | DROP TABLE | Drop collection/container |
 | `CollectionExists(name)` | Information schema check | Provider-specific check |
 | `AddField(collection, field)` | ALTER TABLE ADD COLUMN | No-op (schema-less) |
 | `DropField(collection, name)` | ALTER TABLE DROP COLUMN | No-op |
 | `RenameField(collection, old, new)` | EXEC sp_rename / ALTER | $rename (MongoDB), no-op (others) |
-| `CreateIndex(collection, name, builder)` | CREATE INDEX | Create native index |
+| `CreateIndex(collection, name)...Build()` | CREATE INDEX | Create native index |
 | `DropIndex(collection, name)` | DROP INDEX | Drop native index |
 
 ### IDataMigrator Operations

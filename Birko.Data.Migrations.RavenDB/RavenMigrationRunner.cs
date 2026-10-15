@@ -50,10 +50,7 @@ namespace Birko.Data.Migrations.RavenDB
                 foreach (var migration in migrations)
                 {
                     var context = new Context.RavenDBMigrationContext(_store);
-                    if (direction == Data.Migrations.MigrationDirection.Up)
-                        migration.Up(context);
-                    else
-                        migration.Down(context);
+                    ApplyMigration(migration, direction, context);
 
                     if (direction == Data.Migrations.MigrationDirection.Up)
                     {

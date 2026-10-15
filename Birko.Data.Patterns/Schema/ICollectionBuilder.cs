@@ -16,7 +16,8 @@ namespace Birko.Data.Patterns.Schema
         /// keep the default no-op; providers that must know all fields before creating (e.g. SQL,
         /// which emits a single CREATE TABLE) override this. A migration must call <c>Build()</c> to
         /// finish a <c>CreateCollection(...).WithField(...)</c> chain — without it the SQL builder
-        /// never executes (see CODE-REVIEW-AUDIT CR-C14).
+        /// never executes (see CODE-REVIEW-AUDIT CR-C14). A migration runner fails a
+        /// migration that leaves a chain unbuilt, before recording it (TASK-627, <see cref="SchemaBuildLedger"/>).
         /// </summary>
         void Build() { }
     }

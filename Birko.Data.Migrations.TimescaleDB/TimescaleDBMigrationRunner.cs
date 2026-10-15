@@ -32,10 +32,7 @@ namespace Birko.Data.Migrations.TimescaleDB
             // Thread the connector so context.Schema uses the PostgreSQL connector (DropTable /
             // dialect-correct DDL) instead of falling back to the generic SQL path (CR-H069).
             var context = new TimescaleDBMigrationContext(connection, transaction, Connector);
-            if (direction == Data.Migrations.MigrationDirection.Up)
-                migration.Up(context);
-            else
-                migration.Down(context);
+            ApplyMigration(migration, direction, context);
         }
     }
 }

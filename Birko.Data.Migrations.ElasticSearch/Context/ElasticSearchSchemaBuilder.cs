@@ -9,6 +9,12 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 {
     public class ElasticSearchSchemaBuilder : ISchemaBuilder
     {
+        // TASK-627: the chains handed out, so the runner can fail a migration that never called Build().
+        private readonly SchemaBuildLedger _ledger = new();
+
+        /// <inheritdoc />
+        public System.Collections.Generic.IReadOnlyList<string> PendingBuilds => _ledger.Pending;
+
         private readonly ElasticClient _client;
 
         public ElasticSearchSchemaBuilder(ElasticClient client)
@@ -28,7 +34,7 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
                 );
             }
 
-            return new ElasticCollectionBuilder(name, _client);
+            return _ledger.Track(new ElasticCollectionBuilder(name, _client), name);
         }
 
         public void DropCollection(string name)
@@ -46,7 +52,7 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 
         public IIndexBuilder CreateIndex(string collectionName, string indexName)
         {
-            return new ElasticIndexBuilder(collectionName, indexName, _client);
+            return _ledger.Track(new ElasticIndexBuilder(collectionName, indexName, _client), collectionName, indexName);
         }
 
         public void DropIndex(string collectionName, string indexName)

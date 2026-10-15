@@ -155,10 +155,7 @@ namespace Birko.Data.Migrations.SQL
             DbTransaction? transaction)
         {
             var context = new Context.SqlMigrationContext(connection, transaction, "SQL", _connector);
-            if (direction == Data.Migrations.MigrationDirection.Up)
-                migration.Up(context);
-            else
-                migration.Down(context);
+            ApplyMigration(migration, direction, context);
         }
 
         private void UpdateStoreRecord(

@@ -12,6 +12,12 @@ namespace Birko.Data.Migrations.RavenDB.Context
 {
     public class RavenDBSchemaBuilder : ISchemaBuilder
     {
+        // TASK-627: the chains handed out, so the runner can fail a migration that never called Build().
+        private readonly SchemaBuildLedger _ledger = new();
+
+        /// <inheritdoc />
+        public System.Collections.Generic.IReadOnlyList<string> PendingBuilds => _ledger.Pending;
+
         private readonly IDocumentStore _store;
 
         public RavenDBSchemaBuilder(IDocumentStore store)
@@ -22,7 +28,7 @@ namespace Birko.Data.Migrations.RavenDB.Context
         public ICollectionBuilder CreateCollection(string name)
         {
             // RavenDB is document-based — collections are created implicitly on first document insert.
-            return new RavenCollectionBuilder(name, _store);
+            return _ledger.Track(new RavenCollectionBuilder(name, _store), name);
         }
 
         public void DropCollection(string name)
@@ -48,7 +54,7 @@ namespace Birko.Data.Migrations.RavenDB.Context
 
         public IIndexBuilder CreateIndex(string collectionName, string indexName)
         {
-            return new RavenIndexBuilder(collectionName, indexName, _store);
+            return _ledger.Track(new RavenIndexBuilder(collectionName, indexName, _store), collectionName, indexName);
         }
 
         public void DropIndex(string collectionName, string indexName)

@@ -90,6 +90,36 @@ namespace Birko.Data.Migrations
         }
 
         /// <summary>
+        /// Runs one migration's <see cref="IMigration.Up"/> or <see cref="IMigration.Down"/> against
+        /// <paramref name="context"/>, then fails it if it left a schema chain unfinished. Every runner calls this, before
+        /// it records the migration.
+        /// </summary>
+        /// <remarks>
+        /// TASK-627 (SH-M245): a <c>CreateIndex(...).WithField(...)</c> without <c>Build()</c> emitted nothing and the
+        /// migration was recorded as applied, a schema change missed for good with no error. The omission compiles, so it
+        /// is caught here, when the migration ends, from <see cref="Patterns.Schema.ISchemaBuilder.PendingBuilds"/>.
+        /// </remarks>
+        /// <exception cref="Exceptions.MigrationException">A chain was never finished; the message names each.</exception>
+        protected static void ApplyMigration(IMigration migration, MigrationDirection direction, Context.IMigrationContext context)
+        {
+            if (direction == MigrationDirection.Up)
+                migration.Up(context);
+            else
+                migration.Down(context);
+
+            var pending = context.Schema?.PendingBuilds;
+            if (pending == null || pending.Count == 0)
+            {
+                return;
+            }
+
+            throw new Exceptions.MigrationException(migration, direction,
+                $"Migration {migration.Version} ({migration.Name}) {direction} never called Build() on "
+                + string.Join(", ", pending)
+                + ", so it was not applied (the builder emits nothing until Build()). The migration is not recorded.");
+        }
+
+        /// <summary>
         /// Asynchronously initializes the migration runner and store.
         /// </summary>
         public virtual async Task InitializeAsync(CancellationToken cancellationToken = default)

@@ -10,6 +10,16 @@ namespace Birko.Data.Migrations.CosmosDB.Context;
 
 public class CosmosDBSchemaBuilder : ISchemaBuilder
 {
+
+    // TASK-627: the chains handed out, so the runner can fail a migration that never called Build().
+
+    private readonly SchemaBuildLedger _ledger = new();
+
+
+    /// <inheritdoc />
+
+    public System.Collections.Generic.IReadOnlyList<string> PendingBuilds => _ledger.Pending;
+
     private readonly Database _database;
 
     public CosmosDBSchemaBuilder(Database database)
@@ -21,7 +31,7 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
     {
         var properties = new ContainerProperties(name, "/id");
         _database.CreateContainerIfNotExistsAsync(properties).GetAwaiter().GetResult();
-        return new CosmosCollectionBuilder(name, _database);
+        return _ledger.Track(new CosmosCollectionBuilder(name, _database), name);
     }
 
     public void DropCollection(string name)
@@ -46,7 +56,7 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
 
     public IIndexBuilder CreateIndex(string collectionName, string indexName)
     {
-        return new CosmosIndexBuilder(collectionName, indexName, _database);
+        return _ledger.Track(new CosmosIndexBuilder(collectionName, indexName, _database), collectionName, indexName);
     }
 
     public void DropIndex(string collectionName, string indexName)

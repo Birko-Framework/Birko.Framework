@@ -10,6 +10,12 @@ namespace Birko.Data.Migrations.InfluxDB.Context
 {
     public class InfluxDBSchemaBuilder : ISchemaBuilder
     {
+        // TASK-627: the chains handed out, so the runner can fail a migration that never called Build().
+        private readonly SchemaBuildLedger _ledger = new();
+
+        /// <inheritdoc />
+        public System.Collections.Generic.IReadOnlyList<string> PendingBuilds => _ledger.Pending;
+
         private readonly InfluxDBClient _client;
         private readonly string _organization;
 
@@ -27,7 +33,7 @@ namespace Birko.Data.Migrations.InfluxDB.Context
                 InfluxBucketLookup.Create(_client, _organization, name, null);
             }
 
-            return new InfluxCollectionBuilder(name, _client, _organization);
+            return _ledger.Track(new InfluxCollectionBuilder(name, _client, _organization), name);
         }
 
         public void DropCollection(string name)
@@ -48,7 +54,7 @@ namespace Birko.Data.Migrations.InfluxDB.Context
         public IIndexBuilder CreateIndex(string collectionName, string indexName)
         {
             // InfluxDB does not support custom indexes — time-series structure is implicit.
-            return new InfluxIndexBuilder(collectionName, indexName);
+            return _ledger.Track(new InfluxIndexBuilder(collectionName, indexName), collectionName, indexName);
         }
 
         public void DropIndex(string collectionName, string indexName)

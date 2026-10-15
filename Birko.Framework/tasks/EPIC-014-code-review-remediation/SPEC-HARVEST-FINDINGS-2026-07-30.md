@@ -2821,6 +2821,8 @@ The default (MySQL) ListIndexesSql selects the literal `0 AS is_descending` and 
 
 **Verdict: CONFIRMED, spawned as [[TASK-627]]** (TASK-154, measured 2026-10-15). The hazard is real; the remedy is not. A non-defaulted `Build()` forces implementers to declare it, but an omitted CALL still compiles. The fix is a run-time check when a migration ends, which needs a completion hook the six schema builders do not have.
 
+**Fixed by [[TASK-627]]** (measured 2026-10-15). Every schema builder records the chains it hands out (`SchemaBuildLedger`, `ISchemaBuilder.PendingBuilds`), and every runner runs a migration through `AbstractMigrationRunner.ApplyMigration`, which throws `MigrationException` naming each unbuilt chain before the migration is recorded. Measured on SQLite and live MongoDB: the migration fails, its version is not recorded, no index exists; red 6 of 8 with the check disabled (the 2 terminated-chain pins pass either way).
+
 Build() is a default interface method with an empty body on both IIndexBuilder and ICollectionBuilder (ICollectionBuilder.cs:21). A provider that defers (the doc names SQL, which emits one CREATE TABLE/CREATE INDEX) only acts inside its Build() override, so `CreateIndex("Invoice", "IX_Number").WithField("Number")` without the terminal call emits nothing, returns normally, and the migration is recorded as applied — a schema change permanently missed with no error. A non-defaulted Build() would have made the omission a compile error.
 
 ### area: security-and-authorization
