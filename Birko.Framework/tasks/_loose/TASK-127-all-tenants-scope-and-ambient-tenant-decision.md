@@ -85,6 +85,21 @@ there. Under option (1) that assumption is wrong and should be revisited.
 - Either way: fix the `TenantFilter` comment (both wrappers) so it stops asserting something untrue, and
   re-run `/specs regen tenant-isolation` so the scenario records a decision rather than a contradiction
 
+## Decision (2026-10-15, the user): option 1, `WithAllTenants` widens reads only
+
+With a tenant in scope, an all-tenants scope widens reads, and item writes stay checked against the ambient tenant.
+With no tenant in scope (background jobs) writes widen as before. Reasoning: it is today's behaviour, so nothing breaks
+(measured in Symbio: its nine jobs run with no tenant set, `MediaEndpoints` reads only, and `DashboardLayoutService` uses
+the scope only when no tenant exists), and it keeps an ambient tenant from a header or claim plus an admin scope from
+becoming a cross-tenant write capability inside a request.
+
+**Not breaking** for any consumer. Follow-up, no new task needed (it is the SH-M338 work this task owns):
+- fix the `TenantFilter` comment in both wrappers, which claims writes widen too;
+- `PreserveStoredTenant` (TASK-114) skips re-home protection inside an all-tenants scope on the assumption that
+  cross-tenant writes are intended there: under this decision that holds only with no tenant set, so keep the protection
+  when a tenant is in scope;
+- regenerate `tenant-isolation` so the scenario records the decision (batched with the other regens).
+
 ## Not to be picked up by `/fix-next`
 
 Acceptance is "decide X", so it cannot run unattended — same class as [[TASK-059]], [[TASK-106]],

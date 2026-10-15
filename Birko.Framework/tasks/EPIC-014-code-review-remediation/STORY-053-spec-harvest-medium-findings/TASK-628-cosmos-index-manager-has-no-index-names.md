@@ -39,6 +39,18 @@ A Cosmos DB indexing policy has **no index names**: an index is an included path
    working unchanged.
 2. Whether `Unique` maps to a container unique key when the container is created by this manager, or is always refused.
 
+## Decisions (2026-10-15, the user)
+
+- **Unique:** honoured as a container unique key when this manager creates the container, refused
+  (`NotSupportedException`) on an existing container. **Sparse** and **ExpireAfter** are always refused: Cosmos has no
+  sparse index, and TTL is a container property, not an index's.
+- **Names: B, a name registry in a separate metadata container.** One document per indexed container, in a dedicated
+  container of the same database (`__birko_indexes`, TASK-272's `__` prefix for bookkeeping on schema-less providers),
+  mapping each index name to its included paths or composite path list. The indexing policy stays the truth: `ExistsAsync`
+  answers true only when the registered paths are in the policy, `DropAsync` removes exactly those paths (composites
+  included) and the entry, and a listing reports registered names plus unnamed policy entries by path. Entity reads never
+  see the registry, so no store changes. Cost: one extra container per database.
+
 ## Acceptance criteria
 
 - [ ] `ExistsAsync` / `DropAsync` / `GetInfoAsync` by the name `CreateAsync` was given answer for that index, composites included
