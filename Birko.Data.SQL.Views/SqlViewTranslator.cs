@@ -58,7 +58,7 @@ public static class SqlViewTranslator
 
         foreach (var sourceType in sourceTypes)
         {
-            var table = DataBase.LoadTable(sourceType);
+            var table = DataBase.TryLoadTable(sourceType);
             if (table != null)
             {
                 tableCache[sourceType] = table;

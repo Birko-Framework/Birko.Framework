@@ -486,6 +486,16 @@ Enum properties are automatically mapped to `INTEGER` fields. `IntegerField` han
 ### IgnoreField Attribute
 Properties decorated with `[IgnoreField]` are skipped by `AbstractField.CreateAbstractField()` — they won't be included in table creation or any CRUD operations. Unsupported property types also return `null` instead of throwing `FieldAttributeException`.
 
+### Table load refuses what it cannot map (TASK-154)
+`DataBase.LoadTable` throws `TableAttributeException` for a type that maps to no table; `TryLoadTable` answers null,
+for the few callers to whom that is a real answer (view types in rule-field resolution, drift). At load it also refuses
+an `[IndexedField]` declared on a base class (every derived table would share the index name, and all but the first
+are skipped by `IF NOT EXISTS`: use `[CompositeIndex]` per class), an `[IndexedField]` on an unmapped property, and an
+enum backed by `long` / `ulong` / `uint`. A property with no setter is not a column. Index columns with the same
+`Order` keep declaration order. The index managers read SQLite's `pragma_index_list` / `pragma_index_xinfo` (real
+uniqueness and direction), scope MySQL to `DATABASE()` and PostgreSQL to the visible table, and read direction on
+every provider.
+
 ### Attributes compiled into another assembly (TASK-577)
 In the split-aggregator layout a model's `[MaxLengthField]`, `[UtcField]` etc. have a different CLR identity from the
 copy `Birko.Data.SQL` was compiled with, so `DataBase.LoadField` rebuilds them by type name

@@ -27,8 +27,10 @@ namespace Birko.Data.SQL.Fields
         {
             if (val == null) return null;
             var targetType = Nullable.GetUnderlyingType(Property.PropertyType) ?? Property.PropertyType;
+            // SH-M241 (TASK-154): `(int)val` unboxes only an int-backed enum; `enum : byte` threw on every write.
+            // A wider underlying type is refused when the field is mapped (AbstractField.CreateAbstractField).
             if (targetType.IsEnum)
-                return (int)val;
+                return Convert.ToInt32(val, System.Globalization.CultureInfo.InvariantCulture);
             return val;
         }
     }

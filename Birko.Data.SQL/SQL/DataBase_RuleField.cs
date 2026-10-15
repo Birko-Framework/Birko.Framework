@@ -101,7 +101,7 @@ namespace Birko.Data.SQL
                     nameof(field));
             }
 
-            var table = LoadTable(entityType);
+            var table = TryLoadTable(entityType);
             var resolved = table == null ? null : ResolveFieldNameIn(new[] { table }, field!, withTableName: true);
             resolved ??= ResolveFieldSelectName?.Invoke(entityType, field!, true);
 

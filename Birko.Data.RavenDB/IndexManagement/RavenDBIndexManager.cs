@@ -48,6 +48,15 @@ namespace Birko.Data.RavenDB.IndexManagement
             if (definition == null) throw new ArgumentNullException(nameof(definition));
             if (string.IsNullOrWhiteSpace(definition.Name)) throw new ArgumentException("Index name is required.", nameof(definition));
 
+            // SH-M432 (TASK-154): these flags were ignored, so a definition asking for a unique, sparse or expiring index
+            // created a plain one and reported success (rule 55). A RavenDB index enforces none of them.
+            if (definition.Unique)
+                throw new NotSupportedException($"RavenDB indexes are not unique constraints; '{definition.Name}' cannot be created Unique. Use compare-exchange values for uniqueness.");
+            if (definition.Sparse)
+                throw new NotSupportedException($"RavenDB has no sparse index; '{definition.Name}' cannot be created Sparse.");
+            if (definition.ExpireAfter.HasValue)
+                throw new NotSupportedException($"A RavenDB index does not expire documents; '{definition.Name}' cannot take ExpireAfter. Use the @expires metadata with document expiration enabled.");
+
             // Build a RavenDB IndexDefinition
             var ravenDef = new Raven.Client.Documents.Indexes.IndexDefinition
             {
@@ -69,9 +78,15 @@ namespace Birko.Data.RavenDB.IndexManagement
             else if (definition.Fields.Count > 0)
             {
                 // Auto-generate a simple map from field names + scope (collection name)
-                var collectionName = scope ?? "docs";
+                // SH-M432 (TASK-154): the scope and field names are interpolated into map CODE that the server compiles,
+                // so they are held to plain identifiers rather than escaped (rule 33, containment by refusal). A map for
+                // anything else is written by the caller and passed as the "Map" property.
+                var collectionName = RequireMapIdentifier(scope ?? "docs", "collection", definition.Name);
                 var fieldSelections = string.Join(", ", definition.Fields.Select(f =>
-                    $"{f.Name} = doc.{f.Name}"));
+                {
+                    var field = RequireMapIdentifier(f.Name, "field", definition.Name);
+                    return $"{field} = doc.{field}";
+                }));
                 ravenDef.Maps.Add($"from doc in docs.{collectionName} select new {{ {fieldSelections} }}");
             }
 
@@ -151,6 +166,15 @@ namespace Birko.Data.RavenDB.IndexManagement
 
             return ToIndexInfo(stats);
         }
+
+        private static readonly System.Text.RegularExpressions.Regex MapIdentifier = new("^[A-Za-z_][A-Za-z0-9_]*$");
+
+        private static string RequireMapIdentifier(string name, string what, string index)
+            => MapIdentifier.IsMatch(name)
+                ? name
+                : throw new ArgumentException(
+                    $"Index '{index}': the {what} name '{name}' is not a plain identifier, so it cannot be put into a generated "
+                    + "map. Pass the map yourself in the \"Map\" property.", nameof(index));
 
         #region RavenDB-specific extensions
 

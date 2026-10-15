@@ -23,7 +23,7 @@ namespace Birko.Data.SQL
         /// <para>
         /// TASK-111. `DataBase.ResolveRuleField` resolves a rule's field **at the caller**, before any store
         /// operation has run — unlike `ResolveOrderFields`, which the connector invokes after `LoadView` has
-        /// already registered this delegate. A view type carries no `[Table]`, so `LoadTable` returns null
+        /// already registered this delegate. A view type carries no `[Table]`, so `TryLoadTable` returns null (`LoadTable` throws, TASK-154)
         /// and the delegate is the only thing that can resolve its fields. Without this, the *first*
         /// `ToConditions&lt;MyView&gt;(…)` in a process threw `ArgumentException` for a perfectly valid view
         /// field, and the identical call succeeded later once anything had touched a view — an

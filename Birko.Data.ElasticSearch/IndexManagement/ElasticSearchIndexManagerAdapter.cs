@@ -55,12 +55,28 @@ namespace Birko.Data.ElasticSearch.IndexManagement
 
             Func<CreateIndexDescriptor, ICreateIndexRequest>? descriptor = null;
 
-            // Map properties to ES settings
+            // SH-M238 (TASK-154): every flag this lane cannot honour used to be dropped, so the call that builds an
+            // enforced unique index on SQL built an unconstrained index here and reported success (rule 55). An
+            // ElasticSearch index is a container, not a constraint: Unique, Sparse and ExpireAfter have no meaning
+            // on it. Fields need none: every field of a document is indexed by its mapping.
+            if (definition.Unique)
+                throw new NotSupportedException($"ElasticSearch has no unique index; '{definition.Name}' cannot be created Unique.");
+            if (definition.Sparse)
+                throw new NotSupportedException($"ElasticSearch has no sparse index; '{definition.Name}' cannot be created Sparse.");
+            if (definition.ExpireAfter.HasValue)
+                throw new NotSupportedException($"ElasticSearch has no TTL index; '{definition.Name}' cannot expire documents. Delete them on a schedule.");
+
             int? shards = null, replicas = null;
             if (definition.Properties != null)
             {
-                if (definition.Properties.TryGetValue("NumberOfShards", out var s) && s is int sVal) shards = sVal;
-                if (definition.Properties.TryGetValue("NumberOfReplicas", out var r) && r is int rVal) replicas = rVal;
+                foreach (var (key, value) in definition.Properties)
+                {
+                    var number = key is "NumberOfShards" or "NumberOfReplicas" ? AsInt(key, value) : (int?)null;
+                    if (key == "NumberOfShards") shards = number;
+                    else if (key == "NumberOfReplicas") replicas = number;
+                    else throw new NotSupportedException(
+                        $"Unknown ElasticSearch index property '{key}' on '{definition.Name}'; supported: NumberOfShards, NumberOfReplicas.");
+                }
             }
 
             if (shards.HasValue || replicas.HasValue)
@@ -107,8 +123,11 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         {
             var catResponse = await _client.Cat.IndicesAsync(d => d, ct).ConfigureAwait(false);
 
+            // SH-M236 (TASK-154): a failed _cat request read as a cluster with no indexes. The SQL managers let the
+            // failure propagate, and so does this one now.
             if (!catResponse.IsValid)
-                return Array.Empty<Patterns.IndexManagement.IndexInfo>();
+                throw new IndexManagementException(
+                    $"Failed to list ES indexes: {catResponse.DebugInformation}", "*", scope, catResponse.OriginalException);
 
             return catResponse.Records
                 .Where(r => !r.Index.StartsWith(".")) // skip system indexes
@@ -133,7 +152,11 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         {
             if (string.IsNullOrWhiteSpace(indexName)) throw new ArgumentException("Index name is required.", nameof(indexName));
 
-            try
+            // SH-M237 (TASK-154): every failure (a cluster error, a bad request, an auth failure) answered null, "no such
+            // index". Only that answer is null now, asked as a question rather than read off an exception.
+            if (!await _indexManager.IndexExistsAsync(indexName, ct).ConfigureAwait(false))
+                return null;
+
             {
                 var esInfo = await _indexManager.GetIndexInfoAsync(indexName, ct).ConfigureAwait(false);
 
@@ -152,11 +175,15 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                     }
                 };
             }
-            catch (InvalidOperationException)
-            {
-                return null;
-            }
         }
+
+        private static int AsInt(string key, object? value) => value switch
+        {
+            int i => i,
+            long l when l is >= 0 and <= int.MaxValue => (int)l,
+            string text when int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed) => parsed,
+            _ => throw new NotSupportedException($"ElasticSearch index property '{key}' must be a whole number, not '{value}'."),
+        };
 
         #region Helpers
 

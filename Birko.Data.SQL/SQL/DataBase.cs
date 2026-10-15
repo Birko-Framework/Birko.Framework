@@ -82,7 +82,9 @@ namespace Birko.Data.SQL
             foreach (var field in type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
             {
                 var accesors = field.GetAccessors();
-                if (accesors.Any(x => !x.IsStatic))
+                // SH-M240 (TASK-154): a get-only property (`Display => First + Last`) has no setter, so it was a column
+                // that every read failed to set. A private setter still counts (CanWrite), as reflection can use it.
+                if (accesors.Any(x => !x.IsStatic) && field.CanWrite)
                 {
                     action?.Invoke(field);
                 }
@@ -383,7 +385,7 @@ namespace Birko.Data.SQL
                 return null;
             var isParameterAccess = member.Expression?.NodeType == ExpressionType.Parameter
                 || (member.Expression is UnaryExpression { NodeType: ExpressionType.Convert } c && c.Operand.NodeType == ExpressionType.Parameter);
-            return isParameterAccess ? LoadTable(exprType)?.GetFieldByPropertyName(member.Member.Name) : null;
+            return isParameterAccess ? TryLoadTable(exprType)?.GetFieldByPropertyName(member.Member.Name) : null;
         }
 
         /// <summary>
@@ -1087,7 +1089,7 @@ namespace Birko.Data.SQL
         /// </summary>
         private static string? ResolveColumnName(Type exprType, string propertyName, bool withTableName)
         {
-            var table = LoadTable(exprType);
+            var table = TryLoadTable(exprType);
             if (table != null)
             {
                 var field = table.GetFieldByPropertyName(propertyName);

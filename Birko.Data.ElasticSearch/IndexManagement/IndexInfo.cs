@@ -95,6 +95,12 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         public string? ErrorMessage { get; set; }
 
         /// <summary>
+        /// Set on a SUCCESSFUL alias reindex whose last step, deleting the old index, failed (TASK-154, SH-M235). The
+        /// alias already points at the new index; the old one is left behind and needs deleting by hand.
+        /// </summary>
+        public string? CleanupError { get; set; }
+
+        /// <summary>
         /// Creates a successful result.
         /// </summary>
         public static ReindexResult Successful(string source, string target, long documentsProcessed, TimeSpan duration)

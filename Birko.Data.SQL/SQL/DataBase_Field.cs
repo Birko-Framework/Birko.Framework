@@ -180,7 +180,7 @@ namespace Birko.Data.SQL
 
         public static IEnumerable<AbstractField> GetPrimaryFields(Type type)
         {
-            var table = LoadTable(type);
+            var table = TryLoadTable(type);
             var primaries = table?.GetPrimaryFields()?.ToList();
 
             // Fallback: if no [PrimaryField] attribute is declared, use the Guid property

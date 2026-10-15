@@ -20,69 +20,28 @@ namespace Birko.Data.SQL.SQLite.IndexManagement
 
         protected override string IndexExistsSql(string tableName, string indexName)
         {
+            // SH-M225 (TASK-154): the table was accepted and never used, so an index of the same name on another
+            // table answered "exists" and a guarded CREATE INDEX was skipped.
             var safeIndex = SqlLiteral.EscapeLiteral(indexName);
-            return $"SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = '{safeIndex}'";
-        }
-
-        protected override string ListIndexesSql(string tableName)
-        {
-            // Not used — ListAsync is overridden to use PRAGMA. Kept only to satisfy the abstract
-            // base contract; the base ListAsync no longer runs for SQLite (CR-H093).
             var safeTable = SqlLiteral.EscapeLiteral(tableName);
-            return $"SELECT name, '', 0, CASE WHEN sql LIKE '%UNIQUE%' THEN 1 ELSE 0 END, 0 FROM sqlite_master WHERE type = 'index' AND tbl_name = '{safeTable}' AND name NOT LIKE 'sqlite_autoindex_%'";
+            return $"SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = '{safeIndex}' AND tbl_name = '{safeTable}'";
         }
 
         /// <summary>
-        /// SQLite requires PRAGMA index_info per index to get column details. Must be an override
-        /// (not `new`) so the inherited GetInfoAsync and IIndexManager/SqlIndexManager-typed callers
-        /// dispatch to this PRAGMA implementation instead of the empty-column base query (CR-H093).
+        /// Lists the table's declared indexes from SQLite's own index metadata (TASK-154), through the base reader.
+        /// Uniqueness used to be <c>sql LIKE '%UNIQUE%'</c> (SH-M226), so an index merely NAMED <c>IX_UNIQUE_CODE</c>
+        /// reported unique, and every column read ascending (SH-M244), so a desired-against-actual comparison never
+        /// settled. <c>pragma_index_list</c> carries the real unique flag and the origin (<c>c</c> = CREATE INDEX, not a
+        /// UNIQUE or PRIMARY KEY constraint); <c>pragma_index_xinfo</c> each key column's direction and position.
         /// </summary>
-        public override async Task<IReadOnlyList<IndexInfo>> ListAsync(string? scope = null, CancellationToken ct = default)
+        protected override string ListIndexesSql(string tableName)
         {
-            if (string.IsNullOrWhiteSpace(scope))
-                throw new ArgumentException("Table name (scope) is required for SQL index management.", nameof(scope));
-
-            // Step 1: Get index names
-            var indexNames = new List<(string Name, bool IsUnique)>();
-            var safeTable = SqlLiteral.EscapeLiteral(scope!);
-            var namesSql = $"SELECT name, CASE WHEN sql LIKE '%UNIQUE%' THEN 1 ELSE 0 END AS is_unique FROM sqlite_master WHERE type = 'index' AND tbl_name = '{safeTable}' AND name NOT LIKE 'sqlite_autoindex_%'";
-
-            await ExecuteReaderAsync(namesSql, reader =>
-            {
-                while (reader.Read())
-                {
-                    indexNames.Add((reader.GetString(0), reader.GetInt32(1) != 0));
-                }
-            }, ct).ConfigureAwait(false);
-
-            // Step 2: For each index, get columns via PRAGMA
-            var result = new List<IndexInfo>();
-            foreach (var (name, isUnique) in indexNames)
-            {
-                var safeName = SqlLiteral.EscapeLiteral(name);
-                var fields = new List<IndexField>();
-
-                await ExecuteReaderAsync($"PRAGMA index_info('{safeName}')", reader =>
-                {
-                    while (reader.Read())
-                    {
-                        fields.Add(new IndexField
-                        {
-                            Name = reader.GetString(2), // column name
-                            IsDescending = false
-                        });
-                    }
-                }, ct).ConfigureAwait(false);
-
-                result.Add(new IndexInfo
-                {
-                    Name = name,
-                    Unique = isUnique,
-                    Fields = fields
-                });
-            }
-
-            return result;
+            var safeTable = SqlLiteral.EscapeLiteral(tableName);
+            return $@"SELECT il.name, ii.name, ii.""desc"", il.""unique"", ii.seqno
+FROM pragma_index_list('{safeTable}') AS il
+JOIN pragma_index_xinfo(il.name) AS ii
+WHERE il.origin = 'c' AND ii.""key"" = 1 AND ii.name IS NOT NULL
+ORDER BY il.name, ii.seqno";
         }
     }
 }

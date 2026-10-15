@@ -141,7 +141,7 @@ namespace Birko.Data.SQL.Connectors
             // ModelMap registration. A DIAGNOSTIC must not answer that with a NullReferenceException --
             // it is the most likely thing a host passes by mistake (a DTO, a view model), and § TASK-290
             // records this same shape reaching a consumer as an NRE out of schema-ensure. Report it.
-            var table = DataBase.LoadTable(type);
+            var table = DataBase.TryLoadTable(type);
             if (table == null || string.IsNullOrEmpty(table.Name))
             {
                 return new SchemaDriftReport(type.Name, supported: false, tableExists: false,

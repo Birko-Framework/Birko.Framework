@@ -2515,11 +2515,15 @@ DeleteAsync inlines `TModel item = CreateModelInstance(); MapToModel(data, item)
 
 `../Birko.Data.SQL/SQL/Fields/CharField.cs:26`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15, SQLite). Reading a `char` threw "String cannot be converted to Char" for every row. `CharField.Read` gives a `char` property the first character. `char?` has no mapping at all, which is [[TASK-150]]. `tests/Birko.Data.SQL.SqLite.Tests/SchemaDdlTriageTests.cs`.
+
 CreateAbstractField maps typeof(char) to `new CharField(property, name, primary, unique, 1)` (AbstractField.cs:199), but CharField.Read does `Property.SetValue(value, reader.GetString(index))`. Assigning a string to a char property fails inside reflection. CharField only round-trips string properties; the one CLR type it is named for cannot be read back.
 
 #### SH-M222 — DataBase.LoadTable returns null through a non-nullable return type for any unmapped type
 
 `../Birko.Data.SQL/SQL/DataBase_Table.cs:68`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15). `LoadTable` returned null as non-nullable; measured, `Select` on such a type answered 0 rows, and MySQL's bulk insert returned having inserted nothing. `LoadTable` now throws `TableAttributeException` naming the type, and the callers to whom "not a table" is a real answer (view types in rule-field and column resolution, drift, `LoadTables`, the cache-key prefix, `GetPrimaryFields`'s Guid fallback, the view translator) use the new `TryLoadTable`. Both answers are cached.
 
 ComputeTable returns null when the type has neither a table attribute nor a RegisterTableName override (or when its Fields come out empty); LoadTable then does `return table!`, laundering the null past nullable analysis. Callers that do not null-check (unlike GetPrimaryFields, which does) dereference it, so a model missing [Table] fails with an opaque NullReferenceException instead of a TableAttributeException. The null is also not cached, so every call re-reflects.
 
@@ -2527,11 +2531,15 @@ ComputeTable returns null when the type has neither a table attribute nor a Regi
 
 `../Birko.Data.SQL/SQL/DataBase_Table.cs:191`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15, SQLite). An index on an `[IgnoreField]` property failed at DDL time ("no such column"). It is refused at table load, as `[CompositeIndex]` already was.
+
 `var columnName = field?.Name ?? prop.Name;` — when no field matched (property carries [IgnoreField], or has an unsupported CLR type such as `long` and was skipped by CreateAbstractField), the index silently names the property. CREATE INDEX then fails at DDL time far from the declaration. The [CompositeIndex] path (line 250) throws TableAttributeException for exactly this case, so the inconsistency looks unintentional.
 
 #### SH-M224 — Composite index column order is nondeterministic when Order values tie
 
 `../Birko.Data.SQL/SQL/DataBase_Table.cs:266`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED by reading, fixed** (TASK-154, measured 2026-10-15). `List.Sort` is unstable. Measured, the tie came out in declaration order anyway, so the test is a pin; the sort is now stable (Order, then declaration position).
 
 `idx.Columns.Sort((a, b) => a.Order.CompareTo(b.Order))` uses List<T>.Sort, an unstable introsort. [IndexedField(name)] defaults Order to 0, so the attribute on two properties yields two columns with Order 0 whose emitted order is unspecified — and column order determines which queries the index can serve. OrderBy would at least pin it to reflection order.
 
@@ -2539,11 +2547,15 @@ ComputeTable returns null when the type has neither a table attribute nor a Regi
 
 `../Birko.Data.SQL.SqLite/IndexManagement/SqLiteIndexManager.cs:24`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15, SQLite). `ExistsAsync("IX", "Two")` answered true for an index on table `One`. The query filters `tbl_name`.
+
 The query is `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = '<index>'` — the tableName parameter is accepted and never used, unlike ListAsync (line 48) which does filter on tbl_name. A migration guarding CREATE INDEX with ExistsAsync will skip creating an index on table B because a same-named index exists on table A.
 
 #### SH-M226 — SQLite infers index uniqueness from `sql LIKE '%UNIQUE%'`
 
 `../Birko.Data.SQL.SqLite/IndexManagement/SqLiteIndexManager.cs:48`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15, SQLite). An index named `IX_UNIQUE_…` listed as unique. Listing now reads `pragma_index_list` (`unique`, origin `c`) joined to `pragma_index_xinfo`, through the base reader; the separate `ListAsync` override is gone.
 
 Any index whose stored DDL text contains the substring UNIQUE — including inside a column or index identifier such as IX_UNIQUE_CODE — is reported Unique == true by both ListAsync and the (dead) ListIndexesSql. PRAGMA index_list exposes a real `unique` column and would be exact. A drift check comparing desired against actual uniqueness gets the wrong answer.
 
@@ -2551,11 +2563,15 @@ Any index whose stored DDL text contains the substring UNIQUE — including insi
 
 `../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs:157`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED on MySQL and PostgreSQL, fixed** (TASK-154, measured 2026-10-15, live). An index on a same-named table in another database (MySQL) or schema (PostgreSQL) answered `ExistsAsync` and appeared in `ListAsync`. MySQL filters `table_schema = DATABASE()` and excludes `PRIMARY`; PostgreSQL counts the table an unqualified name resolves to (`pg_table_is_visible`). `IndexManagerTriageLiveTests` (PostgreSQL, MySQL).
+
 IndexExistsSql filters information_schema.statistics only by table_name and index_name (PostgreSqlIndexManager.cs:21 likewise filters pg_indexes only by tablename/indexname, and its ListIndexesSql filters only t.relname). With several schemas reachable from the connection, an index on a same-named table in another schema satisfies the count and ExistsAsync returns a false positive. ListIndexesSql has the same gap and no primary-key filter, so MySQL reports PRIMARY while the others exclude it.
 
 #### SH-M228 — IndexManager.UpdateMapping validates indexName then never uses it
 
 `../Birko.Data.ElasticSearch/IndexManagement/IndexManager.cs:304`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15). The mapping PUT went out without the index. `UpdateMapping[Async]` sets `.Index(indexName)`; the fake transport records `PUT orders_v2/_mapping`. `tests/Birko.Data.ElasticSearch.Tests/IndexManagement/IndexManagementTriageTests.cs` (fake transport).
 
 `_client.Map(mappingDescriptor)` / `MapAsync` is called with no `.Index(indexName)`, so the mapping lands on whatever index the caller's descriptor or the ElasticClient default resolves — not the one named in the argument. The parameter only ever reaches the failure message, which makes a mapping applied to the wrong index look like a success.
 
@@ -2563,11 +2579,15 @@ IndexExistsSql filters information_schema.statistics only by table_name and inde
 
 `../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs:181`
 
+**Verdict: CONFIRMED, fixed by [[TASK-245]]** (TASK-154, measured 2026-10-15, by reading). `CreateUniqueIndexSql` was removed; unique indexes go through the connector emitter, which MySQL overrides.
+
 The base CreateUniqueIndexSql emits `CREATE UNIQUE INDEX IF NOT EXISTS ...`. MySQL has no IF NOT EXISTS clause for CREATE INDEX. MSSqlIndexManager and PostgreSqlIndexManager override this method; MySqlIndexManager.cs:17 declares only a constructor and comments that the base implementation 'is already correct'. Every CreateAsync with definition.Unique == true against MySQL therefore fails with a parse error wrapped in IndexManagementException — the one flag SqlIndexManager branches on is unusable on that provider.
 
 #### SH-M230 — DropAsync emits `DROP INDEX IF EXISTS <name>` with no ON clause — invalid on MySQL
 
 `../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs:84`
+
+**Verdict: CONFIRMED, fixed by [[TASK-249]]** (TASK-154, measured 2026-10-15, by reading). `MySQLConnector.DropIndexSql` renders `DROP INDEX … ON <table>`, and `DropAsync` tolerates "already gone".
 
 DropAsync builds a name-only Tables.IndexDefinition and delegates to Connector.DropIndexSql. The base implementation (AbstractConnectorBase.cs:352) returns `DROP INDEX IF EXISTS "<name>"` — no table. MySQL requires `DROP INDEX <name> ON <table>` and rejects IF EXISTS; MSSqlConnector overrides DropIndexSql to add `ON <table>`, MySQLConnector does not override it at all. So DropAsync (and DropIndexes) can never drop an index on MySQL; every call fails, wrapped as IndexManagementException.
 
@@ -2575,11 +2595,15 @@ DropAsync builds a name-only Tables.IndexDefinition and delegates to Connector.D
 
 `../Birko.Data.SQL.MSSql/IndexManagement/MSSqlIndexManager.cs:32`
 
+**Verdict: CONFIRMED, fixed by [[TASK-622]]** (TASK-154, measured 2026-10-15). The reader uses `Convert.ToInt32(GetValue)`; measured there, `ListAsync` always threw on SQL Server before.
+
 ListIndexesSql selects `ic.key_ordinal AS ordinal_position`; sys.index_columns.key_ordinal is tinyint. The shared reader loop at SqlIndexManager.cs:115 calls `reader.GetInt32(4)`, and Microsoft.Data.SqlClient's GetInt32 performs no widening — a tinyint column raises InvalidCastException. ListAsync (and GetInfoAsync, which delegates to it) therefore throws for any MSSQL table with at least one non-primary index, and since inspection paths are deliberately unwrapped the caller sees a raw cast error.
 
 #### SH-M232 — PostgreSQL descending detection subscripts indoption by table attnum instead of index position
 
 `../Birko.Data.SQL.PostgreSQL/IndexManagement/PostgreSqlIndexManager.cs:30`
+
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15, live PostgreSQL). A DESC index on a later column listed ascending. `indoption` is subscripted by the column's position in `indkey`; both int2vectors are zero-based (catalogue read live: `indkey 6 7`, `indoption 0 3`). `IndexManagerTriageLiveTests` (PostgreSQL, MySQL).
 
 `pg_index.indoption[a.attnum - 1] & 1 = 1` indexes indoption by the column's position in the *table*, but indoption is a per-index vector ordered by position in the *index*. For a descending index on the table's 5th column, indoption has one element and indoption[4] is NULL, so the CASE yields 0 and IsDescending reports false; for multi-column indexes the flags are read off the wrong slots and can report DESC for an ascending column. PostgreSQL is one of only two dialects claimed to report real direction.
 
@@ -2587,11 +2611,15 @@ ListIndexesSql selects `ic.key_ordinal AS ordinal_position`; sys.index_columns.k
 
 `../Birko.Data.ElasticSearch/IndexManagement/IndexManager.cs:44`
 
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15). A failed HEAD answered "does not exist" and `DeleteIndexAsync` returned as done. Existence is now decided by status (200 / 404; anything else throws), because NEST marks a 404 HEAD invalid as well. The four inline checks in `IndexManager` go through it. `tests/Birko.Data.ElasticSearch.Tests/IndexManagement/IndexManagementTriageTests.cs` (fake transport).
+
 IndexExists/IndexExistsAsync return `response.Exists` without ValidateResponse. On a transport failure, auth rejection or unreachable node, Exists is false. So DeleteIndexAsync (line 144) short-circuits and returns as though the index were deleted — a destructive op reporting success having done nothing; CreateIndexAsync (line 76) skips its already-exists guard; and ElasticSearchIndexManagerAdapter.ExistsAsync surfaces the same false to IIndexManager callers guarding migrations.
 
 #### SH-M234 — Reindex with waitForCompletion:false reports Success and 0 documents while the copy still runs
 
 `../Birko.Data.ElasticSearch/IndexManagement/ReindexHelper.cs:69`
+
+**Verdict: CONFIRMED by reading; owned by [[TASK-560]]** (TASK-154, measured 2026-10-15). The open TASK-560 is this exact defect; not duplicated here.
 
 With waitForCompletion=false ES returns immediately with a task handle and response.Created == 0; IsValid is true, so the method refreshes the target and returns ReindexResult.Successful(source, target, 0, elapsed). The caller cannot distinguish 'copied nothing' from 'still copying' and gets no task id to poll, so any follow-up step (alias swap, dropping the source) runs against a partially populated index.
 
@@ -2599,11 +2627,15 @@ With waitForCompletion=false ES returns immediately with a task handle and respo
 
 `../Birko.Data.ElasticSearch/IndexManagement/ReindexHelper.cs:264`
 
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15). A failed delete of the old index after a completed swap returned Failed. It is a success with the new `ReindexResult.CleanupError`. `tests/Birko.Data.ElasticSearch.Tests/IndexManagement/IndexManagementTriageTests.cs` (fake transport).
+
 Steps 3 and 4 (SwapAlias, then DeleteIndex(oldIndexName) when deleteOldIndex is true) run inside the same try. If the delete throws — old index closed, in-flight snapshot, permissions — the catch returns ReindexResult.Failed even though the alias already points at the new index and the migration is complete. A caller that retries on failure then dies at step 1 with "Index '<new>' already exists."
 
 #### SH-M236 — Adapter ListAsync returns an empty list when the _cat request fails
 
 `../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs:111`
+
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15). A failed `_cat/indices` was an empty list; it throws `IndexManagementException`. `tests/Birko.Data.ElasticSearch.Tests/IndexManagement/IndexManagementTriageTests.cs` (fake transport).
 
 `if (!catResponse.IsValid) return Array.Empty<IndexInfo>();` — a rejected, unauthorised or timed-out _cat/indices call is indistinguishable from a cluster with no indexes, with no exception and no diagnostic. SqlIndexManager.ListAsync lets provider failures propagate, so the same IIndexManager contract fails loudly on SQL and silently on ES; a reconciliation loop reading ES would conclude every index is missing and try to recreate them.
 
@@ -2611,11 +2643,15 @@ Steps 3 and 4 (SwapAlias, then DeleteIndex(oldIndexName) when deleteOldIndex is 
 
 `../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs:155`
 
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15). Every failure of `GetInfoAsync` read as "no such index". It asks `IndexExistsAsync` first and returns null only for a missing index; any other failure propagates. `tests/Birko.Data.ElasticSearch.Tests/IndexManagement/IndexManagementTriageTests.cs` (fake transport).
+
 The catch is untyped by cause: IndexManager.ValidateResponse throws InvalidOperationException for a missing index, a cluster error, a bad request and an auth failure alike, so all of them return null. The caller reads 'index absent' and may create or recreate an index that in fact exists, and no context (DebugInformation, inner exception) survives.
 
 #### SH-M238 — ES adapter CreateAsync silently drops Unique/Sparse/ExpireAfter/Fields
 
 `../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs:51`
+
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15). `Unique`, `Sparse`, `ExpireAfter` and unknown properties are refused with `NotSupportedException` before any request (rule 55); a shard count given as text is honoured (pin). `Fields` needs nothing: a document's fields are indexed by its mapping.
 
 Only Properties["NumberOfShards"]/["NumberOfReplicas"] are read, and only when boxed as int (a "3" string is ignored with no error). definition.Fields, Unique, Sparse and ExpireAfter are never inspected. SqlIndexManager.CreateAsync branches on Unique and rejects an empty Fields list, so the same IIndexManager call that creates an enforced unique constraint on SQL creates an unconstrained container on ES and reports success — a divergence a portable migration cannot detect at runtime.
 
@@ -2623,11 +2659,15 @@ Only Properties["NumberOfShards"]/["NumberOfReplicas"] are read, and only when b
 
 `../Birko.Data.ElasticSearch/IndexManagement/IndexManager.cs:271`
 
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15). Asked through an alias, the info was all zeros. The concrete index is the response's only key; an alias naming several indexes is refused. `tests/Birko.Data.ElasticSearch.Tests/IndexManagement/IndexManagementTriageTests.cs` (fake transport).
+
 `statsResponse.Indices.TryGetValue(indexName, ...)` and the settings equivalent look up the argument string, but ES keys both responses by the concrete index name. Call GetIndexInfoAsync("invoices") where `invoices` is an alias for `invoices_v3` and both TryGetValue calls miss: DocumentCount, SizeInBytes, NumberOfShards and NumberOfReplicas stay 0 and RefreshInterval stays null, with IsValid true and no exception. The adapter republishes those zeros as portable IndexInfo.
 
 #### SH-M240 — Get-only computed properties become columns and break row materialisation
 
 `../Birko.Data.SQL/SQL/DataBase_Field.cs:22`
+
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15, SQLite). A get-only property was a column and every read threw "Property set method not found". `GetProperties` skips a property that cannot be written (`CanWrite`; a private setter still counts). **Behaviour change:** such a column disappears from CREATE TABLE; on an existing table, drift reports it unexpected.
 
 LoadFields enumerates via DataBase.GetProperties (DataBase.cs:80), which accepts a property when any public accessor is non-static — a getter alone qualifies. So `public string Display => First + " " + Last;` on a [Table] model is mapped to a StringField, appears in CREATE TABLE and in the SELECT list, and then AbstractField.Read calls Property.SetValue on a property with no setter, throwing ArgumentException for every row read. Only [IgnoreField]/[NotMapped] avoid it, and nothing warns.
 
@@ -2635,11 +2675,15 @@ LoadFields enumerates via DataBase.GetProperties (DataBase.cs:80), which accepts
 
 `../Birko.Data.SQL/SQL/Fields/IntegerField.cs:32`
 
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15, SQLite). A `byte` enum threw `InvalidCastException` on write. `Convert.ToInt32`; an enum backed by `long` / `ulong` / `uint` is refused at mapping, as its values may not fit the INTEGER column.
+
 CreateAbstractField (AbstractField.cs:227) maps every enum — whatever its underlying type — to IntegerField/NullableIntegerField. Write then does `return (int)val;` on the boxed value. The CLR permits unboxing a boxed enum only to its exact underlying type, so `enum Status : byte` or `: long` raises InvalidCastException on every INSERT/UPDATE of that entity. Read is safe (Enum.ToObject), so the failure is write-only and provider-independent.
 
 #### SH-M242 — Base-class [IndexedField] yields one global index name per derived table; IF NOT EXISTS skips all but the first
 
 `../Birko.Data.SQL/SQL/DataBase_Table.cs:144`
+
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15, SQLite). Two derived tables of a base with `[IndexedField("IX_Tenant")]`: the second shipped without the index, and no failure was recorded. An inherited `[IndexedField]` is refused at load, pointing at `[CompositeIndex]` (not inherited). Checked first: no consumer declares one on a base class.
 
 LoadIndexes scans `type.GetProperties(Public|Instance)`, which includes inherited properties, and [IndexedField] is Inherited = true — so `[IndexedField("IX_Tenant")]` on a shared base property produces an index literally named IX_Tenant in every derived table. AbstractConnector_Create.CreateIndexes feeds each to CreateIndexSql, which emits `CREATE INDEX IF NOT EXISTS`. Index names are schema-global on PostgreSQL/SQLite/MSSQL, so the first table wins and later tables silently ship without the index their model declares.
 
@@ -2647,17 +2691,23 @@ LoadIndexes scans `type.GetProperties(Public|Instance)`, which includes inherite
 
 `../Birko.Data.SQL/SQL/Tables/Table.cs:59`
 
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15). After `HasColumnName`, `Fields` stayed keyed by the old name and the attribute-declared index named the old column. `ApplyToDatabase` re-keys `Fields` and renames index columns and predicates. `tests/Birko.Models.SQL.Tests/ModelMapRenameIndexTests.cs`.
+
 ComputeTable keys Fields by the load-time column name and resolves index column names in the same pass (DataBase_Table.cs:104/112). ModelMapRegistry.ApplyToDatabase (Birko.Models.SQL/Mapping/ModelMapRegistry.cs:112) later mutates `sqlField.Name` in place for HasColumnName. After that GetField("<mapped column>") returns null while GetField("<original>") returns a field whose Name is the mapped one, and Table.Indexes still names the pre-rename column so CREATE INDEX references a column the table lacks.
 
 #### SH-M244 — MySQL and SQLite listing hard-code IsDescending=false, so direction never round-trips
 
 `../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs:167`
 
+**Verdict: CONFIRMED, fixed** (TASK-154, measured 2026-10-15, live MySQL, SQLite). Direction was a literal 0. MySQL reads `collation = 'D'`; SQLite `pragma_index_xinfo.desc`.
+
 The default (MySQL) ListIndexesSql selects the literal `0 AS is_descending` and SqLiteIndexManager.ListAsync sets `IsDescending = false` unconditionally (SqLiteIndexManager.cs:72), while CreateAsync/CreateUniqueIndexSql do emit DESC from IndexField.IsDescending. Code that lists the actual index and compares it against the desired IndexDefinition — the natural idempotency check in a migration — sees a permanent mismatch on those two providers and drops/recreates on every run, while being stable on MSSQL and PostgreSQL.
 
 #### SH-M245 — An unterminated builder chain performs no DDL and the migration reports success
 
 `../Birko.Data.Patterns/Schema/IIndexBuilder.cs:19`
+
+**Verdict: CONFIRMED, spawned as [[TASK-627]]** (TASK-154, measured 2026-10-15). The hazard is real; the remedy is not. A non-defaulted `Build()` forces implementers to declare it, but an omitted CALL still compiles. The fix is a run-time check when a migration ends, which needs a completion hook the six schema builders do not have.
 
 Build() is a default interface method with an empty body on both IIndexBuilder and ICollectionBuilder (ICollectionBuilder.cs:21). A provider that defers (the doc names SQL, which emits one CREATE TABLE/CREATE INDEX) only acts inside its Build() override, so `CreateIndex("Invoice", "IX_Number").WithField("Number")` without the terminal call emits nothing, returns normally, and the migration is recorded as applied — a schema change permanently missed with no error. A non-defaulted Build() would have made the omission a compile error.
 

@@ -515,6 +515,13 @@ namespace Birko.Data.SQL.Fields
             var underlyingType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
             if (underlyingType.IsEnum)
             {
+                // SH-M241 (TASK-154): the column is a 32-bit integer on every provider, so an enum whose values
+                // may not fit (long, ulong, uint) is refused rather than truncated.
+                var enumBase = Enum.GetUnderlyingType(underlyingType);
+                if (enumBase == typeof(long) || enumBase == typeof(ulong) || enumBase == typeof(uint))
+                    throw new Exceptions.FieldAttributeException(
+                        $"{property.DeclaringType?.FullName}.{property.Name}: enum {underlyingType.Name} is backed by "
+                        + $"{enumBase.Name}, which does not fit the INTEGER column an enum maps to. Back it by int or smaller.");
                 return (effectiveNotNull)
                         ? (AbstractField)new IntegerField(property, name, primary, unique, autoincrement)
                         : (AbstractField)new NullableIntegerField(property, name, primary, unique, autoincrement);

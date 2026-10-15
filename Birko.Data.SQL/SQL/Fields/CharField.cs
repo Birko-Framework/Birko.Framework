@@ -23,7 +23,11 @@ namespace Birko.Data.SQL.Fields
             }
             else
             {
-                Property.SetValue(value, reader.GetString(index), null);
+                // SH-M221 (TASK-154): a `char` property was handed the column's string and SetValue threw for every
+                // row. CharField also serves `string` properties with a length, which keep the string.
+                var text = reader.GetString(index);
+                var target = Nullable.GetUnderlyingType(Property.PropertyType) ?? Property.PropertyType;
+                Property.SetValue(value, target == typeof(char) ? (text.Length > 0 ? text[0] : '\0') : text, null);
             }
         }
     }

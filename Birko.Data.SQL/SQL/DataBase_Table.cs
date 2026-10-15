@@ -43,7 +43,7 @@ namespace Birko.Data.SQL
                 List<Tables.Table> tables = new List<Tables.Table>();
                 foreach (Type type in types)
                 {
-                    var table = LoadTable(type);
+                    var table = TryLoadTable(type);
                     if (table != null && table.Fields != null && table.Fields.Any())
                     {
                         tables.Add(table);
@@ -57,16 +57,39 @@ namespace Birko.Data.SQL
             }
         }
 
+        /// <summary>
+        /// The table <paramref name="type"/> maps to. Throws <see cref="Exceptions.TableAttributeException"/> for a type
+        /// that maps to none (no <c>[Table]</c>, <c>[System.ComponentModel.DataAnnotations.Schema.Table]</c> or
+        /// registered name, or no columns).
+        /// </summary>
+        /// <remarks>
+        /// SH-M222 (TASK-154). This returned null through a non-nullable type (<c>return table!</c>), so a model missing
+        /// <c>[Table]</c> failed with an opaque NullReferenceException, or not at all: measured, a <c>Select</c> on such
+        /// a type answered 0 rows, and MySQL's bulk insert returned having inserted nothing. A caller to whom "not a
+        /// table" is a legitimate answer uses <see cref="TryLoadTable"/>.
+        /// </remarks>
         public static Tables.Table LoadTable(Type type)
+            => TryLoadTable(type) ?? throw new Exceptions.TableAttributeException(
+                $"{type.FullName} maps to no table: give it a [Table(\"name\")] attribute (or register a table name) and at "
+                + "least one mapped property.");
+
+        /// <summary>The table <paramref name="type"/> maps to, or null when it maps to none. Both answers are cached.</summary>
+        public static Tables.Table? TryLoadTable(Type type)
         {
             if (_tableCache.TryGetValue(type, out var cached))
                 return cached;
+            if (_unmappedTypes.ContainsKey(type))
+                return null;
 
             var table = ComputeTable(type);
             if (table != null)
                 _tableCache.TryAdd(type, table);
-            return table!;
+            else
+                _unmappedTypes.TryAdd(type, 0);
+            return table;
         }
+
+        private static readonly ConcurrentDictionary<Type, byte> _unmappedTypes = new();
 
         private static Tables.Table? ComputeTable(Type type)
         {
@@ -190,6 +213,18 @@ namespace Birko.Data.SQL
                     }
                 }
 
+                // SH-M242 (TASK-154): [IndexedField] is inherited, so one on a base class's property named the same index
+                // in every derived table. Index names are database-wide on PostgreSQL and SQLite, so CREATE INDEX IF
+                // NOT EXISTS created it for the first table and silently skipped the rest (measured on SQLite).
+                // [CompositeIndex] is declared per class and not inherited, which is what this case needs.
+                if (allAttrs.Count > 0 && prop.DeclaringType != type)
+                {
+                    throw new Exceptions.TableAttributeException(
+                        $"{type.FullName}: [IndexedField(\"{allAttrs[0].Name}\")] is declared on {prop.DeclaringType?.Name}.{prop.Name}, "
+                        + "a base class, so every derived table would declare the same index name and all but the first "
+                        + "would be skipped. Declare a [CompositeIndex] with a table-specific name on each derived class.");
+                }
+
                 foreach (var (name, order, isDescending, isUnique, whereNotNullNames, whereNullNames) in allAttrs)
                 {
                     if (!indexes.TryGetValue(name, out var idx))
@@ -206,7 +241,14 @@ namespace Birko.Data.SQL
 
                     // Resolve actual column name from field metadata
                     var field = fields.Values.FirstOrDefault(f => f.Property?.Name == prop.Name);
-                    var columnName = field?.Name ?? prop.Name;
+                    // SH-M223 (TASK-154): an unmapped property ([IgnoreField], no setter) used to name the index column
+                    // anyway, and CREATE INDEX failed far from the declaration. [CompositeIndex] already refused this.
+                    if (field == null)
+                    {
+                        throw new Exceptions.TableAttributeException(
+                            $"[IndexedField(\"{name}\")] on {type.FullName}.{prop.Name}: the property is not a mapped column.");
+                    }
+                    var columnName = field.Name;
 
                     // TASK-248: a provider whose column type depends on being indexed needs to know here,
                     // because this is the only place the declaration is resolved against the field. MySQL
@@ -313,9 +355,15 @@ namespace Birko.Data.SQL
             ApplyIndexPredicates(type, indexes, predicateNames, fields);
 
             // Sort columns by Order within each index
+            // SH-M224 (TASK-154): List.Sort is unstable, so columns with the same Order (the default 0) came out in
+            // no defined order, and column order decides which queries an index serves. Stable: Order, then the
+            // order the columns were declared in.
             foreach (var idx in indexes.Values)
             {
-                idx.Columns.Sort((a, b) => a.Order.CompareTo(b.Order));
+                var ordered = idx.Columns.Select((column, position) => (column, position))
+                    .OrderBy(c => c.column.Order).ThenBy(c => c.position).Select(c => c.column).ToList();
+                idx.Columns.Clear();
+                idx.Columns.AddRange(ordered);
             }
 
             return indexes;

@@ -104,6 +104,7 @@ namespace Birko.Models.SQL.Mapping
                 var table = Birko.Data.SQL.DataBase.LoadTable(type);
                 if (table?.Fields == null) continue;
 
+                var renamed = new Dictionary<string, string>(StringComparer.Ordinal);
                 foreach (var field in properties)
                 {
                     var sqlField = table.GetFieldByPropertyName(field.Name);
@@ -111,7 +112,11 @@ namespace Birko.Models.SQL.Mapping
 
                     // HasColumnName overrides the physical column name — previously dropped silently
                     // even though AbstractField.Name is settable, so the mapping appeared to work.
-                    if (!string.IsNullOrEmpty(field.ColumnName)) sqlField.Name = field.ColumnName;
+                    if (!string.IsNullOrEmpty(field.ColumnName) && field.ColumnName != sqlField.Name)
+                    {
+                        renamed[sqlField.Name] = field.ColumnName!;
+                        sqlField.Name = field.ColumnName!;
+                    }
 
                     // TASK-567: through DeclarePrimary, so a fluent key replaces the implicit Guid key.
                     if (field.IsPrimary) table.DeclarePrimary(sqlField);
@@ -123,7 +128,26 @@ namespace Birko.Models.SQL.Mapping
                     // cannot be assigned onto an already-loaded AbstractField.
                 }
 
+                if (renamed.Count > 0) RenameColumns(table, renamed);
                 ApplyIndexes(table, properties);
+            }
+        }
+
+        /// <summary>
+        /// SH-M243 (TASK-154). The table was keyed, and its attribute-declared indexes resolved, by the column names
+        /// at load. Renaming a field in place left <c>Fields</c> keyed by the old name (so a lookup by the mapped column
+        /// missed) and every index naming the old column, so CREATE INDEX referenced a column the table did not have.
+        /// </summary>
+        private static void RenameColumns(Birko.Data.SQL.Tables.Table table, IReadOnlyDictionary<string, string> renamed)
+        {
+            table.Fields = table.Fields.Values.ToDictionary(f => f.Name);
+            if (table.Indexes == null) return;
+            foreach (var index in table.Indexes.Values)
+            {
+                foreach (var column in index.Columns)
+                    if (renamed.TryGetValue(column.ColumnName, out var to)) column.ColumnName = to;
+                foreach (var predicate in index.Predicates)
+                    if (renamed.TryGetValue(predicate.ColumnName, out var to)) predicate.ColumnName = to;
             }
         }
 

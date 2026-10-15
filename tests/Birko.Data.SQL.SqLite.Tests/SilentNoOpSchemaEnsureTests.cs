@@ -82,7 +82,7 @@ public class SilentNoOpSchemaEnsureTests : IDisposable
     [Fact]
     public void An_unmapped_entity_has_no_table_metadata_at_all()
     {
-        DataBase.LoadTable(typeof(UnmappedRow)).Should().BeNull(
+        DataBase.TryLoadTable(typeof(UnmappedRow)).Should().BeNull(
             "the premise: no [Table] attribute and no fluent mapping, so there is nothing to create");
         DataBase.LoadTable(typeof(MappedRow)).Should().NotBeNull();
     }

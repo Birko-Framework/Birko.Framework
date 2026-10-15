@@ -297,7 +297,7 @@ namespace Birko.Data.SQL.Stores
         // it before SetSettings/Init is correct and cheap (CR-L177). It feeds the cache-key prefix only.
         private static string ResolveTableName()
         {
-            var table = SQL.DataBase.LoadTable(typeof(T));
+            var table = SQL.DataBase.TryLoadTable(typeof(T));
             if (table != null && !string.IsNullOrEmpty(table.Name))
             {
                 return table.Name;

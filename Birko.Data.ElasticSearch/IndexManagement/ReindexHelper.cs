@@ -241,14 +241,20 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                 // Step 3: Atomic alias swap
                 _indexManager.SwapAlias(aliasName, oldIndexName, newIndexName);
 
-                // Step 4: Optionally delete old index
+                // Step 4: Optionally delete old index.
+                // SH-M235 (TASK-154): the migration is complete once the alias points at the new index, so a cleanup
+                // failure is reported on a successful result. Reporting Failed made a retry die at step 1, "already exists".
+                string? cleanupError = null;
                 if (deleteOldIndex)
                 {
-                    _indexManager.DeleteIndex(oldIndexName);
+                    try { _indexManager.DeleteIndex(oldIndexName); }
+                    catch (Exception cleanup) { cleanupError = cleanup.Message; }
                 }
 
                 sw.Stop();
-                return ReindexResult.Successful(oldIndexName, newIndexName, reindexResult.DocumentsProcessed, sw.Elapsed);
+                var done = ReindexResult.Successful(oldIndexName, newIndexName, reindexResult.DocumentsProcessed, sw.Elapsed);
+                done.CleanupError = cleanupError;
+                return done;
             }
             catch (Exception ex)
             {
@@ -298,14 +304,18 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                 // Step 3: Atomic alias swap
                 await _indexManager.SwapAliasAsync(aliasName, oldIndexName, newIndexName, ct).ConfigureAwait(false);
 
-                // Step 4: Optionally delete old index
+                // Step 4: Optionally delete old index (SH-M235: a cleanup failure does not undo a completed swap).
+                string? cleanupError = null;
                 if (deleteOldIndex)
                 {
-                    await _indexManager.DeleteIndexAsync(oldIndexName, ct).ConfigureAwait(false);
+                    try { await _indexManager.DeleteIndexAsync(oldIndexName, ct).ConfigureAwait(false); }
+                    catch (Exception cleanup) when (cleanup is not OperationCanceledException) { cleanupError = cleanup.Message; }
                 }
 
                 sw.Stop();
-                return ReindexResult.Successful(oldIndexName, newIndexName, reindexResult.DocumentsProcessed, sw.Elapsed);
+                var done = ReindexResult.Successful(oldIndexName, newIndexName, reindexResult.DocumentsProcessed, sw.Elapsed);
+                done.CleanupError = cleanupError;
+                return done;
             }
             catch (Exception ex)
             {

@@ -13,7 +13,9 @@ finding-ids: SH-M001 … SH-M428
 
 ## Progress
 
-**56 / 428 closed by this story's tasks.** All 29 of `filter-expression-translation` ([[TASK-153]], done 2026-10-15;
+**83 / 428 closed by this story's tasks.** All 27 of `schema-index-and-ddl` ([[TASK-154]], done 2026-10-15): 27
+confirmed; 19 fixed there, 3 found already fixed, `SH-M234` owned by [[TASK-560]], `SH-M245` spawned as [[TASK-627]],
+`SH-M433` as [[TASK-628]]. All 29 of `filter-expression-translation` ([[TASK-153]], done 2026-10-15;
 `SH-M128` earlier by [[TASK-559]]): 25 confirmed, 2 confirmed-narrower, 1 refuted (`SH-M137`); 18 fixed there, 6 found
 already fixed by other tasks, `SH-M147` and `SH-M148` spawned as [[TASK-626]]. `SH-M311` and `SH-M315` of `store-crud-contract` ([[TASK-557]], done 2026-10-11): fixed. `SH-M313` and `SH-M314` of `store-crud-contract` ([[TASK-556]], done 2026-10-11): fixed; spawned [[TASK-567]]. `SH-M306` and `SH-M309` of `store-crud-contract` ([[TASK-555]], done 2026-10-11): fixed on every provider. All 3 of `core-model-contracts` ([[TASK-323]], done 2026-10-11): `SH-M422`–`SH-M424` fixed. `SH-M425` of `store-lazy-initialization` ([[TASK-324]], done 2026-10-11): fixed. All 3 of `unit-of-work-and-transactions` ([[TASK-325]], done 2026-10-11): `SH-M426`–`SH-M428` fixed. All 15 of `store-crud-contract` ([[TASK-163]], done 2026-10-11): 9 fixed
 (`SH-M302`–`SH-M305`, `SH-M307`, `SH-M308`, `SH-M310`, `SH-M312`, `SH-M316`), 6 confirmed and spawned as fix tasks

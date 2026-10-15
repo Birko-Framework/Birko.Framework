@@ -32,7 +32,9 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         public bool IndexExists(string indexName)
         {
             ValidateIndexName(indexName);
-            return _client.Indices.Exists(indexName).Exists;
+            // SH-M233 (TASK-154): a failed request (transport, auth) also answers Exists == false, so a delete
+            // short-circuited as done and a create skipped its guard. A 404 is valid; anything else is checked.
+            return ExistsAnswer(_client.Indices.Exists(indexName), indexName);
         }
 
         /// <summary>
@@ -42,7 +44,7 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         {
             ValidateIndexName(indexName);
             var response = await _client.Indices.ExistsAsync(indexName, null, ct).ConfigureAwait(false);
-            return response.Exists;
+            return ExistsAnswer(response, indexName);
         }
 
         /// <summary>
@@ -54,7 +56,7 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         {
             ValidateIndexName(indexName);
 
-            if (_client.Indices.Exists(indexName).Exists)
+            if (IndexExists(indexName))
             {
                 throw new InvalidOperationException($"Index '{indexName}' already exists.");
             }
@@ -73,8 +75,7 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         {
             ValidateIndexName(indexName);
 
-            var exists = await _client.Indices.ExistsAsync(indexName, null, ct).ConfigureAwait(false);
-            if (exists.Exists)
+            if (await IndexExistsAsync(indexName, ct).ConfigureAwait(false))
             {
                 throw new InvalidOperationException($"Index '{indexName}' already exists.");
             }
@@ -127,7 +128,7 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         {
             ValidateIndexName(indexName);
 
-            if (!_client.Indices.Exists(indexName).Exists)
+            if (!IndexExists(indexName))
                 return;
 
             var response = _client.Indices.Delete(indexName);
@@ -141,8 +142,7 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         {
             ValidateIndexName(indexName);
 
-            var exists = await _client.Indices.ExistsAsync(indexName, null, ct).ConfigureAwait(false);
-            if (!exists.Exists)
+            if (!await IndexExistsAsync(indexName, ct).ConfigureAwait(false))
                 return;
 
             var response = await _client.Indices.DeleteAsync(indexName, null, ct).ConfigureAwait(false);
@@ -266,7 +266,16 @@ namespace Birko.Data.ElasticSearch.IndexManagement
 
         private static IndexInfo BuildIndexInfo(string indexName, IndicesStatsResponse statsResponse, GetIndexSettingsResponse settingsResponse, GetAliasResponse aliasResponse)
         {
-            var info = new IndexInfo { Name = indexName };
+            // SH-M239 (TASK-154): both responses are keyed by the CONCRETE index, so asked through an alias every
+            // lookup by the requested name missed and the info came back all zeros, valid, with no error. An alias
+            // naming one index resolves to it; one naming several is refused, as their numbers are not one index's.
+            var concrete = statsResponse.Indices.ContainsKey(indexName) ? indexName
+                : statsResponse.Indices.Count == 1 ? statsResponse.Indices.Keys.Single()
+                : throw new InvalidOperationException(
+                    $"'{indexName}' resolves to {statsResponse.Indices.Count} indexes ({string.Join(", ", statsResponse.Indices.Keys)}); "
+                    + "ask for one of them.");
+            var info = new IndexInfo { Name = concrete };
+            indexName = concrete;
 
             if (statsResponse.Indices.TryGetValue(indexName, out var indexStats))
             {
@@ -301,7 +310,9 @@ namespace Birko.Data.ElasticSearch.IndexManagement
             ValidateIndexName(indexName);
             if (mappingDescriptor == null) throw new ArgumentNullException(nameof(mappingDescriptor));
 
-            var response = _client.Map(mappingDescriptor);
+            // SH-M228 (TASK-154): the descriptor went out without the index, so the mapping landed wherever the caller's
+            // descriptor or the client default pointed, and the name reached only the error message.
+            var response = _client.Map<T>(d => mappingDescriptor(d.Index(indexName)));
             ValidateResponse(response, $"update mapping for '{indexName}'");
         }
 
@@ -313,7 +324,7 @@ namespace Birko.Data.ElasticSearch.IndexManagement
             ValidateIndexName(indexName);
             if (mappingDescriptor == null) throw new ArgumentNullException(nameof(mappingDescriptor));
 
-            var response = await _client.MapAsync(mappingDescriptor, ct).ConfigureAwait(false);
+            var response = await _client.MapAsync<T>(d => mappingDescriptor(d.Index(indexName)), ct).ConfigureAwait(false);
             ValidateResponse(response, $"update mapping for '{indexName}'");
         }
 
@@ -599,6 +610,19 @@ namespace Birko.Data.ElasticSearch.IndexManagement
             if (string.IsNullOrWhiteSpace(indexName))
                 throw new ArgumentException("Index name cannot be null or empty.", nameof(indexName));
         }
+
+        /// <summary>
+        /// 200 is "exists" and 404 "does not"; anything else, a transport failure included (no status), is no answer
+        /// at all and throws. NEST's own flags cannot decide it: <c>IsValid</c> is false for a 404 too, and
+        /// <c>Exists</c> is false for every failure.
+        /// </summary>
+        private static bool ExistsAnswer(ExistsResponse response, string indexName) => response.ApiCall?.HttpStatusCode switch
+        {
+            200 => true,
+            404 => false,
+            _ => throw new InvalidOperationException(
+                $"Failed to check whether index '{indexName}' exists: {response.DebugInformation}", response.OriginalException),
+        };
 
         private static void ValidateResponse(IResponse response, string operation)
         {

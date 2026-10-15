@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Schema and index metadata: 19 medium defects fixed (2026-10-15)
+
+[[TASK-154]]. A `char` or `byte`-enum column threw on every read or write, and a get-only property broke every read.
+An inherited `[IndexedField]` created the index on one table only. The index managers misreported uniqueness,
+direction and other schemas. `LoadTable` returns no null (throws; `TryLoadTable` for null), and ElasticSearch index
+management no longer reads a failed request as "absent". Spawned [[TASK-627]] and [[TASK-628]].
 ### Filter translation: 18 medium defects fixed on SQL and ElasticSearch (2026-10-15)
 
 [[TASK-153]]. `25 > x.Age` returned the other rows, `IsNullOrEmpty` matched nothing, `StartsWith("A_1")` matched
@@ -333,12 +339,6 @@ case-sensitive. The default `CI` collation is unchanged.
 showed `/tenantId`), created the container on it, and every write then failed. A non-`/id` path now throws
 `NotSupportedException` when settings are applied. **Migration:** none for a working setup; a setting other than `/id`
 never worked.
-### InfluxDB migrations find the bucket they name, and only in their organization (2026-10-14)
-
-[[TASK-612]]. Bucket names are case-sensitive, but the migration lookups matched them case-insensitively, read one
-page of 20 buckets and ignored the organization. So `DropCollection("Metrics")` deleted `metrics`, and another org's
-bucket counted as ours. Bucket creation also passed the org name as an ID (a 400). All of it now goes through
-`InfluxBucketLookup`. The bookkeeping bucket `_migrations` is a name InfluxDB 2 refuses ([[TASK-617]]).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
