@@ -82,6 +82,22 @@ bridge cannot work **at all** — both halves are registered *and consumed* as s
 there is no per-request instance for them to hold. If that lifetime is changed, several of the options
 above change shape. Settle the lifetime first.
 
+## Decision (2026-10-15, by the user)
+
+- **Lifetime: global only, fail fast.** The bridge requires the process-wide tenant context. Registering a per-request
+  or per-use (`AddTenantContextScoped` / `Transient`) context together with `AddEventTenantScope` fails **at startup**,
+  with a message that says what to change. Deferred to startup because registration order makes a registration-time
+  check inert (the consumer calls `AddEventTenantScope()` before `AddBirkoSecurity`).
+- **Approach: startup check + diagnostic** (option 3 for the wiring, plus option 4). Any remaining mismatch at dispatch
+  is recorded on a diagnostic channel in the framework's idiom. **Genuine system events keep running across all
+  tenants**: `A_genuine_system_event_still_widens_and_must_keep_doing_so` must keep passing.
+- *Rejected, left readable:* option 1 (status quo: a silent cross-tenant widening stays possible), option 2 (a check on
+  every dispatch: per-event scope creation and DI plumbing in two singletons, for a case the startup check already
+  closes), a scope-aware bridge supporting every lifetime (more code for no current consumer), and diagnostic only
+  (measured: nobody reads the existing channels).
+- The live consumer (Symbio: `AddBirkoSecurity` → `Tenant.Current`) is already correctly wired and must stay
+  unaffected; verify that before shipping.
+
 ## Acceptance criteria
 
 - [ ] A decision recorded on the four options, with the reason, and the rejected ones left readable so

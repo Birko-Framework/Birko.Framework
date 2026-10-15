@@ -109,6 +109,21 @@ with no test noticing — the `FoldsUnquotedIdentifiers` lesson.
 - [ ] N/A — mechanical; the proof is an entity's rows and its DDL landing in the declared schema, readable from
       the catalogue.
 
+## Decisions (2026-10-15, by the user)
+
+1. **Providers without schemas: a table-name prefix with `__`.** On MySQL/MariaDB (where `SCHEMA` is a separate
+   database) and SQLite (no schemas), `[Table("evts", Schema = "reporting")]` becomes the table `reporting__evts` in the
+   same database. On PostgreSQL, SQL Server and TimescaleDB it is `reporting.evts`. A load-time check refuses two
+   entities that resolve to the same physical name (e.g. `reporting__evts` declared directly beside `evts` in
+   `reporting`). *Rejected:* refusing the declaration (the same model should work on every provider), mapping to another
+   MySQL database (one word, two blast radii), and ignoring it (silent).
+2. **A connection-wide default schema ships in this task too.** It goes on the settings; a per-entity `Schema`
+   overrides it. On providers without schemas the default becomes the same `__` prefix. *Rejected:* a separate task
+   (the user prefers one migration story) and per-entity only.
+
+These settle the plan's step 1 grill. Steps 2–5 proceed with them: the prefix is one more case of
+`QualifiedIdentifier(schema, name)` on the connector, which the catalogue lookups must use too.
+
 ## Implementation plan
 
 Drafted 2026-10-15. **This is a design task first.** Its two open questions are decisions for the user, not for an
