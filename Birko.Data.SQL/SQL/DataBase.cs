@@ -589,6 +589,24 @@ namespace Birko.Data.SQL
                         // to AND/OR by the normalizer and never reach here.)
                         var valLeft = UnwrapConvert(binaryExpression.Left);
                         var valRight = UnwrapConvert(binaryExpression.Right);
+
+                        // TASK-574: both operands read the row (`x.A == x.B`, `x.Start.Date < x.End.Date`). The
+                        // fall-through below parses both sides into ONE condition, so the right operand's name
+                        // overwrote the left's and no value was bound: `B = NULL`, zero rows, no error. Route the
+                        // pair through the column-vs-column builder instead, which renders both sides.
+                        if (ContainsParameter(valLeft) && ContainsParameter(valRight))
+                        {
+                            var columnCondition = BuildColumnComparison(valLeft, valRight, expr.NodeType, conditionType, isNot, isOR, exprType);
+                            if (parent != null)
+                            {
+                                var columnSubs = parent.SubConditions as List<Condition> ?? new List<Condition>(parent.SubConditions ?? []);
+                                columnSubs.Add(columnCondition);
+                                parent.SubConditions = columnSubs;
+                                return new[] { parent };
+                            }
+                            return new[] { columnCondition };
+                        }
+
                         if (IsValueExpressionOperand(valLeft) || IsValueExpressionOperand(valRight))
                         {
                             var valueCondition = BuildValueComparison(valLeft, valRight, conditionType, isNot, isOR, exprType);
@@ -1534,6 +1552,65 @@ namespace Birko.Data.SQL
             var rightFragment = RenderValueFragment(right, exprType);
             return new Condition(leftFragment, new object[] { rightFragment }, type, isField: true, isNot: isNot, isOr: isOR);
         }
+
+        /// <summary>
+        /// A comparison whose two operands both read the row (TASK-574). Each side is rendered as a raw fragment and
+        /// the right one emitted verbatim (IsField). <c>==</c> and <c>!=</c> between operands that can be null are
+        /// rendered null-safe, so they answer what C# answers (<c>null == null</c> is true), as the constant
+        /// <c>== null</c> path already does. A <c>.Date</c> on a column is refused: the parser has no dialect, and no
+        /// date truncation is portable (<c>DATE()</c> is not T-SQL, <c>CAST(... AS DATE)</c> reads SQLite's stored
+        /// text as a number). Refusing beats the wrong answer this used to give.
+        /// </summary>
+        private static Condition BuildColumnComparison(
+            Expression left, Expression right, ExpressionType nodeType, ConditionType type, bool isNot, bool isOR, Type? exprType)
+        {
+            if (IsColumnDate(left) || IsColumnDate(right))
+                throw new NotSupportedException(
+                    $"Cannot translate '{left} {nodeType} {right}' to SQL: comparing the .Date of a column with another "
+                    + "column has no portable SQL form. Compare the raw columns, or compare one column's .Date with a value.");
+
+            var leftFragment = RenderValueFragment(left, exprType);
+            var rightFragment = RenderValueFragment(right, exprType);
+            var compared = new Condition(leftFragment, new object[] { rightFragment }, type, isField: true, isNot: isNot, isOr: isOR);
+
+            var nullable = CanBeNull(left.Type) || CanBeNull(right.Type);
+            if (!nullable || nodeType is not (ExpressionType.Equal or ExpressionType.NotEqual))
+                return compared;
+
+            Condition Null(string fragment, bool not) => new Condition(fragment, null, ConditionType.IsNull, isNot: not);
+            Condition All(params Condition[] subs) => new Condition(null, null) { IsOr = false, SubConditions = subs.ToList() };
+
+            if (nodeType == ExpressionType.Equal)
+            {
+                // A = B OR (A IS NULL AND B IS NULL)
+                return new Condition(null, null)
+                {
+                    IsOr = true,
+                    SubConditions = new List<Condition> { compared, All(Null(leftFragment, false), Null(rightFragment, false)) },
+                };
+            }
+            // A <> B OR (A IS NULL AND B IS NOT NULL) OR (A IS NOT NULL AND B IS NULL)
+            return new Condition(null, null)
+            {
+                IsOr = true,
+                SubConditions = new List<Condition>
+                {
+                    compared,
+                    All(Null(leftFragment, false), Null(rightFragment, true)),
+                    All(Null(leftFragment, true), Null(rightFragment, false)),
+                },
+            };
+        }
+
+        private static bool CanBeNull(Type type) => !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
+
+        /// <summary>True for <c>x.Col.Date</c> (through any Convert / nullable <c>.Value</c>) on a row column.</summary>
+        private static bool IsColumnDate(Expression expr)
+            => UnwrapConvert(expr) is MemberExpression m
+                && m.Member.Name == "Date"
+                && m.Member.DeclaringType == typeof(DateTime)
+                && m.Expression != null
+                && ContainsParameter(m.Expression);
 
         private static Condition MakeValueCondition(string name, object? value, ConditionType type, bool isNot, bool isOR)
         {

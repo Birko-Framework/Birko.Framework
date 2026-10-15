@@ -217,6 +217,8 @@ await store.UpdateAsync(x => x.Price > 100, item => { item.Price *= 0.9m; });
   parameters bind as their underlying integer, matching how enums are persisted (`INTEGER`).
 - **Culture/comparer arguments are ignored** as operands — `Title.Contains(q, StringComparison.OrdinalIgnoreCase)`
   filters on `q` alone, with case-sensitivity delegated to the column collation.
+- **Two columns compare** (`x.A == x.B`, `x.Opened < x.Closed`); `==` / `!=` on nullable columns treat two nulls
+  as equal, as C# does. `x.Opened.Date == x.Closed.Date` throws `NotSupportedException` (no portable SQL form).
 - Predicates also accept ternaries, `??`, and column arithmetic — see
   [CLAUDE.md § Filter translation](CLAUDE.md) for the full supported surface.
 

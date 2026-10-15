@@ -508,6 +508,14 @@ On top of that, the SQL parsers themselves handle:
   single-quoted with `'` escaped (`RenderValueFragment` / `RenderBoolFragment` / `InlineConstant`).
   Non-portable literal types (DateTime, Guid, byte[]) and anything else it cannot faithfully translate
   throw `NotSupportedException` rather than silently dropping the filter.
+- **Column vs column** (TASK-574) — any comparison whose two operands both read the row (`x.A == x.B`,
+  `x.Opened < x.Closed`) goes through `BuildColumnComparison`: both sides rendered, the right one `IsField`.
+  Before this, plain column-vs-column fell through to the one-condition parse, the right operand overwrote the
+  left and no value was bound: `B = NULL`, zero rows, no error. `==` / `!=` between operands that can be null
+  are null-safe (`A = B OR (A IS NULL AND B IS NULL)`), answering what C# answers. A `.Date` of one column
+  against another column throws `NotSupportedException`: the parser has no dialect and no date truncation is
+  portable (`DATE()` is not T-SQL; `CAST(… AS DATE)` reads SQLite's stored text as a number). A `.Date`
+  against a value keeps its half-open range rewrite.
 - **Value-position** (`ParseExpression`, Update SET RHS) — `a ?? b` → `COALESCE(a, b)`,
   `c ? t : f` → `CASE WHEN c THEN t ELSE f END`, and `x == null` / `x != null` → `IS [NOT] NULL`.
 
