@@ -4,6 +4,22 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-13 — A template engine can encode merged values, per call
+
+[[TASK-586]]. `RenderAsync(template, model, TemplateRenderOptions, ct)`: an `Encoder` (`MarkdownValueEncoder` escapes
+ASCII punctuation) applies to every merged value except the `RawPaths` the calling code declares, so it fails closed.
+No encoder = today's output. Engines without encoding (Razor) throw on an encoder instead of ignoring it (rule 55).
+
+---
+
+## 2026-10-13 — An HTML mail with a text part is HTML on the wire
+
+[[TASK-585]]. With `PlainTextBody` set, `SmtpEmailSender` sent two `text/plain` parts, the HTML first: System.Net.Mail
+ignores `IsBodyHtml` once an `AlternateView` exists. Now `multipart/alternative`, text/plain then text/html, both UTF-8;
+an inline image is a `LinkedResource` of the HTML view. One body is unchanged. Tests read the pickup `.eml`.
+
+---
+
 ## 2026-10-12 — A WebSocket reverse proxy ships
 
 [[TASK-542]]. `MapWebSocketProxy(pattern, upstream, configure)` in `Birko.Communication.WebSocket/Proxy/`. It connects

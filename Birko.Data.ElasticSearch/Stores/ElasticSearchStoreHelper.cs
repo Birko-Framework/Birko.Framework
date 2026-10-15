@@ -132,17 +132,30 @@ namespace Birko.Data.ElasticSearch.Stores
 
             foreach (var assignment in updates.Assignments)
             {
-                var memberExpr = assignment.Property.Body is UnaryExpression unary
-                    ? (MemberExpression)unary.Operand
-                    : (MemberExpression)assignment.Property.Body;
+                // TASK-501: resolved as ApplyTo and the MongoDB translator resolve it. A hard (MemberExpression) cast
+                // threw InvalidCastException on a non-member selector, and a public field was written as a property.
+                var property = assignment.PropertyInfo
+                    ?? throw new ArgumentException($"Unable to resolve property from expression: {assignment.Property}");
 
-                var fieldName = char.ToLowerInvariant(memberExpr.Member.Name[0]) + memberExpr.Member.Name.Substring(1);
-                var paramName = "p_" + memberExpr.Member.Name;
+                // The field the document is stored under: the producer the filter and sort translators use
+                // (TASK-613), so a member renamed by its mapping attribute is written where it is read.
+                var fieldName = Data.ElasticSearch.ElasticSearch.StoredFieldName(property, null)!;
+                var paramName = "p_" + property.Name;
                 var (op, value) = assignment.Match(
                     set => ("=", set.Value),
                     increment => ("+=", (object?)increment.Delta));
+
+                if (value == null)
+                {
+                    // TASK-501: a literal null, never a parameter. This was bound as `value ?? ""`, so a string stored
+                    // "" and a nullable number or date was handed a string, which the mapping refuses (measured: a 400
+                    // that failed the whole update). An increment never gets here: its delta cannot be null.
+                    scriptParts.Add($"ctx._source.{fieldName} {op} null");
+                    continue;
+                }
+
                 scriptParts.Add($"ctx._source.{fieldName} {op} params.{paramName}");
-                scriptParams[paramName] = value ?? string.Empty;
+                scriptParams[paramName] = value;
             }
 
             return (string.Join("; ", scriptParts), scriptParams);

@@ -188,7 +188,11 @@ A key may be the member name or its stored field name. Anything else throws `Arg
 sorts on its keyword form.
 
 **Every read is a search except `ReadRealtimeAsync(guid)`** (async store, TASK-616), a realtime GET by document id.
-A search sees a write only after the next refresh (~1 s). Use `ReadRealtimeAsync` whenever code verifies its own write. Runtime cost is per-document script evaluation, so scope such filters with other
+A search sees a write only after the next refresh (~1 s). Use `ReadRealtimeAsync` whenever code verifies its own write.
+
+**`PropertyUpdate` renders as one Painless script** (`ElasticSearchStoreHelper.BuildUpdateScript`): each field through
+`StoredFieldName`, a null Set as a literal `null` (never a parameter: it was `""`, TASK-501), and a non-property selector
+refused with `ArgumentException`. A conflicted, failed or timed-out by-query write throws (TASK-502). Runtime cost is per-document script evaluation, so scope such filters with other
 term/range clauses where possible.
 
 #### An empty/null collection in `Contains` matches nothing

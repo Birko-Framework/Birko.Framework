@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### An ElasticSearch `PropertyUpdate` Set of null stores null (2026-10-15)
+
+[[TASK-501]]. The update script bound a null as `""`, so a string stored `""`, and a nullable number or date failed the
+mapping: a 400 that, before [[TASK-502]], silently dropped the whole update. A null is now a literal `null`. The script
+resolves its field through `StoredFieldName`, so a mapped member is written where it is read. A non-property selector
+throws `ArgumentException`.
 ### ElasticSearch filtered writes throw instead of reporting a partial write (2026-10-14)
 
 [[TASK-502]]. `Update(filter, PropertyUpdate)` and `Delete(filter)` discarded the by-query response. Measured: three
@@ -323,18 +329,6 @@ owner can't be removed (in-process lock + post-write recount). [[TASK-589]] adds
 when the provider says the email is verified (**never** `UserLogin.IsVerified`), and bootstrap admins listed as
 `provider:subject`. [[TASK-590]]: `Birko.Security.Grants.AspNetCore`, with `RequireGrant`. A denial is 403 if the caller
 can read the resource, otherwise 404 (**rule 65**, also `OwnedCrudResults`' 404). [[TASK-594]]: `.SQL` mappings + `GrantSqlIndexes`.
-
-### A template engine can encode merged values, per call (2026-10-13)
-
-[[TASK-586]]. `RenderAsync(template, model, TemplateRenderOptions, ct)`: an `Encoder` (`MarkdownValueEncoder` escapes
-ASCII punctuation) applies to every merged value except the `RawPaths` the calling code declares, so it fails closed.
-No encoder = today's output. Engines without encoding (Razor) throw on an encoder instead of ignoring it (rule 55).
-
-### An HTML mail with a text part is HTML on the wire (2026-10-13)
-
-[[TASK-585]]. With `PlainTextBody` set, `SmtpEmailSender` sent two `text/plain` parts, the HTML first: System.Net.Mail
-ignores `IsBodyHtml` once an `AlternateView` exists. Now `multipart/alternative`, text/plain then text/html, both UTF-8;
-an inline image is a `LinkedResource` of the HTML view. One body is unchanged. Tests read the pickup `.eml`.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

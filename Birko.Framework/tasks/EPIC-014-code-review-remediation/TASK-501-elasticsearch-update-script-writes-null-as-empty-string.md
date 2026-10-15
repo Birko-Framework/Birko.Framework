@@ -2,7 +2,7 @@
 id: TASK-501
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-26
@@ -34,10 +34,12 @@ The substitution presumably exists because the script-params dictionary is `Dict
 
 ## Acceptance criteria
 
-- [ ] A null Set through the native Elasticsearch update stores null, for a string and for a nullable value type.
-- [ ] Shape test in `tests/Birko.Data.ElasticSearch.Tests/BuildUpdateScriptTests.cs` asserts no `""` substitution.
-- [ ] Measured against a live server if one is available; otherwise say so, per the family's live-suite rule.
-- [ ] `BuildUpdateScript` resolves the selector like `ApplyTo` and the MongoDB translator: a selector that is not a
+- [x] A null Set through the native Elasticsearch update stores null, for a string and for a nullable value type.
+- [x] Shape test in `tests/Birko.Data.ElasticSearch.Tests/BuildUpdateScriptTests.cs` asserts no `""` substitution.
+- [x] Measured against a live server if one is available; otherwise say so, per the family's live-suite rule.
+      → ES 7.17.25. Red: `""` into the `long` and `date` fields was a 400 for the whole update (which before TASK-502
+      was silently discarded, so the update was lost); green: `note`, `score` and `seen` store `null` (`_source` read).
+- [x] `BuildUpdateScript` resolves the selector like `ApplyTo` and the MongoDB translator: a selector that is not a
       property throws `ArgumentException` (today a non-member selector throws `InvalidCastException` from a hard
       `(MemberExpression)` cast, and a public field is written as if it were a property). Grouped here because it is
       the same function; found by the `bulk-filter-operations` spec regen after TASK-498 (2026-09-26).
@@ -48,4 +50,16 @@ The substitution presumably exists because the script-params dictionary is `Dict
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-501` — leave empty until then._
+1. Resolve the selector through `PropertyAssignment.PropertyInfo` and throw `ArgumentException` like the MongoDB
+   translator. Take the field name from `ElasticSearch.StoredFieldName`, the producer for filters and sorts (TASK-613),
+   so a member renamed by its mapping attribute is written where it is read. Recorded here because it came for free
+   with the resolution.
+2. A null value renders as `ctx._source.f = null` with no parameter. That avoids depending on how NEST serialises a
+   null parameter.
+3. Tests: shape tests (null, mapped name, refused selectors) and a live round trip checking the stored `_source`.
+
+## Progress log
+
+- 2026-10-15 — ES 7.17.25 (Docker). Red: three shape tests failed (`params.p_Name` with `""`, `owner` instead of
+  `ownerRef`, `InvalidCastException`), and the live update was refused with 400. Green: Data.ElasticSearch 236,
+  BackgroundJobs.ES 8, Workflow.ES 9, Sync.ES 12, Views 20.
