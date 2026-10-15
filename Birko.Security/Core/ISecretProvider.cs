@@ -49,6 +49,13 @@ public interface ISecretProvider
     Task<IReadOnlyList<string>> ListSecretsAsync(string? path = null, CancellationToken ct = default);
 
     /// <summary>
+    /// True when keys form a tree and <see cref="ListSecretsAsync"/> answers the names of a path's children RELATIVE to
+    /// it (Vault KV: <c>db</c>, <c>nested/</c>). False when names are flat and the listing answers FULL names that start
+    /// with the path (Azure Key Vault). A caller that walks the listing needs to know which (SH-M254).
+    /// </summary>
+    bool IsHierarchical => true;
+
+    /// <summary>
     /// Reads all key/value pairs stored under the given key/path.
     /// For providers with multi-field secrets (e.g. Vault KV), returns all fields.
     /// The default implementation returns a single-entry dictionary from <see cref="GetSecretAsync"/>.

@@ -127,7 +127,8 @@ var result = provider.GenerateToken(claims);
 var validation = provider.ValidateToken(result.Token);
 if (validation.IsValid)
 {
-    var userClaims = validation.Claims;
+    var userClaims = validation.Claims;      // one value per type; a repeated type is joined with ';'
+    var roles = validation.ClaimValues["role"]; // every value of a repeated type
 }
 
 // Generate opaque refresh token (256-bit random, stored in DB)
@@ -136,25 +137,37 @@ var refreshToken = provider.GenerateRefreshToken();
 
 JWT tokens auto-include `jti` (unique ID) and `iat` (issued-at) claims. ClockSkew is 1 minute.
 
+`ValidateToken` always checks the issuer and the audience, as `AddBirkoJwtBearer` does: options without an `Issuer` or
+an `Audience` throw `ArgumentException` (a configuration error, like a missing `Secret`). It used to skip the check and
+accept any token signed with the secret, whichever service minted it (SH-M257). A claim type the token carries more
+than once (several roles, an `aud` array) validates: `Claims` joins its values with `;`, `ClaimValues` lists them
+(SH-M248; it used to report the token invalid).
+
 ## Static Token Authentication
 
 Moved from `Birko.Communication.Authentication` to `Birko.Security.Authentication`:
 
 ```csharp
-var config = new AuthenticationConfiguration
+var config = new RestAuthenticationConfiguration   // or the SOAP / SSE / WebSocket configuration
 {
     Enabled = true,
-    Tokens = new[] { "api-token-1", "api-token-2" },
-    TokenBindings = new[]
-    {
-        new TokenBinding { Token = "api-token-1", AllowedIPs = new[] { "192.168.1.0/24" } }
-    }
+    Tokens = { "api-token-2" },
+    TokenBindings = { new TokenBinding { Token = "api-token-1", AllowedIps = { "192.168.1.100" } } },
+    TrustedProxies = { "10.0.0.5", "10.1.0.0/16" }   // optional; empty trusts no proxy
 };
 
 var service = new AuthenticationService(config);
-service.ValidateToken("api-token-1", "192.168.1.100");  // OK
-service.ValidateToken("api-token-1", "10.0.0.1");       // Throws
+service.ValidateToken("api-token-1", "192.168.1.100");  // true
+service.ValidateToken("api-token-1", "10.0.0.1");       // false: a bound token from another address
 ```
+
+A binding's `AllowedIps` are exact addresses. The client address a transport checks them against is the connection's
+own: `X-Forwarded-For`, `X-Real-IP` and `CF-Connecting-IP` are believed **only** when the connection comes from one of
+`TrustedProxies` (an address or a CIDR range), and `X-Forwarded-For` is then read from the right, skipping trusted
+proxies, so the client cannot choose the answer by writing the header itself. Before SH-M249 the headers were believed
+from anyone, so a caller holding a bound token could name an allowed address and pass. **Behind a reverse proxy, list
+it in `TrustedProxies`**, or every request is seen as coming from the proxy. A binding whose every address expands to
+nothing refuses its token from everywhere and is logged at error level at construction (SH-M250).
 
 ## RBAC Interfaces
 
@@ -347,6 +360,15 @@ public interface ISecretProvider
 
 `GetSecretPairsAsync` returns all key/value pairs at a given path (multi-field secrets in Vault KV). Flat providers return `{"value": <secret>}` by default.
 
+`IsHierarchical` (default `true`) says how `ListSecretsAsync` answers: names relative to the path listed (Vault KV), or
+full names starting with it (`false`: Azure Key Vault, whose names are flat). The configuration provider walks the two
+differently (SH-M254).
+
+A key is a path, never a URL fragment. Vault escapes each `/`-separated segment and refuses an empty, `.` or `..` one
+(SH-M251: `../../sys/policy/x` used to reach another Vault endpoint, a delete included). Azure Key Vault refuses a name
+that is not 1-127 letters, digits and `-` (SH-M252), and `ListSecretsAsync` reads every page of a large vault, following
+`nextLink` only on the vault's own address (SH-M260).
+
 ### HashiCorp Vault (Birko.Security.Vault)
 
 Uses Vault HTTP API directly — no VaultSharp dependency. Supports KV v1 and v2. `VaultSettings` extends `PasswordSettings` (Location=Address, Password=Token, Name=MountPath).
@@ -391,6 +413,9 @@ config.AddSecretConfiguration(azureKeyVaultProvider, "ConnectionStrings", recurs
 // Multiple paths (later overrides earlier)
 config.AddSecretConfiguration(provider, new[] { "defaults", "production" });
 ```
+
+On a flat provider (Azure Key Vault) the vault is listed once, and `--` in a name is a level: with path `app`, the
+secret `app--db--password` loads as `db:password:value`, where Vault's `app/db/password` loads too.
 
 Vault-specific convenience method with hierarchical path convention:
 

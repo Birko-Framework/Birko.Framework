@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — A SQL filter comparing two columns finds its rows
+
+[[TASK-574]]. `x.A == x.B` (any operator) parsed both sides into one condition, the right overwriting the left with no
+value bound: `B = NULL`, zero rows, no error, on every SQL provider. `x.A.Date == x.B.Date` did the same as `DATE(B) =
+NULL`, and on SQL Server failed outright. Both operands are now rendered; `==` / `!=` between nullable columns are
+null-safe, as C# is. A `.Date` of one column against another throws `NotSupportedException`: no portable SQL form.
+
 ## 2026-10-15 — A stale SQL job is reclaimed by exactly one worker
 
 [[TASK-575]]. A reclaim updated `WHERE Status = Processing`, the status it writes, so two workers could both reclaim and

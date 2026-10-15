@@ -38,7 +38,10 @@ public sealed class SecretConfigurationProvider : ConfigurationProvider
     {
         try
         {
-            LoadAsync(_path, string.Empty).GetAwaiter().GetResult();
+            if (_provider.IsHierarchical)
+                LoadAsync(_path, string.Empty).GetAwaiter().GetResult();
+            else
+                LoadFlatAsync().GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
@@ -46,27 +49,49 @@ public sealed class SecretConfigurationProvider : ConfigurationProvider
         }
     }
 
-    private async Task LoadAsync(string path, string prefix)
+    /// <summary>The separator a flat provider's names use for levels (Azure Key Vault: <c>app--db--password</c>).</summary>
+    private const string FlatSeparator = "--";
+
+    /// <summary>
+    /// A flat provider (<see cref="ISecretProvider.IsHierarchical"/> false): one listing, whose names are FULL names.
+    /// </summary>
+    /// <remarks>
+    /// SH-M254: the recursive walk joined each listed name to the path as if it were relative, so with Azure Key Vault
+    /// and path <c>app</c> it asked for <c>app/app--db</c>, which is no secret, and the fail-open load swallowed that:
+    /// an empty section. It also re-listed the whole vault at every level. Here a secret named the path itself loads at
+    /// the root, and a name under it (<c>path--rest</c>) loads at <c>rest</c>, its <c>--</c> read as levels, which is
+    /// where the walk puts the same secret on a hierarchical provider.
+    /// </remarks>
+    private async Task LoadFlatAsync()
     {
+        if (!string.IsNullOrEmpty(_path))
+            await LoadPairsAsync(_path, string.Empty).ConfigureAwait(false);
+
+        if (!_recursive) return;
+
+        IReadOnlyList<string> names;
         try
         {
-            var pairs = await _provider.GetSecretPairsAsync(path).ConfigureAwait(false);
-            if (pairs is not null)
-            {
-                foreach (var kv in pairs)
-                {
-                    var key = string.IsNullOrEmpty(prefix)
-                        ? kv.Key
-                        : prefix + ConfigurationPath.KeyDelimiter + kv.Key;
-                    key = key.Replace("--", ConfigurationPath.KeyDelimiter);
-                    Set(key, kv.Value);
-                }
-            }
+            names = await _provider.ListSecretsAsync(string.IsNullOrEmpty(_path) ? null : _path).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _diagnostics($"SecretConfiguration: warning reading '{path}': {ex.Message}");
+            _diagnostics($"SecretConfiguration: warning listing '{_path}': {ex.Message}");
+            return;
         }
+
+        var under = string.IsNullOrEmpty(_path) ? string.Empty : _path + FlatSeparator;
+        foreach (var name in names)
+        {
+            if (!name.StartsWith(under, StringComparison.OrdinalIgnoreCase) || name.Length == under.Length) continue;
+            var relative = name.Substring(under.Length);
+            await LoadPairsAsync(name, relative.Replace(FlatSeparator, ConfigurationPath.KeyDelimiter)).ConfigureAwait(false);
+        }
+    }
+
+    private async Task LoadAsync(string path, string prefix)
+    {
+        await LoadPairsAsync(path, prefix).ConfigureAwait(false);
 
         if (!_recursive) return;
 
@@ -89,6 +114,29 @@ public sealed class SecretConfigurationProvider : ConfigurationProvider
             var childPath = string.IsNullOrEmpty(path) ? childName : path + "/" + childName;
             var childPrefix = string.IsNullOrEmpty(prefix) ? childName : prefix + ConfigurationPath.KeyDelimiter + childName;
             await LoadAsync(childPath, childPrefix).ConfigureAwait(false);
+        }
+    }
+
+    private async Task LoadPairsAsync(string path, string prefix)
+    {
+        try
+        {
+            var pairs = await _provider.GetSecretPairsAsync(path).ConfigureAwait(false);
+            if (pairs is not null)
+            {
+                foreach (var kv in pairs)
+                {
+                    var key = string.IsNullOrEmpty(prefix)
+                        ? kv.Key
+                        : prefix + ConfigurationPath.KeyDelimiter + kv.Key;
+                    key = key.Replace("--", ConfigurationPath.KeyDelimiter);
+                    Set(key, kv.Value);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _diagnostics($"SecretConfiguration: warning reading '{path}': {ex.Message}");
         }
     }
 }

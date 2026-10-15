@@ -2829,11 +2829,15 @@ Build() is a default interface method with an empty body on both IIndexBuilder a
 
 `../Birko.Security/Hashing/Pbkdf2PasswordHasher.cs:50`
 
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-165, measured 2026-10-15). The 0 / negative half was already fixed by SH-H039 (`iterations <= 0` returns false, `Pbkdf2PasswordHasher.cs:52`). The unbounded half held: a stored `int.MaxValue` was derived. `Verify` now returns false above `Math.Max(10_000_000, configured)` before deriving; measured under a second for `int.MaxValue` and 20,000,000.
+
 int.TryParse at line 50 accepts 0 and negatives, and the value is handed straight to Rfc2898DeriveBytes.Pbkdf2 at line 68. Verified: iterations 0 and -5 both throw ArgumentOutOfRangeException("iterations must be a non-negative and non-zero value"), which escapes Verify — contradicting the CR-M233 contract in the comment at line 53 that Verify be total over arbitrary stored strings. A stored 2147483647 instead burns CPU for hours per login attempt. The FormatException path is caught; this one is not.
 
 #### SH-M247 — BCrypt Verify throws ArgumentException for a shaped hash whose cost is unparseable or out of range
 
 `../Birko.Security.BCrypt/Hashing/BCryptPasswordHasher.cs:277`
+
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). `IsValidBCryptHash` checked only the shape and the alphabet of 7..59, so `$2a$99$`, `$2a$ab$`, `$2a$03$`, `$2a$-1$` reached `HashPassword`, whose cost check threw `ArgumentException` out of `Verify`. The cost is now two ASCII digits in 4..31 inside `IsValidBCryptHash`, so `Verify` answers false and `NeedsRehash` true for all seven shapes tested.
 
 IsValidBCryptHash only checks that indices 7..59 are in the BCrypt-Base64 alphabet — digits and letters both are — so "$2a$99$<53 valid chars>" and "$2a$ab$…" pass it. HashPassword then throws ArgumentException("Invalid BCrypt cost factor") out of Verify (line 69) instead of returning false. NeedsRehash on the identical input returns true without throwing, and the PBKDF2 sibling catches its analogous FormatException, so the two hashers and the two BCrypt entry points disagree on a corrupt stored value.
 
@@ -2841,11 +2845,15 @@ IsValidBCryptHash only checks that indices 7..59 are in the BCrypt-Base64 alphab
 
 `../Birko.Security.Jwt/JwtTokenProvider.cs:102`
 
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). `JwtTokenProvider.ValidateToken` built its result with `ToDictionary(c => c.Type, ...)`, which threw on a repeated type, and the catch-all reported "Unexpected error". Claims are now grouped by type: `TokenValidationResult.Claims` joins distinct values with `;` (the separator `TokenServiceAdapter` already splits roles and permissions on), and the new `ClaimValues` lists them.
+
 `principal.Claims.ToDictionary(c => c.Type, c => c.Value)` throws ArgumentException on a duplicate key, caught by the general handler at line 114 and reported as "Unexpected error: …". Repeated claims are normal JWT (an `aud` array, multiple `role`/`permission` claims — a shape ClaimsCurrentUser explicitly documents supporting at line 54), and JwtSecurityTokenHandler's inbound mapping also collapses "sub" and ClaimTypes.NameIdentifier onto one type. Such a token is reported invalid rather than validated.
 
 #### SH-M249 — IP-bound tokens are bypassable: GetClientIpAddress trusts X-Forwarded-For with no trusted-proxy check
 
 `../Birko.Security/Authentication/AuthenticationService.cs:154`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed (BREAKING behind a proxy)** (TASK-165, measured 2026-10-15). `AuthenticationService.GetClientIpAddress` returned the first `X-Forwarded-For` entry, then `X-Real-IP`, then `CF-Connecting-IP`, from any caller, and the four transports (REST, SOAP, SSE, WebSocket) checked token bindings against it. New `AuthenticationConfiguration.TrustedProxies` (addresses or CIDR, `${VAR}` expanded; empty by default): the headers are read only when the peer is a trusted proxy, and `X-Forwarded-For` from the right, skipping trusted hops. The transports call the new instance `ResolveClientIp`.
 
 GetClientIpAddress returns the first entry of a caller-supplied X-Forwarded-For, then X-Real-IP, then CF-Connecting-IP, before falling back to the real socket IP — with no list of trusted proxies and no verification that the app is behind one. The value it returns is exactly what ValidateToken compares against binding.AllowedIps (line 105), so a client holding the token can send `X-Forwarded-For: 10.0.0.1` and satisfy an allow-list it is not on, defeating the only purpose TokenBinding has.
 
@@ -2853,11 +2861,15 @@ GetClientIpAddress returns the first entry of a caller-supplied X-Forwarded-For,
 
 `../Birko.Security/Authentication/AuthenticationService.cs:96`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-165, measured 2026-10-15). **First half refuted by design:** a binding restricts its token to addresses, so the same token also listed unbound in `Tokens` is a contradiction, and the restrictive reading is the safe one; falling through would make the binding decorative. **Second half confirmed:** a binding whose `AllowedIps` expand to nothing refused its token everywhere with no signal. `InitializeCache` now logs it at error level (the binding is kept, still refusing).
+
 The loop returns from inside the `binding.Token == token` branch, so a token listed in both TokenBindings (with a non-matching IP) and Tokens is rejected outright — the `_expandedTokens` fallback at line 120 is unreachable. A binding whose AllowedIps expanded to empty rejects every IP while still making IsAuthenticationEnabled() true, indistinguishable at the call site from a wrong token.
 
 #### SH-M251 — Vault request paths interpolate the caller's key unescaped — '../' traversal and query injection, incl. delete
 
 `../Birko.Security.Vault/VaultSecretProvider.cs:62`
+
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). `BuildDataPath`, `DeleteSecretAsync` and `ListSecretsAsync` interpolated the key raw into a path resolved by `new Uri(base, path)`, which collapses `..`. New `VaultSecretProvider.EscapeKey`: each `/` segment is `Uri.EscapeDataString`-escaped, and an empty, `.` or `..` segment throws `ArgumentException` before any request (tested on get, set, delete and list, none sent). A listed folder's trailing `/` is still accepted for listing.
 
 `new Uri(_baseUri, relativePath)` with relativePath built by raw interpolation (BuildDataPath line 252, DeleteSecretAsync line 136, ListSecretsAsync line 151). Uri resolution normalises `..`, so key = "../../sys/policy/x" retargets the request at a different Vault endpoint, and a key containing '?' or '#' rewrites the query (ListSecretsAsync appends "?list=true" after the interpolated path). DeleteSecretAsync is a destructive path reachable this way. No Uri.EscapeDataString anywhere.
 
@@ -2865,11 +2877,15 @@ The loop returns from inside the `binding.Token == token` branch, so a token lis
 
 `../Birko.Security.AzureKeyVault/AzureKeyVaultSecretProvider.cs:75`
 
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). Get, Set and Delete interpolated the name into `secrets/{key}?api-version=`. Key Vault names are 1-127 of `[0-9a-zA-Z-]`, so `CheckName` refuses anything else with `ArgumentException` before the token or the request (no escaping: nothing outside that alphabet is a secret).
+
 `$"{BaseUri}secrets/{key}?api-version={ApiVersion}"` at lines 75, 96 and 109 embeds the key with no escaping. A key containing '/' silently becomes the *version* segment of the REST route (secrets/{name}/{version}), '..' collapses to a different route, and '?' or '&' injects query parameters ahead of api-version. Line 109 is a delete. Same species as the Vault provider, so neither backend escapes.
 
 #### SH-M253 — OidcIdTokenVerifier looks the provider up by the raw name, not the canonical one, so " Google " is refused
 
 `../Birko.Security.Jwt/OpenIdConnect/OidcIdTokenVerifier.cs:95`
+
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). The lookup at `OidcIdTokenVerifier.VerifyAsync` used the raw name while the cache key and the identity used `Canonical`. The map is now re-keyed by `Canonical` at construction (two spellings of one name still throw there) and looked up by it; ` Google `, `google\t` and `GOOGLE` verify.
 
 `_providers.TryGetValue(provider, …)` runs at line 95 while Canonical(provider) (trim + lower-case) is only computed at line 118, after the lookup. The re-keyed dictionary is OrdinalIgnoreCase but not trim-insensitive, so a provider name with surrounding whitespace — from a config file or a form post — returns ProviderNotConfigured even though it is configured. Canonical IS used for the key-source cache key and the returned Identity, so the code is inconsistent with itself.
 
@@ -2877,11 +2893,15 @@ The loop returns from inside the `binding.Token == token` branch, so a token lis
 
 `../Birko.Security.Vault.Configuration/SecretConfigurationProvider.cs:89`
 
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). `SecretConfigurationProvider.LoadAsync` joined each listed name to the path; Azure Key Vault lists full names, so `app` + `app--db` asked for `app/app--db`. New default interface member `ISecretProvider.IsHierarchical` (true; Azure false). A flat provider is listed once and each name under `path--` loads at its remainder, `--` read as levels, where the hierarchical walk puts the same secret.
+
 `childPath = path + "/" + childName` treats ListSecretsAsync's output as names relative to `path`. Vault returns KV folder children (relative), but AzureKeyVaultSecretProvider.ListSecretsAsync (line 120) enumerates the whole vault and filters by StartsWith, returning FULL secret names — so with path "app" the recursion queries "app/app-db", which resolves to a nonexistent version route, yields null, and is swallowed by the fail-open catch at line 66. Each level also re-enumerates the entire vault.
 
 #### SH-M255 — UseResolvedPermissions is order-dependent and silently reverts to claim-borne permissions
 
 `../Birko.Security.AspNetCore/Extensions/PermissionResolutionExtensions.cs:27`
+
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). `UseResolvedPermissions` removed only the first `ICurrentUser` and `AddBirkoSecurity` added `ClaimsCurrentUser` unconditionally, so calling the former first left the claim reader registered last. It now removes every registration, and `AddBirkoSecurity` uses `TryAddScoped`. Either order resolves `ResolvedPermissionsCurrentUser`.
 
 It removes only the FIRST ICurrentUser descriptor and then appends ResolvedPermissionsCurrentUser. Since DI resolves the last registration, calling UseResolvedPermissions() before AddBirkoSecurity leaves ClaimsCurrentUser registered afterwards and winning — the app silently keeps reading permissions out of the token instead of resolving them server-side, which is the wider grant of the two. No ordering guard, no throw, and nothing observable at startup.
 
@@ -2889,11 +2909,15 @@ It removes only the FIRST ICurrentUser descriptor and then appends ResolvedPermi
 
 `../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs:74`
 
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). `AddBirkoJwtBearer`'s `OnMessageReceived` copied `?token=` on every request. It is now accepted only with no `Authorization` header and on a WebSocket upgrade, an `Accept: text/event-stream` request, or a path in the new `JwtAuthenticationOptions.QueryTokenPathPrefixes` (mapped by `AddBirkoSecurity`). ⚠ Symbio replaces these events with its own handler that accepts `?token=` everywhere (`Program.cs:131`): the same exposure, out of this repo; reported, not changed.
+
 OnMessageReceived copies Request.Query["token"] into context.Token whenever present, for any path and any method — the comment names SSE/WebSocket but nothing restricts it to those. Query strings are written to reverse-proxy and Kestrel access logs, browser history and Referer headers, so a bearer token good for ExpirationMinutes leaks wherever the URL is recorded. A path predicate would keep the SSE affordance without applying it to every endpoint.
 
 #### SH-M257 — JwtTokenProvider.ValidateToken skips issuer/audience validation when they are unconfigured
 
 `../Birko.Security.Jwt/JwtTokenProvider.cs:93`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). `ValidateIssuer`/`ValidateAudience` were `!IsNullOrEmpty(...)`. They are now always true, and `ValidateToken` throws `ArgumentException` when either is unconfigured, as for a missing secret. `GenerateToken` is unchanged. Every consumer constructing `TokenOptions` (Symbio, DraCode, the OAuth server, the adapter) sets both.
 
 ValidateIssuer = !IsNullOrEmpty(opts.Issuer) and the same for audience, so a TokenOptions carrying only a Secret accepts any correctly signed token whatever iss/aud it names — including one minted by a sibling service that shares the secret. AddBirkoJwtBearer (JwtBearerExtensions.cs:58) always validates both, so the same token is judged differently depending on which entry point sees it.
 
@@ -2901,17 +2925,23 @@ ValidateIssuer = !IsNullOrEmpty(opts.Issuer) and the same for audience, so a Tok
 
 `../Birko.Security.Vault/VaultSecretProvider.cs:292`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). `ParseKv1Response` used `GetProperty("data")`. It now returns an empty value for a body without an object `data`, as the KV v2 parser does (CR-M240).
+
 `root.GetProperty("data")` is unguarded, so a KV v1 200 response lacking `data` raises KeyNotFoundException out of GetSecretWithMetadataAsync. The KV v2 sibling was explicitly hardened for exactly this case (CR-M240, lines 258-261) to return an empty value, so the two engine versions behave differently on the same malformed input.
 
 #### SH-M259 — HttpOidcSigningKeySource serves stale signing keys indefinitely while JWKS is unreachable
 
 `../Birko.Security.Jwt/OpenIdConnect/HttpOidcSigningKeySource.cs:84`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). `HttpOidcSigningKeySource` served the cached keys on any fetch failure, for ever. New `maxStaleAge` (default 24 h): past it a failed fetch answers no keys. A `LastServedStale` flag signals the stale answer. The clock is injectable (`IDateTimeProvider`), and the test walks 2 h (stale served) and 25 h (empty).
+
 On any non-cancellation exception the cached entry is returned unchanged and FetchedAt is never advanced or bounded, so a provider that revokes a compromised key keeps having tokens signed by it accepted for as long as the endpoint is down. The tradeoff is documented at line 82 but there is no maximum stale age and no staleness signal to the verifier, which cannot distinguish fresh keys from week-old ones.
 
 #### SH-M260 — AzureKeyVault ListSecretsAsync enumerates the whole vault and never follows nextLink
 
 `../Birko.Security.AzureKeyVault/AzureKeyVaultSecretProvider.cs:123`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-165, measured 2026-10-15). `ListSecretsAsync` read one page. It now follows `nextLink` while present, only on the vault's own base address (the request carries the access token; another host throws `InvalidOperationException`), and refuses a repeated link. The path stays a client-side prefix filter; the whole-vault enumeration it costs is now paid once per configuration source (SH-M254).
 
 The request is always `secrets?api-version=7.4` with `path` applied only as a client-side StartsWith filter at line 145, and the `nextLink` Key Vault returns for large vaults is never followed. On a vault with more secrets than one page, secrets beyond page 1 are silently missing from both the list and SecretConfigurationProvider's traversal, and each configuration source costs a full-vault enumeration.
 

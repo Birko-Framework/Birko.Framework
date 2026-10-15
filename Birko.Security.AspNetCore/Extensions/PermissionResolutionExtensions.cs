@@ -22,10 +22,16 @@ public static class PermissionResolutionExtensions
     /// separately by the application (e.g.
     /// <c>services.AddScoped&lt;IUserPermissionResolver, MyResolver&gt;()</c>).
     /// </summary>
+    /// <remarks>
+    /// SH-M255: order-independent. It removes EVERY <see cref="ICurrentUser"/> registration, and
+    /// <c>AddBirkoSecurity</c> registers <see cref="ClaimsCurrentUser"/> only when none exists. It removed only the
+    /// first, and AddBirkoSecurity added unconditionally, so calling this first left ClaimsCurrentUser registered last
+    /// and winning: permissions read from the token, the wider grant, with nothing at startup to say so.
+    /// </remarks>
     public static IServiceCollection UseResolvedPermissions(this IServiceCollection services)
     {
-        var existing = services.FirstOrDefault(sd => sd.ServiceType == typeof(ICurrentUser));
-        if (existing is not null) services.Remove(existing);
+        foreach (var existing in services.Where(sd => sd.ServiceType == typeof(ICurrentUser)).ToList())
+            services.Remove(existing);
         services.AddScoped<ICurrentUser, ResolvedPermissionsCurrentUser>();
         return services;
     }

@@ -1,8 +1,10 @@
 using System;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Net.Http.Headers;
 
 namespace Birko.Security.AspNetCore;
 
@@ -65,14 +67,14 @@ public static class JwtBearerExtensions
                 ClockSkew = TimeSpan.FromSeconds(options.ClockSkewSeconds),
             };
 
-            // Allow token from query string for SSE (EventSource can't set headers)
-            // and WebSocket connections — any request with ?token= gets it read
+            // A token from the query string for SSE (EventSource can't set headers) and WebSocket connections, and on
+            // the configured paths only (SH-M256: it was read on every request).
             jwt.Events = new JwtBearerEvents
             {
                 OnMessageReceived = context =>
                 {
                     var token = context.Request.Query["token"];
-                    if (!string.IsNullOrEmpty(token))
+                    if (!string.IsNullOrEmpty(token) && AcceptsQueryToken(context.HttpContext, options))
                     {
                         context.Token = token;
                     }
@@ -84,5 +86,30 @@ public static class JwtBearerExtensions
         services.AddAuthorization();
 
         return services;
+    }
+
+    /// <summary>
+    /// Whether a request may carry its bearer token as <c>?token=</c>: it has no <c>Authorization</c> header, and it is
+    /// a WebSocket upgrade, asks for <c>text/event-stream</c>, or is on one of
+    /// <see cref="JwtAuthenticationOptions.QueryTokenPathPrefixes"/>.
+    /// </summary>
+    internal static bool AcceptsQueryToken(HttpContext http, JwtAuthenticationOptions options)
+    {
+        var request = http.Request;
+        if (request.Headers.ContainsKey(HeaderNames.Authorization))
+            return false;
+        if (http.WebSockets.IsWebSocketRequest)
+            return true;
+        foreach (var accept in request.Headers.Accept)
+        {
+            if (accept != null && accept.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        foreach (var prefix in options.QueryTokenPathPrefixes)
+        {
+            if (!string.IsNullOrWhiteSpace(prefix) && request.Path.StartsWithSegments(new PathString("/" + prefix.Trim().Trim('/')), StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 }

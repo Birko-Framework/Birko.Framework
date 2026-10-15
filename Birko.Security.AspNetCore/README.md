@@ -27,15 +27,23 @@ ASP.NET Core integration for Birko.Security — JWT Bearer authentication, curre
 ```csharp
 builder.Services.AddBirkoSecurity(options =>
 {
-    options.JwtOptions.Secret = "my-secret-key-at-least-32-chars-long!";
-    options.JwtOptions.Issuer = "myapp";
-    options.JwtOptions.Audience = "myapp-api";
+    options.Jwt.Secret = "my-secret-key-at-least-32-chars-long!";
+    options.Jwt.Issuer = "myapp";
+    options.Jwt.Audience = "myapp-api";
     options.TenantResolver = TenantResolverType.Header;
 });
 
 // Add tenant middleware
 app.UseTenantMiddleware();
 ```
+
+A bearer token is read from `?token=` only where a header cannot be set: a WebSocket upgrade, a request that accepts
+`text/event-stream` (EventSource), and the paths in `options.Jwt.QueryTokenPathPrefixes` (e.g. `"/api/media"` for
+`<img src>`). Anywhere else the query string is ignored, since it is written to access logs, browser history and
+`Referer` headers (SH-M256). An `Authorization` header always wins.
+
+`UseResolvedPermissions()` may be called before or after `AddBirkoSecurity`: it replaces every `ICurrentUser`
+registration, and `AddBirkoSecurity` adds `ClaimsCurrentUser` only when none exists (SH-M255).
 
 ### ICurrentUser
 

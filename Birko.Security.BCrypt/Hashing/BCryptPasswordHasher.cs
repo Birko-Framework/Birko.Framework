@@ -435,6 +435,19 @@ public class BCryptPasswordHasher : IPasswordHasher
             return false;
         }
 
+        // SH-M247: the cost is two ASCII digits within the hasher's range. A shaped hash with "$2a$99$" or "$2a$ab$"
+        // passed this check and then made HashPassword throw ArgumentException out of Verify, where a corrupt stored
+        // value must answer false (and NeedsRehash already answered true).
+        if (!char.IsAsciiDigit(hash[4]) || !char.IsAsciiDigit(hash[5]))
+        {
+            return false;
+        }
+        var cost = (hash[4] - '0') * 10 + (hash[5] - '0');
+        if (cost < MinWorkFactor || cost > MaxWorkFactor)
+        {
+            return false;
+        }
+
         // CR-L341: the 22-char salt + 31-char digest (indices 7..59) must all be drawn from the BCrypt-Base64
         // alphabet. Without this, a shaped-but-corrupt hash reaches DecodeBCryptBase64 where an out-of-alphabet
         // char produces IndexOf == -1 and decodes to silent garbage salt bytes instead of being rejected;

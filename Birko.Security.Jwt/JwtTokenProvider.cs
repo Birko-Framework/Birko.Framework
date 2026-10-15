@@ -76,10 +76,20 @@ public class JwtTokenProvider : ITokenProvider
         return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     }
 
+    // SH-M257: validation needs an issuer and an audience to check. Without them it skipped both checks and
+    // accepted any token signed with the secret, whichever service minted it, while AddBirkoJwtBearer always
+    // checks both: one token, two answers. Missing ones are a configuration error, so they fail fast like the secret.
+    private static void EnsureIssuerAndAudiencePresent(TokenOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.Issuer) || string.IsNullOrWhiteSpace(options.Audience))
+            throw new ArgumentException("Issuer and Audience must be provided to validate a token.", nameof(options));
+    }
+
     public TokenValidationResult ValidateToken(string token, TokenOptions? options = null)
     {
         var opts = options ?? _defaultOptions;
         EnsureSecretPresent(opts); // CR-L343: fail fast on a misconfigured override rather than masking it as a generic failure
+        EnsureIssuerAndAudiencePresent(opts);
 
         try
         {
@@ -90,18 +100,24 @@ public class JwtTokenProvider : ITokenProvider
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = key,
-                ValidateIssuer = !string.IsNullOrEmpty(opts.Issuer),
+                ValidateIssuer = true,
                 ValidIssuer = opts.Issuer,
-                ValidateAudience = !string.IsNullOrEmpty(opts.Audience),
+                ValidateAudience = true,
                 ValidAudience = opts.Audience,
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.FromMinutes(1)
             };
 
             var principal = handler.ValidateToken(token, parameters, out _);
-            var claims = principal.Claims.ToDictionary(c => c.Type, c => c.Value);
+            // SH-M248: a claim type may repeat (several roles, an aud array, and the inbound mapping folds "sub" into
+            // NameIdentifier). ToDictionary threw on the second one, so a valid token was reported invalid. Each type
+            // keeps every distinct value: joined with ';' in Claims (the separator TokenServiceAdapter splits roles and
+            // permissions on), and as a list in ClaimValues.
+            var values = principal.Claims
+                .GroupBy(c => c.Type, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(c => c.Value).Distinct(StringComparer.Ordinal).ToList(), StringComparer.Ordinal);
 
-            return TokenValidationResult.Success(claims);
+            return TokenValidationResult.Success(values);
         }
         catch (SecurityTokenExpiredException)
         {

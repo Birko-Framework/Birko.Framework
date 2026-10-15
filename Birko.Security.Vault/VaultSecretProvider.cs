@@ -132,9 +132,10 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
     {
         ArgumentNullException.ThrowIfNull(key);
 
+        var escaped = EscapeKey(key, nameof(key));
         var path = _settings.KvVersion == 2
-            ? $"{_settings.MountPath}/metadata/{key}"
-            : $"{_settings.MountPath}/{key}";
+            ? $"{_settings.MountPath}/metadata/{escaped}"
+            : $"{_settings.MountPath}/{escaped}";
 
         var response = await SendCoreAsync(HttpMethod.Delete, $"v1/{path}", null, ct).ConfigureAwait(false);
 
@@ -147,9 +148,12 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
     /// <inheritdoc />
     public async Task<IReadOnlyList<string>> ListSecretsAsync(string? path = null, CancellationToken ct = default)
     {
+        // A folder name from a listing ends with '/', so a trailing one is not an empty segment.
+        var folder = (path ?? "").TrimEnd('/');
+        var escaped = folder.Length == 0 ? "" : EscapeKey(folder, nameof(path));
         var listPath = _settings.KvVersion == 2
-            ? $"{_settings.MountPath}/metadata/{path ?? ""}"
-            : $"{_settings.MountPath}/{path ?? ""}";
+            ? $"{_settings.MountPath}/metadata/{escaped}"
+            : $"{_settings.MountPath}/{escaped}";
 
         listPath = listPath.TrimEnd('/');
 
@@ -248,9 +252,31 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
 
     private string BuildDataPath(string key)
     {
+        var escaped = EscapeKey(key, nameof(key));
         return _settings.KvVersion == 2
-            ? $"{_settings.MountPath}/data/{key}"
-            : $"{_settings.MountPath}/{key}";
+            ? $"{_settings.MountPath}/data/{escaped}"
+            : $"{_settings.MountPath}/{escaped}";
+    }
+
+    /// <summary>
+    /// A secret key as a URL path: each '/'-separated segment escaped, and a segment that would move the request
+    /// elsewhere refused.
+    /// </summary>
+    /// <remarks>
+    /// SH-M251: the key was interpolated raw, and <c>new Uri(base, path)</c> resolves dot segments, so
+    /// <c>"../../sys/policy/x"</c> sent the request (a delete, from <c>DeleteSecretAsync</c>) to another Vault endpoint,
+    /// and a '?' or '#' rewrote the query. '/' keeps its meaning (nested secrets); everything else in a segment is data.
+    /// </remarks>
+    internal static string EscapeKey(string key, string paramName)
+    {
+        var segments = key.Split('/');
+        foreach (var segment in segments)
+        {
+            if (segment.Length == 0 || segment == "." || segment == "..")
+                throw new ArgumentException(
+                    $"Secret key '{key}' has an empty, '.' or '..' path segment, which would address a different Vault path.", paramName);
+        }
+        return string.Join("/", segments.Select(Uri.EscapeDataString));
     }
 
     private static SecretResult ParseKv2Response(string key, JsonElement root)
@@ -289,7 +315,10 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
 
     private static SecretResult ParseKv1Response(string key, JsonElement root)
     {
-        var data = root.GetProperty("data");
+        // SH-M258: tolerate a body without "data" as the KV2 parser does (CR-M240), rather than a raw
+        // KeyNotFoundException from GetProperty.
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+            return new SecretResult { Key = key, Value = "" };
         var value = data.TryGetProperty("value", out var val) ? val.GetString() ?? "" : "";
 
         return new SecretResult

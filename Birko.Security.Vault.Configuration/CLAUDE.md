@@ -9,7 +9,7 @@ Microsoft.Extensions.Configuration integration for secret providers. Contains tw
 ## Components
 
 ### Birko.Security.Configuration (provider-agnostic)
-- **SecretConfigurationProvider.cs** — ConfigurationProvider that reads secrets from any ISecretProvider. Supports recursive path traversal and `--` to `:` key rewriting.
+- **SecretConfigurationProvider.cs** — ConfigurationProvider that reads secrets from any ISecretProvider. Supports recursive path traversal and `--` to `:` key rewriting. A flat provider (`ISecretProvider.IsHierarchical == false`, Azure Key Vault) is listed once and its full names filtered by `path--` (SH-M254); a hierarchical one is walked level by level.
 - **SecretConfigurationSource.cs** — IConfigurationSource that builds a SecretConfigurationProvider for a given ISecretProvider and path.
 - **SecretConfigurationExtensions.cs** — `AddSecretConfiguration()` extension methods on IConfigurationBuilder for single or multiple secret paths.
 

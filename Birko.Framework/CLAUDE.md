@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Security: forwarding headers from trusted proxies only; `?token=` only where a header cannot be set (2026-10-15)
+
+[[TASK-165]]. **BREAKING behind a proxy:** a token binding's address came from `X-Forwarded-For` written by anyone; set
+`TrustedProxies`. `?token=` was read on every request; it is now WebSocket, `text/event-stream` and
+`QueryTokenPathPrefixes`. JWT validation always checks iss/aud and accepts repeated claims. Vault and Key Vault keys
+cannot leave their path; Key Vault lists every page.
 ### ElasticSearch mapping drift produces its repair (2026-10-15)
 
 [[TASK-634]]. `store.PlanMappingRepairAsync()` turns mapping drift into requests a host sends: one `PUT _mapping` adding
@@ -332,12 +338,6 @@ throws unless the app's `ITenantContext` is the same object. `AddBirkoSecurity` 
 name. The rebuild read `MaxLength`, `Precision` and `Scale` as properties, though they are fields, so a
 `[MaxLengthField(64)]` column was unbounded and `decimal(18,4)` lost its precision. It also skipped `[UtcField]`, making
 an instant a wall clock. All values are now read, and an attribute the build cannot rebuild throws.
-### A SQL filter comparing two columns finds its rows (2026-10-15)
-
-[[TASK-574]]. `x.A == x.B` (any operator) parsed both sides into one condition, the right overwriting the left with no
-value bound: `B = NULL`, zero rows, no error, on every SQL provider. `x.A.Date == x.B.Date` did the same as `DATE(B) =
-NULL`, and on SQL Server failed outright. Both operands are now rendered; `==` / `!=` between nullable columns are
-null-safe, as C# is. A `.Date` of one column against another throws `NotSupportedException`: no portable SQL form.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

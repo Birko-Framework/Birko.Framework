@@ -92,7 +92,7 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
         ArgumentNullException.ThrowIfNull(key);
 
         var request = await CreateAuthorizedRequestAsync(HttpMethod.Get,
-            $"{BaseUri}secrets/{key}?api-version={ApiVersion}", ct).ConfigureAwait(false);
+            $"{BaseUri}secrets/{CheckName(key)}?api-version={ApiVersion}", ct).ConfigureAwait(false);
 
         var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
 
@@ -113,7 +113,7 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
 
         var payload = _serializer.Serialize(new { value });
         var request = await CreateAuthorizedRequestAsync(HttpMethod.Put,
-            $"{BaseUri}secrets/{key}?api-version={ApiVersion}", ct).ConfigureAwait(false);
+            $"{BaseUri}secrets/{CheckName(key)}?api-version={ApiVersion}", ct).ConfigureAwait(false);
         request.Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
 
         var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
@@ -126,7 +126,7 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
         ArgumentNullException.ThrowIfNull(key);
 
         var request = await CreateAuthorizedRequestAsync(HttpMethod.Delete,
-            $"{BaseUri}secrets/{key}?api-version={ApiVersion}", ct).ConfigureAwait(false);
+            $"{BaseUri}secrets/{CheckName(key)}?api-version={ApiVersion}", ct).ConfigureAwait(false);
 
         var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
 
@@ -137,42 +137,74 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Key Vault has no folders, so <paramref name="path"/> is a name prefix and the answer is FULL secret names
+    /// (<see cref="IsHierarchical"/> is false). Every page is read: SH-M260, the <c>nextLink</c> of a vault with more
+    /// secrets than one page was never followed, so the rest were silently missing. A <c>nextLink</c> is followed only
+    /// on this vault's own address, since the request carries the access token.
+    /// </remarks>
     public async Task<IReadOnlyList<string>> ListSecretsAsync(string? path = null, CancellationToken ct = default)
     {
-        var request = await CreateAuthorizedRequestAsync(HttpMethod.Get,
-            $"{BaseUri}secrets?api-version={ApiVersion}", ct).ConfigureAwait(false);
-
-        var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
-
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            return Array.Empty<string>();
-
-        response.EnsureSuccessStatusCode();
-
-        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        using var doc = JsonDocument.Parse(json);
-
         var results = new List<string>();
-        if (doc.RootElement.TryGetProperty("value", out var secrets))
+        string? next = $"{BaseUri}secrets?api-version={ApiVersion}";
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        while (next != null)
         {
-            foreach (var secret in secrets.EnumerateArray())
+            if (!seen.Add(next))
+                throw new InvalidOperationException($"Azure Key Vault returned a nextLink already read: '{next}'.");
+
+            var request = await CreateAuthorizedRequestAsync(HttpMethod.Get, next, ct).ConfigureAwait(false);
+            var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return results.AsReadOnly();
+
+            response.EnsureSuccessStatusCode();
+
+            var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(json);
+
+            if (doc.RootElement.TryGetProperty("value", out var secrets) && secrets.ValueKind == JsonValueKind.Array)
             {
-                if (secret.TryGetProperty("id", out var id))
+                foreach (var secret in secrets.EnumerateArray())
                 {
-                    var name = ExtractSecretName(id.GetString());
-                    if (!string.IsNullOrEmpty(name))
+                    if (secret.TryGetProperty("id", out var id))
                     {
-                        if (string.IsNullOrEmpty(path) || name.StartsWith(path, StringComparison.OrdinalIgnoreCase))
+                        var name = ExtractSecretName(id.GetString());
+                        if (!string.IsNullOrEmpty(name))
                         {
-                            results.Add(name);
+                            if (string.IsNullOrEmpty(path) || name.StartsWith(path, StringComparison.OrdinalIgnoreCase))
+                            {
+                                results.Add(name);
+                            }
                         }
                     }
                 }
+            }
+
+            next = doc.RootElement.TryGetProperty("nextLink", out var link) && link.ValueKind == JsonValueKind.String
+                ? link.GetString()
+                : null;
+            if (string.IsNullOrEmpty(next))
+            {
+                next = null;
+            }
+            else if (!next.StartsWith(BaseUri, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Azure Key Vault returned a nextLink outside the vault '{BaseUri}'; it was not followed, so the access token is not sent elsewhere.");
             }
         }
 
         return results.AsReadOnly();
     }
+
+    /// <summary>
+    /// False: Key Vault names are flat, so <see cref="ListSecretsAsync"/> answers full names, never names relative to
+    /// the path listed (SH-M254).
+    /// </summary>
+    public bool IsHierarchical => false;
 
     /// <inheritdoc />
     // CR-L338: Azure Key Vault secrets are single-valued, so this matches ISecretProvider's default
@@ -199,6 +231,22 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
     #region Private Helpers
 
     private string BaseUri => _settings.VaultUri.TrimEnd('/') + "/";
+
+    /// <summary>
+    /// A secret name as Key Vault defines one: 1 to 127 letters, digits and '-'.
+    /// </summary>
+    /// <remarks>
+    /// SH-M252: the name was interpolated into the route unescaped, so a '/' made the rest of it the VERSION segment
+    /// (<c>secrets/{name}/{version}</c>), a '..' collapsed to another route, and '?' or '&amp;' added query parameters,
+    /// on a delete too. Nothing outside the alphabet names a secret, so it is refused rather than escaped.
+    /// </remarks>
+    internal static string CheckName(string key)
+    {
+        if (key.Length is 0 or > 127 || !key.All(c => char.IsAsciiLetterOrDigit(c) || c == '-'))
+            throw new ArgumentException(
+                $"'{key}' is not an Azure Key Vault secret name: 1-127 characters of letters, digits and '-'.", nameof(key));
+        return key;
+    }
 
     private async Task<HttpRequestMessage> CreateAuthorizedRequestAsync(HttpMethod method, string uri, CancellationToken ct)
     {

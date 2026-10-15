@@ -61,7 +61,7 @@ namespace Birko.Communication.WebSocket.Services
         /// <returns>The client IP address or null</returns>
         public string? GetClientIpAddress(HttpContext context)
         {
-            return AuthenticationService.GetClientIpAddress(
+            return _authService.ResolveClientIp(
                 headerName => context.Request.Headers[headerName].FirstOrDefault(),
                 context.Connection.RemoteIpAddress?.ToString()
             );

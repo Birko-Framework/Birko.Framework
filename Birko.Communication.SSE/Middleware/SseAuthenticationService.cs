@@ -200,7 +200,7 @@ namespace Birko.Communication.SSE.Middleware
         /// </summary>
         private string? GetClientIpAddress(Dictionary<string, string>? headers, string? remoteEndPoint)
         {
-            return AuthenticationService.GetClientIpAddress(
+            return _authService.ResolveClientIp(
                 headers != null ? (key => headers.TryGetValue(key, out var value) ? value : null) : (_ => (string?)null),
                 remoteEndPoint
             );

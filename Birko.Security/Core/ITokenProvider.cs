@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Birko.Security;
 
@@ -40,11 +41,33 @@ public class TokenResult
 public class TokenValidationResult
 {
     public bool IsValid { get; init; }
+
+    /// <summary>
+    /// One value per claim type. A type the token carries more than once has its values joined with <c>';'</c>;
+    /// <see cref="ClaimValues"/> holds them separately.
+    /// </summary>
     public IDictionary<string, string> Claims { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>Every value of every claim type, in token order (SH-M248).</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> ClaimValues { get; init; } = new Dictionary<string, IReadOnlyList<string>>();
+
     public string? Error { get; init; }
 
     public static TokenValidationResult Success(IDictionary<string, string> claims) =>
-        new() { IsValid = true, Claims = claims };
+        new()
+        {
+            IsValid = true,
+            Claims = claims,
+            ClaimValues = claims.ToDictionary(c => c.Key, c => (IReadOnlyList<string>)new[] { c.Value }),
+        };
+
+    public static TokenValidationResult Success(IReadOnlyDictionary<string, IReadOnlyList<string>> claimValues) =>
+        new()
+        {
+            IsValid = true,
+            Claims = claimValues.ToDictionary(c => c.Key, c => string.Join(";", c.Value)),
+            ClaimValues = claimValues,
+        };
 
     public static TokenValidationResult Failure(string error) =>
         new() { IsValid = false, Error = error };

@@ -14,8 +14,8 @@ Birko.Security/
 │   ├── ITokenProvider.cs             - GenerateToken/ValidateToken, TokenResult, TokenOptions
 │   └── ISecretProvider.cs           - GetSecret/SetSecret/DeleteSecret/ListSecrets, SecretResult
 ├── Authentication/                    ← Moved from Birko.Communication.Authentication
-│   ├── AuthenticationService.cs       - Static token validation + IP binding, thread-safe
-│   ├── AuthenticationConfiguration.cs - Enabled, Tokens[], TokenBindings[]
+│   ├── AuthenticationService.cs       - Static token validation + IP binding, thread-safe; ResolveClientIp believes forwarding headers only from TrustedProxies (SH-M249)
+│   ├── AuthenticationConfiguration.cs - Enabled, Tokens[], TokenBindings[], TrustedProxies[] (addresses or CIDR; empty = trust none)
 │   └── TokenBinding.cs               - Token + AllowedIps
 ├── Authorization/
 │   └── IRoleProvider.cs               - IRoleProvider, IPermissionChecker, AuthorizationContext

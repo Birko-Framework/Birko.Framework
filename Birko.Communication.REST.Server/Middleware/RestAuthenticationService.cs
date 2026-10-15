@@ -89,7 +89,7 @@ namespace Birko.Communication.REST.Middleware
         /// <returns>The client IP address or null</returns>
         public string? GetClientIpAddress(RestRequest request)
         {
-            return AuthenticationService.GetClientIpAddress(
+            return _authService.ResolveClientIp(
                 request.GetHeader,
                 request.UserHostAddress
             );

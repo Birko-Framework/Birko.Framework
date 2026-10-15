@@ -66,13 +66,12 @@ public class OidcIdTokenVerifier : IOidcIdTokenVerifier
         _keySource = keySource ?? throw new ArgumentNullException(nameof(keySource));
         if (providers is null) throw new ArgumentNullException(nameof(providers));
 
-        // Re-key case-insensitively so "Google" and "google" resolve identically even when the caller
-        // handed in an ordinal dictionary. (A map holding both spellings is a real misconfiguration and
-        // throws here, loudly, at construction rather than silently preferring one at login time.)
-        _providers = providers is Dictionary<string, OidcProviderOptions> d
-                     && ReferenceEquals(d.Comparer, StringComparer.OrdinalIgnoreCase)
-            ? providers
-            : providers.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+        // Re-key by the canonical name so "Google", "google" and " Google " resolve identically, whatever
+        // the caller's dictionary compares by. (A map holding two spellings of one name is a real
+        // misconfiguration and throws here, loudly, at construction rather than silently preferring one
+        // at login time.) SH-M253: the lookup used the raw name, so surrounding whitespace was refused as
+        // unconfigured while the cache key and the returned identity used the canonical one.
+        _providers = providers.ToDictionary(p => Canonical(p.Key), p => p.Value, StringComparer.Ordinal);
 
         _clockSkew = clockSkew ?? DefaultClockSkew;
     }
@@ -92,7 +91,8 @@ public class OidcIdTokenVerifier : IOidcIdTokenVerifier
                 OidcVerificationOutcome.ProviderNotConfigured, "no provider name was supplied");
         }
 
-        if (!_providers.TryGetValue(provider, out var options))
+        var canonical = Canonical(provider);
+        if (!_providers.TryGetValue(canonical, out var options))
         {
             var reason = _providers.Count == 0
                 ? "no OIDC providers are configured"
@@ -114,8 +114,6 @@ public class OidcIdTokenVerifier : IOidcIdTokenVerifier
                 OidcVerificationOutcome.NoTokenSupplied,
                 "no id token was supplied; a bare provider key is never accepted as proof");
         }
-
-        var canonical = Canonical(provider);
 
         var (validation, hadKeys) = await ValidateAsync(canonical, options, idToken, false, ct)
             .ConfigureAwait(false);

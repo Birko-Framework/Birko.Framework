@@ -122,7 +122,7 @@ namespace Birko.Communication.SOAP.Middleware
         /// <returns>The client IP address or null</returns>
         public string? GetClientIpAddress(System.Net.HttpListenerRequest request)
         {
-            return AuthenticationService.GetClientIpAddress(
+            return _authService.ResolveClientIp(
                 request.Headers.Get,
                 request.UserHostAddress
             );

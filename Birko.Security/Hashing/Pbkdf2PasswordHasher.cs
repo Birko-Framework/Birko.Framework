@@ -13,6 +13,7 @@ public class Pbkdf2PasswordHasher : IPasswordHasher
     private const int SaltSize = 16;     // 128-bit salt
     private const int HashSize = 32;     // 256-bit hash
     private const int DefaultIterations = 600_000;
+    private const int MaxStoredIterations = 10_000_000;
 
     private readonly int _iterations;
 
@@ -50,6 +51,12 @@ public class Pbkdf2PasswordHasher : IPasswordHasher
         // SH-H039: a non-positive iteration count made Pbkdf2 throw ArgumentOutOfRangeException *out of*
         // Verify, so a corrupt column raised an unhandled exception on the login path instead of failing.
         if (!int.TryParse(parts[1], out var iterations) || iterations <= 0)
+            return false;
+
+        // SH-M246: and an unbounded one let a stored value (int.MaxValue) cost hours of CPU per login attempt.
+        // The ceiling is the larger of a fixed 10,000,000 (about 15x today's default) and this hasher's own
+        // count, so a hash made by a stronger configuration still verifies.
+        if (iterations > Math.Max(MaxStoredIterations, _iterations))
             return false;
 
         // CR-M233: Verify must be total over arbitrary stored strings — a corrupted/truncated DB column

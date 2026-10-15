@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Birko.Security.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Birko.Security.AspNetCore;
 
@@ -97,6 +98,7 @@ public static class SecurityServiceExtensions
             jwt.RefreshExpirationDays = options.Jwt.RefreshExpirationDays;
             jwt.ClockSkewSeconds = options.Jwt.ClockSkewSeconds;
             jwt.Claims = options.Jwt.Claims;
+            jwt.QueryTokenPathPrefixes = options.Jwt.QueryTokenPathPrefixes;
         });
 
         // HttpContextAccessor (needed by ClaimsCurrentUser)
@@ -107,8 +109,9 @@ public static class SecurityServiceExtensions
         // SH-M354 (TASK-161): the header guard is on by default, so a pipeline without it refuses to start.
         services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter>(new TenantHeaderGuardStartupCheck(options));
 
-        // ICurrentUser — reads from JWT claims
-        services.AddScoped<ICurrentUser, ClaimsCurrentUser>();
+        // ICurrentUser — reads from JWT claims, unless one is already registered (UseResolvedPermissions called first:
+        // SH-M255, an unconditional Add here registered last and won).
+        services.TryAddScoped<ICurrentUser, ClaimsCurrentUser>();
 
         // IPermissionChecker — reads from ICurrentUser.Permissions (no DB hit)
         services.AddScoped<IPermissionChecker, ClaimsPermissionChecker>();

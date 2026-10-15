@@ -16,6 +16,7 @@ namespace Birko.Security.Authentication
         private readonly ILogger<AuthenticationService>? _logger;
         private readonly HashSet<string> _expandedTokens;
         private readonly List<CachedTokenBinding> _expandedBindings;
+        private readonly IReadOnlyCollection<string> _trustedProxies;
         private readonly ReaderWriterLockSlim _lock;
         private bool _disposed;
 
@@ -42,6 +43,10 @@ namespace Birko.Security.Authentication
             _expandedTokens = new HashSet<string>(StringComparer.Ordinal);
             _expandedBindings = new List<CachedTokenBinding>();
             _lock = new ReaderWriterLockSlim();
+            _trustedProxies = (_config.TrustedProxies ?? new List<string>())
+                .Select(ExpandEnvironmentVariable)
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .ToList();
 
             // Initialize cache immediately to avoid first-request latency
             InitializeCache();
@@ -222,22 +227,50 @@ namespace Birko.Security.Authentication
         }
 
         /// <summary>
-        /// Extracts the client IP address from common forwarded headers
+        /// The client address of a request, believing forwarding headers only from this configuration's
+        /// <see cref="AuthenticationConfiguration.TrustedProxies"/>.
         /// </summary>
         /// <param name="getHeaderValue">Function to get header values</param>
-        /// <param name="fallbackIp">Fallback direct connection IP</param>
+        /// <param name="connectionIp">The address of the connection's peer</param>
+        public string? ResolveClientIp(Func<string, string?> getHeaderValue, string? connectionIp)
+            => GetClientIpAddress(getHeaderValue, connectionIp, _trustedProxies);
+
+        /// <summary>
+        /// The client address of a request: the connection's own, unless that is a trusted proxy, in which case the
+        /// forwarding headers say whom it forwarded.
+        /// </summary>
+        /// <remarks>
+        /// SH-M249: the headers were believed from anyone, and the address returned is what a token binding's
+        /// allow-list is checked against, so a client holding a bound token could send <c>X-Forwarded-For: 10.0.0.1</c>
+        /// and pass a binding it is not on. A header is now read only when <paramref name="fallbackIp"/> is in
+        /// <paramref name="trustedProxies"/>; by default none is. <c>X-Forwarded-For</c> is walked from the right,
+        /// skipping trusted proxies, so the answer is the first hop no trusted proxy vouches for: the left end is
+        /// whatever the client wrote.
+        /// </remarks>
+        /// <param name="getHeaderValue">Function to get header values</param>
+        /// <param name="fallbackIp">The address of the connection's peer</param>
+        /// <param name="trustedProxies">Addresses or CIDR ranges of proxies whose headers are believed</param>
         /// <returns>The client IP address or null</returns>
-        public static string? GetClientIpAddress(Func<string, string?> getHeaderValue, string? fallbackIp)
+        public static string? GetClientIpAddress(
+            Func<string, string?> getHeaderValue,
+            string? fallbackIp,
+            IReadOnlyCollection<string>? trustedProxies = null)
         {
-            // Check for forwarded IP (behind proxy/load balancer)
+            if (trustedProxies == null || trustedProxies.Count == 0 || !IsTrusted(fallbackIp, trustedProxies))
+            {
+                return fallbackIp;
+            }
+
             var forwardedFor = getHeaderValue("X-Forwarded-For");
             if (!string.IsNullOrWhiteSpace(forwardedFor))
             {
-                // X-Forwarded-For can contain multiple IPs, take the first one (original client)
-                var ips = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (ips.Length > 0)
+                var hops = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                for (int i = hops.Length - 1; i >= 0; i--)
                 {
-                    return ips[0];
+                    if (i == 0 || !IsTrusted(hops[i], trustedProxies))
+                    {
+                        return hops[i];
+                    }
                 }
             }
 
@@ -245,19 +278,66 @@ namespace Birko.Security.Authentication
             var realIp = getHeaderValue("X-Real-IP");
             if (!string.IsNullOrWhiteSpace(realIp))
             {
-                return realIp;
+                return realIp.Trim();
             }
 
             // Check for CF-Connecting-IP header (Cloudflare)
             var cfIp = getHeaderValue("CF-Connecting-IP");
             if (!string.IsNullOrWhiteSpace(cfIp))
             {
-                return cfIp;
+                return cfIp.Trim();
             }
 
-            // Fall back to direct connection IP
             return fallbackIp;
         }
+
+        private static bool IsTrusted(string? ip, IReadOnlyCollection<string> trustedProxies)
+        {
+            var address = ParseAddress(ip);
+            if (address == null)
+            {
+                return false;
+            }
+
+            foreach (var entry in trustedProxies)
+            {
+                if (entry.Contains('/'))
+                {
+                    if (System.Net.IPNetwork.TryParse(entry.Trim(), out var network)
+                        && (network.Contains(address) || (address.IsIPv4MappedToIPv6 && network.Contains(address.MapToIPv4()))))
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    var proxy = ParseAddress(entry);
+                    if (proxy != null && Normalize(proxy).Equals(Normalize(address)))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static System.Net.IPAddress? ParseAddress(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+            var text = value.Trim();
+            if (System.Net.IPAddress.TryParse(text, out var address))
+            {
+                return address;
+            }
+            // A peer may be given with its port ("10.0.0.5:51234", "[::1]:51234").
+            return System.Net.IPEndPoint.TryParse(text, out var endPoint) ? endPoint.Address : null;
+        }
+
+        private static System.Net.IPAddress Normalize(System.Net.IPAddress address)
+            => address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
 
         /// <summary>
         /// Expands environment variables in format ${ENV_VAR}
@@ -323,6 +403,16 @@ namespace Birko.Security.Authentication
                         {
                             cachedBinding.AllowedIps.Add(expandedIp);
                         }
+                    }
+
+                    // SH-M250: a binding whose every address expanded to nothing refuses its token from everywhere,
+                    // which at the call site looks exactly like a wrong token. Kept (dropping it would let a plain
+                    // Tokens entry for the same token through, unbound), but said.
+                    if (cachedBinding.AllowedIps.Count == 0)
+                    {
+                        _logger?.LogError(
+                            "A token binding has no allowed IP after expansion, so its token is refused from every address. "
+                            + "Check that each AllowedIps entry is non-empty and that any ${{VAR}} placeholder is set.");
                     }
 
                     _expandedBindings.Add(cachedBinding);
