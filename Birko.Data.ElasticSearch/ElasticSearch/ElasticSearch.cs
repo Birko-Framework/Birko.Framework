@@ -36,6 +36,23 @@ namespace Birko.Data.ElasticSearch
         /// throws <see cref="Birko.Data.Exceptions.EntityNotFoundException"/> naming them — the other items were written.
         /// Any other item error is left to the caller's generic failure.
         /// </summary>
+        /// <summary>Elasticsearch's error type for a create whose id is already taken.</summary>
+        public const string VersionConflictErrorType = "version_conflict_engine_exception";
+
+        /// <summary>
+        /// TASK-625: a bulk create whose only failures are ids already taken is a duplicate create, refused with the shared
+        /// <c>StoreException</c>. Elasticsearch bulk is not atomic, so the other items are already stored.
+        /// </summary>
+        public static void ThrowIfOnlyConflicts(Type entityType, BulkResponse bulkResponse)
+        {
+            var failed = bulkResponse.ItemsWithErrors.ToList();
+            if (failed.Count == 0 || failed.Any(i => i.Error?.Type != VersionConflictErrorType))
+            {
+                return;
+            }
+            throw Birko.Data.Exceptions.StoreException.DuplicateCreate(entityType);
+        }
+
         public static void ThrowIfOnlyMissingDocuments(Type entityType, BulkResponse bulkResponse)
         {
             var failed = bulkResponse.ItemsWithErrors.ToList();

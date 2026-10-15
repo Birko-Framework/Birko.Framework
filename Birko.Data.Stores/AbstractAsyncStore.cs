@@ -171,8 +171,22 @@ namespace Birko.Data.Stores
         public virtual async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            return await CreateCoreAsync(data, processDelegate, ct).ConfigureAwait(false);
+            try
+            {
+                return await CreateCoreAsync(data, processDelegate, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (IsDuplicateKeyException(ex))
+            {
+                throw Birko.Data.Exceptions.StoreException.DuplicateCreate(typeof(T), ex);
+            }
         }
+
+        /// <summary>
+        /// Whether <paramref name="ex"/> is the provider refusing a create because the key is already stored. A provider
+        /// whose driver signals that with its own exception overrides this, and the public create methods turn exactly
+        /// that case into <see cref="Birko.Data.Exceptions.StoreException.DuplicateCreate"/> (TASK-625).
+        /// </summary>
+        protected virtual bool IsDuplicateKeyException(Exception ex) => false;
 
         /// <summary>
         /// Core create implementation. Override in concrete stores.

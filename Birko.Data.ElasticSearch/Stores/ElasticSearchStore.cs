@@ -146,6 +146,11 @@ namespace Birko.Data.ElasticSearch.Stores
             {
                 var indexName = GetIndexName();
                 var response = Connector!.Create(data, i => i.Id(data.Guid).Index(indexName));
+                // TASK-625: an id already taken is a 409, refused with the shared StoreException.
+                if (response.ApiCall?.HttpStatusCode == 409)
+                {
+                    throw Birko.Data.Exceptions.StoreException.DuplicateCreate(typeof(T), response.OriginalException);
+                }
 
                 if (!response.IsValid || response.OriginalException != null)
                 {
@@ -155,7 +160,7 @@ namespace Birko.Data.ElasticSearch.Stores
                         response.OriginalException);
                 }
             }
-            catch (Exception ex) when (ex is InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException or Birko.Data.Exceptions.StoreException)
             {
                 throw;
             }
@@ -190,7 +195,7 @@ namespace Birko.Data.ElasticSearch.Stores
 
                 return (searchResponse.Total > 0) ? searchResponse.Documents.FirstOrDefault() : null;
             }
-            catch (Exception ex) when (ex is InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException or Birko.Data.Exceptions.StoreException)
             {
                 throw;
             }
@@ -258,7 +263,7 @@ namespace Birko.Data.ElasticSearch.Stores
                         response.OriginalException);
                 }
             }
-            catch (Exception ex) when (ex is InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException or Birko.Data.Exceptions.StoreException)
             {
                 throw;
             }
@@ -416,6 +421,7 @@ namespace Birko.Data.ElasticSearch.Stores
             if (!bulkResponse.IsValid)
             {
                 Data.ElasticSearch.ElasticSearch.ThrowIfOnlyMissingDocuments(typeof(T), bulkResponse);
+                Data.ElasticSearch.ElasticSearch.ThrowIfOnlyConflicts(typeof(T), bulkResponse);
                 var errorItems = bulkResponse.ItemsWithErrors.Take(10);
                 var errors = string.Join("\n", errorItems.Select(item =>
                     $"Index: {item.Index}, Id: {item.Id}, Error: {item.Error?.Reason ?? item.Error?.Type ?? "Unknown"}"));
@@ -478,7 +484,7 @@ namespace Birko.Data.ElasticSearch.Stores
                 }
                 return response.Count;
             }
-            catch (Exception ex) when (ex is InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException or Birko.Data.Exceptions.StoreException)
             {
                 throw;
             }
@@ -782,7 +788,7 @@ namespace Birko.Data.ElasticSearch.Stores
 
                 return new HighlightedSearchResults<T>(hits.AsReadOnly(), searchResponse.Total);
             }
-            catch (Exception ex) when (ex is InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException or Birko.Data.Exceptions.StoreException)
             {
                 throw;
             }
@@ -833,7 +839,7 @@ namespace Birko.Data.ElasticSearch.Stores
                         response.OriginalException);
                 }
             }
-            catch (Exception ex) when (ex is InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException or Birko.Data.Exceptions.StoreException)
             {
                 throw;
             }
@@ -860,7 +866,7 @@ namespace Birko.Data.ElasticSearch.Stores
                         response.OriginalException);
                 }
             }
-            catch (Exception ex) when (ex is InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException or Birko.Data.Exceptions.StoreException)
             {
                 throw;
             }

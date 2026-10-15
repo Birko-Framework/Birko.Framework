@@ -35,7 +35,14 @@ namespace Birko.Data.Stores
             CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            await CreateCoreAsync(data, storeDelegate, ct).ConfigureAwait(false);
+            try
+            {
+                await CreateCoreAsync(data, storeDelegate, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (IsDuplicateKeyException(ex))
+            {
+                throw Birko.Data.Exceptions.StoreException.DuplicateCreate(typeof(T), ex);
+            }
         }
 
         /// <summary>

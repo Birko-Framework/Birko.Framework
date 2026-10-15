@@ -138,6 +138,22 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
+
+        /// <summary>
+        /// TASK-625: a write refused for a duplicate key, single (<c>MongoWriteException</c>) or bulk
+        /// (<c>MongoBulkWriteException</c>), anywhere in the exception chain. Note: <c>InsertMany</c> is ordered, so the
+        /// documents before the duplicate are already stored when it throws.
+        /// </summary>
+        protected override bool IsDuplicateKeyException(Exception ex)
+        {
+            for (var e = ex; e != null; e = e.InnerException)
+            {
+                if (e is MongoWriteException w && w.WriteError?.Category == ServerErrorCategory.DuplicateKey) return true;
+                if (e is MongoBulkWriteException bw && bw.WriteErrors.Any(x => x.Category == ServerErrorCategory.DuplicateKey)) return true;
+            }
+            return false;
+        }
+
         protected override Guid CreateCore(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Collection == null || data == null) return Guid.Empty;

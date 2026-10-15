@@ -155,8 +155,22 @@ namespace Birko.Data.Stores
         public virtual Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureInitialized();
-            return CreateCore(data, storeDelegate);
+            try
+            {
+                return CreateCore(data, storeDelegate);
+            }
+            catch (Exception ex) when (IsDuplicateKeyException(ex))
+            {
+                throw Birko.Data.Exceptions.StoreException.DuplicateCreate(typeof(T), ex);
+            }
         }
+
+        /// <summary>
+        /// Whether <paramref name="ex"/> is the provider refusing a create because the key is already stored. A provider
+        /// whose driver signals that with its own exception overrides this, and the public create methods turn exactly
+        /// that case into <see cref="Birko.Data.Exceptions.StoreException.DuplicateCreate"/> (TASK-625).
+        /// </summary>
+        protected virtual bool IsDuplicateKeyException(Exception ex) => false;
 
         /// <summary>
         /// Core create implementation. Override in concrete stores.

@@ -24,11 +24,6 @@ public abstract partial class StoreContract<T>
     /// the acceptance instead, so a change either way is noticed.
     /// </summary>
     protected virtual bool RefusesDuplicateCreate => true;
-    /// <summary>
-    /// Whether this provider's duplicate-create refusal is already the shared <c>StoreException</c>. False only for the
-    /// providers TASK-625 still has to unify; it deletes every override.
-    /// </summary>
-    protected virtual bool DuplicateCreateThrowsStoreException => true;
 
     [Fact]
     public void Contract_Create_of_an_entity_with_no_guid_assigns_one()
@@ -116,9 +111,7 @@ public abstract partial class StoreContract<T>
     /// <summary>
     /// TASK-567. Create means "a new entity": a Guid already stored is refused, never stored twice and never
     /// overwritten. A SQL table for a key-less model stored a second row; RavenDB's Store overwrote.
-    /// <para>The refusal is a <c>StoreException</c>, like the in-memory store's, unless a provider sets
-    /// <see cref="DuplicateCreateThrowsStoreException"/> false: MongoDB, CosmosDB, ElasticSearch, and JSON/XML for their
-    /// single create still refuse with their own types (measured). TASK-625 unifies them and removes those overrides.</para>
+    /// <para>The refusal is the shared <c>StoreException</c> on every provider (TASK-625 unified the five that differed).</para>
     /// </summary>
     [Fact]
     public void Contract_Create_of_a_stored_guid_is_refused_and_the_stored_entity_is_kept()
@@ -138,7 +131,7 @@ public abstract partial class StoreContract<T>
             Settled(store).Count(x => x.Guid == guid).Should().Be(2, "the documented exception: a duplicate is accepted");
             return;
         }
-        ((Action)(() => store.Create(duplicate))).Should().Throw<Exception>().Which.Should().Match<Exception>(e => !DuplicateCreateThrowsStoreException || e is Birko.Data.Exceptions.StoreException);
+        ((Action)(() => store.Create(duplicate))).Should().Throw<Birko.Data.Exceptions.StoreException>();
 
         Settled(store).Count(x => x.Guid == guid).Should().Be(1);
         NameOf(Settled(store).ReadFirst(x => x.Guid == guid)!).Should().Be("first");
@@ -162,7 +155,7 @@ public abstract partial class StoreContract<T>
             Settled(store).Count(x => x.Guid == guid).Should().Be(2, "the documented exception: a duplicate is accepted");
             return;
         }
-        ((Action)(() => store.Create(new[] { duplicate }))).Should().Throw<Exception>().Which.Should().Match<Exception>(e => !DuplicateCreateThrowsStoreException || e is Birko.Data.Exceptions.StoreException);
+        ((Action)(() => store.Create(new[] { duplicate }))).Should().Throw<Birko.Data.Exceptions.StoreException>();
 
         Settled(store).Count(x => x.Guid == guid).Should().Be(1);
         NameOf(Settled(store).ReadFirst(x => x.Guid == guid)!).Should().Be("first");
@@ -173,8 +166,6 @@ public abstract partial class AsyncStoreContract<T>
 {
     /// <inheritdoc cref="StoreContract{T}.RefusesDuplicateCreate"/>
     protected virtual bool RefusesDuplicateCreate => true;
-    /// <inheritdoc cref="StoreContract{T}.DuplicateCreateThrowsStoreException"/>
-    protected virtual bool DuplicateCreateThrowsStoreException => true;
 
     [Fact]
     public async Task Contract_CreateAsync_of_an_entity_with_an_empty_guid_assigns_a_fresh_one()
@@ -263,8 +254,8 @@ public abstract partial class AsyncStoreContract<T>
             (await Settled(store).CountAsync(x => x.Guid == guid)).Should().Be(2, "the documented exception: a duplicate is accepted");
             return;
         }
-        (await ((Func<Task>)(() => store.CreateAsync(duplicate))).Should().ThrowAsync<Exception>()).Which.Should().Match<Exception>(e => !DuplicateCreateThrowsStoreException || e is Birko.Data.Exceptions.StoreException);
-        (await ((Func<Task>)(() => store.CreateAsync(new[] { duplicate }))).Should().ThrowAsync<Exception>()).Which.Should().Match<Exception>(e => !DuplicateCreateThrowsStoreException || e is Birko.Data.Exceptions.StoreException);
+        await ((Func<Task>)(() => store.CreateAsync(duplicate))).Should().ThrowAsync<Birko.Data.Exceptions.StoreException>();
+        await ((Func<Task>)(() => store.CreateAsync(new[] { duplicate }))).Should().ThrowAsync<Birko.Data.Exceptions.StoreException>();
 
         (await Settled(store).CountAsync(x => x.Guid == guid)).Should().Be(1);
         NameOf((await Settled(store).ReadFirstAsync(x => x.Guid == guid))!).Should().Be("first");

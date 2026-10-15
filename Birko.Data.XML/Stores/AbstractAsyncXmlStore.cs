@@ -80,7 +80,8 @@ namespace Birko.Data.XML.Stores
 
             data.EnsureGuid();
             data = StoreDelegates.Apply(storeDelegate, data);
-            _items.Add(data.Guid.Value, data);
+            // TASK-625: refused with the shared StoreException (Add threw ArgumentException).
+            StoredKeyGuard.AddNew(_items, new[] { data });
 
             await SaveDataAsync(ct);
 

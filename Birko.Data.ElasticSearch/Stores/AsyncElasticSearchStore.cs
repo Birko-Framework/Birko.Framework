@@ -144,6 +144,11 @@ namespace Birko.Data.ElasticSearch.Stores
 
             var indexName = GetIndexName();
             var response = await Connector.CreateAsync(data, i => i.Id(data.Guid).Index(indexName), ct);
+            // TASK-625: an id already taken is a 409, refused with the shared StoreException.
+            if (response.ApiCall?.HttpStatusCode == 409)
+            {
+                throw Birko.Data.Exceptions.StoreException.DuplicateCreate(typeof(T), response.OriginalException);
+            }
 
             if (!response.IsValid || response.OriginalException != null)
             {
@@ -420,6 +425,7 @@ namespace Birko.Data.ElasticSearch.Stores
             if (!bulkResponse.IsValid)
             {
                 Data.ElasticSearch.ElasticSearch.ThrowIfOnlyMissingDocuments(typeof(T), bulkResponse);
+                Data.ElasticSearch.ElasticSearch.ThrowIfOnlyConflicts(typeof(T), bulkResponse);
                 var errorItems = bulkResponse.ItemsWithErrors.Take(10);
                 var errors = string.Join("\n", errorItems.Select(item =>
                     $"Index: {item.Index}, Id: {item.Id}, Error: {item.Error?.Reason ?? item.Error?.Type ?? "Unknown"}"));

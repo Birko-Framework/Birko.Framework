@@ -157,6 +157,21 @@ public class CosmosDBStore<T>
     #region Core CRUD Operations - Single Item
 
     /// <inheritdoc />
+
+    /// <summary>
+    /// TASK-625: a create refused because the id is taken is a 409 Conflict, single or from the bulk create's parallel
+    /// writes (which may arrive wrapped in an AggregateException). The other items of a bulk create may already be stored.
+    /// </summary>
+    protected override bool IsDuplicateKeyException(Exception ex)
+    {
+        if (ex is AggregateException agg) return agg.Flatten().InnerExceptions.Any(IsDuplicateKeyException);
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is CosmosException c && c.StatusCode == HttpStatusCode.Conflict) return true;
+        }
+        return false;
+    }
+
     protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
         if (_container == null || data == null) return Guid.Empty;

@@ -19,7 +19,14 @@ namespace Birko.Data.Stores
         public virtual void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureInitialized();
-            CreateCore(data, storeDelegate);
+            try
+            {
+                CreateCore(data, storeDelegate);
+            }
+            catch (Exception ex) when (IsDuplicateKeyException(ex))
+            {
+                throw Birko.Data.Exceptions.StoreException.DuplicateCreate(typeof(T), ex);
+            }
         }
 
         /// <summary>

@@ -16,7 +16,10 @@ batch store upserted. All of them now refuse a create of a stored Guid and keep 
 - **The exception.** SQL, RavenDB and the fixed JSON/XML paths throw `StoreException` (the in-memory store's type),
   with the driver's exception as `InnerException`. The connectors' unique-violation classifiers walk the inner chain,
   so `SqlEventStore`'s conflict handling still recognises it (measured live). MongoDB, CosmosDB, ElasticSearch and the
-  JSON/XML single create already refused, with their own types; unifying those is [[TASK-625]].
+  JSON/XML single create already refused, with their own types. [[TASK-625]] unified them: the base stores' create
+  wrappers translate a provider's `IsDuplicateKeyException`, after an audit found no catch site depending on the old
+  types. A refused **bulk** create is not atomic on MongoDB, CosmosDB or ElasticSearch: items before or beside the
+  duplicate are already stored.
 - **RavenDB** stores with an empty change vector ("must not exist"). Bulk create no longer uses `BulkInsert`, which
   overwrites and has no such form: it saves sessions of 512, each all-or-nothing. That is slower for very large loads.
   Inside a unit of work (a cluster-wide transaction, where a change vector is refused and atomic guards did not cover

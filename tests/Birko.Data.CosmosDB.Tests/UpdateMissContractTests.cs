@@ -66,7 +66,6 @@ internal sealed class CosmosLive : IDisposable
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="CosmosDBStore{T}"/>, live.</summary>
 public sealed class CosmosUpdateMissContractTests : StoreContract<UpdateMissDoc>, IDisposable
 {
-    protected override bool DuplicateCreateThrowsStoreException => false; // TASK-625
     private readonly CosmosLive _live;
     public CosmosUpdateMissContractTests(ITestOutputHelper output) => _live = new CosmosLive(output);
     protected override bool Ready() => _live.Ready();
@@ -86,7 +85,6 @@ public sealed class CosmosUpdateMissContractTests : StoreContract<UpdateMissDoc>
 /// <summary>The async twin, on <see cref="AsyncCosmosDBStore{T}"/>.</summary>
 public sealed class AsyncCosmosUpdateMissContractTests : AsyncStoreContract<UpdateMissDoc>, IDisposable
 {
-    protected override bool DuplicateCreateThrowsStoreException => false; // TASK-625
     private readonly CosmosLive _live;
     public AsyncCosmosUpdateMissContractTests(ITestOutputHelper output) => _live = new CosmosLive(output);
     protected override bool Ready() => _live.Ready();
