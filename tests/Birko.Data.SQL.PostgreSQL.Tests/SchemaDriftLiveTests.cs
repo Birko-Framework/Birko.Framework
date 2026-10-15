@@ -133,7 +133,7 @@ public class SchemaDriftLiveTests
 
         // What an old database looks like: Amount was widened in the model, the column never was.
         Exec($"DROP TABLE IF EXISTS \"{DriftedTable}\"");
-        Exec($"CREATE TABLE \"{DriftedTable}\" (Guid uuid, Name text, Amount text)");
+        Exec($"CREATE TABLE \"{DriftedTable}\" (Guid uuid, Name text, Amount text NOT NULL)");
 
         var report = new PostgreSQLConnector(Settings()).DetectDrift(typeof(DriftedRow));
 
@@ -155,7 +155,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS \"{DriftedTable}\"");
-        Exec($"CREATE TABLE \"{DriftedTable}\" (Guid uuid, Name text, Amount integer, Gone text)");
+        Exec($"CREATE TABLE \"{DriftedTable}\" (Guid uuid, Name text, Amount integer NOT NULL, Gone text)");
         Exec($"ALTER TABLE \"{DriftedTable}\" DROP COLUMN Gone");
 
         var report = new PostgreSQLConnector(Settings()).DetectDrift(typeof(DriftedRow));
@@ -260,5 +260,39 @@ public class SchemaDriftLiveTests
         connector.CatalogueNameLiteral("SupplierVatin").Should().Be("suppliervatin");
         connector.StoredColumnNameComparer.Equals("suppliervatin", "SupplierVatin").Should().BeFalse();
         connector.StoredColumnNameComparer.Equals("suppliervatin", "suppliervatin").Should().BeTrue();
+    }
+
+    [Table("PgDriftNull")]
+    public class NullRow
+    {
+        [PrimaryField]
+        public Guid? Guid { get; set; }
+        public int Count { get; set; }
+        public int? Note { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-620. Drift compared types only, so a column whose nullability disagrees with the model read clean: a
+    /// declared NOT NULL stored as NULL lets in rows the model says cannot exist, and the reverse fails every write
+    /// that leaves the value out. Both directions here.
+    /// </summary>
+    [Fact]
+    public void A_column_whose_nullability_differs_from_the_model_is_reported()
+    {
+        if (!RequireServer()) return;
+
+        Exec("DROP TABLE IF EXISTS \"PgDriftNull\"");
+        new PostgreSQLConnector(Settings()).CreateTable(new[] { typeof(NullRow) });
+        Exec("ALTER TABLE \"PgDriftNull\" ALTER COLUMN count DROP NOT NULL");
+        Exec("ALTER TABLE \"PgDriftNull\" ALTER COLUMN note SET NOT NULL");
+
+        var drifts = new PostgreSQLConnector(Settings()).DetectDrift(typeof(NullRow)).Drifts;
+        foreach (var d in drifts) _output.WriteLine(d.ToString());
+
+        drifts.Select(d => (d.Column, Kind: d.Kind.ToString())).Should().BeEquivalentTo(new[]
+        {
+            ("Count", "NullabilityMismatch"),
+            ("Note", "NullabilityMismatch"),
+        });
     }
 }

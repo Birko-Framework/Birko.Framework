@@ -237,7 +237,7 @@ namespace Birko.Data.SQL.Connectors
 
         protected override string? StoredColumnsSql(string tableName)
             => string.Format(
-                "SELECT c.name, t.name, c.max_length, c.precision, c.scale " +
+                "SELECT c.name, t.name, c.max_length, c.precision, c.scale, c.is_nullable AS birko_nullable " +
                 "FROM sys.columns c JOIN sys.types t ON c.user_type_id = t.user_type_id " +
                 "WHERE c.object_id = OBJECT_ID('{0}')",
                 SqlLiteral.EscapeLiteral(tableName));

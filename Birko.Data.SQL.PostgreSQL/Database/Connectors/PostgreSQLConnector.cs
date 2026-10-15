@@ -242,7 +242,7 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         protected override string? StoredColumnsSql(string tableName)
             => string.Format(
-                "SELECT a.attname, format_type(a.atttypid, a.atttypmod) " +
+                "SELECT a.attname, format_type(a.atttypid, a.atttypmod), NOT a.attnotnull AS birko_nullable " +
                 "FROM pg_attribute a WHERE a.attrelid = '{0}'::regclass " +
                 "AND a.attnum > 0 AND NOT a.attisdropped",
                 RegclassLiteral(tableName));

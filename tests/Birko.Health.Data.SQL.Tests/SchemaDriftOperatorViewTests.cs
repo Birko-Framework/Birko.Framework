@@ -170,7 +170,7 @@ public class SchemaDriftOperatorViewTests : IDisposable
         Exec(drifted, @"CREATE TABLE ""Invoice"" (
                             Guid      TEXT,
                             Number    TEXT,
-                            Total     REAL,
+                            Total     REAL NOT NULL,
                             Note      TEXT,
                             Legacy_Id INTEGER
                         )");

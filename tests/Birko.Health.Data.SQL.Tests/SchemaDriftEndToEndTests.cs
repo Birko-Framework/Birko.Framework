@@ -123,7 +123,7 @@ public class SchemaDriftEndToEndTests : IDisposable
         var settings = NewDatabase();
         // "Amount" is declared INTEGER by the framework; this database has it as TEXT.
         CreateTableWithRawDdl(settings,
-            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount TEXT)");
+            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount TEXT NOT NULL)");
 
         var report = Connector(settings).DetectDrift(typeof(Widget));
 
@@ -161,7 +161,7 @@ public class SchemaDriftEndToEndTests : IDisposable
     {
         var settings = NewDatabase();
         CreateTableWithRawDdl(settings,
-            @"CREATE TABLE ""Money"" (Amount NUMERIC(18,0))");
+            @"CREATE TABLE ""Money"" (Amount NUMERIC(18,0) NOT NULL)");
 
         var connector = Connector(settings);
         var stored = connector.DetectDrift(typeof(MoneyRow));
@@ -204,7 +204,7 @@ public class SchemaDriftEndToEndTests : IDisposable
     {
         var settings = NewDatabase();
         CreateTableWithRawDdl(settings,
-            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount INTEGER, Legacy TEXT)");
+            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount INTEGER NOT NULL, Legacy TEXT)");
 
         var report = Connector(settings).DetectDrift(typeof(Widget));
 
@@ -285,7 +285,7 @@ public class SchemaDriftEndToEndTests : IDisposable
     {
         var settings = NewDatabase();
         CreateTableWithRawDdl(settings,
-            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount TEXT)");
+            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount TEXT NOT NULL)");
 
         var check = new SchemaDriftHealthCheck(() => Connector(settings), new[] { typeof(Widget) });
         var result = await check.CheckAsync();
@@ -307,7 +307,7 @@ public class SchemaDriftEndToEndTests : IDisposable
     {
         var settings = NewDatabase();
         CreateTableWithRawDdl(settings,
-            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount TEXT)");
+            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount TEXT NOT NULL)");
 
         var check = new SchemaDriftHealthCheck(() => Connector(settings), new[] { typeof(Widget) });
         var result = await check.CheckAsync();

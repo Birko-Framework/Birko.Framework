@@ -267,4 +267,77 @@ public class EnsureColumnsEndToEndTests : IDisposable
         connector.StoredColumnName("SupplierVatin").Should().Be("SupplierVatin");
         connector.StoredColumnNameComparer.Equals("suppliervatin", "SupplierVatin").Should().BeTrue();
     }
+
+    [Table("SlDriftNull")]
+    public class NullRow : AbstractModel
+    {
+        public int Count { get; set; }
+        public int? Note { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-620 on SQLite, which has no ALTER COLUMN: the table the framework created is rebuilt from its own CREATE
+    /// statement with the NOT NULL moved from Count to Note, so only nullability differs.
+    /// </summary>
+    [Fact]
+    public void A_column_whose_nullability_differs_from_the_model_is_reported()
+    {
+        var connector = Connector();
+        connector.CreateTable(new[] { typeof(NullRow) });
+
+        var settings = new SqLiteSettings { Location = _root, Name = "ensure.db" };
+        using (var raw = new Microsoft.Data.Sqlite.SqliteConnection(settings.GetConnectionString()))
+        {
+            raw.Open();
+            string create;
+            using (var read = raw.CreateCommand())
+            {
+                read.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'SlDriftNull'";
+                create = (string)read.ExecuteScalar()!;
+            }
+            var flipped = System.Text.RegularExpressions.Regex.Replace(create, @"\bCount\s+(\w+)\s+NOT NULL", "Count $1");
+            flipped = System.Text.RegularExpressions.Regex.Replace(flipped, @"\bNote\s+(\w+)", "Note $1 NOT NULL");
+            flipped.Should().NotBe(create, "the rebuild must actually change the nullability");
+            using var rebuild = raw.CreateCommand();
+            rebuild.CommandText = "DROP TABLE \"SlDriftNull\"; " + flipped;
+            rebuild.ExecuteNonQuery();
+        }
+        SqlitePool.ClearFor(settings.GetConnectionString());
+
+        connector.DetectDrift(typeof(NullRow)).Drifts.Select(d => (d.Column, Kind: d.Kind.ToString())).Should().BeEquivalentTo(new[]
+        {
+            ("Count", "NullabilityMismatch"),
+            ("Note", "NullabilityMismatch"),
+        });
+    }
+
+    [Table("SlNullShapes")]
+    public class NullShapes : AbstractModel
+    {
+        public int Count { get; set; }
+        public int? Maybe { get; set; }
+        public string? Text { get; set; }
+        [RequiredField]
+        public string Required { get; set; } = string.Empty;
+        [RequiredField]
+        public int? RequiredNullable { get; set; }
+        public decimal Money { get; set; }
+        public DateTime Seen { get; set; }
+        public bool Flag { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-620: the drift check takes the declared nullability from <c>IsNotNull</c> because that is the flag
+    /// <c>FieldDefinition</c> emits <c>NOT NULL</c> from (rule 63). This pins the agreement for every field shape, so the
+    /// DDL and the check cannot drift apart.
+    /// </summary>
+    [Fact]
+    public void FieldDefinition_emits_NOT_NULL_exactly_when_the_field_is_IsNotNull()
+    {
+        var connector = Connector();
+        foreach (var field in Birko.Data.SQL.DataBase.LoadTable(typeof(NullShapes))!.Fields.Values)
+        {
+            connector.FieldDefinition(field).Contains("NOT NULL").Should().Be(field.IsNotNull, field.Name);
+        }
+    }
 }

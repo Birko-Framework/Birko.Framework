@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Schema drift reports a column whose nullability differs from the model (2026-10-15)
+
+[[TASK-620]]. `DetectDrift` compared types only. Measured on all four SQL providers: a column made nullable where the
+model says NOT NULL, or the reverse, read clean. It is now `ColumnDriftKind.NullabilityMismatch`, read from each catalogue
+(`birko_nullable`) against `IsNotNull`. Key columns are skipped. **Expect new drift** on tables created by hand, or
+altered with a `MODIFY` / `ALTER COLUMN` that dropped `NOT NULL`.
 ### An ElasticSearch `PropertyUpdate` Set of null stores null (2026-10-15)
 
 [[TASK-501]]. The update script bound a null as `""`, so a string stored `""`, and a nullable number or date failed the

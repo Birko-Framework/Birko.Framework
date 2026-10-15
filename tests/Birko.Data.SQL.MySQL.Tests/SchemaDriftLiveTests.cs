@@ -129,7 +129,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS `{DriftedTable}`");
-        Exec($"CREATE TABLE `{DriftedTable}` (`Guid` char(36), `Money` decimal(18,0))");
+        Exec($"CREATE TABLE `{DriftedTable}` (`Guid` char(36), `Money` decimal(18,0) NOT NULL)");
 
         var report = new MySQLConnector(Settings()).DetectDrift(typeof(DriftedRow));
 
@@ -238,7 +238,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS `{DriftedTable}`");
-        Exec($"CREATE TABLE `{DriftedTable}` (`Guid` char(36), `Money` decimal(18,2))");
+        Exec($"CREATE TABLE `{DriftedTable}` (`Guid` char(36), `Money` decimal(18,2) NOT NULL)");
 
         Exec("CREATE DATABASE IF NOT EXISTS birkodrift_other");
         try
@@ -256,5 +256,38 @@ public class SchemaDriftLiveTests
         {
             Exec("DROP DATABASE IF EXISTS birkodrift_other");
         }
+    }
+
+    [Table("MyDriftNull")]
+    public class NullRow
+    {
+        [PrimaryField]
+        public Guid? Guid { get; set; }
+        public int Count { get; set; }
+        public int? Note { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-620. Drift compared types only, so a column whose nullability disagrees with the model read clean: a
+    /// declared NOT NULL stored as NULL lets in rows the model says cannot exist, and the reverse fails every write
+    /// that leaves the value out. Both directions here.
+    /// </summary>
+    [Fact]
+    public void A_column_whose_nullability_differs_from_the_model_is_reported()
+    {
+        if (!RequireServer()) return;
+
+        Exec("DROP TABLE IF EXISTS `MyDriftNull`");
+        new MySQLConnector(Settings()).CreateTable(new[] { typeof(NullRow) });
+        Exec("ALTER TABLE `MyDriftNull` MODIFY COLUMN Count INT NULL, MODIFY COLUMN Note INT NOT NULL");
+
+        var drifts = new MySQLConnector(Settings()).DetectDrift(typeof(NullRow)).Drifts;
+        foreach (var d in drifts) _output.WriteLine(d.ToString());
+
+        drifts.Select(d => (d.Column, Kind: d.Kind.ToString())).Should().BeEquivalentTo(new[]
+        {
+            ("Count", "NullabilityMismatch"),
+            ("Note", "NullabilityMismatch"),
+        });
     }
 }

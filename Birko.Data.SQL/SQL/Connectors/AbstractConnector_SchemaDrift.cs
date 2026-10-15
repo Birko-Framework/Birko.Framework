@@ -65,7 +65,20 @@ namespace Birko.Data.SQL.Connectors
             public int? Precision { get; }
 
             public int? Scale { get; }
+
+            /// <summary>
+            /// Whether the column allows NULL, read from the catalogue column aliased <see cref="StoredNullableColumn"/>;
+            /// null when a provider's query does not supply it, in which case nullability is not compared (TASK-620).
+            /// </summary>
+            public bool? IsNullable { get; set; }
         }
+
+        /// <summary>
+        /// The alias a <see cref="StoredColumnsSql"/> query gives its "this column allows NULL" value, normalised to a
+        /// boolean or 0/1. Read by name, so a provider adds one column to its query and no reader code.
+        /// </summary>
+        protected const string StoredNullableColumn = "birko_nullable";
+
 
         /// <summary>
         /// The statement that lists <paramref name="tableName"/>'s columns, or null on a provider whose
@@ -148,6 +161,7 @@ namespace Birko.Data.SQL.Connectors
 
             var drifts = new List<ColumnDrift>();
             var seen = new HashSet<string>(StoredColumnNameComparer);
+            var keyFields = new HashSet<Fields.AbstractField>(DataBase.GetPrimaryFields(type));
 
             foreach (var field in table.Fields.Values)
             {
@@ -175,6 +189,19 @@ namespace Birko.Data.SQL.Connectors
                 if (!SameColumnType(declared, rendered))
                 {
                     drifts.Add(new ColumnDrift(table.Name, field.Name, ColumnDriftKind.TypeMismatch, declared, rendered));
+                }
+
+                // TASK-620: nullability, compared only where the catalogue said. The declared side is IsNotNull, the
+                // flag every FieldDefinition emits NOT NULL from (rule 63). Key columns are skipped, the key being
+                // what DataBase.GetPrimaryFields says (an AbstractModel's Guid when nothing is declared): the framework
+                // always writes a key, providers disagree on what a key implies (PostgreSQL, SQL Server and MySQL make
+                // it NOT NULL; SQLite does not), and whether the key is declared at all is TASK-567's question.
+                var declaredNotNull = field.IsNotNull;
+                if (!keyFields.Contains(field) && actual.IsNullable is bool storedNullable && storedNullable == declaredNotNull)
+                {
+                    drifts.Add(new ColumnDrift(table.Name, field.Name, ColumnDriftKind.NullabilityMismatch,
+                        declared + (declaredNotNull ? " NOT NULL" : " NULL"),
+                        rendered + (storedNullable ? " NULL" : " NOT NULL")));
                 }
             }
 
@@ -243,7 +270,12 @@ namespace Birko.Data.SQL.Connectors
             // until the tests caught it.
             foreach (var row in RunReaderCommand(
                 command => { command.CommandText = sql; },
-                reader => new List<object> { ReadStoredColumn(reader) }))
+                reader =>
+                {
+                    var column = ReadStoredColumn(reader);
+                    column.IsNullable = ReadStoredNullable(reader);
+                    return new List<object> { column };
+                }))
             {
                 foreach (var item in row)
                 {
@@ -255,6 +287,18 @@ namespace Birko.Data.SQL.Connectors
             }
 
             return result;
+        }
+
+        private static bool? ReadStoredNullable(DbDataReader reader)
+        {
+            for (var i = 0; i < reader.FieldCount; i++)
+            {
+                if (string.Equals(reader.GetName(i), StoredNullableColumn, StringComparison.OrdinalIgnoreCase))
+                {
+                    return reader.IsDBNull(i) ? null : Convert.ToBoolean(reader.GetValue(i));
+                }
+            }
+            return null;
         }
 
         /// <summary>

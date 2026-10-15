@@ -2,7 +2,7 @@
 id: TASK-620
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-15
@@ -38,14 +38,24 @@ type. So none of these is reported:
 
 ## Acceptance criteria
 
-- [ ] Measured first, per provider (PostgreSQL, MSSQL, MySQL, SQLite): a table whose column differs from the model
+- [x] Measured first, per provider (PostgreSQL, MSSQL, MySQL, SQLite): a table whose column differs from the model
       only in nullability reports clean today. Record it.
-- [ ] Nullability drift is reported, on every provider, with a kind of its own or as `TypeMismatch` carrying both
+      → Clean (an empty drift list) on all four, in both directions (`int` stored NULL, `int?` stored NOT NULL).
+- [x] Nullability drift is reported, on every provider, with a kind of its own or as `TypeMismatch` carrying both
       sides. Decide and record which. The declared side comes from the method that emits the DDL (rule 63), never
       restated.
-- [ ] Defaults and unique / key constraints are each either reported, with a live test, or recorded here as
+      → A kind of its own, `NullabilityMismatch`: the type is the same, and a consumer filtering by kind must be able to
+      tell them apart. The declared side is `IsNotNull`, the flag every `FieldDefinition` emits `NOT NULL` from, with an
+      offline test pinning that agreement. **Key columns are skipped**: the framework always writes a key, providers
+      disagree on what a key implies (SQLite reports a framework-created key as nullable), and whether a key is
+      declared at all is TASK-567's question. The key is `DataBase.GetPrimaryFields`, including its `Guid` fallback.
+- [x] Defaults and unique / key constraints are each either reported, with a live test, or recorded here as
       deliberately not compared, with the reason.
-- [ ] `EnsureColumns` stays additive: none of these is acted on.
+      → **Not compared, deliberately.** *Defaults*: the framework writes every column on every INSERT, so a missing
+      default never changes what a framework write stores; it matters only to other writers. *Unique / key*: a missing
+      declared key is TASK-567's, and a missing unique index or constraint belongs with index drift (TASK-622), where
+      the catalogue reader for indexes already lives.
+- [x] `EnsureColumns` stays additive: none of these is acted on.
 
 ## Out of scope
 
@@ -73,3 +83,12 @@ N/A — covered by the live provider tests.
 6. Tests: a live test per provider (both polarities, proven red), a clean control per provider, and an offline test
    that `DeclaresNotNull` and `FieldDefinition` agree for every field shape.
 
+## Progress log
+
+- 2026-10-15 — Live PostgreSQL, MSSQL and MySQL (Docker), plus SQLite. Red: all four reported the nullability-flipped
+  table clean. Green: PostgreSQL 149, MSSql 184, MySQL 168, SQLite 506, SQL core 710, Health.SQL 20, TimescaleDB 86
+  (offline; no container). Deviation from plan step 3: no extracted `DeclaresNotNull`. The check reads `IsNotNull`
+  directly, and an offline test pins `FieldDefinition` to it. A first cut implied NOT NULL for keys per provider; it
+  produced false positives on SQLite and on keyless `AbstractModel` tables, so keys are skipped instead.
+  Seven hand-written fixtures (PostgreSQL, MySQL, Health.SQL) had omitted the `NOT NULL` their models declare. They
+  now declare it, so they stay about type.

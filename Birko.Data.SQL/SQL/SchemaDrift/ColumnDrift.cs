@@ -35,6 +35,13 @@ namespace Birko.Data.SQL.SchemaDrift
         /// adding the column the connector reads would orphan the values in the stored one (TASK-610).
         /// </summary>
         CaseMismatch = 3,
+
+        /// <summary>
+        /// The column allows NULL where the model declares it NOT NULL, or the reverse (TASK-620). The first admits rows
+        /// the model says cannot exist; the second fails every write that leaves the value out. <see cref="ColumnDrift.Declared"/>
+        /// and <see cref="ColumnDrift.Stored"/> carry the type with its nullability. Reported, never actioned.
+        /// </summary>
+        NullabilityMismatch = 4,
     }
 
     /// <summary>
@@ -91,6 +98,7 @@ namespace Birko.Data.SQL.SchemaDrift
         {
             ColumnDriftKind.Missing => $"{Table}.{Column}: declared {Declared}, not present",
             ColumnDriftKind.Unexpected => $"{Table}.{Column}: present as {Stored}, not declared",
+            ColumnDriftKind.NullabilityMismatch => $"{Table}.{Column}: declared {Declared}, stored {Stored}",
             ColumnDriftKind.CaseMismatch => $"{Table}.{Column}: declared {Declared}, stored only as \"{StoredColumn}\" ({Stored}), which differs in case and is not reachable",
             _ => $"{Table}.{Column}: declared {Declared}, stored {Stored}",
         };

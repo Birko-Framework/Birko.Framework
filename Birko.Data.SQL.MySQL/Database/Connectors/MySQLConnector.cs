@@ -238,7 +238,7 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         protected override string? StoredColumnsSql(string tableName)
             => string.Format(
-                "SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS " +
+                "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE = 'YES' AS birko_nullable FROM information_schema.COLUMNS " +
                 "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{0}'",
                 SqlLiteral.EscapeLiteral(tableName));
 
