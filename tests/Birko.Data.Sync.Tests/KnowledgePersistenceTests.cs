@@ -30,7 +30,7 @@ public class KnowledgePersistenceTests
 
         result.Success.Should().BeTrue();
         // Knowledge must actually be inserted (was a silent no-op before the fix).
-        knowledge.Count().Should().Be(2);
+        knowledge.Count(x => x.EntityGuid != Guid.Empty).Should().Be(2); // TASK-157: plus the scope marker
         knowledge.Read(k => true, null, null, null).Should().OnlyContain(k => k.Guid.HasValue);
     }
 
@@ -51,8 +51,9 @@ public class KnowledgePersistenceTests
         provider.Sync(new SyncOptions { Direction = SyncDirection.Download });
 
         // The second run must update the existing rows, not insert duplicates.
-        knowledge.Count().Should().Be(2);
-        knowledge.Read(k => true, null, null, null).Select(k => k.EntityGuid)
+        knowledge.Count(x => x.EntityGuid != Guid.Empty).Should().Be(2); // TASK-157: plus the scope marker
+        knowledge.Read(k => k.EntityGuid != Guid.Empty, null, null, null).Select(k => k.EntityGuid)
             .Should().BeEquivalentTo(new[] { g1, g2 });
+        knowledge.Count(x => x.EntityGuid == Guid.Empty).Should().Be(1, "the scope marker is upserted like any row");
     }
 }

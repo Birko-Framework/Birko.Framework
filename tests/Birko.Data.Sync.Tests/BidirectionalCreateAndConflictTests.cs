@@ -43,8 +43,16 @@ public class BidirectionalCreateAndConflictTests
     private static void NotInitialSyncAsync(TestAsyncSyncKnowledgeItemStore knowledge)
         => knowledge.SetLastSyncTimeAsync(Scope, DateTime.UtcNow.AddDays(-1), CancellationToken.None).GetAwaiter().GetResult();
 
+    /// <summary>
+    /// TASK-157: a deletion is proven by a pair recorded while BOTH sides held the item, of which one side is now missing.
+    /// These tests used to seed <c>IsRemoteDeleted = true</c> with no versions, a shape only the one-sided knowledge bug
+    /// ever wrote, and that the engine no longer reads as a deletion. The recorded version is older than the survivor's,
+    /// so the survivor counts as changed since the pair (which is what makes the one-sided cases a conflict).
+    /// </summary>
+    private const string RecordedPairVersion = "recorded-before-the-change";
+
     private static TestSyncKnowledge SoleKnowledge(TestSyncKnowledgeItemStore knowledge)
-        => knowledge.Read(null, null, null, null).Should().ContainSingle().Subject;
+        => knowledge.Read(x => x.EntityGuid != Guid.Empty, null, null, null).Should().ContainSingle().Subject; // TASK-157: not the scope marker
 
     // ---------------------------------------------------------------- SH-H008
 
@@ -188,7 +196,8 @@ public class BidirectionalCreateAndConflictTests
             EntityGuid = guid,
             Scope = Scope,
             LastSyncedAt = DateTime.UtcNow.AddDays(-1),
-            IsRemoteDeleted = true
+            LocalVersion = RecordedPairVersion,
+            RemoteVersion = RecordedPairVersion
         }, null);
 
         Provider(local, remote, knowledge)
@@ -257,7 +266,8 @@ public class BidirectionalCreateAndConflictTests
             EntityGuid = guid,
             Scope = Scope,
             LastSyncedAt = DateTime.UtcNow.AddDays(-1),
-            IsRemoteDeleted = true
+            LocalVersion = RecordedPairVersion,
+            RemoteVersion = RecordedPairVersion
         }, null);
 
         var result = Provider(local, remote, knowledge).Sync(new SyncOptions
@@ -288,7 +298,8 @@ public class BidirectionalCreateAndConflictTests
             EntityGuid = guid,
             Scope = Scope,
             LastSyncedAt = DateTime.UtcNow.AddDays(-1),
-            IsLocalDeleted = true
+            LocalVersion = RecordedPairVersion,
+            RemoteVersion = RecordedPairVersion
         }, null);
 
         var result = Provider(local, remote, knowledge).Sync(new SyncOptions
@@ -320,7 +331,8 @@ public class BidirectionalCreateAndConflictTests
             EntityGuid = guid,
             Scope = Scope,
             LastSyncedAt = DateTime.UtcNow.AddDays(-1),
-            IsRemoteDeleted = true
+            LocalVersion = RecordedPairVersion,
+            RemoteVersion = RecordedPairVersion
         }, null);
 
         var result = Provider(local, remote, knowledge).Sync(new SyncOptions
@@ -353,7 +365,8 @@ public class BidirectionalCreateAndConflictTests
             EntityGuid = guid,
             Scope = Scope,
             LastSyncedAt = DateTime.UtcNow.AddDays(-1),
-            IsRemoteDeleted = true
+            LocalVersion = RecordedPairVersion,
+            RemoteVersion = RecordedPairVersion
         }, null);
 
         var result = Provider(local, remote, knowledge).Sync(new SyncOptions
@@ -384,7 +397,8 @@ public class BidirectionalCreateAndConflictTests
             EntityGuid = guid,
             Scope = Scope,
             LastSyncedAt = DateTime.UtcNow.AddDays(-1),
-            IsRemoteDeleted = true
+            LocalVersion = RecordedPairVersion,
+            RemoteVersion = RecordedPairVersion
         }, null, CancellationToken.None);
 
         var provider = new AsyncSyncProvider<TestAsyncBulkStore, TestSyncModel, TestSyncKnowledge>(local, remote, knowledge);

@@ -23,8 +23,10 @@ public class SyncProviderDeletePropagationTests
             EntityGuid = guid,
             Scope = Scope,
             LastSyncedAt = DateTime.UtcNow.AddDays(-1),
-            IsRemoteDeleted = remoteDeleted,
-            IsLocalDeleted = localDeleted
+            // TASK-157: a deletion is a recorded pair with one side now missing; the flags of a recorded pair are false.
+            // remoteDeleted / localDeleted only say which side the test removed; the test seeds the absence itself.
+            LocalVersion = "recorded-pair",
+            RemoteVersion = "recorded-pair"
         }, null);
     }
 

@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Schema drift reports a column whose nullability differs from the model
+
+[[TASK-620]]. `DetectDrift` compared types only. Measured on all four SQL providers: a column made nullable where the
+model says NOT NULL, or the reverse, read clean. It is now `ColumnDriftKind.NullabilityMismatch`, read from each catalogue
+(`birko_nullable`) against `IsNotNull`. Key columns are skipped. **Expect new drift** on tables created by hand, or
+altered with a `MODIFY` / `ALTER COLUMN` that dropped `NOT NULL`.
+
 ## 2026-10-15 — An ElasticSearch `PropertyUpdate` Set of null stores null
 
 [[TASK-501]]. The update script bound a null as `""`, so a string stored `""`, and a nullable number or date failed the

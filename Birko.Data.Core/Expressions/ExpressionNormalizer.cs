@@ -1,5 +1,6 @@
 using System;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Birko.Data.Expressions;
 
@@ -84,6 +85,52 @@ public sealed class ExpressionNormalizer : ExpressionVisitor
         }
 
         return base.Visit(node);
+    }
+
+    /// <summary>
+    /// Rebinds a member reached through an INTERFACE to the concrete type's own property (TASK-157).
+    /// </summary>
+    /// <remarks>
+    /// In generic code, <c>k =&gt; k.Scope == s</c> written against <c>TKnowledge : ISyncKnowledgeItem</c> binds
+    /// <c>k.Scope</c> to <c>ISyncKnowledgeItem.Scope</c>, even though at runtime the parameter is the concrete model. The
+    /// interface property carries none of the model's mapping attributes, so a translator that names fields from them
+    /// built the wrong field: measured on ElasticSearch, the sync engine's knowledge read matched nothing on every run
+    /// (<c>[Keyword(Name = "scope")]</c> lost, so a dynamic <c>.keyword</c> sub-field was queried), and every run inserted
+    /// its knowledge afresh. SQL had the same hole for a <c>[NamedField]</c> remap (SH-M317). The concrete property is the
+    /// one a C# call on the concrete type binds to: found by name, most derived first. An explicit implementation has
+    /// no such property and keeps the interface member.
+    /// </remarks>
+    protected override Expression VisitMember(MemberExpression node)
+    {
+        var visited = (MemberExpression)base.VisitMember(node);
+        if (visited.Member is not PropertyInfo property
+            || property.DeclaringType?.IsInterface != true
+            || visited.Expression is null)
+        {
+            return visited;
+        }
+
+        // A type parameter without a class constraint reaches the member as Convert(x, IFace).Member.
+        var receiver = visited.Expression;
+        while (receiver is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.TypeAs } cast
+               && cast.Type.IsInterface && !cast.Operand.Type.IsInterface && cast.Type.IsAssignableFrom(cast.Operand.Type))
+        {
+            receiver = cast.Operand;
+        }
+        if (receiver.Type.IsInterface)
+        {
+            return visited;
+        }
+
+        for (var type = receiver.Type; type != null; type = type.BaseType)
+        {
+            var concrete = type.GetProperty(property.Name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            if (concrete != null && concrete.PropertyType == property.PropertyType)
+            {
+                return Expression.Property(receiver, concrete);
+            }
+        }
+        return visited;
     }
 
     protected override Expression VisitBinary(BinaryExpression node)

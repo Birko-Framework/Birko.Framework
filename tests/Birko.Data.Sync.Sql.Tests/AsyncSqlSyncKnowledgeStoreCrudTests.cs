@@ -98,7 +98,8 @@ public class AsyncSqlSyncKnowledgeStoreCrudTests : IDisposable
         var stamp = new DateTime(2026, 7, 15, 9, 0, 0, DateTimeKind.Utc);
         var returned = await store.SetLastSyncTimeAsync("empty", stamp, CancellationToken.None);
 
-        returned.Should().Be(stamp, "the method echoes the requested stamp back");
+        // SH-M067 (TASK-157), inverted: the method no longer echoes a stamp it did not persist.
+        returned.Should().BeNull("nothing was stamped, so nothing is reported as persisted");
         (await store.GetLastSyncTimeAsync("empty", CancellationToken.None))
             .Should().BeNull("an empty scope has no row to carry the derived timestamp");
     }

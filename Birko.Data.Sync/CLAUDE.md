@@ -24,19 +24,25 @@ Data synchronization framework for keeping data in sync across different storage
 - `SyncBatch` - Batch of sync operations
 
 ### Sync Providers
-- `SqlSyncProvider` - SQL database sync
-- `ElasticSearchSyncProvider` - Elasticsearch sync
-- `MongoDbSyncProvider` - MongoDB sync
-- `RavenDBSyncProvider` - RavenDB sync
-- `JsonSyncProvider` - JSON file sync
+- `SyncProvider<TStore, T, TKnowledge>` / `AsyncSyncProvider<…>` - the engine: one provider for any pair of bulk
+  stores; the backend-specific part is only the knowledge store (Birko.Data.Sync.Sql / .ElasticSearch / .MongoDb /
+  .Json / .Xml)
+- `SyncProviderBase<T, TKnowledge>` (Internal) - the decision both providers share
+- `SyncQueue` - one run per scope at a time, plus a global concurrency limit
 
 ## Sync Architecture
 
 ```
-Source Store → Sync Engine → Target Store
-                   ↓
-              Sync Log
+Local Store ⇄ Sync Engine ⇄ Remote Store
+                   ↕
+            Knowledge Store
 ```
+
+The decision rests on a **known pair**: a knowledge row recorded while both sides held the item (TASK-157). A deletion
+is a known pair with one side missing; unchanged is Skip; one side changed wins; both changed is the policy. Knowledge
+is written only for a reconciled state, and each run writes a scope marker row (`EntityGuid = Guid.Empty`). Never read
+`IsLocalDeleted` / `IsRemoteDeleted` as "deleted": they mean "this side had no version when the row was written".
+See docs/sync.md.
 
 ## Creating a Sync Operation
 

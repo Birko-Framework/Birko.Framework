@@ -40,62 +40,45 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
     {
         var preview = new SyncPreview { Scope = options.Scope };
 
-        try
+        // SH-M052 (TASK-157): no catch. A bare catch turned every failure (a store error, an empty or duplicate Guid)
+        // into "one conflict" on a partly filled preview, indistinguishable from a real one.
+        ReportProgress(options, SyncPhase.DetectingChanges, 0, 0);
+
+        // Get existing sync knowledge
+        var knowledge = BuildKnowledgeDictionary(_knowledgeStore.Read(k => k.Scope == options.Scope, null, null, null));
+        var lastSyncTime = _knowledgeStore.GetLastSyncTime(options.Scope);
+        var isInitialSync = !lastSyncTime.HasValue;
+
+        // Get all items from both stores
+        var localItems = GetAllItems(_localStore, filterOptions?.LocalFetchPredicate, options.CancellationToken);
+        var remoteItems = GetAllItems(_remoteStore, filterOptions?.RemoteFetchPredicate, options.CancellationToken);
+
+        var localDict = BuildEntityDictionary(localItems, "local");
+        var remoteDict = BuildEntityDictionary(remoteItems, "remote");
+        var allGuids = SelectGuids(localDict, remoteDict, knowledge, isInitialSync, options, filterOptions);
+
+        foreach (var guid in allGuids)
         {
-            ReportProgress(options, SyncPhase.DetectingChanges, 0, 0);
+            if (options.CancellationToken.IsCancellationRequested)
+                break;
 
-            // Get existing sync knowledge
-            var knowledge = _knowledgeStore.Read(k => k.Scope == options.Scope, null, null, null)
-                .ToDictionary(GetGuid, k => k);
-            var lastSyncTime = _knowledgeStore.GetLastSyncTime(options.Scope);
-            var isInitialSync = !lastSyncTime.HasValue;
+            var itemPreview = AnalyzeItem(guid, localDict, remoteDict, knowledge, isInitialSync, options, filterOptions);
+            preview.Items.Add(itemPreview);
 
-            // Get all items from both stores
-            var localItems = GetAllItems(_localStore, filterOptions?.LocalFetchPredicate, options.CancellationToken);
-            var remoteItems = GetAllItems(_remoteStore, filterOptions?.RemoteFetchPredicate, options.CancellationToken);
-
-            var localDict = BuildEntityDictionary(localItems, "local");
-            var remoteDict = BuildEntityDictionary(remoteItems, "remote");
-            var allGuids = localDict.Keys.Union(remoteDict.Keys).ToList();
-            // CR-L207: honor MaxItems by capping the set of Guids processed this run.
-            if (options.MaxItems is int max && max >= 0 && allGuids.Count > max)
+            // Update counters
+            switch (itemPreview.Action)
             {
-                allGuids = allGuids.Take(max).ToList();
+                case SyncAction.Create: preview.ToCreate++; break;
+                case SyncAction.Update: preview.ToUpdate++; break;
+                case SyncAction.Delete: preview.ToDelete++; break;
+                case SyncAction.Skip: preview.Skipped++; break;
+                case SyncAction.Conflict: preview.Conflicts++; break;
             }
 
-            foreach (var guid in allGuids)
-            {
-                if (options.CancellationToken.IsCancellationRequested)
-                    break;
-
-                var itemPreview = AnalyzeItem(guid, localDict, remoteDict, knowledge, isInitialSync, options, filterOptions);
-                preview.Items.Add(itemPreview);
-
-                // Update counters
-                switch (itemPreview.Action)
-                {
-                    case SyncAction.Create: preview.ToCreate++; break;
-                    case SyncAction.Update: preview.ToUpdate++; break;
-                    case SyncAction.Delete: preview.ToDelete++; break;
-                    case SyncAction.Skip: preview.Skipped++; break;
-                    case SyncAction.Conflict: preview.Conflicts++; break;
-                }
-
-                ReportProgress(options, SyncPhase.DetectingChanges, 0, preview.Items.Count);
-            }
-
-            return preview;
+            ReportProgress(options, SyncPhase.DetectingChanges, 0, preview.Items.Count);
         }
-        catch (OperationCanceledException)
-        {
-            // CR-M155: don't mask cancellation as a "conflict" — let it propagate.
-            throw;
-        }
-        catch
-        {
-            preview.Conflicts++; // Mark as failed
-            return preview;
-        }
+
+        return preview;
     }
 
     /// <summary>
@@ -103,6 +86,7 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
     /// </summary>
     public SyncResult Sync(SyncOptions options, SyncFilterOptions<T>? filterOptions = null)
     {
+        ValidateOptions(options);
         var startTime = DateTime.UtcNow;
         var result = new SyncResult
         {
@@ -118,16 +102,17 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
             ReportProgress(options, SyncPhase.DetectingChanges, 0, 0);
 
             // Get existing sync knowledge
-            var knowledge = _knowledgeStore.Read(k => k.Scope == options.Scope, null, null, null)
-                .ToDictionary(GetGuid, k => k);
+            var knowledge = BuildKnowledgeDictionary(_knowledgeStore.Read(k => k.Scope == options.Scope, null, null, null));
             var lastSyncTime = _knowledgeStore.GetLastSyncTime(options.Scope);
             var isInitialSync = !lastSyncTime.HasValue;
             result.IsInitialSync = isInitialSync;
 
-            // For initial sync, always download first
+            // SH-M053 (TASK-157): an initial sync downloads (DetermineSyncAction decides that before it reads Direction), and
+            // the caller's options are not written to: a reused SyncOptions stayed Download for every later run. The
+            // result reports the direction the run actually used.
             if (isInitialSync)
             {
-                options.Direction = SyncDirection.Download;
+                result.Direction = SyncDirection.Download;
             }
 
             // Get all items from both stores
@@ -138,12 +123,7 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
             var remoteDict = BuildEntityDictionary(remoteItems, "remote");
             progress.TotalItems = localDict.Count + remoteDict.Count;
 
-            var allGuids = localDict.Keys.Union(remoteDict.Keys).ToList();
-            // CR-L207: honor MaxItems by capping the set of Guids processed this run.
-            if (options.MaxItems is int max && max >= 0 && allGuids.Count > max)
-            {
-                allGuids = allGuids.Take(max).ToList();
-            }
+            var allGuids = SelectGuids(localDict, remoteDict, knowledge, isInitialSync, options, filterOptions);
             var knowledgeUpdates = new List<TKnowledge>();
 
             // Process in batches
@@ -180,6 +160,11 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                 if (options.CancellationToken.IsCancellationRequested)
                     break;
             }
+
+            // SH-M067 (TASK-157): a row saying the scope was synced, so a run that reconciled nothing (both sides empty, or
+            // only local-only items an initial sync skips) still ends the initial sync. Without it such a scope stayed
+            // initial forever and its local items were never uploaded.
+            knowledgeUpdates.Add(_knowledgeStore.CreateKnowledgeItem(ScopeMarkerGuid, null, null, options));
 
             // Persist sync knowledge. CreateKnowledgeItem returns items with a null store PK, so a
             // plain Update never inserts them and first-run knowledge was silently lost (CR-C18).
@@ -274,6 +259,9 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                 // was applied, not the pre-action dictionaries. Each arm updates the effective pair.
                 var effectiveLocal = localItem;
                 var effectiveRemote = remoteItem;
+                // False when a write the action needed did not happen (a save filter, an unresolved conflict): the
+                // sides still differ, so the state must not be recorded as reconciled knowledge.
+                var reconciled = true;
 
                 switch (action.Action)
                 {
@@ -340,20 +328,34 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                             effectiveRemote = localItem;
                             progress.UpdatedItems++;
                         }
+                        else
+                        {
+                            // SH-M057 (TASK-157): a save filter blocked the write. It was counted as nothing, and the
+                            // pair was recorded as reconciled, so the difference was never retried.
+                            progress.SkippedItems++;
+                            reconciled = false;
+                        }
                         break;
 
                     case SyncAction.Delete:
-                        if (action.DeleteOn == "local" && localItem != null)
+                        if (action.DeleteOn == "local" && localItem != null && CanSaveToLocal(localItem, filterOptions, options))
                         {
                             _localStore.Delete(localItem);
                             effectiveLocal = null;
                             progress.DeletedItems++;
                         }
-                        else if (action.DeleteOn == "remote" && remoteItem != null)
+                        else if (action.DeleteOn == "remote" && remoteItem != null && CanSaveToRemote(remoteItem, filterOptions, options))
                         {
                             _remoteStore.Delete(remoteItem);
                             effectiveRemote = null;
                             progress.DeletedItems++;
+                        }
+                        else
+                        {
+                            // SH-M056 (TASK-157): a delete consults the save filter of the side it removes from, as a
+                            // create and an update do. It was the one destructive path the filter did not guard.
+                            progress.SkippedItems++;
+                            reconciled = false;
                         }
                         break;
 
@@ -364,8 +366,9 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                     case SyncAction.Conflict:
                         progress.Conflicts++;
                         var resolution = ResolveConflict(action.Conflict!, options);
-                        (effectiveLocal, effectiveRemote) = ApplyConflictResolution(
+                        (effectiveLocal, effectiveRemote, var applied) = ApplyConflictResolution(
                             resolution, guid, localItem, remoteItem, options, filterOptions, progress);
+                        reconciled = applied;
                         break;
                 }
 
@@ -377,7 +380,12 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                 // backend set IsLocal/IsRemoteDeleted = string.IsNullOrEmpty(hash) = true. Those flags
                 // mean "absent when decided", but DetermineSyncAction's two delete branches read them as
                 // "deleted", so the next run deleted a row that had just been created (SH-H009).
-                knowledgeUpdates.Add(_knowledgeStore.CreateKnowledgeItem(guid, GetVersionHash(effectiveLocal), GetVersionHash(effectiveRemote), options));
+                // TASK-157: only a reconciled state is knowledge (see IsReconciled). A one-sided row read as a deletion of the
+                // missing side on the next run.
+                if (reconciled && IsReconciled(effectiveLocal, effectiveRemote))
+                {
+                    knowledgeUpdates.Add(_knowledgeStore.CreateKnowledgeItem(guid, GetVersionHash(effectiveLocal), GetVersionHash(effectiveRemote), options));
+                }
             }
             catch (Exception ex)
             {
@@ -415,7 +423,7 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
     /// <para><c>ConflictResolution.Merge</c> is deliberately not handled here: nothing in the framework
     /// can merge two entities, so there is no mechanism to call. It falls through to the unchanged pair.</para>
     /// </remarks>
-    private (T? Local, T? Remote) ApplyConflictResolution(
+    private (T? Local, T? Remote, bool Applied) ApplyConflictResolution(
         ConflictResolution resolution,
         Guid guid,
         T? localItem,
@@ -433,7 +441,7 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                     {
                         _remoteStore.Update(localItem, null);
                         progress.UpdatedItems++;
-                        return (localItem, localItem);
+                        return (localItem, localItem, true);
                     }
                     break;
 
@@ -444,23 +452,27 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                     {
                         _remoteStore.Create(localItem, null);
                         progress.CreatedItems++;
-                        return (localItem, localItem);
+                        return (localItem, localItem, true);
                     }
                     break;
 
                 case ConflictResolution.UseLocal when remoteItem != null:
                     // Deleted locally, modified remotely, local wins: the local deletion wins, so the
                     // remote row goes. Mirrors the LocalWins shortcut, which returns Delete on "remote".
-                    _remoteStore.Delete(remoteItem);
-                    progress.DeletedItems++;
-                    return (null, null);
+                    if (CanSaveToRemote(remoteItem, filterOptions, options))
+                    {
+                        _remoteStore.Delete(remoteItem);
+                        progress.DeletedItems++;
+                        return (null, null, true);
+                    }
+                    break;
 
                 case ConflictResolution.UseRemote when remoteItem != null && localItem != null:
                     if (CanSaveToLocal(remoteItem, filterOptions, options))
                     {
                         _localStore.Update(remoteItem, null);
                         progress.UpdatedItems++;
-                        return (remoteItem, remoteItem);
+                        return (remoteItem, remoteItem, true);
                     }
                     break;
 
@@ -471,19 +483,29 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                     {
                         _localStore.Create(remoteItem, null);
                         progress.CreatedItems++;
-                        return (remoteItem, remoteItem);
+                        return (remoteItem, remoteItem, true);
                     }
                     break;
 
                 case ConflictResolution.UseRemote when localItem != null:
                     // Modified locally, deleted remotely, remote wins: the remote deletion wins, so the
                     // local row goes. Mirrors the RemoteWins shortcut, which returns Delete on "local".
-                    _localStore.Delete(localItem);
-                    progress.DeletedItems++;
-                    return (null, null);
+                    if (CanSaveToLocal(localItem, filterOptions, options))
+                    {
+                        _localStore.Delete(localItem);
+                        progress.DeletedItems++;
+                        return (null, null, true);
+                    }
+                    break;
+
+                case ConflictResolution.Merge:
+                    // SH-M049 (TASK-157): nothing in the framework can merge two entities, so Merge was silently inert:
+                    // no write, no skip, and the item recorded as reconciled. It is refused per item instead.
+                    throw new NotSupportedException(
+                        $"ConflictResolution.Merge is not supported for {typeof(T).Name} {guid}: no merge exists. "
+                        + "Resolve with UseLocal, UseRemote or Skip.");
 
                 case ConflictResolution.Skip:
-                    progress.SkippedItems++;
                     break;
             }
         }
@@ -497,10 +519,14 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                 Details = ex.Message,
                 Exception = ex
             });
+            // SH-M058 (TASK-157): rethrown, so the item's error reaches result.Errors and Success is false. Reported only
+            // through OnError, a failed resolution left a run reporting complete success.
+            throw;
         }
 
-        // Nothing was written (filter blocked, Merge, Skip, or the catch above), so the pair is unchanged.
-        return (localItem, remoteItem);
+        // Nothing was written (a save filter blocked it, or Skip): the conflict stays unresolved and is not recorded.
+        progress.SkippedItems++;
+        return (localItem, remoteItem, false);
     }
 
     /// <summary>

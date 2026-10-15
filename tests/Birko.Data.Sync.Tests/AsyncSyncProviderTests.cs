@@ -17,6 +17,14 @@ public class AsyncSyncProviderTests
 {
     private const string Scope = "Default";
 
+    /// <summary>
+    /// TASK-157: a deletion is proven by a pair recorded while BOTH sides held the item, of which one side is now missing.
+    /// These tests used to seed <c>IsRemoteDeleted = true</c> with no versions, a shape only the one-sided knowledge bug
+    /// ever wrote, and that the engine no longer reads as a deletion. The recorded version is older than the survivor's,
+    /// so the survivor counts as changed since the pair (which is what makes the one-sided cases a conflict).
+    /// </summary>
+    private const string RecordedPairVersion = "recorded-before-the-change";
+
     private static AsyncSyncProvider<TestAsyncBulkStore, TestSyncModel, TestSyncKnowledge> NewProvider(
         TestAsyncBulkStore local, TestAsyncBulkStore remote, TestAsyncSyncKnowledgeItemStore knowledge)
         => new(local, remote, knowledge);
@@ -113,7 +121,8 @@ public class AsyncSyncProviderTests
             EntityGuid = guid,
             Scope = Scope,
             LastSyncedAt = DateTime.UtcNow.AddDays(-1),
-            IsRemoteDeleted = true
+            LocalVersion = RecordedPairVersion,
+            RemoteVersion = RecordedPairVersion
         });
 
         var result = await NewProvider(local, remote, knowledge)

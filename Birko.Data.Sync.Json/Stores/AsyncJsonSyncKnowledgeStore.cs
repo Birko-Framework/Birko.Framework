@@ -36,29 +36,27 @@ public class AsyncJsonSyncKnowledgeStore : AsyncJsonStore<JsonSyncKnowledgeItem>
     /// </summary>
     /// <remarks>
     /// CR-L214: because the time is derived from the items (see <see cref="GetLastSyncTimeAsync"/>),
-    /// stamping a scope that has <em>no</em> items persists nothing — the returned value is echoed back
-    /// but a subsequent Get still yields null (the scope reads as never-synced / initial-sync). This is
-    /// correct for the real flow: <c>AsyncSyncProvider</c> always persists the round's knowledge items
-    /// (Create/Update) <em>before</em> calling this, so a stamp only ever lands on an already-populated
-    /// scope. A caller that stamps an empty scope in isolation should not expect the timestamp to survive.
+    /// stamping a scope that has <em>no</em> items persists nothing.
+    /// <para>TASK-157 (SH-M067): returns the time only when a row was stamped, and <c>null</c> when the scope has none, so a
+    /// caller can tell persisted from discarded. The sync providers write a scope marker row each run, so a stamp after
+    /// a run always lands.</para>
     /// </remarks>
     public async Task<DateTime?> SetLastSyncTimeAsync(string scope, DateTime? lastSyncTime, CancellationToken cancellationToken)
     {
         if (lastSyncTime == null) return null;
 
-        var items = (await ReadAsync(x => x.Scope == scope, ct: cancellationToken).ConfigureAwait(false))?.ToList();
-        if (items != null && items.Count > 0)
+        // SH-M068 (TASK-157): materialised before any write, and one bulk write.
+        var items = (await ReadAsync(x => x.Scope == scope, ct: cancellationToken).ConfigureAwait(false)).ToList();
+        if (items.Count == 0)
         {
-            foreach (var item in items)
-            {
-                item.LastSyncedAt = lastSyncTime.Value;
-            }
-
-            // CR-M162: one bulk UpdateAsync rewrites the JSON file a single time, instead of the whole
-            // file being re-serialized once per item (O(n) full-file rewrites).
-            await UpdateAsync(items, ct: cancellationToken).ConfigureAwait(false);
+            return null;
         }
 
+        foreach (var item in items)
+        {
+            item.LastSyncedAt = lastSyncTime.Value;
+        }
+        await UpdateAsync(items, ct: cancellationToken).ConfigureAwait(false);
         return lastSyncTime;
     }
 

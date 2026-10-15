@@ -58,7 +58,7 @@ public class CancelledSyncKnowledgePersistenceTests
         var written = (await local.ReadAsync(null, null, null, null, CancellationToken.None)).ToList();
         written.Should().NotBeEmpty("the first batch completed before cancellation was observed");
 
-        var recorded = (await knowledge.ReadAsync(null, null, null, null, CancellationToken.None)).ToList();
+        var recorded = (await knowledge.ReadAsync(x => x.EntityGuid != Guid.Empty, null, null, null, CancellationToken.None)).ToList(); // TASK-157: not the scope marker
         recorded.Should().HaveCount(written.Count);
         recorded.Select(k => k.EntityGuid).Should().BeEquivalentTo(written.Select(w => w.Guid!.Value));
     }
@@ -129,6 +129,6 @@ public class CancelledSyncKnowledgePersistenceTests
 
         var written = local.Read(null, null, null, null).ToList();
         written.Should().NotBeEmpty();
-        knowledge.Read(null, null, null, null).Should().HaveCount(written.Count);
+        knowledge.Read(x => x.EntityGuid != Guid.Empty, null, null, null).Should().HaveCount(written.Count); // TASK-157: not the scope marker
     }
 }

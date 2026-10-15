@@ -80,7 +80,9 @@ public class MongoSyncKnowledgeStoreTests
         // hand (not via ToBsonDocument) to avoid the driver's global GuidRepresentation config.
         var doc = new BsonDocument
         {
-            { "_id", ObjectId.GenerateNewId() },
+            // TASK-157: the canonical id (AbstractModel.Guid as a string _id, TASK-219). An ObjectId _id is the
+            // pre-TASK-219 shape, which no Birko model reads any more.
+            { "_id", Guid.NewGuid().ToString() },
             { "scope", "Products" },
             { "recordId", 0 } // legacy element that is no longer a mapped property
         };

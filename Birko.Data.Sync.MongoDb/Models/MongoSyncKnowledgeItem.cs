@@ -20,12 +20,10 @@ namespace Birko.Data.Sync.MongoDb.Models;
 [BsonIgnoreExtraElements]
 public class MongoSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
 {
-    /// <summary>
-    /// MongoDB document identifier.
-    /// </summary>
-    [BsonId]
-    [global::MongoDB.Bson.Serialization.Attributes.BsonRepresentation(global::MongoDB.Bson.BsonType.ObjectId)]
-    public string Id { get; set; } = string.Empty;
+    // SH-M061 (TASK-157): a second `[BsonId] string Id` used to sit here. Since TASK-219 the canonical AbstractModel.Guid
+    // IS `_id`, so the class map refused the model ("'Id' cannot use element name '_id' because it is already being
+    // used by property 'Guid'") on the first knowledge read of every run: measured live, no Mongo sync could run.
+    // Before TASK-219 it was the replace that failed. The knowledge row's identity is its Guid, like every entity's.
 
     // CR-L216: the int IdRecord field (BsonElement "recordId", "for compatibility") was removed — dead
     // surface never assigned by CreateKnowledgeItem and never queried, inflating every persisted document
@@ -35,8 +33,10 @@ public class MongoSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     /// <summary>
     /// GUID of the entity this knowledge refers to.
     /// </summary>
+    // SH-M061 (TASK-157): `[BsonRepresentation(Binary)]` built a GuidSerializer with no GuidRepresentation, which refuses
+    // every value ("cannot serialize a Guid when GuidRepresentation is Unspecified"), so no row could be written either.
+    // The framework's registered Guid serializer (MongoSerialization, Standard) applies without it.
     [BsonElement("entityGuid")]
-    [global::MongoDB.Bson.Serialization.Attributes.BsonRepresentation(global::MongoDB.Bson.BsonType.Binary)]
     public Guid EntityGuid { get; set; }
 
     /// <summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -128,5 +128,49 @@ public class ExpressionNormalizerTests
         var normalized = ExpressionNormalizer.Normalize(expr.Body)!;
 
         normalized.NodeType.Should().Be(ExpressionType.Conditional);
+    }
+
+    public interface IScoped
+    {
+        string Scope { get; }
+    }
+
+    public sealed class Scoped : IScoped
+    {
+        public string Scope { get; set; } = string.Empty;
+    }
+
+    public sealed class ExplicitlyScoped : IScoped
+    {
+        string IScoped.Scope => "hidden";
+    }
+
+    private static Expression<Func<T, bool>> ScopeIs<T>(string scope) where T : IScoped => x => x.Scope == scope;
+
+    private static MemberExpression ScopeAccess(Expression normalized)
+        => (MemberExpression)((BinaryExpression)normalized).Left;
+
+    /// <summary>
+    /// TASK-157: a filter written in generic code against an interface binds its member to the interface; the
+    /// normalizer rebinds it to the concrete property, which carries the model's mapping attributes.
+    /// </summary>
+    [Fact]
+    public void An_interface_member_is_rebound_to_the_concrete_property()
+    {
+        var filter = ScopeIs<Scoped>("s");
+
+        var normalized = ExpressionNormalizer.Normalize(filter.Body)!;
+
+        ScopeAccess(normalized).Member.DeclaringType.Should().Be(typeof(Scoped));
+        Expression.Lambda<Func<Scoped, bool>>(normalized, filter.Parameters).Compile()(new Scoped { Scope = "s" })
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void An_explicit_implementation_keeps_the_interface_member()
+    {
+        var normalized = ExpressionNormalizer.Normalize(ScopeIs<ExplicitlyScoped>("s").Body)!;
+
+        ScopeAccess(normalized).Member.DeclaringType.Should().Be(typeof(IScoped));
     }
 }

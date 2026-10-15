@@ -14,6 +14,10 @@ public class SyncQueue
 {
     private readonly SemaphoreSlim _semaphore;
     private readonly Dictionary<string, Queue<QueuedSync>> _queues = new();
+    // SH-M051 (TASK-157): one lock per queue key, held for the whole run. The class promised one sync per scope at a time,
+    // but the only gate was the shared semaphore, so with maxConcurrentSyncs > 1 two runs of ONE scope ran together
+    // against the same knowledge rows. Reference-counted, so a key with no waiter holds no lock object.
+    private readonly Dictionary<string, (SemaphoreSlim Gate, int Users)> _scopeGates = new();
     private readonly object _lock = new();
     private readonly int _maxConcurrentSyncs;
 
@@ -60,28 +64,93 @@ public class SyncQueue
         // Add to queue
         EnqueueInternal(queueKey, queuedSync);
 
+        var scopeGate = AcquireScopeGate(queueKey);
+        var holdsScope = false;
+        var holdsPermit = false;
         try
         {
-            // Wait for semaphore (limit concurrent operations)
+            // The scope first, then a permit: a run waiting behind its own scope must not hold one of the shared permits.
+            await scopeGate.WaitAsync(cancellationToken);
+            holdsScope = true;
             await _semaphore.WaitAsync(cancellationToken);
+            holdsPermit = true;
 
-            // Remove from queue and execute
-            var currentSync = DequeueNext(queueKey);
-
-            if (currentSync != null)
-            {
-                currentSync.StartedAt = DateTime.UtcNow;
-                var result = await syncOperation();
-                currentSync.CompletedAt = DateTime.UtcNow;
-                return result;
-            }
-
-            // Shouldn't reach here, but if we do, run the operation
-            return await syncOperation();
+            RemoveQueued(queueKey, queuedSync);
+            queuedSync.StartedAt = DateTime.UtcNow;
+            var result = await syncOperation();
+            queuedSync.CompletedAt = DateTime.UtcNow;
+            return result;
         }
         finally
         {
-            _semaphore.Release();
+            // SH-M050 (TASK-157): release only what was acquired. A cancelled wait used to release a permit it never
+            // took, inflating the count past maxConcurrentSyncs (or throwing SemaphoreFullException), and its queue
+            // record stayed, so GetQueueLength counted it forever.
+            if (queuedSync.StartedAt == null)
+            {
+                RemoveQueued(queueKey, queuedSync);
+            }
+            if (holdsPermit)
+            {
+                _semaphore.Release();
+            }
+            if (holdsScope)
+            {
+                scopeGate.Release();
+            }
+            ReleaseScopeGate(queueKey);
+        }
+    }
+
+    private SemaphoreSlim AcquireScopeGate(string queueKey)
+    {
+        lock (_lock)
+        {
+            var entry = _scopeGates.TryGetValue(queueKey, out var existing) ? existing : (Gate: new SemaphoreSlim(1, 1), Users: 0);
+            _scopeGates[queueKey] = (entry.Gate, entry.Users + 1);
+            return entry.Gate;
+        }
+    }
+
+    private void ReleaseScopeGate(string queueKey)
+    {
+        lock (_lock)
+        {
+            if (!_scopeGates.TryGetValue(queueKey, out var entry))
+            {
+                return;
+            }
+            if (entry.Users <= 1)
+            {
+                _scopeGates.Remove(queueKey);
+                entry.Gate.Dispose();
+                return;
+            }
+            _scopeGates[queueKey] = (entry.Gate, entry.Users - 1);
+        }
+    }
+
+    /// <summary>
+    /// Removes one specific record from its key's queue: the run that started, or a waiter that was cancelled. Removing
+    /// the head instead attributed the start to whichever caller enqueued first, not to the one that got the gate.
+    /// </summary>
+    private void RemoveQueued(string queueKey, QueuedSync queuedSync)
+    {
+        lock (_lock)
+        {
+            if (!_queues.TryGetValue(queueKey, out var queue))
+            {
+                return;
+            }
+            var remaining = new Queue<QueuedSync>(queue.Where(q => !ReferenceEquals(q, queuedSync)));
+            if (remaining.Count == 0)
+            {
+                _queues.Remove(queueKey);
+            }
+            else
+            {
+                _queues[queueKey] = remaining;
+            }
         }
     }
 

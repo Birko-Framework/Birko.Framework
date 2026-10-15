@@ -1,6 +1,7 @@
 using Birko.Data.Sync.Models;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 
 namespace Birko.Data.Sync.Internal;
@@ -32,8 +33,108 @@ public abstract class SyncProviderBase<T, TKnowledge>
     }
 
     /// <summary>
+    /// The knowledge row that records "this scope has been synced", so a run that reconciled nothing still ends the
+    /// initial sync (SH-M067, TASK-157). No entity can carry it: <see cref="BuildEntityDictionary"/> refuses an empty
+    /// Guid, so the marker never matches an item.
+    /// </summary>
+    protected static readonly Guid ScopeMarkerGuid = Guid.Empty;
+
+    /// <summary>
+    /// Refuses options no run can honour (SH-M054, TASK-157). A zero <see cref="SyncOptions.BatchSize"/> divided by
+    /// zero, reported as a generic "Sync failed"; a negative one never advanced the batch loop, so the run never ended.
+    /// </summary>
+    protected static void ValidateOptions(SyncOptions options)
+    {
+        if (options is null)
+            throw new ArgumentNullException(nameof(options));
+        if (options.BatchSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options), options.BatchSize,
+                "SyncOptions.BatchSize must be positive.");
+    }
+
+    /// <summary>
+    /// The scope's knowledge by entity Guid. Two rows for one entity (left by an earlier identity defect, SH-M064)
+    /// made <c>ToDictionary</c> throw on every run, with no repair path; the most recently synced row wins, and the
+    /// run's upsert then updates that one.
+    /// </summary>
+    protected Dictionary<Guid, TKnowledge> BuildKnowledgeDictionary(IEnumerable<TKnowledge> rows)
+    {
+        return rows
+            .GroupBy(GetGuid)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(k => k.LastSyncedAt).First());
+    }
+
+    /// <summary>
+    /// The entity Guids this run processes. SH-M055 (TASK-157): a <see cref="SyncOptions.MaxItems"/> cap sliced an
+    /// unordered union, so which items ran depended on dictionary order. A capped run now takes the items that need
+    /// work first, then Guid order, so repeated capped runs converge instead of re-taking the same settled items.
+    /// </summary>
+    protected List<Guid> SelectGuids(
+        Dictionary<Guid, T> localDict,
+        Dictionary<Guid, T> remoteDict,
+        Dictionary<Guid, TKnowledge> knowledge,
+        bool isInitialSync,
+        SyncOptions options,
+        SyncFilterOptions<T>? filterOptions)
+    {
+        var all = localDict.Keys.Union(remoteDict.Keys).ToList();
+        if (options.MaxItems is not int max || max < 0 || all.Count <= max)
+        {
+            return all;
+        }
+
+        return all
+            .Select(guid =>
+            {
+                localDict.TryGetValue(guid, out var local);
+                remoteDict.TryGetValue(guid, out var remote);
+                knowledge.TryGetValue(guid, out var known);
+                var settled = DetermineSyncAction(guid, local, remote, known, isInitialSync, options, filterOptions).Action == SyncAction.Skip;
+                return (Guid: guid, Settled: settled);
+            })
+            .OrderBy(x => x.Settled)
+            .ThenBy(x => x.Guid)
+            .Take(max)
+            .Select(x => x.Guid)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Whether the state after an action may be recorded as knowledge: both sides hold the item, or neither does.
+    /// </summary>
+    /// <remarks>
+    /// TASK-157. A row records the hash of each side, and a side with no hash reads as DELETED on the next run. A row
+    /// written for a one-sided state (an initial sync that skipped a local-only item, a create a save filter blocked)
+    /// therefore told the next run the missing side had been deleted: measured, a local-only item present at the first
+    /// sync was deleted by the second under RemoteWins. Only a reconciled pair is knowledge.
+    /// </remarks>
+    protected static bool IsReconciled(T? local, T? remote) => (local == null) == (remote == null);
+
+    /// <summary>
+    /// Whether <paramref name="item"/> differs from the version recorded for its side. An entity with no
+    /// <c>UpdatedAt</c> has no stable version, so it always counts as changed (the behaviour before change detection).
+    /// </summary>
+    protected bool HasChanged(T item, string? recordedVersion)
+    {
+        return GetUpdatedAt(item) == null || GetVersionHash(item) != recordedVersion;
+    }
+
+    /// <summary>
     /// Determine what sync action to take for an item
     /// </summary>
+    /// <remarks>
+    /// TASK-157 rebuilt the decision on a <b>known pair</b>: a knowledge row recording that both sides held the item at
+    /// the last reconcile. Only a known pair can say a later absence is a deletion, and only it can say which side changed.
+    /// <list type="bullet">
+    /// <item>Deletion used to be read from the stored <c>IsLocalDeleted</c> / <c>IsRemoteDeleted</c>, which every backend
+    /// sets to "the side's hash was empty WHEN THE ROW WAS WRITTEN". After a successful sync both are false, so a later
+    /// deletion was never seen: measured, an item deleted remotely after a synced round was re-created there by the next
+    /// bidirectional run. It is now <c>known pair &amp;&amp; side absent</c>.</item>
+    /// <item>SH-M059: the recorded versions were never compared, so every both-present item was rewritten every run and
+    /// a both-sides edit was never a conflict. Now: neither side changed is a Skip, one side changed wins, both changed
+    /// is the policy (LocalWins / RemoteWins directly, NewestWins / Custom through a conflict carrying both items).</item>
+    /// </list>
+    /// </remarks>
     protected (SyncAction Action, string? Winner, string? DeleteOn, ConflictInfo? Conflict) DetermineSyncAction(
         Guid guid,
         T? localItem,
@@ -51,10 +152,17 @@ public abstract class SyncProviderBase<T, TKnowledge>
         {
             if (remoteExists && !localExists)
                 return (SyncAction.Create, null, null, null);
-            if (!remoteExists && !localExists)
-                return (SyncAction.Skip, null, null, null);
-            return (SyncAction.Skip, null, null, null); // Already exists locally
+            return (SyncAction.Skip, null, null, null); // Absent on both sides, or already present locally
         }
+
+        var knownPair = knowledgeItem != null
+            && !knowledgeItem.IsLocalDeleted && !knowledgeItem.IsRemoteDeleted
+            && !string.IsNullOrEmpty(knowledgeItem.LocalVersion) && !string.IsNullOrEmpty(knowledgeItem.RemoteVersion);
+        var localDeleted = knownPair && !localExists;
+        var remoteDeleted = knownPair && !remoteExists;
+        var localChanged = localExists && (!knownPair || HasChanged(localItem!, knowledgeItem!.LocalVersion));
+        var remoteChanged = remoteExists && (!knownPair || HasChanged(remoteItem!, knowledgeItem!.RemoteVersion));
+        var unchangedPair = knownPair && localExists && remoteExists && !localChanged && !remoteChanged;
 
         // Download only
         if (options.Direction == SyncDirection.Download)
@@ -62,8 +170,8 @@ public abstract class SyncProviderBase<T, TKnowledge>
             if (remoteExists && !localExists)
                 return (SyncAction.Create, null, null, null);
             if (remoteExists && localExists)
-                return (SyncAction.Update, "remote", null, null);
-            if (!remoteExists && localExists && knowledgeItem?.IsRemoteDeleted == true)
+                return unchangedPair ? (SyncAction.Skip, null, null, null) : (SyncAction.Update, "remote", null, null);
+            if (localExists && remoteDeleted)
                 return (SyncAction.Delete, null, "local", null);
             return (SyncAction.Skip, null, null, null);
         }
@@ -74,67 +182,74 @@ public abstract class SyncProviderBase<T, TKnowledge>
             if (localExists && !remoteExists)
                 return (SyncAction.Create, null, null, null);
             if (localExists && remoteExists)
-                return (SyncAction.Update, "local", null, null);
-            if (!localExists && remoteExists && knowledgeItem?.IsLocalDeleted == true)
+                return unchangedPair ? (SyncAction.Skip, null, null, null) : (SyncAction.Update, "local", null, null);
+            if (remoteExists && localDeleted)
                 return (SyncAction.Delete, null, "remote", null);
             return (SyncAction.Skip, null, null, null);
         }
 
-        // Bidirectional - both exist: apply the conflict-resolution policy to pick the winner.
-        // CR-M156: removed a dead `if (winner == "conflict")` branch — GetWinner only ever returns
-        // "local" or "remote" (never "conflict"), so it was unreachable. Genuine both-diverged conflict
-        // detection would require comparing local/remote versions to the last-synced knowledge version;
-        // that is a tracked feature, not a bug fix, so this branch just applies the policy winner.
+        // Bidirectional, both exist
         if (localExists && remoteExists)
         {
-            var winner = GetWinner(localItem!, remoteItem!, options.ConflictPolicy);
-            return (SyncAction.Update, winner, null, null);
+            if (unchangedPair)
+                return (SyncAction.Skip, null, null, null);
+            if (knownPair && localChanged != remoteChanged)
+                return (SyncAction.Update, localChanged ? "local" : "remote", null, null);
+            if (options.ConflictPolicy == ConflictResolutionPolicy.LocalWins)
+                return (SyncAction.Update, "local", null, null);
+            if (options.ConflictPolicy == ConflictResolutionPolicy.RemoteWins)
+                return (SyncAction.Update, "remote", null, null);
+            // Both sides changed since a known pair, and both carry a version: a genuine conflict.
+            if (knownPair && GetUpdatedAt(localItem!) != null && GetUpdatedAt(remoteItem!) != null)
+            {
+                return (SyncAction.Conflict, null, null, new ConflictInfo
+                {
+                    Guid = guid,
+                    LocalItem = localItem,
+                    RemoteItem = remoteItem,
+                    Reason = "Modified on both sides"
+                });
+            }
+            return (SyncAction.Update, GetWinner(localItem!, remoteItem!, options.ConflictPolicy), null, null);
         }
 
         if (localExists && !remoteExists)
         {
-            // Exists locally, not remotely - was it deleted remotely?
-            if (knowledgeItem?.IsRemoteDeleted == true)
+            if (!remoteDeleted)
+                return (SyncAction.Create, null, null, null); // New item to upload
+            // Deleted remotely. Unchanged locally since the pair was recorded: the deletion simply propagates.
+            if (!localChanged)
+                return (SyncAction.Delete, null, "local", null);
+            if (options.ConflictPolicy == ConflictResolutionPolicy.RemoteWins)
+                return (SyncAction.Delete, null, "local", null);
+            if (options.ConflictPolicy == ConflictResolutionPolicy.LocalWins)
+                return (SyncAction.Create, null, null, null); // Re-create on remote
+            return (SyncAction.Conflict, null, null, new ConflictInfo
             {
-                // Conflict: local modified vs remote deleted
-                if (options.ConflictPolicy == ConflictResolutionPolicy.RemoteWins)
-                    return (SyncAction.Delete, null, "local", null);
-                if (options.ConflictPolicy == ConflictResolutionPolicy.LocalWins)
-                    return (SyncAction.Create, null, null, null); // Re-create on remote
-
-                var conflict = new ConflictInfo
-                {
-                    Guid = guid,
-                    LocalItem = localItem,
-                    RemoteItem = null,
-                    Reason = "Modified locally but deleted remotely"
-                };
-                return (SyncAction.Conflict, null, null, conflict);
-            }
-            return (SyncAction.Create, null, null, null); // New item to upload
+                Guid = guid,
+                LocalItem = localItem,
+                RemoteItem = null,
+                Reason = "Modified locally but deleted remotely"
+            });
         }
 
         if (!localExists && remoteExists)
         {
-            // Exists remotely, not locally - was it deleted locally?
-            if (knowledgeItem?.IsLocalDeleted == true)
+            if (!localDeleted)
+                return (SyncAction.Create, null, null, null); // New item to download
+            if (!remoteChanged)
+                return (SyncAction.Delete, null, "remote", null);
+            if (options.ConflictPolicy == ConflictResolutionPolicy.LocalWins)
+                return (SyncAction.Delete, null, "remote", null);
+            if (options.ConflictPolicy == ConflictResolutionPolicy.RemoteWins)
+                return (SyncAction.Create, null, null, null); // Re-create locally
+            return (SyncAction.Conflict, null, null, new ConflictInfo
             {
-                // Conflict: remote modified vs local deleted
-                if (options.ConflictPolicy == ConflictResolutionPolicy.LocalWins)
-                    return (SyncAction.Delete, null, "remote", null);
-                if (options.ConflictPolicy == ConflictResolutionPolicy.RemoteWins)
-                    return (SyncAction.Create, null, null, null); // Re-create locally
-
-                var conflict = new ConflictInfo
-                {
-                    Guid = guid,
-                    LocalItem = null,
-                    RemoteItem = remoteItem,
-                    Reason = "Modified remotely but deleted locally"
-                };
-                return (SyncAction.Conflict, null, null, conflict);
-            }
-            return (SyncAction.Create, null, null, null); // New item to download
+                Guid = guid,
+                LocalItem = null,
+                RemoteItem = remoteItem,
+                Reason = "Modified remotely but deleted locally"
+            });
         }
 
         return (SyncAction.Skip, null, null, null);
@@ -252,8 +367,9 @@ public abstract class SyncProviderBase<T, TKnowledge>
             SyncAction.Create when localItem == null => "New item from remote",
             SyncAction.Create when remoteItem == null => "New item from local",
             SyncAction.Update => "Item modified",
-            SyncAction.Delete when knowledgeItem?.IsLocalDeleted == true => "Deleted locally",
-            SyncAction.Delete when knowledgeItem?.IsRemoteDeleted == true => "Deleted remotely",
+            // TASK-157: the side being deleted is the one that still holds the item; the other side deleted it.
+            SyncAction.Delete when localItem == null => "Deleted locally",
+            SyncAction.Delete when remoteItem == null => "Deleted remotely",
             SyncAction.Skip => "No changes",
             SyncAction.Conflict => "Conflict detected",
             _ => "Unknown"

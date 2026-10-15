@@ -1435,11 +1435,15 @@ RemoveAsync starts the L1 removal and the L2 removal without ordering or a tombs
 
 `../Birko.Data.Sync/SyncProvider.cs:378`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). A resolver returning `Merge` produced no write, no skip and a knowledge row. Nothing in the framework can merge two entities, so `Merge` now throws `NotSupportedException` for the item, which reaches `result.Errors`, and nothing is recorded, so the conflict is raised again. Red.
+
 The switch in ApplyConflictResolution has cases for UseLocal, UseRemote and Skip only. A CustomConflictResolver returning Merge produces no write, no error and no skip count — the item is counted in TotalProcessed with the conflict unresolved and a knowledge row written as if reconciled. Same at AsyncSyncProvider.cs:379.
 
 #### SH-M050 — SyncQueue releases a semaphore permit it never acquired on cancellation
 
 `../Birko.Data.Sync/SyncQueue.cs:84`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). `SyncQueue` released a permit after a cancelled wait and kept the queue record. It now releases only what it acquired and removes the record whether the run started or was cancelled. Red: after a cancelled waiter, three runs overlapped at `maxConcurrentSyncs: 1`.
 
 `await _semaphore.WaitAsync(cancellationToken)` (line 66) is inside the try and the finally unconditionally calls `_semaphore.Release()`. When the wait is cancelled, Release runs anyway: with a permit held elsewhere the count is inflated past maxConcurrentSyncs (permitting over-concurrency); with all permits free `SemaphoreSlim(max,max)` throws SemaphoreFullException. The enqueued QueuedSync record also leaks, inflating GetQueueLength forever.
 
@@ -1447,11 +1451,15 @@ The switch in ApplyConflictResolution has cases for UseLocal, UseRemote and Skip
 
 `../Birko.Data.Sync/SyncQueue.cs:15`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). One shared semaphore gated every scope. A per-key gate (reference-counted) is now taken before the shared permit, so two runs of one scope never overlap. Red with `maxConcurrentSyncs: 2`.
+
 The class doc says "Ensures only one sync operation runs per scope at a time", but one shared SemaphoreSlim governs all scopes and the per-scope `_queues` are bookkeeping only (DequeueNext just pops a record). With maxConcurrentSyncs > 1 two runs of the SAME scope execute concurrently against the same knowledge rows; with the default 1, unrelated scopes are needlessly serialised.
 
 #### SH-M052 — Preview converts structural data errors into a phantom conflict
 
 `../Birko.Data.Sync/SyncProvider.cs:94`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). The preview's bare catch turned any failure into one conflict on a partial preview. The catch is gone; the error propagates. Red.
 
 The bare `catch { preview.Conflicts++; return preview; }` swallows everything except OperationCanceledException — including the InvalidOperationException BuildEntityDictionary throws for an empty or duplicate Guid, the ArgumentException from the knowledge ToDictionary, and any store failure. The caller receives a partially filled preview reporting one conflict, indistinguishable from a real conflict. Same at AsyncSyncProvider.cs:95.
 
@@ -1459,11 +1467,15 @@ The bare `catch { preview.Conflicts++; return preview; }` swallows everything ex
 
 `../Birko.Data.Sync/SyncProvider.cs:130`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). The initial sync wrote `Download` into the caller's options and reported `Bidirectional`. `DetermineSyncAction` decides the initial sync before reading `Direction`, so the write was not needed; it is removed and `result.Direction` reports `Download`. Red.
+
 `options.Direction = SyncDirection.Download` writes to the passed-in object, so a reused SyncOptions instance stays Download for every later run and for any later Preview. `result.Direction` was captured at line 111 before the override, so the result reports Bidirectional for a run that executed as Download. Same at AsyncSyncProvider.cs:131.
 
 #### SH-M054 — BatchSize unvalidated: 0 throws DivideByZeroException, negative hangs in an infinite loop
 
 `../Birko.Data.Sync/SyncProvider.cs:153`
+
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). `BatchSize` 0 threw `DivideByZeroException` as "Sync failed"; -1 hung (the red run took 7 min 21 s before the test host failed it). Both providers now refuse a non-positive batch size with `ArgumentOutOfRangeException` before the run. Red 4 of 4.
 
 `var batchNumber = (i / options.BatchSize) + 1;` divides by the caller-supplied BatchSize (public settable int, SyncOptions.cs:29) — 0 throws DivideByZeroException, swallowed by the outer catch as a generic "Sync failed". With a negative BatchSize the loop `for (i = 0; i < allGuids.Count; i += options.BatchSize)` decrements i forever while `Take(negative)` yields nothing, so the run never terminates and OnBatchStarting fires endlessly. Same at AsyncSyncProvider.cs:154.
 
@@ -1471,11 +1483,15 @@ The bare `catch { preview.Conflicts++; return preview; }` swallows everything ex
 
 `../Birko.Data.Sync/SyncProvider.cs:143`
 
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). A capped run sliced the union in dictionary order, so local (already synced) keys came first and a capped scope never progressed: 5 remote items, `MaxItems = 2`, 3 runs left 2 local. `SelectGuids` now takes items that need work first, then Guid order. Red. The stamp half no longer applies: the scope marker ends the initial sync deliberately.
+
 `allGuids = allGuids.Take(max).ToList()` slices `localDict.Keys.Union(remoteDict.Keys)` with no ordering, so which items are processed depends on dictionary enumeration order and can differ between runs — a capped sync need never converge. SetLastSyncTime is still stamped at line 207, so a capped FIRST run marks the scope non-initial; the untaken remainder is then decided by the Bidirectional rules whose Create is a no-op, leaving those entities permanently unsynced. Same at AsyncSyncProvider.cs:144.
 
 #### SH-M056 — Delete actions bypass CanSaveToLocal/CanSaveToRemote entirely
 
 `../Birko.Data.Sync/SyncProvider.cs:316`
+
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). Delete (and the two delete arms of conflict resolution) now consult the save filter of the side they remove from. Red.
 
 `case SyncAction.Delete:` calls `_localStore.Delete(localItem)` / `_remoteStore.Delete(remoteItem)` with no save-filter consultation, unlike the Create and Update cases. A caller who sets `CanSaveToLocal = x => !x.Protected` to guard rows still has them deleted by the Delete branch — the one destructive path is the only ungated one. Same at AsyncSyncProvider.cs:317.
 
@@ -1483,11 +1499,15 @@ The bare `catch { preview.Conflicts++; return preview; }` swallows everything ex
 
 `../Birko.Data.Sync/SyncProvider.cs:302`
 
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). A blocked update now counts as skipped and is not recorded as reconciled, so the next run retries it. Red.
+
 In `case SyncAction.Update:`, when winner == "remote" and CanSaveToLocal returns false the first branch fails, the `else if (winner == "local" ...)` test also fails, and nothing else runs: no write, no SkippedItems++, and under the default OnSaveFilterBlock = Skip no callback either. Control falls through to `result.Processed++` and a knowledge row with both hashes non-null (both deletion flags false) — the item is recorded as reconciled and result.Success stays true. Same at AsyncSyncProvider.cs:303.
 
 #### SH-M058 — Failures during conflict resolution never reach result.Errors, so Success stays true
 
 `../Birko.Data.Sync/SyncProvider.cs:401`
+
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). The conflict-resolution catch reports through `OnError` and now rethrows, so the item's error reaches `result.Errors`. The test is a pin: on the old code the both-sides-present case went through the update arm instead, where the error was already recorded.
 
 ApplyConflictResolution's catch reports only through `options.OnError?.Invoke(...)`; the SyncError is not added to the batch result, so `result.Success = result.Errors.Count == 0` (line 219) still evaluates true. A store write that throws while resolving a conflict — or an InvalidOperationException from a ThrowException save filter — leaves a run reporting complete success with the conflict unresolved. Same at AsyncSyncProvider.cs:402.
 
@@ -1495,11 +1515,15 @@ ApplyConflictResolution's catch reports only through `options.OnError?.Invoke(..
 
 `../Birko.Data.Sync/Internal/SyncProviderBase.cs:391`
 
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). Versions are now compared against a **known pair** (a row recorded while both sides held the item): unchanged is Skip, one side changed wins, both changed is the policy (NewestWins / Custom as a conflict carrying both items). Red 3 of 3. The triage found the deletion half broken too: see the task's Resolution (deletions resurrected; a first-sync local item deleted).
+
 LocalVersion/RemoteVersion are written by every CreateKnowledgeItem and surfaced in SyncItemPreview, but no code reads them back for comparison (only `string.IsNullOrEmpty` for the deletion flags). So DetermineSyncAction's both-sides-present arms return an unconditional Update (lines 65, 77, 91): a Download of 100k unchanged rows issues 100k local Update calls every run, and a genuine both-sides-modified conflict can never be detected — the CR-M156 comment at line 84 concedes this.
 
 #### SH-M060 — CosmosDB knowledge writes are silent no-ops when Container is null
 
 `../Birko.Data.Sync.CosmosDB/Stores/AsyncCosmosSyncKnowledgeStore.cs:97`
+
+**Verdict: CONFIRMED by reading, spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15). The Cosmos knowledge store implements neither knowledge-store interface; its only consumer is `TenantSyncProvider`, which TASK-630 rebuilds.
 
 `UpdateKnowledgeAsync` (97), `DeleteKnowledgeAsync` (128) and `SetLastSyncTimeAsync` (168) all begin `if (Container == null) return;` — an unconfigured container makes a knowledge write complete successfully while persisting nothing, and GetKnowledgeAsync (43) returns an empty dictionary indistinguishable from "scope has no knowledge", which the caller reads as initial-sync. Same in CosmosSyncKnowledgeStore.cs lines 41, 80, 111, 151.
 
@@ -1507,11 +1531,15 @@ LocalVersion/RemoteVersion are written by every CreateKnowledgeItem and surfaced
 
 `../Birko.Data.Sync.MongoDb/Models/MongoSyncKnowledgeItem.cs:28`
 
+**Verdict: CONFIRMED, BROADER, fixed** (TASK-157, measured 2026-10-15, live MongoDB 7). Since TASK-219 made `Guid` the `_id`, the second `[BsonId] Id` made the class map refuse the model on the first knowledge read: no Mongo sync could run at all. Under it, `[BsonRepresentation(Binary)]` on `EntityGuid` refused every write. Both removed; a live two-run round trip now updates its row. Migration: drop a pre-TASK-219 `MongoSyncKnowledgeItem` collection (ObjectId `_id`s are unreadable); knowledge rebuilds.
+
 `[BsonId] [BsonRepresentation(ObjectId)] public string Id { get; set; } = string.Empty;` is never set by AsyncMongoSyncKnowledgeStore.CreateKnowledgeItem (40-53). The first run's insert-time id generator fills it, but the update path (AsyncSyncProvider.cs:207 → AsyncMongoDBStore.UpdateCoreAsync) issues `ReplaceOneAsync(filter on Guid, item)` with a freshly built item whose Id is empty again, so the replacement's `_id` differs from the stored ObjectId and the server rejects it for altering the immutable `_id`. Every run after the first loses its knowledge round.
 
 #### SH-M062 — RavenDB's deterministic knowledge Guid never becomes the document id, so upserts are inserts
 
 `../Birko.Data.Sync.RavenDB/Stores/AsyncRavenSyncKnowledgeStore.cs:185`
+
+**Verdict: CONFIRMED by reading, spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15). Raven knowledge identity; same store family as SH-M060.
 
 ConvertToRavenItem derives `Guid = item.Guid ?? DeterministicGuid(...)` "so re-syncing the same natural key reuses the same document identity and upserts", but UpdateKnowledgeAsync calls `session.StoreAsync(ravenItem, ct)` — the overload supplying no document id — and RavenSyncKnowledgeItem (via AbstractModel) has no `Id` property for Raven's default FindIdentityProperty convention, while Birko.Data.RavenDB registers no identity convention. The Guid is just a field, so each round stores a new document.
 
@@ -1519,11 +1547,15 @@ ConvertToRavenItem derives `Guid = item.Guid ?? DeterministicGuid(...)` "so re-s
 
 `../Birko.Data.Sync.RavenDB/Stores/AsyncRavenSyncKnowledgeStore.cs:173`
 
+**Verdict: CONFIRMED by reading, spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15).
+
 `if (item is RavenSyncKnowledgeItem ravenItem) return ravenItem;` returns before the CR-H103 deterministic-Guid derivation and before the ITenant copy block (line 199). A RavenSyncKnowledgeItem with a null Guid is stored as-is, so the only path meant to make re-syncs idempotent is skipped exactly for the store's own model type.
 
 #### SH-M064 — Duplicate EntityGuid inside one scope makes the RavenDB/CosmosDB knowledge read throw
 
 `../Birko.Data.Sync.RavenDB/Stores/AsyncRavenSyncKnowledgeStore.cs:55`
+
+**Verdict: CONFIRMED; engine side fixed, store side spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15). The engine now tolerates two rows for one entity (the most recent wins, and is the one upserted); the Raven/Cosmos stores' own `ToDictionary` goes with TASK-630. Red: the engine threw on the old code.
 
 `items.ToDictionary(x => x.EntityGuid, ...)` throws ArgumentException on a duplicate key, and duplicates are exactly what the identity defects above produce (a new Raven document per round; a new Cosmos document per round for foreign items). Once two rows share an EntityGuid, GetKnowledge/GetLastSyncTime/DeleteKnowledge/SetLastSyncTime all throw and the scope becomes unreadable with no repair path. Same at AsyncCosmosSyncKnowledgeStore.cs:58, CosmosSyncKnowledgeStore.cs:49, RavenSyncKnowledgeStore.cs:51.
 
@@ -1531,11 +1563,15 @@ ConvertToRavenItem derives `Guid = item.Guid ?? DeterministicGuid(...)` "so re-s
 
 `../Birko.Data.Sync/Stores/ISyncKnowledgeStore.cs:13`
 
+**Verdict: CONFIRMED by reading, spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15).
+
 No type in the repository declares ISyncKnowledgeStore. AsyncRavenSyncKnowledgeStore's summary says "Async RavenDB implementation of ISyncKnowledgeStore" (line 14) and RavenSyncKnowledgeStore's says the same (line 9), but neither declares it; CosmosDB's `UpdateKnowledgeAsync(items, Guid? tenantId = null, ct)` (AsyncCosmosSyncKnowledgeStore.cs:92) does not even match the interface's `UpdateKnowledgeAsync(items, ct)`. The interface's only consumer, TenantSyncProvider, has no constructible knowledge store.
 
 #### SH-M066 — Sync knowledge is tenant-blind in five of seven backends
 
 `../Birko.Data.Sync.Sql/Models/SqlSyncKnowledgeItem.cs:34`
+
+**Verdict: CONFIRMED by reading, spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15). Tenant-scoped knowledge is the substance of rebuilding the tenant provider on the shared engine. Documented meanwhile in docs/sync.md: one scope name per tenant.
 
 SqlSyncKnowledgeItem, JsonSyncKnowledgeItem, XmlSyncKnowledgeItem, MongoSyncKnowledgeItem and ElasticSyncKnowledgeItem carry no tenant column, and ISyncKnowledgeItemStore / IAsyncSyncKnowledgeItemStore have no tenant parameter, so queries are `x.Scope == scope` only. Two tenants syncing the same scope name share one knowledge set: GetLastSyncTime returns the other tenant's timestamp and SetLastSyncTime rewrites every tenant's rows. RavenSyncKnowledgeItem (ITenant) and CosmosSyncKnowledgeItem (TenantId) do model a tenant — isolation depends on the backend chosen.
 
@@ -1543,17 +1579,23 @@ SqlSyncKnowledgeItem, JsonSyncKnowledgeItem, XmlSyncKnowledgeItem, MongoSyncKnow
 
 `../Birko.Data.Sync.Sql/Stores/SqlSyncKnowledgeStore.cs:40`
 
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-157, measured 2026-10-15). The echo is real (red on SQL; two pins asserting it inverted). The "initial forever" consequence did NOT occur on the old code: the first run wrote one-sided knowledge rows, which ended the initial state (and caused the deletion defect). With knowledge restricted to reconciled pairs it would occur, so each run writes a scope marker row (`Guid.Empty`). The JSON round-trip test is a pin for that marker.
+
 Last-sync-time is derived as `items.Max(x => x.LastSyncedAt)` and "set" stamps existing rows, so for a scope with zero rows the method writes nothing yet returns `lastSyncTime` — the caller cannot distinguish persisted from discarded. A run that processed nothing (MaxItems = 0, or every item errored so no knowledge row was emitted) stays "never synced" and repeats as an initial sync forever. Identical in AsyncSqlSyncKnowledgeStore.cs:44, AsyncJsonSyncKnowledgeStore.cs:45, AsyncXmlSyncKnowledgeStore.cs:23, AsyncElasticSyncKnowledgeStore.cs:23, AsyncMongoSyncKnowledgeStore.cs:23.
 
 #### SH-M068 — SQL SetLastSyncTime writes rows while a lazy SELECT reader is still open
 
 `../Birko.Data.Sync.Sql/Stores/SqlSyncKnowledgeStore.cs:44`
 
+**Verdict: CONFIRMED by reading, fixed; not reproduced** (TASK-157, measured 2026-10-15). The sync SQL stamp updated rows while the connector's lazy reader was open. Materialised, and one bulk write (also in the five async siblings). SQLite did not fail, so the test is a pin.
+
 `var items = Read(x => x.Scope == scope);` returns the connector's `Select` iterator, a `yield return` sequence holding an open DbConnection and DbDataReader for the whole enumeration (AbstractConnector.RunReaderCommand). The `foreach` then issues one `Update(item)` per row on a second connection while that reader scans the same rows. AsyncSqlSyncKnowledgeStore materialises into a List (AsyncDataBaseBulkStore.ReadCoreAsync) and AsyncJsonSyncKnowledgeStore calls `.ToList()` explicitly, so the sync SQL store is alone in interleaving.
 
 #### SH-M069 — Aggregate definitions are unvalidated: duplicate navigations double every operation
 
 `../Birko.Data.Aggregates/Core/AggregateDefinition.cs:43`
+
+**Verdict: CONFIRMED, fixed** (TASK-157, measured 2026-10-15). A navigation registered twice is refused at registration; a relationship with no `Via` / `Through` is refused when the relationships are read. Red 2 of 2.
 
 HasMany/HasOne append to `_relationships` with no check that the navigation property is already registered and no check that Via/Through was ever called. Registering the same navigation twice yields two descriptors: Flatten overwrites `NestedCollections[nav]` (AggregateMapper.cs:49) so the second read wins, and Expand iterates both descriptors and emits every Insert and Delete for that navigation twice. Omitting Via leaves ForeignKeyProperty null and hands that null straight to the data provider.
 

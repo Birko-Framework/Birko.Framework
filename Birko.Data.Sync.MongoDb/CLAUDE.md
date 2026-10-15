@@ -10,7 +10,9 @@ MongoDB-specific sync knowledge item implementation for the Birko.Data.Sync fram
 
 ### Models
 - `MongoSyncKnowledgeItem` - Extends `AbstractModel` (from Birko.Data.Models), implements `ISyncKnowledgeItem` with BSON attributes
-  - Identity is `AbstractModel.Guid` plus the Mongo-generated `_id`. Documents live in the
+  - Identity is `AbstractModel.Guid`, which IS `_id` (TASK-219). TASK-157 removed a second `[BsonId] Id` (the class
+    map refused it, so no Mongo sync could run) and `[BsonRepresentation(Binary)]` on `EntityGuid` (it refused every
+    write). Documents live in the
     `MongoSyncKnowledgeItem` collection (the base store resolves the name via `typeof(T).Name`).
   - (CR-L215/L216: the decorative `CollectionName` property — which never affected the collection name —
     and the dead `IdRecord` "compatibility" field were removed.)
