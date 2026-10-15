@@ -51,4 +51,18 @@ N/A — covered by the live provider tests.
 
 ## Implementation plan
 
-_Drafted when picked._
+1. **Measure** on ES 7.17.25: create the index from model v1 (a dynamic `string` → `text` plus `.keyword`), then
+   query with model v2 (`[Keyword]` on that property). Record the silently empty result.
+2. **Declared mapping, one producer** (rule 63): build it with the same `AutoMap()` descriptor `InitAsync` uses,
+   serialised through the client (`client.RequestResponseSerializer`), never a hand-written expectation.
+3. **Stored mapping**: `GET <index>/_mapping` through NEST (`Indices.GetMappingAsync`).
+4. **Compare** field by field on the flattened property paths: missing, unexpected, type differs (`keyword` vs
+   `text`, `long` vs `keyword`, …), and a declared `.keyword` sub-field the store lacks. Put it on the stores as
+   `DetectMappingDriftAsync()`, returning a report shaped like `SchemaDriftReport` (supported / exists / drifts).
+   Reuse that type if it can live outside `Birko.Data.SQL`; otherwise add a small parallel one. Decide after reading
+   the dependency graph (CLAUDE-projects.md), since `Birko.Data.ElasticSearch` must not reference the SQL projects.
+5. **Health check**: add `ElasticSearchMappingDriftHealthCheck` beside the existing ES health check (Degraded, never
+   Unhealthy, "could not determine" never Healthy), or record why not.
+6. Tests: live clean control, one per drift kind (each proven red by construction of the old index), offline compare
+   tests on fixture mappings.
+

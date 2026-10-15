@@ -46,4 +46,16 @@ N/A — covered by the live provider tests.
 
 ## Implementation plan
 
-_Drafted when picked._
+1. **Measure** per SQL provider: create a table, then declare an index (or drop one that exists), and run
+   `DetectDrift`. Expected: clean. Record it.
+2. **Declared side**: `Tables.Table.Indexes` (attributes and fluent `HasIndex`, after TASK-595), the same declarations
+   schema-ensure emits from (rule 63).
+3. **Stored side, one reader**: move `ListIndexesSql` and its row reader from the `SqlIndexManager` dialects onto the
+   connector (or have the connector call the dialect's manager). The index manager and the drift check then read
+   indexes the same way, and the four dialect queries stay in one place each.
+4. **Report** on `SchemaDriftReport` as a new `IndexDrifts` list (`Missing`, `ColumnsDiffer`, `UniquenessDiffers`), not
+   mixed into column drifts. Match by name (the framework names every index it creates). Undeclared stored indexes
+   are not reported: DBAs add their own, and reporting them would be noise on every table (recorded).
+5. `SchemaDriftHealthCheck` counts index drift like column drift (Degraded).
+6. Tests: live per provider (missing, columns differ, uniqueness differs, a clean control), each proven red.
+

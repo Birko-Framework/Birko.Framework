@@ -48,4 +48,11 @@ N/A — covered by the live provider test.
 
 ## Implementation plan
 
-_Drafted when picked._
+1. **Measure only** on `mysql:8.4` (default `lower_case_table_names=0` on Linux): create `DriftCase` and `driftcase`
+   with different columns, then run `DetectDrift` for a model mapped to each. Also record
+   `SHOW VARIABLES LIKE 'lower_case_table_names'` and the collation of `information_schema.COLUMNS.TABLE_NAME`.
+2. **Each reads its own columns** → cancel the task with the measurement (rule 54: falsified, recorded).
+3. **One reads the other's** → compare exactly in `StoredColumnsSql` (`TABLE_NAME = BINARY '<name>'` or
+   `COLLATE utf8mb4_bin`) and the index manager's `IndexExistsSql`/`ListIndexesSql`, through one helper so the three
+   cannot diverge. Add a live test proven red.
+

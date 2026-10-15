@@ -108,3 +108,23 @@ with no test noticing — the `FoldsUnquotedIdentifiers` lesson.
 
 - [ ] N/A — mechanical; the proof is an entity's rows and its DDL landing in the declared schema, readable from
       the catalogue.
+
+## Implementation plan
+
+Drafted 2026-10-15. **This is a design task first.** Its two open questions are decisions for the user, not for an
+implementer, so the plan ends in a grill before any code.
+
+1. **Decide** (with the user, via `/grill-me`): (a) MySQL `Schema` → refuse at table load (recommended: honouring it
+   silently crosses databases); (b) whether a connector-level default schema / search path ships too, or stays
+   separate. Record both in the task.
+2. **Identity on the table**: `[Table(Name, Schema = …)]` → `Tables.Table.Schema` (null = the provider default);
+   fluent `ToTable(name, schema)` on `ModelMap` likewise.
+3. **Capability and rendering on the connector**: `SupportsSchemas` (PostgreSQL and MSSQL true, MySQL and SQLite
+   false, with **both sides asserted** in tests) and `QualifiedIdentifier(schema, name)` as the one producer
+   (TASK-262 built the string-splitting half).
+4. **Route every table reference through it**: DML (`FROM`/`INTO`/`UPDATE`), DDL (`CREATE TABLE`, indexes, `ALTER`),
+   and every **catalogue lookup** (`StoredColumnsSql`, `regclass`, `OBJECT_ID`, the index managers, the
+   missing-table detection), which today assume the default schema. That last group is what TASK-620 to 623's drift
+   checks inherit.
+5. Tests: live PostgreSQL and MSSQL (an entity in `reporting` round-trips CRUD, drift and index ensure), MySQL and
+   SQLite refusal, and a default-schema control unchanged.

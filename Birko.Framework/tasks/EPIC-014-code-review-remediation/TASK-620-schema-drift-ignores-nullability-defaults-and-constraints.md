@@ -57,4 +57,19 @@ N/A — covered by the live provider tests.
 
 ## Implementation plan
 
-_Drafted when picked._
+1. **Measure** (per provider, live): a table created by the framework, then `ALTER` a declared `NOT NULL` column to
+   nullable (and the reverse), and run `DetectDrift`. Expected: clean. Record it.
+2. **Read the stored side** in the existing catalogue queries rather than adding new ones: PostgreSQL `a.attnotnull`,
+   MSSQL `c.is_nullable`, MySQL `IS_NULLABLE`, SQLite `pragma_table_info.notnull`. `StoredColumn` gains `IsNullable`
+   (null where a provider cannot say, which then reports nothing rather than guessing).
+3. **Declared side, one producer** (rule 63): extract `DeclaresNotNull(field)` (`IsNotNull || IsPrimary`) as the
+   predicate every `FieldDefinition` already applies, and use it in both the DDL and the drift comparison, so they
+   cannot disagree.
+4. **Report** as a new `ColumnDriftKind.NullabilityMismatch` with both sides. Not `TypeMismatch`: the type is the
+   same, and a consumer filtering on kind must be able to tell them apart. `EnsureColumns` ignores it (additive only).
+5. **Defaults and unique/key**: measured but **recorded as not compared**, unless the measurement shows a silent
+   failure. A default only matters for an omitted column (and this framework always writes every column), and key
+   drift is TASK-567's and TASK-622's ground. Record the reasoning in the task.
+6. Tests: a live test per provider (both polarities, proven red), a clean control per provider, and an offline test
+   that `DeclaresNotNull` and `FieldDefinition` agree for every field shape.
+
