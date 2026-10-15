@@ -72,6 +72,7 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <param name="ct">Cancellation token.</param>
         public async Task InitAsync(Func<CreateIndexDescriptor, ICreateIndexRequest> indexDescriptor, CancellationToken ct = default)
         {
+            _initDescriptor = indexDescriptor;
             if (Connector == null) return;
 
             var indexName = GetIndexName();
@@ -90,10 +91,43 @@ namespace Birko.Data.ElasticSearch.Stores
             }
         }
 
+
+        /// <summary>
+        /// The descriptor the index is created with when nothing else is given: the model's attribute mapping.
+        /// One producer for both the index and <c>DetectMappingDrift</c>'s declared side (TASK-621).
+        /// </summary>
+        protected virtual Func<CreateIndexDescriptor, ICreateIndexRequest> IndexDescriptor => cid => cid.Map<T>(m => m.AutoMap());
+
+        // The descriptor this store last created (or would have created) its index with, so the drift check declares
+        // what was actually asked for, including a caller's custom descriptor.
+        private Func<CreateIndexDescriptor, ICreateIndexRequest>? _initDescriptor;
+
         /// <inheritdoc />
         protected override Task InitCoreAsync(CancellationToken ct = default)
         {
-            return InitAsync(cid => cid.Map<T>(m => m.AutoMap()), ct);
+            return InitAsync(IndexDescriptor, ct);
+        }
+
+        /// <summary>
+        /// Compares the mapping this store declares with the index's actual mapping (TASK-621).
+        /// </summary>
+        /// <remarks>
+        /// An index is created once and never revisited, so a model changed afterwards (a property made
+        /// <c>[Keyword]</c>, renamed, retyped) keeps running against the old mapping: queries are translated for the
+        /// declared one and silently match nothing. On demand only, and it never creates the index; an index that does
+        /// not exist yet is reported as such, not as drift.
+        /// </remarks>
+        public async Task<MappingDriftReport> DetectMappingDriftAsync(CancellationToken ct = default)
+        {
+            var index = GetIndexName();
+            if (Connector == null)
+            {
+                return new MappingDriftReport(index, supported: false, indexExists: false, Array.Empty<MappingDrift>(),
+                    "The store has no Elasticsearch client; set its settings first.");
+            }
+
+            var response = await Connector.Indices.GetMappingAsync(new GetMappingRequest(index), ct).ConfigureAwait(false);
+            return MappingDriftFrom(index, response);
         }
 
         #endregion
@@ -761,6 +795,24 @@ namespace Birko.Data.ElasticSearch.Stores
         /// Gets the index name for this store.
         /// </summary>
         /// <returns>The validated and sanitized index name.</returns>
+        private MappingDriftReport MappingDriftFrom(string index, GetMappingResponse response)
+        {
+            if (response.ApiCall?.HttpStatusCode == 404)
+            {
+                return new MappingDriftReport(index, supported: true, indexExists: false, Array.Empty<MappingDrift>(),
+                    $"Index '{index}' does not exist yet.");
+            }
+            if (!response.IsValid)
+            {
+                throw new InvalidOperationException(
+                    $"Reading the mapping of '{index}' failed. DebugInfo: {response.DebugInformation}", response.OriginalException);
+            }
+
+            var stored = response.Indices.Values.FirstOrDefault()?.Mappings;
+            var declared = ElasticMappingDrift.Declared(_initDescriptor ?? IndexDescriptor, index);
+            return ElasticMappingDrift.Compare(index, declared, stored, Connector!.Infer);
+        }
+
         public string GetIndexName()
         {
             // CR-L113: index-name resolution + sanitization is shared with the sync store via the helper.

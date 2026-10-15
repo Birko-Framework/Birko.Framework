@@ -71,6 +71,7 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <param name="indexDescriptor">The index descriptor.</param>
         public void Init(Func<CreateIndexDescriptor, ICreateIndexRequest> indexDescriptor)
         {
+            _initDescriptor = indexDescriptor;
             var indexName = GetIndexName();
             if (!Connector!.Indices.Exists(indexName).Exists)
             {
@@ -85,12 +86,48 @@ namespace Birko.Data.ElasticSearch.Stores
             }
         }
 
+
+        /// <summary>
+        /// The descriptor the index is created with when nothing else is given: the model's attribute mapping.
+        /// One producer for both the index and <c>DetectMappingDrift</c>'s declared side (TASK-621).
+        /// </summary>
+        protected virtual Func<CreateIndexDescriptor, ICreateIndexRequest> IndexDescriptor => cid => cid.Map<T>(m => m.AutoMap());
+
+        // The descriptor this store last created (or would have created) its index with, so the drift check declares
+        // what was actually asked for, including a caller's custom descriptor.
+        private Func<CreateIndexDescriptor, ICreateIndexRequest>? _initDescriptor;
+
         /// <inheritdoc />
         protected override void InitCore()
         {
-            Init(cid =>
-                cid.Map<T>(m => m.AutoMap())
-            );
+            Init(IndexDescriptor);
+        }
+
+        /// <inheritdoc cref="AsyncElasticSearchStore{T}.DetectMappingDriftAsync"/>
+        public MappingDriftReport DetectMappingDrift()
+        {
+            var index = GetIndexName();
+            if (Connector == null)
+            {
+                return new MappingDriftReport(index, supported: false, indexExists: false, Array.Empty<MappingDrift>(),
+                    "The store has no Elasticsearch client; set its settings first.");
+            }
+
+            var response = Connector.Indices.GetMapping(new GetMappingRequest(index));
+            if (response.ApiCall?.HttpStatusCode == 404)
+            {
+                return new MappingDriftReport(index, supported: true, indexExists: false, Array.Empty<MappingDrift>(),
+                    $"Index '{index}' does not exist yet.");
+            }
+            if (!response.IsValid)
+            {
+                throw new InvalidOperationException(
+                    $"Reading the mapping of '{index}' failed. DebugInfo: {response.DebugInformation}", response.OriginalException);
+            }
+
+            var stored = response.Indices.Values.FirstOrDefault()?.Mappings;
+            var declared = ElasticMappingDrift.Declared(_initDescriptor ?? IndexDescriptor, index);
+            return ElasticMappingDrift.Compare(index, declared, stored, Connector.Infer);
         }
 
         #endregion

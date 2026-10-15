@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### ElasticSearch stores report mapping drift (2026-10-15)
+
+[[TASK-621]]. An index is mapped once and never revisited, so a model changed later queries an index mapped for the
+old one. Measured: a member made `[Keyword]` over a `text` index matched nothing, silently. `DetectMappingDriftAsync()` /
+`DetectMappingDrift()` compare the store's index descriptor (the one it creates the index with) against the live mapping:
+`Missing`, `Unexpected`, `TypeMismatch`. The health check is [[TASK-624]].
 ### Schema drift reports a column whose nullability differs from the model (2026-10-15)
 
 [[TASK-620]]. `DetectDrift` compared types only. Measured on all four SQL providers: a column made nullable where the
@@ -327,14 +333,6 @@ SQLite a `[UtcField]` column then held offset-less text beside entity-written `â
 row an entity had written. Both now go through `AbstractField.ToStoredValue`. **Migration:** a row whose UTC column was
 set by `PropertyUpdate` before this fix still reads back fine but won't match a filter until it is re-saved.
 [[TASK-606]]: an `IN` list (`values.Contains(x.At)`) is bound the same way; it matched nothing before.
-### Per-resource grants ship: Birko.Security.Grants + .AspNetCore (2026-10-14)
-
-[[TASK-588]] ([[STORY-062]]). Owners / editors / viewers of one resource or a whole type, optionally tenant-bound,
-on any store. Undeclared roles, actions or types throw. Grant and revoke need `share` and can't escalate; the last
-owner can't be removed (in-process lock + post-write recount). [[TASK-589]] adds email invitations, redeemed only
-when the provider says the email is verified (**never** `UserLogin.IsVerified`), and bootstrap admins listed as
-`provider:subject`. [[TASK-590]]: `Birko.Security.Grants.AspNetCore`, with `RequireGrant`. A denial is 403 if the caller
-can read the resource, otherwise 404 (**rule 65**, also `OwnedCrudResults`' 404). [[TASK-594]]: `.SQL` mappings + `GrantSqlIndexes`.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** â€” measure it, do not eyeball it:
 

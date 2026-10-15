@@ -192,7 +192,13 @@ A search sees a write only after the next refresh (~1 s). Use `ReadRealtimeAsync
 
 **`PropertyUpdate` renders as one Painless script** (`ElasticSearchStoreHelper.BuildUpdateScript`): each field through
 `StoredFieldName`, a null Set as a literal `null` (never a parameter: it was `""`, TASK-501), and a non-property selector
-refused with `ArgumentException`. A conflicted, failed or timed-out by-query write throws (TASK-502). Runtime cost is per-document script evaluation, so scope such filters with other
+refused with `ArgumentException`. A conflicted, failed or timed-out by-query write throws (TASK-502).
+
+**Mapping drift** (TASK-621): `DetectMappingDriftAsync()` / `DetectMappingDrift()` compare the mapping the store declares
+with `GET <index>/_mapping`, field by field (dotted paths, sub-fields included): `Missing`, `Unexpected` and
+`TypeMismatch`. The declared side is the descriptor the index is created with (`IndexDescriptor`, or the one a caller
+passed to `Init`/`InitAsync`). On demand only, and it never creates the index. A missing index is
+`IndexExists = false`, not drift. Not yet in a health check (TASK-624). Runtime cost is per-document script evaluation, so scope such filters with other
 term/range clauses where possible.
 
 #### An empty/null collection in `Contains` matches nothing
