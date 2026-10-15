@@ -4,6 +4,14 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-14 — Every ElasticSearch `orderBy` was a 400; sorts now name the stored field
+
+[[TASK-615]]. The sync, async and view stores sent `OrderBy` keys verbatim (`UpdatedAt`), while NEST stores `updatedAt`,
+so any sorted read failed with "No mapping found … to sort on". Every workflow `Find*` and job dequeue threw. Sorts now
+resolve through `ElasticSearch.Sorts`, the producer the filter translator uses: the attribute's `Name` or camelCase,
+`.keyword` for dynamic strings, and an `ArgumentException` for an unknown key. Job dequeue still returns nothing
+([[TASK-616]]).
+
 ## 2026-10-14 — An ElasticSearch filter on a `[Keyword]` member finds its rows
 
 [[TASK-613]]. The filter translator appended `.keyword` to every string member, but a `[Keyword]` member has no such

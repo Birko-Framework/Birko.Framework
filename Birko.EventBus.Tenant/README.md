@@ -17,6 +17,10 @@ Restores tenant scope for background event dispatch — the bridge between `Birk
   genuine system event still arrives as `null` and keeps its cross-tenant dispatch.
 - `AddEventTenantScope()` DI extension — one call registers **both halves**, alongside adopting
   `TenantIsolationMode.Strict`.
+- **A wrong wiring fails at startup** instead of widening every event to all tenants: if the application's
+  `ITenantContext` is not the object the bridge reads (`AddTenantContext*` builds a separate `TenantContext`), the
+  first resolve of the bridge throws. `AddBirkoSecurity` registers `Tenant.Current` and is accepted.
+- `TenantEventScopeAccessor.AllTenantsDispatches` — which event sources ran across all tenants, how often, when last.
 
 ## Usage
 ```csharp

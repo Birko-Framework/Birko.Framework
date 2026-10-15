@@ -12,5 +12,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)TenantEventScopeAccessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)TenantEventEnricher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\EventTenantScopeServiceCollectionExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\TenantContextWiringCheck.cs" />
   </ItemGroup>
 </Project>

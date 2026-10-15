@@ -17,7 +17,15 @@ published under — required for tenant-scoped event handlers to work under `Ten
 |------|-------------|
 | TenantEventEnricher.cs | **Publish side** — `IEventEnricher` impl: stamps `EventContext.TenantGuid` from the ambient `ITenantContext` (`Tenant.Current`) at publish time, so `OutboxEntry.TenantGuid` is correct for HTTP, jobs, and explicit `WithTenant` scopes. Runs synchronously in the publish flow → nested `WithTenant` inside `WithAllTenants` captures the specific tenant. Replaces hand-rolled HttpContext enrichers |
 | TenantEventScopeAccessor.cs | **Consume side** — `IEventScopeAccessor` impl: maps `EventContext.TenantGuid` → `ITenantContext.WithTenantAsync` (set, **incl. `Guid.Empty`** — a tenant value, not "unset") / `WithAllTenantsAsync` (**`null` only** = system event). `Guid.Empty` previously fell into the all-tenants branch, widening dispatch across every tenant; `TenantGuid` is nullable through the outbox + MQ envelope, so real system events still arrive as `null` |
-| Extensions/EventTenantScopeServiceCollectionExtensions.cs | `AddEventTenantScope()` — registers **both** the enricher (publish) and the accessor (consume) over `Tenant.Current`; overload takes an explicit `ITenantContext` |
+| Extensions/EventTenantScopeServiceCollectionExtensions.cs | `AddEventTenantScope()` — registers **both** the enricher (publish) and the accessor (consume) over `Tenant.Current`; overload takes an explicit `ITenantContext`. Both are built through factories that run the wiring check |
+| Extensions/TenantContextWiringCheck.cs | **TASK-328** — once, when the container first builds either half: resolves the app's `ITenantContext` in a throwaway scope and throws `InvalidOperationException` unless it is the **same object** the bridge reads. Identity, not lifetime: `AddBirkoSecurity`'s scoped `_ => Tenant.Current` passes; `AddTenantContext` / `Scoped` / `Transient` / `Singleton` (a separate `TenantContext`) are refused. No registered context passes |
+
+## The all-tenants dispatch diagnostic (TASK-328)
+`TenantEventScopeAccessor.AllTenantsDispatches` is current state keyed by `EventContext.Source` (count + last UTC
+time) for every dispatch that ran under `WithAllTenantsAsync`; `OnAllTenantsDispatch` fires before the handler, and a
+throwing subscriber is counted in `SubscriberFailures`, never propagated (rule 25). A genuine system event belongs
+there. A source that should be tenant-scoped means it was published outside any tenant scope. The null branch still
+widens, by design: `A_genuine_system_event_still_widens_and_must_keep_doing_so` pins it.
 
 ## Why this project exists (layering)
 `Birko.EventBus` defines the transport-agnostic `IEventScopeAccessor` hook (no-op by default) and cannot

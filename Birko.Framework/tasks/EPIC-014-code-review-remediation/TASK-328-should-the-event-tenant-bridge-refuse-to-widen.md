@@ -2,9 +2,9 @@
 id: TASK-328
 parent: EPIC-014
 feature: FEATURE-014
-status: todo
+status: done
 priority: P1
-assignee: human
+assignee: ai
 created: 2026-09-09
 depends-on: []
 blocks: []
@@ -100,17 +100,52 @@ above change shape. Settle the lifetime first.
 
 ## Acceptance criteria
 
-- [ ] A decision recorded on the four options, with the reason, and the rejected ones left readable so
+- [x] A decision recorded on the four options, with the reason, and the rejected ones left readable so
       nobody re-litigates them
-- [ ] The lifetime question answered first, or explicitly deferred with its reason — it is upstream of
+- [x] The lifetime question answered first, or explicitly deferred with its reason — it is upstream of
       options 2 and 3
-- [ ] If anything ships, the **live consumer** is checked first: measured 2026-09-09, one consumer calls
+- [x] If anything ships, the **live consumer** is checked first: measured 2026-09-09, one consumer calls
       `AddEventTenantScope()` and it is correctly wired (`AddBirkoSecurity` → `Tenant.Current`), so a
       behaviour change must not break the configuration that is already right
-- [ ] ⚠ Whatever is chosen, `A_genuine_system_event_still_widens_and_must_keep_doing_so` keeps passing,
+- [x] ⚠ Whatever is chosen, `A_genuine_system_event_still_widens_and_must_keep_doing_so` keeps passing,
       or its removal is the *explicit* subject of the decision. A genuine system event losing its
       cross-tenant dispatch would be a regression in the opposite direction
-- [ ] Proven able to fail, if code ships
+- [x] Proven able to fail, if code ships
+
+## Resolution (2026-10-15)
+
+**The check is identity, not lifetime, and that is a correction to the decision's wording, found before shipping.**
+The decision said "a per-request or per-use context fails at startup". But `AddBirkoSecurity`, the live consumer's
+wiring, registers `ITenantContext` **scoped**, as `_ => Tenant.Current`. A lifetime rule would have refused exactly the
+configuration the acceptance criteria say must keep working. What actually breaks the bridge is a *different object*
+(`TenantContext` keeps its state in instance `AsyncLocal` fields). So the check resolves the app's context and compares
+it by reference. That refuses `AddTenantContextScoped` / `Transient`, `AddTenantContext()` (default Scoped), and also
+`AddTenantContextSingleton`, a process-wide but different instance the old doc listed as safe. It accepts any
+registration that yields the bridge's own object. This keeps the decision's intent ("global only, fail fast") without
+the wording's false positive.
+
+- **When.** `TenantContextWiringCheck` (`Birko.EventBus.Tenant/Extensions/`) runs once, when the container first builds
+  either half; both are now registered through factories. One throwaway scope per process, not per dispatch (option 2
+  stays rejected). A registration-time check would be inert, because the consumer calls `AddEventTenantScope()` before
+  `AddBirkoSecurity`. With the outbox hosted, the processor resolves `IEventScopeAccessor` when built, so the failure
+  is at host start; otherwise it is the first publish, before any event is enriched. No `Hosting` dependency was added.
+- **Diagnostic.** `TenantEventScopeAccessor.AllTenantsDispatches`, current state keyed by `EventContext.Source` (rule
+  59), plus `OnAllTenantsDispatch`; a throwing subscriber is counted in `SubscriberFailures` and never fails the
+  dispatch (rule 25). It reports, never refuses: a null-tenant dispatch still widens.
+
+**Tests.** `tests/Birko.EventBus.Tenant.Tests/TenantContextWiringCheckTests.cs` (11): the four separate-instance
+wirings, either registration order, and a mismatched explicit context are refused (6, **all red on the old
+registration**). The scoped `_ => Tenant.Current` shape, no registered context and a matching explicit context are
+accepted (green before and after), plus the diagnostic and its subscriber safety. The existing SH-H053 pins all
+pass, `A_genuine_system_event_still_widens_and_must_keep_doing_so` included (26/26).
+`tests/Birko.Security.AspNetCore.Tests/Extensions/EventTenantScopeCompositionTests.cs` runs the **real**
+`AddBirkoSecurity` in Symbio's order (bridge first): accepted. Adding a scoped `TenantContext` after it is refused
+(97/97; the project now imports `Birko.Rules`, `Birko.EventBus` and `Birko.EventBus.Tenant`).
+
+**Live consumer.** Symbio's `Symbio.Tests.Unit` against this change: 3,951 passed, 21 skipped. Two failed, and both
+are an artefact of the run: a running `Symbio.Api` held the default output files, so the build went to another
+directory, and those two tests locate locale files at a fixed depth from their binary. `OutboxDispatchScopeTests`
+(which calls `AddEventTenantScope()`) passed. `Program.cs` wires exactly the composition the security test pins.
 
 ## Out of scope
 

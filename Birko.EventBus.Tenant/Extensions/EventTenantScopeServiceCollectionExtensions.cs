@@ -35,8 +35,16 @@ namespace Birko.EventBus.Tenant
         /// so <see cref="TenantEventScopeAccessor"/> dispatches the handler inside
         /// <c>WithAllTenantsAsync</c>. A tenant-scoped event therefore runs with
         /// <c>IsAllTenantsScope == true</c> and <c>Strict</c> repositories operate across every tenant. The
-        /// two states are indistinguishable from the event alone, which is why this is documented rather
-        /// than detected.
+        /// two states are indistinguishable from the event alone.
+        /// </para>
+        /// <para>
+        /// ✔ <b>TASK-328: that wiring is now refused.</b> The first time the container builds either half, it
+        /// resolves the application's <see cref="ITenantContext"/> once, in a throwaway scope, and throws
+        /// <see cref="InvalidOperationException"/> unless it is the same object the bridge reads. The check is
+        /// identity, not lifetime: <c>AddBirkoSecurity</c>'s scoped <c>_ =&gt; Tenant.Current</c> passes. With the
+        /// outbox hosted, the failure is at host start. An application that registers no
+        /// <see cref="ITenantContext"/> passes. Each dispatch across all tenants is recorded on
+        /// <see cref="TenantEventScopeAccessor.AllTenantsDispatches"/>.
         /// </para>
         /// <para>
         /// ⚠ <b>And with <c>AddTenantContextScoped</c> / <c>AddTenantContextTransient</c> no overload of
@@ -70,8 +78,9 @@ namespace Birko.EventBus.Tenant
         /// ⚠ SH-H053: "the same one" is a real constraint, not a formality — see the parameterless
         /// overload's remarks. Because both halves are held as singletons, the instance supplied here must
         /// be one with process-wide lifetime; a scoped or transient <see cref="ITenantContext"/> cannot be
-        /// made to work through this method at all, and passing one silently widens every tenant-scoped
-        /// event to all tenants rather than failing.
+        /// made to work through this method at all. Since TASK-328 a context that is not the one the application
+        /// resolves is refused when the bridge is first built, rather than silently widening every tenant-scoped
+        /// event to all tenants.
         /// </para>
         /// </summary>
         public static IServiceCollection AddEventTenantScope(this IServiceCollection services, ITenantContext tenantContext)
@@ -81,11 +90,23 @@ namespace Birko.EventBus.Tenant
                 throw new ArgumentNullException(nameof(services));
             }
 
+            if (tenantContext is null)
+            {
+                throw new ArgumentNullException(nameof(tenantContext));
+            }
+
+            // TASK-328: both halves are built through a factory so the wiring is checked once the container is
+            // complete. A check here would be inert: the live consumer calls this BEFORE AddBirkoSecurity, so the
+            // app's ITenantContext is not registered yet.
+            var check = new TenantContextWiringCheck(tenantContext);
+            var accessor = new TenantEventScopeAccessor(tenantContext);
+            var enricher = new TenantEventEnricher(tenantContext);
+
             // Consume side: restore ambient scope from EventContext.TenantGuid before background dispatch.
-            services.AddSingleton<IEventScopeAccessor>(new TenantEventScopeAccessor(tenantContext));
+            services.AddSingleton<IEventScopeAccessor>(sp => { check.Verify(sp); return accessor; });
             // Publish side: capture the ambient tenant onto EventContext.TenantGuid so the outbox entry /
             // envelope is attributed correctly regardless of transport or entry point.
-            services.AddSingleton<IEventEnricher>(new TenantEventEnricher(tenantContext));
+            services.AddSingleton<IEventEnricher>(sp => { check.Verify(sp); return enricher; });
             return services;
         }
     }

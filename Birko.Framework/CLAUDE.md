@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### The event-tenant bridge refuses a tenant context it cannot see (2026-10-15)
+
+[[TASK-328]]. With `AddTenantContext*`, the bridge read `Tenant.Current` while the app set its tenant on a separate
+`TenantContext`, so every tenant event was dispatched across ALL tenants, silently. The first resolve of the bridge now
+throws unless the app's `ITenantContext` is the same object. `AddBirkoSecurity` (scoped `_ => Tenant.Current`) passes.
+`AllTenantsDispatches` records each all-tenants dispatch by event source. System events still widen.
 ### SQL attributes from another assembly keep their values (2026-10-15)
 
 [[TASK-577]]. In the split-aggregator layout, attributes from a second compilation of `Birko.Data.SQL` are rebuilt by
@@ -333,13 +339,6 @@ bucket counted as ours. Bucket creation also passed the org name as an ID (a 400
 the next refresh. Measured live, one dequeue claimed every eligible job, left them all in Processing and returned none.
 The claim is now read back with the new `AsyncElasticSearchStore.ReadRealtimeAsync(guid)`, a realtime GET whose
 `ReadRealtimeCoreAsync` is the seam a test double overrides.
-### Every ElasticSearch `orderBy` was a 400; sorts now name the stored field (2026-10-14)
-
-[[TASK-615]]. The sync, async and view stores sent `OrderBy` keys verbatim (`UpdatedAt`), while NEST stores `updatedAt`,
-so any sorted read failed with "No mapping found … to sort on". Every workflow `Find*` and job dequeue threw. Sorts now
-resolve through `ElasticSearch.Sorts`, the producer the filter translator uses: the attribute's `Name` or camelCase,
-`.keyword` for dynamic strings, and an `ArgumentException` for an unknown key. Job dequeue still returns nothing
-([[TASK-616]]).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
