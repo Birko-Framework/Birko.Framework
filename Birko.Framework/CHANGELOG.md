@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — BREAKING: Create never overwrites; a key-less SQL model is keyed by its Guid
+
+[[TASK-567]]. SQL stored a second row with the same Guid, RavenDB overwrote, and JSON/XML bulk upserted. Every provider
+now refuses a create of a stored Guid with `StoreException` ([[TASK-625]] unified MongoDB, CosmosDB and ES). A
+key-less SQL model's `Guid` is its `PRIMARY KEY`. A fluent key replaces it, and declared composites are untouched.
+On a TimescaleDB hypertable it is left out (user decision). **Migration** for existing tables: CHANGELOG (drift reports `KeyMismatch`).
+
 ## 2026-10-15 — ElasticSearch stores report mapping drift
 
 [[TASK-621]]. An index is mapped once and never revisited, so a model changed later queries an index mapped for the

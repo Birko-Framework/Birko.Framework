@@ -152,6 +152,19 @@ var added = store.Connector.EnsureColumns(typeof(UsageRecord)); // the ColumnDri
   `[RequiredField]` string / `byte[]` — those need a migration that supplies the value.
 - Opt-in: it is never run by a store on its own.
 
+To review the repair instead of running it (rehearse it on a copy, ship it with a deploy), ask for the statements:
+
+```csharp
+var plan = store.Connector.PlanRepair(typeof(UsageRecord));
+foreach (var sql in plan.Statements) Console.WriteLine(sql);       // the ADDs EnsureColumns would run, and renames
+foreach (var skip in plan.NotActioned) Console.WriteLine(skip);     // type, nullability, key, index, extra columns: yours
+foreach (var need in plan.Requirements) Console.WriteLine(need);    // e.g. SQLite decimal: register the collation first
+```
+
+- A missing column becomes the same `ALTER TABLE … ADD` `EnsureColumns` runs; its `DEFAULT` is what fills the existing rows.
+- A column stored under another case (PostgreSQL, a case-sensitive SQL Server) is renamed, keeping its values.
+- Nothing that can lose data is written. The framework never runs the plan (TASK-633).
+
 ### Query Caching
 
 - **CachedAsyncDataBaseBulkStore\<DB,T\>** - Caching decorator for async bulk stores with automatic invalidation

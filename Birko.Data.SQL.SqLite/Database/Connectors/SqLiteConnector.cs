@@ -385,6 +385,16 @@ namespace Birko.Data.SQL.Connectors
             }
         }
 
+        /// <summary>
+        /// A statement naming <see cref="SqLiteDecimal.Collation"/> runs only on a connection that called
+        /// <see cref="SqLiteDecimal.Register"/> (rule 64, TASK-513): the <c>sqlite3</c> CLI and a raw
+        /// <c>SqliteConnection</c> refuse it with "no such collation sequence" (measured, TASK-633).
+        /// </summary>
+        public override string? StatementRequirement(string sql)
+            => sql.Contains(SqLiteDecimal.Collation, StringComparison.Ordinal)
+                ? $"Run on a connection that called SqLiteDecimal.Register: the statement names the {SqLiteDecimal.Collation} collation."
+                : null;
+
         public override string FieldDefinition(AbstractField field)
         {
             var result = new StringBuilder();

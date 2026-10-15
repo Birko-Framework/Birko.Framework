@@ -2,7 +2,7 @@
 id: TASK-633
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-15
@@ -44,19 +44,19 @@ What Symbio's copy does today, and the measured reason behind each rule:
 
 ## Acceptance criteria
 
-- [ ] A provider-aware way to turn a drift report into statements (shape is this task's call — e.g. a repair plan
+- [x] A provider-aware way to turn a drift report into statements (shape is this task's call — e.g. a repair plan
       per table: the statements, plus the drifts it will not action and why).
-- [ ] `Missing` → `ADD COLUMN` with the `ConvertType` type, followed by the backfill `UPDATE … WHERE col IS NULL` for
+- [x] `Missing` → `ADD COLUMN` with the `ConvertType` type, followed by the backfill `UPDATE … WHERE col IS NULL` for
       a non-nullable value type, per the rules above. Correct syntax per SQL provider (SQLite, PostgreSQL, MSSQL,
       MySQL — e.g. MSSQL has no `COLUMN` keyword in `ADD` and renames through `sp_rename`).
-- [ ] `CaseMismatch` → a rename from `StoredColumn` that keeps the values.
-- [ ] `TypeMismatch`, `NullabilityMismatch`, key and index drifts, and `Unexpected` produce **no** statement — they
+- [x] `CaseMismatch` → a rename from `StoredColumn` that keeps the values.
+- [x] `TypeMismatch`, `NullabilityMismatch`, key and index drifts, and `Unexpected` produce **no** statement — they
       are listed as the operator's (a type or key change can lose data or fail on existing rows); the plan says which.
-- [ ] Tests, live on every SQL provider the suites run: a table created before a model gained a non-nullable column
+- [x] Tests, live on every SQL provider the suites run: a table created before a model gained a non-nullable column
       is repaired by the plan, a re-run of drift detection reports nothing, and **existing rows read back** (the
       NULL-read failure above is the regression to prove); a wrong-case column keeps its values after the rename.
       Mutation-prove the backfill and the rename.
-- [ ] CHANGELOG; Symbio TASK-932 is told (it consumes this).
+- [x] CHANGELOG; Symbio TASK-932 is told (it consumes this).
 
 ## Out of scope
 
@@ -68,6 +68,33 @@ What Symbio's copy does today, and the measured reason behind each rule:
 
 N/A — statements and their effect on a real table are asserted by the live provider suites; nothing is rendered.
 
-## Implementation plan
+## Resolution (2026-10-15)
 
-_Drafted when picked._
+**`AbstractConnector.PlanRepair(Type)` → `SchemaRepairPlan`**: `Statements` (in order), `NotActioned` (each drift the
+plan will not write, with the reason), `Requirements` (what the connection running the statements must provide). It
+runs nothing.
+
+- **Missing**: the statement is `AddColumnSql`, the producer `EnsureColumns` (TASK-510) already executes, typed by
+  `ConvertType`. **One deliberate difference from the task text:** there is no separate `UPDATE … WHERE col IS NULL`.
+  A non-nullable value-type property maps to a NOT NULL column (`GuidField` and friends pass `notNull: true`), and the
+  ADD carries `DEFAULT <type default>`, which fills the existing rows on all four providers (measured live). Symbio's
+  copy needed the UPDATE because its `SqlTypeFor` added the column nullable. A column `EnsureColumns` refuses (key,
+  unique, identity, NOT NULL with no value-type default) is listed instead.
+- **CaseMismatch**: `RenameColumnSql(table, stored, StoredColumnName(column))`, a new connector producer: `ALTER TABLE …
+  RENAME COLUMN` (PostgreSQL, SQLite 3.25+, MySQL 8), `EXEC sp_rename` on SQL Server.
+- **Everything else** (type, nullability, key, unexpected column, index drifts) is listed with its reason.
+- **Found while testing, and announced in the plan (rule 64):** on SQLite a `decimal` ADD names the `BIRKO_DECIMAL`
+  collation, and a connection that did not call `SqLiteDecimal.Register` (the `sqlite3` CLI, a raw `SqliteConnection`)
+  refuses it with "no such collation sequence" (measured). The new `StatementRequirement(sql)` connector hook puts that
+  in `plan.Requirements`; Symbio TASK-932 is told.
+
+**Tests.** `SchemaRepairPlanTests` (SQLite, 6) and `SchemaRepairPlanLiveTests` (PostgreSQL 3, SQL Server 2, MySQL 2,
+live): an old table with a row is repaired by running the statements as text, the old row reads back as defaults, a
+re-run of the detection reports nothing, and a second plan is empty; the rename keeps values on every provider; a real
+case-only mismatch is repaired on PostgreSQL; unrepairable drifts are listed and written as nothing. **Mutation-proved:**
+an ADD without NOT NULL / DEFAULT (Symbio's old shape) fails the read with "The data is NULL at ordinal 1" (SQLite) and
+the drift re-check (PostgreSQL); an ADD instead of the rename leaves the stored "Name" as an unexpected column
+(PostgreSQL). Regression: the SQL core, SQLite, PostgreSQL, SQL Server, MySQL, TimescaleDB and Health.Data.SQL suites
+(1,973 tests), live, green.
+
+**Symbio TASK-932 told** (Symbio `6e2e639c`): the API, no separate UPDATE, and the SQLite requirement.

@@ -458,6 +458,22 @@ namespace Birko.Data.SQL.Connectors
         public virtual string AddColumnClause => "ADD COLUMN";
 
         /// <summary>
+        /// The statement that renames column <paramref name="from"/> of <paramref name="table"/> to <paramref name="to"/>,
+        /// keeping its values. Both names are quoted, so a column reachable only under its exact stored case is reached.
+        /// </summary>
+        /// <remarks>TASK-633. <c>RENAME COLUMN</c> is PostgreSQL's, SQLite's (3.25+) and MySQL's (8.0+); SQL Server
+        /// renames through <c>sp_rename</c> and overrides this.</remarks>
+        /// <summary>
+        /// What a connection must provide before it can run <paramref name="sql"/>, which this connector produced; null when
+        /// any connection to the database can. TASK-633: a repair plan's statements are run by the consumer, often on a
+        /// connection the framework never opened, so a requirement is announced with them rather than discovered (rule 64).
+        /// </summary>
+        public virtual string? StatementRequirement(string sql) => null;
+
+        public virtual string RenameColumnSql(string table, string from, string to)
+            => "ALTER TABLE " + QuoteIdentifier(table) + " RENAME COLUMN " + QuoteIdentifier(from) + " TO " + QuoteIdentifier(to);
+
+        /// <summary>
         /// The right-hand side of <c>column = …</c> for a <c>PropertyUpdate</c> increment. By default
         /// <c>column + parameter</c>, the native addition, exact wherever the column's type is.
         /// </summary>

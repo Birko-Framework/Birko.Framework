@@ -343,6 +343,16 @@ ones. Mutation-tested: unwiring the ambient from the async connector fails 7 of 
 207 on SQLite; making the ambient process-wide instead of flow-local fails **exactly the 3 concurrency
 tests** and no others — which is what a naive fix looks like from a single-threaded suite.
 
+### The repair as statements (`PlanRepair`, TASK-633)
+`AbstractConnector.PlanRepair(Type)` is the statement form of `EnsureColumns`, for a host that reviews and rehearses
+schema changes (Symbio's deploy). It runs nothing. `Statements`: `AddColumnSql` for each addable `Missing` column (the
+same producer `EnsureColumns` executes, so they cannot disagree; the ADD's `DEFAULT` is the back-fill) and
+`RenameColumnSql` for each `CaseMismatch` (to `StoredColumnName`, values kept; SQL Server overrides with `sp_rename`).
+`NotActioned`: every other drift, with why. `Requirements`: `StatementRequirement(sql)`, a connector hook announcing what
+a connection must provide before running a statement (rule 64): SQLite's decimal ADD names `BIRKO_DECIMAL`, measured to
+fail on an unregistered connection. Explicit, so it throws where `DetectDrift` cannot look; an absent table gets an
+empty plan.
+
 ### Adding columns a table predates (`EnsureColumns`, TASK-510)
 Schema-ensure is **create-only**: `CREATE TABLE IF NOT EXISTS` never revisits a table that exists, so a table
 created before one of its properties had a column mapping keeps lacking that column, and every INSERT names a

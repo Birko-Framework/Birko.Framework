@@ -439,6 +439,14 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         public override string AddColumnClause => "ADD";
 
+        /// <summary>
+        /// T-SQL has no <c>RENAME COLUMN</c>: <c>sp_rename</c> takes the column as <c>[table].[column]</c> in a literal and the
+        /// new name as a plain literal (a bracketed one would become part of the name) (TASK-633).
+        /// </summary>
+        public override string RenameColumnSql(string table, string from, string to)
+            => "EXEC sp_rename N'" + Birko.Data.SQL.SqlLiteral.EscapeLiteral(QuoteIdentifier(table) + "." + QuoteIdentifier(from))
+               + "', N'" + Birko.Data.SQL.SqlLiteral.EscapeLiteral(to) + "', N'COLUMN'";
+
         public override string FieldDefinition(AbstractField field)
         {
             var result = new StringBuilder();
