@@ -80,7 +80,10 @@ public sealed class SchemaDriftHealthCheck : IHealthCheck
                 reports.Add(connector.DetectDrift(type));
             }
 
-            var drifts = reports.SelectMany(r => r.Drifts).ToList();
+            var columnDrifts = reports.SelectMany(r => r.Drifts).Select(d => d.ToString()).ToList();
+            // TASK-622: a declared index the table lacks or holds differently is drift too, counted on its own.
+            var indexDrifts = reports.SelectMany(r => r.IndexDrifts).Select(d => d.ToString()).ToList();
+            var drifts = columnDrifts.Concat(indexDrifts).ToList();
             var indexFailures = connector.IndexCreationFailures;
 
             // An unsupported provider is NOT a clean bill of health -- see SchemaDriftReport.Supported.
@@ -94,6 +97,7 @@ public sealed class SchemaDriftHealthCheck : IHealthCheck
             {
                 ["checked"] = reports.Count,
                 ["drifted"] = drifts.Count,
+                ["indexDrifted"] = indexDrifts.Count,
                 ["indexFailures"] = indexFailures.Count,
                 ["tablesNotYetCreated"] = absent.Count,
                 ["unsupported"] = unsupported.Count,
@@ -101,7 +105,7 @@ public sealed class SchemaDriftHealthCheck : IHealthCheck
 
             if (drifts.Count > 0)
             {
-                data["drift"] = drifts.Select(d => d.ToString()).ToList();
+                data["drift"] = drifts;
             }
             if (indexFailures.Count > 0)
             {
@@ -113,7 +117,7 @@ public sealed class SchemaDriftHealthCheck : IHealthCheck
             if (drifts.Count > 0 || indexFailures.Count > 0)
             {
                 return Task.FromResult(HealthCheckResult.Degraded(
-                    $"Schema disagrees with the models: {drifts.Count} column(s) drifted, " +
+                    $"Schema disagrees with the models: {columnDrifts.Count} column(s) drifted, {indexDrifts.Count} declared index(es) differ, " +
                     $"{indexFailures.Count} index(es) not built.",
                     null,
                     data));

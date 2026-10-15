@@ -143,12 +143,14 @@ namespace Birko.Data.SQL.IndexManagement
             {
                 while (reader.Read())
                 {
+                    // TASK-622: Convert, not GetInt32. SQL Server returns key_ordinal as tinyint (a byte), so GetInt32
+                    // threw InvalidCastException and ListAsync never worked on that provider (measured).
                     rows.Add((
                         reader.GetString(0),
                         reader.GetString(1),
-                        reader.GetInt32(2) != 0,
-                        reader.GetInt32(3) != 0,
-                        reader.GetInt32(4)
+                        Convert.ToInt32(reader.GetValue(2)) != 0,
+                        Convert.ToInt32(reader.GetValue(3)) != 0,
+                        Convert.ToInt32(reader.GetValue(4))
                     ));
                 }
             }, ct).ConfigureAwait(false);

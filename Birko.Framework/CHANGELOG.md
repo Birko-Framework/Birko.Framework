@@ -4,6 +4,16 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-14 — A SQL query binds values in the column's stored form, so `[UtcField]` filters match
+
+[[TASK-596]]. A filtered `PropertyUpdate` Set and a filter's compared value were bound raw, skipping `ToStorage`. On
+SQLite a `[UtcField]` column then held offset-less text beside entity-written `…+00:00`, and `r.At == instant` matched no
+row an entity had written. Both now go through `AbstractField.ToStoredValue`. **Migration:** a row whose UTC column was
+set by `PropertyUpdate` before this fix still reads back fine but won't match a filter until it is re-saved.
+[[TASK-606]]: an `IN` list (`values.Contains(x.At)`) is bound the same way; it matched nothing before.
+
+---
+
 ## 2026-10-15 — BREAKING: Create means a new entity on every provider; a key-less SQL model is keyed by its Guid
 
 [[TASK-567]]. Measured with the shared contract on all 12 providers: SQL (SQLite, PostgreSQL, MySQL, SQL Server,

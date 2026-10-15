@@ -366,7 +366,10 @@ column the table does not have (consumer DraCode lost two months of rows this wa
   replaces it through `Table.DeclarePrimary`; declared composites are untouched. `EmitsPrimaryKey(field)` is the one
   predicate for "is this key emitted": the DDL and drift's `KeyMismatch` both ask it, and TimescaleDB leaves an
   implicit key out of a hypertable. A create of a stored key throws `StoreException` from the stores' create paths
-  (`Stores/DuplicateCreate.cs`), never from the connector, whose callers classify the driver's exception. A table that does not exist yet is left for
+  (`Stores/DuplicateCreate.cs`), never from the connector, whose callers classify the driver's exception.
+- **Declared indexes are compared** (TASK-622): `SchemaDriftReport.IndexDrifts` (`Missing`, `ColumnsDiffer`,
+  `UniquenessDiffers`), read through each provider's index manager (`CreateIndexManager()` on the connector). Undeclared
+  stored indexes and partial-index predicates are not compared. A table that does not exist yet is left for
   `CREATE TABLE`.
 - **Old rows read back as `default(T)`.** A NOT NULL column is added with `DEFAULT <AbstractField.DefaultStoredValue>`
   — the field's own writer applied to the underlying type's default, so `TimeOnly` back-fills `'00:00:00'`,

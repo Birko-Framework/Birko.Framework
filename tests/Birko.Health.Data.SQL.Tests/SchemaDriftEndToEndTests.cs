@@ -298,6 +298,33 @@ public class SchemaDriftEndToEndTests : IDisposable
              .Which.Should().Contain("Amount").And.Contain("TEXT").And.Contain("INTEGER");
     }
 
+    [Birko.Data.SQL.Attributes.Table("Gadget")]
+    [Birko.Data.SQL.Attributes.CompositeIndex("IX_Gadget_Code", nameof(Code))]
+    public class Gadget : AbstractModel
+    {
+        public int Code { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-622: a declared index the table lacks is drift the health check reports, counted apart from columns so an
+    /// operator can tell a slow query from a wrong column.
+    /// </summary>
+    [Fact]
+    public async Task The_health_check_reports_a_missing_declared_index_as_index_drift()
+    {
+        var settings = NewDatabase();
+        CreateTableWithRawDdl(settings, @"CREATE TABLE ""Gadget"" (Guid TEXT PRIMARY KEY, Code INTEGER NOT NULL)");
+
+        var check = new SchemaDriftHealthCheck(() => Connector(settings), new[] { typeof(Gadget) });
+        var result = await check.CheckAsync();
+
+        result.Status.Should().Be(HealthStatus.Degraded);
+        result.Data!["indexDrifted"].Should().Be(1);
+        result.Description.Should().Contain("0 column(s) drifted").And.Contain("1 declared index(es) differ");
+        result.Data["drift"].Should().BeAssignableTo<IEnumerable<string>>().Which.Should().ContainSingle()
+            .Which.Should().Contain("IX_Gadget_Code").And.Contain("not present");
+    }
+
     /// <summary>
     /// The report is visible where an operator looks: the description carries the counts and
     /// <c>Data</c> carries one line per finding, ready to log.

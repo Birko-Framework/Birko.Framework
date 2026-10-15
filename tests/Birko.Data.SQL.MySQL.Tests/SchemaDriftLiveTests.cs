@@ -327,4 +327,51 @@ public class SchemaDriftLiveTests
 
         connector.DetectDrift(typeof(KeyLessRow)).IsClean.Should().BeTrue();
     }
+
+    [Table("MyIdx")]
+    [CompositeIndex("IX_MyIdx_Code", nameof(Code))]
+    [CompositeIndex("UX_MyIdx_Number", nameof(Number), IsUnique = true)]
+    public class IndexedRow : Birko.Data.Models.AbstractModel
+    {
+        public int Code { get; set; }
+        public int Number { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-622. Drift compared columns only, so a table missing a declared index, or holding it non-unique where the
+    /// model says unique, read clean. Created by the framework, then one index dropped and the unique one recreated plain.
+    /// </summary>
+    [Fact]
+    public void A_missing_or_weakened_declared_index_is_reported()
+    {
+        if (!RequireServer()) return;
+        Exec("DROP TABLE IF EXISTS `MyIdx`");
+        new MySQLConnector(Settings()).CreateTable(new[] { typeof(IndexedRow) });
+        Exec("DROP INDEX `IX_MyIdx_Code` ON `MyIdx`");
+        Exec("DROP INDEX `UX_MyIdx_Number` ON `MyIdx`");
+        Exec("CREATE INDEX `UX_MyIdx_Number` ON `MyIdx` (Number)");
+
+        var report = new MySQLConnector(Settings()).DetectDrift(typeof(IndexedRow));
+        foreach (var d in report.IndexDrifts) _output.WriteLine(d.ToString());
+
+        report.IsClean.Should().BeFalse();
+        report.IndexDrifts.Select(d => (d.Index, d.Kind)).Should().BeEquivalentTo(new[]
+        {
+            ("IX_MyIdx_Code", IndexDriftKind.Missing),
+            ("UX_MyIdx_Number", IndexDriftKind.UniquenessDiffers),
+        });
+    }
+
+    [Fact]
+    public void A_table_the_framework_created_with_its_indexes_reports_no_index_drift()
+    {
+        if (!RequireServer()) return;
+        Exec("DROP TABLE IF EXISTS `MyIdx`");
+        var connector = new MySQLConnector(Settings());
+        connector.CreateTable(new[] { typeof(IndexedRow) });
+
+        var report = connector.DetectDrift(typeof(IndexedRow));
+        report.IndexDrifts.Should().BeEmpty();
+        report.IsClean.Should().BeTrue();
+    }
 }

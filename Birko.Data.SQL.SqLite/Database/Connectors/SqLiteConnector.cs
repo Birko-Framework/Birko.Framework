@@ -263,6 +263,9 @@ namespace Birko.Data.SQL.Connectors
         /// <c>sqlite_master.sql</c> current across <c>ALTER TABLE … ADD COLUMN</c>.
         /// </para>
         /// </remarks>
+        /// <summary>The reader drift uses for this provider's stored indexes (TASK-622).</summary>
+        protected override Birko.Data.SQL.IndexManagement.SqlIndexManager? CreateIndexManager() => new Birko.Data.SQL.SQLite.IndexManagement.SqLiteIndexManager(this);
+
         protected override string? StoredColumnsSql(string tableName)
         {
             var literal = SqlLiteral.EscapeLiteral(tableName);

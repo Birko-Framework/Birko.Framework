@@ -240,6 +240,9 @@ namespace Birko.Data.SQL.Connectors
         /// this framework creates (TASK-472).
         /// </para>
         /// </remarks>
+        /// <summary>The reader drift uses for this provider's stored indexes (TASK-622).</summary>
+        protected override Birko.Data.SQL.IndexManagement.SqlIndexManager? CreateIndexManager() => new Birko.Data.SQL.PostgreSQL.IndexManagement.PostgreSqlIndexManager(this);
+
         protected override string? StoredColumnsSql(string tableName)
             => string.Format(
                 "SELECT a.attname, format_type(a.atttypid, a.atttypmod), NOT a.attnotnull AS birko_nullable, " +

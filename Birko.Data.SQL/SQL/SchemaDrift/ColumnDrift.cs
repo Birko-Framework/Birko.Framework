@@ -113,6 +113,52 @@ namespace Birko.Data.SQL.SchemaDrift
         };
     }
 
+    /// <summary>How a stored index differs from one the model declares (TASK-622).</summary>
+    public enum IndexDriftKind
+    {
+        /// <summary>Declared, absent from the table. Queries that rely on it scan, and a declared unique rule is unenforced.</summary>
+        Missing = 0,
+
+        /// <summary>Both have the index under that name, over different columns or in a different order.</summary>
+        ColumnsDiffer = 1,
+
+        /// <summary>Declared unique and stored plain, or the reverse. A plain one admits the duplicates the model forbids.</summary>
+        UniquenessDiffers = 2,
+    }
+
+    /// <summary>
+    /// One declared index's disagreement with the table (TASK-622). Undeclared stored indexes are never reported: a DBA's
+    /// own index is not drift.
+    /// </summary>
+    public sealed class IndexDrift
+    {
+        public IndexDrift(string table, string index, IndexDriftKind kind, string declared, string? stored)
+        {
+            Table = table;
+            Index = index;
+            Kind = kind;
+            Declared = declared;
+            Stored = stored;
+        }
+
+        public string Table { get; }
+
+        /// <summary>The index name as the model declares it.</summary>
+        public string Index { get; }
+
+        public IndexDriftKind Kind { get; }
+
+        /// <summary>The declared shape, e.g. <c>UNIQUE (TenantGuid, Number)</c>.</summary>
+        public string Declared { get; }
+
+        /// <summary>The stored shape, or null for <see cref="IndexDriftKind.Missing"/>.</summary>
+        public string? Stored { get; }
+
+        public override string ToString() => Kind == IndexDriftKind.Missing
+            ? $"{Table}.{Index}: declared {Declared}, not present"
+            : $"{Table}.{Index}: declared {Declared}, stored {Stored}";
+    }
+
     /// <summary>
     /// The outcome of comparing one entity's declared columns against the table behind it.
     /// </summary>
@@ -125,14 +171,19 @@ namespace Birko.Data.SQL.SchemaDrift
     /// </remarks>
     public sealed class SchemaDriftReport
     {
-        public SchemaDriftReport(string table, bool supported, bool tableExists, IReadOnlyList<ColumnDrift> drifts, string? reason = null)
+        public SchemaDriftReport(string table, bool supported, bool tableExists, IReadOnlyList<ColumnDrift> drifts, string? reason = null,
+            IReadOnlyList<IndexDrift>? indexDrifts = null)
         {
             Table = table;
             Supported = supported;
             TableExists = tableExists;
             Drifts = drifts;
             Reason = reason;
+            IndexDrifts = indexDrifts ?? System.Array.Empty<IndexDrift>();
         }
+
+        /// <summary>Declared indexes the table lacks or holds differently (TASK-622).</summary>
+        public IReadOnlyList<IndexDrift> IndexDrifts { get; }
 
         public string Table { get; }
 
@@ -156,6 +207,6 @@ namespace Birko.Data.SQL.SchemaDrift
         /// <summary>
         /// True only when the question was actually answered and the answer was "no disagreement".
         /// </summary>
-        public bool IsClean => Supported && TableExists && Drifts.Count == 0;
+        public bool IsClean => Supported && TableExists && Drifts.Count == 0 && IndexDrifts.Count == 0;
     }
 }

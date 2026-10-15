@@ -235,6 +235,9 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         protected override string? IdentifierCaseSensitivitySql => "SELECT CASE WHEN N'a' = N'A' THEN 0 ELSE 1 END";
 
+        /// <summary>The reader drift uses for this provider's stored indexes (TASK-622).</summary>
+        protected override Birko.Data.SQL.IndexManagement.SqlIndexManager? CreateIndexManager() => new Birko.Data.SQL.MSSql.IndexManagement.MSSqlIndexManager(this);
+
         protected override string? StoredColumnsSql(string tableName)
             => string.Format(
                 "SELECT c.name, t.name, c.max_length, c.precision, c.scale, c.is_nullable AS birko_nullable, " +

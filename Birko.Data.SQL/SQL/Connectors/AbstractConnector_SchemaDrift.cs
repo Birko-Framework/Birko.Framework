@@ -232,7 +232,7 @@ namespace Birko.Data.SQL.Connectors
                 }
             }
 
-            return new SchemaDriftReport(table.Name, supported: true, tableExists: true, drifts);
+            return new SchemaDriftReport(table.Name, supported: true, tableExists: true, drifts, null, DetectIndexDrift(table));
         }
 
         /// <summary>
@@ -276,6 +276,57 @@ namespace Birko.Data.SQL.Connectors
                 }
             }
             return caseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+        }
+
+        /// <summary>
+        /// This provider's index manager, the one reader of stored indexes (TASK-622). Null where the provider has none,
+        /// and then index drift is not reported.
+        /// </summary>
+        protected virtual IndexManagement.SqlIndexManager? CreateIndexManager() => null;
+
+        /// <summary>
+        /// Compares every index the model declares with the table's (TASK-622): by name, then ordered columns (declared
+        /// names folded the way they are stored), then uniqueness. Undeclared stored indexes are not drift: a DBA's own
+        /// index is legitimate. Partial-index predicates are not compared.
+        /// </summary>
+        private IReadOnlyList<IndexDrift> DetectIndexDrift(Tables.Table table)
+        {
+            if (table.Indexes == null || table.Indexes.Count == 0) return Array.Empty<IndexDrift>();
+            var manager = CreateIndexManager();
+            if (manager == null) return Array.Empty<IndexDrift>();
+
+            var stored = manager.ListAsync(table.Name).GetAwaiter().GetResult();
+            var byName = new Dictionary<string, Patterns.IndexManagement.IndexInfo>(StoredColumnNameComparer);
+            foreach (var index in stored)
+            {
+                byName.TryAdd(index.Name, index);
+            }
+
+            var drifts = new List<IndexDrift>();
+            foreach (var declared in table.Indexes.Values)
+            {
+                var declaredShape = (declared.Unique ? "UNIQUE " : string.Empty)
+                    + "(" + string.Join(", ", declared.Columns.Select(c => c.ColumnName)) + ")";
+                if (!byName.TryGetValue(declared.Name, out var actual))
+                {
+                    drifts.Add(new IndexDrift(table.Name, declared.Name, IndexDriftKind.Missing, declaredShape, null));
+                    continue;
+                }
+
+                var storedShape = (actual.Unique ? "UNIQUE " : string.Empty)
+                    + "(" + string.Join(", ", actual.Fields.Select(f => f.Name)) + ")";
+                var sameColumns = declared.Columns.Select(c => StoredColumnName(c.ColumnName))
+                    .SequenceEqual(actual.Fields.Select(f => f.Name), StoredColumnNameComparer);
+                if (!sameColumns)
+                {
+                    drifts.Add(new IndexDrift(table.Name, declared.Name, IndexDriftKind.ColumnsDiffer, declaredShape, storedShape));
+                }
+                else if (actual.Unique != declared.Unique)
+                {
+                    drifts.Add(new IndexDrift(table.Name, declared.Name, IndexDriftKind.UniquenessDiffers, declaredShape, storedShape));
+                }
+            }
+            return drifts;
         }
 
         private Dictionary<string, StoredColumn> ReadStoredColumns(string sql)

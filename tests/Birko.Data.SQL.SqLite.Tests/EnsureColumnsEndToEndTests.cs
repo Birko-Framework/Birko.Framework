@@ -379,4 +379,55 @@ public class EnsureColumnsEndToEndTests : IDisposable
         connector.DetectDrift(typeof(KeyLessRow)).Drifts.Select(d => (d.Column, d.Kind))
             .Should().BeEquivalentTo(new[] { ("Guid", ColumnDriftKind.KeyMismatch) });
     }
+
+    [Table("SlIdx")]
+    [CompositeIndex("IX_SlIdx_Code", nameof(Code))]
+    [CompositeIndex("UX_SlIdx_Number", nameof(Number), IsUnique = true)]
+    public class IndexedRow : AbstractModel
+    {
+        public int Code { get; set; }
+        public int Number { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-622. Drift compared columns only, so a table missing a declared index, or holding it non-unique where the
+    /// model says unique, read clean. Created by the framework, then one index dropped and the unique one recreated plain.
+    /// </summary>
+    [Fact]
+    public void A_missing_or_weakened_declared_index_is_reported()
+    {
+        var connector0 = Connector();
+        connector0.CreateTable(new[] { typeof(IndexedRow) });
+        var settings = new SqLiteSettings { Location = _root, Name = "ensure.db" };
+        using (var raw = new Microsoft.Data.Sqlite.SqliteConnection(settings.GetConnectionString()))
+        {
+            raw.Open();
+            using var cmd = raw.CreateCommand();
+            cmd.CommandText = "DROP INDEX \"IX_SlIdx_Code\"; DROP INDEX \"UX_SlIdx_Number\"; "
+                            + "CREATE INDEX \"UX_SlIdx_Number\" ON \"SlIdx\" (Number);";
+            cmd.ExecuteNonQuery();
+        }
+        SqlitePool.ClearFor(settings.GetConnectionString());
+
+        var report = Connector().DetectDrift(typeof(IndexedRow));
+        foreach (var d in report.IndexDrifts) _ = d;
+
+        report.IsClean.Should().BeFalse();
+        report.IndexDrifts.Select(d => (d.Index, d.Kind)).Should().BeEquivalentTo(new[]
+        {
+            ("IX_SlIdx_Code", IndexDriftKind.Missing),
+            ("UX_SlIdx_Number", IndexDriftKind.UniquenessDiffers),
+        });
+    }
+
+    [Fact]
+    public void A_table_the_framework_created_with_its_indexes_reports_no_index_drift()
+    {
+        var connector = Connector();
+        connector.CreateTable(new[] { typeof(IndexedRow) });
+
+        var report = connector.DetectDrift(typeof(IndexedRow));
+        report.IndexDrifts.Should().BeEmpty();
+        report.IsClean.Should().BeTrue();
+    }
 }

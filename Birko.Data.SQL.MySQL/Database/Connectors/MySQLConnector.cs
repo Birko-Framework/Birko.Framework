@@ -236,6 +236,9 @@ namespace Birko.Data.SQL.Connectors
         /// arrived last. The table name is a literal here, not an identifier, so it is escaped rather
         /// than quoted (§ Conventions, TASK-253).
         /// </remarks>
+        /// <summary>The reader drift uses for this provider's stored indexes (TASK-622).</summary>
+        protected override Birko.Data.SQL.IndexManagement.SqlIndexManager? CreateIndexManager() => new Birko.Data.SQL.MySQL.IndexManagement.MySqlIndexManager(this);
+
         protected override string? StoredColumnsSql(string tableName)
             => string.Format(
                 "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE = 'YES' AS birko_nullable, COLUMN_KEY = 'PRI' AS birko_primary FROM information_schema.COLUMNS " +

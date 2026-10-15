@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Schema drift reports a declared index the table lacks (2026-10-15)
+
+[[TASK-622]]. Drift compared columns only. Measured on all four SQL providers: a dropped index, or a unique one made plain,
+read clean. `SchemaDriftReport.IndexDrifts` now reports `Missing` / `ColumnsDiffer` / `UniquenessDiffers`, read through
+each provider's index manager. The health check counts them separately. Also fixed: `MSSqlIndexManager.ListAsync`
+always threw on SQL Server (a `tinyint` read with `GetInt32`).
 ### BREAKING: Create never overwrites; a key-less SQL model is keyed by its Guid (2026-10-15)
 
 [[TASK-567]]. SQL stored a second row with the same Guid, RavenDB overwrote, and JSON/XML bulk upserted. Every provider
@@ -332,13 +338,6 @@ spelling), and `EnsureColumns` never adds a second column beside it. The match f
 indexes, `UserLogins (Provider, ProviderKey)` included. It now writes fluent indexes into the table's declarations,
 marks their columns `IsIndexed` (rule 37), and `HasUniqueIndex` makes `UX_UserLogin_Provider_ProviderKey` unique.
 **Migration:** existing duplicate logins block that index; it is reported in `IndexCreationFailures` until resolved.
-### A SQL query binds values in the column's stored form, so `[UtcField]` filters match (2026-10-14)
-
-[[TASK-596]]. A filtered `PropertyUpdate` Set and a filter's compared value were bound raw, skipping `ToStorage`. On
-SQLite a `[UtcField]` column then held offset-less text beside entity-written `…+00:00`, and `r.At == instant` matched no
-row an entity had written. Both now go through `AbstractField.ToStoredValue`. **Migration:** a row whose UTC column was
-set by `PropertyUpdate` before this fix still reads back fine but won't match a filter until it is re-saved.
-[[TASK-606]]: an `IN` list (`values.Contains(x.At)`) is bound the same way; it matched nothing before.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

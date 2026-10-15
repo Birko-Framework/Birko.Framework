@@ -250,7 +250,8 @@ var result = await check.CheckAsync(ct);
 It reports five kinds of disagreement — `TypeMismatch`, `Missing` (declared but absent), `Unexpected`
 (present but undeclared), `CaseMismatch` (present only under a spelling that differs in case, on a database where
 that makes it unreachable: PostgreSQL always, SQL Server under a case-sensitive collation) and `NullabilityMismatch`
-(NULL where the model says NOT NULL, or the reverse; key columns are not compared) — and folds in `AbstractConnector.IndexCreationFailures`, the indexes
+(NULL where the model says NOT NULL, or the reverse; key columns are not compared). Declared indexes are checked too: one
+the table lacks, or holds over other columns or without its uniqueness, is counted separately (`indexDrifted`) — and folds in `AbstractConnector.IndexCreationFailures`, the indexes
 schema-ensure recorded rather than threw on, which nothing else reads.
 
 **Degraded, never Unhealthy.** Drift means the database disagrees with the models, not that it is
