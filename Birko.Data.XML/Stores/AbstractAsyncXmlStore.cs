@@ -279,13 +279,16 @@ namespace Birko.Data.XML.Stores
 
             if (data == null) return;
 
+            var pending = new List<T>();
             foreach (var itemSource in data.Where(x => x != null))
             {
                 var item = itemSource;
                 item.EnsureGuid();
                 item = StoreDelegates.Apply(storeDelegate, item);
-                _items[item.Guid!.Value] = item;
+                pending.Add(item);
             }
+            // TASK-567: a Guid already stored refuses the whole batch; nothing is written.
+            StoredKeyGuard.AddNew(_items, pending);
 
             await SaveDataAsync(ct);
         }

@@ -197,7 +197,15 @@ namespace Birko.Data.SQL.Stores
             using var _tx = EnterTransactionScope();
             data.EnsureGuid();
             data = StoreDelegates.Apply(storeDelegate, data);
-            Connector.Insert(data);
+            try
+            {
+                Connector.Insert(data);
+            }
+            catch (Exception ex) when (DuplicateCreate.IsDuplicate(Connector, ex))
+            {
+                // TASK-567: a stored key is refused like every other provider refuses it.
+                throw DuplicateCreate.Refusal(typeof(T), ex);
+            }
             return data.Guid!.Value;
         }
 

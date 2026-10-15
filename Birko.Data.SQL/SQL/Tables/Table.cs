@@ -14,6 +14,38 @@ namespace Birko.Data.SQL.Tables
         public Dictionary<string, IndexDefinition>? Indexes { get; set; }
 
         /// <summary>
+        /// Makes <paramref name="field"/> a declared key column. An implicit key (the promoted <c>Guid</c>) yields to it,
+        /// so a key declared after the table was loaded replaces the implicit one rather than forming a composite with it.
+        /// </summary>
+        public void DeclarePrimary(Fields.AbstractField field)
+        {
+            if (field == null) throw new ArgumentNullException(nameof(field));
+            foreach (var implicitKey in Fields.Values.Where(f => f.IsImplicitPrimary && !ReferenceEquals(f, field)))
+            {
+                implicitKey.IsPrimary = false;
+                implicitKey.IsImplicitPrimary = false;
+            }
+            field.IsPrimary = true;
+            field.IsImplicitPrimary = false;
+        }
+
+        /// <summary>
+        /// TASK-567. A model that declares no key gets its <c>AbstractModel.Guid</c> as the key: the identity every read,
+        /// update and delete already used, and which the table then also enforces (a second row with the same Guid was
+        /// accepted). The decision is the user's (2026-10-12): a <c>PRIMARY KEY</c>, not a bare <c>UNIQUE</c>.
+        /// </summary>
+        internal void PromoteGuidToKey()
+        {
+            if (Fields == null || Fields.Values.Any(f => f.IsPrimary)) return;
+            if (Type == null || !typeof(Models.AbstractModel).IsAssignableFrom(Type)) return;
+
+            var guid = GetFieldByPropertyName(nameof(Models.AbstractModel.Guid));
+            if (guid == null) return;
+            guid.IsPrimary = true;
+            guid.IsImplicitPrimary = true;
+        }
+
+        /// <summary>
         /// Reverse lookup: property name → field. Built lazily on first GetFieldByPropertyName call.
         /// </summary>
         private Dictionary<string, Fields.AbstractField>? _propertyNameIndex;

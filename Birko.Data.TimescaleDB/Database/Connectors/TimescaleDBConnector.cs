@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Birko.Data.SQL.Connectors;
+using Birko.Data.SQL.Fields;
 using Npgsql;
 using RemoteSettings = Birko.Configuration.RemoteSettings;
 using TimescaleDBSettings = Birko.Data.SQL.TimescaleDB.Stores.TimescaleDBSettings;
@@ -184,6 +185,22 @@ namespace Birko.Data.SQL.Connectors
         // RecordTableCreated, and while this was an override of the public method that bookkeeping was
         // skipped entirely on this provider. TablesCreated was permanently empty here, so TASK-286's
         // annotation, TASK-287's escape channel and TASK-288's healing were all inert.
+        /// <summary>
+        /// The implicit <c>Guid</c> key of a key-less model (TASK-567) is left out when the table carries the configured
+        /// time column, i.e. when it is to become a hypertable. TimescaleDB refuses a unique index without the
+        /// partitioning column (measured: <c>TS103</c>), so the key would silently turn the hypertable into a plain table.
+        /// The user's decision (2026-10-15): the hypertable wins, and a duplicate Guid is accepted on such a table, as
+        /// before. A key the model declares is always emitted.
+        /// </summary>
+        public override bool EmitsPrimaryKey(AbstractField field)
+        {
+            if (!field.IsImplicitPrimary) return base.EmitsPrimaryKey(field);
+            var timeColumn = _timescaleSettings?.TimeColumn;
+            if (string.IsNullOrEmpty(timeColumn) || field.Table?.Fields == null) return true;
+            var time = StoredColumnName(timeColumn);
+            return !field.Table.Fields.Values.Any(f => StoredColumnName(f.Name) == time);
+        }
+
         protected override void CreateTableCore(string name, IEnumerable<string> fields)
         {
             base.CreateTableCore(name, fields);

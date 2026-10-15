@@ -246,4 +246,42 @@ public class RavenTransactionBoundaryLiveTests
             "cluster-wide transactions forbid patching, attachments, counters and time-series, and a "
           + "caller must be able to learn that without reading the source");
     }
+
+    /// <summary>
+    /// TASK-567, measured rather than assumed: inside a unit of work the store cannot pass a "must not exist" change
+    /// vector (RavenDB refuses one in a cluster-wide transaction), and the atomic guards did not refuse it either
+    /// (measured on 7.2.6: the duplicate committed over the stored document). The store checks the id in the session.
+    /// </summary>
+    [Fact]
+    public async Task A_create_of_a_stored_id_inside_a_unit_of_work_is_refused_at_commit()
+    {
+        if (!RequireServer()) return;
+        var db = NewDb();
+        using var store = NewStore(db);
+        try
+        {
+            var guid = Guid.NewGuid();
+            await store.CreateAsync(new TxDoc { Guid = guid, Name = "first" });
+
+            Exception? refused = null;
+            try
+            {
+                await using var uow = RavenDbUnitOfWork.FromStore(store);
+                await uow.BeginAsync();
+                store.SetTransactionContext(uow.Context);
+                await store.CreateAsync(new TxDoc { Guid = guid, Name = "duplicate" });
+                await uow.CommitAsync();
+            }
+            catch (Exception ex) { refused = ex; }
+            store.SetTransactionContext(null);
+
+            refused.Should().BeOfType<Birko.Data.Exceptions.StoreException>("a create of a stored id must not commit");
+            (await store.ReadAsync(guid))!.Name.Should().Be("first");
+        }
+        finally
+        {
+            store.SetTransactionContext(null);
+            try { await store.DestroyAsync(); } catch { }
+        }
+    }
 }

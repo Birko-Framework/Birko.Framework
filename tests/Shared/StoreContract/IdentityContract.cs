@@ -18,6 +18,18 @@ namespace Birko.Tests.Shared.StoreContract;
 /// </summary>
 public abstract partial class StoreContract<T>
 {
+    /// <summary>
+    /// Whether this provider refuses a create of a stored Guid. False only where the user decided a duplicate is
+    /// accepted: a TimescaleDB hypertable, which cannot carry a Guid key (TASK-567, 2026-10-15). There the contract pins
+    /// the acceptance instead, so a change either way is noticed.
+    /// </summary>
+    protected virtual bool RefusesDuplicateCreate => true;
+    /// <summary>
+    /// Whether this provider's duplicate-create refusal is already the shared <c>StoreException</c>. False only for the
+    /// providers TASK-625 still has to unify; it deletes every override.
+    /// </summary>
+    protected virtual bool DuplicateCreateThrowsStoreException => true;
+
     [Fact]
     public void Contract_Create_of_an_entity_with_no_guid_assigns_one()
     {
@@ -100,10 +112,70 @@ public abstract partial class StoreContract<T>
         Settled(store).Count().Should().Be(2);
         Settled(store).ReadFirst(x => x.Guid == Guid.Empty).Should().BeNull();
     }
+
+    /// <summary>
+    /// TASK-567. Create means "a new entity": a Guid already stored is refused, never stored twice and never
+    /// overwritten. A SQL table for a key-less model stored a second row; RavenDB's Store overwrote.
+    /// <para>The refusal is a <c>StoreException</c>, like the in-memory store's, unless a provider sets
+    /// <see cref="DuplicateCreateThrowsStoreException"/> false: MongoDB, CosmosDB, ElasticSearch, and JSON/XML for their
+    /// single create still refuse with their own types (measured). TASK-625 unifies them and removes those overrides.</para>
+    /// </summary>
+    [Fact]
+    public void Contract_Create_of_a_stored_guid_is_refused_and_the_stored_entity_is_kept()
+    {
+        if (!Ready()) return;
+        var store = NewStore();
+        var guid = Guid.NewGuid();
+        var first = NewEntity("first");
+        first.Guid = guid;
+        store.Create(first);
+        var duplicate = NewEntity("duplicate");
+        duplicate.Guid = guid;
+
+        if (!RefusesDuplicateCreate)
+        {
+            store.Create(duplicate);
+            Settled(store).Count(x => x.Guid == guid).Should().Be(2, "the documented exception: a duplicate is accepted");
+            return;
+        }
+        ((Action)(() => store.Create(duplicate))).Should().Throw<Exception>().Which.Should().Match<Exception>(e => !DuplicateCreateThrowsStoreException || e is Birko.Data.Exceptions.StoreException);
+
+        Settled(store).Count(x => x.Guid == guid).Should().Be(1);
+        NameOf(Settled(store).ReadFirst(x => x.Guid == guid)!).Should().Be("first");
+    }
+
+    [Fact]
+    public void Contract_Bulk_create_of_a_stored_guid_is_refused_and_the_stored_entity_is_kept()
+    {
+        if (!Ready()) return;
+        var store = NewStore();
+        var guid = Guid.NewGuid();
+        var first = NewEntity("first");
+        first.Guid = guid;
+        store.Create(first);
+        var duplicate = NewEntity("duplicate");
+        duplicate.Guid = guid;
+
+        if (!RefusesDuplicateCreate)
+        {
+            store.Create(new[] { duplicate });
+            Settled(store).Count(x => x.Guid == guid).Should().Be(2, "the documented exception: a duplicate is accepted");
+            return;
+        }
+        ((Action)(() => store.Create(new[] { duplicate }))).Should().Throw<Exception>().Which.Should().Match<Exception>(e => !DuplicateCreateThrowsStoreException || e is Birko.Data.Exceptions.StoreException);
+
+        Settled(store).Count(x => x.Guid == guid).Should().Be(1);
+        NameOf(Settled(store).ReadFirst(x => x.Guid == guid)!).Should().Be("first");
+    }
 }
 
 public abstract partial class AsyncStoreContract<T>
 {
+    /// <inheritdoc cref="StoreContract{T}.RefusesDuplicateCreate"/>
+    protected virtual bool RefusesDuplicateCreate => true;
+    /// <inheritdoc cref="StoreContract{T}.DuplicateCreateThrowsStoreException"/>
+    protected virtual bool DuplicateCreateThrowsStoreException => true;
+
     [Fact]
     public async Task Contract_CreateAsync_of_an_entity_with_an_empty_guid_assigns_a_fresh_one()
     {
@@ -170,5 +242,31 @@ public abstract partial class AsyncStoreContract<T>
         none.Guid!.Value.Should().NotBe(empty.Guid!.Value);
         (await Settled(store).CountAsync()).Should().Be(2);
         (await Settled(store).ReadFirstAsync(x => x.Guid == Guid.Empty)).Should().BeNull();
+    }
+
+    /// <summary>TASK-567, async: a Guid already stored is refused by create, single and bulk.</summary>
+    [Fact]
+    public async Task Contract_CreateAsync_of_a_stored_guid_is_refused_and_the_stored_entity_is_kept()
+    {
+        if (!Ready()) return;
+        var store = NewStore();
+        var guid = Guid.NewGuid();
+        var first = NewEntity("first");
+        first.Guid = guid;
+        await store.CreateAsync(first);
+        var duplicate = NewEntity("duplicate");
+        duplicate.Guid = guid;
+
+        if (!RefusesDuplicateCreate)
+        {
+            await store.CreateAsync(duplicate);
+            (await Settled(store).CountAsync(x => x.Guid == guid)).Should().Be(2, "the documented exception: a duplicate is accepted");
+            return;
+        }
+        (await ((Func<Task>)(() => store.CreateAsync(duplicate))).Should().ThrowAsync<Exception>()).Which.Should().Match<Exception>(e => !DuplicateCreateThrowsStoreException || e is Birko.Data.Exceptions.StoreException);
+        (await ((Func<Task>)(() => store.CreateAsync(new[] { duplicate }))).Should().ThrowAsync<Exception>()).Which.Should().Match<Exception>(e => !DuplicateCreateThrowsStoreException || e is Birko.Data.Exceptions.StoreException);
+
+        (await Settled(store).CountAsync(x => x.Guid == guid)).Should().Be(1);
+        NameOf((await Settled(store).ReadFirstAsync(x => x.Guid == guid))!).Should().Be("first");
     }
 }

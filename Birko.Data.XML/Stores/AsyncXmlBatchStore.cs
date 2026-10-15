@@ -108,7 +108,8 @@ namespace Birko.Data.XML.Stores
             EnsureWritable();
             data.EnsureGuid();
             data = StoreDelegates.Apply(storeDelegate, data);
-            _items[data.Guid.Value] = data;
+            // TASK-567: create never overwrites a stored entity.
+            StoredKeyGuard.AddNew(_items, new[] { data });
             await SaveDataAsync(ct);
             return data.Guid.Value;
         }
@@ -142,14 +143,17 @@ namespace Birko.Data.XML.Stores
         {
             EnsureWritable();
             var changed = false;
+            var pending = new List<T>();
             foreach (var itemSource in data.Where(x => x != null))
             {
                 var item = itemSource;
                 item.EnsureGuid();
                 item = StoreDelegates.Apply(storeDelegate, item);
-                _items[item.Guid.Value] = item;
+                pending.Add(item);
                 changed = true;
             }
+            // TASK-567: a Guid already stored refuses the whole batch; nothing is written.
+            StoredKeyGuard.AddNew(_items, pending);
             if (changed) await SaveDataAsync(ct);
         }
 

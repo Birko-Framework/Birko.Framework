@@ -106,6 +106,14 @@ namespace Birko.Data.SQL.Connectors
         public virtual bool SupportsTransactionalDdl => true;
 
         /// <summary>
+        /// Whether <paramref name="field"/>'s <c>PRIMARY KEY</c> is emitted. True for every key on every provider except
+        /// where a provider must leave an <b>implicit</b> key out (<c>AbstractField.IsImplicitPrimary</c>, TASK-567):
+        /// TimescaleDB, whose hypertables refuse a key without the time column. The drift check asks the same question,
+        /// so a key left out on purpose is never reported as missing.
+        /// </summary>
+        public virtual bool EmitsPrimaryKey(Fields.AbstractField field) => field.IsPrimary;
+
+        /// <summary>
         /// Whether this provider case-folds an identifier that was emitted <b>unquoted</b>. True for
         /// PostgreSQL (and therefore TimescaleDB), which folds to lower case; false for SQLite, MySQL and
         /// MSSql, which preserve the spelling they were given.

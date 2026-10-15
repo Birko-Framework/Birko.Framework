@@ -68,7 +68,16 @@ namespace Birko.Data.SQL.Stores
         public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureInitialized();
-            CreateCore(data, storeDelegate);
+            try
+            {
+                CreateCore(data, storeDelegate);
+            }
+            catch (Exception ex) when (DuplicateCreate.IsDuplicate(Connector, ex))
+            {
+                // TASK-567. Here, around the seam, so a provider's native bulk insert (COPY, multi-row INSERT) is covered
+                // whether or not it overrides CreateCore (rule 12).
+                throw DuplicateCreate.Refusal(typeof(T), ex);
+            }
         }
 
         /// <summary>

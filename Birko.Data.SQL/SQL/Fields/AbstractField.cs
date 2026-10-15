@@ -12,6 +12,13 @@ namespace Birko.Data.SQL.Fields
         public string Name { get; set; } = null!;
         public DbType Type { get; set; } = DbType.String;
         public bool IsPrimary { get; set; } = false;
+
+        /// <summary>
+        /// True when <see cref="IsPrimary"/> was not declared but given: an <c>AbstractModel</c>'s <c>Guid</c> becomes the
+        /// key of a table whose model declares none (TASK-567). A key declared later (a fluent <c>HasKey</c>) replaces it
+        /// through <see cref="Tables.Table.DeclarePrimary"/> instead of joining it into a composite.
+        /// </summary>
+        public bool IsImplicitPrimary { get; internal set; }
         public bool IsUnique { get; set; } = false;
         public bool IsNotNull { get; set; } = false;
         public bool IsAutoincrement { get; set; } = false;

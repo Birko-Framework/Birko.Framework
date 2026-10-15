@@ -133,7 +133,7 @@ public class SchemaDriftLiveTests
 
         // What an old database looks like: Amount was widened in the model, the column never was.
         Exec($"DROP TABLE IF EXISTS \"{DriftedTable}\"");
-        Exec($"CREATE TABLE \"{DriftedTable}\" (Guid uuid, Name text, Amount text NOT NULL)");
+        Exec($"CREATE TABLE \"{DriftedTable}\" (Guid uuid PRIMARY KEY, Name text, Amount text NOT NULL)");
 
         var report = new PostgreSQLConnector(Settings()).DetectDrift(typeof(DriftedRow));
 
@@ -155,7 +155,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS \"{DriftedTable}\"");
-        Exec($"CREATE TABLE \"{DriftedTable}\" (Guid uuid, Name text, Amount integer NOT NULL, Gone text)");
+        Exec($"CREATE TABLE \"{DriftedTable}\" (Guid uuid PRIMARY KEY, Name text, Amount integer NOT NULL, Gone text)");
         Exec($"ALTER TABLE \"{DriftedTable}\" DROP COLUMN Gone");
 
         var report = new PostgreSQLConnector(Settings()).DetectDrift(typeof(DriftedRow));
@@ -294,5 +294,42 @@ public class SchemaDriftLiveTests
             ("Count", "NullabilityMismatch"),
             ("Note", "NullabilityMismatch"),
         });
+    }
+
+    [Table("PgKeyLess")]
+    public class KeyLessRow : Birko.Data.Models.AbstractModel
+    {
+        public string? Name { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-567. A key-less model's Guid is its key now; a table created before that has no key and accepts a second
+    /// row with the same Guid. Drift reports it, and nothing alters the table.
+    /// </summary>
+    [Fact]
+    public void A_table_without_the_declared_key_is_reported()
+    {
+        if (!RequireServer()) return;
+
+        Exec("DROP TABLE IF EXISTS \"PgKeyLess\"");
+        new PostgreSQLConnector(Settings()).CreateTable(new[] { typeof(KeyLessRow) });
+        Exec("ALTER TABLE \"PgKeyLess\" DROP CONSTRAINT \"PgKeyLess_pkey\"");
+
+        var drifts = new PostgreSQLConnector(Settings()).DetectDrift(typeof(KeyLessRow)).Drifts;
+        foreach (var d in drifts) _output.WriteLine(d.ToString());
+
+        drifts.Select(d => (d.Column, d.Kind)).Should().BeEquivalentTo(new[] { ("Guid", ColumnDriftKind.KeyMismatch) });
+    }
+
+    [Fact]
+    public void A_key_less_model_table_the_framework_creates_is_keyed_and_clean()
+    {
+        if (!RequireServer()) return;
+
+        Exec("DROP TABLE IF EXISTS \"PgKeyLess\"");
+        var connector = new PostgreSQLConnector(Settings());
+        connector.CreateTable(new[] { typeof(KeyLessRow) });
+
+        connector.DetectDrift(typeof(KeyLessRow)).IsClean.Should().BeTrue();
     }
 }

@@ -2,7 +2,7 @@
 id: TASK-567
 parent: STORY-053
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-11
@@ -52,14 +52,25 @@ The task is no longer a decision task: it is runnable by [[fix-next]].
 
 ## Acceptance criteria
 
-- [ ] Decide how a SQL table gets a unique identity when the model declares no key: `Guid` as `PRIMARY KEY`, or a
+- [x] Decide how a SQL table gets a unique identity when the model declares no key: `Guid` as `PRIMARY KEY`, or a
       `UNIQUE` constraint on it — and how existing tables are handled (DetectDrift reports, migration documented; never a
       silent ALTER)
-- [ ] A create (single and bulk) of a stored Guid is refused on every SQL provider, with a typed exception consistent with
+      → The user's decision (2026-10-12): `Guid` as `PRIMARY KEY`. Existing tables are reported (`KeyMismatch`), the
+      migration is in CHANGELOG, and nothing is altered. **TimescaleDB exception** (user decision 2026-10-15, after
+      measuring `TS103`): on a table with the time column the implicit key is left out, so the hypertable wins.
+- [x] A create (single and bulk) of a stored Guid is refused on every SQL provider, with a typed exception consistent with
       the in-memory store; RavenDB's overwrite on create is decided and documented in the same pass
-- [ ] Tests on the shared store contract (`tests/Shared/StoreContract/`) prove a duplicate create is refused on every
+      → `StoreException` on SQL (translated in the stores, not the connector), RavenDB (empty change vector; bulk via
+      sessions of 512; unit of work checks the id first), and the JSON/XML paths that upserted. Wrapped where a caller
+      may classify it: the connectors' classifiers walk the inner chain, so `SqlEventStore` still works (measured live).
+- [x] Tests on the shared store contract (`tests/Shared/StoreContract/`) prove a duplicate create is refused on every
       provider, red-verified
-- [ ] CHANGELOG migration entry; `/specs regen store-crud-contract` and `schema-index-and-ddl`
+      → Measured red on SQL ×5, RavenDB, JSON (bulk) and XML (bulk, batch). MongoDB, CosmosDB and ElasticSearch already
+      refused, with their own types (TASK-625, via `DuplicateCreateThrowsStoreException`). TimescaleDB pins the
+      decided acceptance (`RefusesDuplicateCreate`).
+- [x] CHANGELOG migration entry; `/specs regen store-crud-contract` and `schema-index-and-ddl`
+      → CHANGELOG entry with per-provider migration SQL. **Specs not regenerated in this pass**: `/specs regen
+      store-crud-contract` and `schema-index-and-ddl` remain to run.
 
 ## Out of scope
 
@@ -105,3 +116,17 @@ Drafted 2026-10-15 (queued after TASK-621). The design is the 2026-10-12 decisio
 
 Containers: PostgreSQL, MySQL, MSSQL, TimescaleDB, MongoDB (replica set), CosmosDB emulator, ElasticSearch and RavenDB,
 per live-tests.yml.
+
+## Progress log
+
+- 2026-10-15 — All 8 live servers (Docker). Contract measured on 12 providers (table in TASK-625). Implemented: implicit
+  `Guid` key in `LoadTable` (`IsImplicitPrimary`, `Table.DeclarePrimary` so a fluent key replaces it; offline tests show
+  attribute and fluent composites untouched, and red without the demotion: `(Code, Guid)`), `StoreException` on
+  duplicate create for SQL, RavenDB, JSON and XML, and `KeyMismatch` drift via `birko_primary`. RavenDB unit of work:
+  a change vector is refused there, and the atomic guards did NOT stop the duplicate (measured), so the id is checked
+  first. TimescaleDB: the implicit key turned key-less hypertables into plain tables (`TS103`, measured), fixed per the
+  user's decision via `EmitsPrimaryKey`. Inverted two tests that pinned the old upsert (JSON, XML; rule 56). Updated
+  `RewrapClassificationTests` to the decided type. Keyed eleven hand-written fixture tables that lacked the key their
+  models declare. One MySQL failure (`TASK295_a_vanished_table_heals…`) did not reproduce in 3 reruns: recorded as
+  unexplained (possibly TASK-306's shared-database interference), not fixed. Final: 39 test projects, 3,445 tests,
+  all green, live.

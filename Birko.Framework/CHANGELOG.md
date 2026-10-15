@@ -4,6 +4,49 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — BREAKING: Create means a new entity on every provider; a key-less SQL model is keyed by its Guid
+
+[[TASK-567]]. Measured with the shared contract on all 12 providers: SQL (SQLite, PostgreSQL, MySQL, SQL Server,
+TimescaleDB) stored a second row with the same Guid, RavenDB's `Store` overwrote, and JSON bulk create and the XML
+batch store upserted. All of them now refuse a create of a stored Guid and keep the stored entity.
+
+- **The key.** A SQL model that declares no key gets its `AbstractModel.Guid` as `PRIMARY KEY` (`DataBase.LoadTable`,
+  marked `IsImplicitPrimary`). A key declared later through a fluent `HasPrimary` replaces it (`Table.DeclarePrimary`)
+  and never joins it into a composite. A key declared by attributes, composite included, is untouched.
+- **The exception.** SQL, RavenDB and the fixed JSON/XML paths throw `StoreException` (the in-memory store's type),
+  with the driver's exception as `InnerException`. The connectors' unique-violation classifiers walk the inner chain,
+  so `SqlEventStore`'s conflict handling still recognises it (measured live). MongoDB, CosmosDB, ElasticSearch and the
+  JSON/XML single create already refused, with their own types; unifying those is [[TASK-625]].
+- **RavenDB** stores with an empty change vector ("must not exist"). Bulk create no longer uses `BulkInsert`, which
+  overwrites and has no such form: it saves sessions of 512, each all-or-nothing. That is slower for very large loads.
+  Inside a unit of work (a cluster-wide transaction, where a change vector is refused and atomic guards did not cover
+  a document written outside one; measured on 7.2.6) the id is checked in the session first. A concurrent writer
+  between that check and the commit is not covered.
+- **TimescaleDB (the user's decision).** A hypertable cannot carry a key without the time column (measured: `TS103`),
+  so on a table with the configured time column the implicit Guid key is **left out**: the hypertable wins, and a
+  duplicate Guid is accepted there as before. A declared key is always emitted.
+- **Existing tables are reported, never altered.** `DetectDrift` reports `ColumnDriftKind.KeyMismatch` for a declared
+  key column the table does not key (and the reverse).
+
+**Migration**, for a table created before this change (drift reports `KeyMismatch` on `Guid`):
+
+1. Find duplicates: `SELECT Guid, COUNT(*) FROM <table> GROUP BY Guid HAVING COUNT(*) > 1;` and resolve each by hand.
+   Two rows with one Guid are two entities, or one entity written twice; the framework cannot tell which.
+2. Add the key:
+
+```sql
+ALTER TABLE "T" ADD PRIMARY KEY (guid);                                -- PostgreSQL (the column is folded)
+ALTER TABLE `T` ADD PRIMARY KEY (Guid);                                -- MySQL
+ALTER TABLE [T] ALTER COLUMN Guid UNIQUEIDENTIFIER NOT NULL;           -- SQL Server: a key column must be NOT NULL
+ALTER TABLE [T] ADD CONSTRAINT PK_T PRIMARY KEY (Guid);
+```
+
+   SQLite cannot add a key to an existing table: rename it (`ALTER TABLE "T" RENAME TO "T_old"`), let the store create
+   `"T"` (first use, or `Init()`), copy the rows (`INSERT INTO "T" SELECT * FROM "T_old"`, naming the columns if their
+   order differs), then drop `"T_old"`. Do not add a key to a TimescaleDB hypertable on `Guid` alone; it is refused.
+
+---
+
 ## 2026-10-14 — Per-resource grants ship: Birko.Security.Grants + .AspNetCore
 
 [[TASK-588]] ([[STORY-062]]). Owners / editors / viewers of one resource or a whole type, optionally tenant-bound,

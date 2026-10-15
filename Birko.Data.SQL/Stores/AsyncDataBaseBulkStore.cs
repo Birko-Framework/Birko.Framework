@@ -98,7 +98,16 @@ namespace Birko.Data.SQL.Stores
             CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            await CreateCoreAsync(data, storeDelegate, ct);
+            try
+            {
+                await CreateCoreAsync(data, storeDelegate, ct);
+            }
+            catch (Exception ex) when (DuplicateCreate.IsDuplicate(Connector, ex))
+            {
+                // TASK-567. Here, around the seam, so a provider's native bulk insert (COPY, multi-row INSERT) is covered
+                // whether or not it overrides CreateCoreAsync (rule 12).
+                throw DuplicateCreate.Refusal(typeof(T), ex);
+            }
         }
 
         /// <summary>

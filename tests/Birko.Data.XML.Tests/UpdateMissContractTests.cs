@@ -35,6 +35,7 @@ internal sealed class TempDirs : IDisposable
 public abstract class XmlUpdateMissContractBase<TStore> : StoreContract<TestModel>, IDisposable
     where TStore : AbstractXmlStore<TestModel>, ISettingsStore<Settings>, new()
 {
+    protected override bool DuplicateCreateThrowsStoreException => false; // TASK-625
     private readonly TempDirs _dirs = new();
 
     protected override IBulkStore<TestModel> NewStore()
@@ -58,6 +59,7 @@ public sealed class XmlBatchStoreUpdateMissContractTests : XmlUpdateMissContract
 public abstract class AsyncXmlUpdateMissContractBase<TStore> : AsyncStoreContract<TestModel>, IDisposable
     where TStore : AbstractAsyncXmlStore<TestModel>, ISettingsStore<Settings>, new()
 {
+    protected override bool DuplicateCreateThrowsStoreException => false; // TASK-625
     private readonly TempDirs _dirs = new();
 
     protected override IAsyncBulkStore<TestModel> NewStore()

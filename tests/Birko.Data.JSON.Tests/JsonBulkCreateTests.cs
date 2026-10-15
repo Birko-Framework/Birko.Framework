@@ -67,19 +67,21 @@ public class JsonBulkCreateTests : IDisposable
     }
 
     [Fact]
-    public void BulkCreate_with_a_duplicate_guid_upserts_instead_of_throwing()
+    public void BulkCreate_with_a_duplicate_guid_is_refused_and_the_stored_entry_is_kept()
     {
         var store = NewStore("upsert.json");
         var g = Guid.NewGuid();
 
         store.Create(new[] { new TestModel { Guid = g, Name = "first" } });
 
-        // Re-creating the same Guid used to throw ArgumentException (_items.Add on a dup key).
+        // Inverted at TASK-567 (rule 56). CR-M098 made this an upsert so it would not throw ArgumentException; the
+        // user's decision (2026-10-12) is that Create means a new entity on every provider, so it is refused, with the
+        // shared StoreException, and the stored entry is kept.
         Action act = () => store.Create(new[] { new TestModel { Guid = g, Name = "second" } });
 
-        act.Should().NotThrow();
+        act.Should().Throw<Birko.Data.Exceptions.StoreException>();
         var items = store.Read().ToList();
         items.Should().ContainSingle();
-        items[0].Name.Should().Be("second", "the upsert replaces the existing entry");
+        items[0].Name.Should().Be("first", "create never overwrites a stored entry");
     }
 }

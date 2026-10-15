@@ -61,6 +61,7 @@ internal sealed class ElasticLive : IDisposable
 /// <summary>TASK-555's cross-provider update-miss contract on <see cref="ElasticSearchStore{T}"/>, live.</summary>
 public sealed class ElasticUpdateMissContractTests : StoreContract<UpdateMissDoc>, IDisposable
 {
+    protected override bool DuplicateCreateThrowsStoreException => false; // TASK-625
     private readonly ElasticLive _live;
     public ElasticUpdateMissContractTests(ITestOutputHelper output) => _live = new ElasticLive(output);
     protected override bool Ready() => _live.Ready();
@@ -82,6 +83,7 @@ public sealed class ElasticUpdateMissContractTests : StoreContract<UpdateMissDoc
 /// <summary>The async twin, on <see cref="AsyncElasticSearchStore{T}"/>.</summary>
 public sealed class AsyncElasticUpdateMissContractTests : AsyncStoreContract<UpdateMissDoc>, IDisposable
 {
+    protected override bool DuplicateCreateThrowsStoreException => false; // TASK-625
     private readonly ElasticLive _live;
     public AsyncElasticUpdateMissContractTests(ITestOutputHelper output) => _live = new ElasticLive(output);
     protected override bool Ready() => _live.Ready();

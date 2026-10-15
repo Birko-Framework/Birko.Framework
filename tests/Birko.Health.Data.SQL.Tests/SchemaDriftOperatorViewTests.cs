@@ -168,7 +168,7 @@ public class SchemaDriftOperatorViewTests : IDisposable
         //   Note, Legacy_Id -> present, declared by nothing                       (removed properties)
         var drifted = NewDatabase();
         Exec(drifted, @"CREATE TABLE ""Invoice"" (
-                            Guid      TEXT,
+                            Guid      TEXT PRIMARY KEY,
                             Number    TEXT,
                             Total     REAL NOT NULL,
                             Note      TEXT,

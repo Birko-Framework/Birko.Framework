@@ -131,7 +131,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS [{DriftedTable}]");
-        Exec($"CREATE TABLE [{DriftedTable}] ([Guid] UNIQUEIDENTIFIER, [Bounded] TEXT)");
+        Exec($"CREATE TABLE [{DriftedTable}] ([Guid] UNIQUEIDENTIFIER PRIMARY KEY, [Bounded] TEXT)");
 
         var report = new MSSqlConnector(Settings()).DetectDrift(typeof(DriftedRow));
 
@@ -152,7 +152,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS [{DriftedTable}]");
-        Exec($"CREATE TABLE [{DriftedTable}] ([Guid] UNIQUEIDENTIFIER, [Bounded] NVARCHAR(MAX))");
+        Exec($"CREATE TABLE [{DriftedTable}] ([Guid] UNIQUEIDENTIFIER PRIMARY KEY, [Bounded] NVARCHAR(MAX))");
 
         var report = new MSSqlConnector(Settings()).DetectDrift(typeof(DriftedRow));
 
@@ -226,7 +226,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS [{BareDecimalTable}]");
-        Exec($"CREATE TABLE [{BareDecimalTable}] ([Guid] UNIQUEIDENTIFIER, [Amount] DECIMAL NOT NULL)");
+        Exec($"CREATE TABLE [{BareDecimalTable}] ([Guid] UNIQUEIDENTIFIER PRIMARY KEY, [Amount] DECIMAL NOT NULL)");
 
         var drift = new MSSqlConnector(Settings()).DetectDrift(typeof(BareDecimalRow))
             .Drifts.Should().ContainSingle().Subject;
@@ -246,7 +246,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS [{BareDecimalTable}]");
-        Exec($"CREATE TABLE [{BareDecimalTable}] ([Guid] UNIQUEIDENTIFIER, [Amount] DECIMAL NOT NULL)");
+        Exec($"CREATE TABLE [{BareDecimalTable}] ([Guid] UNIQUEIDENTIFIER PRIMARY KEY, [Amount] DECIMAL NOT NULL)");
         var connector = new MSSqlConnector(Settings());
         var old = Guid.NewGuid();
         connector.Insert(new BareDecimalRow { Guid = old, Amount = 7.5m });
@@ -292,5 +292,43 @@ public class SchemaDriftLiveTests
             ("Count", "NullabilityMismatch"),
             ("Note", "NullabilityMismatch"),
         });
+    }
+
+    [Table("MsKeyLess")]
+    public class KeyLessRow : Birko.Data.Models.AbstractModel
+    {
+        public string? Name { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-567. A key-less model's Guid is its key now; a table created before that has no key and accepts a second
+    /// row with the same Guid. Drift reports it, and nothing alters the table.
+    /// </summary>
+    [Fact]
+    public void A_table_without_the_declared_key_is_reported()
+    {
+        if (!RequireServer()) return;
+
+        Exec("DROP TABLE IF EXISTS [MsKeyLess]");
+        new MSSqlConnector(Settings()).CreateTable(new[] { typeof(KeyLessRow) });
+        Exec("DECLARE @n sysname = (SELECT name FROM sys.key_constraints WHERE parent_object_id = OBJECT_ID('MsKeyLess') AND type = 'PK'); "
+           + "EXEC('ALTER TABLE [MsKeyLess] DROP CONSTRAINT [' + @n + ']')");
+
+        var drifts = new MSSqlConnector(Settings()).DetectDrift(typeof(KeyLessRow)).Drifts;
+        foreach (var d in drifts) _output.WriteLine(d.ToString());
+
+        drifts.Select(d => (d.Column, d.Kind)).Should().BeEquivalentTo(new[] { ("Guid", ColumnDriftKind.KeyMismatch) });
+    }
+
+    [Fact]
+    public void A_key_less_model_table_the_framework_creates_is_keyed_and_clean()
+    {
+        if (!RequireServer()) return;
+
+        Exec("DROP TABLE IF EXISTS [MsKeyLess]");
+        var connector = new MSSqlConnector(Settings());
+        connector.CreateTable(new[] { typeof(KeyLessRow) });
+
+        connector.DetectDrift(typeof(KeyLessRow)).IsClean.Should().BeTrue();
     }
 }

@@ -12,6 +12,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\JsonModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncJsonModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractAsyncJsonStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\StoredKeyGuard.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractJsonStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncJsonBatchBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncJsonBatchStore.cs" />

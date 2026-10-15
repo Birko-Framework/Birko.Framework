@@ -83,6 +83,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\DataBaseModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncDataBaseModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\DataBaseStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\DuplicateCreate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\DataBaseBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncDataBaseStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncDataBaseBulkStore.cs" />

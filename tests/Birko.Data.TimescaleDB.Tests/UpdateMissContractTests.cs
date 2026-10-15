@@ -53,6 +53,7 @@ internal sealed class TimescaleDBLive
 /// before each test so its counts start from zero.</summary>
 public sealed class TimescaleDBUpdateMissContractTests : StoreContract<UpdateMissSyncRow>
 {
+    protected override bool RefusesDuplicateCreate => false; // TASK-567: a hypertable cannot carry a Guid key (user decision)
     private readonly TimescaleDBLive _live;
     public TimescaleDBUpdateMissContractTests(ITestOutputHelper output) => _live = new TimescaleDBLive(output);
     protected override bool Ready() => _live.Ready();
@@ -73,6 +74,7 @@ public sealed class TimescaleDBUpdateMissContractTests : StoreContract<UpdateMis
 /// <summary>The async twin, on <see cref="AsyncTimescaleDBStore{T}"/>.</summary>
 public sealed class AsyncTimescaleDBUpdateMissContractTests : AsyncStoreContract<UpdateMissAsyncRow>
 {
+    protected override bool RefusesDuplicateCreate => false; // TASK-567: a hypertable cannot carry a Guid key (user decision)
     private readonly TimescaleDBLive _live;
     public AsyncTimescaleDBUpdateMissContractTests(ITestOutputHelper output) => _live = new TimescaleDBLive(output);
     protected override bool Ready() => _live.Ready();

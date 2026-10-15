@@ -123,7 +123,7 @@ public class SchemaDriftEndToEndTests : IDisposable
         var settings = NewDatabase();
         // "Amount" is declared INTEGER by the framework; this database has it as TEXT.
         CreateTableWithRawDdl(settings,
-            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount TEXT NOT NULL)");
+            @"CREATE TABLE ""Widget"" (Guid TEXT PRIMARY KEY, Name TEXT, Amount TEXT NOT NULL)");
 
         var report = Connector(settings).DetectDrift(typeof(Widget));
 
@@ -188,7 +188,7 @@ public class SchemaDriftEndToEndTests : IDisposable
     public void A_column_the_model_declares_and_the_table_lacks_is_reported_as_Missing()
     {
         var settings = NewDatabase();
-        CreateTableWithRawDdl(settings, @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT)");
+        CreateTableWithRawDdl(settings, @"CREATE TABLE ""Widget"" (Guid TEXT PRIMARY KEY, Name TEXT)");
 
         var report = Connector(settings).DetectDrift(typeof(Widget));
 
@@ -204,7 +204,7 @@ public class SchemaDriftEndToEndTests : IDisposable
     {
         var settings = NewDatabase();
         CreateTableWithRawDdl(settings,
-            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount INTEGER NOT NULL, Legacy TEXT)");
+            @"CREATE TABLE ""Widget"" (Guid TEXT PRIMARY KEY, Name TEXT, Amount INTEGER NOT NULL, Legacy TEXT)");
 
         var report = Connector(settings).DetectDrift(typeof(Widget));
 
@@ -285,7 +285,7 @@ public class SchemaDriftEndToEndTests : IDisposable
     {
         var settings = NewDatabase();
         CreateTableWithRawDdl(settings,
-            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount TEXT NOT NULL)");
+            @"CREATE TABLE ""Widget"" (Guid TEXT PRIMARY KEY, Name TEXT, Amount TEXT NOT NULL)");
 
         var check = new SchemaDriftHealthCheck(() => Connector(settings), new[] { typeof(Widget) });
         var result = await check.CheckAsync();
@@ -307,7 +307,7 @@ public class SchemaDriftEndToEndTests : IDisposable
     {
         var settings = NewDatabase();
         CreateTableWithRawDdl(settings,
-            @"CREATE TABLE ""Widget"" (Guid TEXT, Name TEXT, Amount TEXT NOT NULL)");
+            @"CREATE TABLE ""Widget"" (Guid TEXT PRIMARY KEY, Name TEXT, Amount TEXT NOT NULL)");
 
         var check = new SchemaDriftHealthCheck(() => Connector(settings), new[] { typeof(Widget) });
         var result = await check.CheckAsync();

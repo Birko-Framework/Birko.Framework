@@ -266,10 +266,18 @@ namespace Birko.Data.SQL.Stores
             data.EnsureGuid();
             data = StoreDelegates.Apply(processDelegate, data);
 
-            if (AsyncConnector != null)
-                await AsyncConnector.InsertAsync(data, ct);
-            else
-                await Task.Run(() => Connector!.Insert(data), ct);
+            try
+            {
+                if (AsyncConnector != null)
+                    await AsyncConnector.InsertAsync(data, ct);
+                else
+                    await Task.Run(() => Connector!.Insert(data), ct);
+            }
+            catch (Exception ex) when (DuplicateCreate.IsDuplicate(Connector, ex))
+            {
+                // TASK-567: a stored key is refused like every other provider refuses it.
+                throw DuplicateCreate.Refusal(typeof(T), ex);
+            }
             return data.Guid!.Value;
         }
 

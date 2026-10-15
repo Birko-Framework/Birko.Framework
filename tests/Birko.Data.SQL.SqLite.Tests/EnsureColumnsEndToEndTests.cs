@@ -340,4 +340,43 @@ public class EnsureColumnsEndToEndTests : IDisposable
             connector.FieldDefinition(field).Contains("NOT NULL").Should().Be(field.IsNotNull, field.Name);
         }
     }
+
+    [Table("SlKeyLess")]
+    public class KeyLessRow : AbstractModel
+    {
+        public string? Name { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-567 on SQLite, which cannot drop a key: the framework's own CREATE is rebuilt without PRIMARY KEY, which is
+    /// what a table created before a key-less model's Guid became its key looks like.
+    /// </summary>
+    [Fact]
+    public void A_table_without_the_declared_key_is_reported()
+    {
+        var connector = Connector();
+        connector.CreateTable(new[] { typeof(KeyLessRow) });
+        connector.DetectDrift(typeof(KeyLessRow)).IsClean.Should().BeTrue("the framework now keys a key-less model's Guid");
+
+        var settings = new SqLiteSettings { Location = _root, Name = "ensure.db" };
+        using (var raw = new Microsoft.Data.Sqlite.SqliteConnection(settings.GetConnectionString()))
+        {
+            raw.Open();
+            string create;
+            using (var read = raw.CreateCommand())
+            {
+                read.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'SlKeyLess'";
+                create = (string)read.ExecuteScalar()!;
+            }
+            var keyless = System.Text.RegularExpressions.Regex.Replace(create, @"\s+PRIMARY KEY", string.Empty);
+            keyless.Should().NotBe(create);
+            using var rebuild = raw.CreateCommand();
+            rebuild.CommandText = "DROP TABLE \"SlKeyLess\"; " + keyless;
+            rebuild.ExecuteNonQuery();
+        }
+        SqlitePool.ClearFor(settings.GetConnectionString());
+
+        connector.DetectDrift(typeof(KeyLessRow)).Drifts.Select(d => (d.Column, d.Kind))
+            .Should().BeEquivalentTo(new[] { ("Guid", ColumnDriftKind.KeyMismatch) });
+    }
 }

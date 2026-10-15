@@ -12,6 +12,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\XmlModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncXmlModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractAsyncXmlStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\StoredKeyGuard.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractXmlStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlBatchBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlBatchStore.cs" />

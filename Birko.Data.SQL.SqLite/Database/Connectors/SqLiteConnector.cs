@@ -268,7 +268,7 @@ namespace Birko.Data.SQL.Connectors
             var literal = SqlLiteral.EscapeLiteral(tableName);
             return string.Format(
                 "SELECT p.name, p.type, (SELECT m.sql FROM sqlite_master m WHERE m.type = 'table' AND m.name = '{0}' COLLATE NOCASE) "
-                + ", p.\"notnull\" = 0 AS birko_nullable FROM pragma_table_info('{0}') p", literal);
+                + ", p.\"notnull\" = 0 AS birko_nullable, p.pk > 0 AS birko_primary FROM pragma_table_info('{0}') p", literal);
         }
 
         /// <summary>

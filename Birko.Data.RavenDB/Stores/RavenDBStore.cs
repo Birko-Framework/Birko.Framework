@@ -173,18 +173,45 @@ public class RavenDBStore<T>
         data.EnsureGuid();
         data = StoreDelegates.Apply(storeDelegate, data);
 
+        // TASK-567: an empty change vector means "this id must not exist yet", so an id already stored is a
+        // ConcurrencyException at SaveChanges instead of the silent overwrite Store does without one.
         if (TransactionContext != null)
         {
+            // Inside a unit of work (a cluster-wide transaction) RavenDB refuses an explicit change vector, and its
+            // atomic guards only cover documents a cluster transaction created: measured on 7.2.6, a stored id written
+            // by an ordinary create was silently overwritten at commit. So the id is checked in the session first. A
+            // concurrent writer between the check and the commit is not covered (TASK-567).
+            if (TransactionContext.Advanced.Exists(IdOf(data.Guid.Value))) throw DuplicateCreateRefusal(null);
             TransactionContext.Store(data, IdOf(data.Guid.Value));
             return data.Guid.Value;
         }
 
         using var session = _documentStore.OpenSession();
-        session.Store(data, IdOf(data.Guid.Value));
-        session.SaveChanges();
+        session.Store(data, string.Empty, IdOf(data.Guid.Value));
+        try
+        {
+            session.SaveChanges();
+        }
+        catch (Raven.Client.Exceptions.ConcurrencyException ex)
+        {
+            throw DuplicateCreateRefusal(ex);
+        }
 
         return data.Guid.Value;
     }
+
+    /// <summary>The <c>StoreException</c> every provider throws for a create of a stored key (TASK-567).</summary>
+    private static Birko.Data.Exceptions.StoreException DuplicateCreateRefusal(Exception? ex)
+        => new Birko.Data.Exceptions.StoreException(
+            $"Create of {typeof(T).Name} refused: an entity with the same key is already stored. "
+            + "Create never overwrites; use Update or Save for a stored entity.", ex);
+
+    /// <summary>
+    /// Documents per session in a bulk create. RavenDB's <c>BulkInsert</c> overwrites an existing id and has no
+    /// "must not exist" form, so bulk create stores through sessions instead, each chunk one all-or-nothing batch
+    /// (TASK-567). Slower than BulkInsert for very large loads, which is the price of Create meaning "new".
+    /// </summary>
+    private const int CreateChunkSize = 512;
 
     /// <inheritdoc />
     public override T? Read(Guid guid)
@@ -402,23 +429,30 @@ public class RavenDBStore<T>
                 // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
                 item.EnsureGuid();
                 item = StoreDelegates.Apply(storeDelegate, item);
+                if (TransactionContext.Advanced.Exists(IdOf(item.Guid!.Value))) throw DuplicateCreateRefusal(null);
                 TransactionContext.Store(item, IdOf(item.Guid.Value));
             }
             return;
         }
 
-        using var bulkInsert = _documentStore.BulkInsert();
-
-        foreach (var itemSource in data)
+        foreach (var chunk in data.Where(x => x != null).Chunk(CreateChunkSize))
         {
-            var item = itemSource;
-            if (item == null) continue;
-
-            // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
-            item.EnsureGuid();
-            item = StoreDelegates.Apply(storeDelegate, item);
-
-            bulkInsert.Store(item, IdOf(item.Guid.Value));
+            using var session = _documentStore.OpenSession();
+            foreach (var itemSource in chunk)
+            {
+                // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
+                itemSource.EnsureGuid();
+                var item = StoreDelegates.Apply(storeDelegate, itemSource);
+                session.Store(item, string.Empty, IdOf(item.Guid!.Value));
+            }
+            try
+            {
+                session.SaveChanges();
+            }
+            catch (Raven.Client.Exceptions.ConcurrencyException ex)
+            {
+                throw DuplicateCreateRefusal(ex);
+            }
         }
     }
 

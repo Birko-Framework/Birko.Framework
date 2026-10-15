@@ -242,7 +242,8 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         protected override string? StoredColumnsSql(string tableName)
             => string.Format(
-                "SELECT a.attname, format_type(a.atttypid, a.atttypmod), NOT a.attnotnull AS birko_nullable " +
+                "SELECT a.attname, format_type(a.atttypid, a.atttypmod), NOT a.attnotnull AS birko_nullable, " +
+                "EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = a.attrelid AND i.indisprimary AND a.attnum = ANY(i.indkey)) AS birko_primary " +
                 "FROM pg_attribute a WHERE a.attrelid = '{0}'::regclass " +
                 "AND a.attnum > 0 AND NOT a.attisdropped",
                 RegclassLiteral(tableName));
@@ -394,7 +395,7 @@ namespace Birko.Data.SQL.Connectors
                 // AbstractConnector.CreateTable emits a table-level PRIMARY KEY (a, b) instead;
                 // two inline clauses are rejected by every provider (PostgreSQL 42P16, SQLite
                 // "more than one primary key").
-                if (field.UsesInlinePrimaryConstraint)
+                if (field.UsesInlinePrimaryConstraint && EmitsPrimaryKey(field))
                 {
                     result.AppendFormat(" PRIMARY KEY");
                 }

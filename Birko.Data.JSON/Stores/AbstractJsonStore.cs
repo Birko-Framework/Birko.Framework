@@ -210,17 +210,19 @@ namespace Birko.Data.JSON.Stores
         {
             EnsureWritable();
             bool save = false;
+            var pending = new List<T>();
             foreach (var itemSource in data.Where(x => x != null))
             {
                 var item = itemSource;
-                // CR-M098: preserve a caller-supplied Guid (was overwritten) and upsert via the indexer
-                // (was _items.Add, which throws ArgumentException on a duplicate key) — matches the
-                // single-item CreateCore's Guid handling and the async bulk path's indexer store.
+                // CR-M098 / CR-L244: a caller-supplied Guid is kept. A stored one is refused below (TASK-567), never
+                // upserted.
                 item.EnsureGuid();
                 item = StoreDelegates.Apply(storeDelegate, item);
-                _items[item.Guid.Value] = item;
+                pending.Add(item);
                 save = true;
             }
+            // TASK-567: a Guid already stored refuses the whole batch; nothing is written.
+            StoredKeyGuard.AddNew(_items, pending);
             if (save)
             {
                 SaveData();

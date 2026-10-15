@@ -113,7 +113,8 @@ namespace Birko.Models.SQL.Mapping
                     // even though AbstractField.Name is settable, so the mapping appeared to work.
                     if (!string.IsNullOrEmpty(field.ColumnName)) sqlField.Name = field.ColumnName;
 
-                    if (field.IsPrimary) sqlField.IsPrimary = true;
+                    // TASK-567: through DeclarePrimary, so a fluent key replaces the implicit Guid key.
+                    if (field.IsPrimary) table.DeclarePrimary(sqlField);
                     if (field.IsUnique) sqlField.IsUnique = true;
                     if (field.IsRequired) sqlField.IsNotNull = true;
                     if (field.IsAutoIncrement) sqlField.IsAutoincrement = true;

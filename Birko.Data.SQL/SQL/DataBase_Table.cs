@@ -109,6 +109,7 @@ namespace Birko.Data.SQL
                             {
                                 field.Value.Table = table;
                             }
+                            table.PromoteGuidToKey();
                             table.Indexes = LoadIndexes(type, table.Fields, table.Name);
                             return table;
                         }
@@ -129,6 +130,7 @@ namespace Birko.Data.SQL
                 {
                     foreach (var field in table.Fields)
                         field.Value.Table = table;
+                    table.PromoteGuidToKey();
                     table.Indexes = LoadIndexes(type, table.Fields, table.Name);
                     return table;
                 }

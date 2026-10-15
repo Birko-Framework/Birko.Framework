@@ -180,18 +180,41 @@ public class AsyncRavenDBStore<T>
         data.EnsureGuid();
         data = StoreDelegates.Apply(processDelegate, data);
 
+        // TASK-567: an empty change vector means "this id must not exist yet", so an id already stored is a
+        // ConcurrencyException at SaveChanges instead of the silent overwrite Store does without one.
         if (TransactionContext != null)
         {
+            // Inside a unit of work (a cluster-wide transaction) RavenDB refuses an explicit change vector, and its
+            // atomic guards only cover documents a cluster transaction created: measured on 7.2.6, a stored id written
+            // by an ordinary create was silently overwritten at commit. So the id is checked in the session first. A
+            // concurrent writer between the check and the commit is not covered (TASK-567).
+            if (await TransactionContext.Advanced.ExistsAsync(IdOf(data.Guid.Value), ct)) throw DuplicateCreateRefusal(null);
             await TransactionContext.StoreAsync(data, IdOf(data.Guid.Value), ct);
             return data.Guid.Value;
         }
 
         using var session = _documentStore.OpenAsyncSession();
-        await session.StoreAsync(data, IdOf(data.Guid.Value), ct);
-        await session.SaveChangesAsync(ct);
+        await session.StoreAsync(data, string.Empty, IdOf(data.Guid.Value), ct);
+        try
+        {
+            await session.SaveChangesAsync(ct);
+        }
+        catch (Raven.Client.Exceptions.ConcurrencyException ex)
+        {
+            throw DuplicateCreateRefusal(ex);
+        }
 
         return data.Guid.Value;
     }
+
+    /// <summary>The <c>StoreException</c> every provider throws for a create of a stored key (TASK-567).</summary>
+    private static Birko.Data.Exceptions.StoreException DuplicateCreateRefusal(Exception? ex)
+        => new Birko.Data.Exceptions.StoreException(
+            $"Create of {typeof(T).Name} refused: an entity with the same key is already stored. "
+            + "Create never overwrites; use Update or Save for a stored entity.", ex);
+
+    /// <summary>Documents per session in a bulk create; see <c>RavenDBStore.CreateChunkSize</c> (TASK-567).</summary>
+    private const int CreateChunkSize = 512;
 
     /// <inheritdoc />
     public override async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
@@ -452,26 +475,32 @@ public class AsyncRavenDBStore<T>
                 // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
                 item.EnsureGuid();
                 item = StoreDelegates.Apply(storeDelegate, item);
+                if (await TransactionContext.Advanced.ExistsAsync(IdOf(item.Guid!.Value), ct)) throw DuplicateCreateRefusal(null);
                 await TransactionContext.StoreAsync(item, IdOf(item.Guid.Value), ct);
             }
             return;
         }
 
-        // CR-M130: pass the token at creation so a long bulk insert can be cancelled (the ct was
-        // accepted but never observed).
-        using var bulkInsert = _documentStore.BulkInsert(token: ct);
-
-        foreach (var itemSource in data)
+        // TASK-567: sessions with an empty change vector, not BulkInsert, which overwrites an existing id.
+        foreach (var chunk in data.Where(x => x != null).Chunk(CreateChunkSize))
         {
-            var item = itemSource;
-            if (item == null) continue;
             ct.ThrowIfCancellationRequested();
-
-            // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
-            item.EnsureGuid();
-            item = StoreDelegates.Apply(storeDelegate, item);
-
-            await bulkInsert.StoreAsync(item, IdOf(item.Guid.Value));
+            using var session = _documentStore.OpenAsyncSession();
+            foreach (var itemSource in chunk)
+            {
+                // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
+                itemSource.EnsureGuid();
+                var item = StoreDelegates.Apply(storeDelegate, itemSource);
+                await session.StoreAsync(item, string.Empty, IdOf(item.Guid!.Value), ct);
+            }
+            try
+            {
+                await session.SaveChangesAsync(ct);
+            }
+            catch (Raven.Client.Exceptions.ConcurrencyException ex)
+            {
+                throw DuplicateCreateRefusal(ex);
+            }
         }
     }
 

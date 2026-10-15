@@ -71,7 +71,16 @@ namespace Birko.Data.SQL.Connectors
             /// null when a provider's query does not supply it, in which case nullability is not compared (TASK-620).
             /// </summary>
             public bool? IsNullable { get; set; }
+
+            /// <summary>
+            /// Whether the column is part of the table's primary key, read from the column aliased
+            /// <see cref="StoredPrimaryColumn"/>; null when a provider's query does not supply it (TASK-567).
+            /// </summary>
+            public bool? IsPrimary { get; set; }
         }
+
+        /// <summary>The alias a <see cref="StoredColumnsSql"/> query gives its "this column is a key column" value.</summary>
+        protected const string StoredPrimaryColumn = "birko_primary";
 
         /// <summary>
         /// The alias a <see cref="StoredColumnsSql"/> query gives its "this column allows NULL" value, normalised to a
@@ -196,6 +205,16 @@ namespace Birko.Data.SQL.Connectors
                 // what DataBase.GetPrimaryFields says (an AbstractModel's Guid when nothing is declared): the framework
                 // always writes a key, providers disagree on what a key implies (PostgreSQL, SQL Server and MySQL make
                 // it NOT NULL; SQLite does not), and whether the key is declared at all is TASK-567's question.
+                // TASK-567: the key, declared against stored. A table created before a key-less model's Guid became its
+                // key has no key at all, and accepts a second row with the same Guid.
+                var declaredPrimary = EmitsPrimaryKey(field);
+                if (actual.IsPrimary is bool storedPrimary && storedPrimary != declaredPrimary)
+                {
+                    drifts.Add(new ColumnDrift(table.Name, field.Name, ColumnDriftKind.KeyMismatch,
+                        declared + (declaredPrimary ? " PRIMARY KEY" : " (not a key)"),
+                        rendered + (storedPrimary ? " PRIMARY KEY" : " (not a key)")));
+                }
+
                 var declaredNotNull = field.IsNotNull;
                 if (!keyFields.Contains(field) && actual.IsNullable is bool storedNullable && storedNullable == declaredNotNull)
                 {
@@ -273,7 +292,8 @@ namespace Birko.Data.SQL.Connectors
                 reader =>
                 {
                     var column = ReadStoredColumn(reader);
-                    column.IsNullable = ReadStoredNullable(reader);
+                    column.IsNullable = ReadStoredFlag(reader, StoredNullableColumn);
+                    column.IsPrimary = ReadStoredFlag(reader, StoredPrimaryColumn);
                     return new List<object> { column };
                 }))
             {
@@ -289,11 +309,11 @@ namespace Birko.Data.SQL.Connectors
             return result;
         }
 
-        private static bool? ReadStoredNullable(DbDataReader reader)
+        private static bool? ReadStoredFlag(DbDataReader reader, string alias)
         {
             for (var i = 0; i < reader.FieldCount; i++)
             {
-                if (string.Equals(reader.GetName(i), StoredNullableColumn, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(reader.GetName(i), alias, StringComparison.OrdinalIgnoreCase))
                 {
                     return reader.IsDBNull(i) ? null : Convert.ToBoolean(reader.GetValue(i));
                 }

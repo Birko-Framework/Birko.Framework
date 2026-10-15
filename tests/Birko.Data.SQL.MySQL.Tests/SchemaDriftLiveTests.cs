@@ -129,7 +129,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS `{DriftedTable}`");
-        Exec($"CREATE TABLE `{DriftedTable}` (`Guid` char(36), `Money` decimal(18,0) NOT NULL)");
+        Exec($"CREATE TABLE `{DriftedTable}` (`Guid` char(36) PRIMARY KEY, `Money` decimal(18,0) NOT NULL)");
 
         var report = new MySQLConnector(Settings()).DetectDrift(typeof(DriftedRow));
 
@@ -194,7 +194,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS `{BareDecimalTable}`");
-        Exec($"CREATE TABLE `{BareDecimalTable}` (`Guid` char(36), `Amount` DECIMAL NOT NULL)");
+        Exec($"CREATE TABLE `{BareDecimalTable}` (`Guid` char(36) PRIMARY KEY, `Amount` DECIMAL NOT NULL)");
 
         var drift = new MySQLConnector(Settings()).DetectDrift(typeof(BareDecimalRow))
             .Drifts.Should().ContainSingle().Subject;
@@ -214,7 +214,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS `{BareDecimalTable}`");
-        Exec($"CREATE TABLE `{BareDecimalTable}` (`Guid` char(36), `Amount` DECIMAL NOT NULL)");
+        Exec($"CREATE TABLE `{BareDecimalTable}` (`Guid` char(36) PRIMARY KEY, `Amount` DECIMAL NOT NULL)");
         var connector = new MySQLConnector(Settings());
         var old = Guid.NewGuid();
         connector.Insert(new BareDecimalRow { Guid = old, Amount = 7.5m });
@@ -238,7 +238,7 @@ public class SchemaDriftLiveTests
         if (!RequireServer()) return;
 
         Exec($"DROP TABLE IF EXISTS `{DriftedTable}`");
-        Exec($"CREATE TABLE `{DriftedTable}` (`Guid` char(36), `Money` decimal(18,2) NOT NULL)");
+        Exec($"CREATE TABLE `{DriftedTable}` (`Guid` char(36) PRIMARY KEY, `Money` decimal(18,2) NOT NULL)");
 
         Exec("CREATE DATABASE IF NOT EXISTS birkodrift_other");
         try
@@ -289,5 +289,42 @@ public class SchemaDriftLiveTests
             ("Count", "NullabilityMismatch"),
             ("Note", "NullabilityMismatch"),
         });
+    }
+
+    [Table("MyKeyLess")]
+    public class KeyLessRow : Birko.Data.Models.AbstractModel
+    {
+        public string? Name { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-567. A key-less model's Guid is its key now; a table created before that has no key and accepts a second
+    /// row with the same Guid. Drift reports it, and nothing alters the table.
+    /// </summary>
+    [Fact]
+    public void A_table_without_the_declared_key_is_reported()
+    {
+        if (!RequireServer()) return;
+
+        Exec("DROP TABLE IF EXISTS `MyKeyLess`");
+        new MySQLConnector(Settings()).CreateTable(new[] { typeof(KeyLessRow) });
+        Exec("ALTER TABLE `MyKeyLess` DROP PRIMARY KEY");
+
+        var drifts = new MySQLConnector(Settings()).DetectDrift(typeof(KeyLessRow)).Drifts;
+        foreach (var d in drifts) _output.WriteLine(d.ToString());
+
+        drifts.Select(d => (d.Column, d.Kind)).Should().BeEquivalentTo(new[] { ("Guid", ColumnDriftKind.KeyMismatch) });
+    }
+
+    [Fact]
+    public void A_key_less_model_table_the_framework_creates_is_keyed_and_clean()
+    {
+        if (!RequireServer()) return;
+
+        Exec("DROP TABLE IF EXISTS `MyKeyLess`");
+        var connector = new MySQLConnector(Settings());
+        connector.CreateTable(new[] { typeof(KeyLessRow) });
+
+        connector.DetectDrift(typeof(KeyLessRow)).IsClean.Should().BeTrue();
     }
 }

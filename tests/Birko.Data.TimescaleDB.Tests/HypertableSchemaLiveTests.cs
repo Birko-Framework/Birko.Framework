@@ -592,4 +592,38 @@ public class HypertableSchemaLiveTests : IDisposable
             "the plain table is committed and usable — TASK-254's whole licence for degrading — so the "
             + "create is a fact and must be on record");
     }
+
+    [Birko.Data.SQL.Attributes.Table("Ts567KeyLess")]
+    public class KeyLessTsRow : AbstractModel
+    {
+        public string? Name { get; set; }
+        public DateTime Ts { get; set; }
+    }
+
+    /// <summary>
+    /// TASK-567. A key-less model's Guid became its key, and on TimescaleDB that key cannot coexist with a hypertable:
+    /// measured, the conversion failed with <c>TS103 cannot create a unique index without the column "ts"</c> and the
+    /// table silently stayed plain. The user's decision (2026-10-15): the hypertable wins. The implicit key is left out
+    /// of a table that carries the time column, and drift does not report it as missing.
+    /// </summary>
+    [Fact]
+    public void A_key_less_time_series_model_still_becomes_a_hypertable()
+    {
+        if (!RequireServer()) return;
+        Exec("DROP TABLE IF EXISTS \"Ts567KeyLess\"");
+        var connector = new TimescaleDBConnector(Settings());
+        try
+        {
+            connector.CreateTable(new[] { typeof(KeyLessTsRow) });
+
+            IsHypertable("Ts567KeyLess").Should().BeTrue();
+            connector.HypertableCreationFailures.Should().BeEmpty();
+            connector.DetectDrift(typeof(KeyLessTsRow)).IsClean.Should().BeTrue(
+                "a key left out on purpose is not drift");
+        }
+        finally
+        {
+            Exec("DROP TABLE IF EXISTS \"Ts567KeyLess\"");
+        }
+    }
 }

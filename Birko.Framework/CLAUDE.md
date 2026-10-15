@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### BREAKING: Create never overwrites; a key-less SQL model is keyed by its Guid (2026-10-15)
+
+[[TASK-567]]. SQL stored a second row with the same Guid, RavenDB overwrote, and JSON/XML bulk upserted. Every provider
+now refuses a create of a stored Guid (SQL, RavenDB, JSON, XML: `StoreException`; [[TASK-625]] unifies the rest). A
+key-less SQL model's `Guid` is its `PRIMARY KEY`. A fluent key replaces it, and declared composites are untouched.
+On a TimescaleDB hypertable it is left out (user decision). **Migration** for existing tables: CHANGELOG (drift reports `KeyMismatch`).
 ### ElasticSearch stores report mapping drift (2026-10-15)
 
 [[TASK-621]]. An index is mapped once and never revisited, so a model changed later queries an index mapped for the

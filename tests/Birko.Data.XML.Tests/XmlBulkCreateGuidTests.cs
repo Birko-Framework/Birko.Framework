@@ -52,7 +52,7 @@ public class XmlBulkCreateGuidTests : IDisposable
     }
 
     [Fact]
-    public void BulkCreate_DuplicateGuid_UpsertsInsteadOfThrowing()
+    public void BulkCreate_DuplicateGuid_IsRefusedAndTheStoredEntryIsKept()
     {
         var store = new XmlStore<TestModel>();
         store.SetSettings(new Settings(_location, "l244-upsert"));
@@ -61,12 +61,13 @@ public class XmlBulkCreateGuidTests : IDisposable
         var bulk = (IBulkStore<TestModel>)store;
         bulk.Create(new List<TestModel> { new() { Guid = g, Name = "first" } });
 
-        // Re-creating the same Guid must NOT throw (indexer upsert), unlike the old _items.Add.
+        // Inverted at TASK-567 (rule 56). CR-L244 made this an indexer upsert so it would not throw ArgumentException;
+        // Create now means a new entity on every provider (the user's decision, 2026-10-12): refused, entry kept.
         Action act = () => bulk.Create(new List<TestModel> { new() { Guid = g, Name = "second" } });
-        act.Should().NotThrow();
+        act.Should().Throw<Birko.Data.Exceptions.StoreException>();
 
         var items = bulk.Read(_ => true).ToList();
         items.Should().ContainSingle();
-        items[0].Name.Should().Be("second");
+        items[0].Name.Should().Be("first");
     }
 }

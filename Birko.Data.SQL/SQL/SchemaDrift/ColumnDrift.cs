@@ -42,6 +42,14 @@ namespace Birko.Data.SQL.SchemaDrift
         /// and <see cref="ColumnDrift.Stored"/> carry the type with its nullability. Reported, never actioned.
         /// </summary>
         NullabilityMismatch = 4,
+
+        /// <summary>
+        /// The column is part of the declared key and the table does not key it, or the reverse (TASK-567). A table
+        /// created before a key-less model's <c>Guid</c> became its key has none, so a second row with the same Guid is
+        /// accepted. Reported, never actioned: adding a key to a table that may already hold duplicates is a migration
+        /// (CHANGELOG, TASK-567), not something the framework does on its own.
+        /// </summary>
+        KeyMismatch = 5,
     }
 
     /// <summary>
@@ -99,6 +107,7 @@ namespace Birko.Data.SQL.SchemaDrift
             ColumnDriftKind.Missing => $"{Table}.{Column}: declared {Declared}, not present",
             ColumnDriftKind.Unexpected => $"{Table}.{Column}: present as {Stored}, not declared",
             ColumnDriftKind.NullabilityMismatch => $"{Table}.{Column}: declared {Declared}, stored {Stored}",
+            ColumnDriftKind.KeyMismatch => $"{Table}.{Column}: declared {Declared}, stored {Stored}",
             ColumnDriftKind.CaseMismatch => $"{Table}.{Column}: declared {Declared}, stored only as \"{StoredColumn}\" ({Stored}), which differs in case and is not reachable",
             _ => $"{Table}.{Column}: declared {Declared}, stored {Stored}",
         };

@@ -271,21 +271,25 @@ public class RewrapClassificationTests : IDisposable
             + $"{failure?.Data[AbstractConnector.CommandTextDataKey]}");
         _out.WriteLine($"  stack head: {failure?.StackTrace?.Split('\n')[0]?.Trim()}");
 
-        var sqlite = failure.Should().BeOfType<SqliteException>(
-            "a constraint violation is the caller's own problem and it must arrive as the provider's own "
-            + "exception, not as a bare Exception whose message is the SQL").Which;
+        // TASK-567: a duplicate CREATE is the shared StoreException every provider throws for it (the user's decision,
+        // 2026-10-12). What this test exists for still holds: it is typed, never a bare Exception whose message is the
+        // SQL, and the provider's own exception is right underneath with its code and the statement.
+        failure.Should().BeOfType<Birko.Data.Exceptions.StoreException>(
+            "a duplicate create is refused with the same type on every provider");
+        var sqlite = failure!.InnerException.Should().BeOfType<SqliteException>(
+            "the provider's own exception is kept, so a host can still map it").Which;
         sqlite.SqliteErrorCode.Should().Be(19, "SQLITE_CONSTRAINT");
 
-        failure!.Data[AbstractConnector.CommandTextDataKey].Should().NotBeNull();
-        Convert.ToString(failure.Data[AbstractConnector.CommandTextDataKey])
+        sqlite.Data[AbstractConnector.CommandTextDataKey].Should().NotBeNull();
+        Convert.ToString(sqlite.Data[AbstractConnector.CommandTextDataKey])
             .Should().Contain("INSERT INTO", "the statement is still on the record, just not in the type");
 
         // Witnesses ExceptionDispatchInfo.Capture(...).Throw() rather than `throw ex`: the original throw
         // site survives. `throw ex` would reset the trace to EnsureSchemaAndReport and the frame below
         // would be gone. (This is the only assertion in this suite that can see it — the funnel probe
         // hands over constructed exceptions, which have no stack.)
-        failure.StackTrace.Should().NotBeNullOrEmpty();
-        failure.StackTrace.Should().Contain("Microsoft.Data.Sqlite",
+        sqlite.StackTrace.Should().NotBeNullOrEmpty();
+        sqlite.StackTrace.Should().Contain("Microsoft.Data.Sqlite",
             "the trace must still point at where the statement actually failed");
     }
 }

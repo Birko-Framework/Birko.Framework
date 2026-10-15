@@ -211,18 +211,19 @@ namespace Birko.Data.XML.Stores
             if (data == null) return;
 
             bool save = false;
+            var pending = new List<T>();
             foreach (var itemSource in data.Where(x => x != null))
             {
                 var item = itemSource;
-                // CR-L244: align with the async bulk sibling (AbstractAsyncXmlStore.CreateCoreAsync) —
-                // preserve a caller-supplied Guid (only assign when null) and use the indexer instead of
-                // _items.Add, which threw ArgumentException on a duplicate key. The sync path previously
-                // discarded caller Guids AND could throw; both stores now upsert by Guid.
+                // CR-M098 / CR-L244: a caller-supplied Guid is kept. A stored one is refused below (TASK-567), never
+                // upserted.
                 item.EnsureGuid();
                 item = StoreDelegates.Apply(storeDelegate, item);
-                _items[item.Guid.Value] = item;
+                pending.Add(item);
                 save = true;
             }
+            // TASK-567: a Guid already stored refuses the whole batch; nothing is written.
+            StoredKeyGuard.AddNew(_items, pending);
             if (save)
             {
                 SaveData();
