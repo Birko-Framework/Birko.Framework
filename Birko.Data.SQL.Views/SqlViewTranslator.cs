@@ -233,7 +233,8 @@ public static class SqlViewTranslator
             PortableJoinType.Inner => Conditions.JoinType.Inner,
             PortableJoinType.LeftOuter => Conditions.JoinType.LeftOuter,
             PortableJoinType.Cross => Conditions.JoinType.Cross,
-            _ => Conditions.JoinType.Cross
+            // TASK-626: an unknown type was Cross, whose condition is not rendered (a cartesian product). Refused.
+            _ => throw new NotSupportedException($"Join type {joinType} has no SQL rendering.")
         };
     }
 

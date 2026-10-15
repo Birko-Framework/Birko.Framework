@@ -1766,17 +1766,12 @@ namespace Birko.Data.SQL.Connectors
                 if (joins != null && joins.ContainsKey(table))
                 {
                     var joingroups = joins[table].GroupBy(x => new { x.Right, x.JoinType }).ToDictionary(x => x.Key, x => x.SelectMany(y => y.Conditions ?? Enumerable.Empty<Conditions.Condition>()).Where(z => z != null));
-                    foreach (var joingroup in joingroups.Where(x => x.Value.Any()))
+                    foreach (var joingroup in joingroups)
                     {
-                        command.CommandText +=
-                            joingroup.Key.JoinType switch
-                            {
-                                Conditions.JoinType.Inner => " INNER JOIN ",
-                                Conditions.JoinType.LeftOuter => " LEFT OUTER JOIN ",
-                                _ => " CROSS JOIN ",
-                            };
+                        // TASK-626: every group is rendered, and Join.Keyword refuses a type its conditions contradict.
+                        command.CommandText += Conditions.Join.Keyword(joingroup.Key.JoinType, joingroup.Value.Any(), table, joingroup.Key.Right);
                         command.CommandText += SelectTableReference(joingroup.Key.Right);
-                        if (joingroup.Key.JoinType != Conditions.JoinType.Cross && joingroup.Value != null && joingroup.Value.Any())
+                        if (joingroup.Value.Any())
                         {
                             command.CommandText += " ON (";
                             command.CommandText += ConditionDefinition(joingroup.Value, command);

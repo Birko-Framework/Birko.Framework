@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Filtered bulk writes: an unconfigured SQL store refuses, a vanished row is skipped
+
+[[TASK-170]]. A SQL store with no settings answered every delete, update and read as done; it now throws on first
+use. An empty `PropertyUpdate` rewrote every matched row on the portable path. A row deleted mid-`Update(filter,
+action)` aborted the loop halfway; it is skipped. Two `Set`s of one property are last-wins on SQL too, and a nested
+`Set` is refused. Atomic bulk writes by default are [[TASK-629]].
+
 ## 2026-10-15 — Schema and index metadata: 19 medium defects fixed
 
 [[TASK-154]]. A `char` or `byte`-enum column threw on every read or write, and a get-only property broke every read.

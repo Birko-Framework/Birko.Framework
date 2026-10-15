@@ -2135,6 +2135,8 @@ The DeleteByQuery / UpdateByQuery return values are never inspected, unlike ever
 
 **Verdict: CONFIRMED by reading, not fixed here; spawned** (TASK-153, measured 2026-10-15). `AbstractConnectorBase` still drops the ON clause of a `JoinType.Cross` group that carries conditions, and Cross is the default join type. Fixing it changes what an existing join renders, so it goes with SH-M148 into a task of its own.
 
+**Fixed by [[TASK-626]]** (measured 2026-10-15, live on SQLite, PostgreSQL, MySQL and SQL Server). A Cross join carrying conditions is refused (`Join.Keyword`, the one producer for both renderers); a join given conditions and no type is Inner. Wider than filed: every `[View]` declared without `connect:` hit it (ViewConnect.None mapped to Cross) and returned the product; it is an inner join now. 6 rows -> 2.
+
 `if (joingroup.Key.JoinType != JoinType.Cross && … Any())` renders ` ON (…)`, so a Join whose JoinType is Cross has its conditions silently discarded. JoinType.Cross is the DEFAULT of both Join.Create overloads and the Join constructor (Join.cs:22/30), so a caller who supplies conditions but forgets the join type gets an unrestricted cross product instead of the restricted join — every row of one table paired with every row of the other.
 
 #### SH-M148 — A join group with no conditions is dropped entirely rather than emitted
@@ -2142,6 +2144,8 @@ The DeleteByQuery / UpdateByQuery return values are never inspected, unlike ever
 `../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase.cs:531`
 
 **Verdict: CONFIRMED by reading, not fixed here; spawned** (TASK-153, measured 2026-10-15). `joingroups.Where(x => x.Value.Any())` still drops a conditionless group, so a CROSS JOIN without conditions cannot be expressed. Same code and same task as SH-M147.
+
+**Fixed by [[TASK-626]]** (measured 2026-10-15, same four providers). Every join group is rendered: a conditionless CROSS JOIN is emitted (3 rows -> 6, the product), and an Inner or LeftOuter join with no condition is refused rather than dropped.
 
 `joingroups.Where(x => x.Value.Any())` skips any (Right, JoinType) group whose flattened conditions are empty. A conditionless CROSS JOIN is legitimate and the only way to express it, so it disappears from the FROM clause; if the SELECT list or WHERE references a column of the dropped table the statement fails, and if it does not, the result set is quietly narrower than requested. An Inner/LeftOuter join whose conditions failed to translate vanishes the same way.
 

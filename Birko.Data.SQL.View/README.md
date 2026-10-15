@@ -27,22 +27,27 @@ dotnet add package Birko.Data.SQL.View
 ### Define a View
 
 ```csharp
-using Birko.Data.SQL.View.Attributes;
+using Birko.Data.SQL.Attributes;
 
-[View("customer_orders_view")]
-[ViewJoin("Orders", "Id", "CustomerId")]
+[View(typeof(CustomerModel), typeof(OrderModel), nameof(CustomerModel.Guid), nameof(OrderModel.CustomerId),
+      name: "CustomerOrders", connect: ViewConnect.Check)]
 public class CustomerOrderView
 {
-    [ViewColumn("customer_id", "Id")]
-    public Guid CustomerId { get; set; }
+    [ViewField(typeof(CustomerModel), nameof(CustomerModel.Name))]
+    public string CustomerName { get; set; } = null!;
 
-    [ViewColumn("customer_name", "Name")]
-    public string CustomerName { get; set; }
-
-    [ViewColumn("order_count")]
+    [CountField(typeof(OrderModel), nameof(OrderModel.Guid))]
     public int OrderCount { get; set; }
 }
 ```
+
+**The join** is on the two named keys. `connect:` picks its type: `ViewConnect.Check` is `LEFT OUTER JOIN`,
+`CheckExisting` and the default `None` are `INNER JOIN`. Before TASK-626 the default was a `CROSS JOIN` whose condition
+was not rendered, so a view declared without `connect:` returned the cartesian product of the two tables.
+
+In code (`Join.Create`), a join given conditions and no type is `Inner`; a `Cross` join carrying conditions, and an
+`Inner` or `LeftOuter` join with none, are refused with `NotSupportedException` (a cross join has no ON; an inner join
+with nothing to join on is not SQL). A `Cross` join with no conditions renders `CROSS JOIN`.
 
 ### Generate the View
 

@@ -2,7 +2,7 @@
 id: TASK-626
 parent: STORY-053
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-15
@@ -36,10 +36,39 @@ rendering and left them unfixed because the fix changes what existing joins rend
 
 ## Acceptance criteria
 
-- [ ] A Cross join with conditions never renders without them: refused, or rendered with them, per the decision
-- [ ] A conditionless Cross join is emitted, measured against a real database (row count of the product)
-- [ ] An INNER / LEFT join whose conditions are empty is refused rather than dropped
-- [ ] Regression tests red before, green after, on SQLite and at least one server provider
+- [x] A Cross join with conditions never renders without them: refused, or rendered with them, per the decision
+- [x] A conditionless Cross join is emitted, measured against a real database (row count of the product)
+- [x] An INNER / LEFT join whose conditions are empty is refused rather than dropped
+- [x] Regression tests red before, green after, on SQLite and at least one server provider
+
+## Decisions (2026-10-15, the user)
+
+Refuse, with an Inner default: a Cross join carrying conditions is refused; a join given conditions and no type is Inner
+(both `Join.Create` overloads and the constructor); a conditionless Cross renders `CROSS JOIN`; an Inner or LeftOuter join
+with no conditions is refused; and a `[View]` declaring join keys with the default `ViewConnect.None` is an inner join.
+
+## Resolution (2026-10-15)
+
+**Found while deciding, worse than filed:** `DataBase.LoadView` started every attribute view's join as `Cross` and mapped
+only `Check` (LeftOuter) and `CheckExisting` (Inner), so a `[View(A, B, "Guid", "AId")]` declared without `connect:`
+attached its condition to a Cross join, the condition was dropped, and the view returned the cartesian product. No
+consumer declares `[View]`; five framework test fixtures do, and none asserted a row count.
+
+- **One producer for the keyword:** `Join.Keyword(type, hasConditions, left, right)`, used by both renderers
+  (`AbstractConnectorBase.CreateSelectCommand` and `ViewSelectSqlBuilder`), which each kept their own copy of the switch.
+  Both now render every join group: the `.Where(x => x.Value.Any())` that dropped a conditionless group is gone.
+- `Join`'s constructor and the type-taking `Create` take `JoinType? = null` (Inner with conditions, Cross without); the
+  condition-taking `Create` defaults to Inner. `ViewConnect.None` maps to Inner. `SqlViewTranslator` refuses an unknown
+  portable join type instead of mapping it to Cross.
+- Docs: `Birko.Data.SQL.View/README.md` documented attributes that do not exist (`ViewJoin`, `ViewColumn`); replaced with
+  the real `[View]` / `[ViewField]` API and how its join type resolves.
+
+**Measured live, in rows** (3 customers, 2 with an order): on SQLite, PostgreSQL, MySQL and SQL Server, a join given a
+condition and no type is 2 rows (was 6, the product), the left join 3, a conditionless cross join 6 (was 3: the join was
+skipped), Cross-with-conditions and Inner-without both refused, and the `[View]` with no `connect:` 2 (was 6).
+**Red:** 16 of 16 fail on the old code.
+
+**Regression:** the 32 suites importing Birko.Data.SQL, .View or .Views (2,690 tests), live on SQLite, PostgreSQL, MySQL, SQL Server and TimescaleDB, green.
 
 ## Human test plan
 

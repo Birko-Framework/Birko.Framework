@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### SQL joins: a condition is never dropped, a `[View]` without `connect:` is an inner join (2026-10-15)
+
+[[TASK-626]]. A CROSS join's ON was not rendered, and Cross was the default, so `Join.Create(a, b, cond)` and every
+`[View]` declared without `connect:` returned the cartesian product. A conditionless join was skipped. A join given
+conditions is now Inner by default; Cross with conditions, and Inner/Left without, are refused.
 ### Migrations: back-dated migrations run, filters refuse what they cannot express, nothing reports false success (2026-10-15)
 
 [[TASK-152]]. A migration added below the current version never ran; a rollback ran `Down` for unapplied ones. `$in` was
@@ -329,12 +334,6 @@ false`. The tenant sync provider's 11 divergences are [[TASK-630]].
 enum given as text, parsed numbers in the host's culture, and rounded `10.7` to `11`. A null `Contains` matched every
 row. Composites now evaluate through their operands. Paging sorts by the caller's order, then `Guid`, and never sends
 a negative offset. Three engine divergences are now [[TASK-144]].
-### Filtered bulk writes: an unconfigured SQL store refuses, a vanished row is skipped (2026-10-15)
-
-[[TASK-170]]. A SQL store with no settings answered every delete, update and read as done; it now throws on first
-use. An empty `PropertyUpdate` rewrote every matched row on the portable path. A row deleted mid-`Update(filter,
-action)` aborted the loop halfway; it is skipped. Two `Set`s of one property are last-wins on SQL too, and a nested
-`Set` is refused. Atomic bulk writes by default are [[TASK-629]].
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

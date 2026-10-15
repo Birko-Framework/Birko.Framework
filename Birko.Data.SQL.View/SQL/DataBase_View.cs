@@ -134,7 +134,10 @@ namespace Birko.Data.SQL
                             var fieldRight = (attr.ModelProperyRight is string) ? tableRight?.GetFieldByPropertyName((string)attr.ModelProperyRight) ?? null : null;
                             if (fieldLeft != null || fieldRight != null)
                             {
-                                var joinType = JoinType.Cross;
+                                // TASK-626: a [View] declaring join keys with the default ViewConnect.None is an inner join
+                                // on them. It was Cross, whose condition was not rendered, so the view returned the
+                                // cartesian product of the two tables.
+                                var joinType = JoinType.Inner;
                                 switch (attr.Connect)
                                 {
                                     case ViewConnect.Check: joinType = JoinType.LeftOuter;  break;

@@ -133,16 +133,12 @@ namespace Birko.Data.SQL.Connectors
                             x => x.Key,
                             x => x.SelectMany(y => y.Conditions ?? Enumerable.Empty<Conditions.Condition>()).Where(z => z != null));
 
-                    foreach (var joingroup in joingroups.Where(x => x.Value.Any()))
+                    foreach (var joingroup in joingroups)
                     {
-                        sql += joingroup.Key.JoinType switch
-                        {
-                            Conditions.JoinType.Inner => " INNER JOIN ",
-                            Conditions.JoinType.LeftOuter => " LEFT OUTER JOIN ",
-                            _ => " CROSS JOIN ",
-                        };
+                        // TASK-626: every group is rendered, and Join.Keyword refuses a type its conditions contradict.
+                        sql += Conditions.Join.Keyword(joingroup.Key.JoinType, joingroup.Value.Any(), table, joingroup.Key.Right);
                         sql += qualifyTableName(joingroup.Key.Right);
-                        if (joingroup.Key.JoinType != Conditions.JoinType.Cross && joingroup.Value != null && joingroup.Value.Any())
+                        if (joingroup.Value.Any())
                         {
                             sql += " ON (";
                             sql += BuildViewJoinConditionSql(joingroup.Value, quoteIdentifier);
