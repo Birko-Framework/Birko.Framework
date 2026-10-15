@@ -3141,6 +3141,8 @@ Verified: Convert.ChangeType(10.7, typeof(int)) returns 11, so a rule `Qty Equal
 
 **Verdict: CONFIRMED, owned by [[TASK-144]]** (TASK-171, measured 2026-10-15). `Name == "open"` matches "Open" in memory (OrdinalIgnoreCase) and not at the store (ordinal). A case-insensitive equality every store translates has no single form: SQLite and PostgreSQL compare case-sensitively, MySQL and SQL Server by collation, and not every translator accepts `string.Equals(…, comparison)` or `ToLower`. Choosing it is the unification decision TASK-144 owns.
 
+**Resolution: DECIDED and documented by [[TASK-144]]** (2026-10-15): the one translator emits plain `==` for string equality, the only form every store translates (ordinal on SQLite / PostgreSQL, collation-defined on MySQL / SQL Server). The in-memory evaluator stays case-insensitive, so the two can differ on case: recorded as the one divergence in the converter's and `docs/rules.md`'s docs. The converter's old `string.Equals(…, OrdinalIgnoreCase)` pin is inverted.
+
 The Equal/NotEqual arms go through BuildComparison → Expression.Equal, i.e. ordinal string equality. Verified compiled: `x.Name == "open"` against Name="Open" returns false. ComparisonHelper.AreEqual (ComparisonHelper.cs:68) ends with string.Equals(..., OrdinalIgnoreCase) and returns true for the same pair, so IsSatisfiedBy and ToExpression select different rows for the commonest rule shape of all. RuleExpressionConverter.BuildComparison special-cases string equality to string.Equals(OrdinalIgnoreCase) precisely to avoid this.
 
 #### SH-M296 — A null rule value turns Contains/StartsWith/EndsWith into match-all (and NotContains into match-none)
@@ -3157,6 +3159,8 @@ BuildStringMethod builds the needle as `value?.ToString() ?? string.Empty`, so a
 
 **Verdict: CONFIRMED, owned by [[TASK-144]]** (TASK-171, measured 2026-10-15). An unresolvable field with `IsNull` matches every entity in memory and none at the store. Two DELIBERATE rules collide: the evaluator reads a missing field as null for null-checks (right for dictionary contexts), and the three-engine agreement tests pin "an unresolved field matches nothing, even negated". Refusing the field was tried and broke those pins, so it was reverted; the resolution needs the unified translator.
 
+**Resolution: FIXED by [[TASK-144]]** (2026-10-15): `IRuleContext.HasFixedFields` (default false); `ObjectRuleContext` is fixed, and resolves nested paths. On a fixed context a field it cannot reach (no such property, a null intermediate) matches nothing in `RuleEvaluator`, negated or not, as the translator answers; a dictionary context still reads a missing key as null. Red: `OneRuleTranslatorTests.A_misspelled_field_*`, `A_null_intermediate_*`.
+
 BuildLeafExpression returns Constant(false) when typeof(T).GetProperty fails (line 77-78) — including any dotted field such as "Address.City", which this translator does not support. IsSatisfiedBy takes the other path: RuleEvaluator.EvaluateLeaf lines 48-53 ignore the TryGetValue result for IsNull/IsNotNull, so Compare(null, IsNull, null) returns true and EVERY entity satisfies a null-check on a field that does not exist. A typo'd or nested field therefore reports 0 rows from the store and 100% match in memory.
 
 #### SH-M298 — Composing a RuleSpecification routes in-memory evaluation back through the divergent LINQ path, defeating CR-H074
@@ -3172,6 +3176,8 @@ AndSpecification/OrSpecification/NotSpecification do not override IsSatisfiedBy,
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:31`
 
 **Verdict: CONFIRMED, owned by [[TASK-144]]** (TASK-171, measured 2026-10-15). That open task is this finding: two translators for one rule model.
+
+**Resolution: FIXED by [[TASK-144]]** (2026-10-15): `RuleSpecification.ToExpression` calls `RuleExpressionConverter`, which took the specification's fixes (degradation invariant, null needle, interior `%`, fractional vs integral, string ordering, unknown operator throws) and kept nested fields. TASK-116's suite passes unchanged; an expression-equality theory fails if a second translator reappears.
 
 Birko.Rules/Expressions/RuleExpressionConverter.cs is a complete public converter for the same IRule/RuleSet model, and it is correct on every point this file gets wrong: In/NotIn/Like, group IsNegated, IsNull on a non-nullable value type, nested "A.B" fields with null guards, invariant-culture and Guid/DateTime/enum conversion, case-insensitive string equality. Two translators for one model means the store filter a caller gets depends on which entry point they picked — and a disabled RuleSet is match-nothing here versus no-filter (match-everything) there.
 

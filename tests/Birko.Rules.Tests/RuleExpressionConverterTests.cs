@@ -45,11 +45,16 @@ public class RuleExpressionConverterTests
 
     // ── Equality ──
 
+    /// <summary>
+    /// TASK-144 (SH-M295), inverted: string equality is plain <c>==</c>, the form every store translates, so it is
+    /// ordinal in memory and ordinal or collation-defined at the store. It was <c>string.Equals(…, OrdinalIgnoreCase)</c>,
+    /// which matched case-insensitively in memory and which not every store's translator accepts.
+    /// </summary>
     [Fact]
-    public void Equal_StringField_CaseInsensitive()
+    public void Equal_StringField_IsTheStoreTranslatableOrdinalEquality()
     {
-        var result = Apply(new Rule("Name", ComparisonOperator.Equal, "widget"));
-        result.Should().ContainSingle().Which.Name.Should().Be("Widget");
+        Apply(new Rule("Name", ComparisonOperator.Equal, "widget")).Should().BeEmpty();
+        Apply(new Rule("Name", ComparisonOperator.Equal, "Widget")).Should().ContainSingle().Which.Name.Should().Be("Widget");
     }
 
     [Fact]

@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Schema drift reports a declared index the table lacks
+
+[[TASK-622]]. Drift compared columns only. Measured on all four SQL providers: a dropped index, or a unique one made plain,
+read clean. `SchemaDriftReport.IndexDrifts` now reports `Missing` / `ColumnsDiffer` / `UniquenessDiffers`, read through
+each provider's index manager. The health check counts them separately. Also fixed: `MSSqlIndexManager.ListAsync`
+always threw on SQL Server (a `tinyint` read with `GetInt32`).
+
 ## 2026-10-15 — BREAKING: Create never overwrites; a key-less SQL model is keyed by its Guid
 
 [[TASK-567]]. SQL stored a second row with the same Guid, RavenDB overwrote, and JSON/XML bulk upserted. Every provider

@@ -147,7 +147,9 @@ var sensor = new SensorReading { Temperature = 95, Humidity = 80 };
 var ctx = new ObjectRuleContext<SensorReading>(sensor);
 ```
 
-Property lookup is case-insensitive.
+Property lookup is case-insensitive, and a nested path (`Address.City`) is resolved. A field the type does not have,
+or one behind a null intermediate, has no value: a rule on it matches nothing, negated or not, the same answer the
+store filter gives (an open context such as a dictionary still reads a missing key as null for `IsNull`).
 
 ### Custom Context
 
@@ -196,7 +198,13 @@ ComparisonHelper handles type-safe comparisons:
 
 ## LINQ Expression Conversion
 
-`RuleExpressionConverter` bridges rules and stores — converts any `IRule`, `RuleGroup`, `RuleSet`, or `IEnumerable<IRule>` into an `Expression<Func<T, bool>>` that all Birko stores accept (SQL, Elasticsearch, MongoDB, JSON, etc.).
+`RuleExpressionConverter` bridges rules and stores — converts any `IRule`, `RuleGroup`, `RuleSet`, or `IEnumerable<IRule>` into an `Expression<Func<T, bool>>` that all Birko stores accept (SQL, Elasticsearch, MongoDB, JSON, etc.). It is the only rule-to-LINQ translator: `RuleSpecification<T>.ToExpression()` uses it.
+
+- A rule it cannot express as a store filter matches nothing, and is never turned into "everything" by a negation.
+- **String equality differs between the two engines.** In memory (`RuleEvaluator`) `Equal` on strings ignores case. As a
+  store filter it is plain `==`: ordinal on SQLite and PostgreSQL, by the collation on MySQL and SQL Server. No
+  case-insensitive equality translates on every store; where case must not matter, store the value normalised (for
+  example lower-cased) and compare against the normalised form.
 
 ### Basic Usage
 

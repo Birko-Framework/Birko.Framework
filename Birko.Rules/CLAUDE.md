@@ -36,9 +36,18 @@ Birko.Rules/
 - **Rule** aligned with `Birko.Data.SQL.Condition` structure but DB-independent
 - **RuleGroup** aligned with `Birko.Data.SQL.Condition.SubConditions + IsOr` pattern
 - **ComparisonHelper** is `internal static` — type-safe comparisons with numeric promotion (int/long/float/double/decimal), DateTime, IComparable, string fallback
-- **ObjectRuleContext\<T\>** caches PropertyInfo per type via ConcurrentDictionary (case-insensitive)
+- **ObjectRuleContext\<T\>** caches the property path per type via ConcurrentDictionary (case-insensitive), resolves nested
+  paths (`Address.City`), and has `HasFixedFields`: a field it cannot reach (no such property, a null intermediate) matches
+  nothing in `RuleEvaluator`, as the store filter answers. An open context (dictionary) still reads a missing key as null
+  for the null checks (TASK-144, SH-M297)
 - **RuleEvaluator** is stateless, singleton-safe
-- **RuleExpressionConverter** is `static` — converts rules to `Expression<Func<T, bool>>` for use with any LINQ-based store (SQL, Elasticsearch, MongoDB, JSON). Supports nested properties with null guards, automatic value conversion (int→decimal, string→DateTime/Guid/enum), case-insensitive property resolution and string comparisons
+- **RuleExpressionConverter** is `static` and is the framework's **one** rule-to-LINQ translator (TASK-144):
+  `RuleSpecification.ToExpression` calls it. Nested properties with null guards, invariant value conversion
+  (string→DateTime/Guid/enum), case-insensitive property resolution. A leaf it cannot express (unknown field, mistyped
+  value, string ordering, null needle, interior `%`) matches nothing and is never negated (TASK-116's invariant); an
+  operator with no arm throws. String `Equal` is plain `==` (store-translatable; ordinal or by collation at the store),
+  while `RuleEvaluator` compares case-insensitively: the one recorded divergence (SH-M295). String methods
+  (`Contains` / `StartsWith` / `EndsWith` / `Like`) stay `OrdinalIgnoreCase`
 
 ## Conventions
 - Namespace: `Birko.Rules`

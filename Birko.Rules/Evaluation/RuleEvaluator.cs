@@ -54,6 +54,12 @@ public class RuleEvaluator : IRuleEvaluator
         // The leaf's own flag and an enclosing negated group's cancel out: NOT(NOT a) is a.
         var negated = rule.IsNegated != negate;
 
+        // TASK-144 (SH-M297): on a context whose fields are fixed by a type, a field it cannot reach (no such property, or
+        // a null intermediate of a nested path) has no value at all. It matches nothing, negated or not, as the store
+        // filter answers. Only an open context (a dictionary) reads a missing field as null for the null checks.
+        if (context.HasFixedFields && !context.TryGetValue(rule.Field, out _))
+            return RuleResult.NoMatch(rule);
+
         // IsNull/IsNotNull don't need the field to exist
         if (rule.Operator is ComparisonOperator.IsNull or ComparisonOperator.IsNotNull)
         {

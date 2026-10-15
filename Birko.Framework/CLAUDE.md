@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### One rule-to-LINQ translator (2026-10-15)
+
+[[TASK-144]]. `RuleSpecification` had its own copy of `RuleExpressionConverter`, and the two drifted both ways. The
+converter is now the only one, with the specification's safety rules and its own nested fields. String `Equal` is plain
+`==` (what stores translate), so it is case-sensitive at the store and case-insensitive in memory. A typed entity's
+unknown or unreachable field now matches nothing in memory too (`IRuleContext.HasFixedFields`).
 ### Schema drift produces its repair SQL (2026-10-15)
 
 [[TASK-633]]. `connector.PlanRepair(typeof(T))` turns a drift report into statements a host reviews and runs itself:
@@ -332,12 +338,6 @@ also require `LastAttemptAt < staleBefore`.
 [[TASK-624]]. New project. `ElasticSearchMappingDriftHealthCheck` runs one `DetectMappingDriftAsync` probe per store
 ([[TASK-621]]): Degraded on drift or on a store it could not ask, Healthy only for what it verified. Its own project
 because `Birko.Health.Data` stays dependency-free.
-### Schema drift reports a declared index the table lacks (2026-10-15)
-
-[[TASK-622]]. Drift compared columns only. Measured on all four SQL providers: a dropped index, or a unique one made plain,
-read clean. `SchemaDriftReport.IndexDrifts` now reports `Missing` / `ColumnsDiffer` / `UniquenessDiffers`, read through
-each provider's index manager. The health check counts them separately. Also fixed: `MSSqlIndexManager.ListAsync`
-always threw on SQL Server (a `tinyint` read with `GetInt32`).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
