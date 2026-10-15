@@ -2,7 +2,7 @@
 id: TASK-623
 parent: EPIC-014
 feature: null
-status: todo
+status: cancelled
 priority: P3
 assignee: ai
 created: 2026-10-15
@@ -14,6 +14,8 @@ pr: null
 github-issue: null
 jira-key: null
 ---
+
+> Cancelled 2026-10-15: falsified by measurement in both `lower_case_table_names` modes (below). No defect.
 
 # MySQL catalogue lookups match the table name with a plain `=`, whose case behaviour has not been measured
 
@@ -56,3 +58,15 @@ N/A — covered by the live provider test.
    `COLLATE utf8mb4_bin`) and the index manager's `IndexExistsSql`/`ListIndexesSql`, through one helper so the three
    cannot diverge. Add a live test proven red.
 
+## Outcome — cancelled on measurement (rule 54: falsified, recorded)
+
+Measured 2026-10-15 on `mysql:8.4`, CI's image, in both modes:
+
+| `lower_case_table_names` | Stored name of `DriftCase` | `information_schema` comparison | `TABLE_NAME = 'DriftCase'` finds |
+|---|---|---|---|
+| `0` (Linux default) | `DriftCase` (beside a separate `driftcase`) | `utf8mb3_bin`, case-sensitive | only `DriftCase`'s column and index |
+| `1` (Windows / macOS default; set at server init) | `driftcase` | the argument is folded too | `driftcase`, its column and its index |
+
+So the catalogue lookup reads exactly the table the connector's queries reach in either mode, and the index
+statistics behave the same. End to end: the framework's MySQL drift and `EnsureColumns` tests (15) pass against a
+`lower_case_table_names = 1` server, as they do in CI's default mode. Nothing to change.
