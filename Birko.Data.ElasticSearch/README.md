@@ -124,6 +124,21 @@ await native.CreateAliasAsync("products-v2", "products");
 await native.SwapAliasAsync("products", "products-v1", "products-v2");
 ```
 
+### Mapping drift and its repair
+
+An index is mapped once, so a model that changes later can query fields the index does not have (they match nothing,
+silently). `DetectMappingDriftAsync()` reports `Missing`, `Unexpected` and `TypeMismatch` fields; `PlanMappingRepairAsync()`
+turns the report into requests you review and send yourself:
+
+```csharp
+var plan = await store.PlanMappingRepairAsync();
+foreach (var request in plan.Requests) Console.WriteLine(request);  // PUT /<index>/_mapping {"properties":{...}}
+foreach (var skip in plan.NotActioned) Console.WriteLine(skip);     // type changes: reindex; undeclared fields
+```
+
+A missing field is added in place. Documents indexed before the repair have no value for it, so they read back with the
+property's default and match no filter on it. A type change needs a new index and a reindex (below).
+
 ### Reindexing
 
 ```csharp

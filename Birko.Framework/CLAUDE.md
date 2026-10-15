@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### ElasticSearch mapping drift produces its repair (2026-10-15)
+
+[[TASK-634]]. `store.PlanMappingRepairAsync()` turns mapping drift into requests a host sends: one `PUT _mapping` adding
+the declared fields the index lacks; type changes (a reindex) and undeclared fields are listed. Measured: old documents
+read the new fields as defaults. MongoDB and RavenDB need no plan; an old document reads new properties as defaults.
 ### Rules and validation: exact numbers, safe rule reloads, validated filtered updates (2026-10-15)
 
 [[TASK-156]]. In memory, distinct longs and decimals compared equal through double, and "007" equalled "7". Editing a
@@ -333,11 +338,6 @@ an instant a wall clock. All values are now read, and an attribute the build can
 value bound: `B = NULL`, zero rows, no error, on every SQL provider. `x.A.Date == x.B.Date` did the same as `DATE(B) =
 NULL`, and on SQL Server failed outright. Both operands are now rendered; `==` / `!=` between nullable columns are
 null-safe, as C# is. A `.Date` of one column against another throws `NotSupportedException`: no portable SQL form.
-### A stale SQL job is reclaimed by exactly one worker (2026-10-15)
-
-[[TASK-575]]. A reclaim updated `WHERE Status = Processing`, the status it writes, so two workers could both reclaim and
-run one job, and the Dead burial overwrote a job its slow worker had completed (both measured). Reclaim and burial now
-also require `LastAttemptAt < staleBefore`.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

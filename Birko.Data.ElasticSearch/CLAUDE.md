@@ -198,7 +198,11 @@ refused with `ArgumentException`. A conflicted, failed or timed-out by-query wri
 with `GET <index>/_mapping`, field by field (dotted paths, sub-fields included): `Missing`, `Unexpected` and
 `TypeMismatch`. The declared side is the descriptor the index is created with (`IndexDescriptor`, or the one a caller
 passed to `Init`/`InitAsync`). On demand only, and it never creates the index. A missing index is
-`IndexExists = false`, not drift. Not yet in a health check (TASK-624). Runtime cost is per-document script evaluation, so scope such filters with other
+`IndexExists = false`, not drift. `ElasticSearchMappingDriftHealthCheck` (Birko.Health.Data.ElasticSearch, TASK-624)
+surfaces it. **`PlanMappingRepair()` / `PlanMappingRepairAsync()`** (TASK-634) turn it into requests a host sends: one
+`PUT /<index>/_mapping` with the declared definition of every top-level field that has a `Missing` path (built from the
+same descriptor), skipping a field with a `TypeMismatch` beneath it; type changes (new index, `_reindex`, alias swap) and
+`Unexpected` fields are listed, not written. Nothing is sent by the framework. Runtime cost is per-document script evaluation, so scope such filters with other
 term/range clauses where possible.
 
 #### An empty/null collection in `Contains` matches nothing

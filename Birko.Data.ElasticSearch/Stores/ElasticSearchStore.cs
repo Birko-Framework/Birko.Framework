@@ -146,6 +146,22 @@ namespace Birko.Data.ElasticSearch.Stores
             return ElasticMappingDrift.Compare(index, declared, stored, Connector.Infer);
         }
 
+        /// <summary>
+        /// The requests that repair this store's mapping drift, without sending them: a <c>PUT _mapping</c> for the declared
+        /// fields the index lacks; type changes and undeclared fields listed with their remedy (TASK-634).
+        /// </summary>
+        /// <exception cref="NotSupportedException">The store has no client to ask.</exception>
+        public MappingRepairPlan PlanMappingRepair()
+        {
+            var report = DetectMappingDrift();
+            if (!report.Supported)
+            {
+                throw new NotSupportedException($"Cannot plan a mapping repair of '{report.Index}': {report.Reason}");
+            }
+            var declared = ElasticMappingDrift.Declared(_initDescriptor ?? IndexDescriptor, report.Index);
+            return ElasticMappingRepair.Plan(report, declared, Connector!.Infer, Connector.RequestResponseSerializer);
+        }
+
         #endregion
 
         #region Core CRUD Operations - Single Item

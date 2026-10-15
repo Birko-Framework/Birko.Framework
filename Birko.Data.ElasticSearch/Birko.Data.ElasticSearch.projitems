@@ -26,6 +26,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\EnumerableExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncElasticSearchStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\MappingDrift.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MappingRepairPlan.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ElasticSearch\ElasticSearch.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\ElasticSearchModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncElasticSearchModelRepository.cs" />

@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — A stale SQL job is reclaimed by exactly one worker
+
+[[TASK-575]]. A reclaim updated `WHERE Status = Processing`, the status it writes, so two workers could both reclaim and
+run one job, and the Dead burial overwrote a job its slow worker had completed (both measured). Reclaim and burial now
+also require `LastAttemptAt < staleBefore`.
+
 ## 2026-10-15 — Birko.Health.Data.ElasticSearch: a health check for mapping drift
 
 [[TASK-624]]. New project. `ElasticSearchMappingDriftHealthCheck` runs one `DetectMappingDriftAsync` probe per store

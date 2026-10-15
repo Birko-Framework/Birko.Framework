@@ -2,7 +2,7 @@
 id: TASK-634
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-15
@@ -40,21 +40,47 @@ needed there; the claim is the reason they get no repair plan, and it is unmeasu
 
 ## Acceptance criteria
 
-- [ ] A plan from an ES store's drift: the `PUT _mapping` body for each `Missing` field, the reindex named (not run) for
+- [x] A plan from an ES store's drift: the `PUT _mapping` body for each `Missing` field, the reindex named (not run) for
       each `TypeMismatch`, `Unexpected` listed; shape mirrors `SchemaRepairPlan` (statements / not actioned).
-- [ ] Live against ElasticSearch: an index created for an older model gains the new field from the plan, a re-run of
+- [x] Live against ElasticSearch: an index created for an older model gains the new field from the plan, a re-run of
       `DetectMappingDrift` reports nothing, a filter on the new field finds a document indexed after the repair, and the
       behaviour of documents indexed before it is measured and documented.
-- [ ] Live on MongoDB and RavenDB: a document stored before a model gained a non-nullable property reads back with the
+- [x] Live on MongoDB and RavenDB: a document stored before a model gained a non-nullable property reads back with the
       default (or the measured failure is filed).
-- [ ] Mutation-prove the mapping body (a wrong field type in the plan must fail the re-check).
-- [ ] CHANGELOG; docs.
+- [x] Mutation-prove the mapping body (a wrong field type in the plan must fail the re-check).
+- [x] CHANGELOG; docs.
 
 ## Out of scope
 
 - Running a reindex automatically.
 - Index drift on MongoDB / RavenDB / CosmosDB: [[TASK-635]].
 
+## Resolution (2026-10-15)
+
+**`PlanMappingRepair()` / `PlanMappingRepairAsync()`** on both ES stores return a `MappingRepairPlan`: `Requests`
+(method, path, JSON body), `NotActioned` (drift and remedy) and `IsComplete`. The framework sends nothing.
+
+- **Missing:** one `PUT /<index>/_mapping` carrying the declared definition of every top-level field with a missing path,
+  taken from the same descriptor the store creates the index with and serialised by the client's own serializer
+  (measured body: `{"properties":{"code":{"type":"keyword"},"rank":{"type":"integer"}}}`). ElasticSearch merges it,
+  adding what is new. A top-level field with a `TypeMismatch` anywhere beneath it is not sent: the merge would be refused,
+  and it needs the reindex anyway.
+- **TypeMismatch:** listed with the remedy (an index with the declared mapping, `_reindex`, an alias swap: `ReindexHelper`).
+- **Unexpected:** listed; a mapped field cannot be removed in place.
+
+**Measured live on ElasticSearch 7.17:** an index created before the model gained `code` and `rank` is repaired by
+sending the plan's request; a re-run of `DetectMappingDriftAsync` reports nothing; a filter on the added keyword field
+finds a document indexed after the repair. **Documents indexed before the repair** have no value for the new fields:
+they read back with the properties' defaults and match no filter on them (`Rank == 0` finds nothing), which is the right
+answer for an entity that never had the property. **Mutation-proved:** a plan body with the wrong type sent instead
+leaves `code` reported as `TypeMismatch` by the re-check. Red is not applicable as such (new API).
+
+**MongoDB and RavenDB, measured live:** a document stored before its model gained non-nullable properties (`int`,
+`Guid`, `bool`, `decimal`, `DateTime`, an enum) reads back with every one at its default. No column schema, so no repair
+plan is needed when a model grows there; nothing to file.
+
+**Regression:** the eight ElasticSearch suites (359 tests), live, green.
+
 ## Human test plan
 
-N/A: asserted against live ElasticSearch, MongoDB and RavenDB.
+N/A: fully covered by automated tests, asserted against live ElasticSearch, MongoDB and RavenDB.
