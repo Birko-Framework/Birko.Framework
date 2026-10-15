@@ -4,6 +4,16 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-14 — On PostgreSQL, a column differing only in case is drift
+
+[[TASK-610]]. `DetectDrift` matched stored columns case-insensitively, but PostgreSQL folds the bare `SupplierVatin`
+the connector emits to `suppliervatin`, so a column created quoted as `"SupplierVatin"` reported clean while every
+query on it failed (`42703`). It is now `ColumnDriftKind.CaseMismatch` (`ColumnDrift.StoredColumn` carries the stored
+spelling), and `EnsureColumns` never adds a second column beside it. The match follows the connector's new
+`StoredColumnName` / `StoredColumnNameComparer`. SQLite, MySQL and MSSQL still match case-insensitively.
+
+---
+
 ## 2026-10-14 — A fluent `HasIndex` creates the index; `HasUniqueIndex` declares a unique composite
 
 [[TASK-595]]. `ModelMapRegistry.ApplyToDatabase` ignored `HasIndex`, so every `Birko.Models.Users.SQL` table had zero

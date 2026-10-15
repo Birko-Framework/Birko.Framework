@@ -2,7 +2,7 @@
 id: TASK-575
 parent: STORY-051
 feature: FEATURE-014
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-12
@@ -32,10 +32,10 @@ also bury a row another worker has just legitimately reclaimed.
 
 ## Acceptance criteria
 
-- [ ] A reclaim's WHERE also requires the row to still be stale (`LastAttemptAt < staleBefore`, or the `ClaimToken` read with the candidate), so at most one concurrent reclaim matches
-- [ ] The Dead burial is guarded the same way, so it cannot overwrite a row another worker reclaimed meanwhile
-- [ ] A concurrency test with two workers on one stale row asserts exactly one claim
-- [ ] A regression test fails on the current code and passes with the fix
+- [x] A reclaim's WHERE also requires the row to still be stale (`LastAttemptAt < staleBefore`, or the `ClaimToken` read with the candidate), so at most one concurrent reclaim matches
+- [x] The Dead burial is guarded the same way, so it cannot overwrite a row another worker reclaimed meanwhile
+- [x] A concurrency test with two workers on one stale row asserts exactly one claim
+- [x] A regression test fails on the current code and passes with the fix
 - [ ] `/specs regen` of the area, with the spec diff reviewed, is the fix's evidence (EPIC-014's standing constraint)
 
 ## Out of scope
@@ -46,3 +46,15 @@ also bury a row another worker has just legitimately reclaimed.
 ## Human test plan
 
 N/A — the behaviour is asserted by the regression test; nothing here is visual.
+
+## Progress log
+
+- 2026-10-15 — Both races forced deterministically (`StaleReclaimRaceTests`): a store hook runs the other party's whole
+  step just before this worker's write. Red on the old code: two workers both got the reclaimed job, and a job its slow
+  worker completed was buried as Dead (status 5, not 3). Fix: the reclaim and the burial both update only
+  `WHERE Guid = id AND Status = Processing AND LastAttemptAt < staleBefore` (the winner's write moves `LastAttemptAt` to
+  now). The staleness guard was chosen over comparing the old `ClaimToken`, which is null on a fresh row, the
+  null-comparison shape TASK-574 shows can render as `= NULL`. Green: BackgroundJobs.SQL 27/27.
+- **Open: `/specs regen background-jobs`** (EPIC-014's standing evidence rule) has not been run. It is batched with
+  the regens TASK-567, 620, 622 and 625 also owe (`store-crud-contract`, `schema-index-and-ddl`). The box stays
+  unticked until it is done.

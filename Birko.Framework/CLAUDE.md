@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A stale SQL job is reclaimed by exactly one worker (2026-10-15)
+
+[[TASK-575]]. A reclaim updated `WHERE Status = Processing`, the status it writes, so two workers could both reclaim and
+run one job, and the Dead burial overwrote a job its slow worker had completed (both measured). Reclaim and burial now
+also require `LastAttemptAt < staleBefore`.
 ### Birko.Health.Data.ElasticSearch: a health check for mapping drift (2026-10-15)
 
 [[TASK-624]]. New project. `ElasticSearchMappingDriftHealthCheck` runs one `DetectMappingDriftAsync` probe per store
@@ -330,13 +335,6 @@ sub-field, so `x.Scope == s` matched nothing and raised no error. The sync store
 "never synced", and workflow and job lookups by name were empty. Field names now come from one producer that honours
 the mapping attribute's `Name`, and an exact match on a `[Text]` member throws. Workflow `Find*` also hit the
 PascalCase `orderBy` sort ([[TASK-615]]).
-### On PostgreSQL, a column differing only in case is drift (2026-10-14)
-
-[[TASK-610]]. `DetectDrift` matched stored columns case-insensitively, but PostgreSQL folds the bare `SupplierVatin`
-the connector emits to `suppliervatin`, so a column created quoted as `"SupplierVatin"` reported clean while every
-query on it failed (`42703`). It is now `ColumnDriftKind.CaseMismatch` (`ColumnDrift.StoredColumn` carries the stored
-spelling), and `EnsureColumns` never adds a second column beside it. The match follows the connector's new
-`StoredColumnName` / `StoredColumnNameComparer`. SQLite, MySQL and MSSQL still match case-insensitively.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

@@ -1,4 +1,5 @@
 using System;
+using System.Linq.Expressions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -146,18 +147,34 @@ namespace Birko.BackgroundJobs.SQL
                 // handed round forever and the failure never surfaces. MaxRetries is already on the row
                 // and already means "how many attempts this job gets", so it is reused rather than a
                 // second cap invented beside it.
-                if (originalStatus == processingStatus && candidate.AttemptCount >= candidate.MaxRetries)
+                // TASK-575: a reclaim's claim must also require the row to STILL be stale. Status alone cannot
+                // tell: a reclaim writes Processing over Processing, so a second worker's identical UPDATE matched
+                // after the first one's, and both ran the job (measured). The winner's write sets LastAttemptAt to
+                // now, so the stale condition matches at most one concurrent reclaim. A Pending / Scheduled claim
+                // keeps its status guard (CR-H011), which the claim does change.
+                var reclaim = originalStatus == processingStatus;
+                Expression<Func<JobDescriptorModel, bool>> stillEligible = reclaim
+                    ? j => j.Guid == claimId && j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore
+                    : j => j.Guid == claimId && j.Status == originalStatus;
+
+                if (reclaim && candidate.AttemptCount >= candidate.MaxRetries)
                 {
-                    candidate.Status = (int)JobStatus.Dead;
-                    candidate.CompletedAt = now;
-                    candidate.LastError = $"Abandoned: held in Processing for longer than {_claimTimeout} "
-                        + $"after {candidate.AttemptCount} attempt(s), and the attempt budget is spent.";
-                    await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
+                    // TASK-575: guarded like the claim. This was a read-modify-write of the whole row, so a job its
+                    // slow (not dead) worker completed in the meantime was overwritten as Dead (measured).
+                    await _store.UpdateAsync(
+                        filter: stillEligible,
+                        updates: new PropertyUpdate<JobDescriptorModel>()
+                            .Set(j => j.Status, (int)JobStatus.Dead)
+                            .Set(j => j.CompletedAt, now)
+                            .Set(j => j.LastError, $"Abandoned: held in Processing for longer than {_claimTimeout} "
+                                + $"after {candidate.AttemptCount} attempt(s), and the attempt budget is spent."),
+                        ct: cancellationToken
+                    ).ConfigureAwait(false);
                     continue;
                 }
 
                 await _store.UpdateAsync(
-                    filter: j => j.Guid == claimId && j.Status == originalStatus,
+                    filter: stillEligible,
                     updates: new PropertyUpdate<JobDescriptorModel>()
                         .Set(j => j.Status, processingStatus)
                         .Set(j => j.ClaimToken, claimToken)
