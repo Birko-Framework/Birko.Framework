@@ -2,7 +2,7 @@
 id: TASK-629
 parent: STORY-053
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-15
@@ -37,9 +37,30 @@ bulk paths join the boundary (TASK-240, `BulkTransactionBoundaryEndToEndTests`).
 
 ## Acceptance criteria
 
-- [ ] A failure at item k of a bulk create / update / delete leaves the table as it was, measured on SQLite and one server
-- [ ] Inside an existing boundary, behaviour is unchanged (it joins, as today)
-- [ ] Red on the current code
+- [x] A failure at item k of a bulk create / update / delete leaves the table as it was, measured on SQLite and one server
+- [x] Inside an existing boundary, behaviour is unchanged (it joins, as today)
+- [x] Red on the current code
+
+## Resolution (2026-10-15)
+
+**Decided: a bulk collection write outside any boundary is one transaction.** It is the conventional meaning of a bulk
+write, it is what the class doc advertised, and on every provider one commit is cheaper than N. The lock cost is the
+batch's duration, which is the caller's choice of batch size. Inside an existing boundary (an ambient transaction for
+the database, or the store's `SetTransactionContext`) it joins, unchanged.
+
+`DataBaseBulkStore.Atomically` / `AsyncDataBaseBulkStore.AtomicallyAsync` wrap the public collection `Create` / `Update`
+/ `Delete` (not the overridable `*Core`, so a provider override is covered, rule 12). With no boundary they open a
+connection and a transaction and publish it as the ambient scope, so each per-item write and a provider's native bulk
+insert join it (TASK-240). Any failure rolls back, a cancelled token included (the rollback does not use the caller's
+token). One exception commits: TASK-555's `EntityNotFoundException`, raised after every stored item was written, is the
+collection update's contract, and a zero-row UPDATE does not abort the transaction (measured on PostgreSQL, where a
+failed statement would).
+
+**Red-verified.** `AtomicBulkWriteTests` (SQLite) 3 of 5 (pins: TASK-555's partial update, a successful batch);
+`AtomicBulkWriteLiveTests` 2 of 3 on PostgreSQL, SQL Server and MySQL each (pin: TASK-555). The existing
+`BulkTransactionBoundaryEndToEndTests` (joining a boundary) pass unchanged.
+
+**Spec regen pending**, batched: `store-crud-contract`.
 
 ## Human test plan
 

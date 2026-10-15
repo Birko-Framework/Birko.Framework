@@ -91,6 +91,53 @@ namespace Birko.Data.SQL.Stores
 
         #region Bulk Write Operations
 
+        /// <summary>
+        /// SH-M028 (TASK-629). Runs one async bulk collection write as ONE transaction. Each item used to commit on its own, so a
+        /// failure (or a cancelled token) at item k left items 0..k-1 written and the caller unable to tell how far it
+        /// got. Inside an existing boundary (an ambient transaction for this database, or the store's own transaction
+        /// context) nothing changes: the write joins it, as every write does (TASK-240). Otherwise the batch opens its
+        /// own transaction and publishes it as the ambient scope, so each per-item write and a provider's native bulk
+        /// insert join it; it commits at the end and rolls back on any failure.
+        /// </summary>
+        /// <remarks>
+        /// One exception commits: <see cref="EntityNotFoundException"/> from a collection update is TASK-555's report of
+        /// the items that were not stored, raised AFTER every stored item was written, which is that contract. It is a
+        /// zero-row UPDATE, not a database error, so the transaction is still usable.
+        /// </remarks>
+        protected async Task AtomicallyAsync(Func<Task> write, CancellationToken ct)
+        {
+            if (Connector == null || TransactionContext != null || AmbientSqlTransaction.Find(Connector.Settings.GetId()) != null)
+            {
+                using var joined = EnterTransactionScope();
+                await write().ConfigureAwait(false);
+                return;
+            }
+
+            await using var connection = Connector.CreateConnection(Connector.Settings);
+            await connection.OpenAsync(ct).ConfigureAwait(false);
+            await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+            var scope = AmbientSqlTransaction.Enter(Connector.Settings.GetId(), connection, transaction);
+            try
+            {
+                await write().ConfigureAwait(false);
+            }
+            catch (Exceptions.EntityNotFoundException)
+            {
+                scope.Dispose();
+                await transaction.CommitAsync(ct).ConfigureAwait(false);
+                throw;
+            }
+            catch
+            {
+                scope.Dispose();
+                // Not the caller's token: a cancelled batch must still be rolled back.
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
+            scope.Dispose();
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+        }
+
         /// <inheritdoc />
         public async Task CreateAsync(
             IEnumerable<T> data,
@@ -100,7 +147,7 @@ namespace Birko.Data.SQL.Stores
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
             try
             {
-                await CreateCoreAsync(data, storeDelegate, ct);
+                await AtomicallyAsync(() => CreateCoreAsync(data, storeDelegate, ct), ct);
             }
             catch (Exception ex) when (DuplicateCreate.IsDuplicate(Connector, ex))
             {
@@ -131,7 +178,7 @@ namespace Birko.Data.SQL.Stores
             CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            await UpdateCoreAsync(data, storeDelegate, ct);
+            await AtomicallyAsync(() => UpdateCoreAsync(data, storeDelegate, ct), ct);
         }
 
         /// <summary>
@@ -279,7 +326,7 @@ namespace Birko.Data.SQL.Stores
             CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            await DeleteCoreAsync(data, ct);
+            await AtomicallyAsync(() => DeleteCoreAsync(data, ct), ct);
         }
 
         /// <summary>

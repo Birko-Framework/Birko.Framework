@@ -1271,7 +1271,7 @@ GetFieldFromLambda ends in `LoadField(propInfo).First()` (DataBase_Field.cs:167-
 
 `../Birko.Data.SQL/Stores/DataBaseBulkStore.cs:75`
 
-**Verdict: CONFIRMED by reading, spawned as [[TASK-629]]** (TASK-170, measured 2026-10-15). Outside a boundary each item commits alone. Inside `SqlUnitOfWork` / `SetTransactionContext` the bulk paths already join (TASK-240), so atomicity is available; making it the default changes transaction behaviour on every provider, which is that task's decision.
+**Verdict: CONFIRMED, fixed by [[TASK-629]]** (2026-10-15: a bulk collection write outside a boundary is one transaction, measured on SQLite, PostgreSQL, SQL Server and MySQL). Triaged by TASK-170, measured 2026-10-15. Outside a boundary each item commits alone. Inside `SqlUnitOfWork` / `SetTransactionContext` the bulk paths already join (TASK-240), so atomicity is available; making it the default changes transaction behaviour on every provider, which is that task's decision.
 
 CreateCore/UpdateCore/DeleteCore (75/93/143, and AsyncDataBaseBulkStore.cs:105/129/193) call the single-entity operation per item; each opens its own connection and DoCommandWithTransaction unless an external SqlTransactionContext was set. An exception or cancelled token on item k commits items 0..k-1 with no rollback and no way for the caller to learn how far it got, while the class XML doc (line 12) advertises 'optimized bulk operations'.
 

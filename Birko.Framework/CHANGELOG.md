@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-14 — ElasticSearch filtered writes throw instead of reporting a partial write
+
+[[TASK-502]]. `Update(filter, PropertyUpdate)` and `Delete(filter)` discarded the by-query response. Measured: three
+concurrent increments over 3,000 documents all "succeeded" and left 1,000 increments of 9,000, and a racing delete left
+2,432 rows. A version conflict now throws `StoreConcurrencyException` (`Applied`, `Conflicts`). Another failure or a
+timeout throws `StoreException`. The job queue treats a conflicted claim as a lost race.
+
 ## 2026-10-14 — InfluxDB `RemoveMigration` removes the record
 
 [[TASK-618]]. The delete predicate named the tag `name`, a keyword in InfluxDB's delete grammar (a 400). The client's

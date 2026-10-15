@@ -486,6 +486,12 @@ Enum properties are automatically mapped to `INTEGER` fields. `IntegerField` han
 ### IgnoreField Attribute
 Properties decorated with `[IgnoreField]` are skipped by `AbstractField.CreateAbstractField()` — they won't be included in table creation or any CRUD operations. Unsupported property types also return `null` instead of throwing `FieldAttributeException`.
 
+### A bulk collection write is one transaction (TASK-629)
+`Create` / `Update` / `Delete(IEnumerable<T>)` on `DataBaseBulkStore` / `AsyncDataBaseBulkStore` run inside
+`Atomically` / `AtomicallyAsync`: outside any boundary they open their own transaction and publish it as the ambient
+scope (so per-item writes and native bulk inserts join it), commit at the end and roll back on any failure; inside a
+boundary they join it. A collection update's `EntityNotFoundException` (TASK-555: the stored items ARE written) commits.
+
 ### A store with no connector refuses (TASK-170)
 `DataBaseStore.InitCore` / `AsyncDataBaseStore.InitCoreAsync` throw `InvalidOperationException` when `SetSettings` was
 never called. Every public operation passes through lazy init first, so a misconfigured store fails on first use

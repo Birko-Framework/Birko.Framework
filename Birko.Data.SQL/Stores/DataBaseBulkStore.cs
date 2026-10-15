@@ -74,7 +74,7 @@ namespace Birko.Data.SQL.Stores
             EnsureInitialized();
             try
             {
-                CreateCore(data, storeDelegate);
+                Atomically(() => CreateCore(data, storeDelegate));
             }
             catch (Exception ex) when (DuplicateCreate.IsDuplicate(Connector, ex))
             {
@@ -82,6 +82,52 @@ namespace Birko.Data.SQL.Stores
                 // whether or not it overrides CreateCore (rule 12).
                 throw DuplicateCreate.Refusal(typeof(T), ex);
             }
+        }
+
+        /// <summary>
+        /// SH-M028 (TASK-629). Runs one bulk collection write as ONE transaction. Each item used to commit on its own, so a
+        /// failure (or a cancelled token) at item k left items 0..k-1 written and the caller unable to tell how far it
+        /// got. Inside an existing boundary (an ambient transaction for this database, or the store's own transaction
+        /// context) nothing changes: the write joins it, as every write does (TASK-240). Otherwise the batch opens its
+        /// own transaction and publishes it as the ambient scope, so each per-item write and a provider's native bulk
+        /// insert join it; it commits at the end and rolls back on any failure.
+        /// </summary>
+        /// <remarks>
+        /// One exception commits: <see cref="EntityNotFoundException"/> from a collection update is TASK-555's report of
+        /// the items that were not stored, raised AFTER every stored item was written, which is that contract. It is a
+        /// zero-row UPDATE, not a database error, so the transaction is still usable.
+        /// </remarks>
+        protected void Atomically(Action write)
+        {
+            if (Connector == null || TransactionContext != null || AmbientSqlTransaction.Find(Connector.Settings.GetId()) != null)
+            {
+                using var joined = EnterTransactionScope();
+                write();
+                return;
+            }
+
+            using var connection = Connector.CreateConnection(Connector.Settings);
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+            var scope = AmbientSqlTransaction.Enter(Connector.Settings.GetId(), connection, transaction);
+            try
+            {
+                write();
+            }
+            catch (EntityNotFoundException)
+            {
+                scope.Dispose();
+                transaction.Commit();
+                throw;
+            }
+            catch
+            {
+                scope.Dispose();
+                transaction.Rollback();
+                throw;
+            }
+            scope.Dispose();
+            transaction.Commit();
         }
 
         /// <summary>
@@ -99,7 +145,7 @@ namespace Birko.Data.SQL.Stores
         public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureInitialized();
-            UpdateCore(data, storeDelegate);
+            Atomically(() => UpdateCore(data, storeDelegate));
         }
 
         /// <summary>
@@ -219,7 +265,7 @@ namespace Birko.Data.SQL.Stores
         public void Delete(IEnumerable<T> data)
         {
             EnsureInitialized();
-            DeleteCore(data);
+            Atomically(() => DeleteCore(data));
         }
 
         /// <summary>

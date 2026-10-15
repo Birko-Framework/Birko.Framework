@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A SQL bulk write commits all of its items or none (2026-10-15)
+
+[[TASK-629]]. Outside a transaction, `Create` / `Update` / `Delete` of a collection committed item by item, so a failure
+at item k left items 0..k-1 written. It is now one transaction, rolled back on any failure or cancellation. Inside an
+existing boundary it joins, as before. A collection update still writes its stored items and reports the missing ones.
 ### Repositories: no store, no silent success; the locator keeps one store per key (2026-10-15)
 
 [[TASK-162]]. A repository with no store answered every call as if it had worked. It now throws (plain and ViewModel).
@@ -333,12 +338,6 @@ altered with a `MODIFY` / `ALTER COLUMN` that dropped `NOT NULL`.
 mapping: a 400 that, before [[TASK-502]], silently dropped the whole update. A null is now a literal `null`. The script
 resolves its field through `StoredFieldName`, so a mapped member is written where it is read. A non-property selector
 throws `ArgumentException`.
-### ElasticSearch filtered writes throw instead of reporting a partial write (2026-10-14)
-
-[[TASK-502]]. `Update(filter, PropertyUpdate)` and `Delete(filter)` discarded the by-query response. Measured: three
-concurrent increments over 3,000 documents all "succeeded" and left 1,000 increments of 9,000, and a racing delete left
-2,432 rows. A version conflict now throws `StoreConcurrencyException` (`Applied`, `Conflicts`). Another failure or a
-timeout throws `StoreException`. The job queue treats a conflicted claim as a lost race.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
