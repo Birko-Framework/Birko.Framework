@@ -25,7 +25,8 @@ namespace Birko.Data.SQL.Connectors.Strategies
             var op = condition.IsNot ? " NOT LIKE " : " LIKE ";
             var valueExpression = BuildValueExpression(condition, command, context);
 
-            return $"{condition.Name}{op}{valueExpression}";
+            // SH-M134 (TASK-153): the bound pattern escapes its metacharacters with this character.
+            return $"{condition.Name}{op}{valueExpression} ESCAPE '{SqlBuilderContext.LikeEscapeCharacter}'";
         }
 
         private string BuildValueExpression(Conditions.Condition condition, DbCommand command, SqlBuilderContext context)

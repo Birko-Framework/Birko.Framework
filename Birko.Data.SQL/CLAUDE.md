@@ -527,6 +527,15 @@ On top of that, the SQL parsers themselves handle:
   against another column throws `NotSupportedException`: the parser has no dialect and no date truncation is
   portable (`DATE()` is not T-SQL; `CAST(… AS DATE)` reads SQLite's stored text as a number). A `.Date`
   against a value keeps its half-open range rewrite.
+- **Medium filter findings, TASK-153.** A value on the left of a comparison flips the operator (`25 > x.Age` is
+  `Age < 25`). `string.IsNullOrEmpty(col)` is `(col IS NULL OR col = '')`. Every LIKE declares `ESCAPE '!'` and
+  `SqlBuilderContext.EscapeLikePattern` makes `%`, `_`, `[` and `!` in a search term literal (not `\`: a syntax
+  error inside a MySQL literal). A bool column used as a CASE test is `(col = '1')` (`BoolColumnTest`), the one form
+  PostgreSQL, SQL Server, MySQL and SQLite all accept. `InlineConstant` refuses a string containing a backslash,
+  because MySQL's default `sql_mode` reads it as an escape. A parameter-bound nested member (`x.Sub.Prop`) and a
+  LIKE pattern built from a column throw `NotSupportedException`. Rule conversion follows the in-memory evaluator:
+  `Between` has both bounds, a null `Equal`/`NotEqual` is `IS [NOT] NULL`, an `In` string is one value, and a
+  `Like` pattern's `%` counts only at either end.
 - **Value-position** (`ParseExpression`, Update SET RHS) — `a ?? b` → `COALESCE(a, b)`,
   `c ? t : f` → `CASE WHEN c THEN t ELSE f END`, and `x == null` / `x != null` → `IS [NOT] NULL`.
 

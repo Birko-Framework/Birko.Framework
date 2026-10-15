@@ -49,11 +49,27 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <param name="settings">The settings to use.</param>
         public virtual void SetSettings(ISettings settings)
         {
-            if (settings is Stores.Settings sets)
-            {
-                _settings = sets;
-                Connector = Data.ElasticSearch.ElasticSearch.GetClient(_settings);
-            }
+            // SH-M146 (TASK-153): any other settings type used to be ignored, leaving no client, and every
+            // write then reported success and every read answered empty: a misconfigured store looked like an
+            // empty index.
+            if (settings is not Stores.Settings sets)
+                throw new ArgumentException(
+                    $"An ElasticSearch store needs ElasticSearch settings, not {settings?.GetType().FullName ?? "null"}.",
+                    nameof(settings));
+            _settings = sets;
+            Connector = Data.ElasticSearch.ElasticSearch.GetClient(_settings);
+        }
+
+        /// <summary>
+        /// SH-M146 (TASK-153). A store with no client cannot answer, so it throws instead of reporting an empty
+        /// index or a write that never happened.
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(Connector))]
+        protected void RequireConnector()
+        {
+            if (Connector == null)
+                throw new InvalidOperationException(
+                    $"{GetType().Name} has no ElasticSearch client: call SetSettings with ElasticSearch settings first.");
         }
 
         /// <summary>
@@ -73,7 +89,7 @@ namespace Birko.Data.ElasticSearch.Stores
         public async Task InitAsync(Func<CreateIndexDescriptor, ICreateIndexRequest> indexDescriptor, CancellationToken ct = default)
         {
             _initDescriptor = indexDescriptor;
-            if (Connector == null) return;
+            RequireConnector();
 
             var indexName = GetIndexName();
             var existsResponse = await Connector.Indices.ExistsAsync(indexName, null, ct);
@@ -164,7 +180,7 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <inheritdoc />
         protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
-            if (Connector == null) return null;
+            RequireConnector();
 
             var indexName = GetIndexName();
             var query = new SearchRequest(indexName)
@@ -297,7 +313,7 @@ namespace Birko.Data.ElasticSearch.Stores
             RequireBoundedFilter(filter, "delete");
             // CR-L111: lazy-init the index and observe an already-cancelled token, like every base CRUD method.
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            if (Connector == null) return;
+            RequireConnector();
 
             var indexName = GetIndexName();
             var response = await Connector.DeleteByQueryAsync(new Nest.DeleteByQueryRequest(indexName)
@@ -326,7 +342,7 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <summary>Core of <see cref="ReadRealtimeAsync"/>. Null when no document has that id.</summary>
         protected virtual async Task<T?> ReadRealtimeCoreAsync(Guid guid, CancellationToken ct)
         {
-            if (Connector == null) return null;
+            RequireConnector();
 
             var response = await Connector.GetAsync<T>(guid, g => g.Index(GetIndexName()).Realtime(), ct).ConfigureAwait(false);
             if (response.Found)
@@ -471,7 +487,7 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <returns>The count of matching documents.</returns>
         public async Task<long> CountAsync(QueryContainer? query, CancellationToken ct = default)
         {
-            if (Connector == null) return 0;
+            RequireConnector();
 
             var indexName = GetIndexName();
             var request = new CountRequest(indexName);
@@ -525,7 +541,7 @@ namespace Birko.Data.ElasticSearch.Stores
             int? offset = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
-            if (Connector == null) yield break;
+            RequireConnector();
 
             var indexName = GetIndexName();
             SearchRequest request = new SearchRequest(indexName)
@@ -704,7 +720,7 @@ namespace Birko.Data.ElasticSearch.Stores
             CancellationToken ct = default)
         {
             if (highlightOptions == null) throw new ArgumentNullException(nameof(highlightOptions));
-            if (Connector == null) return new HighlightedSearchResults<T>(Array.Empty<SearchResult<T>>(), 0);
+            RequireConnector();
 
             var query = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter);
             return await SearchWithHighlightsAsync(query, highlightOptions, orderBy, limit, offset, ct);
@@ -729,7 +745,7 @@ namespace Birko.Data.ElasticSearch.Stores
             CancellationToken ct = default)
         {
             if (highlightOptions == null) throw new ArgumentNullException(nameof(highlightOptions));
-            if (Connector == null) return new HighlightedSearchResults<T>(Array.Empty<SearchResult<T>>(), 0);
+            RequireConnector();
 
             var indexName = GetIndexName();
             var request = new SearchRequest(indexName)
@@ -831,7 +847,7 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <param name="ct">Cancellation token.</param>
         public async Task DeleteIndexAsync(CancellationToken ct = default)
         {
-            if (Connector == null) return;
+            RequireConnector();
 
             var indexName = GetIndexName();
             var response = await Connector.Indices.DeleteAsync(indexName, null, ct);
@@ -850,7 +866,7 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <param name="ct">Cancellation token.</param>
         public async Task ClearCacheAsync(CancellationToken ct = default)
         {
-            if (Connector == null) return;
+            RequireConnector();
 
             var indexName = GetIndexName();
             var response = await Connector.Indices.ClearCacheAsync(indexName, null, ct);
@@ -905,7 +921,7 @@ namespace Birko.Data.ElasticSearch.Stores
             AggregateQuery<T> query,
             CancellationToken ct = default)
         {
-            if (Connector == null) return Array.Empty<AggregateResult>();
+            RequireConnector();
 
             var indexName = GetIndexName();
 

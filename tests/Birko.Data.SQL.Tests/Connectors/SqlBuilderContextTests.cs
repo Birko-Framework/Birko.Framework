@@ -260,7 +260,8 @@ namespace Birko.Data.SQL.Tests.Connectors
             var result = context.FormatValue(input, ConditionType.Like);
 
             // Assert
-            result.Should().Be("%test%value%");
+            // SH-M134 (TASK-153): the caller's % is literal, escaped with the ESCAPE character the strategy declares.
+            result.Should().Be("%test!%value%");
         }
 
         [Fact]

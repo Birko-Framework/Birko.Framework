@@ -3,7 +3,7 @@ id: TASK-153
 parent: STORY-053
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-09
@@ -50,18 +50,44 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 29 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 29 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
 - [ ] Any behavioural fix is followed by `/specs regen filter-expression-translation`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
+
+## Resolution (2026-10-15)
+
+**28 findings triaged (SH-M128 was closed by TASK-559): 25 confirmed, 2 confirmed-narrower, 1 refuted.** Of the
+confirmed: 18 fixed here, 6 already fixed by other tasks (verified, not assumed: TASK-574, TASK-559, TASK-278,
+TASK-308, TASK-615, TASK-502), 2 spawned as [[TASK-626]] (SH-M147, SH-M148, the join renderer). Verdicts with evidence
+are in `SPEC-HARVEST-FINDINGS-2026-07-30.md`.
+
+- **Measured, not read**: each SQL finding was first run as a probe comparing the SQL answer with LINQ-to-objects
+  over the same seeded rows. The probe's first run was wrong. It reused one database file and every call appended
+  the seed again, so every count was inflated. That was caught and fixed before any verdict was written.
+- **Two corrections found by the live run, not by review.** The value-position bool test was first resolved
+  table-qualified, which PostgreSQL refuses in an UPDATE's SET. And NEST drops a term query on `""` as
+  "conditionless", which left `IsNullOrEmpty` half-built. Both were fixed before the red check.
+- **One wrong premise corrected in code**: `SqlLiteral` stated that quote-doubling is complete containment "on the
+  other three providers". Measured on MySQL 8.4, the default `sql_mode` honours backslash escapes.
+
+**Red-verified, as numbers.** SQLite `FilterTranslationTriageTests` 20 of 23 red (pins: an equality with the value on
+the left, `Contains("0%")`, the escape character alone). `ValueExpressionTriageTests` 2 of 3 (pin: a closure chain).
+Live `FilterTranslationTriageLiveTests`: PostgreSQL 3 of 5 (pins: the UPDATE CASE, which PostgreSQL accepted
+before, and the mixed-case table read, which is SH-M137's refutation), SQL Server 3 of 4 (pin: bool in a WHERE CASE,
+valid T-SQL before), MySQL 3 of 5. ElasticSearch `FilterTranslationTriageTests` 9 of 10 (pin: SH-M151's two
+closures, which the normalizer folds before the cache). 7 SQL renderings that pinned the unescaped LIKE were updated.
+Regression: 30 SQL-dependent suites, 2,587 tests, green live; ElasticSearch 255/255 live.
+
+**Spec regen pending**, batched with the database fixes ([[project-spec-regen-batched]]): `filter-expression-translation`.
 
 ## Out of scope
 
@@ -76,11 +102,8 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A: fully covered by automated tests. This is a library contract with no UI surface, and every fix is asserted
+by the rows (or documents) a real database returns.
 
 ## Implementation plan
 

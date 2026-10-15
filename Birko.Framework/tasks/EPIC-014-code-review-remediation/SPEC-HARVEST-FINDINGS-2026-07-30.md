@@ -1863,11 +1863,15 @@ AppendRangeAsync appends the whole list, then loops publishing each event; a thr
 
 `../Birko.Data.SQL/SQL/DataBase.cs:523`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15, SQLite and live on all three servers). `x => 25 > x.Age` returned the ages 30–60 where C# says 10, 20; `25 <= x.Age` returned 10, 20. The comparison fallback (`DataBase.cs`, the `basecondition` build) now swaps a value-left pair and flips the operator with the existing `FlipComparison`. `tests/Birko.Data.SQL.SqLite.Tests/FilterTranslationTriageTests.cs`; red 2 of 3 (the equality is symmetric, a pin).
+
 `x => 5 > x.Age` takes Greather from the node type, binds 5 as the condition's value (via the ConstantExpression branch at 665) and Age as its Name, rendering `Age > @p(5)` — the inverse of the C# meaning. Only the value-expression path flips, via BuildValueComparison/FlipComparison (1176-1179), so the fix pattern already exists in the same file. Reversed-operand comparisons are idiomatic C# and produce silently wrong rows on reads and on filter-based writes.
 
 #### SH-M124 — Comparison with the constant operand on the LEFT is not flipped (ElasticSearch)
 
 `../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs:227`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `18 > x.Count` rendered `NumericRange(gt=18)`. `ParseComparison` mirrors the operator when only the right operand is a field. Live: `10 > x.Count` now returns the documents C# selects. `tests/Birko.Data.ElasticSearch.Tests/FilterTranslationTriageTests.cs`.
 
 ParseComparison takes `field` from whichever operand yielded an ITermQuery with a Field and `value` from whichever yielded a Value, then switches on binary.NodeType with no compensation for the swap. `x => 18 > x.Age` emits NumericRangeQuery{Field="age", GreaterThan=18}, i.e. Age > 18. Identical defect to the SQL side, and the two backends are wrong in the same direction, so a cross-backend test would not catch it.
 
@@ -1875,17 +1879,23 @@ ParseComparison takes `field` from whichever operand yielded an ITermQuery with 
 
 `../Birko.Data.SQL/SQL/DataBase.cs:813`
 
+**Verdict: CONFIRMED, fixed by [[TASK-574]] (comparisons) and here (pattern methods)** (TASK-153, measured 2026-10-15). The comparison half (`x.A == x.B`) was TASK-574 on 2026-10-15. The pattern half held: `x.Name.StartsWith(x.Code)` parsed both columns into one condition and rendered `Name LIKE NULL`. It is now refused with `NotSupportedException`, because a LIKE pattern built from a column needs string concatenation, which no two providers spell alike.
+
 For `x => x.StartDate == x.EndDate` neither operand is a value-expression, so both go through the member branch and each assigns `parent.Name = name` (813) — the right operand overwrites the left. Values is never populated, so EqualConditionStrategy.BuildValueExpression returns the literal "NULL" and the SQL is `Table.EndDate = NULL`, UNKNOWN for every row. Same shape for `!=`, for `x.Name.StartsWith(x.Prefix)` (pattern operand overwrites the object's Name), and for `x.TagsA.Contains(x.TagB)`. No error is raised.
 
 #### SH-M126 — Column-versus-column comparison becomes "field does not exist" (ElasticSearch)
 
 `../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs:230`
 
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `x.A == x.B` became `MustNot(exists a)`. `ParseComparison` returns null when both operands are fields, and `ParseFilterQuery` throws. `tests/Birko.Data.ElasticSearch.Tests/FilterTranslationTriageTests.cs`.
+
 For `x => x.A == x.B`, ParseMember returns TermQuery{Field} with Value unset for both operands, so `field = "a"` and `value = null`. The null-value branch then treats it as a null comparison and emits BoolQuery{MustNot=[ExistsQuery a]} — documents where A is absent. A perfectly sensible predicate silently returns an unrelated set instead of being refused; ParseContains rejects the analogous both-operands-bound case (580) by returning null.
 
 #### SH-M127 — string.IsNullOrEmpty(x.Col) renders as `Col = NULL` and matches no rows (SQL)
 
 `../Birko.Data.SQL/SQL/DataBase.cs:546`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `string.IsNullOrEmpty(x.Name)` returned no rows, and its negation no rows either. The method branch now renders `(Col IS NULL OR Col = '')`, nested so an enclosing `!` gives `NOT (…)`, which is right under three-valued logic. `tests/Birko.Data.SQL.SqLite.Tests/FilterTranslationTriageTests.cs`, red 4 of 4.
 
 IsNullOrEmpty matches no case in the method-name switch, so Type stays Equal; the single argument resolves the column into Name and no value is ever bound, leaving Values null. EqualConditionStrategy emits the literal "NULL", giving `Col = NULL` — UNKNOWN for every row, so the filter silently matches nothing, and inside an AND the whole predicate matches nothing. ElasticSearch translates the same call to BoolQuery.MustNot(WildcardQuery "*").
 
@@ -1899,11 +1909,15 @@ ConvertGroup marks children via SetOr, then wraps them with Condition.AndSubCond
 
 `../Birko.Data.SQL/SQL/Conditions/RuleConditionConverter.cs:134`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `Between Age 15..35` returned 20–60. Now `>= lower AND <= upper`, negated by De Morgan (`< lower OR > upper`) like the rest of the converter; a missing bound throws `ArgumentException`. `tests/Birko.Data.SQL.SqLite.Tests/FilterTranslationTriageTests.cs`.
+
 MapOperator maps ComparisonOperator.Between to (ConditionType.GreatherAndEqual, WrapValue(rule.Value)) — one `>=` against a single value. ConditionType has no Between member and no two-value range is built, so the upper bound is discarded and the generated predicate matches strictly more rows than the rule specifies, with no error.
 
 #### SH-M130 — A rule with a null value renders `Field = NULL` instead of IS NULL (RuleConditionConverter)
 
 `../Birko.Data.SQL/SQL/Conditions/RuleConditionConverter.cs:150`
+
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `Equal null` and `NotEqual null` both returned no rows. They render `IS NULL` / `IS NOT NULL`, as `ParseConditionExpression` does.
 
 WrapValue returns null for a null rule.Value, so an Equal/NotEqual/comparison rule with no value produces a Condition with Values = null. EqualConditionStrategy then emits `Field = NULL`, UNKNOWN for every row. The converter already has ConditionType.IsNull (used for the IsNull/IsNotNull operators), and DataBase.ParseConditionExpression converts a null operand to IsNull for exactly this reason (687, 723) — the rules path does not.
 
@@ -1911,11 +1925,15 @@ WrapValue returns null for a null rule.Value, so an Equal/NotEqual/comparison ru
 
 `../Birko.Data.SQL/SQL/Conditions/RuleConditionConverter.cs:142`
 
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `Name In "ABC"` bound `'A','B','C'` and returned the row named `A`. A string is one value (`InValues`), as `ComparisonHelper.IsIn` treats it.
+
 `rule.Value as IEnumerable ?? WrapValue(rule.Value)` succeeds for a string, because string implements IEnumerable. A rule `Status In "ABC"` therefore renders `Status IN (@p0, @p1, @p2)` bound to 'A','B','C' rather than the single value "ABC". DataBase.InvokeExpression (1320) special-cases string for precisely this reason; the rules converter does not, so the same intent gives different rows depending on which entry point built the condition.
 
 #### SH-M132 — ComparisonOperator.Like double-wraps the pattern in %…%, destroying an anchored LIKE pattern
 
 `../Birko.Data.SQL/SQL/Conditions/RuleConditionConverter.cs:141`
+
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `Like "FV2026%"` matched `XFV2026`. The rule pattern now maps the way `ComparisonHelper.LikeString` reads it: a `%` only at either end (prefix / suffix / substring / equality), the rest literal, so the SQL and in-memory engines agree.
 
 Like maps to ConditionType.Like, the same type used for Contains. LikeConditionStrategy runs the value through SqlBuilderContext.FormatValue, which returns `%{str}%` for ConditionType.Like. An explicit rule pattern such as `FV2026%` becomes `%FV2026%%`, so an anchored prefix rule silently matches unanchored, returning more rows than specified. ConditionType has no raw-LIKE member, so an author cannot express an unwrapped pattern at all.
 
@@ -1923,11 +1941,15 @@ Like maps to ConditionType.Like, the same type used for Contains. LikeConditionS
 
 `../Birko.Data.SQL/SQL/Conditions/RuleConditionConverter.cs:26`
 
+**Verdict: CONFIRMED, fixed by [[TASK-559]]** (TASK-153, measured 2026-10-15). An unknown `IRule` now converts to the always-false term, matching nothing, which is what `RuleEvaluator` (`NoMatch`) and `RuleSpecification` (`Constant(false)`) answer. Measured: no rows, no whole-table read.
+
 ToConditions' switch ends with `_ => []`, so any other IRule implementation (Birko.Rules is interface-based and extensible) is dropped without error. Combined with ConditionDefinition/AddWhere, a rule set consisting only of such rules produces no WHERE clause at all — every row. RuleSpecification's analogous degradations at least choose an explicit constant; here the outcome is a widened filter that reaches Delete/Update by filter.
 
 #### SH-M134 — LIKE patterns are not escaped, so % and _ in a search term match extra rows
 
 `../Birko.Data.SQL/SQL/Connectors/SqlBuilderContext.cs:49`
+
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15, SQLite and live on all three servers). `StartsWith("A_1")` matched `A21`. `SqlBuilderContext.EscapeLikePattern` prefixes `%`, `_`, `[` (SQL Server's character class) and `!` with `!`, and every LIKE declares `ESCAPE '!'`, not `'\'`, which is a syntax error inside a MySQL literal. 7 pinned renderings updated. `tests/Birko.Data.SQL.SqLite.Tests/FilterTranslationTriageTests.cs`, `FilterTranslationTriageLiveTests` (PostgreSQL / SQL Server / MySQL).
 
 FormatValue wraps the bound value as `%{str}%` / `{str}%` / `%{str}` with no escaping of the LIKE metacharacters `%` and `_` (and no ESCAPE clause is ever emitted). `x.Name.Contains("100%")` becomes the pattern `%100%%`, which matches any name containing "100", and `x.Code.StartsWith("A_1")` matches `A21`. C# Contains/StartsWith treat both characters literally, so the SQL backend returns a strict superset of the correct rows.
 
@@ -1935,11 +1957,15 @@ FormatValue wraps the bound value as `%{str}%` / `{str}%` / `%{str}` with no esc
 
 `../Birko.Data.SQL/SQL/DataBase.cs:1108`
 
+**Verdict: CONFIRMED on PostgreSQL, fixed** (TASK-153, measured 2026-10-15, live). `(x.Vip ? x.Premium : x.Score) > 100` failed on PostgreSQL (`boolean <> integer`) and worked on the other three. Both CASE renderers now share `BoolColumnTest`, `(col = '1')`, which all four providers accept (measured: PostgreSQL casts the literal to boolean, the others convert it to the column's number). `FilterTranslationTriageLiveTests` (PostgreSQL / SQL Server / MySQL).
+
 A bare boolean column inside a CASE test in a WHERE is rendered as `({column} <> 0)`. BooleanField maps to DbType.Boolean and PostgreSQLConnector.ConvertType returns BOOLEAN (line 138), so PostgreSQL rejects the comparison with `operator does not exist: boolean <> integer`. `x => (x.Vip ? x.Premium : x.Score) > 100` therefore works on SQLite/MySQL/MSSQL and fails at execution on one of the four supported providers; there is no provider hook for the boolean literal form.
 
 #### SH-M136 — Value-position CASE renders a bool column as a bare column, which is invalid in MSSQL
 
 `../Birko.Data.SQL/SQL/DataBase.cs:135`
+
+**Verdict: CONFIRMED on SQL Server, fixed** (TASK-153, measured 2026-10-15, live). A value-position `x.Vip ? 1 : 2` in an UPDATE SET failed on SQL Server (a BIT is no predicate) and worked on PostgreSQL. Now `CASE WHEN (col = '1')`, resolved through `ParseExpression` so an UPDATE's SET stays unqualified (a first attempt qualified it and PostgreSQL refused `"T".col`; caught by the live test).
 
 ParseExpression renders a ConditionalExpression as `CASE WHEN {test} THEN … END` where the test goes through ParseExpression, so a bare bool member yields just the column name: `CASE WHEN Table.Vip THEN …`. SQL Server's BIT is not a boolean predicate and rejects this with error 4145. The mirror-image of the previous finding: the WHERE-side renderer (RenderBoolFragment) forces `<> 0` and breaks PostgreSQL, while the value-side renderer omits it and breaks MSSQL. The spec (line 735) records the broken form as expected output.
 
@@ -1947,11 +1973,15 @@ ParseExpression renders a ConditionalExpression as `CASE WHEN {test} THEN … EN
 
 `../Birko.Data.SQL/SQL/DataBase.cs:862`
 
+**Verdict: REFUTED** (TASK-153, measured 2026-10-15, live PostgreSQL). The table `PgFtTriage` is mixed case, and every filtered read in `FilterTranslationTriageLiveTests` (PostgreSQL / SQL Server / MySQL) resolves its qualifier. The bare-alias rule (`FROM "T" AS T`, TASK-211, rule 18) closed this before the harvest was triaged; the PostgreSQL test `A_filtered_read_on_a_mixed_case_table_resolves_its_qualifier` pins it, green before and after.
+
 ResolveColumnName returns AbstractField.GetSelectName(true) = `Table.Column`, unquoted, and the strategies interpolate it raw. CreateSelectCommand (AbstractConnectorBase:527) writes the table through QuoteIdentifier, i.e. "Invoice". PostgreSQL folds the unquoted qualifier to `invoice`, which does not match the quoted range-table entry, so every filtered read on a non-lowercase table fails with `missing FROM-clause entry`. Unquoted column names also break for reserved-word identifiers (Order, Group) on every provider.
 
 #### SH-M138 — MSSQL LimitOffsetDefinition emits FETCH NEXT with no OFFSET when offset is null — invalid T-SQL
 
 `../Birko.Data.SQL.MSSql/Database/Connector/MSSqlConnector.cs:241`
+
+**Verdict: CONFIRMED, fixed by [[TASK-278]]** (TASK-153, measured 2026-10-15, by reading `MSSqlConnector.LimitOffsetDefinition`). `OFFSET` is now always emitted (`offset ?? 0`), with the placeholder ORDER BY.
 
 The override appends ` OFFSET @OFFSET ROWS` only inside `if (offset != null)`, then unconditionally appends ` FETCH NEXT @LIMIT ROWS ONLY`. T-SQL requires OFFSET to precede FETCH, so any `Read(filter, limit: 10)` with no offset produces a syntax error on MSSQL while working on the other three providers. (Separately, OFFSET/FETCH also requires ORDER BY, and CreateSelectCommand appends the fragment even when orderFields is empty.) The spec's only scenario covers limit+offset, so the broken shape is unrecorded.
 
@@ -1959,11 +1989,15 @@ The override appends ` OFFSET @OFFSET ROWS` only inside `if (offset != null)`, t
 
 `../Birko.Data.SQL/SQL/DataBase.cs:1132`
 
+**Verdict: CONFIRMED on MySQL, fixed** (TASK-153, measured 2026-10-15, live). MySQL 8.4 at its default `sql_mode` answers `SELECT LENGTH('a\b')` with 2 (`\b` is one escaped character), so a backslash escapes a quote and doubling `'` does not contain the literal; `SqlLiteral`'s premise ("ANSI on the other three providers") is wrong for MySQL. `InlineConstant` has no dialect and cannot bind a parameter inside a fragment, so it now refuses a string containing a backslash. Red on MySQL before.
+
 Constants inside a raw value fragment cannot be parameterised, so InlineConstant emits `'` + s.Replace("'", "''") + `'`. MySQL/MariaDB honour backslash escapes by default, so the value `\' OR 1=1 -- ` becomes `'\'' OR 1=1 -- '`: the backslash consumes the first quote, the doubled quote closes the literal, and the remainder is executed. Reached by any predicate with a string constant inside a fragment, e.g. `x => (x.Code ?? fallback) == target`, where fallback is application input. The same predicate is safe on SQLite/PostgreSQL.
 
 #### SH-M140 — ElasticSearch String.Contains is an exact term match on a .keyword field, not a substring match
 
 `../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs:546`
+
+**Verdict: CONFIRMED, fixed by [[TASK-308]]** (TASK-153, measured 2026-10-15, by reading). `ParseContains` now emits a `WildcardQuery` `*term*` on the exact field (escaped), a substring match, not a `query_string` over a keyword.
 
 ParseExpression on call.Object appends `.keyword` (676), so the QueryStringQuery runs against a non-analysed keyword field: the term must equal the whole field value. `x.Name.Contains("abc")` therefore matches only documents whose Name is exactly "abc", while SQL renders `LIKE '%abc%'` and C# means substring. The code comment on line 546 claims it "mirrors SQL LIKE '%x%'" — a doc/behaviour contradiction, and the most common cross-backend filter silently returns different rows.
 
@@ -1971,11 +2005,15 @@ ParseExpression on call.Object appends `.keyword` (676), so the QueryStringQuery
 
 `../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs:517`
 
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15, live). An indexed `""` was not returned by `IsNullOrEmpty`. Now `missing OR term ""`, with `IsVerbatim`: NEST silently drops a term on `""` as conditionless, which the first live run caught. `tests/Birko.Data.ElasticSearch.Tests/FilterTranslationTriageTests.cs`.
+
 ParseIsNullOrEmpty emits BoolQuery.MustNot(WildcardQuery{Value="*"}). A Lucene `*` wildcard matches zero or more characters, so a keyword field indexed with the empty string still matches the wildcard and is excluded by MustNot. The translation therefore means "field is missing", while C# string.IsNullOrEmpty is true for "" as well — so rows with a blank value are silently omitted. The correct shape is a bool with MustNot exists OR a term on "".
 
 #### SH-M142 — A nested member silently resolves to its parent field (ElasticSearch)
 
 `../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs:691`
+
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `x.Sub.Count == 1` resolved to the parent field `sub`. A parameter-bound member that is not a direct member is now refused.
 
 ParseMember's final branch recurses into `member.Expression` for a parameter-bound sub-expression. For `x => x.Sub.Prop == 1`, `x.Sub.Prop` is not a direct member of the parameter, so it recurses to `x.Sub`, which is, and returns TermQuery{Field="sub"}. The comparison then becomes `sub == 1` instead of `sub.prop == 1` — ES supports the dotted path, so the correct field exists and is simply not used. The query runs and returns the wrong documents rather than being refused.
 
@@ -1983,11 +2021,15 @@ ParseMember's final branch recurses into `member.Expression` for a parameter-bou
 
 `../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs:643`
 
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `x.Lines.Any()` built a nested term query with no value. A parameterless `Any()` is `NestedQuery(match_all)`.
+
 ParseAny uses Arguments.First() as the collection and Arguments.Last() as the inner predicate. For `x => x.Lines.Any()` there is only one argument, so First and Last are the same node: the inner query becomes TermQuery{Field="lines"} with no Value, wrapped in NestedQuery{Path="lines"}. A term query with no value is not a valid "collection is non-empty" test; the parameterless Any overload needs an ExistsQuery. No guard on Arguments.Count.
 
 #### SH-M144 — ElasticSearch sort fields bypass the camelCase/.keyword naming that filter fields go through
 
 `../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs:485`
+
+**Verdict: CONFIRMED, fixed by [[TASK-615]]** (TASK-153, measured 2026-10-15, by reading). All four sort sites go through `ElasticSearch.Sorts`.
 
 ReadStream builds `new FieldSort { Field = field.PropertyName }` — the raw C# property name. Every filter field goes through FormatFieldName (camelCase) and gets `.keyword` for strings, so documents are indexed as `name` while the sort asks for `Name`, and a text field sorted without `.keyword` is rejected outright. Ordering is therefore dropped or errors while the filter on the same property works. Identical code at AsyncElasticSearchStore.cs:454 and in both SearchWithHighlights overloads.
 
@@ -1995,11 +2037,15 @@ ReadStream builds `new FieldSort { Field = field.PropertyName }` — the raw C# 
 
 `../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs:281`
 
+**Verdict: CONFIRMED, fixed by [[TASK-502]]** (TASK-153, measured 2026-10-15, by reading). The by-query responses are inspected; a conflict throws `StoreConcurrencyException`, another failure `StoreException`.
+
 The DeleteByQuery / UpdateByQuery return values are never inspected, unlike every other call in the file, which throws on `!IsValid || OriginalException != null`. A version conflict, a missing index, a script compilation error or a partial failure (`response.Failures`) leaves the caller believing the delete/update ran. Same in AsyncElasticSearchStore.DeleteAsync (253) and UpdateAsync (270).
 
 #### SH-M146 — A null Connector turns ElasticSearch Delete(filter)/Update(filter) into a silent success
 
 `../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs:278`
+
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `SetSettings(ISettings)` silently ignored any non-ElasticSearch settings, and the 17 single-line guards then answered "nothing" (a write that never happened, an empty read). Foreign settings now throw `ArgumentException`, and the guards call `RequireConnector()` (`[MemberNotNull]`), which throws. `IsHealthyAsync` still answers false, and `DetectMappingDrift` still reports "unsupported", both honest answers.
 
 `if (Connector == null) return;` in Delete(filter) (278) and Update(filter, updates) (292) reports success while writing nothing — Connector is only assigned when SetSettings receives a Settings instance (51), so a store configured with any other ISettings silently no-ops. The read paths degrade the same way (ReadStream:466 yields nothing, Aggregate:872 returns empty), so a misconfigured store is indistinguishable from an empty index. Mirrors the SQL null-connector no-op already recorded for DataBaseBulkStore.
 
@@ -2007,11 +2053,15 @@ The DeleteByQuery / UpdateByQuery return values are never inspected, unlike ever
 
 `../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase.cs:541`
 
+**Verdict: CONFIRMED by reading, not fixed here; spawned** (TASK-153, measured 2026-10-15). `AbstractConnectorBase` still drops the ON clause of a `JoinType.Cross` group that carries conditions, and Cross is the default join type. Fixing it changes what an existing join renders, so it goes with SH-M148 into a task of its own.
+
 `if (joingroup.Key.JoinType != JoinType.Cross && … Any())` renders ` ON (…)`, so a Join whose JoinType is Cross has its conditions silently discarded. JoinType.Cross is the DEFAULT of both Join.Create overloads and the Join constructor (Join.cs:22/30), so a caller who supplies conditions but forgets the join type gets an unrestricted cross product instead of the restricted join — every row of one table paired with every row of the other.
 
 #### SH-M148 — A join group with no conditions is dropped entirely rather than emitted
 
 `../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase.cs:531`
+
+**Verdict: CONFIRMED by reading, not fixed here; spawned** (TASK-153, measured 2026-10-15). `joingroups.Where(x => x.Value.Any())` still drops a conditionless group, so a CROSS JOIN without conditions cannot be expressed. Same code and same task as SH-M147.
 
 `joingroups.Where(x => x.Value.Any())` skips any (Right, JoinType) group whose flattened conditions are empty. A conditionless CROSS JOIN is legitimate and the only way to express it, so it disappears from the FROM clause; if the SELECT list or WHERE references a column of the dropped table the statement fails, and if it does not, the result set is quietly narrower than requested. An Inner/LeftOuter join whose conditions failed to translate vanishes the same way.
 
@@ -2019,17 +2069,23 @@ The DeleteByQuery / UpdateByQuery return values are never inspected, unlike ever
 
 `../Birko.Data.SQL/SQL/DataBase.cs:296`
 
+**Verdict: CONFIRMED, fixed** (TASK-153, measured 2026-10-15). `x => x.Sub.Count` recursed without the type and produced a null fragment. A parameter-bound nested member now throws `NotSupportedException`; a closure chain (`holder.Sub.Count`) is still bound as a value (pin).
+
 `return ParseExpression(memberExpression.Expression, parameters, withTableName);` (comment: "not resending type here") recurses without exprType, so column resolution is impossible in the recursion. For a value expression `x => x.Sub.Prop` it descends to `x.Sub` (no type → no name → not a ConstantExpression) and then to the ParameterExpression, which matches no branch and returns null. The caller interpolates that null, so the emitted SQL is `( = @Const0)` — a syntax error at execution rather than a translation failure.
 
 #### SH-M150 — ContainsParameterCore returns false for NewArray/New/Invocation/TypeBinary nodes
 
 `../Birko.Data.SQL/SQL/DataBase.cs:1312`
 
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-153, measured 2026-10-15). The widening it led to was closed by TASK-308: `x => (object)x.Name is string || …` is refused (measured). `ContainsParameterCore` still answered false for NewArray / New / Invocation / TypeIs nodes, so the classification is now completed with an `ExpressionVisitor`.
+
 The recursion covers only Lambda/Parameter/Member/MethodCall/Unary/Binary/Conditional and falls through to `return false`. A parameter-bearing NewArrayExpression, NewExpression, InvocationExpression or TypeBinaryExpression is therefore classified parameter-free, so EvaluateExpression takes the compile path (1263) and Compile() throws "variable 'x' … is not defined". Callers catch that (TryGetLiteralBool:965, line 499) and continue, which is how an `is` test or an Expression.Invoke-composed predicate reaches the constant-true widening at line 916.
 
 #### SH-M151 — ElasticSearch caches compiled delegates in an unbounded static dictionary keyed by expression text
 
 `../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs:828`
+
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-153, measured 2026-10-15). The unbounded, text-keyed static cache was real. The stale-closure value is **not reachable through the translator**: `ExpressionNormalizer` folds every parameter-free subtree first, so two closures from one call site arrive as distinct constants; the pin `Two_closures_from_one_call_site_each_bind_their_own_value` passed before the fix. The cache is now a `ConditionalWeakTable` keyed by the expression object, as in `DataBase`.
 
 `_expressionCache` is a static ConcurrentDictionary<string, Func<object>> keyed by `expr.ToString()`, never trimmed, so long-lived processes accumulate one entry (plus a compiled delegate and its DynamicMethod) per distinct predicate text. Worse, ToString() is not identity: two closures over the same display-class field render identically (`value(C+<>c__DisplayClass0_0).ids`), so a cache hit can return the first closure's captured value. DataBase.cs:37 uses a ConditionalWeakTable keyed by reference specifically to avoid both problems.
 

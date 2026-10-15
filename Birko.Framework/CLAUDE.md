@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Filter translation: 18 medium defects fixed on SQL and ElasticSearch (2026-10-15)
+
+[[TASK-153]]. `25 > x.Age` returned the other rows, `IsNullOrEmpty` matched nothing, `StartsWith("A_1")` matched
+`A21`, and a `Between` rule lost its upper bound. All are measured against real databases and fixed. Every LIKE now
+declares `ESCAPE '!'`. A CASE bool test is `(col = '1')`, the form all four providers accept. An ElasticSearch store
+given foreign settings throws instead of answering empty. Join rendering is [[TASK-626]].
 ### The event-tenant bridge refuses a tenant context it cannot see (2026-10-15)
 
 [[TASK-328]]. With `AddTenantContext*`, the bridge read `Tenant.Current` while the app set its tenant on a separate
@@ -333,12 +339,6 @@ never worked.
 page of 20 buckets and ignored the organization. So `DropCollection("Metrics")` deleted `metrics`, and another org's
 bucket counted as ours. Bucket creation also passed the org name as an ID (a 400). All of it now goes through
 `InfluxBucketLookup`. The bookkeeping bucket `_migrations` is a name InfluxDB 2 refuses ([[TASK-617]]).
-### ElasticSearch job dequeue hands out the job it claims (2026-10-14)
-
-[[TASK-616]]. `ElasticSearchJobQueue.DequeueAsync` verified its claim with a search, which does not see a write until
-the next refresh. Measured live, one dequeue claimed every eligible job, left them all in Processing and returned none.
-The claim is now read back with the new `AsyncElasticSearchStore.ReadRealtimeAsync(guid)`, a realtime GET whose
-`ReadRealtimeCoreAsync` is the seam a test double overrides.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

@@ -148,17 +148,10 @@ public static class RuleConditionConverter
 
         return rule switch
         {
-            Rules.Rule leaf => NegateLeaf(ConvertLeaf(leaf, entityType), negate),
+            Rules.Rule leaf => ConvertLeaf(leaf, negate, entityType),
             RuleGroup group => BuildGroup(group, negate, entityType),
             _ => null
         };
-    }
-
-    private static Condition NegateLeaf(Condition leaf, bool negate)
-    {
-        if (negate)
-            leaf.IsNot = !leaf.IsNot;
-        return leaf;
     }
 
     private static Condition? BuildGroup(RuleGroup group, bool negate, Type? entityType)
@@ -191,7 +184,7 @@ public static class RuleConditionConverter
     /// </summary>
     private static Condition MatchNone() => new("1", Array.Empty<object>(), ConditionType.In);
 
-    private static Condition ConvertLeaf(Rules.Rule rule, Type? entityType)
+    private static Condition ConvertLeaf(Rules.Rule rule, bool negate, Type? entityType)
     {
         // SH-H023 (TASK-111). The single place a rule.Field becomes a Condition.Name, and therefore the
         // single place to check it — Condition.Name is interpolated raw by every strategy. With an entity
@@ -201,29 +194,67 @@ public static class RuleConditionConverter
             ? DataBase.ResolveRuleField(entityType, rule.Field)
             : DataBase.ValidateRuleFieldIdentifier(rule.Field);
 
+        // TASK-153. Each operator below answers what RuleEvaluator (ComparisonHelper) answers for the same rule.
+        var isNegated = rule.IsNegated != negate;
+
+        // SH-M129: Between kept only `>= lower`. Inclusive on both bounds, as the evaluator; negated by De Morgan
+        // (`< lower OR > upper`) rather than a NOT around a group, as the rest of this converter does.
+        if (rule.Operator == ComparisonOperator.Between)
+        {
+            if (rule.Value is null || rule.UpperValue is null)
+                throw new ArgumentException($"A Between rule on '{rule.Field}' needs both bounds.", nameof(rule));
+            return isNegated
+                ? Condition.OrSubCondition([
+                    new Condition(name, new[] { rule.Value }, ConditionType.Less),
+                    new Condition(name, new[] { rule.UpperValue }, ConditionType.Greather)])
+                : Condition.AndSubCondition([
+                    new Condition(name, new[] { rule.Value }, ConditionType.GreatherAndEqual),
+                    new Condition(name, new[] { rule.UpperValue }, ConditionType.LessAndEqual)]);
+        }
+
+        // SH-M130: Equal / NotEqual with a null value rendered `Field = NULL`, which no row satisfies.
+        if (rule.Value is null && rule.Operator is ComparisonOperator.Equal or ComparisonOperator.NotEqual)
+        {
+            var notNull = (rule.Operator == ComparisonOperator.NotEqual) != isNegated;
+            return new Condition(name, null, ConditionType.IsNull, false, notNull);
+        }
+
+        // SH-M132: Like wrapped the author's pattern in %…% again, so `FV2026%` matched anywhere. The evaluator reads
+        // a `%` only at either end, so the pattern maps the same way: prefix, suffix, substring, or equality, and
+        // the rest of it is literal (escaped by the LIKE strategy, SH-M134).
+        if (rule.Operator == ComparisonOperator.Like && rule.Value is string pattern)
+        {
+            var (likeType, likeValue) = pattern.Length >= 2 && pattern.StartsWith('%') && pattern.EndsWith('%')
+                ? (ConditionType.Like, pattern[1..^1])
+                : pattern.StartsWith('%') ? (ConditionType.EndsWith, pattern[1..])
+                : pattern.EndsWith('%') ? (ConditionType.StartsWith, pattern[..^1])
+                : (ConditionType.Equal, pattern);
+            return new Condition(name, new object[] { likeValue }, likeType, false, isNegated);
+        }
+
         var (condType, values) = MapOperator(rule);
-        var isNot = rule.IsNegated;
+        var isNot = isNegated;
 
         // Special handling for certain operators that map to IsNot
         if (rule.Operator == ComparisonOperator.NotEqual)
         {
             condType = ConditionType.Equal;
-            isNot = !rule.IsNegated; // NotEqual = Equal + IsNot (double negation if already negated)
+            isNot = !isNegated; // NotEqual = Equal + IsNot (double negation if already negated)
         }
         else if (rule.Operator == ComparisonOperator.NotContains)
         {
             condType = ConditionType.Like;
-            isNot = !rule.IsNegated;
+            isNot = !isNegated;
         }
         else if (rule.Operator == ComparisonOperator.NotIn)
         {
             condType = ConditionType.In;
-            isNot = !rule.IsNegated;
+            isNot = !isNegated;
         }
         else if (rule.Operator == ComparisonOperator.IsNotNull)
         {
             condType = ConditionType.IsNull;
-            isNot = !rule.IsNegated;
+            isNot = !isNegated;
         }
 
         return new Condition(name, values, condType, false, isNot);
@@ -247,11 +278,15 @@ public static class RuleConditionConverter
             ComparisonOperator.StartsWith => (ConditionType.StartsWith, WrapValue(rule.Value)),
             ComparisonOperator.EndsWith => (ConditionType.EndsWith, WrapValue(rule.Value)),
             ComparisonOperator.Like => (ConditionType.Like, WrapValue(rule.Value)),
-            ComparisonOperator.In => (ConditionType.In, rule.Value as IEnumerable ?? WrapValue(rule.Value)),
-            ComparisonOperator.NotIn => (ConditionType.In, rule.Value as IEnumerable ?? WrapValue(rule.Value)),
+            // SH-M131: a string is IEnumerable, so `In "ABC"` bound 'A', 'B', 'C'. The evaluator treats it as one value.
+            ComparisonOperator.In => (ConditionType.In, InValues(rule.Value)),
+            ComparisonOperator.NotIn => (ConditionType.In, InValues(rule.Value)),
             _ => (ConditionType.Equal, WrapValue(rule.Value))
         };
     }
+
+    private static IEnumerable? InValues(object? value)
+        => value is IEnumerable values and not string ? values : WrapValue(value);
 
     private static object[]? WrapValue(object? value)
     {

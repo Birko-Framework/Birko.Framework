@@ -245,6 +245,13 @@ Deliberately unchanged: the parser still returns `null` for its ~20 other "canno
 rather than throwing at source. Guarding at the boundary is the smaller change and now covers every consumer
 path; moving the throw into the parser is a behaviour change for consumers and remains an open option.
 
+**TASK-153 (medium findings).** A value on the left mirrors the operator (`18 > x.Count` is `count < 18`). Two fields
+compared (`x.A == x.B`), a member of a member (`x.Sub.Prop`) and a field compared with a field are refused; they read as
+"field missing" or as the parent field. `IsNullOrEmpty` is `missing OR term ""` (`IsVerbatim`, because NEST drops a term
+on `""`). A parameterless `Any()` is `nested(match_all)`. The compiled-value cache is a `ConditionalWeakTable` keyed by
+the expression. `SetSettings` refuses settings that are not ElasticSearch settings, and a store with no client throws
+(`RequireConnector`) instead of answering empty or reporting a write.
+
 ## Index Mapping
 
 Define mapping for your types:

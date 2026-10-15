@@ -49,11 +49,27 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <param name="settings">The settings to apply.</param>
         public virtual void SetSettings(ISettings settings)
         {
-            if (settings is Settings sets)
-            {
-                _settings = sets;
-                Connector = Data.ElasticSearch.ElasticSearch.GetClient(_settings);
-            }
+            // SH-M146 (TASK-153): any other settings type used to be ignored, leaving no client, and every
+            // write then reported success and every read answered empty: a misconfigured store looked like an
+            // empty index.
+            if (settings is not Settings sets)
+                throw new ArgumentException(
+                    $"An ElasticSearch store needs ElasticSearch settings, not {settings?.GetType().FullName ?? "null"}.",
+                    nameof(settings));
+            _settings = sets;
+            Connector = Data.ElasticSearch.ElasticSearch.GetClient(_settings);
+        }
+
+        /// <summary>
+        /// SH-M146 (TASK-153). A store with no client cannot answer, so it throws instead of reporting an empty
+        /// index or a write that never happened.
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(Connector))]
+        protected void RequireConnector()
+        {
+            if (Connector == null)
+                throw new InvalidOperationException(
+                    $"{GetType().Name} has no ElasticSearch client: call SetSettings with ElasticSearch settings first.");
         }
 
         /// <summary>
@@ -329,7 +345,7 @@ namespace Birko.Data.ElasticSearch.Stores
             RequireBoundedFilter(filter, "delete");
             // CR-L111: lazy-init the index, like every base CRUD method.
             EnsureInitialized();
-            if (Connector == null) return;
+            RequireConnector();
 
             var indexName = GetIndexName();
             var response = Connector.DeleteByQuery(new Nest.DeleteByQueryRequest(indexName)
@@ -525,7 +541,7 @@ namespace Birko.Data.ElasticSearch.Stores
             int? limit = null,
             int? offset = null)
         {
-            if (Connector == null) yield break;
+            RequireConnector();
 
             var indexName = GetIndexName();
             SearchRequest request = new SearchRequest(indexName)
@@ -700,7 +716,7 @@ namespace Birko.Data.ElasticSearch.Stores
             int? offset = null)
         {
             if (highlightOptions == null) throw new ArgumentNullException(nameof(highlightOptions));
-            if (Connector == null) return new HighlightedSearchResults<T>(Array.Empty<SearchResult<T>>(), 0);
+            RequireConnector();
 
             var query = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter);
             return SearchWithHighlights(query, highlightOptions, orderBy, limit, offset);
@@ -723,7 +739,7 @@ namespace Birko.Data.ElasticSearch.Stores
             int? offset = null)
         {
             if (highlightOptions == null) throw new ArgumentNullException(nameof(highlightOptions));
-            if (Connector == null) return new HighlightedSearchResults<T>(Array.Empty<SearchResult<T>>(), 0);
+            RequireConnector();
 
             var indexName = GetIndexName();
             var request = new SearchRequest(indexName)
@@ -913,7 +929,7 @@ namespace Birko.Data.ElasticSearch.Stores
         /// </summary>
         public IReadOnlyList<AggregateResult> Aggregate(AggregateQuery<T> query)
         {
-            if (Connector == null) return Array.Empty<AggregateResult>();
+            RequireConnector();
 
             var indexName = GetIndexName();
 

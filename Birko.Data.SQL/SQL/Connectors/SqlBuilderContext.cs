@@ -45,14 +45,43 @@ namespace Birko.Data.SQL.Connectors
             {
                 return type switch
                 {
-                    Conditions.ConditionType.StartsWith => $"{str}%",
-                    Conditions.ConditionType.Like => $"%{str}%",
-                    Conditions.ConditionType.EndsWith => $"%{str}",
+                    Conditions.ConditionType.StartsWith => $"{EscapeLikePattern(str)}%",
+                    Conditions.ConditionType.Like => $"%{EscapeLikePattern(str)}%",
+                    Conditions.ConditionType.EndsWith => $"%{EscapeLikePattern(str)}",
                     _ => str,
                 };
             }
             return value;
         }
+
+        /// <summary>
+        /// The escape character every LIKE this framework renders declares (<c>LIKE @p ESCAPE '!'</c>). Not the
+        /// backslash: inside a MySQL string literal a backslash is itself an escape, so <c>ESCAPE ''</c> is a
+        /// syntax error there.
+        /// </summary>
+        public const char LikeEscapeCharacter = '!';
+
+        /// <summary>
+        /// SH-M134 (TASK-153). Makes a search term literal inside a LIKE pattern. C#'s <c>Contains</c> /
+        /// <c>StartsWith</c> / <c>EndsWith</c> treat every character literally, but SQL reads <c>%</c> and <c>_</c> as
+        /// wildcards (and SQL Server reads <c>[</c> as a character class), so <c>StartsWith("A_1")</c> matched
+        /// <c>A21</c>. Each is prefixed with <see cref="LikeEscapeCharacter"/>, as is that character itself.
+        /// </summary>
+        public static string EscapeLikePattern(string value)
+        {
+            if (value.IndexOfAny(LikeMetacharacters) < 0)
+                return value;
+            var sb = new System.Text.StringBuilder(value.Length + 4);
+            foreach (var c in value)
+            {
+                if (Array.IndexOf(LikeMetacharacters, c) >= 0)
+                    sb.Append(LikeEscapeCharacter);
+                sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
+        private static readonly char[] LikeMetacharacters = { LikeEscapeCharacter, '%', '_', '[' };
 
         /// <summary>
         /// Escapes a value to prevent SQL injection (fallback when parameters can't be used)

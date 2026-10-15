@@ -45,8 +45,11 @@ namespace Birko.Data.SQL
     /// <b>Premise, stated once because everything here depends on it:</b> doubling <c>'</c> is
     /// <i>complete</i> containment — text inside a literal cannot leave it — but only while
     /// <c>standard_conforming_strings</c> is <c>on</c>. That is PostgreSQL's default since 9.1 and the
-    /// ANSI behaviour on the other three providers. With it off, backslash escapes revive and
-    /// <c>\'</c> breaks out. Every literal-interpolating sink in this framework has always rested on
+    /// ANSI behaviour on SQLite and SQL Server. <b>It is not MySQL's</b> (TASK-153, SH-M139, measured on 8.4): its
+    /// default <c>sql_mode</c> lacks <c>NO_BACKSLASH_ESCAPES</c>, so <c>\'</c> breaks out there, exactly as it does
+    /// on PostgreSQL with <c>standard_conforming_strings</c> off. Text reaching a MySQL literal through this must come
+    /// from the model, never from input; <c>DataBase.InlineConstant</c>, the sink that can carry input, refuses a
+    /// backslash. Every literal-interpolating sink in this framework has always rested on
     /// this; it is written down here rather than assumed.
     /// </para>
     /// </remarks>

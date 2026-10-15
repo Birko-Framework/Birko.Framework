@@ -62,7 +62,7 @@ namespace Birko.Data.SQL.Tests.Strategies
             var sql = _strategy.BuildSql(condition, _command, _context);
 
             // Assert
-            sql.Should().Be("Name LIKE @WHEREName0_0");
+            sql.Should().Be("Name LIKE @WHEREName0_0 ESCAPE '!'");
         }
 
         [Fact]
@@ -75,7 +75,7 @@ namespace Birko.Data.SQL.Tests.Strategies
             var sql = _strategy.BuildSql(condition, _command, _context);
 
             // Assert
-            sql.Should().Be("Name NOT LIKE @WHEREName0_0");
+            sql.Should().Be("Name NOT LIKE @WHEREName0_0 ESCAPE '!'");
         }
 
         [Fact]
@@ -88,7 +88,7 @@ namespace Birko.Data.SQL.Tests.Strategies
             var sql = _strategy.BuildSql(condition, _command, _context);
 
             // Assert
-            sql.Should().Be("Name LIKE @WHEREName0_0");
+            sql.Should().Be("Name LIKE @WHEREName0_0 ESCAPE '!'");
         }
 
         [Fact]
@@ -101,7 +101,7 @@ namespace Birko.Data.SQL.Tests.Strategies
             var sql = _strategy.BuildSql(condition, _command, _context);
 
             // Assert
-            sql.Should().Be("Name LIKE @WHEREName0_0");
+            sql.Should().Be("Name LIKE @WHEREName0_0 ESCAPE '!'");
         }
 
         [Fact]
@@ -155,7 +155,7 @@ namespace Birko.Data.SQL.Tests.Strategies
             var sql = _strategy.BuildSql(condition, _command, _context);
 
             // Assert
-            sql.Should().Be("Table1.Name LIKE Table2.Name");
+            sql.Should().Be("Table1.Name LIKE Table2.Name ESCAPE '!'");
         }
 
         [Fact]
@@ -168,7 +168,7 @@ namespace Birko.Data.SQL.Tests.Strategies
             var sql = _strategy.BuildSql(condition, _command, _context);
 
             // Assert
-            sql.Should().Be("Name LIKE NULL");
+            sql.Should().Be("Name LIKE NULL ESCAPE '!'");
         }
 
         [Fact]

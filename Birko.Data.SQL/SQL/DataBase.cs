@@ -129,7 +129,16 @@ namespace Birko.Data.SQL
                 else if (expr is ConditionalExpression conditionalExpression)
                 {
                     // Value-position ternary (e.g. an Update SET right-hand side): render as CASE WHEN.
-                    var test = ParseExpression(conditionalExpression.Test, parameters, withTableName, exprType);
+                    // SH-M136 (TASK-153): a bare bool column is not a predicate on SQL Server (BIT, error 4145), so
+                    // it is rendered as the same test the WHERE-side renderer uses.
+                    // The column is resolved by this method, so it is qualified only when the caller asked
+                    // (an UPDATE's SET is not: PostgreSQL rejects `"T".col` there against `UPDATE "T"`).
+                    var testExpr = UnwrapConvert(conditionalExpression.Test);
+                    var test = testExpr is MemberExpression boolMember
+                            && UnwrapNullable(boolMember.Type) == typeof(bool)
+                            && TryResolveParameterColumn(boolMember, exprType, out _)
+                        ? BoolColumnTest(ParseExpression(boolMember, parameters, withTableName, exprType)!)
+                        : ParseExpression(conditionalExpression.Test, parameters, withTableName, exprType);
                     var ifTrue = ParseExpression(conditionalExpression.IfTrue, parameters, withTableName, exprType);
                     var ifFalse = ParseExpression(conditionalExpression.IfFalse, parameters, withTableName, exprType);
                     return $"CASE WHEN {test} THEN {ifTrue} ELSE {ifFalse} END";
@@ -309,9 +318,19 @@ namespace Birko.Data.SQL
                             parameters.Add(key, value!);
                             return key;
                         }
+                        else if (!ContainsParameter(memberExpression))
+                        {
+                            // A closure chain (`filter.Range.From`): a value, bound like any other constant.
+                            var key = "@Const" + parameters.Count;
+                            parameters.Add(key, EvaluateExpression(memberExpression)!);
+                            return key;
+                        }
                         else
                         {
-                            return ParseExpression(memberExpression.Expression, parameters, withTableName); // not resending type here
+                            // SH-M149 (TASK-153): `x.Sub.Prop` is no column. Recursing (without the type) produced a
+                            // null fragment and SQL such as `( = @Const0)`, a syntax error far from its cause.
+                            throw new NotSupportedException(
+                                $"Cannot translate '{memberExpression}' to SQL: it is not a mapped column of the entity.");
                         }
                     }
                     else
@@ -645,14 +664,24 @@ namespace Birko.Data.SQL
                             return new[] { dateRange };
                         }
 
+                        // SH-M123 (TASK-153): the condition is rendered `column op value`, whichever side each came
+                        // from, so a value on the LEFT must flip the operator. `25 > x.Age` rendered `Age > 25`, the
+                        // complement's neighbour. The value-expression and `.Date` paths above already flipped.
+                        var comparedLeft = binaryExpression.Left;
+                        var comparedRight = binaryExpression.Right;
+                        if (!ContainsParameter(comparedLeft) && ContainsParameter(comparedRight))
+                        {
+                            (comparedLeft, comparedRight) = (comparedRight, comparedLeft);
+                            conditionType = FlipComparison(conditionType);
+                        }
                         var basecondition = new Conditions.Condition(null, null)
                         {
                             IsOr = isOR,
                             Type = conditionType,
                             IsNot = isNot,
                         };
-                        var left = ParseConditionExpression(binaryExpression.Left, basecondition, exprType);
-                        var right = ParseConditionExpression(binaryExpression.Right, basecondition, exprType);
+                        var left = ParseConditionExpression(comparedLeft, basecondition, exprType);
+                        var right = ParseConditionExpression(comparedRight, basecondition, exprType);
                         StoreComparedValues(basecondition, binaryExpression, exprType);
                         if (parent != null)
                         {
@@ -670,6 +699,48 @@ namespace Birko.Data.SQL
                 else if (expr is MethodCallExpression methodExpression)
                 {
                     var condition = parent ?? new Conditions.Condition(null, null);
+
+                    // SH-M127 (TASK-153): `string.IsNullOrEmpty(x.Col)` matched no case below, so the column became the
+                    // Name with no value bound: `Col = NULL`, no rows, and its negation no rows either.
+                    if (methodExpression.Method.Name == "IsNullOrEmpty"
+                        && methodExpression.Method.DeclaringType == typeof(string)
+                        && methodExpression.Arguments.Count == 1
+                        && ContainsParameter(methodExpression.Arguments[0]))
+                    {
+                        var probe = new Conditions.Condition(null, null);
+                        ParseConditionExpression(methodExpression.Arguments[0], probe, exprType);
+                        if (string.IsNullOrEmpty(probe.Name) || probe.SubConditions?.Any() == true)
+                            throw new NotSupportedException(
+                                $"Cannot translate '{methodExpression}' to SQL: its argument is not a column.");
+                        // Nested in the condition, so the condition's own IsNot (from an enclosing `!`) negates the
+                        // whole OR, and its IsOr keeps joining it to its sibling: NOT (Col IS NULL OR Col = '').
+                        var subs = condition.SubConditions as List<Condition> ?? new List<Condition>(condition.SubConditions ?? []);
+                        subs.Add(new Conditions.Condition(null, null)
+                        {
+                            IsOr = true,
+                            SubConditions = new List<Condition>
+                            {
+                                new Conditions.Condition(probe.Name, null, ConditionType.IsNull),
+                                new Conditions.Condition(probe.Name, new object[] { string.Empty }, ConditionType.Equal),
+                            },
+                        });
+                        condition.SubConditions = subs;
+                        return new[] { condition };
+                    }
+
+                    // SH-M125 (TASK-153): `x.Name.StartsWith(x.Prefix)` parsed both columns into one condition, the
+                    // object overwriting the pattern, with no value bound: `Name LIKE NULL`, no rows. Building a
+                    // pattern from a column needs string concatenation, which no provider spells the same way.
+                    if (methodExpression.Method.DeclaringType == typeof(string)
+                        && methodExpression.Method.Name is "StartsWith" or "EndsWith" or "Contains"
+                        && methodExpression.Object != null && ContainsParameter(methodExpression.Object)
+                        && methodExpression.Arguments.Count > 0 && ContainsParameter(methodExpression.Arguments[0]))
+                    {
+                        throw new NotSupportedException(
+                            $"Cannot translate '{methodExpression}' to SQL: the pattern is a column, and building a LIKE "
+                            + "pattern from a column has no portable SQL form. Compare against a value instead.");
+                    }
+
                     switch (methodExpression.Method.Name)
                     {
                         case "StartsWith":
@@ -1360,6 +1431,14 @@ namespace Birko.Data.SQL
 
         private static Type UnwrapNullable(Type type) => Nullable.GetUnderlyingType(type) ?? type;
 
+        /// <summary>
+        /// A bool column used as a predicate (TASK-153, SH-M135/SH-M136). <c>col &lt;&gt; 0</c> fails on PostgreSQL
+        /// (<c>boolean &lt;&gt; integer</c>) and a bare column fails on SQL Server (a BIT is no predicate). Comparing with
+        /// the literal <c>'1'</c> is accepted by all four: PostgreSQL casts it to boolean, the others convert it to
+        /// the column's number. Measured live in <c>BoolColumnTestLiveTests</c>.
+        /// </summary>
+        private static string BoolColumnTest(string column) => $"({column} = '1')";
+
         private static bool IsNullConstant(Expression expr)
             => expr is ConstantExpression c && c.Value == null;
 
@@ -1464,7 +1543,7 @@ namespace Birko.Data.SQL
                     return $"({RenderValueFragment(b.Left, exprType)} {op} {RenderValueFragment(b.Right, exprType)})";
                 case MemberExpression m when TryResolveParameterColumn(m, exprType, out var column)
                         && UnwrapNullable(m.Type) == typeof(bool):
-                    return $"({column} <> 0)";
+                    return BoolColumnTest(column);
                 default:
                     if (!ContainsParameter(expr) && EvaluateExpression(expr) is bool constBool)
                         return constBool ? "(1=1)" : "(1=0)";
@@ -1488,6 +1567,13 @@ namespace Birko.Data.SQL
                 case bool b:
                     return b ? "1" : "0";
                 case string s:
+                    // SH-M139 (TASK-153): doubling `'` contains a literal only where backslash is not an escape.
+                    // MySQL's default sql_mode honours `\'`, so `\' OR 1=1 -- ` left the literal there. This
+                    // renderer has no dialect, and a parameter cannot be bound inside the fragment, so it refuses.
+                    if (s.IndexOf('\\') >= 0)
+                        throw new NotSupportedException(
+                            "Cannot inline a string containing a backslash into a CASE/COALESCE/arithmetic SQL fragment: "
+                            + "MySQL reads it as an escape. Compare the column with the value directly instead.");
                     return "'" + SqlLiteral.EscapeLiteral(s) + "'";
                 case Enum e:
                     return Convert.ToInt64(e, System.Globalization.CultureInfo.InvariantCulture)
@@ -1755,7 +1841,26 @@ namespace Birko.Data.SQL
                 return ContainsParameter(be.Left) || ContainsParameter(be.Right);
             if (expr is ConditionalExpression ce)
                 return ContainsParameter(ce.Test) || ContainsParameter(ce.IfTrue) || ContainsParameter(ce.IfFalse);
-            return false;
+            // SH-M150 (TASK-153): every other node kind (NewArray, New, Invocation, TypeIs, ListInit, Index, ...)
+            // used to answer false, so a parameter-bearing one was evaluated as a constant.
+            if (expr == null || expr is ConstantExpression)
+                return false;
+            var finder = new ParameterFinder();
+            finder.Visit(expr);
+            return finder.Found;
+        }
+
+        private sealed class ParameterFinder : ExpressionVisitor
+        {
+            public bool Found { get; private set; }
+
+            public override Expression? Visit(Expression? node) => Found ? node : base.Visit(node);
+
+            protected override Expression VisitParameter(ParameterExpression node)
+            {
+                Found = true;
+                return node;
+            }
         }
 
         private static IEnumerable<object>? InvokeExpression(Expression expr)

@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-14 — ElasticSearch job dequeue hands out the job it claims
+
+[[TASK-616]]. `ElasticSearchJobQueue.DequeueAsync` verified its claim with a search, which does not see a write until
+the next refresh. Measured live, one dequeue claimed every eligible job, left them all in Processing and returned none.
+The claim is now read back with the new `AsyncElasticSearchStore.ReadRealtimeAsync(guid)`, a realtime GET whose
+`ReadRealtimeCoreAsync` is the seam a test double overrides.
+
 ## 2026-10-14 — Every ElasticSearch `orderBy` was a 400; sorts now name the stored field
 
 [[TASK-615]]. The sync, async and view stores sent `OrderBy` keys verbatim (`UpdatedAt`), while NEST stores `updatedAt`,

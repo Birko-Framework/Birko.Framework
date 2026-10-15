@@ -70,7 +70,11 @@ namespace Birko.Data.ElasticSearch
         public static TimeSpan DefaultScrollTime { get; set; } = TimeSpan.FromMinutes(1);
 
         private static readonly ConcurrentDictionary<string, ElasticClient> _clients = new();
-        private static readonly ConcurrentDictionary<string, Func<object>> _expressionCache = new();
+        // SH-M151 (TASK-153): keyed by the expression OBJECT, not its text. Two closures from one call site print the
+        // same (`value(C+<>c__DisplayClass0_0).limit * 2`), so a text key handed the second caller a delegate bound
+        // to the first caller's captured value; and a static dictionary keyed by text never shrank. A weak table
+        // lets an expression and its delegate go together, as DataBase's cache does.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Expression, Func<object>> _expressionCache = new();
 
         /// <summary>
         /// Maximum number of retries for transient failures. Default is 3.
@@ -285,13 +289,34 @@ namespace Birko.Data.ElasticSearch
             var left = ParseExpression(binary.Left, exprType, fieldPrefix) as ITermQuery;
             var right = ParseExpression(binary.Right, exprType, fieldPrefix) as ITermQuery;
 
+            // SH-M126 (TASK-153): two fields. `x.A == x.B` took A as the field and no value, so it became the null
+            // comparison: "A is missing", an unrelated set of documents. A term or range query compares a field
+            // with a value; refused (null), which ParseFilterQuery turns into a throw.
+            if (left?.Field != null && right?.Field != null)
+                return null;
+
             var field = left?.Field ?? right?.Field;
             var value = right?.Value ?? left?.Value;
+
+            // SH-M124 (TASK-153): a value on the LEFT (`18 > x.Age`) is `x.Age < 18`. The query is built field-first,
+            // so the operator is mirrored, as the SQL translator does.
+            var nodeType = binary.NodeType;
+            if (left?.Field == null && right?.Field != null)
+            {
+                nodeType = nodeType switch
+                {
+                    ExpressionType.GreaterThan => ExpressionType.LessThan,
+                    ExpressionType.GreaterThanOrEqual => ExpressionType.LessThanOrEqual,
+                    ExpressionType.LessThan => ExpressionType.GreaterThan,
+                    ExpressionType.LessThanOrEqual => ExpressionType.GreaterThanOrEqual,
+                    _ => nodeType,
+                };
+            }
 
             // Handle null comparisons: Equal(member, null) → must_not exists, NotEqual(member, null) → exists
             if (field != null && value == null)
             {
-                return binary.NodeType switch
+                return nodeType switch
                 {
                     ExpressionType.Equal => new BoolQuery
                     {
@@ -311,13 +336,13 @@ namespace Birko.Data.ElasticSearch
             // NumericRangeQuery(gt=NULL, gte=NULL, lt=NULL, lte=NULL) and survived both ParseFilterQuery
             // and ParseRequiredFilterQuery untouched, so DeleteByQuery targeted the whole index on the most
             // ordinary shape a time-series filter has.
-            if (binary.NodeType is ExpressionType.GreaterThan or ExpressionType.GreaterThanOrEqual
+            if (nodeType is ExpressionType.GreaterThan or ExpressionType.GreaterThanOrEqual
                 or ExpressionType.LessThan or ExpressionType.LessThanOrEqual)
             {
-                return BuildRangeComparison(binary.NodeType, field, value);
+                return BuildRangeComparison(nodeType, field, value);
             }
 
-            return binary.NodeType switch
+            return nodeType switch
             {
                 ExpressionType.Equal => new TermQuery { Field = field, Value = value },
                 ExpressionType.NotEqual => new BoolQuery
@@ -646,9 +671,17 @@ namespace Birko.Data.ElasticSearch
             if (field?.Field == null)
                 return null;
 
+            // SH-M141 (TASK-153): `MustNot wildcard *` excluded an indexed "" too, because `*` matches zero
+            // characters, so it meant "missing", not "null or empty". Missing, or exactly "".
             return new BoolQuery
             {
-                MustNot = new[] { new QueryContainer(new WildcardQuery { Field = field.Field, Value = "*" }) }
+                Should = new[]
+                {
+                    new QueryContainer(new BoolQuery { MustNot = new[] { new QueryContainer(new ExistsQuery { Field = field.Field }) } }),
+                    // IsVerbatim: NEST drops a term on "" as "conditionless", which would leave only the missing half.
+                    new QueryContainer(new TermQuery { Field = field.Field, Value = string.Empty, IsVerbatim = true }),
+                },
+                MinimumShouldMatch = 1,
             };
         }
 
@@ -810,6 +843,11 @@ namespace Birko.Data.ElasticSearch
             if (anyField?.Field == null)
                 return null;
 
+            // SH-M143 (TASK-153): `x.Lines.Any()` has one argument, so First and Last were the same node and the
+            // "predicate" was a term query with no value. With no predicate, any nested document matches.
+            if (call.Arguments.Count == 1)
+                return new NestedQuery { Path = anyField.Field, Query = new MatchAllQuery() };
+
             var query = ParseExpression(call.Arguments.Last(), exprType, anyField.Field.Name);
             if (query == null)
                 return null;
@@ -848,10 +886,8 @@ namespace Birko.Data.ElasticSearch
                 return value != null ? new TermQuery { Value = value } : null;
             }
 
-            // Parameter-bound sub-expression — recurse
-            if (member.Expression != null)
-                return ParseExpression(member.Expression, exprType, fieldPrefix);
-
+            // SH-M142 (TASK-153): a parameter-bound member that is not a direct member (`x.Sub.Prop`) used to recurse
+            // to `x.Sub` and answer with the PARENT's field, so `x.Sub.Prop == 1` ran as `sub == 1`. Refused.
             return null;
         }
 
@@ -1073,8 +1109,7 @@ namespace Birko.Data.ElasticSearch
             }
 
             // Fallback: compile as parameterless lambda with cache
-            var cacheKey = expr.ToString();
-            var func = _expressionCache.GetOrAdd(cacheKey, _ =>
+            var func = _expressionCache.GetValue(expr, _ =>
             {
                 // Box value types so the delegate is always Func<object>
                 var body = expr.Type.IsValueType

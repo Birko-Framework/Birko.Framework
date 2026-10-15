@@ -50,7 +50,7 @@ namespace Birko.Data.SQL.Tests.Connectors
         {
             var condition = Condition.CreateValue("Email", "@example.com", ConditionType.EndsWith);
             var sql = _connectorMock.Object.ConditionDefinition(condition, _command);
-            sql.Should().Be("Email LIKE @WHEREEmail0_0");
+            sql.Should().Be("Email LIKE @WHEREEmail0_0 ESCAPE '!'");
         }
 
         [Fact]
