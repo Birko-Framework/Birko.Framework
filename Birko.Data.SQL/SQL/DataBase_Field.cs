@@ -120,6 +120,30 @@ namespace Birko.Data.SQL
                 + $"{type.Assembly.GetName().Name} has no '{member}'; it was compiled from different Birko.Data.SQL sources.");
         }
 
+        /// <summary>
+        /// SH-M317 (TASK-159). A member reached through an interface (<c>x =&gt; x.UpdatedBy</c> where T is constrained to
+        /// <c>IAuditable</c>, as in the Audit decorator) binds to the INTERFACE property, which carries none of the model's
+        /// attributes, so a <c>[NamedField]</c> remap was ignored and the SET named a column that does not exist. The member
+        /// is resolved by name on the model type instead, most-derived first; an explicit implementation is not found by
+        /// name and keeps the interface property.
+        /// </summary>
+        private static PropertyInfo ResolveOnModel(PropertyInfo property, Type modelType)
+        {
+            if (property.DeclaringType?.IsInterface != true || modelType.IsInterface)
+            {
+                return property;
+            }
+            for (var type = modelType; type != null; type = type.BaseType)
+            {
+                var declared = type.GetProperty(property.Name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                if (declared != null)
+                {
+                    return declared;
+                }
+            }
+            return property;
+        }
+
         public static AbstractField GetField<T, P>(Expression<Func<T, P>> expr)
         {
             PropertyInfo? propInfo = null;
@@ -135,6 +159,7 @@ namespace Birko.Data.SQL
             {
                 throw new ArgumentException($"Unable to resolve property from expression: {expr}", nameof(expr));
             }
+            propInfo = ResolveOnModel(propInfo, expr.Parameters[0].Type);
             if (propInfo.ReflectedType == typeof(Models.AbstractLogModel))
             {
                 propInfo = typeof(Models.AbstractDatabaseLogModel).GetProperty(propInfo.Name);
@@ -166,6 +191,7 @@ namespace Birko.Data.SQL
             {
                 throw new ArgumentException($"Unable to resolve property from expression: {expr}", nameof(expr));
             }
+            propInfo = ResolveOnModel(propInfo, expr.Parameters[0].Type);
             if (propInfo.ReflectedType == typeof(Models.AbstractLogModel))
             {
                 propInfo = typeof(Models.AbstractDatabaseLogModel).GetProperty(propInfo.Name);

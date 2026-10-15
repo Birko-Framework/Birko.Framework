@@ -32,7 +32,7 @@ public class AuditBulkStoreWrapper<TStore, T> : AuditStoreWrapper<TStore, T>, IB
             item.CreatedBy = userId;
             item.UpdatedBy = userId;
             return item;
-        }), storeDelegate);
+        }).ToList(), storeDelegate);
     }
 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
@@ -42,7 +42,7 @@ public class AuditBulkStoreWrapper<TStore, T> : AuditStoreWrapper<TStore, T>, IB
         {
             item.UpdatedBy = userId;
             return item;
-        }), storeDelegate);
+        }).ToList(), storeDelegate);
     }
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
@@ -57,7 +57,8 @@ public class AuditBulkStoreWrapper<TStore, T> : AuditStoreWrapper<TStore, T>, IB
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
     {
-        updates.Set(x => x.UpdatedBy, _auditContext.CurrentUserGuid);
+        // SH-M322 (TASK-159): stamp a copy; the caller's update is theirs.
+        updates = updates.Clone().Set(x => x.UpdatedBy, _auditContext.CurrentUserGuid);
         _innerStore.Update(filter, updates);
     }
 

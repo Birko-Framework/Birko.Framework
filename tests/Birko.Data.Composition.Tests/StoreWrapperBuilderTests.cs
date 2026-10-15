@@ -488,4 +488,23 @@ public class StoreWrapperBuilderTests
 
         act.Should().Throw<InvalidOperationException>();
     }
+
+    public class VersionedModel : AbstractModel, Birko.Data.Patterns.Concurrency.IVersioned
+    {
+        public long Version { get; set; }
+    }
+
+    /// <summary>
+    /// SH-M334 (TASK-159), rule 55: the builder has no versioned link, so an IVersioned model got a chain that never checked
+    /// or bumped Version. It refuses instead of building one silently.
+    /// </summary>
+    [Fact]
+    public void Build_refuses_an_IVersioned_model()
+    {
+        var raw = new AsyncInMemoryStore<VersionedModel>();
+
+        Action act = () => StoreWrapperBuilder.Build<VersionedModel>(raw);
+
+        act.Should().Throw<NotSupportedException>().WithMessage("*IVersioned*");
+    }
 }

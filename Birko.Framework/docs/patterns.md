@@ -64,6 +64,12 @@ await softStore.UpdateAsync(x => x.Price > 100,
 await softStore.DeleteAsync(x => x.IsExpired);                  // Soft-deletes matching non-deleted
 ```
 
+A soft-deleted row is invisible to updates as it is to reads: `Update` of one throws `EntityNotFoundException` (a bulk
+update writes its live items, then reports the deleted Guids), so a stale copy cannot resurrect it. Deleting a row that
+is already deleted keeps its original `DeletedAt`. A filtered `Update` / `Delete` checks **your** filter before adding
+the not-deleted clause: a null filter throws `ArgumentNullException`, and one that reduces to every row throws
+`WholeTableWriteException` (TASK-159).
+
 ### Expression Helper
 
 ```csharp
@@ -182,6 +188,13 @@ await store.UpdateAsync(existingCurrency);
 ```
 
 > **Note:** Requires a bulk store (`IBulkStore<T>` / `IAsyncBulkStore<T>`) because enforcing the constraint needs bulk read and update to find and unset other defaults.
+
+A filtered update enforces it too: `Update(filter, action)` and a `PropertyUpdate` that sets `IsDefault` read the
+matches, keep the last one marked default, unset every other, and write once. A `PropertyUpdate` that does not touch
+`IsDefault` stays a native filtered update (TASK-159).
+
+> ⚠ **Single caller only.** The decorator reads, then writes. Two callers promoting different rows at the same moment
+> can both succeed; closing that race needs storage-level enforcement ([[TASK-632]]). The same holds for unique slugs.
 
 ### Variants
 
@@ -370,6 +383,11 @@ catch (ConcurrentUpdateException ex)
     // Reload and retry
 }
 ```
+
+`Update` of a row that is not stored throws `EntityNotFoundException`, as every store's update does, so `SaveAsync` of an
+unstored Guid creates it at Version 1. A write that fails for another reason (a timeout, a dropped connection) leaves
+`order.Version` as it was, so retrying it is a retry, not a conflict (TASK-159). `StoreWrapperBuilder` has no versioned
+link and refuses an `IVersioned` model; wrap the store yourself.
 
 ## Stacking Decorators
 

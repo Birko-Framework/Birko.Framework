@@ -83,6 +83,11 @@ IAsyncBulkStore<Product> decorated = StoreWrapperBuilder.Build(
 
 If `Product` only implements `ITimestamped` and `ISoftDeletable`, the returned chain is just `SoftDelete → Timestamp → rawStore` — the others are skipped.
 
+An `IVersioned` model is **refused** with `NotSupportedException`: the builder has no optimistic-concurrency link, and a
+chain that never checked `Version` would look as if it did. Wrap the store in `AsyncVersionedStoreWrapper` yourself
+(TASK-159). The chain carries `IAsyncBulkStore<T>` only; aggregation, transaction and settings interfaces of the raw
+store are not forwarded ([[TASK-631]]).
+
 ## What interfaces map to which decorators
 
 | Interface | Decorator | Required context |

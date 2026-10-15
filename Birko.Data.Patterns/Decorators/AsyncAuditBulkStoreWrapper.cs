@@ -34,7 +34,7 @@ public class AsyncAuditBulkStoreWrapper<TStore, T> : AsyncAuditStoreWrapper<TSto
             item.CreatedBy = userId;
             item.UpdatedBy = userId;
             return item;
-        }), storeDelegate, ct);
+        }).ToList(), storeDelegate, ct);
     }
 
     public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
@@ -44,7 +44,7 @@ public class AsyncAuditBulkStoreWrapper<TStore, T> : AsyncAuditStoreWrapper<TSto
         {
             item.UpdatedBy = userId;
             return item;
-        }), storeDelegate, ct);
+        }).ToList(), storeDelegate, ct);
     }
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
@@ -59,7 +59,8 @@ public class AsyncAuditBulkStoreWrapper<TStore, T> : AsyncAuditStoreWrapper<TSto
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
     {
-        updates.Set(x => x.UpdatedBy, _auditContext.CurrentUserGuid);
+        // SH-M322 (TASK-159): stamp a copy; the caller's update is theirs.
+        updates = updates.Clone().Set(x => x.UpdatedBy, _auditContext.CurrentUserGuid);
         return _innerStore.UpdateAsync(filter, updates, ct);
     }
 

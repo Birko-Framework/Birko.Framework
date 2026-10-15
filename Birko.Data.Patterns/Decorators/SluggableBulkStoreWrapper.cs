@@ -37,8 +37,14 @@ public class SluggableBulkStoreWrapper<TStore, T> : SluggableStoreWrapper<TStore
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         var items = data as IReadOnlyList<T> ?? data.ToList();
+        // SH-M319 (TASK-159): the batch's own slugs count, as in Create and in the async twin; two rows of one batch
+        // re-resolving to "widget" both kept it.
+        var batchSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in items)
-            ResolveSlug(item, item.Guid);
+        {
+            ResolveSlug(item, item.Guid, batchSlugs);
+            batchSlugs.Add(item.Slug!);
+        }
         _innerStore.Update(items, storeDelegate);
     }
 

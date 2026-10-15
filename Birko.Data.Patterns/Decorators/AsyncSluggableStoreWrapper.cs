@@ -72,8 +72,10 @@ public class AsyncSluggableStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
                     return true;
                 if (data.IsReservedSlug(slug))
                     return true;
-                var existing = await _innerStore.ReadAsync(BuildSlugFilter(slug), ct);
-                return existing is not null && existing.Guid != excludeId;
+                var existing = await _innerStore.ReadAsync(BuildSlugFilter(slug, excludeId), ct);
+                // SH-M326 (TASK-159): ANY other row holding the slug, asked in the filter. Reading one row and comparing its
+                // Guid answered "free" whenever the store happened to return this row, so an existing duplicate survived.
+                return existing is not null;
             },
             fallback: "item");
     }
@@ -81,8 +83,10 @@ public class AsyncSluggableStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
     /// <summary>
     /// Builds an expression filter for matching a specific slug value.
     /// </summary>
-    protected static Expression<Func<T, bool>> BuildSlugFilter(string slug)
+    protected static Expression<Func<T, bool>> BuildSlugFilter(string slug, Guid? excludeId = null)
     {
-        return entity => entity.Slug == slug;
+        if (excludeId == null)
+            return entity => entity.Slug == slug;
+        return entity => entity.Slug == slug && entity.Guid != excludeId;
     }
 }

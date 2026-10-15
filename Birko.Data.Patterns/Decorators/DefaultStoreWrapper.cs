@@ -87,17 +87,33 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
     {
-        _innerStore.Update(filter, item =>
+        // SH-M329/M330 (TASK-159): read the matches, apply, then write once, as the async twin does. Unsetting the other
+        // defaults from inside the inner store's update callback was a nested write in an in-flight operation, and
+        // every matched row that the action made default stayed default (each unset excluded only itself).
+        RequireFilter(filter, "update");
+        var items = _innerStore.Read(filter, null, null, null).ToList();
+        foreach (var item in items)
         {
             updateAction(item);
-            if (item.IsDefault)
-            {
-                UnsetOtherDefaults(item.Guid);
-            }
-        });
+        }
+        KeepLastDefault(items);
+        if (items.Count > 0)
+        {
+            _innerStore.Update(items);
+        }
     }
 
-    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates) => _innerStore.Update(filter, updates);
+    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+    {
+        // SH-M320 (TASK-159): an update that writes IsDefault is enforced like the Action overload; a native SET of
+        // IsDefault = true over N rows left N defaults. Any other update stays native.
+        if (WritesIsDefault(updates))
+        {
+            Update(filter, item => updates.ApplyTo(item));
+            return;
+        }
+        _innerStore.Update(filter, updates);
+    }
 
     public void Delete(T data) => _innerStore.Delete(data);
     public void Delete(IEnumerable<T> data) => _innerStore.Delete(data);
@@ -121,14 +137,44 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
     public TInner? GetInnerStoreAs<TInner>() where TInner : class => _innerStore as TInner;
 
     /// <summary>
+    /// Of a batch, only the last item marked default stays default; every other stored default is unset.
+    /// </summary>
+    private void KeepLastDefault(List<T> items)
+    {
+        var defaultItems = items.Where(i => i.IsDefault).ToList();
+        if (defaultItems.Count == 0)
+        {
+            return;
+        }
+        foreach (var item in defaultItems.SkipLast(1))
+        {
+            item.IsDefault = false;
+        }
+        UnsetOtherDefaults(defaultItems.Last().Guid, items.Select(i => i.Guid).ToHashSet());
+    }
+
+    internal static bool WritesIsDefault(PropertyUpdate<T> updates) =>
+        updates.Assignments.Any(a => a.MemberPath == nameof(IDefault.IsDefault));
+
+    private static void RequireFilter(Expression<Func<T, bool>> filter, string operation)
+    {
+        if (filter is null)
+            throw new ArgumentNullException(nameof(filter), $"A filtered {operation} on {typeof(T).Name} needs a filter.");
+        Birko.Data.Expressions.BoundedFilterGuard.Require(filter, operation, typeof(T).Name, "UpdateAll(updateAction)");
+    }
+
+    /// <summary>
     /// Finds all entities with IsDefault=true (excluding the given entity) and sets them to false.
     /// </summary>
     protected void UnsetOtherDefaults(Guid? excludeGuid, HashSet<Guid?>? alsoExcludeGuids = null)
     {
-        var others = _innerStore.Read(e => e.IsDefault, orderBy: null, limit: null, offset: null).Where(e => e.Guid != excludeGuid);
+        // SH-M324 (TASK-159): a null exclusion excludes nothing. Comparing Guid != null skipped any stored default whose
+        // Guid was null, and a null in the batch's set did the same, leaving two defaults.
+        var others = _innerStore.Read(e => e.IsDefault, orderBy: null, limit: null, offset: null)
+            .Where(e => excludeGuid == null || e.Guid != excludeGuid);
         if (alsoExcludeGuids != null)
         {
-            others = others.Where(e => !alsoExcludeGuids.Contains(e.Guid));
+            others = others.Where(e => e.Guid == null || !alsoExcludeGuids.Contains(e.Guid));
         }
 
         var toUpdate = others.ToList();

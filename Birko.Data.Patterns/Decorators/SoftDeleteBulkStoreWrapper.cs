@@ -30,21 +30,31 @@ public class SoftDeleteBulkStoreWrapper<TStore, T> : SoftDeleteStoreWrapper<TSto
 
     public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        _innerStore.Create(data.Select(item => { item.DeletedAt = null; return item; }), storeDelegate);
+        _innerStore.Create(data.Select(item => { item.DeletedAt = null; return item; }).ToList(), storeDelegate);
     }
 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        _innerStore.Update(data, storeDelegate);
+        // SH-M331 (TASK-159): a soft-deleted row is invisible to reads, so it is not found by an update either. Writing it
+        // through let a caller resurrect it (DeletedAt back to null) past the Sluggable and Default probes, which read
+        // through this wrapper and never saw it. TASK-555's shape: the live items are written, then the rest reported.
+        var items = data.ToList();
+        var ids = items.Select(i => i.Guid).ToList();
+        var deleted = _innerStore.Read(x => ids.Contains(x.Guid) && x.DeletedAt != null, null, null, null).Select(x => x.Guid!.Value).ToHashSet();
+        _innerStore.Update(items.Where(i => i.Guid == null || !deleted.Contains(i.Guid.Value)).ToList(), storeDelegate);
+        if (deleted.Count > 0)
+            throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), deleted);
     }
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
     {
+        RequireCallerFilter(filter, "update");
         _innerStore.Update(SoftDeleteFilter.CombineWithNotDeleted(filter), updateAction);
     }
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
     {
+        RequireCallerFilter(filter, "update");
         _innerStore.Update(SoftDeleteFilter.CombineWithNotDeleted(filter), updates);
     }
 
@@ -53,9 +63,15 @@ public class SoftDeleteBulkStoreWrapper<TStore, T> : SoftDeleteStoreWrapper<TSto
     /// </summary>
     public void Delete(IEnumerable<T> data)
     {
+        // SH-M325 (TASK-159): a row already deleted keeps its deletion instant; only live rows are stamped. SH-M323: once.
         var now = _clock.UtcNow;
-        var items = data.Select(item => { item.DeletedAt = now; return item; });
-        _innerStore.Update(items);
+        var items = data.ToList();
+        var ids = items.Select(i => i.Guid).ToList();
+        var already = _innerStore.Read(x => ids.Contains(x.Guid) && x.DeletedAt != null, null, null, null).Select(x => x.Guid!.Value).ToHashSet();
+        var live = items.Where(i => i.Guid == null || !already.Contains(i.Guid.Value)).ToList();
+        foreach (var item in live) item.DeletedAt = now;
+        if (live.Count > 0)
+            _innerStore.Update(live);
     }
 
     /// <summary>
@@ -63,7 +79,18 @@ public class SoftDeleteBulkStoreWrapper<TStore, T> : SoftDeleteStoreWrapper<TSto
     /// </summary>
     public void Delete(Expression<Func<T, bool>> filter)
     {
-        var now = _clock.UtcNow;
-        _innerStore.Update(SoftDeleteFilter.CombineWithNotDeleted(filter), item => { item.DeletedAt = now; });
+        // SH-M332 (TASK-159): a null filter became "soft-delete every active row". SH-M333: one native UPDATE, not a
+        // per-row read-modify-write that a failure leaves half-applied.
+        RequireCallerFilter(filter, "delete");
+        var deletion = new PropertyUpdate<T>().Set(x => x.DeletedAt, (DateTime?)_clock.UtcNow);
+        _innerStore.Update(SoftDeleteFilter.CombineWithNotDeleted(filter), deletion);
+    }
+
+    private static void RequireCallerFilter(Expression<Func<T, bool>> filter, string operation)
+    {
+        if (filter is null)
+            throw new ArgumentNullException(nameof(filter), $"A filtered soft {operation} on {typeof(T).Name} needs a filter.");
+        Birko.Data.Expressions.BoundedFilterGuard.Require(filter, operation, typeof(T).Name,
+            "a filter that names the rows (deleted rows are excluded for you)");
     }
 }

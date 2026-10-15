@@ -89,19 +89,30 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
 
     public async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
     {
+        // SH-M329/M330 (TASK-159): one collection write, as the sync twin does (atomic on SQL, TASK-629). One write per row
+        // left an arbitrary prefix updated on a failure, and every matched row the action made default stayed default.
+        RequireFilter(filter, "update");
         var items = (await _innerStore.ReadAsync(filter, null, null, null, ct)).ToList();
         foreach (var item in items)
         {
             updateAction(item);
-            if (item.IsDefault)
-            {
-                await UnsetOtherDefaultsAsync(item.Guid, ct: ct);
-            }
-            await _innerStore.UpdateAsync(item, ct: ct);
+        }
+        await KeepLastDefaultAsync(items, ct);
+        if (items.Count > 0)
+        {
+            await _innerStore.UpdateAsync(items, storeDelegate: null, ct);
         }
     }
 
-    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default) => _innerStore.UpdateAsync(filter, updates, ct);
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
+    {
+        // SH-M320 (TASK-159): an update that writes IsDefault is enforced like the Action overload; any other is native.
+        if (DefaultStoreWrapper<IBulkStore<T>, T>.WritesIsDefault(updates))
+        {
+            return UpdateAsync(filter, item => updates.ApplyTo(item), ct);
+        }
+        return _innerStore.UpdateAsync(filter, updates, ct);
+    }
 
     public Task DeleteAsync(T data, CancellationToken ct = default) => _innerStore.DeleteAsync(data, ct);
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default) => _innerStore.DeleteAsync(data, ct);
@@ -125,15 +136,40 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
     public TInner? GetInnerStoreAs<TInner>() where TInner : class => _innerStore as TInner;
 
     /// <summary>
+    /// Of a batch, only the last item marked default stays default; every other stored default is unset.
+    /// </summary>
+    private async Task KeepLastDefaultAsync(List<T> items, CancellationToken ct)
+    {
+        var defaultItems = items.Where(i => i.IsDefault).ToList();
+        if (defaultItems.Count == 0)
+        {
+            return;
+        }
+        foreach (var item in defaultItems.SkipLast(1))
+        {
+            item.IsDefault = false;
+        }
+        await UnsetOtherDefaultsAsync(defaultItems.Last().Guid, items.Select(i => i.Guid).ToHashSet(), ct);
+    }
+
+    private static void RequireFilter(Expression<Func<T, bool>> filter, string operation)
+    {
+        if (filter is null)
+            throw new ArgumentNullException(nameof(filter), $"A filtered {operation} on {typeof(T).Name} needs a filter.");
+        Birko.Data.Expressions.BoundedFilterGuard.Require(filter, operation, typeof(T).Name, "UpdateAllAsync(updateAction)");
+    }
+
+    /// <summary>
     /// Finds all entities with IsDefault=true (excluding the given entity) and sets them to false.
     /// </summary>
     protected async Task UnsetOtherDefaultsAsync(Guid? excludeGuid, HashSet<Guid?>? alsoExcludeGuids = null, CancellationToken ct = default)
     {
+        // SH-M324 (TASK-159): a null exclusion excludes nothing; see the sync twin.
         var allDefaults = await _innerStore.ReadAsync(e => e.IsDefault, orderBy: null, limit: null, offset: null, ct);
-        var others = allDefaults.Where(e => e.Guid != excludeGuid);
+        var others = allDefaults.Where(e => excludeGuid == null || e.Guid != excludeGuid);
         if (alsoExcludeGuids != null)
         {
-            others = others.Where(e => !alsoExcludeGuids.Contains(e.Guid));
+            others = others.Where(e => e.Guid == null || !alsoExcludeGuids.Contains(e.Guid));
         }
 
         var toUpdate = others.ToList();

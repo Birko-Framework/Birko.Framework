@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Store decorators: soft-deleted rows are not found, one default per filtered write (2026-10-15)
+
+[[TASK-159]]. An update could resurrect a soft-deleted row, and a filtered soft delete checked no filter, so a null
+soft-deleted every row. A `PropertyUpdate` setting `IsDefault` over N rows left N defaults. The slug probe could keep a
+slug another row held. A versioned update of a missing row was a conflict, not not-found, so `Save` threw. `StoreWrapperBuilder`
+now refuses `IVersioned`. An interface member's `[NamedField]` is honoured in a SQL SET. Races: [[TASK-632]].
 ### A SQL bulk write commits all of its items or none (2026-10-15)
 
 [[TASK-629]]. Outside a transaction, `Create` / `Update` / `Delete` of a collection committed item by item, so a failure
@@ -332,12 +338,6 @@ old one. Measured: a member made `[Keyword]` over a `text` index matched nothing
 model says NOT NULL, or the reverse, read clean. It is now `ColumnDriftKind.NullabilityMismatch`, read from each catalogue
 (`birko_nullable`) against `IsNotNull`. Key columns are skipped. **Expect new drift** on tables created by hand, or
 altered with a `MODIFY` / `ALTER COLUMN` that dropped `NOT NULL`.
-### An ElasticSearch `PropertyUpdate` Set of null stores null (2026-10-15)
-
-[[TASK-501]]. The update script bound a null as `""`, so a string stored `""`, and a nullable number or date failed the
-mapping: a 400 that, before [[TASK-502]], silently dropped the whole update. A null is now a literal `null`. The script
-resolves its field through `StoredFieldName`, so a mapped member is written where it is read. A non-property selector
-throws `ArgumentException`.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

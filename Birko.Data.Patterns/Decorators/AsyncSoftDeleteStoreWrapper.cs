@@ -47,18 +47,24 @@ public class AsyncSoftDeleteStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrap
         return _innerStore.CreateAsync(data, processDelegate, ct);
     }
 
-    public Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+    public async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
-        return _innerStore.UpdateAsync(data, processDelegate, ct);
+        // SH-M331 (TASK-159): a soft-deleted row is not found, as reads do not see it; updating it would resurrect it.
+        if (data.Guid != null && (await _innerStore.ReadAsync(data.Guid.Value, ct))?.DeletedAt != null)
+            throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), data.Guid);
+        await _innerStore.UpdateAsync(data, processDelegate, ct);
     }
 
     /// <summary>
     /// Soft-deletes the entity by setting DeletedAt to UtcNow.
     /// </summary>
-    public Task DeleteAsync(T data, CancellationToken ct = default)
+    public async Task DeleteAsync(T data, CancellationToken ct = default)
     {
+        // SH-M325 (TASK-159): an already-deleted row keeps its original deletion instant.
+        if (data.Guid != null && (await _innerStore.ReadAsync(data.Guid.Value, ct))?.DeletedAt != null)
+            return;
         data.DeletedAt = _clock.UtcNow;
-        return _innerStore.UpdateAsync(data, ct: ct);
+        await _innerStore.UpdateAsync(data, ct: ct);
     }
 
     public async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)

@@ -3265,11 +3265,15 @@ The delegate is declared `public delegate T StoreDataDelegate<T>(T data)` (IStor
 
 `../Birko.Data.Patterns/Decorators/AuditBulkStoreWrapper.cs:60`
 
+**Verdict: CONFIRMED, fixed** (TASK-159, measured 2026-10-15, on SQLite). Reproduced as `SqliteException: no such column: UpdatedBy` for an `IAuditable` model whose `UpdatedBy` is `[NamedField("updated_by")]`, updated through `AuditBulkStoreWrapper`. `DataBase.GetField` / `GetFieldFromLambda` (`DataBase_Field.cs`) now resolve an interface-declared member by name on the lambda's model type (`ResolveOnModel`), most-derived first. Test: `InterfaceMemberColumnRemapTests`, red on the old code.
+
 In `updates.Set(x => x.UpdatedBy, ...)` T is constrained `AbstractModel, IAuditable`; AbstractModel has no UpdatedBy so the member binds to IAuditable.UpdatedBy, making Member.ReflectedType typeof(IAuditable). GetFieldFromLambda (DataBase_Field.cs:158-165) only remaps AbstractModel/AbstractLogModel, so LoadField runs on the interface property, which has no [NamedField], and CreateAbstractField (AbstractField.cs:68) falls back to property.Name. DataBaseBulkStore.cs:125 uses that as the SET column, so a renamed column yields an UPDATE against a column that does not exist.
 
 #### SH-M318 — Async Audit/Timestamp/SoftDelete SaveAsync discard the created Guid and can return Guid.Empty
 
 `../Birko.Data.Patterns/Decorators/AsyncAuditStoreWrapper.cs:46`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed earlier** (TASK-159, measured 2026-10-15, by reading). Every decorator's `Save` / `SaveAsync` routes through `StoreSave` (TASK-555) and returns the Guid the create returned; `DecoratorSaveUpsertTests` covers it.
 
 `await CreateAsync(data, processDelegate, ct)` at line 50 discards its result and line 56 returns `data.Guid ?? Guid.Empty`. An inner store that generates the Guid and returns it without assigning it back gives the caller Guid.Empty for a row that was created. Same at AsyncTimestampStoreWrapper.cs:54/60 and AsyncSoftDeleteStoreWrapper.cs:68/74. The sync twins (AuditStoreWrapper.cs:48, TimestampStoreWrapper.cs:52, SoftDeleteStoreWrapper.cs:68) all `return Create(...)`, as do Sluggable/Default/Versioned, so Save's result depends on the flavour used.
 
@@ -3277,11 +3281,15 @@ In `updates.Set(x => x.UpdatedBy, ...)` T is constrained `AbstractModel, IAudita
 
 `../Birko.Data.Patterns/Decorators/SluggableBulkStoreWrapper.cs:41`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-159, measured 2026-10-15). Sync `SluggableBulkStoreWrapper.Update` now passes and fills a batch slug set, as `Create` and the async twin do. Two rows of one batch re-titled "Widget" kept one slug before; red on the old code.
+
 `ResolveSlug(item, item.Guid)` is called with no batchSlugs argument, so uniqueness is checked only against the inner store. Two rows in one batch both re-resolving to "widget" both keep "widget". Its own Create (line 31) passes a batch set and AsyncSluggableBulkStoreWrapper.UpdateAsync (line 53) does too, with a CR-H075 comment naming missing per-batch tracking as the defect being fixed. The sync Update was left behind.
 
 #### SH-M320 — Default wrappers forward PropertyUpdate<T> untouched, so the single-default invariant can be violated
 
 `../Birko.Data.Patterns/Decorators/AsyncDefaultStoreWrapper.cs:104`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-159, measured 2026-10-15). A `PropertyUpdate` whose assignments write `IsDefault` is routed through the enforcing filtered-action path (`DefaultStoreWrapper.WritesIsDefault`); any other update stays native. `Set(IsDefault, true)` over 3 rows left 3 defaults; red sync and async.
 
 `UpdateAsync(filter, PropertyUpdate<T>)` is a straight pass-through (same at DefaultStoreWrapper.cs:100). `updates.Set(x => x.IsDefault, true)` with a filter matching N rows yields N rows with IsDefault=true, exactly what the decorator exists to prevent, while the Action<T> overload directly above (line 90) does enforce it.
 
@@ -3289,11 +3297,15 @@ In `updates.Set(x => x.UpdatedBy, ...)` T is constrained `AbstractModel, IAudita
 
 `../Birko.Data.Patterns/Decorators/TimestampBulkStoreWrapper.cs:64`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, waived** (TASK-159, measured 2026-10-15, by reading). Keeping `PrevUpdatedAt` in a native `PropertyUpdate` needs a column-to-column assignment (`PrevUpdatedAt = UpdatedAt`), which `PropertyUpdate` has no form for, and a read-modify-write fallback would break the atomicity an `Increment` relies on (TASK-498). The filtered `Action<T>` overload keeps it.
+
 `Update(filter, PropertyUpdate<T>)` appends only `Set(x => x.UpdatedAt, now)`, breaking the previous-timestamp chain the class maintains everywhere else: PrevUpdatedAt keeps the value from two writes ago. The Action<T> overload above (line 57) sets both. Same at AsyncTimestampBulkStoreWrapper.cs:66. Consumers using PrevUpdatedAt for change detection or sync watermarks read a stale value.
 
 #### SH-M322 — Audit and Timestamp bulk wrappers mutate the caller's PropertyUpdate<T> instance in place
 
 `../Birko.Data.Patterns/Decorators/AsyncAuditBulkStoreWrapper.cs:62`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-159, measured 2026-10-15). The Audit and Timestamp bulk wrappers (sync and async) appended their assignment to the caller's `PropertyUpdate`. They now stamp `updates.Clone()`, a new public method. Red: the caller's update held the extra assignment afterwards.
 
 `updates.Set(...)` appends to the caller-owned Assignments list (PropertyUpdate.cs:27 mutates and returns this), not a copy. Same at AuditBulkStoreWrapper.cs:60, TimestampBulkStoreWrapper.cs:64, AsyncTimestampBulkStoreWrapper.cs:66. Reusing one PropertyUpdate for a second call carries the first call's assignments forward, and a chain with both decorators appends one per decorator per call; the SQL path then throws ArgumentException on the duplicate dictionary key (DataBaseBulkStore.cs:125).
 
@@ -3301,11 +3313,15 @@ In `updates.Set(x => x.UpdatedBy, ...)` T is constrained `AbstractModel, IAudita
 
 `../Birko.Data.Patterns/Decorators/AsyncTimestampBulkStoreWrapper.cs:45`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED by reading, fixed; not reproduced** (TASK-159, measured 2026-10-15). The Audit/Timestamp bulk creates and updates and the SoftDelete create/delete passed a lazy `Select` that stamps per enumeration; each is materialised once. InMemory enumerates its input once, so the enumeration-count test passes on the old code too: a pin.
+
 The mutation lambda lives in `data.Select(...)`, so it runs whenever the inner store enumerates. An inner store that enumerates twice (count-then-write, retry) sets PrevUpdatedAt to the UpdatedAt the first pass just wrote, leaving both equal. AsyncSluggableBulkStoreWrapper.cs:31 materializes first for exactly this species (CR-M124); Audit (32, 43), Timestamp (33, 45) and SoftDelete (35, 59) plus their sync twins never got the same fix.
 
 #### SH-M324 — UnsetOtherDefaults with excludeGuid == null skips existing default rows whose Guid is null
 
 `../Birko.Data.Patterns/Decorators/AsyncDefaultStoreWrapper.cs:141`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-159, measured 2026-10-15, by reading). `Guid != excludeGuid` with a null exclusion does skip a null-Guid row, but no shipped store holds a row without a Guid, so it is unreachable through one. Fixed anyway (a null exclusion excludes nothing, a null in the batch set matches nothing); no test.
 
 `allDefaults.Where(e => e.Guid != excludeGuid)` degenerates to `e.Guid != null` when excludeGuid is null, so a stored row with IsDefault=true and a null Guid is filtered out of the clearing pass and keeps the flag, leaving two defaults. Reached from batch create (line 53 passes literal null), CreateAsync(T) line 43 (Guid is null on create) and SaveAsync line 114. The alsoExcludeGuids HashSet at 85/144 has the same hole for a batch with a null-Guid item. Same at DefaultStoreWrapper.cs:136/51/41/110/83.
 
@@ -3313,11 +3329,15 @@ The mutation lambda lives in `data.Select(...)`, so it runs whenever the inner s
 
 `../Birko.Data.Patterns/Decorators/SoftDeleteBulkStoreWrapper.cs:57`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-159, measured 2026-10-15). An entity delete of an already-deleted row re-stamped `DeletedAt`. `Delete(T)` sync/async and the bulk `Delete(IEnumerable)` now skip rows stored deleted, so the original instant stays. Red: 3 of 3.
+
 `Delete(IEnumerable<T>)` and `Delete(T)` (SoftDeleteStoreWrapper.cs:60) assign `DeletedAt = _clock.UtcNow` unconditionally, overwriting the original deletion instant. The filter-based Delete(filter) on the same class (line 67) does guard via CombineWithNotDeleted. Whether the true deletion time survives depends on which overload the caller reaches, so retention/audit logic keyed on DeletedAt loses it. Same at AsyncSoftDeleteBulkStoreWrapper.cs:59 and AsyncSoftDeleteStoreWrapper.cs:60.
 
 #### SH-M326 — Slug uniqueness probe reads only ONE row, so an update lets an existing duplicate slug survive
 
 `../Birko.Data.Patterns/Decorators/SluggableStoreWrapper.cs:73`
+
+**Verdict: CONFIRMED, fixed** (TASK-159, measured 2026-10-15). The probe read ONE row with the slug and compared its Guid, so it answered "free" whenever the store returned the row being updated while another held the slug. The filter now asks for `Slug == s && Guid != excludeId`. Red sync and async with a store that returns the updated row first (a dictionary's order cannot be chosen, so the test chooses it).
 
 `var existing = _innerStore.Read(BuildSlugFilter(slug)); return existing is not null && existing.Guid != excludeId;` asks whether THE returned row has a different Guid, not whether ANY other row holds the slug. With rows A and B both holding "widget" (reachable via the sync bulk-update defect, or a pre-existing dataset), updating A probes "widget", the store returns A, the Guid comparison is false, the candidate is reported free, A keeps "widget" and the duplicate is silently preserved and never repaired. Identical at AsyncSluggableStoreWrapper.cs:79.
 
@@ -3325,11 +3345,15 @@ The mutation lambda lives in `data.Select(...)`, so it runs whenever the inner s
 
 `../Birko.Data.Patterns/Decorators/AsyncSluggableStoreWrapper.cs:78`
 
+**Verdict: CONFIRMED by reading, spawned as TASK-632** (TASK-159, measured 2026-10-15). A read-then-write cannot close a race; it needs a storage-level unique index and a retry.
+
 ResolveSlugAsync probes with `_innerStore.ReadAsync(entity => entity.Slug == slug, ct)` and the caller then writes; nothing holds a lock, opens a transaction or relies on a unique index. Two requests creating entities whose slug source is "widget" both observe the slug free and both persist Slug="widget". The in-batch HashSet closes only the single-call window. Same at SluggableStoreWrapper.cs:72. Neither the decorator nor ISluggable documents that a storage-level unique index is required.
 
 #### SH-M328 — UnsetOtherDefaults is an unguarded read-then-write, so concurrent promotions leave two default rows
 
 `../Birko.Data.Patterns/Decorators/AsyncDefaultStoreWrapper.cs:140`
+
+**Verdict: CONFIRMED by reading, spawned as TASK-632** (TASK-159, measured 2026-10-15). The same race on the single default; "at most one true" is a partial index over a boolean, which `WhereNull` / `WhereNotNull` (rule 58) cannot declare.
 
 `ReadAsync(e => e.IsDefault)` then `UpdateAsync(toUpdate)` then the caller's own create/update: three round trips with no lock, transaction or conditional predicate. Two callers each writing an entity with IsDefault=true interleave so both read the same default set, both clear it, and both persist their own default. The invariant the decorator exists to enforce is violated with no error. Same at DefaultStoreWrapper.cs:136-152, and the builder emits no compensating storage constraint.
 
@@ -3337,11 +3361,15 @@ ResolveSlugAsync probes with `_innerStore.ReadAsync(entity => entity.Slug == slu
 
 `../Birko.Data.Patterns/Decorators/DefaultStoreWrapper.cs:90`
 
+**Verdict: CONFIRMED by reading, fixed** (TASK-159, measured 2026-10-15). Sync and async filtered updates now share one shape: read the matches, apply, keep the last default, unset the others excluding the batch, one collection write (atomic on SQL, TASK-629). No nested write in the inner store's callback. InMemory survived the nested write, so the one-default test is a pin.
+
 The callback passed to `_innerStore.Update(filter, item => {...})` calls UnsetOtherDefaults(item.Guid), issuing an inner-store bulk Read plus bulk Update while the inner store is mid-iteration of its own filter-update. DataBaseBulkStore.Update(filter, Action<T>) (line 103) materializes with ToList() so SQL survives, but file-backed backends that rewrite the whole document per write (JSON/XML) and connection- or transaction-stateful stores see a nested write inside an in-flight operation. The async sibling reads first and writes after (AsyncDefaultStoreWrapper.cs:92-101).
 
 #### SH-M330 — Default filter-update diverges sync vs async: one native filter-update vs N individual writes
 
 `../Birko.Data.Patterns/Decorators/AsyncDefaultStoreWrapper.cs:92`
+
+**Verdict: CONFIRMED by reading, fixed with SH-M329** (TASK-159, measured 2026-10-15). The async path wrote one row at a time; it is one collection write now, and both paths check the caller's filter (`BoundedFilterGuard`), since reading first bypassed the inner store's guard. Pin as above.
 
 `UpdateAsync(filter, action)` reads all matches into a list then issues one `_innerStore.UpdateAsync(item)` per row, so the inner store's native filter-update path is never used and the call is N+1 round trips with no atomicity. `DefaultStoreWrapper.Update(filter, action)` (line 90) instead forwards to `_innerStore.Update(filter, callback)`. The same logical call is one statement on the sync chain and N on the async chain, and a mid-loop failure on the async path leaves an arbitrary prefix updated.
 
@@ -3349,11 +3377,15 @@ The callback passed to `_innerStore.Update(filter, item => {...})` calls UnsetOt
 
 `../Birko.Data.Patterns/Decorators/SoftDeleteStoreWrapper.cs:50`
 
+**Verdict: CONFIRMED, fixed** (TASK-159, measured 2026-10-15). An update of a soft-deleted row is now `EntityNotFoundException` (sync, async, bulk), since reads do not see it; writing it resurrected it past the slug and default probes. The bulk update writes its live items and then reports the deleted Guids (TASK-555's shape). Red: 3 of 3.
+
 `Update(T)` (and AsyncSoftDeleteStoreWrapper.cs:50, SoftDeleteBulkStoreWrapper.cs:38) pass straight through with no DeletedAt == null check, while the filter-based overloads do combine it. Setting DeletedAt back to null restores the row; because the Sluggable probe (AsyncSluggableStoreWrapper.cs:78) and the Default probe (AsyncDefaultStoreWrapper.cs:140) read through the SoftDelete wrapper and never see deleted rows, the restored row still holds its old Slug and IsDefault=true, yielding two rows with one slug and/or two defaults, with no error on either write.
 
 #### SH-M332 — A null filter turns soft-delete Delete(filter) into "soft-delete every active row"
 
 `../Birko.Data.Patterns/Decorators/SoftDeleteBulkStoreWrapper.cs:67`
+
+**Verdict: CONFIRMED, fixed** (TASK-159, measured 2026-10-15). The soft-delete `Delete(filter)` / `Update(filter, …)` combined the caller's filter with `DeletedAt == null` before any guard saw it, so a null or a reducing-to-all filter soft-deleted every live row. The caller's filter is now checked first: `ArgumentNullException`, then `BoundedFilterGuard`. Red 2 of 2.
 
 CombineWithNotDeleted returns the right-hand lambda unchanged when filter is null (ExpressionParameterReplacer.cs:33), so `Delete(null)` becomes `_innerStore.Update(x => x.DeletedAt == null, item => item.DeletedAt = now)`, a destructive operation over the whole table. Neither Delete(filter) nor Update(filter, updates) (line 48) null-checks its filter, and the decorator actively converts the null into a match-all-active predicate instead of rejecting it. Same at AsyncSoftDeleteBulkStoreWrapper.cs:69 and 50.
 
@@ -3361,11 +3393,15 @@ CombineWithNotDeleted returns the right-hand lambda unchanged when filter is nul
 
 `../Birko.Data.Patterns/Decorators/AsyncSoftDeleteBulkStoreWrapper.cs:69`
 
+**Verdict: CONFIRMED by reading, fixed** (TASK-159, measured 2026-10-15). `Delete(filter)` is one native `Update(filter && live, Set(DeletedAt, now))` instead of a per-row action. The rows it stamps are the same, so its test is a pin.
+
 `DeleteAsync(filter)` routes through `_innerStore.UpdateAsync(filter, Action<T>)`, which backends implement as read-then-update-each-row (DataBaseBulkStore.cs:102-109), rather than the PropertyUpdate<T> overload that exists to become one native UPDATE ... SET DeletedAt WHERE. A failure or cancellation halfway leaves some matched rows flagged deleted and others not, with no indication of progress and no affected-count returned. Same at SoftDeleteBulkStoreWrapper.cs:67.
 
 #### SH-M334 — StoreWrapperBuilder silently ignores IVersioned, so composed chains never enforce optimistic concurrency
 
 `../Birko.Data.Composition/StoreWrapperBuilder.cs:100`
+
+**Verdict: CONFIRMED, fixed** (TASK-159, measured 2026-10-15). `StoreWrapperBuilder.Build` has no versioned link and built an `IVersioned` model's chain with no version check. It now throws `NotSupportedException` naming `AsyncVersionedStoreWrapper` (rule 55). No consumer uses `IVersioned`. Red.
 
 Build probes IEventSourced, ITimestamped, IAuditable, ITenant, ISoftDeletable, ISluggable and IDefault but never IVersioned, and neither VersionedStoreWrapper nor AsyncVersionedStoreWrapper is referenced in the file. An entity declaring IVersioned gets a chain that treats Version as an ordinary column with no conflict detection, so lost updates occur while the marker suggests they cannot. There is also no sync Build overload, so the whole sync decorator family has no supported composition path.
 
@@ -3373,11 +3409,15 @@ Build probes IEventSourced, ITimestamped, IAuditable, ITenant, ISoftDeletable, I
 
 `../Birko.Data.Patterns/Concurrency/VersionedStoreWrapper.cs:50`
 
+**Verdict: CONFIRMED, fixed** (TASK-159, measured 2026-10-15). A failed inner write left the entity at Version+1, so the retry was a permanent conflict. The version is restored and the error rethrown (sync and async). Red: a retry after an `IOException` succeeds.
+
 `data.Version++` runs at line 50 and `_inner.Update(data, storeDelegate)` at line 51. If the inner write throws (timeout, deadlock, dropped connection) the caller's entity is at Version+1 while storage is still at Version, so the obvious retry fails the `existing.Version != data.Version` check at line 45 and throws ConcurrentUpdateException forever. A transient I/O error is reported as a concurrency conflict the caller cannot resolve without re-reading. Same at AsyncVersionedStoreWrapper.cs:54-55.
 
 #### SH-M336 — Composed chains silently drop capabilities outside IStore/IBulkStore, including aggregation and transactions
 
 `../Birko.Data.Composition/StoreWrapperBuilder.cs:26`
+
+**Verdict: CONFIRMED by reading, spawned as TASK-631** (TASK-159, measured 2026-10-15). Forwarding or refusing each capability through every decorator is a design decision across the family.
 
 Build takes and returns IAsyncBulkStore<T>, and every decorator implements only that surface. A raw store additionally implementing IAsyncAggregatableStore<T>, ITransactionalStore or ISettingsStore loses those members once wrapped: `wrapped as IAggregatableStore<T>` returns null and the caller must walk GetInnerStore() to reach them, at which point the decorators' soft-delete exclusion and tenant scoping are bypassed for that operation. Nothing forwards or re-exposes those interfaces.
 

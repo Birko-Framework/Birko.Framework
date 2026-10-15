@@ -22,6 +22,9 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 - `SoftDeleteBulkStoreWrapper<T>` - Bulk store variant
 - `AsyncSoftDeleteStoreWrapper<T>` - Async store variant
 - `AsyncSoftDeleteBulkStoreWrapper<T>` - Async bulk store variant
+- A soft-deleted row is NOT FOUND by an update (`EntityNotFoundException`; bulk writes the live items first), an
+  already-deleted row keeps its `DeletedAt`, and a filtered write checks the caller's filter (null / reducing-to-all
+  refused) before the not-deleted clause is added (TASK-159)
 
 ### Audit
 - `IAuditable` - Interface with `CreatedBy`, `UpdatedBy` properties (Guid?)
@@ -60,6 +63,8 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 - `DefaultStoreWrapper<TStore, T>` - Wraps `IBulkStore<T>`, enforces only one entity has `IsDefault=true`. On create/update, automatically unsets other defaults. Implements `IBulkStore<T>`
 - `AsyncDefaultStoreWrapper<TStore, T>` - Async variant wrapping `IAsyncBulkStore<T>`, implements `IAsyncBulkStore<T>`
 - Note: Requires bulk store (not plain IStore) because enforcing the constraint requires bulk read + update
+- Filtered updates (an `Action<T>`, or a `PropertyUpdate` that writes `IsDefault`) read, apply, keep the last default and
+  write once, on both paths (TASK-159). Single-caller only: a concurrent race needs storage enforcement (TASK-632)
 
 ### Schema (Birko.Data.Patterns.Schema)
 Provider-agnostic field and schema abstractions. Used by both the migration system and the SQL model mapping framework.
@@ -81,6 +86,9 @@ Provider-agnostic field and schema abstractions. Used by both the migration syst
 - `ConcurrentUpdateException` - Thrown on version mismatch, includes `EntityType`, `EntityGuid`, `ExpectedVersion`
 - `VersionedStoreWrapper<T>` - Wraps `IStore<T>`, sets Version=1 on create, increments+checks on update
 - `AsyncVersionedStoreWrapper<T>` - Async variant wrapping `IAsyncStore<T>`
+- A missing row is `EntityNotFoundException` (so `Save` of an unstored Guid creates), and a failed inner write restores
+  `Version` before rethrowing (TASK-159)
+- Decorators that add an assignment to a caller's `PropertyUpdate` stamp `updates.Clone()`, never the caller's instance
 
 ## Architecture
 

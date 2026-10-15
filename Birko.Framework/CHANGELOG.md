@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — An ElasticSearch `PropertyUpdate` Set of null stores null
+
+[[TASK-501]]. The update script bound a null as `""`, so a string stored `""`, and a nullable number or date failed the
+mapping: a 400 that, before [[TASK-502]], silently dropped the whole update. A null is now a literal `null`. The script
+resolves its field through `StoredFieldName`, so a mapped member is written where it is read. A non-property selector
+throws `ArgumentException`.
+
 ## 2026-10-14 — ElasticSearch filtered writes throw instead of reporting a partial write
 
 [[TASK-502]]. `Update(filter, PropertyUpdate)` and `Delete(filter)` discarded the by-query response. Measured: three

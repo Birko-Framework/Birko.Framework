@@ -36,7 +36,7 @@ public class AsyncTimestampBulkStoreWrapper<TStore, T> : AsyncTimestampStoreWrap
             item.UpdatedAt = now;
             item.PrevUpdatedAt = null;
             return item;
-        }), storeDelegate, ct);
+        }).ToList(), storeDelegate, ct);
     }
 
     public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
@@ -47,7 +47,7 @@ public class AsyncTimestampBulkStoreWrapper<TStore, T> : AsyncTimestampStoreWrap
             item.PrevUpdatedAt = item.UpdatedAt;
             item.UpdatedAt = now;
             return item;
-        }), storeDelegate, ct);
+        }).ToList(), storeDelegate, ct);
     }
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
@@ -63,7 +63,8 @@ public class AsyncTimestampBulkStoreWrapper<TStore, T> : AsyncTimestampStoreWrap
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
     {
-        updates.Set(x => x.UpdatedAt, _clock.UtcNow);
+        // SH-M322 (TASK-159): stamp a copy; the caller's update is theirs.
+        updates = updates.Clone().Set(x => x.UpdatedAt, _clock.UtcNow);
         return _innerStore.UpdateAsync(filter, updates, ct);
     }
 

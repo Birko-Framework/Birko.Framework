@@ -34,7 +34,7 @@ public class TimestampBulkStoreWrapper<TStore, T> : TimestampStoreWrapper<TStore
             item.UpdatedAt = now;
             item.PrevUpdatedAt = null;
             return item;
-        }), storeDelegate);
+        }).ToList(), storeDelegate);
     }
 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
@@ -45,7 +45,7 @@ public class TimestampBulkStoreWrapper<TStore, T> : TimestampStoreWrapper<TStore
             item.PrevUpdatedAt = item.UpdatedAt;
             item.UpdatedAt = now;
             return item;
-        }), storeDelegate);
+        }).ToList(), storeDelegate);
     }
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
@@ -61,7 +61,8 @@ public class TimestampBulkStoreWrapper<TStore, T> : TimestampStoreWrapper<TStore
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
     {
-        updates.Set(x => x.UpdatedAt, _clock.UtcNow);
+        // SH-M322 (TASK-159): stamp a copy; the caller's update is theirs.
+        updates = updates.Clone().Set(x => x.UpdatedAt, _clock.UtcNow);
         _innerStore.Update(filter, updates);
     }
 

@@ -17,6 +17,8 @@ Static `Build<T>()` method that inspects `T` at runtime and wraps the store with
 7. EventSourcing (if `T : IEventSourced` and `eventStore` provided)
 8. Raw store
 
+An `IVersioned` `T` is refused with `NotSupportedException` (no versioned link exists; rule 55, TASK-159).
+
 EventSourcing sits innermost so the recorded event payload includes Timestamp/Audit enrichments and so outer-wrapper rejections (slug collision, default conflict, tenant guard) do not leave orphan events behind. Soft-deletes emit an `"Updated"` event with `IsDeleted=true` — matches physical storage.
 
 ## Signature

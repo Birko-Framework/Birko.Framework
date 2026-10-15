@@ -33,6 +33,15 @@ public static class StoreWrapperBuilder
         Func<IAsyncBulkStore<T>, ITenantContext, IAsyncBulkStore<T>>? tenantWrapperFactory = null)
         where T : AbstractModel, new()
     {
+        // SH-M334 (TASK-159), rule 55: the builder has no versioned link (VersionedStoreWrapper is single-entity, not a bulk
+        // store), so an IVersioned model got a chain that never checked or bumped Version, and nothing said so.
+        if (typeof(Birko.Data.Patterns.Concurrency.IVersioned).IsAssignableFrom(typeof(T)))
+        {
+            throw new NotSupportedException(
+                $"{typeof(T).Name} is IVersioned, and StoreWrapperBuilder has no optimistic-concurrency link: the chain would "
+                + "never check or increment Version. Wrap the store in AsyncVersionedStoreWrapper yourself.");
+        }
+
         var effectiveClock = clock ?? new SystemDateTimeProvider();
         IAsyncBulkStore<T> store = rawStore;
 

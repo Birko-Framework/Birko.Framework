@@ -31,6 +31,18 @@ namespace Birko.Data.Stores
         internal IReadOnlyList<PropertyAssignment> Assignments => _assignments;
 
         /// <summary>
+        /// A copy with the same assignments (TASK-159, SH-M322). A decorator adding its own assignment (UpdatedAt,
+        /// UpdatedBy) appended to the CALLER's instance, so a reused update carried them into the next call, and two
+        /// decorators each added one per call.
+        /// </summary>
+        public PropertyUpdate<T> Clone()
+        {
+            var copy = new PropertyUpdate<T>();
+            copy._assignments.AddRange(_assignments);
+            return copy;
+        }
+
+        /// <summary>
         /// Sets a property to the specified value.
         /// </summary>
         /// <typeparam name="TProperty">The type of the property.</typeparam>

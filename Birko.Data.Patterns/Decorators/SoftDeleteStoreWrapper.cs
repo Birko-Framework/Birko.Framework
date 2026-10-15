@@ -49,6 +49,9 @@ public class SoftDeleteStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 
     public void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
+        // SH-M331 (TASK-159): a soft-deleted row is not found, as reads do not see it; updating it would resurrect it.
+        if (data.Guid != null && _innerStore.Read(data.Guid.Value)?.DeletedAt != null)
+            throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), data.Guid);
         _innerStore.Update(data, storeDelegate);
     }
 
@@ -57,6 +60,9 @@ public class SoftDeleteStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     /// </summary>
     public void Delete(T data)
     {
+        // SH-M325 (TASK-159): an already-deleted row keeps its original deletion instant.
+        if (data.Guid != null && _innerStore.Read(data.Guid.Value)?.DeletedAt != null)
+            return;
         data.DeletedAt = _clock.UtcNow;
         _innerStore.Update(data);
     }

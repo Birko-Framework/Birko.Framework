@@ -32,32 +32,48 @@ public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWr
 
     public Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
-        return _innerStore.CreateAsync(data.Select(item => { item.DeletedAt = null; return item; }), storeDelegate, ct);
+        return _innerStore.CreateAsync(data.Select(item => { item.DeletedAt = null; return item; }).ToList(), storeDelegate, ct);
     }
 
-    public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+    public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
-        return _innerStore.UpdateAsync(data, storeDelegate, ct);
+        // SH-M331 (TASK-159): a soft-deleted row is invisible to reads, so it is not found by an update either. Writing it
+        // through let a caller resurrect it (DeletedAt back to null) past the Sluggable and Default probes, which read
+        // through this wrapper and never saw it. TASK-555's shape: the live items are written, then the rest reported.
+        var items = data.ToList();
+        var ids = items.Select(i => i.Guid).ToList();
+        var deleted = (await _innerStore.ReadAsync(x => ids.Contains(x.Guid) && x.DeletedAt != null, null, null, null, ct)).Select(x => x.Guid!.Value).ToHashSet();
+        await _innerStore.UpdateAsync(items.Where(i => i.Guid == null || !deleted.Contains(i.Guid.Value)).ToList(), storeDelegate, ct);
+        if (deleted.Count > 0)
+            throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), deleted);
     }
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
     {
+        RequireCallerFilter(filter, "update");
         return _innerStore.UpdateAsync(SoftDeleteFilter.CombineWithNotDeleted(filter), updateAction, ct);
     }
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
     {
+        RequireCallerFilter(filter, "update");
         return _innerStore.UpdateAsync(SoftDeleteFilter.CombineWithNotDeleted(filter), updates, ct);
     }
 
     /// <summary>
     /// Soft-deletes multiple entities.
     /// </summary>
-    public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
+    public async Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
     {
+        // SH-M325 (TASK-159): a row already deleted keeps its deletion instant; only live rows are stamped. SH-M323: once.
         var now = _clock.UtcNow;
-        var items = data.Select(item => { item.DeletedAt = now; return item; });
-        return _innerStore.UpdateAsync(items, ct: ct);
+        var items = data.ToList();
+        var ids = items.Select(i => i.Guid).ToList();
+        var already = (await _innerStore.ReadAsync(x => ids.Contains(x.Guid) && x.DeletedAt != null, null, null, null, ct)).Select(x => x.Guid!.Value).ToHashSet();
+        var live = items.Where(i => i.Guid == null || !already.Contains(i.Guid.Value)).ToList();
+        foreach (var item in live) item.DeletedAt = now;
+        if (live.Count > 0)
+            await _innerStore.UpdateAsync(live, ct: ct);
     }
 
     /// <summary>
@@ -65,7 +81,18 @@ public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWr
     /// </summary>
     public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
     {
-        var now = _clock.UtcNow;
-        return _innerStore.UpdateAsync(SoftDeleteFilter.CombineWithNotDeleted(filter), item => { item.DeletedAt = now; }, ct);
+        // SH-M332 (TASK-159): a null filter became "soft-delete every active row". SH-M333: one native UPDATE, not a
+        // per-row read-modify-write that a failure leaves half-applied.
+        RequireCallerFilter(filter, "delete");
+        var deletion = new PropertyUpdate<T>().Set(x => x.DeletedAt, (DateTime?)_clock.UtcNow);
+        return _innerStore.UpdateAsync(SoftDeleteFilter.CombineWithNotDeleted(filter), deletion, ct);
+    }
+
+    private static void RequireCallerFilter(Expression<Func<T, bool>> filter, string operation)
+    {
+        if (filter is null)
+            throw new ArgumentNullException(nameof(filter), $"A filtered soft {operation} on {typeof(T).Name} needs a filter.");
+        Birko.Data.Expressions.BoundedFilterGuard.Require(filter, operation, typeof(T).Name,
+            "a filter that names the rows (deleted rows are excluded for you)");
     }
 }

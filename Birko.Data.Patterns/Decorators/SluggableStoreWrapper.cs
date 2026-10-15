@@ -66,14 +66,18 @@ public class SluggableStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
                     return true;
                 if (data.IsReservedSlug(slug))
                     return true;
-                var existing = _innerStore.Read(BuildSlugFilter(slug));
-                return existing is not null && existing.Guid != excludeId;
+                var existing = _innerStore.Read(BuildSlugFilter(slug, excludeId));
+                // SH-M326 (TASK-159): ANY other row holding the slug, asked in the filter. Reading one row and comparing its
+                // Guid answered "free" whenever the store happened to return this row, so an existing duplicate survived.
+                return existing is not null;
             },
             fallback: "item");
     }
 
-    protected static Expression<Func<T, bool>> BuildSlugFilter(string slug)
+    protected static Expression<Func<T, bool>> BuildSlugFilter(string slug, Guid? excludeId = null)
     {
-        return entity => entity.Slug == slug;
+        if (excludeId == null)
+            return entity => entity.Slug == slug;
+        return entity => entity.Slug == slug && entity.Guid != excludeId;
     }
 }

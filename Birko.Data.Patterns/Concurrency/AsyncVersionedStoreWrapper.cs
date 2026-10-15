@@ -46,13 +46,30 @@ public class AsyncVersionedStoreWrapper<T> : IAsyncStore<T>, IStoreWrapper
         var existing = await _inner.ReadAsync(data.Guid ?? Guid.Empty, ct);
         // CR-M125: a missing row is a conflict (not a silent pass) — previously a null read skipped the
         // version check entirely and the write proceeded with data.Version++, a lost-update window.
-        if (existing == null || existing.Version != data.Version)
+        // SH-M435 (TASK-159): a missing row is NOT FOUND, the contract every store's Update keeps (TASK-555) and the one
+        // StoreSave falls back to create on. As a conflict, Save of a new Guid threw instead of creating.
+        if (existing == null)
+        {
+            throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), data.Guid);
+        }
+        if (existing.Version != data.Version)
         {
             throw new ConcurrentUpdateException(typeof(T), data.Guid ?? Guid.Empty, data.Version);
         }
 
+        // SH-M335 (TASK-159): a write that fails leaves the caller's entity at the version storage still has, so a retry
+        // is a retry and not a permanent conflict.
+        var version = data.Version;
         data.Version++;
-        await _inner.UpdateAsync(data, processDelegate, ct);
+        try
+        {
+            await _inner.UpdateAsync(data, processDelegate, ct);
+        }
+        catch
+        {
+            data.Version = version;
+            throw;
+        }
     }
 
     public async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
