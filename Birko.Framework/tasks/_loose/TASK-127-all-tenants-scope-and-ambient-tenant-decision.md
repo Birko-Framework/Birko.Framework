@@ -100,6 +100,14 @@ becoming a cross-tenant write capability inside a request.
   when a tenant is in scope;
 - regenerate `tenant-isolation` so the scenario records the decision (batched with the other regens).
 
+**Considered and deferred (2026-10-15, with the user): an explicit `WithAllTenantsWithWrite` opt-in.** Additive and
+not hard (four `ITenantContext` overloads with default bodies, a three-state scope in `TenantContext`, ~10 write
+checks in the two wrapper pairs, a `PreserveStoredTenant` rule), but no caller needs it, and the need is already met
+more safely: admin code that writes into another tenant nests `WithTenant(target, ...)` inside `WithAllTenants`, so
+each write is checked and stamped against a named tenant. It would also have to answer what option 1 avoids (may it
+re-home a row, which tenant a create is stamped with, whether it is allowed inside a request). Adding it later is not
+breaking; removing it would be. Document the nested `WithTenant` idiom where the decision is documented.
+
 ## Not to be picked up by `/fix-next`
 
 Acceptance is "decide X", so it cannot run unattended — same class as [[TASK-059]], [[TASK-106]],
