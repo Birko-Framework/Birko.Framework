@@ -71,4 +71,37 @@ N/A — library code; covered by the shared contract tests.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-567` — leave empty until then._
+Drafted 2026-10-15 (queued after TASK-621). The design is the 2026-10-12 decision above; this is the order of work.
+
+1. **Measure first, on the shared contract.** Add `Contract_Create_of_a_stored_guid_is_refused` (single, then bulk) to
+   `tests/Shared/StoreContract/IdentityContract.cs`, expecting `StoreException`. Run it on all 12 providers that link
+   the contract (SQLite, PostgreSQL, MySQL, MSSQL, TimescaleDB, MongoDB, CosmosDB, ElasticSearch, RavenDB, InMemory,
+   JSON, XML) and record each result. The task names only SQL and RavenDB as accepting a duplicate. **JSON and XML are
+   unmeasured.** If either upserts, its fix is in scope ("every provider means the same thing by Create"), recorded
+   here before it is fixed.
+2. **The key, declared once.** In `DataBase.LoadTable`, a table whose model declares no `[PrimaryField]` and has the
+   `AbstractModel` `Guid` gets that field's `IsPrimary = true`. Then the DDL (`UsesInlinePrimaryConstraint` → inline
+   `PRIMARY KEY`), `GetPrimaryFields`, the update/delete `WHERE` and the TASK-620 drift skip all see one key, and the
+   `GetPrimaryFields` fallback becomes unreachable. Delete it rather than keep it (rule 53), after checking its other
+   callers. Check `EnsureColumns`' refusal of a key column and the MSSQL unlengthed-key rule (TASK-257) still hold.
+3. **Refuse a duplicate create with a typed exception.** The four connectors already classify unique violations
+   (`IsUniqueViolationException`). Single and bulk create (sync and async, the SQL bulk tier included, which is a
+   separate hierarchy, CLAUDE.md § SQL Stores) catch exactly that classification and rethrow `StoreException` (the
+   in-memory store's type), with the inner exception kept. A bulk create that fails part-way: measure whether each
+   provider rolls the batch back, and record it.
+4. **RavenDB** refuses too: `Store(entity, changeVector: string.Empty, id)` makes an existing id a
+   `ConcurrencyException` at `SaveChanges`. Rethrow as `StoreException`, sync and async, single and bulk.
+5. **Existing tables are reported, never altered.** The catalogue queries gain a `birko_primary` column (the TASK-620
+   `birko_nullable` mechanism: PostgreSQL `pg_index.indisprimary`, MSSQL `sys.index_columns` on the PK index, MySQL
+   `COLUMN_KEY = 'PRI'`, SQLite `pk > 0`). `DetectDrift` reports a declared key column the table does not key as a
+   new `ColumnDriftKind.KeyMismatch`, plus the reverse. `EnsureColumns` does not act on it.
+6. **Docs.** CHANGELOG migration: find duplicate Guids (`SELECT Guid, COUNT(*) … HAVING COUNT(*) > 1`), resolve them,
+   then add the key, with the statement per provider. SQLite has no `ALTER TABLE … ADD PRIMARY KEY`, so it needs the
+   rebuild recipe. Recent Updates entry (BREAKING: new tables gain a key). Then `/specs regen store-crud-contract` and
+   `schema-index-and-ddl`.
+7. **Tests.** The contract test, red on SQL and RavenDB first (and wherever step 1 finds more). Live drift tests for
+   `KeyMismatch` per SQL provider. The existing suites, unchanged in meaning: a `GetPrimaryFields` fallback test, if
+   one exists, is inverted, not deleted (rule 56).
+
+Containers: PostgreSQL, MySQL, MSSQL, TimescaleDB, MongoDB (replica set), CosmosDB emulator, ElasticSearch and RavenDB,
+per live-tests.yml.
