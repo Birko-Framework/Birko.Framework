@@ -146,23 +146,23 @@ var indexManager = new CosmosDBIndexManager(database);
 // List indexes
 var indexes = await indexManager.ListAsync("MyContainer");
 
-// Add included path
+// Add an included path, under a name
 await indexManager.CreateAsync(new IndexDefinition
 {
-    Name = "/Name/?",
-    Fields = { new IndexField("Name") }
+    Name = "IX_Name",
+    Fields = new[] { IndexField.Ascending("Name") }
 }, scope: "MyContainer");
 
-// Add composite index
+// Add a composite index
 await indexManager.CreateAsync(new IndexDefinition
 {
-    Name = "composite_name_date",
-    Fields =
-    {
-        new IndexField("Name"),
-        new IndexField("CreatedDate", IndexFieldType.Descending)
-    }
+    Name = "IX_Name_Date",
+    Fields = new[] { IndexField.Ascending("Name"), IndexField.Descending("CreatedDate") }
 }, scope: "MyContainer");
+
+// Both answer by the name they were given
+await indexManager.ExistsAsync("IX_Name_Date", "MyContainer");   // true
+await indexManager.DropAsync("IX_Name_Date", "MyContainer");     // removes exactly that composite
 
 // Add spatial index
 await indexManager.AddSpatialIndexAsync("MyContainer", "/location/*", SpatialType.Point);
@@ -170,6 +170,13 @@ await indexManager.AddSpatialIndexAsync("MyContainer", "/location/*", SpatialTyp
 // Replace entire indexing policy
 await indexManager.SetIndexingPolicyAsync("MyContainer", newPolicy);
 ```
+
+A Cosmos indexing policy has no index names, so the manager keeps them: one document per indexed container in the
+`__birko_indexes` container of the same database, mapping each name to its included path or composite path list. The
+policy stays the truth (a registered index exists while its paths are in the policy), entity reads never see the
+registry, and the listing reports unregistered policy entries by path. `Unique` is refused: a unique key holds within a
+logical partition and the stores partition on `/id`, so it would reject nothing (measured). `Sparse`, `ExpireAfter`,
+non-standard field types, a single descending field and `Properties` are refused too (TASK-628).
 
 ## Partition Key
 

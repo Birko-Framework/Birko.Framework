@@ -28,7 +28,7 @@ Azure Cosmos DB (NoSQL API) implementation for the Birko data layer providing do
 - `CosmosDbUnitOfWork` - Wraps `TransactionalBatch` (partition-key scoped)
 
 ### IndexManagement
-- `CosmosDBIndexManager` - Manages indexing policies (included paths, composite indexes, spatial indexes)
+- `CosmosDBIndexManager` - Manages indexing policies (included paths, composite indexes, spatial indexes). Index names are kept in the `__birko_indexes` registry container (TASK-628); `Unique`, `Sparse`, `ExpireAfter`, non-standard field types, a single descending field and `Properties` are refused
 
 ## Connection
 

@@ -48,7 +48,7 @@ what the code *does*, defects included, which is exactly what let it find them. 
 ### Added by the 2026-10-12 spec regen (harvester claims, not reproduced)
 
 - **SH-M432** — RavenDB index manager (`Birko.Data.RavenDB/IndexManagement/RavenDBIndexManager.cs`): `Unique`, `Sparse` and `ExpireAfter` on a definition are silently ignored, the auto-generated map interpolates scope and field names into map text, and listing reports no fields
-- **SH-M433** — Cosmos DB index manager (`Birko.Data.CosmosDB/IndexManagement/CosmosDBIndexManager.cs`): the definition name and flags are not stored, so `ExistsAsync` by the declared name is false, and `DropAsync` never removes composite indexes
+- **SH-M433** — Cosmos DB index manager (`Birko.Data.CosmosDB/IndexManagement/CosmosDBIndexManager.cs`): the definition name and flags are not stored, so `ExistsAsync` by the declared name is false, and `DropAsync` never removes composite indexes. **Fixed by [[TASK-628]] (2026-10-15):** names kept in the `__birko_indexes` registry container; `Unique`, `Sparse`, `ExpireAfter` refused
 
 **Verdicts (2026-10-15).** **SH-M432: CONFIRMED, fixed.** `RavenDBIndexManager.CreateAsync` dropped `Unique` / `Sparse` /
 `ExpireAfter` and interpolated the scope and field names into map code the server compiles. The flags are refused, and a

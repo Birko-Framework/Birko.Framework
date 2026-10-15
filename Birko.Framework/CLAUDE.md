@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Cosmos DB index manager: indexes answer by their name; Unique refused (2026-10-15)
+
+[[TASK-628]]. A Cosmos policy has no index names, so `ExistsAsync("IX_Code")` was false for the index just created, and a
+composite could never be dropped. Names now live in a `__birko_indexes` registry container; the policy stays the truth.
+`Unique` is refused, as are `Sparse` and `ExpireAfter`. Measured: on `/id` partitioning, a unique key rejects nothing.
 ### A migration that forgets `Build()` fails instead of being recorded (2026-10-15)
 
 [[TASK-627]]. `CreateIndex(...).WithField(...)` without `Build()` emitted nothing, and the runner recorded the migration
@@ -331,12 +336,6 @@ management no longer reads a failed request as "absent". Spawned [[TASK-627]] an
 `A21`, and a `Between` rule lost its upper bound. All are measured against real databases and fixed. Every LIKE now
 declares `ESCAPE '!'`. A CASE bool test is `(col = '1')`, the form all four providers accept. An ElasticSearch store
 given foreign settings throws instead of answering empty. Join rendering is [[TASK-626]].
-### The event-tenant bridge refuses a tenant context it cannot see (2026-10-15)
-
-[[TASK-328]]. With `AddTenantContext*`, the bridge read `Tenant.Current` while the app set its tenant on a separate
-`TenantContext`, so every tenant event was dispatched across ALL tenants, silently. The first resolve of the bridge now
-throws unless the app's `ITenantContext` is the same object. `AddBirkoSecurity` (scoped `_ => Tenant.Current`) passes.
-`AllTenantsDispatches` records each all-tenants dispatch by event source. System events still widen.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

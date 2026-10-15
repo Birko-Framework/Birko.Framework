@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — The event-tenant bridge refuses a tenant context it cannot see
+
+[[TASK-328]]. With `AddTenantContext*`, the bridge read `Tenant.Current` while the app set its tenant on a separate
+`TenantContext`, so every tenant event was dispatched across ALL tenants, silently. The first resolve of the bridge now
+throws unless the app's `ITenantContext` is the same object. `AddBirkoSecurity` (scoped `_ => Tenant.Current`) passes.
+`AllTenantsDispatches` records each all-tenants dispatch by event source. System events still widen.
+
 ## 2026-10-15 — SQL attributes from another assembly keep their values
 
 [[TASK-577]]. In the split-aggregator layout, attributes from a second compilation of `Birko.Data.SQL` are rebuilt by
