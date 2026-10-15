@@ -118,6 +118,12 @@ namespace Birko.Data.SQL.Stores
         /// </remarks>
         protected override void InitCore()
         {
+            // SH-M031 (TASK-170): a store whose SetSettings was never called has no connector, and every operation
+            // then answered as if it had worked: a delete or update that wrote nothing, a read of no rows (measured).
+            // Init is the funnel every public operation passes through first, so it refuses here.
+            if (Connector == null)
+                throw new InvalidOperationException(
+                    $"{GetType().Name} has no database connector: call SetSettings with the database's settings first.");
             using var _tx = EnterTransactionScope();
             Connector?.CreateTable(new[] { typeof(T) });
             Connector?.DoInit();

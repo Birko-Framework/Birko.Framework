@@ -486,6 +486,13 @@ Enum properties are automatically mapped to `INTEGER` fields. `IntegerField` han
 ### IgnoreField Attribute
 Properties decorated with `[IgnoreField]` are skipped by `AbstractField.CreateAbstractField()` — they won't be included in table creation or any CRUD operations. Unsupported property types also return `null` instead of throwing `FieldAttributeException`.
 
+### A store with no connector refuses (TASK-170)
+`DataBaseStore.InitCore` / `AsyncDataBaseStore.InitCoreAsync` throw `InvalidOperationException` when `SetSettings` was
+never called. Every public operation passes through lazy init first, so a misconfigured store fails on first use
+instead of answering every delete, update and read as done. The sync bulk read is materialised (the connector's
+`Select` is an iterator holding its connection), and `PropertyUpdateSqlTranslator` keeps the last of two `Set`s of one
+property, as the portable `ApplyTo` does.
+
 ### Table load refuses what it cannot map (TASK-154)
 `DataBase.LoadTable` throws `TableAttributeException` for a type that maps to no table; `TryLoadTable` answers null,
 for the few callers to whom that is a real answer (view types in rule-field resolution, drift). At load it also refuses

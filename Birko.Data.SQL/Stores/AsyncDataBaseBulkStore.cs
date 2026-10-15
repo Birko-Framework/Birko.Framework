@@ -67,10 +67,10 @@ namespace Birko.Data.SQL.Stores
                 return items;
             }
 
-            var results = await Task.Run(() => Connector!.Select(typeof(T), filter as LambdaExpression, orderBy?.ToDictionary(), limit, offset), ct);
-            if (results == null) return Enumerable.Empty<T>();
-
-            return results.OfType<T>();
+            // SH-M024 (TASK-170): Select is an iterator, so Task.Run only built it and the query ran later, on the caller's
+            // thread, outside its try/catch. It is enumerated inside the task now.
+            var results = await Task.Run(() => Connector!.Select(typeof(T), filter as LambdaExpression, orderBy?.ToDictionary(), limit, offset)?.OfType<T>().ToList(), ct);
+            return results ?? (IEnumerable<T>)Enumerable.Empty<T>();
         }
 
         /// <inheritdoc />
@@ -177,7 +177,10 @@ namespace Birko.Data.SQL.Stores
             foreach (var item in items)
             {
                 updateAction(item);
-                await UpdateAsync(item, ct: ct);
+                // SH-M434 (TASK-170): a row deleted after the read no longer matches the filter, so it is skipped, as a
+                // SQL UPDATE … WHERE skips it. Throwing left the earlier rows written and the later ones not.
+                try { await UpdateAsync(item, ct: ct); }
+                catch (Exceptions.EntityNotFoundException) { }
             }
         }
 
@@ -324,9 +327,14 @@ namespace Birko.Data.SQL.Stores
             CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            if (AsyncConnector == null || Connector == null)
+            if (Connector == null)
                 return Array.Empty<AggregateResult>();
             using var _tx = EnterTransactionScope();
+
+            // SH-M034 (TASK-170): a connector without the async API answered no groups at all; every other async path
+            // falls back to the sync one, and so does this.
+            if (AsyncConnector == null)
+                return await Task.Run(() => (IReadOnlyList<AggregateResult>)Connector.SelectAggregate(typeof(T), query).ToList().AsReadOnly(), ct).ConfigureAwait(false);
 
             var results = new List<AggregateResult>();
             await foreach (var row in AsyncConnector.SelectAggregateAsync(typeof(T), query, ct))

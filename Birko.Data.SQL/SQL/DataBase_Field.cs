@@ -175,7 +175,10 @@ namespace Birko.Data.SQL
                 propInfo = typeof(Models.AbstractDatabaseModel).GetProperty(propInfo.Name);
             }
             var fields = LoadField(propInfo!);
-            return fields.First();
+            return fields.FirstOrDefault()
+                // SH-M027 (TASK-170): an [IgnoreField] / [NotMapped] / unsupported member maps to no field, and First()
+                // threw "Sequence contains no elements" from inside the store, naming nothing.
+                ?? throw new ArgumentException($"'{expr}' names {propInfo!.DeclaringType?.Name}.{propInfo.Name}, which is not a mapped column.", nameof(expr));
         }
 
         public static IEnumerable<AbstractField> GetPrimaryFields(Type type)

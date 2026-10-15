@@ -1,4 +1,5 @@
 ﻿using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -76,6 +77,9 @@ namespace Birko.Data.Stores
         {
             RequireFilter(filter, "update");
             RequireBoundedFilter(filter, "update");
+            // SH-M032 (TASK-170): with nothing to assign, every matched row was still rewritten, so UpdatedAt, audit
+            // fields and concurrency versions moved for rows nobody changed. The SQL path returns here too.
+            if (updates.Assignments.Count == 0) return;
             Update(filter, entity => updates.ApplyTo(entity));
         }
 
@@ -88,7 +92,10 @@ namespace Birko.Data.Stores
             foreach (var item in items)
             {
                 updateAction(item);
-                Update(item);
+                // SH-M434 (TASK-170): a row deleted after the read no longer matches the filter, so it is skipped, as a
+                // SQL UPDATE … WHERE skips it. Throwing left the earlier rows written and the later ones not.
+                try { Update(item); }
+                catch (EntityNotFoundException) { }
             }
         }
 
@@ -99,6 +106,7 @@ namespace Birko.Data.Stores
         /// </summary>
         public virtual void UpdateAll(PropertyUpdate<T> updates)
         {
+            if (updates.Assignments.Count == 0) return; // SH-M032 (TASK-170)
             UpdateAll(entity => updates.ApplyTo(entity));
         }
 
@@ -109,7 +117,9 @@ namespace Birko.Data.Stores
             foreach (var item in items)
             {
                 updateAction(item);
-                Update(item);
+                // SH-M434 (TASK-170): a row deleted after the read is skipped, as in the filtered overload.
+                try { Update(item); }
+                catch (EntityNotFoundException) { }
             }
         }
 

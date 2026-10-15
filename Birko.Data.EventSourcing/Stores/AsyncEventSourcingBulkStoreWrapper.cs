@@ -176,6 +176,7 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         public virtual Task UpdateAsync(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates, CancellationToken cancellationToken = default)
         {
+            if (updates.Assignments.Count == 0) return Task.CompletedTask; // SH-M032 (TASK-170)
             return UpdateAsync(filter, entity => updates.ApplyTo(entity), cancellationToken);
         }
 

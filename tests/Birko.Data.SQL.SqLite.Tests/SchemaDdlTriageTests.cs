@@ -114,6 +114,20 @@ public class SchemaDdlTriageTests : IDisposable
         read.Should().Throw<TableAttributeException>();
     }
 
+    public class LateRegistered : AbstractModel { public int X { get; set; } }
+
+    /// <summary>
+    /// The negative cache TryLoadTable added must not outlive a registration: a type looked up before its fluent
+    /// table name is registered maps once the name is (found while closing TASK-170).
+    /// </summary>
+    [Fact]
+    public void A_table_name_registered_after_a_failed_lookup_is_honoured()
+    {
+        DataBase.TryLoadTable(typeof(LateRegistered)).Should().BeNull();
+        DataBase.RegisterTableName(typeof(LateRegistered), "Sd154Late");
+        DataBase.LoadTable(typeof(LateRegistered)).Name.Should().Be("Sd154Late");
+    }
+
     /// <summary>SH-M242: an inherited [IndexedField] named one index for every derived table; all but the first were skipped.</summary>
     [Fact]
     public void An_indexed_field_on_a_base_class_is_refused()

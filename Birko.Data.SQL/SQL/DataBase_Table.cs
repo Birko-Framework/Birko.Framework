@@ -23,8 +23,10 @@ namespace Birko.Data.SQL
         public static void RegisterTableName(Type modelType, string tableName)
         {
             _tableNameOverrides[modelType] = tableName;
-            // Invalidate cache so LoadTable picks up the override
+            // Invalidate cache so LoadTable picks up the override - including a cached "maps to no table" (TASK-154),
+            // which would otherwise outlive the registration that gives the type its table.
             _tableCache.TryRemove(modelType, out _);
+            _unmappedTypes.TryRemove(modelType, out _);
         }
 
         /// <summary>

@@ -1221,17 +1221,23 @@ TryAcquireAsync sets the key with the caller's `timeout` as the expiry (89-94) a
 
 **Verdict: CONFIRMED** — AbstractConnectorBase.cs:558 builds `" ORDER BY " + string.Join(", ", orderFields.Select(kvp => string.Format("{0} {1}", kvp.Key, ...)))` — the key is interpolated verbatim with no QuoteIdentifier and no whitelist. OrderBy<T>.ByName(string) accepts an arbitrary string, so a consumer forwarding a user-supplied sort column (?sort=) has an injection sink.
 
+**Re-verified: fixed** (TASK-170, measured 2026-10-15, by reading). Both select paths resolve order keys through `DataBase.ResolveOrderFields` (`AbstractConnector_Select.cs`, `AbstractAsyncConnector_Select.cs`), so a remapped member orders by its column and an unknown key is refused.
+
 OrderBy<T>.ToDictionary() keys by member.Member.Name (OrderBy.cs:81/90) and ReadCore hands it to the string-keyed Connector.Select overload, which renders keys verbatim. The expression-keyed overload (AbstractConnector_Select.cs:15) maps through DataBase.GetField().GetSelectName() and the aggregate path uses ResolveSqlName; the store path does neither. Ordering by a [NamedField("col")]-remapped property emits ORDER BY on a nonexistent column, which RunReaderCommand swallows (InitException/yield break) - the read returns empty, not an error.
 
 #### SH-M023 — Portable Delete(filter)/UpdateAsync(filter,...) accept a null filter and act on every entity in the store
 
 `../Birko.Data.Stores/AbstractBulkStore.cs:99`
 
+**Verdict: CONFIRMED, fixed earlier (TASK-215 / TASK-329)** (TASK-170, measured 2026-10-15, by reading). `RequireFilter` throws `ArgumentNullException` for a null filter on every filtered write, and `RequireBoundedFilter` refuses one that reduces to every row; `DeleteAll` / `UpdateAll` are the explicit doors.
+
 `Read(filter, null, null, null)` takes a nullable filter and treats null as read-everything, but Delete(filter)'s parameter is declared non-nullable and unguarded. Delete(null!) materialises the whole table and passes it to Delete(items) -> DeleteCore. Same at AbstractAsyncBulkStore.cs:146 and at 76/117 for Update(filter, Action)/UpdateAsync. No StoreException, no argument check - the destructive scope is decided by a silently tolerated null.
 
 #### SH-M024 — Task.Run over Connector.Select does no work off-thread: the query runs synchronously on the caller's thread
 
 `../Birko.Data.SQL/Stores/AsyncDataBaseBulkStore.cs:68`
+
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-170, measured 2026-10-15). The deferred query is real, but only on the fallback for a connector without the async API, and all four shipped SQL connectors are `AbstractAsyncConnector`, so no shipped provider reaches it. The fallback now enumerates inside `Task.Run`. No regression test: it needs a sync-only connector the framework does not ship.
 
 Connector.Select is an iterator method (AbstractConnector_Select.cs:13-127 down to RunReaderCommand), so `Task.Run(() => Connector!.Select(...), ct)` only constructs the enumerator and completes at once. `results.OfType<T>()` is enumerated later - on the awaiting caller's thread, opening the connection and blocking there. So this async read is not asynchronous, ct never reaches the I/O, and query exceptions surface after `await ReadAsync(...)` returns, escaping the caller's try/catch.
 
@@ -1241,11 +1247,15 @@ Connector.Select is an iterator method (AbstractConnector_Select.cs:13-127 down 
 
 **Verdict: CONFIRMED** — AbstractConnectorBase.cs:558 builds `" ORDER BY " + string.Join(", ", orderFields.Select(kvp => string.Format("{0} {1}", kvp.Key, ...)))` — the key is interpolated verbatim with no QuoteIdentifier and no whitelist. OrderBy<T>.ByName(string) accepts an arbitrary string, so a consumer forwarding a user-supplied sort column (?sort=) has an injection sink.
 
+**Corrected verdict: CONFIRMED, fixed** (TASK-170, measured 2026-10-15, SQLite). The verdict line above is a copy of SH-M022's and does not describe this finding. The finding itself held: the sync bulk read handed out the connector's iterator, its connection and reader open until enumeration ended. `ReadCore` materialises, as the async twin did. `tests/Birko.Data.SQL.SqLite.Tests/BulkFilterTriageSqlTests.cs`.
+
 `Connector?.Select(...)?.OfType<T>()` is deferred: RunReaderCommand (AbstractConnector.cs:227) does `using var db = CreateConnection(...); db.Open();` inside the iterator, so connection and DbDataReader stay open while the caller holds the sequence and close only on enumerator disposal. Read() hands that out unmaterialised, so an abandoned enumerator leaks a pooled connection and a write inside `foreach (var x in store.Read(f))` runs against a live reader. The async twin materialises a List (60-65).
 
 #### SH-M026 — A nested member selector in PropertyUpdate writes to a same-named column on the wrong table
 
 `../Birko.Data.SQL/Stores/DataBaseBulkStore.cs:124`
+
+**Verdict: CONFIRMED, fixed** (TASK-170, measured 2026-10-15). `Set(x => x.Owner.Name, v)` resolved the leaf alone. `PropertyUpdate.Set` refuses anything but a top-level property of T (a conversion allowed), as `Increment` already did. `tests/Birko.Data.InMemory.Tests/BulkFilterTriageTests.cs`.
 
 GetFieldFromLambda takes `memberExpression.Member as PropertyInfo` with no check that the member is declared on T (DataBase_Field.cs:151-153). `Set(x => x.Owner.Name, "v")` resolves Owner's `Name`, LoadField builds a field called `Name`, and the statement becomes `UPDATE <T's table> SET Name = @SETName WHERE ...` - silently overwriting T's own Name column. ApplyTo (PropertyUpdate.cs:45) throws a reflection TargetException for the same input, so one backend throws and the other corrupts a different column.
 
@@ -1253,11 +1263,15 @@ GetFieldFromLambda takes `memberExpression.Member as PropertyInfo` with no check
 
 `../Birko.Data.SQL/Stores/DataBaseBulkStore.cs:124`
 
+**Verdict: CONFIRMED, fixed** (TASK-170, measured 2026-10-15, SQLite). `Set` of an `[IgnoreField]` property threw "Sequence contains no elements". `GetFieldFromLambda` throws `ArgumentException` naming the property. `tests/Birko.Data.SQL.SqLite.Tests/BulkFilterTriageSqlTests.cs`.
+
 GetFieldFromLambda ends in `LoadField(propInfo).First()` (DataBase_Field.cs:167-168) and LoadField returns Array.Empty when CreateAbstractField yields null - which it does for [IgnoreField] and [NotMapped] (AbstractField.cs:62-65). `Set(x => x.NotMapped, v)` therefore throws 'Sequence contains no elements' from inside the store without naming the property, while the portable path applies it in memory and never persists it - no error at all. Same call at AsyncDataBaseBulkStore.cs:169.
 
 #### SH-M028 — Bulk collection ops are per-item loops with no transaction, so a mid-batch failure leaves a partial batch
 
 `../Birko.Data.SQL/Stores/DataBaseBulkStore.cs:75`
+
+**Verdict: CONFIRMED by reading, spawned as [[TASK-629]]** (TASK-170, measured 2026-10-15). Outside a boundary each item commits alone. Inside `SqlUnitOfWork` / `SetTransactionContext` the bulk paths already join (TASK-240), so atomicity is available; making it the default changes transaction behaviour on every provider, which is that task's decision.
 
 CreateCore/UpdateCore/DeleteCore (75/93/143, and AsyncDataBaseBulkStore.cs:105/129/193) call the single-entity operation per item; each opens its own connection and DoCommandWithTransaction unless an external SqlTransactionContext was set. An exception or cancelled token on item k commits items 0..k-1 with no rollback and no way for the caller to learn how far it got, while the class XML doc (line 12) advertises 'optimized bulk operations'.
 
@@ -1265,11 +1279,15 @@ CreateCore/UpdateCore/DeleteCore (75/93/143, and AsyncDataBaseBulkStore.cs:105/1
 
 `../Birko.Data.Stores/PropertyUpdate.cs:45`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed earlier (TASK-498)** (TASK-170, measured 2026-10-15, by reading). `ApplyTo` throws `ArgumentException` when the member is not a property.
+
 `memberExpr.Member as PropertyInfo` + `prop?.SetValue(entity, value)` skips a field selector (or any non-property member) with no exception and no return value, so the caller believes the update landed. The SQL native path throws ArgumentException from GetFieldFromLambda for the same input (DataBase_Field.cs:157): one throws, one silently no-ops. Re-confirmed as reported.
 
 #### SH-M030 — Duplicate Set() on one property throws in the SQL path but is last-wins on the portable path
 
 `../Birko.Data.SQL/Stores/DataBaseBulkStore.cs:126`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-170, measured 2026-10-15, SQLite). Two Sets of one property threw on the duplicate parameter. `PropertyUpdateSqlTranslator` keeps the last, as `ApplyTo` does; two different properties mapped onto one column are refused. `tests/Birko.Data.SQL.SqLite.Tests/BulkFilterTriageSqlTests.cs`.
 
 `values.Add(field.Name, value ?? DBNull.Value)` throws ArgumentException on the duplicate dictionary key when two assignments resolve to the same column, and `fields` would carry the column twice. ApplyTo applies both in order (last wins). Same code at AsyncDataBaseBulkStore.cs:171. Two properties remapped onto one column via [NamedField] collide the same way. Re-confirmed as reported.
 
@@ -1277,11 +1295,15 @@ CreateCore/UpdateCore/DeleteCore (75/93/143, and AsyncDataBaseBulkStore.cs:105/1
 
 `../Birko.Data.SQL/Stores/DataBaseBulkStore.cs:155`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-170, measured 2026-10-15, SQLite). A store with no settings answered delete, update and read as done, measured on both stores. `InitCore` / `InitCoreAsync` throw `InvalidOperationException` when there is no connector; every public operation passes through lazy init first. `tests/Birko.Data.SQL.SqLite.Tests/BulkFilterTriageSqlTests.cs`.
+
 `if (Connector == null) return;` in Delete(filter) (also 116 in Update(filter,PropertyUpdate); 161/209 in AsyncDataBaseBulkStore) reports success while writing nothing, so a store whose SetSettings was never called appears to delete/update rows. The read side is the same shape: ReadCore returns Enumerable.Empty (44), Aggregate Array.Empty (169), AggregateAsync 228. StoreException exists for this and is thrown nowhere. Re-confirmed as reported.
 
 #### SH-M032 — Empty PropertyUpdate rewrites every matching row on the portable path
 
 `../Birko.Data.Stores/AbstractBulkStore.cs:70`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-170, measured 2026-10-15). An empty `PropertyUpdate` rewrote every matched row on the portable path (measured: one write per row). The filtered and `UpdateAll` overloads, sync and async, and the event-sourcing wrappers return, as the SQL path does. `tests/Birko.Data.InMemory.Tests/BulkFilterTriageTests.cs`.
 
 `Update(filter, entity => updates.ApplyTo(entity))` runs before any emptiness check, so a zero-assignment PropertyUpdate reads all matching entities and calls the single-entity Update on each. Under the timestamp/audit/versioned wrappers that bumps UpdatedAt, audit fields and concurrency versions for rows nobody changed. The SQL override returns immediately (DataBaseBulkStore.cs:116). Same in AbstractAsyncBulkStore.cs:108. Re-confirmed as reported.
 
@@ -1289,11 +1311,15 @@ CreateCore/UpdateCore/DeleteCore (75/93/143, and AsyncDataBaseBulkStore.cs:105/1
 
 `../Birko.Data.Stores/AbstractBulkStore.cs:68`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, waived** (TASK-170, measured 2026-10-15). The portable fallback writes the whole entity as read. It is the fallback for backends without a native update (JSON, XML, InMemory), whose unit of storage is the whole document, so a narrow write cannot be expressed there; the backends that can (SQL, MongoDB `$set`, ElasticSearch, RavenDB patch) override it. A concurrent writer needs a version check (the versioned decorators), not this path.
+
 The fallback persists the entire entity as read (Update(item) at line 80), not just the named columns, so a concurrent modification to an unnamed column between the read (76) and the write is silently overwritten. PropertyUpdate exists to express a narrow write, which the SQL override honours; a backend without a native override quietly widens it to a full-row write. Same in AbstractAsyncBulkStore.cs:108/121. Re-confirmed as reported.
 
 #### SH-M034 — AggregateAsync returns empty on a sync-only connector, unlike every other async path
 
 `../Birko.Data.SQL/Stores/AsyncDataBaseBulkStore.cs:228`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-170, measured 2026-10-15). Like SH-M024, reachable only with a connector without the async API, which no shipped provider is. `AggregateAsync` falls back to the sync aggregate instead of answering no groups.
 
 `if (AsyncConnector == null || Connector == null) return Array.Empty<AggregateResult>();` - AsyncConnector is `Connector as AbstractAsyncConnector` (AsyncDataBaseStore.cs:37), so a DB that is a plain AbstractConnector always takes this branch. ReadCoreAsync (68), UpdateAsync (178) and DeleteAsync (213) fall back to Task.Run over the sync connector; this does not, so the caller gets zero rows, indistinguishable from an empty GROUP BY. Sync Aggregate (DataBaseBulkStore.cs:169) needs only Connector. Re-confirmed.
 

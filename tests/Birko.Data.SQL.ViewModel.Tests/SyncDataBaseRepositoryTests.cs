@@ -136,13 +136,14 @@ public class SyncDataBaseRepositoryTests : IDisposable
     // observable results for these cases, so nothing was traded away to close the leak.
 
     [Fact]
-    public void ReadOne_ReturnsDefault_WhenNoStore()
+    public void ReadOne_Throws_WhenTheStoreHasNoSettings()
     {
-        // Was "WhenNoConnector": the short-circuit is now a null Store rather than a null Connector, which
-        // is the same unusable-repository condition expressed at the layer that is actually decorator-aware.
+        // Was "ReturnsDefault_WhenNoStore", and it pinned the answer TASK-170 (SH-M031) removed: a store whose
+        // SetSettings was never called answered every read with nothing, indistinguishable from an empty table. The
+        // store now refuses on first use, and the repository surfaces that rather than answering null.
         var repo = new SyncRepo();
-        var result = repo.ReadOne();
-        result.Should().BeNull();
+        var act = () => repo.ReadOne();
+        act.Should().Throw<InvalidOperationException>().WithMessage("*SetSettings*");
     }
 
     [Fact]

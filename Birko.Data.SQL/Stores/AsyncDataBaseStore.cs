@@ -145,7 +145,13 @@ namespace Birko.Data.SQL.Stores
         /// </remarks>
         protected override async Task InitCoreAsync(CancellationToken ct = default)
         {
-            if (Connector == null) return;
+            // SH-M031 (TASK-170): a store whose SetSettings was never called has no connector, and every operation
+            // then answered as if it had worked: a delete or update that wrote nothing, a read of no rows (measured).
+            // Init is the funnel every public operation passes through first, so it refuses here.
+            if (Connector == null)
+                throw new InvalidOperationException(
+                    $"{GetType().Name} has no database connector: call SetSettings with the database's settings first.");
+
             using var _tx = EnterTransactionScope();
             await Task.Run(() => Connector.CreateTable(new[] { typeof(T) }), ct).ConfigureAwait(false);
             if (AsyncConnector != null)

@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Filtered bulk writes: an unconfigured SQL store refuses, a vanished row is skipped (2026-10-15)
+
+[[TASK-170]]. A SQL store with no settings answered every delete, update and read as done; it now throws on first
+use. An empty `PropertyUpdate` rewrote every matched row on the portable path. A row deleted mid-`Update(filter,
+action)` aborted the loop halfway; it is skipped. Two `Set`s of one property are last-wins on SQL too, and a nested
+`Set` is refused. Atomic bulk writes by default are [[TASK-629]].
 ### Schema and index metadata: 19 medium defects fixed (2026-10-15)
 
 [[TASK-154]]. A `char` or `byte`-enum column threw on every read or write, and a get-only property broke every read.
@@ -333,12 +339,6 @@ InfluxDB 2 database can hold the old name.
 `Latin1_General_CS_AS` a column renamed `suppliervatin` is unreachable ("Invalid column name") but drift reported it
 clean. The MSSQL connector now asks the database (`'a' = 'A'`, once per connector) and matches exactly when it is
 case-sensitive. The default `CI` collation is unchanged.
-### BREAKING: CosmosDB refuses a `PartitionKeyPath` other than `/id` (2026-10-14)
-
-[[TASK-614]]. The stores address every document by its Guid as the partition key, but accepted any path (the docs
-showed `/tenantId`), created the container on it, and every write then failed. A non-`/id` path now throws
-`NotSupportedException` when settings are applied. **Migration:** none for a working setup; a setting other than `/id`
-never worked.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

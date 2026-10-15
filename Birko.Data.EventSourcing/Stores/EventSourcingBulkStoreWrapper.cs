@@ -174,6 +174,7 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         public virtual void Update(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates)
         {
+            if (updates.Assignments.Count == 0) return; // SH-M032 (TASK-170)
             Update(filter, entity => updates.ApplyTo(entity));
         }
 

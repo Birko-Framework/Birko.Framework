@@ -40,6 +40,13 @@ namespace Birko.Data.Stores
         /// <exception cref="InvalidOperationException">The property is already incremented in this update.</exception>
         public PropertyUpdate<T> Set<TProperty>(Expression<Func<T, TProperty>> property, TProperty value)
         {
+            // SH-M026 (TASK-170): `Set(x => x.Owner.Name, v)` resolved the leaf alone, so SQL wrote T's own Name column
+            // while the portable path threw. Like Increment, only a top-level property of T (a conversion allowed).
+            var body = property.Body is UnaryExpression { NodeType: ExpressionType.Convert } convert ? convert.Operand : property.Body;
+            if (body is not MemberExpression { Member: PropertyInfo, Expression: ParameterExpression })
+                throw new ArgumentException(
+                    $"Set needs a direct access to a top-level property of {typeof(T).Name}; '{property}' is not one.", nameof(property));
+
             var assignment = new SetAssignment(property, value);
             RefuseConflict(assignment, set => false, increment => true);
             _assignments.Add(assignment);

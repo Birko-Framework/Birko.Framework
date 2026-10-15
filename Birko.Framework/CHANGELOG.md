@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-14 — BREAKING: CosmosDB refuses a `PartitionKeyPath` other than `/id`
+
+[[TASK-614]]. The stores address every document by its Guid as the partition key, but accepted any path (the docs
+showed `/tenantId`), created the container on it, and every write then failed. A non-`/id` path now throws
+`NotSupportedException` when settings are applied. **Migration:** none for a working setup; a setting other than `/id`
+never worked.
+
 ## 2026-10-14 — InfluxDB migrations find the bucket they name, and only in their organization
 
 [[TASK-612]]. Bucket names are case-sensitive, but the migration lookups matched them case-insensitively, read one

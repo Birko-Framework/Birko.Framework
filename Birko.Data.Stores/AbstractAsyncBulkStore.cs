@@ -1,4 +1,5 @@
 ﻿using System;
+using Birko.Data.Exceptions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -114,6 +115,8 @@ namespace Birko.Data.Stores
         {
             RequireFilter(filter, "update");
             RequireBoundedFilter(filter, "update");
+            // SH-M032 (TASK-170): nothing to assign rewrote every matched row anyway (UpdatedAt, audit, versions).
+            if (updates.Assignments.Count == 0) return Task.CompletedTask;
             return UpdateAsync(filter, entity => updates.ApplyTo(entity), ct);
         }
 
@@ -129,7 +132,10 @@ namespace Birko.Data.Stores
             foreach (var item in items)
             {
                 updateAction(item);
-                await UpdateAsync(item, ct: ct).ConfigureAwait(false);
+                // SH-M434 (TASK-170): a row deleted after the read no longer matches the filter, so it is skipped, as a
+                // SQL UPDATE … WHERE skips it. Throwing left the earlier rows written and the later ones not.
+                try { await UpdateAsync(item, ct: ct).ConfigureAwait(false); }
+                catch (EntityNotFoundException) { }
             }
         }
 
@@ -163,6 +169,7 @@ namespace Birko.Data.Stores
         /// <inheritdoc cref="AbstractBulkStore{T}.UpdateAll(PropertyUpdate{T})"/>
         public virtual Task UpdateAllAsync(PropertyUpdate<T> updates, CancellationToken ct = default)
         {
+            if (updates.Assignments.Count == 0) return Task.CompletedTask; // SH-M032 (TASK-170)
             return UpdateAllAsync(entity => updates.ApplyTo(entity), ct);
         }
 
@@ -173,7 +180,10 @@ namespace Birko.Data.Stores
             foreach (var item in items)
             {
                 updateAction(item);
-                await UpdateAsync(item, ct: ct).ConfigureAwait(false);
+                // SH-M434 (TASK-170): a row deleted after the read no longer matches the filter, so it is skipped, as a
+                // SQL UPDATE … WHERE skips it. Throwing left the earlier rows written and the later ones not.
+                try { await UpdateAsync(item, ct: ct).ConfigureAwait(false); }
+                catch (EntityNotFoundException) { }
             }
         }
 

@@ -43,7 +43,11 @@ namespace Birko.Data.SQL.Stores
         protected virtual IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
         {
             using var _tx = EnterTransactionScope();
-            return Connector?.Select(typeof(T), filter as LambdaExpression, orderBy?.ToDictionary(), limit, offset)?.OfType<T>() ?? Enumerable.Empty<T>();
+            // SH-M025 (TASK-170): materialised. The connector's Select is an iterator that holds its connection and
+            // reader open until enumeration ends, so handing it out leaked a pooled connection on an abandoned
+            // enumerator, and ran any write inside `foreach (var x in store.Read(f))` against a live reader.
+            return Connector?.Select(typeof(T), filter as LambdaExpression, orderBy?.ToDictionary(), limit, offset)?.OfType<T>().ToList()
+                ?? (IEnumerable<T>)Enumerable.Empty<T>();
         }
 
         /// <inheritdoc />
@@ -133,7 +137,10 @@ namespace Birko.Data.SQL.Stores
             foreach (var item in items)
             {
                 updateAction(item);
-                Update(item);
+                // SH-M434 (TASK-170): a row deleted after the read no longer matches the filter, so it is skipped, as a
+                // SQL UPDATE … WHERE skips it. Throwing left the earlier rows written and the later ones not.
+                try { Update(item); }
+                catch (Exceptions.EntityNotFoundException) { }
             }
         }
 
