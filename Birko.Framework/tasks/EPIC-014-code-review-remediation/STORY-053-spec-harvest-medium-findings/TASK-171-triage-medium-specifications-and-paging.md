@@ -3,7 +3,7 @@ id: TASK-171
 parent: STORY-053
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-09
@@ -47,18 +47,36 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 12 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 12 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
 - [ ] Any behavioural fix is followed by `/specs regen specifications-and-paging`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
+
+## Resolution (2026-10-15)
+
+**12 findings triaged: 11 confirmed, 1 confirmed-narrower, 0 refuted.** 9 fixed here (SH-M290, M291, M292, M293,
+M294, M296, M298, M300, M301: M291 is the narrower one). 3 owned by the open [[TASK-144]] (two translators, one rule
+model): SH-M295, M297 and M299, each with the conflict that makes it a unification decision written into its verdict.
+
+- **Measured as the two engines' selections**: each finding was first a probe comparing `ToExpression().Compile()` with
+  `IsSatisfiedBy` over the same entities, under `sk-SK` for the culture findings. 13 of 14 probe shapes disagreed or threw.
+- **One fix tried and reverted.** Refusing an unresolvable field at construction (for SH-M297) broke 11 pinned
+  tests: TASK-116's three-engine agreement says an unresolved field matches nothing, even negated. Two deliberate
+  rules collide there, so SH-M297 went to TASK-144 instead of being forced.
+- **Behaviour changes, recorded:** every paged read sorts (by the caller's order, then `Guid`); `NotContains` with a
+  null needle matches nothing in memory too.
+
+**Red-verified, as numbers.** `SpecificationPagingTriageTests` 9 of 9.
+
+**Spec regen pending**, batched with the database fixes: `specifications-and-paging`.
 
 ## Out of scope
 
@@ -73,11 +91,8 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A: fully covered by automated tests. A library contract with no UI surface; every fix is asserted by what
+both rule engines select over the same entities, and by the order and offset paging hands the repository.
 
 ## Implementation plan
 

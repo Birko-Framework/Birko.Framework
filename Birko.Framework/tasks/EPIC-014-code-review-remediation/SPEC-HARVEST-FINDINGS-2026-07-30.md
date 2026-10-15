@@ -3013,11 +3013,15 @@ When settings is a RemoteSettings/SqlSettings but not an MSSqlSettings, the conn
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:108`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-171, measured 2026-10-15). `IsNull` / `IsNotNull` on `int` threw `ArgumentException` from `ToExpression()`. A non-nullable value type is never null: the leaf is the constant the evaluator also answers. `tests/Birko.Data.Patterns.Tests/SpecificationPagingTriageTests.cs`.
+
 BuildNullCheck calls Expression.Constant(null, member.Type) with no nullability guard, outside any try. Verified by running it: Expression.Constant(null, typeof(int)) throws ArgumentException "Argument types do not match" (typeof(int?) is fine). A rule `Qty IsNull` on `int Qty` therefore throws from ToExpression() while every sibling path degrades gracefully and IsSatisfiedBy handles it (ComparisonHelper.IsNull => actual is null). RuleExpressionConverter.BuildIsNull returns Constant(false) for this case.
 
 #### SH-M291 — Ordering comparisons on string/bool/non-comparable members throw InvalidOperationException from ToExpression()
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:124`
+
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-171, measured 2026-10-15). `Name > "a"` and a string `Between` threw `InvalidOperationException`; the leaf now degrades (match nothing, in both polarities) like every other leaf that cannot be translated. The engines still differ here: the evaluator orders strings by culture-sensitive `CompareTo`, which no store can reproduce. That is [[TASK-144]]'s unification question, recorded there.
 
 BuildComparison calls comparison(member, constant) outside the conversion try-block. Verified: Expression.GreaterThan on two strings throws InvalidOperationException "The binary operator GreaterThan is not defined for the types 'System.String'", likewise GreaterThanOrEqual on bool and Equal on a struct with no op_Equality. So `Name GreaterThan "a"`, or any Between on a string property (BuildBetween line 132-134), throws out of ToExpression() — while ComparisonHelper.CompareValues falls back to string.Compare and evaluates it fine in memory.
 
@@ -3025,11 +3029,15 @@ BuildComparison calls comparison(member, constant) outside the conversion try-bl
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:182`
 
+**Verdict: CONFIRMED, fixed** (TASK-171, measured 2026-10-15). A Guid or an enum name given as text matched nothing. `TryConvertConstant` parses a Guid, an enum by name (case-insensitive) or by number.
+
 TryConvertConstant falls through to Convert.ChangeType for any value not already the member type. Verified: ChangeType("<valid guid>", typeof(Guid)) and ChangeType("Open", typeof(SomeEnum)) both throw InvalidCastException, which the catch at line 188 swallows into Constant(false). Since rule values normally arrive as strings from JSON/a UI rule builder, `Guid Equal "<guid>"` on the AbstractModel key matches zero rows with no error — while ComparisonHelper.AreEqual compares ToString() and matches. RuleExpressionConverter.ConvertValue parses Guid/DateTime/enum explicitly.
 
 #### SH-M293 — Convert.ChangeType is called with no IFormatProvider, so rule values are parsed in the server's current culture
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:182`
+
+**Verdict: CONFIRMED, fixed** (TASK-171, measured 2026-10-15, sk-SK). "1.5" failed and "02/03/2026" read as 2 March. Conversion is invariant. (The evaluator does not parse a date from text at all, so a date given as text still matches nothing in memory: recorded for [[TASK-144]].)
 
 `Convert.ChangeType(value, underlying)` uses CurrentCulture. Verified under this machine's sk-SK: ChangeType("1.5", typeof(decimal)) throws FormatException and is swallowed into Constant(false) (a price rule matches nothing), and ChangeType("02/03/2026", typeof(DateTime)) yields 2 March, not 3 February — so the same stored rule filters different rows on differently-localised hosts. RuleExpressionConverter.ConvertValue passes CultureInfo.InvariantCulture for exactly this reason.
 
@@ -3037,11 +3045,15 @@ TryConvertConstant falls through to Convert.ChangeType for any value not already
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:182`
 
+**Verdict: CONFIRMED, fixed** (TASK-171, measured 2026-10-15). `Qty == 10.7` selected Qty 11. A fractional value against an integral member is compared as double, as the evaluator compares.
+
 Verified: Convert.ChangeType(10.7, typeof(int)) returns 11, so a rule `Qty Equal 10.7` on `int Qty` emits `x.Qty == 11` and the store filter selects rows with Qty 11 — a value the rule never named. ComparisonHelper.AreEqual(11, 10.7) returns false (both promoted to double, diff 0.3 exceeds the relative tolerance), so in-memory evaluation rejects the same entity. On Update(filter,...)/Delete(filter) this mutates rows that do not satisfy the rule.
 
 #### SH-M295 — String Equal/NotEqual are case-sensitive at the store but case-insensitive in memory
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:86`
+
+**Verdict: CONFIRMED, owned by [[TASK-144]]** (TASK-171, measured 2026-10-15). `Name == "open"` matches "Open" in memory (OrdinalIgnoreCase) and not at the store (ordinal). A case-insensitive equality every store translates has no single form: SQLite and PostgreSQL compare case-sensitively, MySQL and SQL Server by collation, and not every translator accepts `string.Equals(…, comparison)` or `ToLower`. Choosing it is the unification decision TASK-144 owns.
 
 The Equal/NotEqual arms go through BuildComparison → Expression.Equal, i.e. ordinal string equality. Verified compiled: `x.Name == "open"` against Name="Open" returns false. ComparisonHelper.AreEqual (ComparisonHelper.cs:68) ends with string.Equals(..., OrdinalIgnoreCase) and returns true for the same pair, so IsSatisfiedBy and ToExpression select different rows for the commonest rule shape of all. RuleExpressionConverter.BuildComparison special-cases string equality to string.Equals(OrdinalIgnoreCase) precisely to avoid this.
 
@@ -3049,11 +3061,15 @@ The Equal/NotEqual arms go through BuildComparison → Expression.Equal, i.e. or
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:145`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-171, measured 2026-10-15). A null needle was "" (match-all at the store) and `NotContains null` was match-all in memory. Both engines now match nothing in both polarities: the expression leaf degrades, and `ComparisonHelper`'s `NotContains` no longer inverts an unanswerable needle (the TASK-116 invariant). `tests/Birko.Data.Patterns.Tests/SpecificationPagingTriageTests.cs`.
+
 BuildStringMethod builds the needle as `value?.ToString() ?? string.Empty`, so a null Value yields "" and `x.Name.Contains("", OrdinalIgnoreCase)` is true for every non-null string — a whole-table filter on Read/Update/Delete. ComparisonHelper.ContainsString/StartsWithString return false when expected is null, so the same rule is match-all at the store and match-none in memory; the NotContains arm inverts both, giving match-none at the store and match-all in memory.
 
 #### SH-M297 — An unresolvable or nested field with IsNull/IsNotNull matches every entity in memory but no row at the store
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:47`
+
+**Verdict: CONFIRMED, owned by [[TASK-144]]** (TASK-171, measured 2026-10-15). An unresolvable field with `IsNull` matches every entity in memory and none at the store. Two DELIBERATE rules collide: the evaluator reads a missing field as null for null-checks (right for dictionary contexts), and the three-engine agreement tests pin "an unresolved field matches nothing, even negated". Refusing the field was tried and broke those pins, so it was reverted; the resolution needs the unified translator.
 
 BuildLeafExpression returns Constant(false) when typeof(T).GetProperty fails (line 77-78) — including any dotted field such as "Address.City", which this translator does not support. IsSatisfiedBy takes the other path: RuleEvaluator.EvaluateLeaf lines 48-53 ignore the TryGetValue result for IsNull/IsNotNull, so Compare(null, IsNull, null) returns true and EVERY entity satisfies a null-check on a field that does not exist. A typo'd or nested field therefore reports 0 rows from the store and 100% match in memory.
 
@@ -3061,11 +3077,15 @@ BuildLeafExpression returns Constant(false) when typeof(T).GetProperty fails (li
 
 `../Birko.Data.Patterns/Specification/AndSpecification.cs:25`
 
+**Verdict: CONFIRMED, fixed** (TASK-171, measured 2026-10-15). `And` / `Or` / `Not` specifications compiled the combined expression for `IsSatisfiedBy`; they now delegate to their operands, so a `RuleSpecification` inside keeps its evaluator. `tests/Birko.Data.Patterns.Tests/SpecificationPagingTriageTests.cs`.
+
 AndSpecification/OrSpecification/NotSpecification do not override IsSatisfiedBy, so the base (Specification.cs:23) compiles ToExpression() — the hand-built rule tree — instead of dispatching to RuleSpecification's evaluator override. `ruleSpec.IsSatisfiedBy(e)` and `(ruleSpec & other).IsSatisfiedBy(e)` therefore disagree wherever the two halves diverge (In/Like match-all, string casing, null needle), and a composite's IsSatisfiedBy can even throw (IsNull on int, GreaterThan on string) where the operand alone succeeds — the exact dispatch problem the override's comment claims to have fixed.
 
 #### SH-M299 — RuleSpecification hand-rolls a second rule→LINQ translator instead of using Birko.Rules.RuleExpressionConverter
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:31`
+
+**Verdict: CONFIRMED, owned by [[TASK-144]]** (TASK-171, measured 2026-10-15). That open task is this finding: two translators for one rule model.
 
 Birko.Rules/Expressions/RuleExpressionConverter.cs is a complete public converter for the same IRule/RuleSet model, and it is correct on every point this file gets wrong: In/NotIn/Like, group IsNegated, IsNull on a non-nullable value type, nested "A.B" fields with null guards, invariant-culture and Guid/DateTime/enum conversion, case-insensitive string equality. Two translators for one model means the store filter a caller gets depends on which entry point they picked — and a disabled RuleSet is match-nothing here versus no-filter (match-everything) there.
 
@@ -3073,11 +3093,15 @@ Birko.Rules/Expressions/RuleExpressionConverter.cs is a complete public converte
 
 `../Birko.Data.Patterns/Paging/PagedRepositoryWrapper.cs:40`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-171, measured 2026-10-15). `page = int.MaxValue` wrapped the offset negative. It is computed in `long`; a page past any possible offset is empty, with its total count. Both wrappers.
+
 `(page - 1) * pageSize` is unchecked and page is clamped only at the low end, so page=int.MaxValue with pageSize=20 wraps to a negative offset handed straight to IBulkReadRepository.Read(filter, orderBy, limit, offset) and on to the backend's OFFSET clause — provider-specific failure or wrong window instead of an empty page. AsyncPagedRepositoryWrapper.cs:43 is identical.
 
 #### SH-M301 — Paging with orderBy = null produces non-deterministic page windows (rows repeated or skipped)
 
 `../Birko.Data.Patterns/Paging/PagedRepositoryWrapper.cs:41`
+
+**Verdict: CONFIRMED, fixed** (TASK-171, measured 2026-10-15). Paging with no order sent LIMIT/OFFSET with no ORDER BY. `PagingOrder.Total` orders by `Guid` when none is given and appends it as the last key otherwise, copying the order the caller passed (new `OrderBy.ThenByName`). **Behaviour change:** every paged read now sorts.
 
 orderBy defaults to null in both wrappers and interfaces and is forwarded unchanged; DataBaseBulkStore.ReadCore passes `orderBy?.ToDictionary()`, so SQL gets LIMIT/OFFSET with no ORDER BY, whose row order is unspecified. Paging a grid with the default arguments can therefore show the same entity on pages 1 and 2 and never show another, with no error and a TotalCount that looks consistent. Neither the interface docs nor the wrappers require or supply a deterministic tiebreak sort.
 

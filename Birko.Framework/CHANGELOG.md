@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-14 — On a case-sensitive SQL Server database, a column differing only in case is drift
+
+[[TASK-611]]. TASK-610's fix for PostgreSQL, extended. SQL Server resolves columns by the database collation, so under
+`Latin1_General_CS_AS` a column renamed `suppliervatin` is unreachable ("Invalid column name") but drift reported it
+clean. The MSSQL connector now asks the database (`'a' = 'A'`, once per connector) and matches exactly when it is
+case-sensitive. The default `CI` collation is unchanged.
+
 ## 2026-10-14 — BREAKING: CosmosDB refuses a `PartitionKeyPath` other than `/id`
 
 [[TASK-614]]. The stores address every document by its Guid as the partition key, but accepted any path (the docs

@@ -37,7 +37,9 @@ internal static class ComparisonHelper
             // behaviour given up is `21 Contains "1"` → true, which was an artefact of ToString() rather
             // than a business predicate anybody specified.
             ComparisonOperator.Contains => IsStringMember(actual) && ContainsString(actual, expected),
-            ComparisonOperator.NotContains => IsStringMember(actual) && !ContainsString(actual, expected),
+            // SH-M296 (TASK-171): a null needle is no predicate, so NotContains does not invert it into match-ALL; it
+            // matches nothing, as Contains does and as the expression engine does.
+            ComparisonOperator.NotContains => IsStringMember(actual) && expected is not null && !ContainsString(actual, expected),
             ComparisonOperator.StartsWith => IsStringMember(actual) && StartsWithString(actual, expected),
             ComparisonOperator.EndsWith => IsStringMember(actual) && EndsWithString(actual, expected),
             ComparisonOperator.Like => IsStringMember(actual) && LikeString(actual, expected),

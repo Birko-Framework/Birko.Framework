@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Rule specifications agree with the in-memory evaluator; paging orders totally (2026-10-15)
+
+[[TASK-171]]. A `RuleSpecification` threw for `IsNull` on an `int` or `>` on a string, matched nothing for a Guid or
+enum given as text, parsed numbers in the host's culture, and rounded `10.7` to `11`. A null `Contains` matched every
+row. Composites now evaluate through their operands. Paging sorts by the caller's order, then `Guid`, and never sends
+a negative offset. Three engine divergences are now [[TASK-144]].
 ### Filtered bulk writes: an unconfigured SQL store refuses, a vanished row is skipped (2026-10-15)
 
 [[TASK-170]]. A SQL store with no settings answered every delete, update and read as done; it now throws on first
@@ -333,12 +339,6 @@ the migration recorded as applied. The key is quoted, the call awaited, and a re
 `InfluxMigrationStore.Initialize()` failed on every fresh server. It is now `birko_migrations`, overridable through the
 store and runner constructors, and a name starting with `_` is refused up front. No migration needed, because no
 InfluxDB 2 database can hold the old name.
-### On a case-sensitive SQL Server database, a column differing only in case is drift (2026-10-14)
-
-[[TASK-611]]. TASK-610's fix for PostgreSQL, extended. SQL Server resolves columns by the database collation, so under
-`Latin1_General_CS_AS` a column renamed `suppliervatin` is unreachable ("Invalid column name") but drift reported it
-clean. The MSSQL connector now asks the database (`'a' = 'A'`, once per connector) and matches exactly when it is
-case-sensitive. The default `CI` collation is unchanged.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

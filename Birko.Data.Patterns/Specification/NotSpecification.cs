@@ -17,6 +17,9 @@ public sealed class NotSpecification<T> : Specification<T>
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     }
 
+    /// <summary>SH-M298 (TASK-171): through the operand's own IsSatisfiedBy.</summary>
+    public override bool IsSatisfiedBy(T entity) => !_inner.IsSatisfiedBy(entity);
+
     public override Expression<Func<T, bool>> ToExpression()
     {
         var innerExpr = _inner.ToExpression();

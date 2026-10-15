@@ -39,6 +39,18 @@ in-memory `RuleEvaluator`, pinned afterwards by a parameterised both-engines tes
 for how this task should end — except the two engines here are both *expression* translators, so they can
 be compared structurally and not only by results.
 
+### Added by TASK-171 (2026-10-15): three medium findings this task owns
+
+- **SH-M295**: string `Equal` is case-insensitive in memory and ordinal at the store. No single case-insensitive
+  equality is translated by every store (SQLite / PostgreSQL compare case-sensitively; not every translator accepts
+  `string.Equals(…, comparison)` or `ToLower`).
+- **SH-M297**: an unresolvable field with `IsNull` matches every entity in memory (the evaluator reads a missing
+  field as null, right for dictionary contexts) and none at the store (the three-engine agreement tests pin
+  "unresolved matches nothing, even negated"). Refusing the field breaks those pins.
+- **SH-M299**: this task's subject.
+- Also recorded there: string ORDERING is culture-sensitive in memory and has no store form (SH-M291, now degraded on
+  the expression side), and the evaluator does not parse a date given as text (SH-M293).
+
 ## Acceptance criteria
 
 - [ ] Establish whether the two can become one — including whether `Birko.Data.Patterns` may depend on

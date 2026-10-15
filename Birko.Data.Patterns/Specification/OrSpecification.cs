@@ -20,6 +20,12 @@ public sealed class OrSpecification<T> : Specification<T>
         _right = right ?? throw new ArgumentNullException(nameof(right));
     }
 
+    /// <summary>
+    /// SH-M298 (TASK-171): through the operands' own IsSatisfiedBy, not by compiling the combined expression, so a
+    /// RuleSpecification inside a composite keeps its evaluator.
+    /// </summary>
+    public override bool IsSatisfiedBy(T entity) => _left.IsSatisfiedBy(entity) || _right.IsSatisfiedBy(entity);
+
     public override Expression<Func<T, bool>> ToExpression()
     {
         return ExpressionParameterReplacer.OrElse(_left.ToExpression(), _right.ToExpression());

@@ -40,7 +40,15 @@ public class AsyncPagedRepositoryWrapper<T> : IAsyncPagedRepository<T>
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 1;
 
-        var offset = (page - 1) * pageSize;
+        // SH-M300 (TASK-171): (page - 1) * pageSize wrapped to a negative OFFSET for a large page. A page past
+        // every possible row is empty.
+        var wideOffset = (long)(page - 1) * pageSize;
+        if (wideOffset > int.MaxValue)
+            return new PagedResult<T>(new System.Collections.Generic.List<T>(), await _repository.CountAsync(filter, ct), page, pageSize);
+        var offset = (int)wideOffset;
+        // SH-M301 (TASK-171): LIMIT/OFFSET with no ORDER BY has no defined row order, so a row could appear on two
+        // pages and another on none. The Guid makes every order total; a caller's order keeps precedence.
+        orderBy = PagingOrder.Total(orderBy);
 
         // Await sequentially rather than concurrently: the wrapped repository may be backed by a
         // non-thread-safe store/connection that cannot service two in-flight calls on one instance

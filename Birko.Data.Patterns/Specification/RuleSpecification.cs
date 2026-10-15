@@ -174,6 +174,10 @@ public class RuleSpecification<T> : Specification<T> where T : class
 
     private static Expression BuildNullCheck(MemberExpression member, bool isNull)
     {
+        // SH-M290 (TASK-171): Constant(null, int) throws. A non-nullable value is never null, which is what the
+        // evaluator answers too (`actual is null` is false for a boxed int).
+        if (member.Type.IsValueType && Nullable.GetUnderlyingType(member.Type) is null)
+            return Expression.Constant(!isNull);
         var nullExpr = Expression.Constant(null, member.Type);
         return isNull
             ? Expression.Equal(member, nullExpr)
@@ -190,9 +194,43 @@ public class RuleSpecification<T> : Specification<T> where T : class
         // than throwing when the compiled delegate runs in-memory or the provider translates it.
         // Unevaluable, NOT false: a negated comparison with a mistyped value used to invert this
         // constant into match-all. Not one of the four filed findings — found while fixing them.
-        if (!TryConvertConstant(value, member.Type, out var constant))
+        // SH-M294 (TASK-171): ChangeType(10.7, int) is 11, so `Qty == 10.7` selected Qty 11, which the evaluator rejects.
+        // A fractional value against an integral member is compared in double, as the evaluator compares.
+        Expression left = member;
+        if (IsFractional(value) && IsIntegral(member.Type))
+        {
+            var asDouble = Nullable.GetUnderlyingType(member.Type) is null ? typeof(double) : typeof(double?);
+            left = Expression.Convert(member, asDouble);
+        }
+
+        if (!TryConvertConstant(value, left.Type, out var constant))
             return Leaf.Unevaluable();
-        return Leaf.Predicate(comparison(member, constant));
+        try
+        {
+            return Leaf.Predicate(comparison(left, constant));
+        }
+        catch (InvalidOperationException)
+        {
+            // SH-M291 (TASK-171): no such operator for this type (`string > string`, `bool >= bool`, a struct with no
+            // ==). It threw out of ToExpression; it now degrades like every other leaf that cannot be translated. The
+            // evaluator orders strings culturally, which no store can reproduce, so the two still differ there.
+            return Leaf.Unevaluable();
+        }
+    }
+
+    private static bool IsFractional(object? value) => value switch
+    {
+        double d => d != Math.Truncate(d),
+        float f => f != MathF.Truncate(f),
+        decimal m => m != decimal.Truncate(m),
+        _ => false,
+    };
+
+    private static bool IsIntegral(Type type)
+    {
+        var t = Nullable.GetUnderlyingType(type) ?? type;
+        return t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte)
+            || t == typeof(uint) || t == typeof(ulong) || t == typeof(ushort) || t == typeof(sbyte);
     }
 
     private static Leaf BuildBetween(MemberExpression member, object? lower, object? upper)
@@ -202,10 +240,17 @@ public class RuleSpecification<T> : Specification<T> where T : class
         if (!TryConvertConstant(lower, member.Type, out var lowerConst) ||
             !TryConvertConstant(upper, member.Type, out var upperConst))
             return Leaf.Unevaluable();
-        return Leaf.Predicate(Expression.AndAlso(
-            Expression.GreaterThanOrEqual(member, lowerConst),
-            Expression.LessThanOrEqual(member, upperConst)
-        ));
+        try
+        {
+            return Leaf.Predicate(Expression.AndAlso(
+                Expression.GreaterThanOrEqual(member, lowerConst),
+                Expression.LessThanOrEqual(member, upperConst)
+            ));
+        }
+        catch (InvalidOperationException)
+        {
+            return Leaf.Unevaluable(); // SH-M291 (TASK-171): no ordering for this type
+        }
     }
 
     /// <summary>
@@ -285,8 +330,12 @@ public class RuleSpecification<T> : Specification<T> where T : class
         if (member.Type != typeof(string))
             return Leaf.Unevaluable();
 
+        // SH-M296 (TASK-171): a null needle became "", which every string contains: a whole-table filter on the store
+        // and, negated, match-none. "Contains nothing" is not a predicate, so it degrades and stays degraded.
+        if (value is null)
+            return Leaf.Unevaluable();
         var method = typeof(string).GetMethod(methodName, [typeof(string), typeof(StringComparison)])!;
-        var valueExpr = Expression.Constant(value?.ToString() ?? string.Empty, typeof(string));
+        var valueExpr = Expression.Constant(value.ToString() ?? string.Empty, typeof(string));
         var comparisonExpr = Expression.Constant(StringComparison.OrdinalIgnoreCase, typeof(StringComparison));
         var call = Expression.Call(member, method, valueExpr, comparisonExpr);
 
@@ -325,7 +374,17 @@ public class RuleSpecification<T> : Specification<T> where T : class
             else
             {
                 var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
-                converted = Convert.ChangeType(value, underlying);
+                // SH-M292 (TASK-171): a rule value arrives as text from JSON or a rule builder, and ChangeType cannot
+                // make a Guid or an enum from text, so `Guid Equal "<guid>"` matched nothing. SH-M293: ChangeType used
+                // the host's culture, so "1.5" failed on sk-SK and "02/03/2026" was 2 March there. Invariant now.
+                if (underlying == typeof(Guid) && value is string guidText)
+                    converted = Guid.Parse(guidText);
+                else if (underlying.IsEnum && value is string enumText)
+                    converted = Enum.Parse(underlying, enumText, ignoreCase: true);
+                else if (underlying.IsEnum)
+                    converted = Enum.ToObject(underlying, value);
+                else
+                    converted = Convert.ChangeType(value, underlying, System.Globalization.CultureInfo.InvariantCulture);
             }
 
             constant = Expression.Constant(converted, targetType);
