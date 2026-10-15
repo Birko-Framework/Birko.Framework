@@ -30,7 +30,8 @@ Birko.Security.AspNetCore/
 │   └── TenantHeaderClaimGuardMiddleware.cs - Post-auth guard: 403 when X-Tenant-Id disagrees with the JWT tenant claim
 └── Extensions/
     ├── SecurityServiceExtensions.cs - AddBirkoSecurity() one-line DI (JWT + User + Permissions + Tenant)
-    └── TenantHeaderGuardExtensions.cs - UseBirkoTenantHeaderGuard() middleware wiring
+    ├── TenantHeaderGuardExtensions.cs - UseBirkoTenantHeaderGuard() middleware wiring (sets the startup marker)
+    └── TenantHeaderGuardStartupCheck.cs - TASK-161: the host refuses to start when the guard is required but not wired
 ```
 
 ## Dependencies
@@ -92,6 +93,10 @@ made the fix a coverage regression for those apps.
   was considered and rejected: a check nobody knows to enable protects nobody. Set it false only for an app
   that genuinely wants header-only tenancy (which re-opens the above); with the flag off the middleware is a
   pass-through, so `UseBirkoTenantHeaderGuard()` is safe to call unconditionally.
+- **Enforced at startup (TASK-161, SH-M354).** The default used to protect only apps that also called
+  `UseBirkoTenantHeaderGuard()`; nothing registered the middleware. `AddBirkoSecurity` now adds an `IStartupFilter` that
+  throws when `RequireTenantHeaderMatchesClaim` is true and the guard is not in the pipeline. It cannot add the guard
+  itself, because the guard must run after `UseAuthentication()`. Opt out with `RequireTenantHeaderMatchesClaim = false`.
 - **Mismatch** → `403` with `{"Error": "…", "Code": "Tenant.HeaderClaimMismatch"}`.
 - **Deliberate pass-throughs**: no tenant addressed (the claim is then the only source — SSE cannot set
   headers); unauthenticated (login/register/first-run setup carry no claim); wildcard `*` holders

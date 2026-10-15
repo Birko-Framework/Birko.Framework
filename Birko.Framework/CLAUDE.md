@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Tenant isolation: tenant-scoped bulk writes check the caller's filter; the header guard is enforced (2026-10-15)
+
+[[TASK-161]]. Through the tenant bulk wrapper, a null filter deleted every row of the tenant. Tenant repository
+registration always built the non-bulk wrapper, and its async form accepted no async repository. **BREAKING:**
+`AddBirkoSecurity` now refuses to start without `UseBirkoTenantHeaderGuard()`, unless `RequireTenantHeaderMatchesClaim =
+false`. The tenant sync provider's 11 divergences are [[TASK-630]].
 ### Rule specifications agree with the in-memory evaluator; paging orders totally (2026-10-15)
 
 [[TASK-171]]. A `RuleSpecification` threw for `IsNull` on an `int` or `>` on a string, matched nothing for a Guid or
@@ -333,12 +339,6 @@ timeout throws `StoreException`. The job queue treats a conflicted claim as a lo
 [[TASK-618]]. The delete predicate named the tag `name`, a keyword in InfluxDB's delete grammar (a 400). The client's
 `Delete` Task was never awaited, and a catch swallowed the error besides, so every downgrade reported success and left
 the migration recorded as applied. The key is quoted, the call awaited, and a refused delete now throws.
-### InfluxDB migrations can record what they apply (2026-10-14)
-
-[[TASK-617]]. The bookkeeping bucket was `_migrations`, and InfluxDB 2 refuses names starting with `_`, so
-`InfluxMigrationStore.Initialize()` failed on every fresh server. It is now `birko_migrations`, overridable through the
-store and runner constructors, and a name starting with `_` is refused up front. No migration needed, because no
-InfluxDB 2 database can hold the old name.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

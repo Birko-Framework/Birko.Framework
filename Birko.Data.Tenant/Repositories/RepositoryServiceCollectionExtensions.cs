@@ -39,9 +39,9 @@ namespace Birko.Data.Tenant.Repositories
                 var innerStore = sp.GetRequiredService<TStore>();
                 var tenantContext = sp.GetService<ITenantContext>() ?? Models.Tenant.Current;
 
-                var wrappedStore = Activator.CreateInstance(
-                    typeof(TenantStoreWrapper<,>).MakeGenericType(typeof(TStore), typeof(TModel)),
-                    innerStore, tenantContext, mode) as IStore<TModel>;
+                // SH-M339 (TASK-161): AsTenantAware picks the bulk wrapper for a bulk store, as everywhere else. This always built
+                // the non-bulk one, so a bulk repository could not be constructed or lost the tenant-scoped filtered writes.
+                var wrappedStore = innerStore.AsTenantAware(tenantContext, mode);
 
                 return Activator.CreateInstance(typeof(TRepository), wrappedStore) as TRepository
                     ?? throw new InvalidOperationException($"Failed to create instance of {typeof(TRepository).Name}");
@@ -64,7 +64,7 @@ namespace Birko.Data.Tenant.Repositories
             ServiceLifetime lifetime = ServiceLifetime.Scoped,
             TenantIsolationMode mode = TenantIsolationMode.Permissive)
             where TStore : class, IAsyncStore<TModel>
-            where TRepository : class, IBaseRepository
+            where TRepository : class, IAsyncBaseRepository // TASK-161: the async base; IBaseRepository made every async repository unregistrable
             where TModel : Data.Models.AbstractModel, ITenant
         {
             // Register the inner store
@@ -76,9 +76,8 @@ namespace Birko.Data.Tenant.Repositories
                 var innerStore = sp.GetRequiredService<TStore>();
                 var tenantContext = sp.GetService<ITenantContext>() ?? Models.Tenant.Current;
 
-                var wrappedStore = Activator.CreateInstance(
-                    typeof(AsyncTenantStoreWrapper<,>).MakeGenericType(typeof(TStore), typeof(TModel)),
-                    innerStore, tenantContext, mode) as IAsyncStore<TModel>;
+                // SH-M339 (TASK-161): AsTenantAware picks the bulk wrapper for a bulk store.
+                var wrappedStore = innerStore.AsTenantAware(tenantContext, mode);
 
                 return Activator.CreateInstance(typeof(TRepository), wrappedStore) as TRepository
                     ?? throw new InvalidOperationException($"Failed to create instance of {typeof(TRepository).Name}");
@@ -109,7 +108,7 @@ namespace Birko.Data.Tenant.Repositories
                 var innerStore = storeFactory(sp);
                 var tenantContext = sp.GetService<ITenantContext>() ?? Models.Tenant.Current;
 
-                var wrappedStore = new TenantStoreWrapper<IStore<TModel>, TModel>(innerStore, tenantContext, mode);
+                var wrappedStore = innerStore.AsTenantAware(tenantContext, mode); // SH-M339 (TASK-161)
 
                 return Activator.CreateInstance(typeof(TRepository), wrappedStore) as TRepository
                     ?? throw new InvalidOperationException($"Failed to create instance of {typeof(TRepository).Name}");
@@ -132,7 +131,7 @@ namespace Birko.Data.Tenant.Repositories
             Func<IServiceProvider, IAsyncStore<TModel>> storeFactory,
             ServiceLifetime lifetime = ServiceLifetime.Scoped,
             TenantIsolationMode mode = TenantIsolationMode.Permissive)
-            where TRepository : class, IBaseRepository
+            where TRepository : class, IAsyncBaseRepository
             where TModel : Data.Models.AbstractModel, ITenant
         {
             services.Add(new ServiceDescriptor(typeof(TRepository), sp =>
@@ -140,7 +139,7 @@ namespace Birko.Data.Tenant.Repositories
                 var innerStore = storeFactory(sp);
                 var tenantContext = sp.GetService<ITenantContext>() ?? Models.Tenant.Current;
 
-                var wrappedStore = new AsyncTenantStoreWrapper<IAsyncStore<TModel>, TModel>(innerStore, tenantContext, mode);
+                var wrappedStore = innerStore.AsTenantAware(tenantContext, mode); // SH-M339 (TASK-161)
 
                 return Activator.CreateInstance(typeof(TRepository), wrappedStore) as TRepository
                     ?? throw new InvalidOperationException($"Failed to create instance of {typeof(TRepository).Name}");
@@ -165,7 +164,7 @@ namespace Birko.Data.Tenant.Repositories
         /// </summary>
         public static IServiceCollection AddTenantAsyncRepositoryScoped<TStore, TRepository, TModel>(this IServiceCollection services, TenantIsolationMode mode = TenantIsolationMode.Permissive)
             where TStore : class, IAsyncStore<TModel>
-            where TRepository : class, IBaseRepository
+            where TRepository : class, IAsyncBaseRepository
             where TModel : Data.Models.AbstractModel, ITenant
         {
             return services.AddTenantAsyncRepository<TStore, TRepository, TModel>(ServiceLifetime.Scoped, mode);

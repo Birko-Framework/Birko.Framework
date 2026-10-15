@@ -93,17 +93,30 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
     {
+        RequireCallerFilter(filter, "update");
         _innerStore.Update(TenantFilter(filter).Filter()!, updateAction);
     }
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
     {
+        RequireCallerFilter(filter, "update");
         _innerStore.Update(TenantFilter(filter).Filter()!, updates);
     }
 
     public void Delete(Expression<Func<T, bool>> filter)
     {
+        RequireCallerFilter(filter, "delete");
         _innerStore.Delete(TenantFilter(filter).Filter()!);
     }
-}
 
+    // SH-M337 (TASK-161): the caller's filter is checked BEFORE the tenant predicate is added to it. Afterwards a null
+    // filter is "this tenant's every row" and `x => true` looks bounded, so the inner store's own guards never fire, and
+    // a forwarded null deleted every row of the tenant. The tenant scope is applied for you: name the rows.
+    private static void RequireCallerFilter(Expression<Func<T, bool>> filter, string operation)
+    {
+        if (filter is null)
+            throw new ArgumentNullException(nameof(filter), $"A filtered {operation} on {typeof(T).Name} needs a filter.");
+        Data.Expressions.BoundedFilterGuard.Require(filter, operation, typeof(T).Name,
+            "a filter that names the rows (the tenant scope is added to it)");
+    }
+}

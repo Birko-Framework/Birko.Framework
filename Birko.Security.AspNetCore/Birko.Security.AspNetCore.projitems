@@ -66,5 +66,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Extensions/SecurityServiceExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions/PermissionResolutionExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions/TenantHeaderGuardExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions/TenantHeaderGuardStartupCheck.cs" />
   </ItemGroup>
 </Project>

@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-14 — InfluxDB migrations can record what they apply
+
+[[TASK-617]]. The bookkeeping bucket was `_migrations`, and InfluxDB 2 refuses names starting with `_`, so
+`InfluxMigrationStore.Initialize()` failed on every fresh server. It is now `birko_migrations`, overridable through the
+store and runner constructors, and a name starting with `_` is refused up front. No migration needed, because no
+InfluxDB 2 database can hold the old name.
+
 ## 2026-10-14 — On a case-sensitive SQL Server database, a column differing only in case is drift
 
 [[TASK-611]]. TASK-610's fix for PostgreSQL, extended. SQL Server resolves columns by the database collation, so under

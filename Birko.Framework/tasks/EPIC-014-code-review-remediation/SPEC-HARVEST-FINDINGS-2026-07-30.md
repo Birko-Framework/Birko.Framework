@@ -3363,11 +3363,15 @@ Build takes and returns IAsyncBulkStore<T>, and every decorator implements only 
 
 `../Birko.Data.Tenant/Stores/TenantBulkStoreWrapper.cs:78`
 
+**Verdict: CONFIRMED, fixed** (TASK-161, measured 2026-10-15). With a tenant set, a forwarded null filter became "this tenant's every row" once the tenant predicate was added, so the inner store's null guard never fired; a filter that only reduces to every row looked bounded the same way. The tenant bulk wrappers (sync and async) now check the CALLER's filter first: `ArgumentNullException` for null, `BoundedFilterGuard` for the rest. `x => true`, the explicit every-row spelling, stays allowed. `tests/Birko.Data.Tenant.Tests/TenantIsolationTriageTests.cs`.
+
 `_innerStore.Delete(TenantFilter(filter).Filter()!)` suppresses a genuinely nullable return: ModelByTenant.Filter() returns BaseFilter unchanged when the effective tenant is null (Permissive with no tenant, or inside an all-tenants scope). A caller passing a nullable expression through the non-nullable parameter (`store.Delete(f!)`) reaches DataBaseBulkStore.Delete(filter) with null, which calls `Connector.Delete(typeof(T), null)` — an unqualified DELETE. Same `!` at lines 68 and 73 and at AsyncTenantBulkStoreWrapper.cs:71, 76, 81.
 
 #### SH-M338 — All-tenants scope widens reads but item writes are still tenant-compared, contradicting the comment at the seam
 
 `../Birko.Data.Tenant/Stores/TenantStoreWrapper.cs:152`
+
+**Verdict: CONFIRMED, owned by [[TASK-127]]** (TASK-161, measured 2026-10-15, by reading). Inside `WithAllTenants` with a tenant also set, reads widen and item writes are still tenant-compared. That task is this exact question and is an open user decision: what `WithAllTenants` means when a tenant is in scope.
 
 TenantFilter's comment claims 'the write-authorization guards already special-case all-tenants scope', but BelongsToCurrentTenant (line 180) consults IsAllTenantsScope only inside `if (!HasTenant)`. With tenant t set, entering WithAllTenants widens reads to every tenant yet Update/Delete of any row so read throws TenantMismatchException. This is the reads-fail-open / writes-fail-closed split that ModelByTenant's own remarks record as the Guid.Empty bug (Symbio TASK-295), reintroduced for the admin scope.
 
@@ -3375,11 +3379,15 @@ TenantFilter's comment claims 'the write-authorization guards already special-ca
 
 `../Birko.Data.Tenant/Repositories/RepositoryServiceCollectionExtensions.cs:42`
 
+**Verdict: CONFIRMED, fixed** (TASK-161, measured 2026-10-15). All four repository factories built the NON-bulk wrapper; measured, a repository taking `IAsyncBulkStore` failed to resolve with `MissingMethodException`. They now go through `AsTenantAware`, which picks the bulk wrapper. **Found with it:** the async registrations constrained `TRepository : IBaseRepository`, the SYNC base, so no ordinary async repository could be registered at all; now `IAsyncBaseRepository`. `tests/Birko.Data.Tenant.Tests/TenantIsolationTriageTests.cs`.
+
 All four factories build TenantStoreWrapper<,> / AsyncTenantStoreWrapper<,> even when TStore implements IBulkStore/IAsyncBulkStore, diverging from AsTenantAware which picks the bulk wrapper. A TRepository whose constructor takes IAsyncBulkStore<TModel> (any AbstractAsyncBulkRepository) cannot be built from the non-bulk wrapper, so Activator.CreateInstance throws MissingMethodException at resolve time — also making the `?? throw new InvalidOperationException` arm unreachable. Where it does construct, the repository loses tenant-composed filter-based Update/Delete.
 
 #### SH-M340 — ApplyTenantFiltering mutates the caller's SyncFilterOptions, accumulating one tenant predicate per run
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:155`
+
+**Verdict: CONFIRMED, fixed earlier** (TASK-161, measured 2026-10-15, by reading). `ApplyTenantFiltering` builds a new `SyncFilterOptions` from the caller's values and assigns nothing back.
 
 The method assigns filterOptions.CanSaveToLocal/CanSaveToRemote on the instance the caller passed in, capturing the previous delegate. Reusing one SyncFilterOptions across two syncs under tenants t then u yields `BelongsToTenant(u) && BelongsToTenant(t)` — no item satisfies both, so every save is silently skipped and the run reports success with zero writes. Same escaping-mutation defect CR-M168 fixed for Direction, at a second site.
 
@@ -3387,11 +3395,15 @@ The method assigns filterOptions.CanSaveToLocal/CanSaveToRemote on the instance 
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:102`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed earlier** (TASK-161, measured 2026-10-15, by reading). `ResolveTenantScope` resolves the tenant into a local and does not write to the caller's `TenantSyncOptions`.
+
 For a TenantSyncOptions with a null TenantGuid it sets `tenantOptions.TenantGuid = CurrentTenantGuid` on that same instance and returns it, so the mutation escapes the call. Reusing one options object across two tenant scopes pins every later sync to the first tenant. CR-M168 fixed exactly this leak for Direction via an effectiveDirection local but left TenantGuid mutating in place.
 
 #### SH-M342 — OnBatchCompleted reports every error so far, not the current batch's
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:528`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `result.Errors.Skip(result.Errors.Count - progress.Errors)` still uses the cumulative count.
 
 `result.Errors.Skip(result.Errors.Count - progress.Errors)` takes the last progress.Errors entries, but progress.Errors is cumulative across batches and never reset per batch. With one error in batch 1 and one in batch 2, batch 2's callback receives both, so a consumer using the callback for per-batch alerting or retry double-reports earlier failures.
 
@@ -3399,11 +3411,15 @@ For a TenantSyncOptions with a null TenantGuid it sets `tenantOptions.TenantGuid
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:429`
 
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). The `Create` arm still acts only for Download and Upload; under Bidirectional (the default) it writes nothing.
+
 The Create arm acts only when effectiveDirection is Download or Upload, but DetermineSyncAction returns Create for one-sided items in the Bidirectional branch (lines 667, 682) and effectiveDirection is then Bidirectional. Nothing is written, no counter moves (not even SkippedItems), totalProcessed++ runs and CreateKnowledgeItem records the item as synced. Bidirectional is the default Direction, so the default configuration drops every one-sided create while reporting Success == true, and the recorded knowledge later turns the missing side into a spurious deleted-remotely conflict.
 
 #### SH-M344 — Preview and Sync disagree: AnalyzeItem ignores Direction and can never report a conflict
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:202`
+
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `AnalyzeItem` still decides independently of the sync.
 
 AnalyzeItem re-implements the decision independently of DetermineSyncAction: it never reads options.Direction (so a Download-only run previews local-only items as ToCreate although the sync Skips them), and returns only Create/Update/Delete/Skip, so preview.Conflicts is always 0 and an item the sync will treat as a conflict is previewed as a plain Update. A caller using PreviewAsync as a dry run sees counts the following SyncAsync will not honour.
 
@@ -3411,11 +3427,15 @@ AnalyzeItem re-implements the decision independently of DetermineSyncAction: it 
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:459`
 
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15).
+
 In the Update arm `if (CanSaveToLocal?.Invoke(remoteItem) != false)` has no else, so when the tenant predicate rejects a cross-tenant item nothing is incremented — not UpdatedItems, not SkippedItems, no SyncError. The Create arm (lines 436-439, 448-451) increments SkippedItems for the identical condition. The item is still counted in totalProcessed and written to the knowledge store as synced, so the skip is invisible in SyncResult and never retried.
 
 #### SH-M346 — Knowledge is recorded for items whose write was skipped, stamping foreign entity guids into the tenant's scope
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:504`
+
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15).
 
 CreateKnowledgeItem runs for every item reaching the end of the try, whether or not the save predicate blocked the write. Because the fetch side is unscoped that includes other tenants' items: a TenantSyncKnowledgeItem carrying another tenant's EntityGuid is persisted with TenantGuid = the current tenant. The next run reads it as prior knowledge and infers IsLocalDeleted/IsRemoteDeleted from the item's absence, driving deletes and conflicts for rows this tenant never owned.
 
@@ -3423,11 +3443,15 @@ CreateKnowledgeItem runs for every item reaching the end of the try, whether or 
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:534`
 
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `SetLastSyncTimeAsync` still runs unconditionally after the loop.
+
 SetLastSyncTimeAsync(scope, tenant, DateTime.UtcNow) runs unconditionally after the batch loop, including when the loop broke on options.CancellationToken.IsCancellationRequested (line 408) and when result.Errors is non-empty. The next run then reports IsInitialSync == false, skipping the initial-download path that would have re-fetched the unprocessed items. A cancelled first sync permanently marks itself complete.
 
 #### SH-M348 — TenantSyncProvider ignores OnSaveFilterBlock and OnError, so ThrowException on a tenant-blocked save is silently skipped
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:431`
+
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). The save gates still invoke the predicates directly; `OnSaveFilterBlock` is copied but never acted on.
 
 Every save gate calls `filterOptions.CanSaveToLocal?.Invoke(item) != false` directly. The non-tenant siblings route the same decision through SyncProviderBase.CanSaveToLocal/HandleSaveFilterBlock (SyncProviderBase.cs:301), honouring SaveFilterBlockAction.ThrowException / LogAsError / MarkConflict and firing options.OnError / OnConflict. Here those settings are read by nothing, so a cross-tenant item — the exact case the tenant predicate blocks — can never be surfaced as an error or made to fail the sync.
 
@@ -3435,11 +3459,15 @@ Every save gate calls `filterOptions.CanSaveToLocal?.Invoke(item) != false` dire
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:402`
 
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). No reference to `MaxItems` or `OnBatchStarting`.
+
 The batch loop iterates all of allGuids with no cap. SyncProvider.cs:61 and AsyncSyncProvider.cs:62 both truncate allGuids to options.MaxItems (CR-L207). A caller who limits a tenant sync to N items — the documented way to bound a first run — syncs the entire (cross-tenant) set instead. options.OnBatchStarting is likewise never invoked here while the siblings call it at AsyncSyncProvider.cs:156.
 
 #### SH-M350 — TenantSyncQueue's per-tenant key does not give per-tenant concurrency — one semaphore serializes all tenants
 
 `../Birko.Data.Sync.Tenant/TenantSyncQueue.cs:43`
+
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `SyncQueue` has one `SemaphoreSlim`; the tenant key scopes only the bookkeeping.
 
 GetQueueKey scopes only the bookkeeping Dictionary<string, Queue<QueuedSync>>. The actual gate is the single SyncQueue._semaphore created with maxConcurrentSyncs (default 1) and awaited in EnqueueWithKeyAsync regardless of key, so tenant t's sync blocks tenant u's for its whole duration. The class summary ('uses current tenant for queue scoping') and the spec scenario 'the two tenants do not serialize against one another' describe behaviour the code does not implement.
 
@@ -3447,11 +3475,15 @@ GetQueueKey scopes only the bookkeeping Dictionary<string, Queue<QueuedSync>>. T
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:392`
 
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `ToDictionary(GetGuid)` at both entry points.
+
 GetGuid returns Guid.Empty whenever the reflected `Guid` property is null or not a Guid, so any two unsaved/unkeyed entities on one side collide and ToDictionary raises ArgumentException. In ExecuteSyncAsync the outer catch swallows it into one SyncError { Message = "Sync failed" } naming no item; in ExecutePreviewAsync it propagates raw. The two entry points fail differently for the same input and neither points at the offending rows.
 
 #### SH-M352 — ISyncProvider entry points silently drop a mismatched filterOptions via `as`
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:904`
+
+**Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `filterOptions as SyncFilterOptions<T>` on both explicit interface members.
 
 Both explicit interface implementations do `filterOptions as SyncFilterOptions<T>`, yielding null for any other type. A caller passing SyncFilterOptions<TOther> (easy through the non-generic ISyncProvider surface) loses LocalFetchPredicate/RemoteFetchPredicate and CanSaveTo* with no exception, and the run proceeds as a full unfiltered sync of both stores instead of reporting the mistake.
 
@@ -3459,11 +3491,15 @@ Both explicit interface implementations do `filterOptions as SyncFilterOptions<T
 
 `../Birko.EventBus.Tenant/TenantEventScopeAccessor.cs:59`
 
+**Verdict: CONFIRMED; decided by [[TASK-328]]** (TASK-161, measured 2026-10-15). A null-tenant event dispatching across all tenants is the documented meaning of a system event, kept by the user's decision (2026-10-15); the mis-wiring that produced untagged events from tenant requests is now refused when the bridge is built, and every all-tenants dispatch is recorded (`AllTenantsDispatches`).
+
 When EventContext is null or its TenantGuid is null, RunWithScopeAsync runs the handler inside WithAllTenantsAsync. Any publish path that missed the enricher — a hand-rolled EventContext, or the DI mismatch above — therefore escalates the handler to cross-tenant scope rather than failing closed. The fail direction is open: NullEventScopeAccessor (no scope at all) would leave Strict operations throwing instead of silently succeeding across tenants.
 
 #### SH-M354 — RequireTenantHeaderMatchesClaim defaults true but is enforced only if the app also calls UseBirkoTenantHeaderGuard
 
 `../Birko.Security.AspNetCore/Extensions/TenantHeaderGuardExtensions.cs:34`
+
+**Verdict: CONFIRMED, fixed** (TASK-161, measured 2026-10-15, real host start). `AddBirkoSecurity` registers a startup filter that refuses to start when `RequireTenantHeaderMatchesClaim` is true and `UseBirkoTenantHeaderGuard()` was not called (the call leaves a builder marker; measured to reach the filter under minimal hosting). Opting out starts as before. **Consumer impact, checked:** Symbio wires the guard; DraCode.KoboldLair.Server and GrantsSmoke do neither, with the default header resolver, so they are exposed and now fail at startup until they add the call or opt out. `tests/Birko.Security.AspNetCore.Tests/Extensions/TenantHeaderGuardStartupTests.cs`.
 
 The option is read exclusively by TenantHeaderClaimGuardMiddleware, which nothing registers automatically — AddBirkoSecurity wires auth, ICurrentUser, ITenantResolver and ITenantContext but not this middleware, and no startup check verifies the guard is in the pipeline. An app that adopts AddBirkoSecurity and never adds the Use call reports RequireTenantHeaderMatchesClaim == true while performing no comparison, contradicting the 'secure by default; an opt-in guard protects nobody' rationale.
 

@@ -33,5 +33,9 @@ public static class TenantHeaderGuardExtensions
     /// </para>
     /// </summary>
     public static IApplicationBuilder UseBirkoTenantHeaderGuard(this IApplicationBuilder app)
-        => app.UseMiddleware<TenantHeaderClaimGuardMiddleware>();
+    {
+        // TASK-161: what TenantHeaderGuardStartupCheck looks for once the pipeline is built.
+        app.Properties[TenantHeaderGuardStartupCheck.Marker] = true;
+        return app.UseMiddleware<TenantHeaderClaimGuardMiddleware>();
+    }
 }

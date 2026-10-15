@@ -104,6 +104,8 @@ public static class SecurityServiceExtensions
 
         // The resolved options, so middleware can read them (e.g. TenantHeaderClaimGuardMiddleware).
         services.AddSingleton(options);
+        // SH-M354 (TASK-161): the header guard is on by default, so a pipeline without it refuses to start.
+        services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter>(new TenantHeaderGuardStartupCheck(options));
 
         // ICurrentUser — reads from JWT claims
         services.AddScoped<ICurrentUser, ClaimsCurrentUser>();
