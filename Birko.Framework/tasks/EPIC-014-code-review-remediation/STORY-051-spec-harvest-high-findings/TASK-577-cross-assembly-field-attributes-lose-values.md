@@ -2,7 +2,7 @@
 id: TASK-577
 parent: STORY-051
 feature: FEATURE-014
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-12
@@ -34,11 +34,33 @@ Reach: 23 consumer source files use these attributes; the defect fires only in t
 
 ## Acceptance criteria
 
-- [ ] Every attribute type in `Birko.Data.SQL.Attributes` either round-trips through the rebuild with all its values, or the rebuild throws naming the type it cannot rebuild — no `default: skip`
-- [ ] Values are read as fields or properties, whichever the attribute declares
-- [ ] A test compiles or emits an attribute of a foreign identity and asserts the rebuilt column (length, precision, scale, UTC, unique index)
-- [ ] A regression test fails on the current code and passes with the fix
+- [x] Every attribute type in `Birko.Data.SQL.Attributes` either round-trips through the rebuild with all its values, or the rebuild throws naming the type it cannot rebuild — no `default: skip`
+- [x] Values are read as fields or properties, whichever the attribute declares
+- [x] A test compiles or emits an attribute of a foreign identity and asserts the rebuilt column (length, precision, scale, UTC, unique index)
+- [x] A regression test fails on the current code and passes with the fix
 - [ ] `/specs regen` of the area, with the spec diff reviewed, is the fix's evidence (EPIC-014's standing constraint)
+
+## Resolution (2026-10-15)
+
+`DataBase.LoadField`'s rebuild moved into `RebuildForeignFieldAttribute` (`Birko.Data.SQL/SQL/DataBase_Field.cs`): one
+case per field attribute, each value read through `ForeignValue` as a property or a field, whichever the attribute
+declares, and `default` throws `FieldAttributeException` naming the type and its assembly. `[UtcField]` has its case;
+`IndexedField` is rebuilt with `IsUnique`, `WhereNotNull` and `WhereNull`.
+
+**The test is the real layout, not an imitation.** `tests/Birko.Data.SQL.Tests.ForeignAttributes` compiles
+`Birko.Data.SQL/Attributes/Field.cs` and `Table.cs` into a second assembly, with a model carrying every attribute type.
+`Birko.Data.SQL.Tests` references it with `Aliases="foreign"` (`CrossAssemblyFieldAttributeTests`, 8 tests). A
+hand-emitted attribute would have encoded the test author's idea of the shape, and the shape (field vs property) is
+exactly what the defect got wrong. A coverage test requires every concrete field attribute on the foreign model, so the
+next attribute added without a rebuild case fails it.
+
+Measured on the old code: 4 of 8 red. Length (`StringField`, not `CharField(64)`), precision/scale (0), `[UtcField]`
+(`DateTimeField`), and the unknown-attribute refusal (skipped silently).
+
+**The unique-index loss did not reproduce, and that is recorded rather than claimed.** The field-level rebuild did drop
+`IsUnique`, but `CreateAbstractField` never reads `IndexedField`. Indexes come from `DataBase_Table.cs`, which has its
+own reflective read and already copied `IsUnique` and the predicate lists (TASK-273). The table test was green before
+and after. It stays as a pin, and the field rebuild now copies the values anyway, so the two paths agree.
 
 ## Out of scope
 

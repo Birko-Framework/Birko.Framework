@@ -193,6 +193,7 @@
   <Folder Name="/Tests/">
     <Project Path="../tests/Birko.Data.ElasticSearch.Tests/Birko.Data.ElasticSearch.Tests.csproj" />
     <Project Path="../tests/Birko.Data.SQL.Tests/Birko.Data.SQL.Tests.csproj" />
+    <Project Path="../tests/Birko.Data.SQL.Tests.ForeignAttributes/Birko.Data.SQL.Tests.ForeignAttributes.csproj" />
     <Project Path="../tests/Birko.Data.SQL.SqLite.Tests/Birko.Data.SQL.SqLite.Tests.csproj" />
     <Project Path="../tests/Birko.Data.SQL.SqLite.View.Tests/Birko.Data.SQL.SqLite.View.Tests.csproj" />
     <Project Path="../tests/Birko.Data.SQL.Providers.Tests/Birko.Data.SQL.Providers.Tests.csproj" />

@@ -55,52 +55,7 @@ namespace Birko.Data.SQL
                     var rebuilt = new List<Birko.Data.SQL.Attributes.Field>();
                     foreach (var attr in crossAttrs)
                     {
-                        var typeName = attr.GetType().Name;
-                        switch (typeName)
-                        {
-                            case "PrimaryField":
-                                rebuilt.Add(new Birko.Data.SQL.Attributes.PrimaryField());
-                                break;
-                            case "UniqueField":
-                                rebuilt.Add(new Birko.Data.SQL.Attributes.UniqueField());
-                                break;
-                            case "RequiredField":
-                                rebuilt.Add(new Birko.Data.SQL.Attributes.RequiredField());
-                                break;
-                            case "IncrementField":
-                                rebuilt.Add(new Birko.Data.SQL.Attributes.IncrementField());
-                                break;
-                            case "IgnoreField":
-                                rebuilt.Add(new Birko.Data.SQL.Attributes.IgnoreField());
-                                break;
-                            case "NamedField":
-                                var name = attr.GetType().GetProperty("Name")?.GetValue(attr) as string;
-                                if (!string.IsNullOrEmpty(name))
-                                    rebuilt.Add(new Birko.Data.SQL.Attributes.NamedField(name));
-                                break;
-                            case "PrecisionField":
-                                var prec = attr.GetType().GetProperty("Precision")?.GetValue(attr);
-                                rebuilt.Add(new Birko.Data.SQL.Attributes.PrecisionField(prec is int p ? p : 0));
-                                break;
-                            case "ScaleField":
-                                var sc = attr.GetType().GetProperty("Scale")?.GetValue(attr);
-                                rebuilt.Add(new Birko.Data.SQL.Attributes.ScaleField(sc is int s ? s : 0));
-                                break;
-                            case "MaxLengthField":
-                                var ml = attr.GetType().GetProperty("MaxLength")?.GetValue(attr);
-                                rebuilt.Add(new Birko.Data.SQL.Attributes.MaxLengthField(ml is int m ? m : 0));
-                                break;
-                            case "IndexedField":
-                                var idxName = attr.GetType().GetProperty("Name")?.GetValue(attr) as string;
-                                var idxOrder = attr.GetType().GetProperty("Order")?.GetValue(attr) is int io ? io : 0;
-                                var idxDesc = attr.GetType().GetProperty("IsDescending")?.GetValue(attr) is bool id && id;
-                                if (!string.IsNullOrEmpty(idxName))
-                                    rebuilt.Add(new Birko.Data.SQL.Attributes.IndexedField(idxName!, idxOrder, idxDesc));
-                                break;
-                            default:
-                                // Unknown attribute subtype — skip (property still gets mapped without attributes)
-                                break;
-                        }
+                        rebuilt.Add(RebuildForeignFieldAttribute(attr, field));
                     }
                     fieldAttrs = rebuilt.ToArray();
                 }
@@ -108,6 +63,61 @@ namespace Birko.Data.SQL
 
             var tableField = Fields.AbstractField.CreateAbstractField(field, fieldAttrs);
             return tableField != null ? new[] { tableField } : Array.Empty<AbstractField>();
+        }
+
+        /// <summary>
+        /// Rebuilds a field attribute compiled into another assembly (the split-aggregator layout) as the local type,
+        /// with every value it carries (TASK-577). The rebuild used to read <c>MaxLength</c>, <c>Precision</c> and
+        /// <c>Scale</c> with <c>GetProperty</c> although they are public FIELDS, so each came back 0; it dropped
+        /// <c>[UtcField]</c> in a <c>default: skip</c>, so an instant column became a wall clock; and it left out
+        /// <c>IndexedField.IsUnique</c> and its predicate lists. Every value is now read as whichever member the
+        /// attribute declares, and an attribute this method does not know throws rather than being skipped, so a new
+        /// attribute type cannot work in-assembly and silently do nothing cross-assembly.
+        /// </summary>
+        private static Birko.Data.SQL.Attributes.Field RebuildForeignFieldAttribute(object attr, PropertyInfo property)
+        {
+            var type = attr.GetType();
+            switch (type.Name)
+            {
+                case "PrimaryField": return new Birko.Data.SQL.Attributes.PrimaryField();
+                case "UniqueField": return new Birko.Data.SQL.Attributes.UniqueField();
+                case "RequiredField": return new Birko.Data.SQL.Attributes.RequiredField();
+                case "IncrementField": return new Birko.Data.SQL.Attributes.IncrementField();
+                case "IgnoreField": return new Birko.Data.SQL.Attributes.IgnoreField();
+                case "UtcField": return new Birko.Data.SQL.Attributes.UtcField();
+                case "NamedField": return new Birko.Data.SQL.Attributes.NamedField((string?)ForeignValue(attr, "Name", property));
+                case "MaxLengthField": return new Birko.Data.SQL.Attributes.MaxLengthField((int)ForeignValue(attr, "MaxLength", property)!);
+                case "PrecisionField": return new Birko.Data.SQL.Attributes.PrecisionField((int)ForeignValue(attr, "Precision", property)!);
+                case "ScaleField": return new Birko.Data.SQL.Attributes.ScaleField((int)ForeignValue(attr, "Scale", property)!);
+                case "IndexedField":
+                    return new Birko.Data.SQL.Attributes.IndexedField(
+                        (string)ForeignValue(attr, "Name", property)!,
+                        (int)ForeignValue(attr, "Order", property)!,
+                        (bool)ForeignValue(attr, "IsDescending", property)!,
+                        (bool)ForeignValue(attr, "IsUnique", property)!)
+                    {
+                        WhereNotNull = (string[])ForeignValue(attr, "WhereNotNull", property)!,
+                        WhereNull = (string[])ForeignValue(attr, "WhereNull", property)!,
+                    };
+                default:
+                    throw new Exceptions.FieldAttributeException(
+                        $"{property.DeclaringType?.FullName}.{property.Name}: attribute {type.FullName} comes from another "
+                        + $"assembly ({type.Assembly.GetName().Name}) and this build of Birko.Data.SQL cannot rebuild it. "
+                        + "Compile both from the same Birko.Data.SQL sources.");
+            }
+        }
+
+        /// <summary>A foreign attribute's value, read as a property or a field, whichever the attribute declares.</summary>
+        private static object? ForeignValue(object attr, string member, PropertyInfo property)
+        {
+            var type = attr.GetType();
+            var prop = type.GetProperty(member, BindingFlags.Public | BindingFlags.Instance);
+            if (prop != null) return prop.GetValue(attr);
+            var fieldInfo = type.GetField(member, BindingFlags.Public | BindingFlags.Instance);
+            if (fieldInfo != null) return fieldInfo.GetValue(attr);
+            throw new Exceptions.FieldAttributeException(
+                $"{property.DeclaringType?.FullName}.{property.Name}: attribute {type.FullName} from assembly "
+                + $"{type.Assembly.GetName().Name} has no '{member}'; it was compiled from different Birko.Data.SQL sources.");
         }
 
         public static AbstractField GetField<T, P>(Expression<Func<T, P>> expr)

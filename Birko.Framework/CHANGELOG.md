@@ -4,6 +4,14 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-14 — An ElasticSearch filter on a `[Keyword]` member finds its rows
+
+[[TASK-613]]. The filter translator appended `.keyword` to every string member, but a `[Keyword]` member has no such
+sub-field, so `x.Scope == s` matched nothing and raised no error. The sync store's `GetLastSyncTimeAsync` answered
+"never synced", and workflow and job lookups by name were empty. Field names now come from one producer that honours
+the mapping attribute's `Name`, and an exact match on a `[Text]` member throws. Workflow `Find*` also hit the
+PascalCase `orderBy` sort ([[TASK-615]]).
+
 ## 2026-10-14 — On PostgreSQL, a column differing only in case is drift
 
 [[TASK-610]]. `DetectDrift` matched stored columns case-insensitively, but PostgreSQL folds the bare `SupplierVatin`

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    TASK-577. The split-aggregator layout in a test: Birko.Data.SQL's attribute and table-attribute sources compiled
+    into a SECOND assembly, so the models below carry attributes whose CLR identity differs from the copy
+    Birko.Data.SQL.Tests compiles. Referenced through an extern alias, so the duplicate type names never collide.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Birko.Data.SQL\Attributes\Field.cs" Link="Linked\Field.cs" />
+    <Compile Include="..\..\Birko.Data.SQL\Attributes\Table.cs" Link="Linked\Table.cs" />
+  </ItemGroup>
+
+</Project>

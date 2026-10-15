@@ -27,6 +27,11 @@
   <ItemGroup>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- TASK-577: models whose SQL attributes have a foreign CLR identity (the split-aggregator layout). -->
+    <ProjectReference Include="..\Birko.Data.SQL.Tests.ForeignAttributes\Birko.Data.SQL.Tests.ForeignAttributes.csproj" Aliases="foreign" />
+  </ItemGroup>
+
   <Import Project="..\..\Birko.Time\Birko.Time.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />

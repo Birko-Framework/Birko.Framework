@@ -953,6 +953,10 @@
 			"path": "../tests/Birko.Data.SQL.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.SQL.Tests.ForeignAttributes",
+			"path": "../tests/Birko.Data.SQL.Tests.ForeignAttributes"
+		},
+		{
 			"name": "Tests / Birko.Data.SQL.Providers.Tests",
 			"path": "../tests/Birko.Data.SQL.Providers.Tests"
 		},

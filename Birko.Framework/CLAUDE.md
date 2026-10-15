@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### SQL attributes from another assembly keep their values (2026-10-15)
+
+[[TASK-577]]. In the split-aggregator layout, attributes from a second compilation of `Birko.Data.SQL` are rebuilt by
+name. The rebuild read `MaxLength`, `Precision` and `Scale` as properties, though they are fields, so a
+`[MaxLengthField(64)]` column was unbounded and `decimal(18,4)` lost its precision. It also skipped `[UtcField]`, making
+an instant a wall clock. All values are now read, and an attribute the build cannot rebuild throws.
 ### A SQL filter comparing two columns finds its rows (2026-10-15)
 
 [[TASK-574]]. `x.A == x.B` (any operator) parsed both sides into one condition, the right overwriting the left with no
@@ -334,13 +340,6 @@ so any sorted read failed with "No mapping found … to sort on". Every workflow
 resolve through `ElasticSearch.Sorts`, the producer the filter translator uses: the attribute's `Name` or camelCase,
 `.keyword` for dynamic strings, and an `ArgumentException` for an unknown key. Job dequeue still returns nothing
 ([[TASK-616]]).
-### An ElasticSearch filter on a `[Keyword]` member finds its rows (2026-10-14)
-
-[[TASK-613]]. The filter translator appended `.keyword` to every string member, but a `[Keyword]` member has no such
-sub-field, so `x.Scope == s` matched nothing and raised no error. The sync store's `GetLastSyncTimeAsync` answered
-"never synced", and workflow and job lookups by name were empty. Field names now come from one producer that honours
-the mapping attribute's `Name`, and an exact match on a `[Text]` member throws. Workflow `Find*` also hit the
-PascalCase `orderBy` sort ([[TASK-615]]).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

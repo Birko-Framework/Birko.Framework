@@ -19,6 +19,11 @@ Unit tests for the Birko.Data.SQL project - SQL connector condition builders, st
 - `TestDbParameter.cs` - Concrete DbParameter stub
 - `TestDbParameterCollection.cs` - Concrete DbParameterCollection stub with `All` property for assertions
 
+### Foreign attributes (TASK-577)
+- `CrossAssemblyFieldAttributeTests.cs` - models from `../Birko.Data.SQL.Tests.ForeignAttributes` (referenced with
+  `Aliases="foreign"`), whose SQL attributes are a second compilation of `Birko.Data.SQL/Attributes/*.cs`: the
+  split-aggregator layout. A new field attribute must appear on `ForeignModel`, or the coverage test fails.
+
 ### TestResources
 - `Models/DateModel.cs` - Test fixture model (DateModel, NestedDateModel)
 

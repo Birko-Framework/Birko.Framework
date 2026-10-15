@@ -486,6 +486,17 @@ Enum properties are automatically mapped to `INTEGER` fields. `IntegerField` han
 ### IgnoreField Attribute
 Properties decorated with `[IgnoreField]` are skipped by `AbstractField.CreateAbstractField()` — they won't be included in table creation or any CRUD operations. Unsupported property types also return `null` instead of throwing `FieldAttributeException`.
 
+### Attributes compiled into another assembly (TASK-577)
+In the split-aggregator layout a model's `[MaxLengthField]`, `[UtcField]` etc. have a different CLR identity from the
+copy `Birko.Data.SQL` was compiled with, so `DataBase.LoadField` rebuilds them by type name
+(`RebuildForeignFieldAttribute`). Every value is read as the member the attribute declares, property or field
+(`MaxLength`, `Precision` and `Scale` are fields), and an attribute type the rebuild does not know throws
+`FieldAttributeException` naming it. **Adding a field attribute means adding its case there**:
+`tests/Birko.Data.SQL.Tests/CrossAssemblyFieldAttributeTests` fails until it is, because it requires every concrete
+attribute type on the foreign model in `tests/Birko.Data.SQL.Tests.ForeignAttributes` (which compiles the real
+`Attributes/*.cs` into a second assembly). Class-level `[Table]` / `[CompositeIndex]` and the index builder's
+`[IndexedField]` read are separate reflective paths in `DataBase_Table.cs`.
+
 ### Filter translation (`DataBase.ParseConditionExpression` / `ParseExpression`)
 The hand-rolled filter parsers run every predicate (Where / Delete / Update) and every value-position
 Update-SET expression through the shared `Birko.Data.Expressions.ExpressionNormalizer` (in
