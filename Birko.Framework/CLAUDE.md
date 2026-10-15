@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A composed store chain keeps aggregation, transactions and settings (2026-10-15)
+
+[[TASK-631]]. A store wrapped by `StoreWrapperBuilder` lost every interface but `IAsyncBulkStore<T>`, and `GetInnerStore()`
+skipped soft-delete and tenant scope. Every decorator now forwards aggregates with its own scope. A transaction context
+and settings reach the raw store through `StoreChain.SetTransactionContext` / `SetSettings`.
 ### SQL joins: a condition is never dropped, a `[View]` without `connect:` is an inner join (2026-10-15)
 
 [[TASK-626]]. A CROSS join's ON was not rendered, and Cross was the default, so `Join.Create(a, b, cond)` and every
@@ -328,12 +333,6 @@ under a sibling. `AddRepository(store, lifetime)` takes only Singleton. ViewMode
 registration always built the non-bulk wrapper, and its async form accepted no async repository. **BREAKING:**
 `AddBirkoSecurity` now refuses to start without `UseBirkoTenantHeaderGuard()`, unless `RequireTenantHeaderMatchesClaim =
 false`. The tenant sync provider's 11 divergences are [[TASK-630]].
-### Rule specifications agree with the in-memory evaluator; paging orders totally (2026-10-15)
-
-[[TASK-171]]. A `RuleSpecification` threw for `IsNull` on an `int` or `>` on a string, matched nothing for a Guid or
-enum given as text, parsed numbers in the host's culture, and rounded `10.7` to `11`. A null `Contains` matched every
-row. Composites now evaluate through their operands. Paging sorts by the caller's order, then `Guid`, and never sends
-a negative offset. Three engine divergences are now [[TASK-144]].
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

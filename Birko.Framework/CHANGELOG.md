@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Rule specifications agree with the in-memory evaluator; paging orders totally
+
+[[TASK-171]]. A `RuleSpecification` threw for `IsNull` on an `int` or `>` on a string, matched nothing for a Guid or
+enum given as text, parsed numbers in the host's culture, and rounded `10.7` to `11`. A null `Contains` matched every
+row. Composites now evaluate through their operands. Paging sorts by the caller's order, then `Guid`, and never sends
+a negative offset. Three engine divergences are now [[TASK-144]].
+
 ## 2026-10-15 — Filtered bulk writes: an unconfigured SQL store refuses, a vanished row is skipped
 
 [[TASK-170]]. A SQL store with no settings answered every delete, update and read as done; it now throws on first

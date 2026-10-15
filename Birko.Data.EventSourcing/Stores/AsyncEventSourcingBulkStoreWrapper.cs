@@ -17,10 +17,14 @@ namespace Birko.Data.EventSourcing.Stores
     /// </summary>
     /// <typeparam name="TStore">The type of inner async bulk store.</typeparam>
     /// <typeparam name="T">The type of entity.</typeparam>
-    public class AsyncEventSourcingBulkStoreWrapper<TStore, T> : AsyncEventSourcingStoreWrapper<TStore, T>, IAsyncBulkStore<T>, IStoreWrapper<T>
+    public class AsyncEventSourcingBulkStoreWrapper<TStore, T> : AsyncEventSourcingStoreWrapper<TStore, T>, IAsyncBulkStore<T>, IStoreWrapper<T>, IAsyncAggregatableStore<T>
         where TStore : IAsyncBulkStore<T>
         where T : Data.Models.AbstractModel, IEventSourced
     {
+        /// <summary>Forwards aggregation: this decorator does not scope reads (TASK-631).</summary>
+        public Task<IReadOnlyList<AggregateResult>> AggregateAsync(AggregateQuery<T> query, CancellationToken ct = default)
+            => StoreChain.AggregateThrough(_innerStore, query, ct);
+
         /// <summary>
         /// Creates a new async event sourcing bulk store wrapper.
         /// </summary>

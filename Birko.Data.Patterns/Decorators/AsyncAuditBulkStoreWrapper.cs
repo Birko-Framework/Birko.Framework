@@ -13,10 +13,14 @@ namespace Birko.Data.Patterns.Decorators;
 /// <summary>
 /// Async bulk store wrapper that automatically sets CreatedBy/UpdatedBy from IAuditContext.
 /// </summary>
-public class AsyncAuditBulkStoreWrapper<TStore, T> : AsyncAuditStoreWrapper<TStore, T>, IAsyncBulkStore<T>
+public class AsyncAuditBulkStoreWrapper<TStore, T> : AsyncAuditStoreWrapper<TStore, T>, IAsyncBulkStore<T>, IAsyncAggregatableStore<T>
     where TStore : IAsyncBulkStore<T>
     where T : Data.Models.AbstractModel, IAuditable
 {
+    /// <summary>Forwards aggregation: this decorator does not scope reads (TASK-631).</summary>
+    public Task<IReadOnlyList<AggregateResult>> AggregateAsync(AggregateQuery<T> query, CancellationToken ct = default)
+        => StoreChain.AggregateThrough(_innerStore, query, ct);
+
     public AsyncAuditBulkStoreWrapper(TStore innerStore, IAuditContext auditContext) : base(innerStore, auditContext) { }
 
     public Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default) => _innerStore.ReadAsync(ct);

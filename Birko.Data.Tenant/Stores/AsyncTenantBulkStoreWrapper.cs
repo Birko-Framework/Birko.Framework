@@ -12,10 +12,14 @@ namespace Birko.Data.Tenant.Stores;
 /// <summary>
 /// A store wrapper that automatically filters by tenant
 /// </summary>
-public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TStore, T>, IAsyncBulkStore<T>, IStoreWrapper<T>
+public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TStore, T>, IAsyncBulkStore<T>, IStoreWrapper<T>, IAsyncAggregatableStore<T>
     where TStore : IAsyncBulkStore<T>
     where T : Data.Models.AbstractModel, ITenant
 {
+    /// <summary>Aggregates within this decorator's scope: the query's filter is narrowed as every read's is (TASK-631).</summary>
+    public Task<IReadOnlyList<AggregateResult>> AggregateAsync(AggregateQuery<T> query, CancellationToken ct = default)
+        => StoreChain.AggregateThrough(_innerStore, query.WithFilter(TenantFilter(query.Filter).Filter()), ct);
+
     public AsyncTenantBulkStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null, TenantIsolationMode mode = TenantIsolationMode.Permissive) : base(innerStore, tenantContext, mode)
     {
     }

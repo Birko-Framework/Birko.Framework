@@ -59,5 +59,18 @@ namespace Birko.Data.Stores
 
         /// <summary>Number of results to skip.</summary>
         public int? Offset { get; init; }
+
+        /// <summary>This query with <paramref name="filter"/> in place of <see cref="Filter"/> (a scoping decorator's, TASK-631).</summary>
+        public AggregateQuery<T> WithFilter(Expression<Func<T, bool>>? filter) => new()
+        {
+            Filter = filter,
+            GroupByFields = GroupByFields,
+            Aggregates = Aggregates,
+            TimeBucketInterval = TimeBucketInterval,
+            TimeColumn = TimeColumn,
+            OrderBy = OrderBy,
+            Limit = Limit,
+            Offset = Offset,
+        };
     }
 }

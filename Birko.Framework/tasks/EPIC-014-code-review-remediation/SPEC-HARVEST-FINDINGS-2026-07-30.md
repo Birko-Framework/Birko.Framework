@@ -3581,6 +3581,8 @@ Build probes IEventSourced, ITimestamped, IAuditable, ITenant, ISoftDeletable, I
 
 **Verdict: CONFIRMED by reading, spawned as TASK-631** (TASK-159, measured 2026-10-15). Forwarding or refusing each capability through every decorator is a design decision across the family.
 
+**Fixed by [[TASK-631]]** (measured 2026-10-15, decision: forward with scope). Every decorator the builder composes implements `IAsyncAggregatableStore<T>` and forwards with its own scope (soft-delete and tenant narrow the filter); a transaction context and settings reach the raw store through `StoreChain`. Through the chain: tenant A live rows only (3, not 15).
+
 Build takes and returns IAsyncBulkStore<T>, and every decorator implements only that surface. A raw store additionally implementing IAsyncAggregatableStore<T>, ITransactionalStore or ISettingsStore loses those members once wrapped: `wrapped as IAggregatableStore<T>` returns null and the caller must walk GetInnerStore() to reach them, at which point the decorators' soft-delete exclusion and tenant scoping are bypassed for that operation. Nothing forwards or re-exposes those interfaces.
 
 ### area: store-lazy-initialization

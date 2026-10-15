@@ -99,6 +99,30 @@ store are not forwarded ([[TASK-631]]).
 | `IAuditable` | `AsyncAuditBulkStoreWrapper<>` | `IAuditContext` |
 | `ITimestamped` | `AsyncTimestampBulkStoreWrapper<>` | `IDateTimeProvider` |
 
+## Capabilities beyond `IAsyncBulkStore<T>` (TASK-631)
+
+A composed chain keeps the raw store's other capabilities:
+
+- **Aggregation** (`IAsyncAggregatableStore<T>`): every decorator implements it and forwards to the next store, adding
+  its own scope as it does for reads. Through the soft-delete decorator deleted rows are excluded; through the tenant
+  decorator only the current tenant's rows count (Strict mode refuses with no tenant). A raw store that does not
+  aggregate makes the chain throw `NotSupportedException`.
+
+  ```csharp
+  var chain = StoreWrapperBuilder.Build(rawStore, tenantContext: tenant);
+  var totals = await ((IAsyncAggregatableStore<Sale>)chain).AggregateAsync(new AggregateQuery<Sale>
+  {
+      Aggregates = new[] { new AggregateField(AggregateFunction.Sum, nameof(Sale.Amount), "total") },
+  });
+  ```
+
+- **Transaction context and settings** are not scoped, so they go to the raw store:
+  `StoreChain.SetTransactionContext<Sale, IClientSessionHandle>(chain, uow.Context)` and
+  `StoreChain.SetSettings(chain, settings)`. Each throws `NotSupportedException` if no store in the chain takes them.
+
+`GetInnerStore()` still reaches the raw store, and anything sent there skips every decorator's scope: use the members
+above instead.
+
 ## Typical use cases
 
 1. **SaaS entities** implementing `ITenant + IAuditable + ITimestamped` — one `Build<>` call produces the full safety stack.

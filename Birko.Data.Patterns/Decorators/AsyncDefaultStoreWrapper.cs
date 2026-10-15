@@ -15,10 +15,14 @@ namespace Birko.Data.Patterns.Decorators;
 /// with IsDefault=true are automatically set to false.
 /// Requires an async bulk store because enforcing the constraint needs bulk read and update.
 /// </summary>
-public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWrapper<T>
+public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWrapper<T>, IAsyncAggregatableStore<T>
     where TStore : IAsyncBulkStore<T>
     where T : AbstractModel, IDefault
 {
+    /// <summary>Forwards aggregation: this decorator does not scope reads (TASK-631).</summary>
+    public Task<IReadOnlyList<AggregateResult>> AggregateAsync(AggregateQuery<T> query, CancellationToken ct = default)
+        => StoreChain.AggregateThrough(_innerStore, query, ct);
+
     protected readonly TStore _innerStore;
 
     public AsyncDefaultStoreWrapper(TStore innerStore)

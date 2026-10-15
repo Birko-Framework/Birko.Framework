@@ -19,6 +19,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)AbstractBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AbstractAsyncBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)StoreChain.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ITransactionalStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OrderBy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OrderByHelper.cs" />

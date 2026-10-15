@@ -14,10 +14,14 @@ namespace Birko.Data.Patterns.Decorators;
 /// <summary>
 /// Async bulk store wrapper that automatically sets CreatedAt/UpdatedAt/PrevUpdatedAt timestamps.
 /// </summary>
-public class AsyncTimestampBulkStoreWrapper<TStore, T> : AsyncTimestampStoreWrapper<TStore, T>, IAsyncBulkStore<T>
+public class AsyncTimestampBulkStoreWrapper<TStore, T> : AsyncTimestampStoreWrapper<TStore, T>, IAsyncBulkStore<T>, IAsyncAggregatableStore<T>
     where TStore : IAsyncBulkStore<T>
     where T : AbstractModel, ITimestamped
 {
+    /// <summary>Forwards aggregation: this decorator does not scope reads (TASK-631).</summary>
+    public Task<IReadOnlyList<AggregateResult>> AggregateAsync(AggregateQuery<T> query, CancellationToken ct = default)
+        => StoreChain.AggregateThrough(_innerStore, query, ct);
+
     public AsyncTimestampBulkStoreWrapper(TStore innerStore, IDateTimeProvider clock) : base(innerStore, clock) { }
 
     public Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default) => _innerStore.ReadAsync(ct);

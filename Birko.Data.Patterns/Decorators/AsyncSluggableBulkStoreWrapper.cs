@@ -12,10 +12,14 @@ namespace Birko.Data.Patterns.Decorators;
 /// <summary>
 /// Async bulk store wrapper that normalizes and ensures slug uniqueness on Create/Update.
 /// </summary>
-public class AsyncSluggableBulkStoreWrapper<TStore, T> : AsyncSluggableStoreWrapper<TStore, T>, IAsyncBulkStore<T>
+public class AsyncSluggableBulkStoreWrapper<TStore, T> : AsyncSluggableStoreWrapper<TStore, T>, IAsyncBulkStore<T>, IAsyncAggregatableStore<T>
     where TStore : IAsyncBulkStore<T>
     where T : Data.Models.AbstractModel, ISluggable
 {
+    /// <summary>Forwards aggregation: this decorator does not scope reads (TASK-631).</summary>
+    public Task<IReadOnlyList<AggregateResult>> AggregateAsync(AggregateQuery<T> query, CancellationToken ct = default)
+        => StoreChain.AggregateThrough(_innerStore, query, ct);
+
     public AsyncSluggableBulkStoreWrapper(TStore innerStore) : base(innerStore) { }
 
     public Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default)

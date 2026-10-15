@@ -21,6 +21,8 @@ An `IVersioned` `T` is refused with `NotSupportedException` (no versioned link e
 
 EventSourcing sits innermost so the recorded event payload includes Timestamp/Audit enrichments and so outer-wrapper rejections (slug collision, default conflict, tenant guard) do not leave orphan events behind. Soft-deletes emit an `"Updated"` event with `IsDeleted=true` — matches physical storage.
 
+**Capabilities (TASK-631):** the chain stays `IAsyncAggregatableStore<T>`; every decorator forwards aggregates with its own scope (soft-delete, tenant). A transaction context and settings go to the raw store through `StoreChain.SetTransactionContext` / `StoreChain.SetSettings` (Birko.Data.Stores). `GetInnerStore()` skips every scope.
+
 ## Signature
 
 ```csharp

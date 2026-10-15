@@ -14,10 +14,14 @@ namespace Birko.Data.Patterns.Decorators;
 /// <summary>
 /// Async bulk store wrapper that adds soft-delete behavior.
 /// </summary>
-public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWrapper<TStore, T>, IAsyncBulkStore<T>
+public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWrapper<TStore, T>, IAsyncBulkStore<T>, IAsyncAggregatableStore<T>
     where TStore : IAsyncBulkStore<T>
     where T : Data.Models.AbstractModel, ISoftDeletable
 {
+    /// <summary>Aggregates within this decorator's scope: the query's filter is narrowed as every read's is (TASK-631).</summary>
+    public Task<IReadOnlyList<AggregateResult>> AggregateAsync(AggregateQuery<T> query, CancellationToken ct = default)
+        => StoreChain.AggregateThrough(_innerStore, query.WithFilter(SoftDeleteFilter.CombineWithNotDeleted(query.Filter)), ct);
+
     public AsyncSoftDeleteBulkStoreWrapper(TStore innerStore, IDateTimeProvider clock) : base(innerStore, clock) { }
 
     public Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default)
