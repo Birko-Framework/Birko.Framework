@@ -73,6 +73,11 @@ Provider-agnostic field and schema abstractions. Used by both the migration syst
 - `ISchemaBuilder` - CreateCollection, DropCollection, CollectionExists, CreateIndex, DropIndex, AddField, DropField, RenameField
 - `ICollectionBuilder` - Fluent: WithField(name, type) and WithField(FieldDescriptor)
 - `IIndexBuilder` - Fluent: WithField (uses IndexFieldType from IndexManagement), Unique, Sparse, WithProperty
+- `SchemaBuildLedger` - The chains a schema builder handed out; `ISchemaBuilder.PendingBuilds` lists the unbuilt ones and every migration runner fails on them (TASK-627)
+
+### Index management (Birko.Data.Patterns.IndexManagement)
+- `IIndexManager`, `IndexDefinition`, `IndexInfo`, `IndexManagementException` - the provider-neutral index API
+- `IndexDeclarationDriftDetector.DetectAsync(manager, declared, scope)` - compares declared `IndexDefinition`s with the manager's `GetInfoAsync`: `Missing`, `ColumnsDiffer`, `UniquenessDiffers`, and `Unverified` for an index it could not compare (never counted clean). The declared side for document stores, which declare no indexes on the model (TASK-635); SQL has its own model-derived check (TASK-622)
 
 ### Specification
 - `ISpecification<T>` - Interface with `IsSatisfiedBy(entity)` and `ToExpression()` for store filtering

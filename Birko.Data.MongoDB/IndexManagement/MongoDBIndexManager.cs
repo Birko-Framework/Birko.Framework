@@ -245,6 +245,16 @@ namespace Birko.Data.MongoDB.IndexManagement
                 var fields = new List<IndexField>();
                 foreach (var element in idx["key"].AsBsonDocument)
                 {
+                    // TASK-635: a text index stores its key as {_fts: "text", _ftsx: 1}, and its fields in "weights".
+                    // Read back as the key, it described two fields nobody declared, so every text index read as drift.
+                    if (element.Name == "_ftsx") continue;
+                    if (element.Name == "_fts" && idx.Contains("weights") && idx["weights"].IsBsonDocument)
+                    {
+                        foreach (var weighted in idx["weights"].AsBsonDocument)
+                            fields.Add(new IndexField { Name = weighted.Name, FieldType = IndexFieldType.Text });
+                        continue;
+                    }
+
                     var field = new IndexField { Name = element.Name };
 
                     if (element.Value.IsInt32 || element.Value.IsInt64 || element.Value.IsDouble)

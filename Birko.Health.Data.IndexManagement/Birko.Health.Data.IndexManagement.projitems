@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>16d1b9fc-19c3-49e8-955d-2756af84ce29</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Health.Data.IndexManagement</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- Its own project for the reason Birko.Health.Data.SQL and .ElasticSearch are (TASK-635): Birko.Health.Data is
+       dependency-free by construction, and an index-drift check needs Birko.Data.Patterns' IIndexManager. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)IndexDeclarationDriftHealthCheck.cs" />
+  </ItemGroup>
+</Project>

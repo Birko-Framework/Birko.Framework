@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Filter translation: 18 medium defects fixed on SQL and ElasticSearch
+
+[[TASK-153]]. `25 > x.Age` returned the other rows, `IsNullOrEmpty` matched nothing, `StartsWith("A_1")` matched
+`A21`, and a `Between` rule lost its upper bound. All are measured against real databases and fixed. Every LIKE now
+declares `ESCAPE '!'`. A CASE bool test is `(col = '1')`, the form all four providers accept. An ElasticSearch store
+given foreign settings throws instead of answering empty. Join rendering is [[TASK-626]].
+
 ## 2026-10-15 — The event-tenant bridge refuses a tenant context it cannot see
 
 [[TASK-328]]. With `AddTenantContext*`, the bridge read `Tenant.Current` while the app set its tenant on a separate

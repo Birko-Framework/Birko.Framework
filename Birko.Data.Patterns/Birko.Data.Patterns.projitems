@@ -67,6 +67,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexDefinition.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexInfo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexManagementException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexDeclarationDrift.cs" />
     <!-- Schema -->
     <Compile Include="$(MSBuildThisFileDirectory)Schema\FieldType.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Schema\FieldDescriptor.cs" />

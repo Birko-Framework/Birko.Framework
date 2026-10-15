@@ -246,6 +246,31 @@ var check = new ElasticSearchMappingDriftHealthCheck(new Func<CancellationToken,
 Degraded on drift or on a store it could not ask, never Unhealthy for drift. An index not created yet is Healthy, and
 the description says it was not checked.
 
+## Index Declaration Drift Health Check (Birko.Health.Data.IndexManagement)
+
+The document stores declare no indexes on the model: an index on MongoDB, RavenDB or Cosmos DB exists because a host or
+a migration created it from an `IndexDefinition`. `IndexDeclarationDriftDetector` (Birko.Data.Patterns) compares that
+list with the store's `IIndexManager` and reports, per declared index, `Missing`, `ColumnsDiffer` (other fields, order or
+direction) or `UniquenessDiffers`, the kinds SQL schema drift reports. A missing unique index is a correctness failure:
+duplicates are accepted silently.
+
+```csharp
+var declared = new[]
+{
+    new IndexDefinition { Name = "UX_Number", Fields = new[] { IndexField.Ascending("Number") }, Unique = true },
+    new IndexDefinition { Name = "IX_Customer_Date", Fields = new[] { IndexField.Ascending("CustomerGuid"), IndexField.Descending("Date") } },
+};
+var check = new IndexDeclarationDriftHealthCheck(new Func<CancellationToken, Task<IndexDeclarationReport>>[]
+{
+    ct => IndexDeclarationDriftDetector.DetectAsync(new MongoDBIndexManager(client), declared, "Invoices", ct),
+});
+```
+
+Degraded on drift, and on an index it could not compare (the provider reports no fields for it, or the lookup failed),
+never Unhealthy for drift. RavenDB reports the fields of a map its manager generated; a map written by hand is "not
+compared". Cosmos DB answers by the names its manager registered (TASK-628); a policy path nobody named is "not
+compared". Detection only: nothing is created.
+
 ## Schema Drift Health Check (Birko.Health.Data.SQL)
 
 Birko never reconciles an existing table: `CREATE TABLE` is guarded by `IF NOT EXISTS` and schema-ensure
@@ -442,6 +467,7 @@ app.MapGet("/health/live", async () =>
 | `Birko.Health.Data` | SQL, Elasticsearch, MongoDB, RavenDB, InfluxDB, Vault, MQTT, SMTP | System.Data.Common, System.Net.Http, System.Net.Sockets |
 | `Birko.Health.Data.SQL` | Schema drift + unbuilt indexes | Birko.Data.SQL |
 | `Birko.Health.Data.ElasticSearch` | Elasticsearch mapping drift | Birko.Data.ElasticSearch |
+| `Birko.Health.Data.IndexManagement` | Index declaration drift (MongoDB, RavenDB, Cosmos DB) | Birko.Data.Patterns |
 | `Birko.Health.Redis` | Redis PING | StackExchange.Redis |
 | `Birko.Health.Azure` | Azure Blob Storage, Azure Key Vault | Birko.Storage.AzureBlob, Birko.Security.AzureKeyVault |
 

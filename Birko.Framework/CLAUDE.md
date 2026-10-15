@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Index drift on MongoDB, RavenDB and Cosmos DB, and a health check for it (2026-10-15)
+
+[[TASK-635]]. `IndexDeclarationDriftDetector` compares the `IndexDefinition`s a host declares with a store's index manager:
+`Missing`, `ColumnsDiffer`, `UniquenessDiffers`, or not compared. `IndexDeclarationDriftHealthCheck` is in the new
+`Birko.Health.Data.IndexManagement`. Fixed on the way: a MongoDB text index read as fields `_fts`, `_ftsx`, and a RavenDB
+lookup of an absent index threw instead of answering null.
 ### Cosmos DB index manager: indexes answer by their name; Unique refused (2026-10-15)
 
 [[TASK-628]]. A Cosmos policy has no index names, so `ExistsAsync("IX_Code")` was false for the index just created, and a
@@ -330,12 +336,6 @@ action)` aborted the loop halfway; it is skipped. Two `Set`s of one property are
 An inherited `[IndexedField]` created the index on one table only. The index managers misreported uniqueness,
 direction and other schemas. `LoadTable` returns no null (throws; `TryLoadTable` for null), and ElasticSearch index
 management no longer reads a failed request as "absent". Spawned [[TASK-627]] and [[TASK-628]].
-### Filter translation: 18 medium defects fixed on SQL and ElasticSearch (2026-10-15)
-
-[[TASK-153]]. `25 > x.Age` returned the other rows, `IsNullOrEmpty` matched nothing, `StartsWith("A_1")` matched
-`A21`, and a `Between` rule lost its upper bound. All are measured against real databases and fixed. Every LIKE now
-declares `ESCAPE '!'`. A CASE bool test is `(col = '1')`, the form all four providers accept. An ElasticSearch store
-given foreign settings throws instead of answering empty. Join rendering is [[TASK-626]].
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

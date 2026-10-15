@@ -82,12 +82,8 @@ namespace Birko.Data.RavenDB.IndexManagement
                 // so they are held to plain identifiers rather than escaped (rule 33, containment by refusal). A map for
                 // anything else is written by the caller and passed as the "Map" property.
                 var collectionName = RequireMapIdentifier(scope ?? "docs", "collection", definition.Name);
-                var fieldSelections = string.Join(", ", definition.Fields.Select(f =>
-                {
-                    var field = RequireMapIdentifier(f.Name, "field", definition.Name);
-                    return $"{field} = doc.{field}";
-                }));
-                ravenDef.Maps.Add($"from doc in docs.{collectionName} select new {{ {fieldSelections} }}");
+                ravenDef.Maps.Add(GeneratedMap(collectionName,
+                    definition.Fields.Select(f => RequireMapIdentifier(f.Name, "field", definition.Name))));
             }
 
             // Reduce expression
@@ -159,12 +155,51 @@ namespace Birko.Data.RavenDB.IndexManagement
         {
             if (string.IsNullOrWhiteSpace(indexName)) throw new ArgumentException("Index name is required.", nameof(indexName));
 
+            // TASK-635, measured on RavenDB 6: statistics of an index that does not exist throw InvalidOperationException
+            // ("Response is invalid."), so the null check below never ran and an absent index threw instead of answering
+            // null, as IIndexManager.GetInfoAsync promises.
+            if (!await ExistsAsync(indexName, scope, ct).ConfigureAwait(false)) return null;
+
             var stats = await _documentStore.Maintenance.ForDatabase(_documentStore.Database)
                 .SendAsync(new GetIndexStatisticsOperation(indexName), ct).ConfigureAwait(false);
 
             if (stats == null) return null;
 
-            return ToIndexInfo(stats);
+            var info = ToIndexInfo(stats);
+
+            // TASK-635: report the fields of a map this manager generated, so drift detection can compare them. A map the
+            // caller wrote is not parsed: its fields stay empty, which the detector reports as not compared.
+            var definition = await _documentStore.Maintenance.ForDatabase(_documentStore.Database)
+                .SendAsync(new GetIndexOperation(indexName), ct).ConfigureAwait(false);
+            if (definition != null && definition.Maps.Count == 1 && FieldsOfGeneratedMap(definition.Maps.First()) is { } fields)
+            {
+                info.Fields = fields.Select(f => new IndexField
+                {
+                    Name = f,
+                    FieldType = definition.Fields.TryGetValue(f, out var options) && options.Indexing == FieldIndexing.Search
+                        ? IndexFieldType.Text
+                        : IndexFieldType.Standard
+                }).ToList();
+            }
+            return info;
+        }
+
+        /// <summary>The map <see cref="CreateAsync"/> generates for plain fields: the one producer of that text.</summary>
+        internal static string GeneratedMap(string collection, IEnumerable<string> fields)
+            => $"from doc in docs.{collection} select new {{ {string.Join(", ", fields.Select(f => $"{f} = doc.{f}"))} }}";
+
+        private static readonly System.Text.RegularExpressions.Regex GeneratedMapShape = new(
+            @"^from doc in docs\.(?<c>[A-Za-z_][A-Za-z0-9_]*) select new \{ (?<f>[A-Za-z_][A-Za-z0-9_]*) = doc\.\k<f>(, (?<f>[A-Za-z_][A-Za-z0-9_]*) = doc\.\k<f>)* \}$");
+
+        /// <summary>
+        /// The fields of a map in exactly the form <see cref="GeneratedMap"/> writes, or null for any other map.
+        /// </summary>
+        internal static IReadOnlyList<string>? FieldsOfGeneratedMap(string map)
+        {
+            var match = GeneratedMapShape.Match(map.Trim());
+            if (!match.Success) return null;
+            var fields = match.Groups["f"].Captures.Select(c => c.Value).ToList();
+            return GeneratedMap(match.Groups["c"].Value, fields) == map.Trim() ? fields : null;
         }
 
         private static readonly System.Text.RegularExpressions.Regex MapIdentifier = new("^[A-Za-z_][A-Za-z0-9_]*$");

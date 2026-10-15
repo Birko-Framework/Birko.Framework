@@ -457,6 +457,10 @@
 			"path": "../Birko.Health.Data.ElasticSearch"
 		},
 		{
+			"name": "Health / Birko.Health.Data.IndexManagement",
+			"path": "../Birko.Health.Data.IndexManagement"
+		},
+		{
 			"name": "Health / Birko.Health.Data.SQL",
 			"path": "../Birko.Health.Data.SQL"
 		},
@@ -1083,6 +1087,10 @@
 		{
 			"name": "Tests / Birko.Health.Data.ElasticSearch.Tests",
 			"path": "../tests/Birko.Health.Data.ElasticSearch.Tests"
+		},
+		{
+			"name": "Tests / Birko.Health.Data.IndexManagement.Tests",
+			"path": "../tests/Birko.Health.Data.IndexManagement.Tests"
 		},
 		{
 			"name": "Tests / Birko.Health.Data.SQL.Tests",
