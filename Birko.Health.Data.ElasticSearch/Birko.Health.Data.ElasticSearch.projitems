@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>fb2ef126-70ac-4e59-9428-aa9b38b56d6d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Health.Data.ElasticSearch</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- Its own project for the reason Birko.Health.Data.SQL is (TASK-624, after TASK-269): Birko.Health.Data is
+       dependency-free by construction, and a mapping-drift check is meaningless without Birko.Data.ElasticSearch,
+       so the dependency is inherent to the feature. A consumer that does not want it does not import it. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchMappingDriftHealthCheck.cs" />
+  </ItemGroup>
+</Project>

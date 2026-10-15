@@ -248,6 +248,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 |---------|-------------|
 | Birko.Health | IHealthCheck, HealthCheckRunner, DiskSpace/Memory checks |
 | Birko.Health.Data | SQL, Elasticsearch, MongoDB, RavenDB, InfluxDB, TimescaleDB, CosmosDB, Vault, MQTT, SMTP, WebSocket, TCP, SSE checks |
+| Birko.Health.Data.ElasticSearch | Elasticsearch mapping drift (an index mapped differently from its store) |
 | Birko.Health.Data.SQL | Schema drift (a column whose stored type is no longer the declared one) + unbuilt indexes |
 | Birko.Health.Redis | Redis PING + latency |
 | Birko.Health.Azure | Blob Storage, Key Vault checks |
@@ -371,6 +372,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Data.XML.Tests | XML file store tests |
 | Birko.Health.Tests | Health check tests (runner, disk space, memory) |
 | Birko.Health.Azure.Tests | Azure health check tests (Blob Storage, Key Vault) |
+| Birko.Health.Data.ElasticSearch.Tests | The Elasticsearch mapping-drift health check, offline and live |
 | Birko.Health.Data.SQL.Tests | Schema-drift detection + the health check that reports it |
 | Birko.Localization.Tests | Localization tests (CLDR pluralization, JSON/RESX providers) |
 | Birko.Localization.Data.Tests | Database-backed localization tests (namespace scoping, TTL cache) |

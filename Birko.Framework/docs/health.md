@@ -230,6 +230,22 @@ HTTP GET with `Accept: text/event-stream`:
 var check = new SseHealthCheck("http://localhost:3000/events");
 ```
 
+## Mapping Drift Health Check (Birko.Health.Data.ElasticSearch)
+
+`ElasticSearchMappingDriftHealthCheck` runs `DetectMappingDriftAsync()` over the stores you list (one probe each) and
+reports fields whose stored mapping differs from the store's (`Missing`, `Unexpected`, `TypeMismatch`). An index
+mapped for an older model answers queries with empty results, not errors, so this is the only place that shows it.
+
+```csharp
+var check = new ElasticSearchMappingDriftHealthCheck(new Func<CancellationToken, Task<MappingDriftReport>>[]
+{
+    ct => orderStore.DetectMappingDriftAsync(ct),
+});
+```
+
+Degraded on drift or on a store it could not ask, never Unhealthy for drift. An index not created yet is Healthy, and
+the description says it was not checked.
+
 ## Schema Drift Health Check (Birko.Health.Data.SQL)
 
 Birko never reconciles an existing table: `CREATE TABLE` is guarded by `IF NOT EXISTS` and schema-ensure
@@ -425,6 +441,7 @@ app.MapGet("/health/live", async () =>
 | `Birko.Health` | DiskSpace, Memory, Runner | None |
 | `Birko.Health.Data` | SQL, Elasticsearch, MongoDB, RavenDB, InfluxDB, Vault, MQTT, SMTP | System.Data.Common, System.Net.Http, System.Net.Sockets |
 | `Birko.Health.Data.SQL` | Schema drift + unbuilt indexes | Birko.Data.SQL |
+| `Birko.Health.Data.ElasticSearch` | Elasticsearch mapping drift | Birko.Data.ElasticSearch |
 | `Birko.Health.Redis` | Redis PING | StackExchange.Redis |
 | `Birko.Health.Azure` | Azure Blob Storage, Azure Key Vault | Birko.Storage.AzureBlob, Birko.Security.AzureKeyVault |
 

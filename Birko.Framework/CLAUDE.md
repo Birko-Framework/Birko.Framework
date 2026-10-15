@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Birko.Health.Data.ElasticSearch: a health check for mapping drift (2026-10-15)
+
+[[TASK-624]]. New project. `ElasticSearchMappingDriftHealthCheck` runs one `DetectMappingDriftAsync` probe per store
+([[TASK-621]]): Degraded on drift or on a store it could not ask, Healthy only for what it verified. Its own project
+because `Birko.Health.Data` stays dependency-free.
 ### Schema drift reports a declared index the table lacks (2026-10-15)
 
 [[TASK-622]]. Drift compared columns only. Measured on all four SQL providers: a dropped index, or a unique one made plain,
@@ -332,12 +337,6 @@ the connector emits to `suppliervatin`, so a column created quoted as `"Supplier
 query on it failed (`42703`). It is now `ColumnDriftKind.CaseMismatch` (`ColumnDrift.StoredColumn` carries the stored
 spelling), and `EnsureColumns` never adds a second column beside it. The match follows the connector's new
 `StoredColumnName` / `StoredColumnNameComparer`. SQLite, MySQL and MSSQL still match case-insensitively.
-### A fluent `HasIndex` creates the index; `HasUniqueIndex` declares a unique composite (2026-10-14)
-
-[[TASK-595]]. `ModelMapRegistry.ApplyToDatabase` ignored `HasIndex`, so every `Birko.Models.Users.SQL` table had zero
-indexes, `UserLogins (Provider, ProviderKey)` included. It now writes fluent indexes into the table's declarations,
-marks their columns `IsIndexed` (rule 37), and `HasUniqueIndex` makes `UX_UserLogin_Provider_ProviderKey` unique.
-**Migration:** existing duplicate logins block that index; it is reported in `IndexCreationFailures` until resolved.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
