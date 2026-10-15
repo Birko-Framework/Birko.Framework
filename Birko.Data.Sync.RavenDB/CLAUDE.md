@@ -12,18 +12,17 @@ RavenDB-specific sync knowledge item and store implementations for the Birko.Dat
 - `RavenSyncKnowledgeItem` - Extends `AbstractModel`, implements `ISyncKnowledgeItem` with scope validation
 
 ### Stores
-- `RavenSyncKnowledgeStore` - Sync store inheriting from `RavenDBStore<RavenSyncKnowledgeItem>`
-  - `GetKnowledgeAsync()`, `UpdateKnowledgeAsync()`, `DeleteKnowledgeAsync()` methods
-- `AsyncRavenSyncKnowledgeStore` - Async store inheriting from `AsyncRavenDBStore<RavenSyncKnowledgeItem>`
-  - Uses bulk insert and async sessions
+- `RavenSyncKnowledgeStore` - `RavenDBStore<RavenSyncKnowledgeItem>` implementing `ISyncKnowledgeItemStore<>`
+- `AsyncRavenSyncKnowledgeStore` - `AsyncRavenDBStore<RavenSyncKnowledgeItem>` implementing `IAsyncSyncKnowledgeItemStore<>`
+  - TASK-630: both used to expose their own tenant API (`GetKnowledgeAsync(scope, tenantId)` and friends) with their own
+    identity path, which stored a new document every round (SH-M062/M063). They now give the engine what every backend
+    gives it, and the engine upserts by Guid. Verified live (`RavenSyncKnowledgeLiveTests`).
 
 ## Dependencies
 - Birko.Data.Sync
 - Birko.Data.RavenDB
-- Birko.Data.Tenant — `RavenSyncKnowledgeItem` implements `ITenant` so tenant-aware sync knowledge
-  (emitted by `TenantSyncProvider` as `ITenantSyncKnowledgeItem`) is persisted and queryable by
-  tenant. Consumers importing this project's projitems must also import `Birko.Data.Tenant`
-  (and its `Birko.Serialization` dependency).
+- (No longer Birko.Data.Tenant, TASK-630: the model carries no tenant; the tenant provider keeps tenants apart by
+  scope.)
 
 ## Maintenance
 

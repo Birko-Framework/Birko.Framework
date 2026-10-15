@@ -13,7 +13,8 @@ finding-ids: SH-M001 … SH-M428
 
 ## Progress
 
-**186 / 428 closed by this story's tasks.** All 22 of `data-sync` ([[TASK-157]], done 2026-10-15): 21 confirmed, 1
+**186 / 428 closed by this story's tasks.** [[TASK-630]] (done 2026-10-15) fixed the 18 findings TASK-161 and TASK-157
+handed it (counted there) by rebuilding the tenant sync provider on the shared engine. All 22 of `data-sync` ([[TASK-157]], done 2026-10-15): 21 confirmed, 1
 narrower; 15 fixed there plus the engine side of SH-M064 (and three unfiled engine defects), the rest handed to [[TASK-630]]. All 21 of `store-decorator-composition` ([[TASK-159]], done 2026-10-15): 20
 confirmed, 1 narrower; 16 fixed there, `SH-M318` found already fixed, `SH-M321` waived, `SH-M327`/`SH-M328` spawned as
 [[TASK-632]], `SH-M336` as [[TASK-631]]. All 16 of `repository-contract` ([[TASK-162]], done 2026-10-15): 16 confirmed;

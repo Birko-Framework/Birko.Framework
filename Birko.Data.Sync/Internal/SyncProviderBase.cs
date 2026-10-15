@@ -100,6 +100,22 @@ public abstract class SyncProviderBase<T, TKnowledge>
     }
 
     /// <summary>
+    /// Reads one side, then enforces the fetch predicate in process as well (TASK-630, carried over from the tenant
+    /// provider). A predicate is only as strong as the backend's translation of it, and this family has shipped filters a
+    /// backend silently widened to match-all; for a tenant-scoped run that would put another tenant's rows on the
+    /// compare, delete and knowledge paths.
+    /// </summary>
+    protected static IEnumerable<T> EnforceFetchPredicate(IEnumerable<T> items, System.Linq.Expressions.Expression<Func<T, bool>>? predicate)
+    {
+        if (predicate == null)
+        {
+            return items;
+        }
+        var compiled = predicate.Compile();
+        return items.Where(compiled).ToList();
+    }
+
+    /// <summary>
     /// Whether the state after an action may be recorded as knowledge: both sides hold the item, or neither does.
     /// </summary>
     /// <remarks>
@@ -111,12 +127,12 @@ public abstract class SyncProviderBase<T, TKnowledge>
     protected static bool IsReconciled(T? local, T? remote) => (local == null) == (remote == null);
 
     /// <summary>
-    /// Whether <paramref name="item"/> differs from the version recorded for its side. An entity with no
-    /// <c>UpdatedAt</c> has no stable version, so it always counts as changed (the behaviour before change detection).
+    /// Whether <paramref name="item"/> differs from the version recorded for its side (its <c>UpdatedAt</c>, or a hash of
+    /// its content when it has none).
     /// </summary>
     protected bool HasChanged(T item, string? recordedVersion)
     {
-        return GetUpdatedAt(item) == null || GetVersionHash(item) != recordedVersion;
+        return GetVersionHash(item) != recordedVersion;
     }
 
     /// <summary>
@@ -199,8 +215,8 @@ public abstract class SyncProviderBase<T, TKnowledge>
                 return (SyncAction.Update, "local", null, null);
             if (options.ConflictPolicy == ConflictResolutionPolicy.RemoteWins)
                 return (SyncAction.Update, "remote", null, null);
-            // Both sides changed since a known pair, and both carry a version: a genuine conflict.
-            if (knownPair && GetUpdatedAt(localItem!) != null && GetUpdatedAt(remoteItem!) != null)
+            // Both sides changed since a known pair: a genuine conflict.
+            if (knownPair)
             {
                 return (SyncAction.Conflict, null, null, new ConflictInfo
                 {
@@ -504,12 +520,31 @@ public abstract class SyncProviderBase<T, TKnowledge>
     /// <summary>
     /// Get version hash for entity
     /// </summary>
+    /// <remarks>
+    /// TASK-630 (from the tenant provider's CR-H104): an entity with no <c>UpdatedAt</c> is versioned by a hash of its
+    /// serialized content, so an unchanged row hashes equal across runs and is skipped. It used to get a fresh random
+    /// Guid per call, so such a row always counted as changed. An entity that cannot be serialized keeps that fallback
+    /// (always changed); it never gets an empty version, which every knowledge store reads as "this side is absent".
+    /// </remarks>
     protected string? GetVersionHash(T? entity)
     {
         if (entity == null) return null;
 
         var updatedAt = GetUpdatedAt(entity);
-        return updatedAt?.ToString("O") ?? Guid.NewGuid().ToString();
+        if (updatedAt.HasValue)
+        {
+            return updatedAt.Value.ToString("O");
+        }
+
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(entity, entity.GetType());
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json)));
+        }
+        catch (Exception)
+        {
+            return Guid.NewGuid().ToString();
+        }
     }
 
     /// <summary>

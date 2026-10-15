@@ -25,7 +25,8 @@ Knowledge stores:
 | MongoDB | Birko.Data.Sync.MongoDb | `AsyncMongoSyncKnowledgeStore` |
 | JSON | Birko.Data.Sync.Json | `AsyncJsonSyncKnowledgeStore` |
 | XML | Birko.Data.Sync.Xml | `AsyncXmlSyncKnowledgeStore` |
-| RavenDB, CosmosDB | Birko.Data.Sync.RavenDB / .CosmosDB | tenant-aware stores for `TenantSyncProvider` (being rebuilt, TASK-630) |
+| RavenDB | Birko.Data.Sync.RavenDB | `RavenSyncKnowledgeStore` / `AsyncRavenSyncKnowledgeStore` |
+| CosmosDB | Birko.Data.Sync.CosmosDB | `CosmosSyncKnowledgeStore` / `AsyncCosmosSyncKnowledgeStore` |
 
 ## Usage
 
@@ -97,8 +98,24 @@ scopes. A cancelled wait leaves no trace in the queue.
 
 ## Tenant-Aware Sync
 
-`Birko.Data.Sync.Tenant` adds tenant isolation to sync operations. Its provider is being rebuilt on this engine
-(TASK-630); until then the knowledge stores above are tenant-blind, so give each tenant its own scope name.
+`TenantSyncProvider<TStore, T, TKnowledge>` runs this engine under one tenant, with any knowledge store above:
+
+```csharp
+var provider = new TenantSyncProvider<IAsyncBulkStore<Order>, Order, SqlSyncKnowledgeItem>(
+    localStore, remoteStore, knowledgeStore, tenantContext);
+
+await provider.SyncAsync(new TenantSyncOptions { Scope = "orders", TenantGuid = tenantId });
+```
+
+- **The tenant is resolved once per run**: `TenantSyncOptions.TenantGuid`, else the ambient tenant. Both present and
+  different is refused (`TenantMismatchException`); neither present is refused for a tenant-scoped type
+  (`TenantScopeRequiredException`), unless the run is inside an explicit all-tenants scope.
+- **Only that tenant's rows are fetched and written.** The tenant term goes on both fetch predicates (enforced in
+  process too, so a backend that widens a predicate cannot leak rows) and on every save, deletes included.
+- **Knowledge is kept per tenant** by running under the scope `{scope}@tenant:{guid:N}`, so the knowledge stores need
+  no tenant column. An all-tenants run, and a type with no `TenantGuid`, use the scope as given; their knowledge is
+  separate from any tenant's.
+- `TenantSyncQueue` runs different tenants concurrently and one tenant's syncs of a scope one at a time.
 
 ## See Also
 

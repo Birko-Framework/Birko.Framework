@@ -24,7 +24,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\SyncPreview.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\SyncProgress.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\SyncResult.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\ISyncKnowledgeStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\ISyncKnowledgeItemStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\IAsyncSyncKnowledgeItemStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SyncProvider.cs" />

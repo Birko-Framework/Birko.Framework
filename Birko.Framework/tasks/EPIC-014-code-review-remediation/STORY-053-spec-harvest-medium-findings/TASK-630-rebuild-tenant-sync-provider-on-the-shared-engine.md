@@ -2,7 +2,7 @@
 id: TASK-630
 parent: STORY-053
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-15
@@ -66,15 +66,53 @@ includes the tenant. Built on `AsyncSyncProvider`, the tenant provider shrinks t
 
 ## Acceptance criteria
 
-- [ ] `TenantSyncProvider` delegates the run to the shared engine; tenant resolution and the tenant predicates are kept
-- [ ] Each of the eleven findings has a regression test, red on the current code (most become the shared engine's tests run under a tenant)
-- [ ] `TenantSyncQueue` runs two tenants concurrently while serialising one tenant's syncs
-- [ ] No cross-tenant entity reaches the tenant's knowledge scope (SH-M346), asserted by reading the knowledge store
+- [x] `TenantSyncProvider` delegates the run to the shared engine; tenant resolution and the tenant predicates are kept
+- [x] Each of the eleven findings has a regression test, red on the current code (most become the shared engine's tests run under a tenant)
+- [x] `TenantSyncQueue` runs two tenants concurrently while serialising one tenant's syncs
+- [x] No cross-tenant entity reaches the tenant's knowledge scope (SH-M346), asserted by reading the knowledge store
 
 ## Ordering
 
 After [[TASK-157]] (the shared engine's own triage), so the rebuild stands on a triaged engine.
 
+## Resolution (2026-10-15)
+
+**`TenantSyncProvider<TStore, T, TKnowledge>` is the shared engine run under one tenant**: 372 lines instead of 1,107.
+It keeps what is tenant-specific (`ResolveTenantScope`, the tenant fetch and save predicates, `BelongsToTenant`,
+unchanged) and runs `AsyncSyncProvider` for everything else. Tenant isolation of knowledge comes from running under
+`TenantScope(scope, tenant)` = `{scope}@tenant:{guid:N}`, so it takes any `IAsyncSyncKnowledgeItemStore<T>`, and no
+knowledge store needs a tenant column (closes SH-M065 and SH-M066 for tenant sync).
+
+**Carried into the shared engine** so the rebuild loses nothing: the in-process enforcement of the fetch predicate
+(`EnforceFetchPredicate`; the tenant copy's post-fetch `BelongsToTenant` pass, which now protects every engine user),
+and the content hash for an entity with no `UpdatedAt` (CR-H104; an unchanged row now hashes equal and is skipped, where
+the engine gave it a random version every run). `SyncOptions.Clone()` is new: the provider runs on a copy.
+
+**RavenDB and CosmosDB knowledge stores** now implement the engine's interfaces, like every other backend. Their own
+tenant API, identity and conversion paths are gone, and with them SH-M060, M062, M063, M064 and M436. The models no
+longer carry a tenant (`RavenSyncKnowledgeItem` is no longer `ITenant`, so Birko.Data.Sync.RavenDB no longer needs
+Birko.Data.Tenant). `ISyncKnowledgeStore`, `ITenantSyncKnowledgeItem`, `TenantSyncKnowledgeItem` and
+`CosmosSyncKnowledgeQuery` are deleted. The RavenDB store is verified live: two runs leave one knowledge row per
+entity, updated by the second (`RavenSyncKnowledgeLiveTests`). CosmosDB has no emulator here: offline tests only.
+
+**BREAKING** (no consumer references any of it, measured): `TenantSyncProvider` gains a knowledge type parameter and
+takes `IAsyncSyncKnowledgeItemStore<TKnowledge>`; the Raven/Cosmos knowledge stores lose their tenant API.
+
+**Tests.** `TenantSyncEngineTests` covers each of SH-M342 to SH-M352 (12 tests). The 27 tests of the old suite that
+test the provider's contract (tenant resolution, scoping, refusals, filter copies) are ported to the new constructor and
+pass unchanged in substance; 10 that called internals of the deleted engine copy are removed, and the 6 version-hash
+ones are ported to the engine (`EngineVersionHashTests`). **Red-verification is limited by the rebuild**: the new
+tests cannot construct the old provider (it took `ISyncKnowledgeStore`, which nothing implemented). What could be
+isolated was: SH-M350 on the pre-TASK-157 `SyncQueue` 1 of 1; removing the in-process fetch enforcement fails
+`ForeignRowsAreDropped_EvenWhenTheStoreIgnoresTheFetchPredicate`; restoring the random version fails 2 of 6
+`EngineVersionHashTests`. The other findings were confirmed by reading (TASK-161 / TASK-157), and their behaviour is
+the shared engine's, whose own tests were red-verified in TASK-157.
+
+**Regression:** the 10 suites importing a sync project, 243 tests, green, live against MongoDB, ElasticSearch and
+RavenDB.
+
+**Spec regen pending**, batched: `tenant-isolation`, `data-sync`.
+
 ## Human test plan
 
-N/A: asserted by store and knowledge contents.
+N/A: fully covered by automated tests; asserted by store and knowledge contents.

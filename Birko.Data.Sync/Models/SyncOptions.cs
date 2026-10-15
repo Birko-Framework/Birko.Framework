@@ -77,4 +77,11 @@ public class SyncOptions
     /// source compatibility and caller-side branching.
     /// </summary>
     public bool SkipPreview { get; set; } = false;
+
+    /// <summary>
+    /// A shallow copy of these options, of the same runtime type (so a derived options class keeps its own members). For
+    /// a caller that needs to run with one value changed without writing to the caller's instance (TASK-630: the tenant
+    /// provider runs the engine under a tenant-qualified scope).
+    /// </summary>
+    public SyncOptions Clone() => (SyncOptions)MemberwiseClone();
 }

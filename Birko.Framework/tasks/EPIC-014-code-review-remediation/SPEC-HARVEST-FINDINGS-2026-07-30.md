@@ -1525,6 +1525,8 @@ LocalVersion/RemoteVersion are written by every CreateKnowledgeItem and surfaced
 
 **Verdict: CONFIRMED by reading, spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15). The Cosmos knowledge store implements neither knowledge-store interface; its only consumer is `TenantSyncProvider`, which TASK-630 rebuilds.
 
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): the Cosmos knowledge stores now implement the engine's interface over the base Cosmos store; the custom methods with their `Container == null` no-ops are gone.
+
 `UpdateKnowledgeAsync` (97), `DeleteKnowledgeAsync` (128) and `SetLastSyncTimeAsync` (168) all begin `if (Container == null) return;` — an unconfigured container makes a knowledge write complete successfully while persisting nothing, and GetKnowledgeAsync (43) returns an empty dictionary indistinguishable from "scope has no knowledge", which the caller reads as initial-sync. Same in CosmosSyncKnowledgeStore.cs lines 41, 80, 111, 151.
 
 #### SH-M061 — MongoDB knowledge rows can never be updated: [BsonId] Id is never assigned
@@ -1541,6 +1543,8 @@ LocalVersion/RemoteVersion are written by every CreateKnowledgeItem and surfaced
 
 **Verdict: CONFIRMED by reading, spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15). Raven knowledge identity; same store family as SH-M060.
 
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): the Raven knowledge store's own upsert path is gone; the engine upserts through the base store, which keys documents by Guid (`RavenDocumentId`). Live: `RavenSyncKnowledgeLiveTests`, one row per entity after two runs.
+
 ConvertToRavenItem derives `Guid = item.Guid ?? DeterministicGuid(...)` "so re-syncing the same natural key reuses the same document identity and upserts", but UpdateKnowledgeAsync calls `session.StoreAsync(ravenItem, ct)` — the overload supplying no document id — and RavenSyncKnowledgeItem (via AbstractModel) has no `Id` property for Raven's default FindIdentityProperty convention, while Birko.Data.RavenDB registers no identity convention. The Guid is just a field, so each round stores a new document.
 
 #### SH-M063 — An already-Raven knowledge item bypasses both the deterministic Guid and the tenant stamp
@@ -1548,6 +1552,8 @@ ConvertToRavenItem derives `Guid = item.Guid ?? DeterministicGuid(...)` "so re-s
 `../Birko.Data.Sync.RavenDB/Stores/AsyncRavenSyncKnowledgeStore.cs:173`
 
 **Verdict: CONFIRMED by reading, spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15).
+
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): `ConvertToRavenItem` and its deterministic-Guid derivation were removed with the tenant API.
 
 `if (item is RavenSyncKnowledgeItem ravenItem) return ravenItem;` returns before the CR-H103 deterministic-Guid derivation and before the ITenant copy block (line 199). A RavenSyncKnowledgeItem with a null Guid is stored as-is, so the only path meant to make re-syncs idempotent is skipped exactly for the store's own model type.
 
@@ -1557,6 +1563,8 @@ ConvertToRavenItem derives `Guid = item.Guid ?? DeterministicGuid(...)` "so re-s
 
 **Verdict: CONFIRMED; engine side fixed, store side spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15). The engine now tolerates two rows for one entity (the most recent wins, and is the one upserted); the Raven/Cosmos stores' own `ToDictionary` goes with TASK-630. Red: the engine threw on the old code.
 
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): the Raven/Cosmos `ToDictionary` sites were removed with the tenant API; the engine tolerates duplicates (TASK-157).
+
 `items.ToDictionary(x => x.EntityGuid, ...)` throws ArgumentException on a duplicate key, and duplicates are exactly what the identity defects above produce (a new Raven document per round; a new Cosmos document per round for foreign items). Once two rows share an EntityGuid, GetKnowledge/GetLastSyncTime/DeleteKnowledge/SetLastSyncTime all throw and the scope becomes unreadable with no repair path. Same at AsyncCosmosSyncKnowledgeStore.cs:58, CosmosSyncKnowledgeStore.cs:49, RavenSyncKnowledgeStore.cs:51.
 
 #### SH-M065 — ISyncKnowledgeStore has no implementation anywhere, though two stores' docs claim to be one
@@ -1565,6 +1573,8 @@ ConvertToRavenItem derives `Guid = item.Guid ?? DeterministicGuid(...)` "so re-s
 
 **Verdict: CONFIRMED by reading, spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15).
 
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): `ISyncKnowledgeStore` is deleted; the tenant provider takes the engine's `IAsyncSyncKnowledgeItemStore<T>`, which every backend implements.
+
 No type in the repository declares ISyncKnowledgeStore. AsyncRavenSyncKnowledgeStore's summary says "Async RavenDB implementation of ISyncKnowledgeStore" (line 14) and RavenSyncKnowledgeStore's says the same (line 9), but neither declares it; CosmosDB's `UpdateKnowledgeAsync(items, Guid? tenantId = null, ct)` (AsyncCosmosSyncKnowledgeStore.cs:92) does not even match the interface's `UpdateKnowledgeAsync(items, ct)`. The interface's only consumer, TenantSyncProvider, has no constructible knowledge store.
 
 #### SH-M066 — Sync knowledge is tenant-blind in five of seven backends
@@ -1572,6 +1582,8 @@ No type in the repository declares ISyncKnowledgeStore. AsyncRavenSyncKnowledgeS
 `../Birko.Data.Sync.Sql/Models/SqlSyncKnowledgeItem.cs:34`
 
 **Verdict: CONFIRMED by reading, spawned for [[TASK-630]]** (TASK-157, measured 2026-10-15). Tenant-scoped knowledge is the substance of rebuilding the tenant provider on the shared engine. Documented meanwhile in docs/sync.md: one scope name per tenant.
+
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): tenant sync keeps each tenant's knowledge apart by a tenant-qualified scope (`TenantSyncProvider.TenantScope`), so no knowledge store needs a tenant column. The knowledge stores stay tenant-blind for direct use of the engine, by design: one scope per tenant.
 
 SqlSyncKnowledgeItem, JsonSyncKnowledgeItem, XmlSyncKnowledgeItem, MongoSyncKnowledgeItem and ElasticSyncKnowledgeItem carry no tenant column, and ISyncKnowledgeItemStore / IAsyncSyncKnowledgeItemStore have no tenant parameter, so queries are `x.Scope == scope` only. Two tenants syncing the same scope name share one knowledge set: GetLastSyncTime returns the other tenant's timestamp and SetLastSyncTime rewrites every tenant's rows. RavenSyncKnowledgeItem (ITenant) and CosmosSyncKnowledgeItem (TenantId) do model a tenant — isolation depends on the backend chosen.
 
@@ -3519,6 +3531,8 @@ For a TenantSyncOptions with a null TenantGuid it sets `tenantOptions.TenantGuid
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `result.Errors.Skip(result.Errors.Count - progress.Errors)` still uses the cumulative count.
 
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): the tenant provider now runs the shared engine, whose batch result carries only that batch's errors. `TenantSyncEngineTests.SH_M342_*`.
+
 `result.Errors.Skip(result.Errors.Count - progress.Errors)` takes the last progress.Errors entries, but progress.Errors is cumulative across batches and never reset per batch. With one error in batch 1 and one in batch 2, batch 2's callback receives both, so a consumer using the callback for per-batch alerting or retry double-reports earlier failures.
 
 #### SH-M343 — Bidirectional SyncAction.Create is a silent no-op that still counts as processed and records knowledge
@@ -3526,6 +3540,8 @@ For a TenantSyncOptions with a null TenantGuid it sets `tenantOptions.TenantGuid
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:429`
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). The `Create` arm still acts only for Download and Upload; under Bidirectional (the default) it writes nothing.
+
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): the shared engine creates on whichever side is missing (SH-H008). `SH_M343_*`.
 
 The Create arm acts only when effectiveDirection is Download or Upload, but DetermineSyncAction returns Create for one-sided items in the Bidirectional branch (lines 667, 682) and effectiveDirection is then Bidirectional. Nothing is written, no counter moves (not even SkippedItems), totalProcessed++ runs and CreateKnowledgeItem records the item as synced. Bidirectional is the default Direction, so the default configuration drops every one-sided create while reporting Success == true, and the recorded knowledge later turns the missing side into a spurious deleted-remotely conflict.
 
@@ -3535,6 +3551,8 @@ The Create arm acts only when effectiveDirection is Download or Upload, but Dete
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `AnalyzeItem` still decides independently of the sync.
 
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): preview and sync are the one engine's `DetermineSyncAction`, so the preview honours the direction and reports conflicts. `SH_M344_*` (2 tests).
+
 AnalyzeItem re-implements the decision independently of DetermineSyncAction: it never reads options.Direction (so a Download-only run previews local-only items as ToCreate although the sync Skips them), and returns only Create/Update/Delete/Skip, so preview.Conflicts is always 0 and an item the sync will treat as a conflict is previewed as a plain Update. A caller using PreviewAsync as a dry run sees counts the following SyncAsync will not honour.
 
 #### SH-M345 — A tenant-blocked Update is dropped with no counter and no error, unlike the Create branch
@@ -3542,6 +3560,8 @@ AnalyzeItem re-implements the decision independently of DetermineSyncAction: it 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:459`
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15).
+
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): the engine counts a blocked update as skipped and does not record it (SH-M057). `SH_M345_*`.
 
 In the Update arm `if (CanSaveToLocal?.Invoke(remoteItem) != false)` has no else, so when the tenant predicate rejects a cross-tenant item nothing is incremented — not UpdatedItems, not SkippedItems, no SyncError. The Create arm (lines 436-439, 448-451) increments SkippedItems for the identical condition. The item is still counted in totalProcessed and written to the knowledge store as synced, so the skip is invisible in SyncResult and never retried.
 
@@ -3551,6 +3571,8 @@ In the Update arm `if (CanSaveToLocal?.Invoke(remoteItem) != false)` has no else
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15).
 
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): knowledge is written only for a reconciled pair (TASK-157), and the fetch is tenant-scoped, enforced in process. `SH_M346_*`, `KnowledgeIsKeyedToTheSameTenantTheWritesWereScopedTo`.
+
 CreateKnowledgeItem runs for every item reaching the end of the try, whether or not the save predicate blocked the write. Because the fetch side is unscoped that includes other tenants' items: a TenantSyncKnowledgeItem carrying another tenant's EntityGuid is persisted with TenantGuid = the current tenant. The next run reads it as prior knowledge and infers IsLocalDeleted/IsRemoteDeleted from the item's absence, driving deletes and conflicts for rows this tenant never owned.
 
 #### SH-M347 — Last-sync-time is written even when the run was cancelled or every item failed
@@ -3558,6 +3580,8 @@ CreateKnowledgeItem runs for every item reaching the end of the try, whether or 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:534`
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `SetLastSyncTimeAsync` still runs unconditionally after the loop.
+
+**Resolution: RESOLVED by design, [[TASK-630]]** (2026-10-15): the engine still stamps after a cancelled run (SH-H012 decided knowledge for completed writes is persisted), but the stamp now only ends the initial sync; an item that failed has no knowledge row, so the next run retries it. `SH_M347_items_that_failed_are_retried_by_the_next_run`.
 
 SetLastSyncTimeAsync(scope, tenant, DateTime.UtcNow) runs unconditionally after the batch loop, including when the loop broke on options.CancellationToken.IsCancellationRequested (line 408) and when result.Errors is non-empty. The next run then reports IsInitialSync == false, skipping the initial-download path that would have re-fetched the unprocessed items. A cancelled first sync permanently marks itself complete.
 
@@ -3567,6 +3591,8 @@ SetLastSyncTimeAsync(scope, tenant, DateTime.UtcNow) runs unconditionally after 
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). The save gates still invoke the predicates directly; `OnSaveFilterBlock` is copied but never acted on.
 
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): the engine honours `OnSaveFilterBlock` and `OnError`. `SH_M348_*`.
+
 Every save gate calls `filterOptions.CanSaveToLocal?.Invoke(item) != false` directly. The non-tenant siblings route the same decision through SyncProviderBase.CanSaveToLocal/HandleSaveFilterBlock (SyncProviderBase.cs:301), honouring SaveFilterBlockAction.ThrowException / LogAsError / MarkConflict and firing options.OnError / OnConflict. Here those settings are read by nothing, so a cross-tenant item — the exact case the tenant predicate blocks — can never be surfaced as an error or made to fail the sync.
 
 #### SH-M349 — TenantSyncProvider ignores options.MaxItems and OnBatchStarting, which both non-tenant providers honour
@@ -3574,6 +3600,8 @@ Every save gate calls `filterOptions.CanSaveToLocal?.Invoke(item) != false` dire
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:402`
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). No reference to `MaxItems` or `OnBatchStarting`.
+
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): the engine honours `MaxItems` (needing-work first, SH-M055) and `OnBatchStarting`. `SH_M349_*`.
 
 The batch loop iterates all of allGuids with no cap. SyncProvider.cs:61 and AsyncSyncProvider.cs:62 both truncate allGuids to options.MaxItems (CR-L207). A caller who limits a tenant sync to N items — the documented way to bound a first run — syncs the entire (cross-tenant) set instead. options.OnBatchStarting is likewise never invoked here while the siblings call it at AsyncSyncProvider.cs:156.
 
@@ -3583,6 +3611,8 @@ The batch loop iterates all of allGuids with no cap. SyncProvider.cs:61 and Asyn
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `SyncQueue` has one `SemaphoreSlim`; the tenant key scopes only the bookkeeping.
 
+**Resolution: FIXED by [[TASK-157]]'s `SyncQueue`, verified in [[TASK-630]]** (2026-10-15): the base gates per queue key, and `TenantSyncQueue` enqueues under its tenant key. `SH_M350_*`, red on the queue before TASK-157.
+
 GetQueueKey scopes only the bookkeeping Dictionary<string, Queue<QueuedSync>>. The actual gate is the single SyncQueue._semaphore created with maxConcurrentSyncs (default 1) and awaited in EnqueueWithKeyAsync regardless of key, so tenant t's sync blocks tenant u's for its whole duration. The class summary ('uses current tenant for queue scoping') and the spec scenario 'the two tenants do not serialize against one another' describe behaviour the code does not implement.
 
 #### SH-M351 — ToDictionary(GetGuid) throws on duplicate or unset guids, aborting the sync as an opaque "Sync failed"
@@ -3591,6 +3621,8 @@ GetQueueKey scopes only the bookkeeping Dictionary<string, Queue<QueuedSync>>. T
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `ToDictionary(GetGuid)` at both entry points.
 
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): the engine's `BuildEntityDictionary` refuses an empty or duplicate Guid with a message naming the side and the Guid, on preview and sync alike. `SH_M351_*`.
+
 GetGuid returns Guid.Empty whenever the reflected `Guid` property is null or not a Guid, so any two unsaved/unkeyed entities on one side collide and ToDictionary raises ArgumentException. In ExecuteSyncAsync the outer catch swallows it into one SyncError { Message = "Sync failed" } naming no item; in ExecutePreviewAsync it propagates raw. The two entry points fail differently for the same input and neither points at the offending rows.
 
 #### SH-M352 — ISyncProvider entry points silently drop a mismatched filterOptions via `as`
@@ -3598,6 +3630,8 @@ GetGuid returns Guid.Empty whenever the reflected `Guid` property is null or not
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:904`
 
 **Verdict: CONFIRMED by reading, owned by [[TASK-630]]** (TASK-161, measured 2026-10-15). `filterOptions as SyncFilterOptions<T>` on both explicit interface members.
+
+**Resolution: FIXED by [[TASK-630]]** (2026-10-15): the explicit `ISyncProvider` members refuse a filter of another type with `ArgumentException`. `SH_M352_*`.
 
 Both explicit interface implementations do `filterOptions as SyncFilterOptions<T>`, yielding null for any other type. A caller passing SyncFilterOptions<TOther> (easy through the non-generic ISyncProvider surface) loses LocalFetchPredicate/RemoteFetchPredicate and CanSaveTo* with no exception, and the run proceeds as a full unfiltered sync of both stores instead of reporting the mistake.
 

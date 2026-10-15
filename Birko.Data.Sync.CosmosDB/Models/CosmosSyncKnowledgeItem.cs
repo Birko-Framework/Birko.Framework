@@ -20,12 +20,7 @@ public class CosmosSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     /// </summary>
     public Guid EntityGuid { get; set; }
 
-    /// <summary>
-    /// Optional tenant this knowledge belongs to. Null means tenant-agnostic. Used to scope
-    /// read/delete/last-sync operations so one tenant's sync knowledge is never returned, deleted, or
-    /// overwritten by another (CR-H100).
-    /// </summary>
-    public Guid? TenantGuid { get; set; }
+    // TASK-630: TenantGuid removed; a tenant's knowledge is kept apart by the tenant provider's tenant-qualified scope.
 
     private string _scope = string.Empty;
 
@@ -73,50 +68,9 @@ public class CosmosSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     /// </summary>
     public const string ContainerName = "SyncKnowledge";
 
-    /// <summary>
-    /// Builds a <see cref="CosmosSyncKnowledgeItem"/> from any <see cref="ISyncKnowledgeItem"/>, stamping
-    /// the tenant. Shared by the sync and async stores so the 14-line mapping can't drift between them
-    /// (CR-L211) — this is the mapper that changes whenever the model gains a field (e.g. TenantGuid).
-    /// </summary>
-    /// <remarks>
-    /// If <paramref name="item"/> is already a <see cref="CosmosSyncKnowledgeItem"/> it is returned as-is
-    /// (an explicit <paramref name="tenantId"/> wins over whatever it already carried); otherwise a fresh
-    /// row is materialized. The Guid is populated when null so the downstream <c>Guid!.Value</c>
-    /// dereferences in Update/SetLastSyncTime are provably safe (mirrors the base store's <c>??=</c>) —
-    /// see CR-H100 (tenant scoping) and CR-M158 (null-Guid pass-through).
-    /// </remarks>
-    internal static CosmosSyncKnowledgeItem FromInterface(ISyncKnowledgeItem item, Guid? tenantId)
-    {
-        if (item is CosmosSyncKnowledgeItem cosmosItem)
-        {
-            if (tenantId.HasValue)
-            {
-                cosmosItem.TenantGuid = tenantId;
-            }
-            // System.Guid is fully qualified: the inherited instance property `Guid` shadows the type
-            // name in this static method's expression context.
-            cosmosItem.EnsureGuid();
-            return cosmosItem;
-        }
+    // TASK-630 (SH-M436): the FromInterface conversion (which kept a foreign Guid.Empty as a key) was removed with the
+    // tenant API; the engine creates and upserts this type directly.
 
-        return new CosmosSyncKnowledgeItem
-        {
-            Guid = item.Guid ?? System.Guid.NewGuid(),
-            EntityGuid = item.EntityGuid,
-            TenantGuid = tenantId,
-            Scope = item.Scope,
-            LastSyncedAt = item.LastSyncedAt,
-            LocalVersion = item.LocalVersion,
-            RemoteVersion = item.RemoteVersion,
-            IsLocalDeleted = item.IsLocalDeleted,
-            IsRemoteDeleted = item.IsRemoteDeleted,
-            Metadata = item.Metadata
-        };
-    }
-
-    /// <summary>
-    /// Returns a string representation for debugging.
-    /// </summary>
     public override string ToString()
     {
         return $"CosmosSyncKnowledgeItem: {EntityGuid} | {Scope}";

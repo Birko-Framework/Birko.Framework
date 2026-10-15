@@ -1,20 +1,25 @@
-using Birko.Data.Sync.Models;
-using Birko.Data.Sync.CosmosDB.Models;
-using Birko.Data.CosmosDB.Stores;
-using Microsoft.Azure.Cosmos;
-using Microsoft.Azure.Cosmos.Linq;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Data.CosmosDB.Stores;
+using Birko.Data.Sync.CosmosDB.Models;
+using Birko.Data.Sync.Models;
+using Birko.Data.Sync.Stores;
+using Microsoft.Azure.Cosmos;
 
 namespace Birko.Data.Sync.CosmosDB.Stores;
 
 /// <summary>
-/// Async Cosmos DB implementation of sync knowledge store.
+/// Async Cosmos DB knowledge store for the sync engine.
 /// </summary>
-public class AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowledgeItem>
+/// <remarks>
+/// TASK-630: implements the sync engine's knowledge-store interface, like every other backend. It used to expose its own
+/// tenant API (the <c>ISyncKnowledgeStore</c> shape, which nothing implemented and only <c>TenantSyncProvider</c> called)
+/// with its own identity and conversion paths, and those were the defects (SH-M060, SH-M062, SH-M063, SH-M064, SH-M436).
+/// The engine upserts by the row's Guid; tenant isolation comes from the tenant provider's tenant-qualified scope.
+/// </remarks>
+public class AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowledgeItem>, IAsyncSyncKnowledgeItemStore<CosmosSyncKnowledgeItem>
 {
     /// <summary>
     /// Creates a new async Cosmos DB sync knowledge store.
@@ -32,156 +37,45 @@ public class AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowle
     {
     }
 
-    /// <summary>
-    /// Gets sync knowledge for a specific scope.
-    /// </summary>
-    public async Task<Dictionary<Guid, ISyncKnowledgeItem>> GetKnowledgeAsync(
-        string scope,
-        Guid? tenantId,
-        CancellationToken ct = default)
+    public async Task<DateTime?> GetLastSyncTimeAsync(string scope, CancellationToken cancellationToken)
     {
-        if (Container == null) return new Dictionary<Guid, ISyncKnowledgeItem>();
-
-        // Scope by tenant as well (CR-H100): previously tenantId was ignored, so a query returned —
-        // and Delete/SetLastSyncTime affected — every tenant's items in the scope.
-        // SH-H013: the predicate now comes from one producer, which drops the tenant term entirely when no
-        // tenant was given. Inline, it was an unconditional `x.TenantGuid == tenantId` that Cosmos renders as
-        // `root["TenantGuid"] = null` — Undefined in the Cosmos SQL dialect, so it matched nothing at all.
-        var queryable = CosmosSyncKnowledgeQuery.ApplyScope(
-            Container.GetItemLinqQueryable<CosmosSyncKnowledgeItem>(), scope, tenantId);
-
-        var results = new List<CosmosSyncKnowledgeItem>();
-        using var iterator = queryable.ToFeedIterator();
-        while (iterator.HasMoreResults)
-        {
-            var response = await iterator.ReadNextAsync(ct);
-            results.AddRange(response);
-        }
-
-        return results.ToDictionary(x => x.EntityGuid, x => (ISyncKnowledgeItem)x);
+        var items = (await ReadAsync(x => x.Scope == scope, null, null, null, cancellationToken).ConfigureAwait(false)).ToList();
+        return items.Count > 0 ? items.Max(x => (DateTime?)x.LastSyncedAt) : null;
     }
 
     /// <summary>
-    /// Gets a specific sync knowledge item.
+    /// Stamps every row of the scope; <c>null</c> when the scope has none (nothing persisted, SH-M067).
     /// </summary>
-    public async Task<ISyncKnowledgeItem?> GetKnowledgeItemAsync(
-        Guid entityGuid,
-        string scope,
-        Guid? tenantId,
-        CancellationToken ct = default)
+    public async Task<DateTime?> SetLastSyncTimeAsync(string scope, DateTime? lastSyncTime, CancellationToken cancellationToken)
     {
-        if (Container == null) return null;
+        if (lastSyncTime == null) return null;
 
-        // CR-L210: query directly on Scope + TenantGuid + EntityGuid and take the first result, instead of
-        // materializing every document in the scope into a Dictionary just to pull one item out of it.
-        // SH-H013: scope/tenant come from the shared producer — see CosmosSyncKnowledgeQuery.
-        var queryable = CosmosSyncKnowledgeQuery.ApplyScope(
-                Container.GetItemLinqQueryable<CosmosSyncKnowledgeItem>(), scope, tenantId)
-            .Where(x => x.EntityGuid == entityGuid)
-            .Take(1);
-
-        using var iterator = queryable.ToFeedIterator();
-        while (iterator.HasMoreResults)
+        var items = (await ReadAsync(x => x.Scope == scope, null, null, null, cancellationToken).ConfigureAwait(false)).ToList();
+        if (items.Count == 0)
         {
-            var response = await iterator.ReadNextAsync(ct);
-            var first = response.FirstOrDefault();
-            if (first != null) return first;
+            return null;
         }
 
-        return null;
-    }
-
-    /// <summary>
-    /// Updates or creates sync knowledge items.
-    /// </summary>
-    public async Task UpdateKnowledgeAsync(
-        IEnumerable<ISyncKnowledgeItem> items,
-        Guid? tenantId = null,
-        CancellationToken ct = default)
-    {
-        if (Container == null) return;
-
-        var tasks = new List<Task>();
         foreach (var item in items)
         {
-            var cosmosItem = CosmosSyncKnowledgeItem.FromInterface(item, tenantId);
-            tasks.Add(Container.UpsertItemAsync(cosmosItem, new PartitionKey(cosmosItem.Guid!.Value.ToString()), cancellationToken: ct));
+            item.LastSyncedAt = lastSyncTime.Value;
         }
-
-        await Task.WhenAll(tasks);
+        await UpdateAsync(items, null, cancellationToken).ConfigureAwait(false);
+        return lastSyncTime;
     }
 
-    /// <summary>
-    /// Updates or creates a single sync knowledge item.
-    /// </summary>
-    public async Task UpdateKnowledgeItemAsync(
-        ISyncKnowledgeItem item,
-        Guid? tenantId = null,
-        CancellationToken ct = default)
+    public CosmosSyncKnowledgeItem CreateKnowledgeItem(Guid guid, string? localItemHash, string? remoteItemHash, SyncOptions options)
     {
-        await UpdateKnowledgeAsync(new[] { item }, tenantId, ct);
-    }
-
-    /// <summary>
-    /// Deletes sync knowledge for a specific scope.
-    /// </summary>
-    public async Task DeleteKnowledgeAsync(
-        string scope,
-        Guid? tenantId,
-        CancellationToken ct = default)
-    {
-        if (Container == null) return;
-
-        var knowledge = await GetKnowledgeAsync(scope, tenantId, ct);
-        var tasks = new List<Task>();
-
-        foreach (var item in knowledge.Values)
+        return new CosmosSyncKnowledgeItem
         {
-            if (item.Guid.HasValue)
-            {
-                tasks.Add(Container.DeleteItemAsync<CosmosSyncKnowledgeItem>(
-                    item.Guid.Value.ToString(),
-                    new PartitionKey(item.Guid.Value.ToString()),
-                    cancellationToken: ct));
-            }
-        }
-
-        await Task.WhenAll(tasks);
-    }
-
-    /// <summary>
-    /// Gets the last sync time for a scope.
-    /// </summary>
-    public async Task<DateTime?> GetLastSyncTimeAsync(
-        string scope,
-        Guid? tenantId,
-        CancellationToken ct = default)
-    {
-        var knowledge = await GetKnowledgeAsync(scope, tenantId, ct);
-        return knowledge.Values.Any() ? knowledge.Values.Max(x => (DateTime?)x.LastSyncedAt) : null;
-    }
-
-    /// <summary>
-    /// Sets the last sync time for all items in a scope.
-    /// </summary>
-    public async Task SetLastSyncTimeAsync(
-        string scope,
-        Guid? tenantId,
-        DateTime syncTime,
-        CancellationToken ct = default)
-    {
-        if (Container == null) return;
-
-        var knowledge = await GetKnowledgeAsync(scope, tenantId, ct);
-        var tasks = new List<Task>();
-
-        foreach (var item in knowledge.Values.Cast<CosmosSyncKnowledgeItem>())
-        {
-            item.LastSyncedAt = syncTime;
-            tasks.Add(Container.ReplaceItemAsync(item, item.Guid!.Value.ToString(),
-                new PartitionKey(item.Guid.Value.ToString()), cancellationToken: ct));
-        }
-
-        await Task.WhenAll(tasks);
+            Guid = Guid.NewGuid(),
+            EntityGuid = guid,
+            Scope = options.Scope,
+            LastSyncedAt = DateTime.UtcNow,
+            LocalVersion = localItemHash,
+            RemoteVersion = remoteItemHash,
+            IsLocalDeleted = string.IsNullOrEmpty(localItemHash),
+            IsRemoteDeleted = string.IsNullOrEmpty(remoteItemHash)
+        };
     }
 }

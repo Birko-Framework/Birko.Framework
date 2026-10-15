@@ -9,8 +9,6 @@
     <Import_RootNamespace>Birko.Data.Sync.Tenant</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Models\ITenantSyncKnowledgeItem.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Models\TenantSyncKnowledgeItem.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\TenantSyncOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\TenantSyncResult.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Providers\TenantSyncProvider.cs" />

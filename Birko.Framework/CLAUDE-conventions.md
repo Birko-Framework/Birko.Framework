@@ -208,7 +208,9 @@ Rules are in their original order; `CLAUDE.md` indexes them 1—63.
   TASK-309 / SH-H013, and the first member of the one-producer family to arrive at a *value* that is absent
   rather than at an identifier. `ISyncKnowledgeStore` takes `Guid? tenantId` and documents it as "optional
   tenant"; RavenDB applied the predicate under `if (tenantId.HasValue)` and CosmosDB applied it
-  unconditionally as `x.TenantId == tenantId`. Five parts generalise:
+  unconditionally as `x.TenantId == tenantId`. (The code this was measured on is gone: TASK-630 replaced both stores'
+  tenant API with the engine's knowledge-store interface, and tenants are kept apart by a tenant-qualified scope.
+  The lessons stand.) Five parts generalise:
   - **The contract is settled by the CALLER, not by the parameter's type.** `Guid?` is equally readable as
     "no filter" and as "the rows whose tenant is null", and only the caller disambiguates:
     `TenantSyncProvider.ResolveTenantScope` returns null in exactly two cases — an explicit

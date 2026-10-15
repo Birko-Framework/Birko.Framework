@@ -534,6 +534,6 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
     /// </summary>
     private IEnumerable<T> GetAllItems(TStore store, Expression<Func<T, bool>>? filter, CancellationToken cancellationToken)
     {
-        return store.Read(filter, null, null, null);
+        return EnforceFetchPredicate(store.Read(filter, null, null, null), filter);
     }
 }

@@ -1,56 +1,51 @@
 using Birko.Data.Sync.Models;
 using Birko.Data.Sync.RavenDB.Models;
 using Birko.Data.Sync.RavenDB.Stores;
+using Birko.Data.Sync.Stores;
 using Birko.Data.Tenant.Models;
 using FluentAssertions;
 using System;
-using System.Linq;
 using System.Reflection;
 using Xunit;
 
 namespace Birko.Data.Sync.RavenDB.Tests;
 
 /// <summary>
-/// Offline tests for the RavenDB sync-knowledge model. Building this project compile-verifies the
-/// CR-C19 (tenant queries filter on the canonical <see cref="ITenant.TenantGuid"/>) and CR-C20
-/// (async delete uses the tracked entity) fixes in the store classes.
-///
-/// The store query/delete behavior itself needs a live RavenDB server and is not exercised here —
-/// that is the documented infra gap for this backend.
+/// Offline tests for the RavenDB sync-knowledge model and stores. TASK-630 replaced the stores' own tenant API with the
+/// sync engine's knowledge-store interfaces; the live round trip is <see cref="RavenSyncKnowledgeLiveTests"/>.
 /// </summary>
 public class RavenSyncKnowledgeItemTests
 {
     [Fact]
-    public void ImplementsCanonicalTenantAndSyncKnowledgeAbstractions()
+    public void The_stores_implement_the_engines_knowledge_store_interfaces()
     {
-        var item = new RavenSyncKnowledgeItem();
-        item.Should().BeAssignableTo<ITenant>();
-        item.Should().BeAssignableTo<ISyncKnowledgeItem>();
+        typeof(IAsyncSyncKnowledgeItemStore<RavenSyncKnowledgeItem>).IsAssignableFrom(typeof(AsyncRavenSyncKnowledgeStore)).Should().BeTrue();
+        typeof(ISyncKnowledgeItemStore<RavenSyncKnowledgeItem>).IsAssignableFrom(typeof(RavenSyncKnowledgeStore)).Should().BeTrue();
     }
 
     [Fact]
-    public void Tenant_RoundTrips()
+    public void The_model_carries_no_tenant_of_its_own()
     {
-        var tenant = Guid.NewGuid();
-        var item = new RavenSyncKnowledgeItem
-        {
-            EntityGuid = Guid.NewGuid(),
-            Scope = "Products",
-            TenantGuid = tenant,
-            TenantName = "Acme"
-        };
-
-        item.TenantGuid.Should().Be(tenant);
-        item.TenantName.Should().Be("Acme");
+        // TASK-630: a tenant's knowledge is kept apart by the tenant provider's tenant-qualified scope.
+        typeof(ITenant).IsAssignableFrom(typeof(RavenSyncKnowledgeItem)).Should().BeFalse();
+        typeof(ISyncKnowledgeItem).IsAssignableFrom(typeof(RavenSyncKnowledgeItem)).Should().BeTrue();
     }
 
     [Fact]
-    public void TenantGuid_DefaultsToEmpty_ForSingleTenantKnowledge()
+    public void CreateKnowledgeItem_records_both_versions_and_absence_flags()
     {
-        // Guid.Empty is what ModelByTenant treats as "no tenant filter".
-        var item = new RavenSyncKnowledgeItem { EntityGuid = Guid.NewGuid(), Scope = "Products" };
+        var store = new AsyncRavenSyncKnowledgeStore("http://localhost:1", "unused");
+        var entity = Guid.NewGuid();
 
-        item.TenantGuid.Should().Be(Guid.Empty);
+        var item = store.CreateKnowledgeItem(entity, "local", null, new SyncOptions { Scope = "Products" });
+
+        item.EntityGuid.Should().Be(entity);
+        item.Scope.Should().Be("Products");
+        item.LocalVersion.Should().Be("local");
+        item.RemoteVersion.Should().BeNull();
+        item.IsLocalDeleted.Should().BeFalse();
+        item.IsRemoteDeleted.Should().BeTrue();
+        item.Guid.Should().NotBeNull();
     }
 
     [Fact]
@@ -66,24 +61,5 @@ public class RavenSyncKnowledgeItemTests
             .Should().BeNull("dead CollectionName const was removed under CR-L218");
         t.GetMethod("GenerateDocumentId", BindingFlags.Public | BindingFlags.Static)
             .Should().BeNull("dead GenerateDocumentId helper was removed under CR-L218");
-    }
-
-    [Fact]
-    public void SyncStore_MethodsDropTheMisleadingAsyncSuffix()
-    {
-        // CR-L217: the synchronous RavenSyncKnowledgeStore returned Dictionary/void/DateTime? from
-        // methods named *Async. They were renamed to their true synchronous names (mirroring the
-        // CosmosDB sync sibling). Assert the *Async names are gone and the plain names exist.
-        var t = typeof(RavenSyncKnowledgeStore);
-        var names = t.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .Select(m => m.Name).ToList();
-
-        names.Should().Contain(new[]
-        {
-            "GetKnowledge", "GetKnowledgeItem", "UpdateKnowledge", "UpdateKnowledgeItem",
-            "DeleteKnowledge", "GetLastSyncTime", "SetLastSyncTime"
-        });
-        names.Should().NotContain(n => n.EndsWith("KnowledgeAsync") || n.EndsWith("SyncTimeAsync"),
-            "the synchronous sync store must not carry a misleading Async suffix");
     }
 }

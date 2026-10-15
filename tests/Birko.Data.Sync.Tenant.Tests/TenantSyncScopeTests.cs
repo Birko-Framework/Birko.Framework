@@ -67,52 +67,6 @@ public class TenantSyncScopeTests
     }
 
     /// <summary>
-    /// Records every tenant it is keyed by, so "knowledge is keyed to the tenant the writes were scoped to"
-    /// is assertable on the same run rather than inferred.
-    /// </summary>
-    private sealed class RecordingKnowledgeStore : ISyncKnowledgeStore
-    {
-        private readonly Dictionary<Guid, ISyncKnowledgeItem> _existing;
-        private readonly DateTime? _lastSyncTime;
-
-        public RecordingKnowledgeStore(
-            DateTime? lastSyncTime = null,
-            Dictionary<Guid, ISyncKnowledgeItem>? existing = null)
-        {
-            _lastSyncTime = lastSyncTime;
-            _existing = existing ?? new Dictionary<Guid, ISyncKnowledgeItem>();
-        }
-
-        public List<Guid?> ReadTenantIds { get; } = new();
-        public List<Guid?> WrittenLastSyncTenantIds { get; } = new();
-        public List<ISyncKnowledgeItem> Written { get; } = new();
-
-        public Task<Dictionary<Guid, ISyncKnowledgeItem>> GetKnowledgeAsync(string scope, Guid? tenantId, CancellationToken ct = default)
-        {
-            ReadTenantIds.Add(tenantId);
-            return Task.FromResult(_existing);
-        }
-
-        public Task<DateTime?> GetLastSyncTimeAsync(string scope, Guid? tenantId, CancellationToken ct = default)
-        {
-            ReadTenantIds.Add(tenantId);
-            return Task.FromResult(_lastSyncTime);
-        }
-
-        public Task UpdateKnowledgeAsync(IEnumerable<ISyncKnowledgeItem> items, CancellationToken ct = default)
-        {
-            Written.AddRange(items);
-            return Task.CompletedTask;
-        }
-
-        public Task SetLastSyncTimeAsync(string scope, Guid? tenantId, DateTime syncTime, CancellationToken ct = default)
-        {
-            WrittenLastSyncTenantIds.Add(tenantId);
-            return Task.CompletedTask;
-        }
-    }
-
-    /// <summary>
     /// A store that DISCARDS the filter it is handed — standing in for a backend whose filter translation
     /// silently widens to match-all. This family has shipped that defect more than once (a NEST request with
     /// a null Query; an empty IN rendered always-true), which is why the provider re-checks the tenant on
@@ -128,6 +82,8 @@ public class TenantSyncScopeTests
             CancellationToken ct = default)
             => base.ReadCoreAsync(null, orderBy, limit, offset, ct);
     }
+
+    private static string Scoped(Guid tenant) => TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>.TenantScope("S", tenant);
 
     private static TenantContext ContextFor(Guid? tenantGuid)
     {
@@ -158,8 +114,8 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(mine);
         await remote.CreateAsync(theirs);
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(TenantA));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(TenantA));
 
         var preview = await provider.PreviewAsync(DownloadOptions());
 
@@ -176,8 +132,8 @@ public class TenantSyncScopeTests
         var remote = new AsyncInMemoryStore<TenantItem>();
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "b" });
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(TenantA));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(TenantA));
 
         var preview = await provider.PreviewAsync(DownloadOptions());
 
@@ -196,8 +152,8 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(mine);
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "b" });
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(TenantA));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(TenantA));
 
         var result = await provider.SyncAsync(DownloadOptions());
 
@@ -219,8 +175,8 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(mine);
         await remote.CreateAsync(new StrictTenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "b" });
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<StrictTenantItem>, StrictTenantItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(TenantA));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<StrictTenantItem>, StrictTenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(TenantA));
 
         var preview = await provider.PreviewAsync(DownloadOptions());
 
@@ -236,8 +192,8 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(mine);
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "b" });
 
-        var provider = new TenantSyncProvider<PredicateIgnoringStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(TenantA));
+        var provider = new TenantSyncProvider<PredicateIgnoringStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(TenantA));
 
         var preview = await provider.PreviewAsync(DownloadOptions());
 
@@ -256,19 +212,20 @@ public class TenantSyncScopeTests
         var remote = new AsyncInMemoryStore<TenantItem>();
         await local.CreateAsync(theirs);
 
-        var knowledge = new Dictionary<Guid, ISyncKnowledgeItem>
+        var knowledge = new Dictionary<Guid, Knowledge>
         {
-            [theirs.Guid!.Value] = new TenantSyncKnowledgeItem
+            [theirs.Guid!.Value] = new Knowledge
             {
                 EntityGuid = theirs.Guid!.Value,
-                Scope = "S",
-                TenantGuid = TenantB,
-                IsRemoteDeleted = true
+                // TASK-630: a recorded pair in the tenant's own scope, with the remote side now missing.
+                Scope = Scoped(TenantB),
+                LocalVersion = "recorded",
+                RemoteVersion = "recorded"
             }
         };
-        var knowledgeStore = new RecordingKnowledgeStore(DateTime.UtcNow.AddDays(-1), knowledge);
+        var knowledgeStore = new TestKnowledgeStore(DateTime.UtcNow.AddDays(-1), knowledge.Values);
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
             local, remote, knowledgeStore, ContextFor(TenantA));
 
         var result = await provider.SyncAsync(DownloadOptions());
@@ -288,19 +245,20 @@ public class TenantSyncScopeTests
         var remote = new AsyncInMemoryStore<TenantItem>();
         await local.CreateAsync(mine);
 
-        var knowledge = new Dictionary<Guid, ISyncKnowledgeItem>
+        var knowledge = new Dictionary<Guid, Knowledge>
         {
-            [mine.Guid!.Value] = new TenantSyncKnowledgeItem
+            [mine.Guid!.Value] = new Knowledge
             {
                 EntityGuid = mine.Guid!.Value,
-                Scope = "S",
-                TenantGuid = TenantA,
-                IsRemoteDeleted = true
+                // TASK-630: a recorded pair in the tenant's own scope, with the remote side now missing.
+                Scope = Scoped(TenantA),
+                LocalVersion = "recorded",
+                RemoteVersion = "recorded"
             }
         };
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(DateTime.UtcNow.AddDays(-1), knowledge), ContextFor(TenantA));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(DateTime.UtcNow.AddDays(-1), knowledge.Values), ContextFor(TenantA));
 
         var result = await provider.SyncAsync(
             DownloadOptions(),
@@ -320,19 +278,20 @@ public class TenantSyncScopeTests
         var remote = new AsyncInMemoryStore<TenantItem>();
         await local.CreateAsync(mine);
 
-        var knowledge = new Dictionary<Guid, ISyncKnowledgeItem>
+        var knowledge = new Dictionary<Guid, Knowledge>
         {
-            [mine.Guid!.Value] = new TenantSyncKnowledgeItem
+            [mine.Guid!.Value] = new Knowledge
             {
                 EntityGuid = mine.Guid!.Value,
-                Scope = "S",
-                TenantGuid = TenantA,
-                IsRemoteDeleted = true
+                // TASK-630: a recorded pair in the tenant's own scope, with the remote side now missing.
+                Scope = Scoped(TenantA),
+                LocalVersion = "recorded",
+                RemoteVersion = "recorded"
             }
         };
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(DateTime.UtcNow.AddDays(-1), knowledge), ContextFor(TenantA));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(DateTime.UtcNow.AddDays(-1), knowledge.Values), ContextFor(TenantA));
 
         var result = await provider.SyncAsync(DownloadOptions());
 
@@ -353,8 +312,8 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(mine);
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "b" });
 
-        var knowledgeStore = new RecordingKnowledgeStore();
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
+        var knowledgeStore = new TestKnowledgeStore();
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
             local, remote, knowledgeStore, ContextFor(null));
 
         var result = await provider.SyncAsync(DownloadOptions(TenantA));
@@ -374,27 +333,28 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(mine);
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "b" });
 
-        var knowledgeStore = new RecordingKnowledgeStore();
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
+        var knowledgeStore = new TestKnowledgeStore();
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
             local, remote, knowledgeStore, ContextFor(null));
 
         await provider.SyncAsync(DownloadOptions(TenantA));
 
-        knowledgeStore.ReadTenantIds.Should().AllBeEquivalentTo(TenantA);
-        knowledgeStore.WrittenLastSyncTenantIds.Should().AllBeEquivalentTo(TenantA);
-        knowledgeStore.Written.Should().HaveCount(1, "only the scoped tenant's entity was processed");
-        knowledgeStore.Written.OfType<ITenantSyncKnowledgeItem>().Select(k => k.TenantGuid)
-            .Should().AllBeEquivalentTo(TenantA);
-        knowledgeStore.Written.Select(k => k.EntityGuid).Should().BeEquivalentTo(new[] { mine.Guid!.Value },
+        // TASK-630: the tenant is carried by the knowledge scope, which every knowledge store keeps apart.
+        knowledgeStore.ReadScopes.Should().AllBe(Scoped(TenantA));
+        knowledgeStore.StampedScopes.Should().AllBe(Scoped(TenantA));
+        var rows = knowledgeStore.EntityRows();
+        rows.Should().HaveCount(1, "only the scoped tenant's entity was processed");
+        rows.Select(k => k.Scope).Should().AllBe(Scoped(TenantA));
+        rows.Select(k => k.EntityGuid).Should().BeEquivalentTo(new[] { mine.Guid!.Value },
             "a foreign entity's guid must never reach the knowledge store");
     }
 
     [Fact]
     public async Task AmbientAndOptionsTenantDisagree_IsRefused()
     {
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
             new AsyncInMemoryStore<TenantItem>(), new AsyncInMemoryStore<TenantItem>(),
-            new RecordingKnowledgeStore(), ContextFor(TenantA));
+            new TestKnowledgeStore(), ContextFor(TenantA));
 
         Func<Task> act = () => provider.SyncAsync(DownloadOptions(TenantB));
 
@@ -406,9 +366,9 @@ public class TenantSyncScopeTests
     [Fact]
     public async Task AmbientAndOptionsTenantDisagree_IsRefusedOnPreviewToo()
     {
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
             new AsyncInMemoryStore<TenantItem>(), new AsyncInMemoryStore<TenantItem>(),
-            new RecordingKnowledgeStore(), ContextFor(TenantA));
+            new TestKnowledgeStore(), ContextFor(TenantA));
 
         Func<Task> act = () => provider.PreviewAsync(DownloadOptions(TenantB));
 
@@ -422,8 +382,8 @@ public class TenantSyncScopeTests
         var remote = new AsyncInMemoryStore<TenantItem>();
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantA, Name = "a" });
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(TenantA));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(TenantA));
 
         var result = await provider.SyncAsync(DownloadOptions(TenantA));
 
@@ -439,8 +399,8 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantA, Name = "a" });
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "b" });
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(null));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(null));
 
         Func<Task> act = () => provider.SyncAsync(DownloadOptions());
 
@@ -457,8 +417,8 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "b" });
 
         var context = ContextFor(null);
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), context);
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), context);
 
         var result = await context.WithAllTenantsAsync(() => provider.SyncAsync(DownloadOptions()));
 
@@ -476,8 +436,8 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "b" });
 
         var context = ContextFor(null);
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), context);
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), context);
 
         await context.WithAllTenantsAsync(() => provider.SyncAsync(DownloadOptions(TenantB)));
 
@@ -497,8 +457,8 @@ public class TenantSyncScopeTests
         var remote = new AsyncInMemoryStore<PlainItem>();
         await remote.CreateAsync(new PlainItem { Guid = Guid.NewGuid(), Name = "x" });
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<PlainItem>, PlainItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(null));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<PlainItem>, PlainItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(null));
 
         var result = await provider.SyncAsync(DownloadOptions());
 
@@ -516,8 +476,8 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantA, Name = "drop" });
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "keep" });
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(TenantA));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(TenantA));
 
         var preview = await provider.PreviewAsync(
             DownloadOptions(),
@@ -538,8 +498,8 @@ public class TenantSyncScopeTests
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantA, Name = "a" });
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantB, Name = "b" });
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(null));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(null));
 
         var shared = new SyncFilterOptions<TenantItem>();
 
@@ -570,8 +530,8 @@ public class TenantSyncScopeTests
         var remote = new AsyncInMemoryStore<TenantItem>();
         await remote.CreateAsync(new TenantItem { Guid = Guid.NewGuid(), TenantGuid = TenantA, Name = "a" });
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            local, remote, new RecordingKnowledgeStore(), ContextFor(TenantA));
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            local, remote, new TestKnowledgeStore(), ContextFor(TenantA));
 
         var result = await provider.SyncAsync(
             DownloadOptions(),

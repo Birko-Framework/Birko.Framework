@@ -34,9 +34,7 @@ public class AsyncSqlSyncKnowledgeStore<DB> : AsyncDataBaseBulkStore<DB, SqlSync
     /// <remarks>
     /// CR-L220: last-sync-time is <em>derived</em> from the rows (see <see cref="GetLastSyncTimeAsync"/>),
     /// only refreshing existing rows — stamping a scope with <em>no</em> rows persists nothing. This is a deliberate cross-backend
-    /// design choice shared with the JSON reference store (CR-L214). Note the abstract <c>ISyncKnowledgeStore.SetLastSyncTimeAsync</c> takes a
-    /// non-nullable time, whereas this per-item store's overload takes <c>DateTime?</c> and short-circuits
-    /// on null.
+    /// design choice shared with the JSON reference store (CR-L214). A null time is a no-op.
     /// <para>TASK-157 (SH-M067): returns the time only when a row was stamped, and <c>null</c> when the scope has none, so a
     /// caller can tell persisted from discarded. The sync providers write a scope marker row each run, so a stamp after
     /// a run always lands.</para>

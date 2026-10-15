@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### BREAKING: the tenant sync provider runs the shared sync engine (2026-10-15)
+
+[[TASK-630]]. `TenantSyncProvider` was a 1,107-line copy of the engine that had drifted in eleven ways. It is now
+`TenantSyncProvider<TStore, T, TKnowledge>`: tenant resolution and predicates, over `AsyncSyncProvider`. Each tenant's
+knowledge is kept apart by a tenant-qualified scope, in any knowledge store. The RavenDB and CosmosDB knowledge stores
+now implement the engine's interface (RavenDB verified live); their tenant API and `ISyncKnowledgeStore` are gone.
 ### Sync: deletions propagate, unchanged items are skipped; Mongo and ES knowledge work (2026-10-15)
 
 [[TASK-157]]. Measured: a deletion after a synced round was re-created, and a first-sync local item was deleted by
@@ -332,12 +338,6 @@ always threw on SQL Server (a `tinyint` read with `GetInt32`).
 now refuses a create of a stored Guid with `StoreException` ([[TASK-625]] unified MongoDB, CosmosDB and ES). A
 key-less SQL model's `Guid` is its `PRIMARY KEY`. A fluent key replaces it, and declared composites are untouched.
 On a TimescaleDB hypertable it is left out (user decision). **Migration** for existing tables: CHANGELOG (drift reports `KeyMismatch`).
-### ElasticSearch stores report mapping drift (2026-10-15)
-
-[[TASK-621]]. An index is mapped once and never revisited, so a model changed later queries an index mapped for the
-old one. Measured: a member made `[Keyword]` over a `text` index matched nothing, silently. `DetectMappingDriftAsync()` /
-`DetectMappingDrift()` compare the store's index descriptor (the one it creates the index with) against the live mapping:
-`Missing`, `Unexpected`, `TypeMismatch`. The health check is [[TASK-624]].
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

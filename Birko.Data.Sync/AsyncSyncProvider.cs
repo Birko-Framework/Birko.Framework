@@ -542,6 +542,6 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
     /// </summary>
     private async Task<IEnumerable<T>> GetAllItemsAsync(TStore store, Expression<Func<T, bool>>? filter, CancellationToken cancellationToken)
     {
-        return await store.ReadAsync(filter, null, null, null, cancellationToken);
+        return EnforceFetchPredicate(await store.ReadAsync(filter, null, null, null, cancellationToken), filter);
     }
 }

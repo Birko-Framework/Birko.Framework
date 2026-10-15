@@ -8,14 +8,14 @@ Tenant-aware synchronization support for multi-tenant applications using the Bir
 
 ## Components
 
-### Interfaces
-- `ITenantSyncKnowledgeItem` - Extends `ISyncKnowledgeItem` and `ITenant`
-
 ### Sync Provider
-- `TenantSyncProvider<TStore, T>` - Implements `ISyncProvider` with tenant scoping
-  - `PreviewAsync()`, `SyncAsync()` methods
-  - `ResolveTenantScope()`, `ApplyTenantFiltering()`, `BuildTenantPredicate()` for tenant isolation
-  - `BelongsToTenant()`, `DetermineSyncAction()`, `ResolveConflict()` logic
+- `TenantSyncProvider<TStore, T, TKnowledge>` - Implements `ISyncProvider`: the shared `AsyncSyncProvider` run under one
+  tenant (TASK-630). It used to carry its own copy of the engine, which had drifted in eleven ways (SH-M342 to M352).
+  - `PreviewAsync()`, `SyncAsync()` methods; takes any `IAsyncSyncKnowledgeItemStore<TKnowledge>`
+  - `ResolveTenantScope()`, `ApplyTenantFiltering()`, `BuildTenantPredicate()`, `BelongsToTenant()`: the tenant-specific part
+  - `TenantScope(scope, tenant)`: the knowledge scope a run uses (`{scope}@tenant:{guid:N}`), which keeps each tenant's
+    knowledge apart in any knowledge store. An all-tenants run and a type with no `TenantGuid` use the scope as given.
+  - The explicit `ISyncProvider` members refuse a filter of another entity type (SH-M352).
 
 #### Tenant scoping — the fetch is what is scoped (SH-H050/H051/H052)
 
@@ -38,14 +38,15 @@ Three rules for anyone touching this provider:
   source throws `TenantScopeRequiredException` rather than syncing everything. `IsAllTenantsScope` is the one
   sanctioned cross-tenant path, and under it an explicit `options.TenantGuid` still narrows the run — that is
   the per-tenant admin loop.
-- **The post-fetch `BelongsToTenant` pass in `GetAllItemsAsync` is not redundant.** A fetch predicate is only
-  as strong as the backend's translation of it, and this family has shipped filters a backend silently
-  widened to match-all (a NEST request with a null `Query`; an empty `IN` rendered always-true). Deleting
-  that pass moves the tenant guarantee back into the backend's hands.
+- **The fetch predicate is also enforced in process** (now by the shared engine, `EnforceFetchPredicate`, TASK-630).
+  A fetch predicate is only as strong as the backend's translation of it, and this family has shipped filters a
+  backend silently widened to match-all (a NEST request with a null `Query`; an empty `IN` rendered always-true).
+  Removing that pass moves the tenant guarantee back into the backend's hands.
 
 ### Queue
 - `TenantSyncQueue` - Extends `SyncQueue` with tenant-aware scoping
-  - `GetEffectiveTenantGuid()`, `GetQueueKey()` overrides
+  - `GetEffectiveTenantGuid()`, `GetQueueKey()` overrides; the base gates per key, so two tenants run concurrently and
+    one tenant's syncs of a scope run one at a time (SH-M350, fixed by TASK-157)
 
 ### Models
 - `TenantSyncResult` - Extends `SyncResult` with `TenantGuid` and `TenantName`
@@ -53,7 +54,7 @@ Three rules for anyone touching this provider:
 
 ### Extensions
 - `TenantSyncProviderExtensions` - `CreateTenantSync()`, `WithTenantSync()` helpers
-- `TenantSyncSetup<TStore, T>` - Fluent setup class
+- `TenantSyncSetup<TStore, T, TKnowledge>` - Fluent setup class
 
 ## Dependencies
 - Birko.Data.Sync

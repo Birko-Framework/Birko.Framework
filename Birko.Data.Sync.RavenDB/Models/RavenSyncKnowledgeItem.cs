@@ -1,39 +1,25 @@
 using Birko.Data.Sync.Models;
 using Birko.Data.Models;
-using Birko.Data.Tenant.Models;
 
 namespace Birko.Data.Sync.RavenDB.Models;
 
 /// <summary>
 /// RavenDB implementation of ISyncKnowledgeItem extending AbstractModel.
-/// Also implements <see cref="ITenant"/> so tenant-aware sync knowledge (produced by
-/// TenantSyncProvider as ITenantSyncKnowledgeItem) is persisted and queryable by tenant.
 /// Optimized for RavenDB document storage
 /// </summary>
-public class RavenSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem, ITenant
+public class RavenSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
 {
     // CR-L219: the int InternalRecordId field ("for database compatibility") was removed — never set,
     // read, or used by either store; it only added a meaningless int to every RavenDB document.
-    // Identity is AbstractModel.Guid (the base store keys documents off it; re-syncs derive a
-    // deterministic Guid via AsyncRavenSyncKnowledgeStore.DeterministicGuid).
+    // Identity is AbstractModel.Guid (the base store keys documents off it).
 
     /// <summary>
     /// GUID of the entity this knowledge refers to
     /// </summary>
     public Guid EntityGuid { get; set; }
 
-    /// <summary>
-    /// Tenant this knowledge item belongs to (canonical <see cref="ITenant"/> member). Used to scope
-    /// tenant-aware queries; <see cref="Guid.Empty"/> for single-tenant / tenant-agnostic knowledge,
-    /// which ModelByTenant treats as "no tenant filter". (CR-C19: tenant scoping previously filtered
-    /// on the record's own random Guid, which could never match.)
-    /// </summary>
-    public Guid TenantGuid { get; set; }
-
-    /// <summary>
-    /// Optional tenant display name (canonical <see cref="ITenant"/> member).
-    /// </summary>
-    public string? TenantName { get; set; }
+    // TASK-630: TenantGuid / TenantName (ITenant) removed; a tenant's knowledge is kept apart by the tenant provider's
+    // tenant-qualified scope, and the engine upserts by Guid (no DeterministicGuid any more).
 
     private string _scope = string.Empty;
 
@@ -78,8 +64,7 @@ public class RavenSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem, ITenant
 
     // CR-L218: the CollectionName const and GenerateDocumentId helper were removed — both dead. RavenDB
     // resolves the collection from the type name (the base store registers no CollectionName convention),
-    // and document identity comes from AbstractModel.Guid (deterministic on re-sync via
-    // AsyncRavenSyncKnowledgeStore.DeterministicGuid), not a string id built here.
+    // and document identity comes from AbstractModel.Guid , not a string id built here.
 
     /// <summary>
     /// Returns a string representation for debugging

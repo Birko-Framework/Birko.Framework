@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — ElasticSearch stores report mapping drift
+
+[[TASK-621]]. An index is mapped once and never revisited, so a model changed later queries an index mapped for the
+old one. Measured: a member made `[Keyword]` over a `text` index matched nothing, silently. `DetectMappingDriftAsync()` /
+`DetectMappingDrift()` compare the store's index descriptor (the one it creates the index with) against the live mapping:
+`Missing`, `Unexpected`, `TypeMismatch`. The health check is [[TASK-624]].
+
 ## 2026-10-15 — Schema drift reports a column whose nullability differs from the model
 
 [[TASK-620]]. `DetectDrift` compared types only. Measured on all four SQL providers: a column made nullable where the

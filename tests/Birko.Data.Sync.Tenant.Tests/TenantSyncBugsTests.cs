@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.InMemory.Stores;
 using Birko.Data.Models;
+using Birko.Data.Stores;
 using Birko.Data.Sync;
 using Birko.Data.Sync.Models;
 using Birko.Data.Sync.Stores;
@@ -35,21 +36,11 @@ public class TenantSyncBugsTests
         public string? Name { get; set; }
     }
 
-    private sealed class FakeKnowledgeStore : ISyncKnowledgeStore
-    {
-        public Task<Dictionary<Guid, ISyncKnowledgeItem>> GetKnowledgeAsync(string scope, Guid? tenantId, CancellationToken ct = default)
-            => Task.FromResult(new Dictionary<Guid, ISyncKnowledgeItem>());
-        public Task<DateTime?> GetLastSyncTimeAsync(string scope, Guid? tenantId, CancellationToken ct = default)
-            => Task.FromResult<DateTime?>(null); // null ⇒ initial sync
-        public Task UpdateKnowledgeAsync(IEnumerable<ISyncKnowledgeItem> items, CancellationToken ct = default)
-            => Task.CompletedTask;
-        public Task SetLastSyncTimeAsync(string scope, Guid? tenantId, DateTime syncTime, CancellationToken ct = default)
-            => Task.CompletedTask;
-    }
-
     private sealed class ThrowingReadStore : AsyncInMemoryStore<Item>
     {
-        public override Task<IEnumerable<Item>> ReadAsync(CancellationToken ct = default)
+        protected override Task<IEnumerable<Item>> ReadCoreAsync(
+            System.Linq.Expressions.Expression<Func<Item, bool>>? filter = null, OrderBy<Item>? orderBy = null,
+            int? limit = null, int? offset = null, CancellationToken ct = default)
             => throw new InvalidOperationException("read failed");
     }
 
@@ -58,9 +49,9 @@ public class TenantSyncBugsTests
     [Fact]
     public void BelongsToTenant_ExcludesUnsetOrMismatchedTenant()
     {
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>(
-            new AsyncInMemoryStore<TenantItem>(), new AsyncInMemoryStore<TenantItem>(), new FakeKnowledgeStore());
-        var belongs = typeof(TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem>)
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>(
+            new AsyncInMemoryStore<TenantItem>(), new AsyncInMemoryStore<TenantItem>(), new TestKnowledgeStore());
+        var belongs = typeof(TenantSyncProvider<AsyncInMemoryStore<TenantItem>, TenantItem, Knowledge>)
             .GetMethod("BelongsToTenant", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
         var tenant = Guid.NewGuid();
@@ -74,9 +65,9 @@ public class TenantSyncBugsTests
     [Fact]
     public void BelongsToTenant_AllowsTypesWithoutTenantProperty()
     {
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<Item>, Item>(
-            new AsyncInMemoryStore<Item>(), new AsyncInMemoryStore<Item>(), new FakeKnowledgeStore());
-        var belongs = typeof(TenantSyncProvider<AsyncInMemoryStore<Item>, Item>)
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<Item>, Item, Knowledge>(
+            new AsyncInMemoryStore<Item>(), new AsyncInMemoryStore<Item>(), new TestKnowledgeStore());
+        var belongs = typeof(TenantSyncProvider<AsyncInMemoryStore<Item>, Item, Knowledge>)
             .GetMethod("BelongsToTenant", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
         // Item has no TenantGuid property → the allow-all path applies (not a tenant-scoped entity).
@@ -88,8 +79,8 @@ public class TenantSyncBugsTests
     [Fact]
     public async Task InitialSync_DoesNotMutateCallerDirection_AndReportsEffectiveDirection()
     {
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<Item>, Item>(
-            new AsyncInMemoryStore<Item>(), new AsyncInMemoryStore<Item>(), new FakeKnowledgeStore());
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<Item>, Item, Knowledge>(
+            new AsyncInMemoryStore<Item>(), new AsyncInMemoryStore<Item>(), new TestKnowledgeStore());
 
         // A TenantSyncOptions instance is returned as-is by ApplyTenantContext, so the old in-place
         // mutation of Direction would leak back to this caller-held object.
@@ -107,8 +98,8 @@ public class TenantSyncBugsTests
     [Fact]
     public async Task Preview_StoreReadFailure_Propagates_NotSwallowedAsConflict()
     {
-        var provider = new TenantSyncProvider<ThrowingReadStore, Item>(
-            new ThrowingReadStore(), new ThrowingReadStore(), new FakeKnowledgeStore());
+        var provider = new TenantSyncProvider<ThrowingReadStore, Item, Knowledge>(
+            new ThrowingReadStore(), new ThrowingReadStore(), new TestKnowledgeStore());
 
         Func<Task> act = () => provider.PreviewAsync();
 
@@ -127,7 +118,7 @@ public class TenantSyncBugsTests
         for (var i = 0; i < 3; i++)
             await remote.CreateAsync(new Item { Guid = Guid.NewGuid(), Name = $"r{i}" });
 
-        var provider = new TenantSyncProvider<AsyncInMemoryStore<Item>, Item>(local, remote, new FakeKnowledgeStore());
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<Item>, Item, Knowledge>(local, remote, new TestKnowledgeStore());
 
         using var cts = new CancellationTokenSource();
         var batchCallbacks = 0;
