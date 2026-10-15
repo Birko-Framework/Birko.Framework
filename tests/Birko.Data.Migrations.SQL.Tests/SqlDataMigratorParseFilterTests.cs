@@ -45,12 +45,25 @@ public class SqlDataMigratorParseFilterTests
     [InlineData("$gte", ">=")]
     [InlineData("$lt", "<")]
     [InlineData("$lte", "<=")]
-    [InlineData("$ne", "<>")]
+    [InlineData("$eq", "=")]
     public void Comparison_operators_map_to_sql(string mongoOp, string sqlOp)
     {
         var (where, parameters) = Parse($"{{\"age\":{{\"{mongoOp}\":18}}}}");
 
         where.Should().Be($"\"age\" {sqlOp} @p0");
+        parameters[0].Value.Should().Be(18L);
+    }
+
+    /// <summary>
+    /// SH-M176 (TASK-152): inverted from <c>$ne → "age" &lt;&gt; @p0</c>. The filter's dialect matches a row whose value
+    /// is absent too, and SQL's <c>&lt;&gt;</c> is unknown for NULL, so the plain form missed those rows.
+    /// </summary>
+    [Fact]
+    public void Not_equal_also_matches_null()
+    {
+        var (where, parameters) = Parse("{\"age\":{\"$ne\":18}}");
+
+        where.Should().Be("(\"age\" <> @p0 OR \"age\" IS NULL)");
         parameters[0].Value.Should().Be(18L);
     }
 

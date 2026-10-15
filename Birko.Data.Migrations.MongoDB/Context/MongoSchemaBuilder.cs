@@ -166,10 +166,10 @@ namespace Birko.Data.Migrations.MongoDB.Context
             {
                 if (_fields.Count == 0) return;
 
-                var keys = Builders<BsonDocument>.IndexKeys.Combine(
-                    _fields.Select(f => f.Descending
-                        ? Builders<BsonDocument>.IndexKeys.Descending(f.Name)
-                        : Builders<BsonDocument>.IndexKeys.Ascending(f.Name)));
+                // SH-M203 (TASK-152): the field type was recorded and dropped, so a text, hashed or geo field built a plain
+                // ascending index. The keys now come from the index manager's producer.
+                var keys = Birko.Data.MongoDB.IndexManagement.MongoDBIndexManager.KeysFor(_fields.Select(f =>
+                    new IndexField { Name = f.Name, IsDescending = f.Descending, FieldType = f.Type }));
 
                 // TASK-274 — Sparse was dropped here, so a migration's .Sparse() got a full index while
                 // the index-manager door honoured it. Both doors now set it.

@@ -43,6 +43,20 @@ namespace Birko.Data.Migrations.Context
         /// this test inline and identically; it is stated once here so the guard and the callers cannot
         /// drift about which inputs are intentional.
         /// </summary>
+        /// <summary>
+        /// Refuses a <c>CopyData</c> transform on a backend that cannot apply one (SH-M196, TASK-152). SQL, Cosmos DB and
+        /// InfluxDB accepted <c>transformJson</c> and never read it: the copy ran untransformed and the migration was
+        /// recorded, while MongoDB applied it and ElasticSearch and RavenDB threw. No transform (null, blank or
+        /// <c>{}</c>) is a plain copy.
+        /// </summary>
+        public static void RefuseTransform(string? transformJson, string provider)
+        {
+            if (IsExplicitMatchAll(transformJson)) return;
+            throw new NotSupportedException(
+                $"{provider} CopyData cannot apply a transform, so it would copy the data untransformed. Copy without one, "
+                + "then update the target, or use Raw().");
+        }
+
         public static bool IsExplicitMatchAll(string? filterJson)
             => string.IsNullOrWhiteSpace(filterJson) || filterJson!.Trim() == "{}";
 

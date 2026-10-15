@@ -115,8 +115,7 @@ namespace Birko.Data.Migrations.SQL
                     // Ignore rollback errors
                 }
 
-                var failedMigration = executed.Count > 0 ? migrations[executed.Count] : migrations[0];
-                throw new MigrationException(failedMigration, direction, "Migration failed. Changes have been rolled back.", ex);
+                throw RunFailed(migrations, executed.Count, direction, "Migration failed. Changes have been rolled back.", ex);
             }
         }
 
@@ -143,8 +142,7 @@ namespace Birko.Data.Migrations.SQL
             }
             catch (Exception ex)
             {
-                var failedMigration = executed.Count > 0 ? migrations[executed.Count] : migrations[0];
-                throw new MigrationException(failedMigration, direction, "Migration failed. Database may be in an inconsistent state.", ex);
+                throw RunFailed(migrations, executed.Count, direction, "Migration failed. Database may be in an inconsistent state.", ex);
             }
         }
 

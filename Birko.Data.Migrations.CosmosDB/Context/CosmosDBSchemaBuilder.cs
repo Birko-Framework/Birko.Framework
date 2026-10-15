@@ -10,14 +10,10 @@ namespace Birko.Data.Migrations.CosmosDB.Context;
 
 public class CosmosDBSchemaBuilder : ISchemaBuilder
 {
-
     // TASK-627: the chains handed out, so the runner can fail a migration that never called Build().
-
     private readonly SchemaBuildLedger _ledger = new();
 
-
     /// <inheritdoc />
-
     public System.Collections.Generic.IReadOnlyList<string> PendingBuilds => _ledger.Pending;
 
     private readonly Database _database;
@@ -29,8 +25,9 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
 
     public ICollectionBuilder CreateCollection(string name)
     {
-        var properties = new ContainerProperties(name, "/id");
-        _database.CreateContainerIfNotExistsAsync(properties).GetAwaiter().GetResult();
+        // SH-M174 (TASK-152): the container is created by Build(), once the fields are declared. It was created here,
+        // partitioned on /id, before WithField(..., isPrimary: true) could say otherwise, and a partition key cannot
+        // change afterwards; the builder recorded the declared one and nothing read it.
         return _ledger.Track(new CosmosCollectionBuilder(name, _database), name);
     }
 
@@ -158,7 +155,6 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
     {
         private readonly string _name;
         private readonly Database _database;
-        private string _partitionKeyPath = "/id";
 
         public CosmosCollectionBuilder(string name, Database database)
         {
@@ -171,24 +167,32 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
             bool isRequired = false, int? maxLength = null,
             int? precision = null, int? scale = null,
             bool isAutoIncrement = false, object? defaultValue = null)
+            => WithField(new FieldDescriptor(name) { Type = type, IsPrimary = isPrimary, IsUnique = isUnique });
+
+        /// <summary>
+        /// Cosmos DB is schema-less, so a field declares nothing but its key role. The container is partitioned on
+        /// <c>/id</c>, the only key the Birko stores address (TASK-614); a primary field that is not the document id is
+        /// refused rather than recorded and ignored (SH-M174), and so is a unique field (a unique key holds per logical
+        /// partition, so on <c>/id</c> it rejects nothing, measured at TASK-628).
+        /// </summary>
+        public ICollectionBuilder WithField(FieldDescriptor field)
         {
-            // Cosmos DB is schema-less — field definitions are not needed for containers.
-            // However, if a field is marked as primary, use it as partition key.
-            if (isPrimary)
-            {
-                _partitionKeyPath = $"/{name}";
-            }
+            if (field.IsPrimary && !IsDocumentId(field.Name))
+                throw new NotSupportedException(
+                    $"Collection '{_name}': field '{field.Name}' is declared primary, and a Cosmos DB container for the Birko stores "
+                    + "is partitioned on /id (the document id). Declare the id field primary, or none.");
+            if (field.IsUnique && !field.IsPrimary)
+                throw new NotSupportedException(
+                    $"Collection '{_name}': field '{field.Name}' is declared unique, which Cosmos DB cannot enforce on a container "
+                    + "partitioned on /id (a unique key holds within one logical partition).");
             return this;
         }
 
-        public ICollectionBuilder WithField(FieldDescriptor field)
-        {
-            if (field.IsPrimary)
-            {
-                _partitionKeyPath = $"/{field.Name}";
-            }
-            return this;
-        }
+        private static bool IsDocumentId(string name)
+            => string.Equals(name, "id", StringComparison.OrdinalIgnoreCase) || string.Equals(name, "Guid", StringComparison.OrdinalIgnoreCase);
+
+        public void Build()
+            => _database.CreateContainerIfNotExistsAsync(new ContainerProperties(_name, "/id")).GetAwaiter().GetResult();
     }
 
     private class CosmosIndexBuilder : IIndexBuilder
@@ -196,7 +200,7 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
         private readonly string _collectionName;
         private readonly string _indexName;
         private readonly Database _database;
-        private readonly List<(string Name, bool Descending)> _fields = new();
+        private readonly List<(string Name, bool Descending, IndexFieldType FieldType)> _fields = new();
         private bool _unique;
 
         public CosmosIndexBuilder(string collectionName, string indexName, Database database)
@@ -208,7 +212,7 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
 
         public IIndexBuilder WithField(string name, bool descending = false, IndexFieldType fieldType = IndexFieldType.Standard)
         {
-            _fields.Add((name, descending));
+            _fields.Add((name, descending, fieldType));
             return this;
         }
 
@@ -231,23 +235,24 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
                 "CosmosDB", $"index property '{key}'", "Cosmos DB has no individual index objects — indexing is a container-level policy", "Use Raw() to modify the container indexing policy.");
 
         /// <summary>
-        /// <b>Refuses the whole declaration (TASK-274).</b> This builder used to inherit
-        /// <c>IIndexBuilder.Build()</c>'s no-op default while accumulating fields and a <c>Unique()</c> flag
-        /// and holding a live client — so a migration read as though it had declared an index and the
-        /// database never got one. That is the lost-flag defect TASK-246 fixed in the SQL builder, total
-        /// rather than partial. Silence was the worst of the three options; refusing is honest and costs
-        /// nothing, because nothing called it (measured: 0 uses across all 16 consumer repos).
+        /// Creates the index through <see cref="Birko.Data.CosmosDB.IndexManagement.CosmosDBIndexManager"/>, the other
+        /// door onto the same feature (SH-M200, TASK-152). TASK-274 refused the whole declaration because the builder
+        /// created nothing; since TASK-628 the manager keeps the index's name and honours or refuses each flag
+        /// (<c>Unique</c> is refused there: it would reject nothing on /id), so a migration's index is the manager's.
         /// </summary>
         public void Build()
-            => throw Birko.Data.Patterns.Schema.IndexBuilderSupport.NotImplementedHere(
-                "CosmosDB", _indexName, "Use Raw() to modify the container indexing policy.");
+        {
+            if (_fields.Count == 0)
+                throw new InvalidOperationException($"Index '{_indexName}' on '{_collectionName}' declares no field.");
 
-        /// <summary>
-        /// Exposes whether <see cref="Unique"/> was called. Cosmos DB expresses uniqueness via
-        /// unique-key policies declared at container creation time, not through index metadata,
-        /// so <see cref="_unique"/> is captured here but not yet translated into a container-level
-        /// policy. Reserved for when that wiring lands.
-        /// </summary>
-        internal bool IsUnique => _unique;
+            var definition = new IndexDefinition
+            {
+                Name = _indexName,
+                Unique = _unique,
+                Fields = _fields.ConvertAll(f => new IndexField { Name = f.Name, IsDescending = f.Descending, FieldType = f.FieldType }),
+            };
+            new Birko.Data.CosmosDB.IndexManagement.CosmosDBIndexManager(_database)
+                .CreateAsync(definition, _collectionName).GetAwaiter().GetResult();
+        }
     }
 }

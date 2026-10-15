@@ -54,8 +54,10 @@ public class IndexBuilderRefusalTests
     [Fact]
     public void Build_refuses_rather_than_creating_nothing()
     {
+        // TASK-152 (SH-M200): inverted from "Build refuses the whole declaration". Build now creates the index through
+        // CosmosDBIndexManager, which refuses Unique before any request: a unique key rejects nothing on /id (TASK-628).
         Action act = () => Builder().WithField("Code").Unique().Build();
 
-        act.Should().Throw<NotSupportedException>().Which.Message.Should().Contain("does not create indexes");
+        act.Should().Throw<NotSupportedException>().Which.Message.Should().Contain("is Unique");
     }
 }

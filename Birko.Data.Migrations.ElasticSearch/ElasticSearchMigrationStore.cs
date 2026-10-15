@@ -32,9 +32,19 @@ namespace Birko.Data.Migrations.ElasticSearch
         {
             var indexName = GetMigrationsIndex();
 
-            if (!_client.Indices.Exists(indexName).Exists)
+            // SH-M202 (TASK-152): a failed Exists probe read as "absent", and the Create it led to was not checked, so an
+            // unreachable or unauthorized cluster initialised "successfully".
+            var exists = _client.Indices.Exists(indexName);
+            if (!exists.IsValid && exists.ApiCall?.HttpStatusCode != 404)
             {
-                _client.Indices.Create(indexName, c => c
+                throw new InvalidOperationException(
+                    $"Cannot initialise migrations index '{indexName}': the existence check failed. {exists.DebugInformation}",
+                    exists.OriginalException);
+            }
+
+            if (!exists.Exists)
+            {
+                var created = _client.Indices.Create(indexName, c => c
                     .Settings(s => s
                         // CR-L142: honor the configured shard/replica counts (were hardcoded 1/0).
                         .NumberOfShards(_settings.NumberOfShards ?? 1)
@@ -42,7 +52,8 @@ namespace Birko.Data.Migrations.ElasticSearch
                     )
                     .Map<MigrationDocument>(m => m
                         .Properties(p => p
-                            .Keyword(k => k.Name(n => n.Version))
+                            // SH-M201 (TASK-152): a number, so it orders as one (was keyword: "9" above "10").
+                            .Number(k => k.Name(n => n.Version).Type(NumberType.Long))
                             .Text(t => t.Name(n => n.Name))
                             .Text(t => t.Name(n => n.Description))
                             .Date(d => d.Name(n => n.CreatedAt))
@@ -50,6 +61,11 @@ namespace Birko.Data.Migrations.ElasticSearch
                         )
                     )
                 );
+                if (!created.IsValid && created.ServerError?.Error?.Type != "resource_already_exists_exception")
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot create migrations index '{indexName}'. {created.DebugInformation}", created.OriginalException);
+                }
             }
         }
 
@@ -90,14 +106,13 @@ namespace Birko.Data.Migrations.ElasticSearch
                 return new HashSet<long>();
             }
 
-            // CR-M105: sort Descending and raise the window so a truncated result keeps the NEWEST
-            // versions — GetCurrentVersion() derives from Max(), so the old Ascending+Size(1000) dropped
-            // exactly the highest versions past 1000 and under-reported the current version. 10000 is the
-            // default index.max_result_window; a deployment with more applied migrations needs scroll.
+            // CR-M105 sorted Descending so a truncated result kept the newest versions. SH-M201 (TASK-152): an index
+            // created before this change maps Version as keyword, where that sort is lexicographic ("9" above "10"), so
+            // the truncation kept the wrong ones. No truncation is accepted now: the whole set or a refusal.
             var searchResponse = _client.Search<MigrationDocument>(s => s
                 .Index(indexName)
                 .Size(10000)
-                .Sort(sort => sort.Descending(f => f.Version))
+                .TrackTotalHits()
             );
 
             if (!searchResponse.IsValid)
@@ -110,6 +125,13 @@ namespace Birko.Data.Migrations.ElasticSearch
                     + "Refusing to report an empty set, which would replay every registered migration "
                     + $"against an already-migrated cluster. {searchResponse.DebugInformation}",
                     searchResponse.OriginalException);
+            }
+
+            if (searchResponse.Total > searchResponse.Documents.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Migrations index '{indexName}' records {searchResponse.Total} versions, more than one read returns "
+                    + $"({searchResponse.Documents.Count}); refusing a partial set, which would misreport the current version.");
             }
 
             return new HashSet<long>(searchResponse.Documents.Select(d => d.Version));

@@ -89,8 +89,20 @@ The context provides three capabilities:
 | `UpdateDocuments(collection, filter, updates)` | Update matching documents |
 | `DeleteDocuments(collection, filter)` | Delete matching documents |
 | `CountDocuments(collection, filter)` | Count matching documents |
-| `CopyData(source, target, filter)` | Copy documents between collections |
+| `CopyData(source, target, transform)` | Copy documents between collections |
 | `BulkInsert(collection, documents)` | Insert multiple documents |
+
+**The filter** is a Mongo-style JSON object, read by one shared parser (`MigrationFilterTerms`) for SQL, ElasticSearch,
+RavenDB and Cosmos DB (TASK-152): a field's value (equality) or an object of `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`.
+Any other operator (`$in`, `$exists`, `$regex`, ...), an array or object value, and an ordering comparison with `null`
+are refused with `NotSupportedException`; they used to become equality and hit the wrong rows. `null` means what it means
+in MongoDB on every backend: `{"x": null}` matches a missing or null `x`, `{"x": {"$ne": null}}` one that has a value,
+and `{"x": {"$ne": v}}` also matches a document without `x` (SQL's `x <> v` alone never matched NULL).
+
+**What a backend cannot do, it refuses**, rather than reporting success: a `CopyData` transform on SQL, Cosmos DB and
+InfluxDB (only MongoDB applies one); and on InfluxDB, `UpdateDocuments` (points are immutable), a filtered
+`CountDocuments`, a delete from a bucket that does not exist, and a `BulkInsert` document with no numeric or boolean value
+(a point with no field is not written).
 
 ### FieldDescriptor
 
@@ -164,6 +176,11 @@ var runner = new InfluxMigrationRunner(influxClient, "my-org");
 // TimescaleDB
 var runner = new TimescaleDBMigrationRunner(store.Connector);
 ```
+
+**Which migrations run** is decided by the applied set, not by a version range (TASK-152): `Migrate()` runs every
+registered migration not yet applied up to the target, including one whose version is below the current one (added
+later from a merged branch), in version order. `Rollback(target)` runs `Down` only for applied migrations above the
+target, never for one that was skipped.
 
 ### Registering Migrations
 

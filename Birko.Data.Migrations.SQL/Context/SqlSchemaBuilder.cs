@@ -76,17 +76,16 @@ namespace Birko.Data.Migrations.SQL.Context
 
         public bool CollectionExists(string name)
         {
-            // CR-L152: INFORMATION_SCHEMA is standard for MSSql/MySQL/PostgreSQL but does not exist in
-            // SQLite (which uses sqlite_master), so an unconditional INFORMATION_SCHEMA query threw there.
-            // Pick the catalog query from the connection's provider.
-            var connTypeName = _connection.GetType().Name;
-            var isSqlite = connTypeName.IndexOf("Sqlite", StringComparison.OrdinalIgnoreCase) >= 0;
+            // CR-L152 picked sqlite_master by the connection's type name; SH-M181 (TASK-152): the other branch asked
+            // INFORMATION_SCHEMA by name alone, across every schema or database. The connector owns the query now,
+            // scoped as its own DDL resolves a bare name.
+            var sql = _connector.TableExistsSql
+                ?? throw new NotSupportedException(
+                    $"{_connector.GetType().Name} has no table-existence query, so CollectionExists cannot answer for it.");
 
             using var command = _connection.CreateCommand();
             command.Transaction = _transaction;
-            command.CommandText = isSqlite
-                ? "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @tableName"
-                : "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @tableName";
+            command.CommandText = sql;
             var param = command.CreateParameter();
             param.ParameterName = "@tableName";
             param.Value = name;

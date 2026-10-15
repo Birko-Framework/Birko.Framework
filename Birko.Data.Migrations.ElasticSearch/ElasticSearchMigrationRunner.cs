@@ -65,8 +65,7 @@ namespace Birko.Data.Migrations.ElasticSearch
             }
             catch (Exception ex)
             {
-                var failedMigration = executed.Count > 0 ? migrations[executed.Count] : migrations[0];
-                throw new Exceptions.MigrationException(failedMigration, direction, "Migration failed. ElasticSearch state may be inconsistent.", ex);
+                throw RunFailed(migrations, executed.Count, direction, "Migration failed. ElasticSearch state may be inconsistent.", ex);
             }
         }
     }

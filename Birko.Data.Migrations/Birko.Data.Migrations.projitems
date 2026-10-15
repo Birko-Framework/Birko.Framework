@@ -20,5 +20,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Context\IMigrationContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\IDataMigrator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\MigrationFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\MigrationFilterTerm.cs" />
   </ItemGroup>
 </Project>

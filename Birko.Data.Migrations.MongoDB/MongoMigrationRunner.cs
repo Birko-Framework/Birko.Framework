@@ -103,16 +103,10 @@ namespace Birko.Data.Migrations.MongoDB
 
                 // Failure inside the loop → blame the migration that was executing. Failure AFTER
                 // the loop (e.g. CommitTransaction, where executed.Count == migrations.Count) has no
-                // single migration to blame — use the message ctor rather than indexing out of
-                // bounds and masking the real error (CR-H063).
-                if (executed.Count < migrations.Count)
-                {
-                    throw new Exceptions.MigrationException(migrations[executed.Count], direction,
-                        "Migration failed. Changes rolled back if session was used.", ex);
-                }
-
-                throw new Exceptions.MigrationException(
-                    "Migration transaction failed to commit. Changes rolled back if session was used.", ex);
+                // single migration to blame (CR-H063). RunFailed is the one producer of that rule now,
+                // for every runner (SH-M172).
+                throw RunFailed(migrations, executed.Count, direction,
+                    "Migration failed. Changes rolled back if session was used.", ex);
             }
             finally
             {

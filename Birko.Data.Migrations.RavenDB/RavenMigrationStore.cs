@@ -98,27 +98,58 @@ namespace Birko.Data.Migrations.RavenDB
         public void RecordMigration(Data.Migrations.IMigration migration)
         {
             EnsureInitialized();
-
-            using var session = _store.OpenSession();
-            var state = session.Load<MigrationsStateDocument>(_settings.MigrationsDocumentId) ?? new MigrationsStateDocument
+            UpdateState(state =>
             {
-                Id = _settings.MigrationsDocumentId,
-                AppliedMigrations = new Dictionary<string, MigrationRecord>()
-            };
+                state.AppliedMigrations ??= new Dictionary<string, MigrationRecord>();
+                state.AppliedMigrations[migration.Version.ToString()] = new MigrationRecord
+                {
+                    Version = migration.Version,
+                    Name = migration.Name,
+                    Description = migration.Description,
+                    CreatedAt = migration.CreatedAt,
+                    AppliedAt = DateTime.UtcNow
+                };
+                return true;
+            });
+        }
 
-            var record = new MigrationRecord
+        /// <summary>
+        /// Loads the state document, applies <paramref name="change"/>, and saves it with optimistic concurrency,
+        /// reloading on a conflict.
+        /// </summary>
+        /// <remarks>
+        /// SH-M187 (TASK-152): saved last-write-wins (RavenDB's default), so two processes recording different versions
+        /// each wrote back the document they had loaded and one version disappeared: that migration ran again.
+        /// </remarks>
+        private const int MaxStateAttempts = 50;
+
+        private void UpdateState(Func<MigrationsStateDocument, bool> change)
+        {
+            for (var attempt = 1; ; attempt++)
             {
-                Version = migration.Version,
-                Name = migration.Name,
-                Description = migration.Description,
-                CreatedAt = migration.CreatedAt,
-                AppliedAt = DateTime.UtcNow
-            };
+                using var session = _store.OpenSession();
+                session.Advanced.UseOptimisticConcurrency = true;
+                var state = session.Load<MigrationsStateDocument>(_settings.MigrationsDocumentId) ?? new MigrationsStateDocument
+                {
+                    Id = _settings.MigrationsDocumentId,
+                    AppliedMigrations = new Dictionary<string, MigrationRecord>()
+                };
 
-            state.AppliedMigrations[migration.Version.ToString()] = record;
-            session.Store(state);
-            session.SaveChanges();
+                if (!change(state)) return;
 
+                try
+                {
+                    session.Store(state);
+                    session.SaveChanges();
+                    return;
+                }
+                catch (Raven.Client.Exceptions.ConcurrencyException) when (attempt < MaxStateAttempts)
+                {
+                    // Another writer saved first: reload its document and apply the change to that, after a jittered
+                    // pause so contending writers stop colliding in lockstep.
+                    System.Threading.Thread.Sleep(Random.Shared.Next(1, 10 * Math.Min(attempt, 10)));
+                }
+            }
         }
 
         /// <summary>
@@ -137,16 +168,7 @@ namespace Birko.Data.Migrations.RavenDB
         public void RemoveMigration(Data.Migrations.IMigration migration)
         {
             EnsureInitialized();
-
-            using var session = _store.OpenSession();
-            var state = session.Load<MigrationsStateDocument>(_settings.MigrationsDocumentId);
-
-            if (state?.AppliedMigrations != null)
-            {
-                state.AppliedMigrations.Remove(migration.Version.ToString());
-                session.Store(state);
-                session.SaveChanges();
-            }
+            UpdateState(state => state.AppliedMigrations?.Remove(migration.Version.ToString()) == true);
         }
 
         /// <summary>

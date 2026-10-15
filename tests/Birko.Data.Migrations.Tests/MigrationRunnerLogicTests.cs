@@ -57,6 +57,32 @@ public class MigrationRunnerLogicTests
             => GetMigrationsToExecute(from, to, dir);
     }
 
+    private sealed class FailingRunner : AbstractMigrationRunner
+    {
+        public FailingRunner(IMigrationStore store) : base(store) { }
+        protected override MigrationResult ExecuteMigrations(long from, long to, MigrationDirection direction)
+            => throw new NotSupportedException();
+        public Birko.Data.Migrations.Exceptions.MigrationException Fail(IReadOnlyList<IMigration> migrations, int executed, Exception inner)
+            => RunFailed(migrations, executed, MigrationDirection.Up, "Migration failed.", inner);
+    }
+
+    [Fact]
+    public void A_failure_after_every_migration_ran_keeps_its_own_exception()
+    {
+        // SH-M172 (TASK-152): runners blamed migrations[executed.Count], past the end when the failure came after the
+        // loop (a Commit), so an ArgumentOutOfRangeException replaced the commit failure.
+        var runner = new FailingRunner(new FakeStore());
+        var migrations = new IMigration[] { new Mig { Version = 1 }, new Mig { Version = 2 } };
+        var commit = new InvalidOperationException("commit refused");
+
+        var after = runner.Fail(migrations, 2, commit);
+        after.InnerException.Should().BeSameAs(commit);
+        after.Message.Should().Contain("Every migration ran").And.Contain("commit refused");
+
+        var during = runner.Fail(migrations, 1, commit);
+        during.Migration.Should().BeSameAs(migrations[1]);
+    }
+
     private static Runner NewRunner(FakeStore store, params long[] versions)
     {
         var runner = new Runner(store);
@@ -164,22 +190,50 @@ public class MigrationRunnerLogicTests
     }
 
     [Fact]
-    public void GetMigrationsToExecute_up_selects_open_lower_closed_upper_ascending()
+    public void GetMigrationsToExecute_up_selects_the_unapplied_up_to_the_target_ascending()
     {
-        var runner = NewRunner(new FakeStore(), 1, 2, 3, 4);
+        // SH-M182 (TASK-152): inverted from "version > from && version <= to". Selection is by the applied set.
+        var store = new FakeStore { Current = 1 };
+        store.Applied.Add(1);
+        var runner = NewRunner(store, 1, 2, 3, 4);
 
-        // Up: version > from && version <= to
-        runner.Selection(1, 3, MigrationDirection.Up).Select(m => m.Version)
-            .Should().ContainInOrder(2L, 3L).And.HaveCount(2);
+        runner.Selection(1, 3, MigrationDirection.Up).Select(m => m.Version).Should().Equal(2L, 3L);
     }
 
     [Fact]
-    public void GetMigrationsToExecute_down_selects_closed_upper_open_lower_descending()
+    public void A_back_dated_pending_migration_is_run_by_Migrate()
     {
-        var runner = NewRunner(new FakeStore(), 1, 2, 3, 4);
+        // SH-M182: applied {1, 5}, v3 added later (a merged branch). GetPendingMigrations listed it and Migrate never
+        // ran it, because current = MAX(applied) = target.
+        var store = new FakeStore { Current = 5 };
+        store.Applied.UnionWith(new[] { 1L, 5L });
+        var runner = NewRunner(store, 1, 3, 5);
 
-        // Down: version <= from && version > to (from=3,to=1 → 2,3 → reversed 3,2)
-        runner.Selection(3, 1, MigrationDirection.Down).Select(m => m.Version)
-            .Should().ContainInOrder(3L, 2L).And.HaveCount(2);
+        runner.GetPendingMigrations().Select(m => m.Version).Should().Equal(3L);
+        runner.Selection(5, 5, MigrationDirection.Up).Select(m => m.Version).Should().Equal(3L);
+        runner.Migrate().Success.Should().BeTrue();
+        runner.LastExecute.Should().NotBeNull("the pending v3 is executed");
+    }
+
+    [Fact]
+    public void Rollback_runs_Down_only_for_applied_migrations()
+    {
+        // SH-M183: applied {1, 5}, registered {1, 3, 5}. Rollback(0) ran Down for 3 as well, undoing what its Up never did.
+        var store = new FakeStore { Current = 5 };
+        store.Applied.UnionWith(new[] { 1L, 5L });
+        var runner = NewRunner(store, 1, 3, 5);
+
+        runner.Selection(5, 0, MigrationDirection.Down).Select(m => m.Version).Should().Equal(5L, 1L);
+    }
+
+    [Fact]
+    public void GetMigrationsToExecute_down_selects_applied_in_range_descending()
+    {
+        var store = new FakeStore { Current = 3 };
+        store.Applied.UnionWith(new[] { 1L, 2L, 3L });
+        var runner = NewRunner(store, 1, 2, 3, 4);
+
+        // Down: applied && version <= from && version > to (from=3, to=1 → 3, 2)
+        runner.Selection(3, 1, MigrationDirection.Down).Select(m => m.Version).Should().Equal(3L, 2L);
     }
 }

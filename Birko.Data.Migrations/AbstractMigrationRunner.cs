@@ -120,6 +120,21 @@ namespace Birko.Data.Migrations
         }
 
         /// <summary>
+        /// The exception a runner throws when a run fails, blaming the migration that was executing.
+        /// </summary>
+        /// <remarks>
+        /// SH-M172 (TASK-152): runners blamed <c>migrations[executed.Count]</c>, which is past the end when the failure
+        /// comes after every migration ran (a transaction's <c>Commit</c>), so an ArgumentOutOfRangeException thrown
+        /// inside the catch replaced the real failure. MongoMigrationRunner guarded it (CR-H063); the others did not.
+        /// </remarks>
+        protected static Exceptions.MigrationException RunFailed(
+            IReadOnlyList<IMigration> migrations, int executedCount, MigrationDirection direction, string message, Exception inner)
+            => executedCount < migrations.Count
+                ? new Exceptions.MigrationException(migrations[executedCount], direction, message, inner)
+                : new Exceptions.MigrationException(
+                    $"{message} Every migration ran; the failure came after them ({inner.GetType().Name}: {inner.Message}).", inner);
+
+        /// <summary>
         /// Asynchronously initializes the migration runner and store.
         /// </summary>
         public virtual async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -142,14 +157,16 @@ namespace Birko.Data.Migrations
             var current = CurrentVersion;
             var target = targetVersion ?? LatestVersion;
 
-            if (target == current)
-            {
-                return MigrationResult.Successful(current, current, MigrationDirection.Up, Array.Empty<ExecutedMigration>());
-            }
-
             if (target < current)
             {
                 return MigrationResult.Failed(current, MigrationDirection.Up, $"Target version {target} is less than current version {current}. Use Rollback for downgrades.");
+            }
+
+            // Nothing to run is decided by the selection, not by target == current: a back-dated pending migration
+            // sits below the current version (SH-M182).
+            if (GetMigrationsToExecute(current, target, MigrationDirection.Up).Count == 0)
+            {
+                return MigrationResult.Successful(current, target, MigrationDirection.Up, Array.Empty<ExecutedMigration>());
             }
 
             return ExecuteMigrations(current, target, MigrationDirection.Up);
@@ -166,14 +183,15 @@ namespace Birko.Data.Migrations
             var current = await Store.GetCurrentVersionAsync(cancellationToken).ConfigureAwait(false);
             var target = targetVersion ?? LatestVersion;
 
-            if (target == current)
-            {
-                return MigrationResult.Successful(current, current, MigrationDirection.Up, Array.Empty<ExecutedMigration>());
-            }
-
             if (target < current)
             {
                 return MigrationResult.Failed(current, MigrationDirection.Up, $"Target version {target} is less than current version {current}. Use Rollback for downgrades.");
+            }
+
+            // See Migrate (SH-M182).
+            if (GetMigrationsToExecute(current, target, MigrationDirection.Up).Count == 0)
+            {
+                return MigrationResult.Successful(current, target, MigrationDirection.Up, Array.Empty<ExecutedMigration>());
             }
 
             return await ExecuteMigrationsAsync(current, target, MigrationDirection.Up, cancellationToken).ConfigureAwait(false);
@@ -265,9 +283,14 @@ namespace Birko.Data.Migrations
         /// </summary>
         protected IReadOnlyList<IMigration> GetMigrationsToExecute(long fromVersion, long toVersion, MigrationDirection direction)
         {
+            // SH-M182 / SH-M183 (TASK-152): selected from the APPLIED SET, as GetPendingMigrations is. By version range
+            // alone, a migration added with a version below the current one (a merged branch) was listed as pending
+            // and never run, because current = MAX(applied); and a rollback ran Down for every registered version in
+            // the range, including ones never applied, undoing changes their Up never made.
+            var applied = Store.GetAppliedVersions();
             IEnumerable<IMigration> query = direction == MigrationDirection.Up
-                ? _migrations.Where(m => m.Version > fromVersion && m.Version <= toVersion)
-                : _migrations.Where(m => m.Version <= fromVersion && m.Version > toVersion);
+                ? _migrations.Where(m => !applied.Contains(m.Version) && m.Version <= toVersion)
+                : _migrations.Where(m => applied.Contains(m.Version) && m.Version <= fromVersion && m.Version > toVersion);
 
             // Reverse order for Down migrations
             return direction == MigrationDirection.Up

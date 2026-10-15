@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Migrations: back-dated migrations run, filters refuse what they cannot express, nothing reports false success (2026-10-15)
+
+[[TASK-152]]. A migration added below the current version never ran; a rollback ran `Down` for unapplied ones. `$in` was
+equality and null matched nothing on SQL. Every backend now shares one filter reader, refuses unknown operators, and
+reads null as MongoDB does. InfluxDB, ES, RavenDB and Cosmos report what they cannot do. RavenDB/Cosmos indexes are built.
 ### Index drift on MongoDB, RavenDB and Cosmos DB, and a health check for it (2026-10-15)
 
 [[TASK-635]]. `IndexDeclarationDriftDetector` compares the `IndexDefinition`s a host declares with a store's index manager:
@@ -330,12 +335,6 @@ a negative offset. Three engine divergences are now [[TASK-144]].
 use. An empty `PropertyUpdate` rewrote every matched row on the portable path. A row deleted mid-`Update(filter,
 action)` aborted the loop halfway; it is skipped. Two `Set`s of one property are last-wins on SQL too, and a nested
 `Set` is refused. Atomic bulk writes by default are [[TASK-629]].
-### Schema and index metadata: 19 medium defects fixed (2026-10-15)
-
-[[TASK-154]]. A `char` or `byte`-enum column threw on every read or write, and a get-only property broke every read.
-An inherited `[IndexedField]` created the index on one table only. The index managers misreported uniqueness,
-direction and other schemas. `LoadTable` returns no null (throws; `TryLoadTable` for null), and ElasticSearch index
-management no longer reads a failed request as "absent". Spawned [[TASK-627]] and [[TASK-628]].
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

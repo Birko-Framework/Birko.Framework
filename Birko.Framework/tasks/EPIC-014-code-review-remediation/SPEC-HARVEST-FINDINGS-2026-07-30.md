@@ -2297,11 +2297,15 @@ Reference/collection fields are guarded (copy only if non-empty/non-null) but ev
 
 `../Birko.Data.Migrations.SQL/SqlMigrationRunner.cs:113`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). `SqlMigrationRunner.ExecuteWithTransaction` calls `Commit()` inside the try, so a commit failure reached `migrations[executed.Count]` with `executed.Count == migrations.Count` and an ArgumentOutOfRangeException replaced it (the non-transaction path and the other runners could not reach that state, but shared the expression). New `AbstractMigrationRunner.RunFailed` is the one producer of the blame, used by all seven runners (Mongo's CR-H063 guard moved into it).
+
 transaction.Commit() (line 99) is inside the try. If it throws, executed.Count == migrations.Count, so `migrations[executed.Count]` raises ArgumentOutOfRangeException from inside the catch — the commit failure is replaced by an index error and no MigrationException is built. MongoMigrationRunner guards exactly this (line 104); SQL and ExecuteWithoutTransaction (line 141) kept the unguarded form.
 
 #### SH-M173 — SqlIndexBuilder discards Unique() on the connector path
 
 `../Birko.Data.Migrations.SQL/Context/SqlSchemaBuilder.cs:320`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed earlier** (TASK-152, 2026-10-15, by reading). TASK-246 set `Unique = _unique` on the connector path (`SqlSchemaBuilder.SqlIndexBuilder.Build`, comment at the line), and TASK-259 removed the raw-SQL fallback.
 
 The connector path builds `new IndexDefinition { Name = _indexName }` and never sets Unique, although AbstractConnectorBase.CreateIndexSql:342 honours `index.Unique`. The raw-SQL fallback (line 336) does emit CREATE UNIQUE INDEX. So CreateIndex(...).Unique().Build() yields a non-unique index whenever a connector is supplied — and SqlMigrationRunner always supplies one, so the constraint is silently absent in production.
 
@@ -2309,11 +2313,15 @@ The connector path builds `new IndexDefinition { Name = _indexName }` and never 
 
 `../Birko.Data.Migrations.CosmosDB/Context/CosmosDBSchemaBuilder.cs:146`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). `CreateCollection` created the container on `/id` before any `WithField`, and `_partitionKeyPath` was written and never read. The container is now created by `Build()`, and a primary field that is not the document id (`id` / `Guid`) is refused, as is a unique field: the stores address only `/id` (TASK-614), and a unique key rejects nothing there (TASK-628). Live on the emulator: nothing exists before Build, a `TenantId` primary is refused with no container created.
+
 CreateCollection creates the container with the hard-coded path "/id" (line 22) BEFORE returning the builder, and CosmosCollectionBuilder never overrides Build(). `_partitionKeyPath` is written by both WithField overloads (lines 164, 173) and read by nothing, so WithField(..., isPrimary: true) silently yields a container partitioned on /id — and a Cosmos partition key cannot be changed afterwards.
 
 #### SH-M175 — Unrecognised filter operators degrade to equality instead of failing
 
 `../Birko.Data.Migrations.SQL/Context/SqlDataMigrator.cs:163`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). `_ => "="` held in all four translators, with arrays rendered as their JSON text. One shared reader now, `MigrationFilterTerms.Parse` (Birko.Data.Migrations.Context): `$eq $ne $gt $gte $lt $lte`, anything else, an array or object value, and a null in an ordering comparison refused with `NotSupportedException`. Live on SQLite, PostgreSQL, MySQL, SQL Server, RavenDB, ElasticSearch and the Cosmos emulator: `$in` throws.
 
 `_ => "="` appears in SqlDataMigrator:163, ElasticSearchDataMigrator:208, RavenDBDataMigrator:156 and CosmosDBDataMigrator:227. Combined with ExtractValue's `_ => element.ToString()` for arrays, {"tags":{"$in":["a","b"]}} becomes tags = '["a","b"]' (matches nothing), while $exists/$regex/$not become equality against their operand. UpdateDocuments/DeleteDocuments then hit the wrong rows with no error.
 
@@ -2321,11 +2329,15 @@ CreateCollection creates the container with the hard-coded path "/id" (line 22) 
 
 `../Birko.Data.Migrations.SQL/Context/SqlDataMigrator.cs:162`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED-WIDER, fixed** (TASK-152, measured 2026-10-15). Wider: a bare `{"x": null}` bound `x = NULL` too, and Raven's `= null`, Cosmos's `= null` / `!= v` and ElasticSearch's null TermQuery (conditionless in NEST, so dropped) each missed the document without the field. Null now means what it means in MongoDB on every backend (`{x:null}` = null or absent, `$ne null` = has a value, `$ne v` also matches absent): SQL `IS NULL` / `IS NOT NULL` / `(x <> @p OR x IS NULL)`, Cosmos `IS_DEFINED`/`IS_NULL`, Raven `exists()`, ES `exists`. Measured live on all seven.
+
 ParseFilterToWhere maps $ne to `<>` and AddParameter turns null into DBNull.Value, so {"deletedAt":{"$ne":null}} renders `"deletedAt" <> @p0` bound to NULL — three-valued logic matches zero rows instead of IS NOT NULL. MongoDB handles $ne null natively and CosmosDB's `!= null` evaluates correctly, so the identical filter means different things per backend.
 
 #### SH-M177 — SQL tracking table is ANSI-double-quoted on every provider, breaking MySQL
 
 `../Birko.Data.Migrations.SQL/Settings/SqlMigrationSettings.cs:56`
+
+**Verdict: CONFIRMED, fixed earlier** (TASK-152, 2026-10-15, by reading). The tracking table is quoted through `AbstractConnectorBase.QuoteIdentifier` (`SqlMigrationStore.Quote`, line 400); the settings-level quoter is gone (comment at `SqlMigrationSettings.cs:45`).
 
 SqlMigrationSettings.QuoteIdentifier hardcodes `"` and is never overridden (no provider-specific migration settings type exists); SqlMigrationStore's _quoteOpen/_quoteClose also default to `"` and SqlMigrationRunner:46 builds the store without provider quotes, though AbstractConnectorBase.QuoteIdentifier is available and MySQLConnector:89 uses backticks. On MySQL (ANSI_QUOTES off by default) `CREATE TABLE "__Migrations" ("Version" ...)` is a syntax error, so Initialize() cannot provision the table.
 
@@ -2333,11 +2345,15 @@ SqlMigrationSettings.QuoteIdentifier hardcodes `"` and is never overridden (no p
 
 `../Birko.Data.Migrations.SQL/SqlMigrationStore.cs:266`
 
+**Verdict: CONFIRMED, fixed earlier** (TASK-152, 2026-10-15, by reading). `CreateMigrationsTable` emits each column through the connector's own type mapping (`ColumnDefinition`, `SqlMigrationStore.cs:338`), measured on all four providers per its comment.
+
 CreateMigrationsTable emits `CreatedAt TIMESTAMP NOT NULL` / `AppliedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP` for every provider. On MSSql, TIMESTAMP is a synonym for rowversion — it cannot be NOT NULL with a CURRENT_TIMESTAMP default — so the CREATE TABLE fails and MSSql consumers cannot initialize the store, despite SqlMigrationRunner accepting any AbstractConnector. The DDL is only valid on SQLite/PostgreSQL.
 
 #### SH-M179 — SqlSchemaBuilder sets the connector's external transaction and never clears it
 
 `../Birko.Data.Migrations.SQL/Context/SqlSchemaBuilder.cs:116`
+
+**Verdict: CONFIRMED, fixed earlier** (TASK-152, 2026-10-15, by reading). Every DDL entry point enters a self-restoring `EnterAmbientBoundary()` scope (`SqlSchemaBuilder.cs:73` ff.), so nothing is left on the shared connector.
 
 EnsureExternalTransaction (also called from SqlCollectionBuilder.Build:225 and SqlIndexBuilder.Build:319) calls _connector.SetExternalTransaction(connection, transaction), which stores connector-wide state (AbstractConnector.cs:85). Nothing resets it. The connector is the shared instance from the caller's store, so after the runner disposes its connection/transaction, every later connector command takes the RunCommandWithExternalTransaction path against a disposed connection — normal store CRUD then fails for the rest of the process.
 
@@ -2345,11 +2361,15 @@ EnsureExternalTransaction (also called from SqlCollectionBuilder.Build:225 and S
 
 `../Birko.Data.Migrations.SQL/Context/SqlSchemaBuilder.cs:162`
 
+**Verdict: CONFIRMED, fixed earlier** (TASK-152, 2026-10-15, by reading). TASK-247 removed `FormatValue` with the raw-SQL fallbacks it served (`SqlSchemaBuilder.cs:221`); DDL goes through the connector.
+
 FormatValue falls through to `value.ToString()` for numerics, so a decimal/double DefaultValue renders as "1,5" under a comma-decimal culture (this repo's own machine is sk-SK), producing `DEFAULT 1,5` — a syntax error or a two-column parse. The DateTime branch (line 160) uses `:` in the custom format, which is the culture's TimeSeparator placeholder, so the timestamp literal also varies by culture. No CultureInfo.InvariantCulture anywhere.
 
 #### SH-M181 — CollectionExists queries INFORMATION_SCHEMA.TABLES with no schema/catalog filter
 
 `../Birko.Data.Migrations.SQL/Context/SqlSchemaBuilder.cs:53`
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). The query matched `TABLE_NAME` only. New `AbstractConnectorBase.TableExistsSql`, one per provider, scoped as its DDL resolves a bare name: SQLite `sqlite_master`, MySQL `TABLE_SCHEMA = DATABASE()`, SQL Server `TABLE_SCHEMA = SCHEMA_NAME()`, PostgreSQL `to_regclass(quote_ident(...))` (search_path). Live: a same-named table in another schema (PostgreSQL, SQL Server) or database (MySQL) no longer counts; one in the right place does.
 
 `SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @tableName` matches any schema (MSSql/PostgreSQL) or any database on the server (MySQL, where INFORMATION_SCHEMA spans all schemas). A migration guarded by `if (!Schema.CollectionExists("Orders")) CreateCollection(...)` skips creation because an unrelated database has an Orders table, then records the migration as applied with no table created.
 
@@ -2357,11 +2377,15 @@ FormatValue falls through to `value.ToString()` for numerics, so a decimal/doubl
 
 `../Birko.Data.Migrations/AbstractMigrationRunner.cs:239`
 
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). `GetMigrationsToExecute` now selects from the applied set (Up: not applied and `<= target`), and `Migrate` decides "nothing to run" from that selection rather than `target == current`, so a back-dated migration listed by `GetPendingMigrations` is run, in version order.
+
 GetMigrationsToExecute selects `Version > fromVersion && Version <= toVersion` where fromVersion is Store.GetCurrentVersion() (the MAX applied version). With applied {1,5} and a newly added migration v3, GetPendingMigrations() (line 203, computed against the applied SET) lists v3, but Migrate() computes current=5, target=5 and returns the already-at-target success result — v3 never executes. The two selection rules in the same class disagree.
 
 #### SH-M183 — Rollback executes Down for migrations that were never applied
 
 `../Birko.Data.Migrations/AbstractMigrationRunner.cs:240`
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). Down selects only applied versions in `(target, current]`; with applied {1,5} and registered {1,3,5}, `Rollback(0)` runs 5 and 1.
 
 The Down branch selects `Version <= fromVersion && Version > toVersion` and never consults Store.GetAppliedVersions(). With applied {1,5} and registered {1,3,5}, Rollback(0) runs Down for 5, 3 and 1 — v3's Down executes destructive DDL/deletes for changes its Up never made, and on backends with no batch atomicity (ES/Raven/Cosmos/Influx, and Mongo outside a replica set) the earlier steps stay committed.
 
@@ -2369,11 +2393,15 @@ The Down branch selects `Version <= fromVersion && Version > toVersion` and neve
 
 `../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs:138`
 
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). `CountDocuments` read one page; it now sums every page. Live: 25 documents, filtered 13.
+
 It calls iterator.ReadNextAsync() exactly once (no `while (iterator.HasMoreResults)` loop, unlike every other method in the file) and returns response.FirstOrDefault(). A cross-partition `SELECT VALUE COUNT(1)` aggregate can return an empty first page while the query pipeline drains partitions, so the count silently comes back 0 and a migration guarded by `if (CountDocuments(...) == 0)` proceeds as though the container were empty.
 
 #### SH-M185 — CosmosDB SQL literals use SQL-style '' escaping and culture-sensitive numbers
 
 `../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs:246`
+
+**Verdict: CONFIRMED, fixed earlier** (TASK-152, 2026-10-15, by reading). TASK-450 replaced `FormatSqlValue` with bound parameters (`BindValue`, `CosmosDBDataMigrator.cs`), so neither the escaping nor the culture reaches the text.
 
 FormatSqlValue escapes a quote by doubling it (`s.Replace("'", "''")`), but Cosmos DB SQL follows JSON string rules and escapes with a backslash — `'O''Brien'` parses as two adjacent literals and the query fails. Line 249 falls through to `value.ToString()` for the long/double produced by ExtractValue, so a non-invariant culture emits `c["x"] = 1,5`. Both paths feed the WHERE clause of DeleteDocuments/UpdateDocuments.
 
@@ -2381,11 +2409,15 @@ FormatSqlValue escapes a quote by doubling it (`s.Replace("'", "''")`), but Cosm
 
 `../Birko.Data.Migrations.CosmosDB/CosmosMigrationStore.cs:136`
 
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). Record and Remove now go through `UpdateState`, which replaces with `IfMatchEtag` and re-reads on 412 (jittered, up to 50 attempts).
+
 RecordMigration reads the state item, mutates the dictionary and calls ReplaceItemAsync with no ItemRequestOptions.IfMatchEtag. Two processes (or two pods at startup) recording different versions concurrently overwrite each other's document wholesale, so one applied version is lost and that migration is re-executed on the next Migrate(). RemoveMigration (line 166) has the same hole.
 
 #### SH-M187 — RavenDB migration state is saved without optimistic concurrency, losing records
 
 `../Birko.Data.Migrations.RavenDB/RavenMigrationStore.cs:120`
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). Record and Remove save with `UseOptimisticConcurrency` and reload on `ConcurrencyException`. Live: 20 versions recorded by 8 concurrent writers are all kept (10 attempts were measured too few under that contention; 50, jittered).
 
 RecordMigration loads the single MigrationsStateDocument, sets one key and SaveChanges() without enabling session.Advanced.UseOptimisticConcurrency or passing a change vector (Raven's default is last-write-wins). Two concurrent recorders each write the document they loaded, so one version silently disappears from AppliedMigrations and that migration is re-run.
 
@@ -2393,11 +2425,15 @@ RecordMigration loads the single MigrationsStateDocument, sets one key and SaveC
 
 `../Birko.Data.Migrations.InfluxDB/InfluxMigrationStore.cs:176`
 
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). The delete window started at `CreatedAt - 1 minute`. `RemoveMigration` now finds the version's own points, deletes each at its exact timestamp by its tags, and throws if any remain. Live: a version recorded with a CreatedAt three days back is removed by a migration object constructed now. Also fixed: the reads used `range(start: -10y)`, so a migration with an old fixed CreatedAt read as never applied; now from the epoch (measured with 2012).
+
 The delete range is [migration.CreatedAt - 1 minute, UtcNow], but AbstractMigration.CreatedAt is DateTime.UtcNow at object construction — in a later process (the normal rollback case) that is "now", while the point was written with the original run's CreatedAt, days earlier. The delete matches nothing, RemoveMigration reports success, and the version stays applied so Rollback can never progress past it (and re-running Rollback re-executes Down).
 
 #### SH-M189 — InfluxDB version points are keyed by name tag, not version, so records collide
 
 `../Birko.Data.Migrations.InfluxDB/InfluxMigrationStore.cs:146`
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). A `version` tag joins `name`, so two versions sharing a name and a millisecond are two points; the delete matches the version's own tags. Live: both recorded, one removed, the other kept.
 
 RecordMigration puts `name` in a tag and `version` in a field, so point identity is measurement+name+timestamp. Only Version must be unique across registered migrations (AbstractMigrationRunner:58 checks Version only), so two migrations sharing a Name and constructed in the same millisecond overwrite each other and one applied version is silently lost. Conversely RemoveMigration's predicate filters on `name` alone (line 174), deleting the records of every version sharing that name.
 
@@ -2405,11 +2441,15 @@ RecordMigration puts `name` in a tag and `version` in a field, so point identity
 
 `../Birko.Data.Migrations.InfluxDB/InfluxMigrationStore.cs:183`
 
+**Verdict: CONFIRMED, fixed earlier** (TASK-152, 2026-10-15, by reading). TASK-618 removed the catch; the delete is awaited and a refusal propagates (comment at `RemoveMigration`).
+
 The catch is justified as "already deleted", but an auth failure, missing bucket or server error is the same exception type. On rollback the runner treats the removal as done, so the version row survives while Down has already run — the database is downgraded but still reports the migration as applied, and the next Migrate() will not re-apply it.
 
 #### SH-M191 — InfluxDB UpdateDocuments is a silent no-op that records the migration as applied
 
 `../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs:22`
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). `UpdateDocuments` now throws `NotSupportedException` (points are immutable).
 
 The method body is only a comment. A data migration written against the neutral IDataMigrator contract (`context.Data.UpdateDocuments(...)`) performs no write, throws nothing, and InfluxMigrationRunner then records the version — so the migration is permanently marked applied with none of its effect. Every other backend either performs the update or throws (RavenDB.CopyData and ElasticSearch.CopyData use NotSupportedException for exactly this reason).
 
@@ -2417,11 +2457,15 @@ The method body is only a comment. A data migration written against the neutral 
 
 `../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs:56`
 
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). A filtered `CountDocuments` is refused (a delete predicate is not a Flux filter, so there is nothing to translate to); the unfiltered count reads from the epoch, and the bucket name is escaped into the Flux.
+
 The Flux query hardcodes `filter(fn: (r) => true)` and the filterJson parameter is never read, so CountDocuments("readings", "{\"host\":\"a\"}") returns the total record count of the bucket. A migration branching on that count ("only backfill if the filtered set is empty") takes the wrong branch with no error. DeleteDocuments in the same class throws NotSupportedException for a JSON filter rather than ignoring it, so the class is internally inconsistent.
 
 #### SH-M193 — InfluxDB DeleteDocuments silently does nothing when the bucket is not found
 
 `../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs:38`
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). A bucket that is not found throws `InvalidOperationException` instead of skipping the delete.
 
 `if (bucket != null)` wraps the entire delete; a misspelled or not-yet-created collection name means the whole call is skipped with no exception, and the runner records the migration as applied. The bucket lookup is an exact-name FirstOrDefault over FindBucketsAsync(), so any lookup shortfall reads as "nothing to delete" — a destructive step reporting success without acting.
 
@@ -2429,11 +2473,15 @@ The Flux query hardcodes `filter(fn: (r) => true)` and the filterJson parameter 
 
 `../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs:108`
 
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). CopyData now writes each record as its field (`_field` = `_value`) with its non-underscore columns as tags (not `result` / `table`), and no longer adds the reserved `_original_bucket` tag. Live: the copy reads back as `cpu,host=a usage=0.5`.
+
 The loop over record.Values skips only _measurement/_time/_start/_stop, so `_field` (a string) is written as a TAG named "_field", `_value` becomes a field literally named "_value", and the pivot columns `result`/`table` are copied too. The target bucket ends up with points whose real field name is a tag value under a reserved key rather than a reconstruction of the source series. BulkInsert (line 151) correctly skips every key starting with "_"; CopyData does not.
 
 #### SH-M195 — InfluxDB BulkInsert silently drops documents whose values are all strings
 
 `../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs:175`
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). A document that yields no field (strings only) is refused with `NotSupportedException` instead of being dropped by the client.
 
 ApplyValue maps every string to point.Tag(...) and only bool/integral/floating values to Field(...). A document of purely string values therefore produces a point with tags and no fields, which the InfluxDB client renders as no line protocol at all — the document is dropped with no exception and the migration is recorded as applied. Every other backend writes a string-only document intact.
 
@@ -2441,11 +2489,15 @@ ApplyValue maps every string to point.Tag(...) and only bool/integral/floating v
 
 `../Birko.Data.Migrations.SQL/Context/SqlDataMigrator.cs:86`
 
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). `MigrationFilter.RefuseTransform` (one producer): SQL, Cosmos DB and InfluxDB refuse a transform they cannot apply.
+
 SqlDataMigrator.CopyData accepts transformJson and never reads it (emitting a plain INSERT INTO ... SELECT *); CosmosDBDataMigrator:142 and InfluxDBDataMigrator:83 do the same. MongoDataMigrator:56 honours it and ElasticSearch/RavenDB throw NotSupportedException. So the identical neutral call yields transformed data, an exception, or untransformed data presented as success depending on backend — the third case writes wrong data and records the migration as applied.
 
 #### SH-M197 — ElasticSearch CountDocuments returns 0 on an invalid response
 
 `../Birko.Data.Migrations.ElasticSearch/Context/ElasticSearchDataMigrator.cs:85`
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). `CountDocuments` now calls `EnsureValid`. Live: a count on a missing index throws instead of answering 0.
 
 `return response.Count;` is the only call in the file that skips EnsureValid. A missing index, auth failure or malformed query yields an invalid response whose Count is 0, so a migration guarded by `if (context.Data.CountDocuments(...) == 0)` proceeds as though the index were empty — e.g. re-seeding data that already exists.
 
@@ -2453,11 +2505,15 @@ SqlDataMigrator.CopyData accepts transformJson and never reads it (emitting a pl
 
 `../Birko.Data.Migrations.ElasticSearch/Context/ElasticSearchDataMigrator.cs:47`
 
+**Verdict: CONFIRMED, fixed (by reading, not reproduced)** (TASK-152, 2026-10-15, by reading). `EnsureValid` now also throws when an `UpdateByQueryResponse` / `DeleteByQueryResponse` reports version conflicts or failures. Not reproduced live (a version conflict needs a concurrent writer mid-request); the check is on fields NEST populates from the response body.
+
 EnsureValid only checks response.IsValid. An _update_by_query / _delete_by_query that completes with version conflicts or shard-level Failures returns a VALID response with a non-empty Failures list, so a partially-applied bulk mutation passes the check and the migration is recorded as applied. BulkInsert (line 132) explicitly inspects Errors/ItemsWithErrors, so the same file enforces the invariant on one path and not the others.
 
 #### SH-M199 — ElasticSearch RenameField discards the _update_by_query response
 
 `../Birko.Data.Migrations.ElasticSearch/Context/ElasticSearchSchemaBuilder.cs:72`
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). The rename response is checked with `EnsureValid`, both names are script params (`ctx._source[params.newName] = ctx._source.remove(params.oldName)`), and only documents that have the old field are touched. `BuildPainlessSource` had the same interpolation of field names and is fixed with it. Live: `first name` -> `given 'name'` on the two documents that had it, none added to the third; a missing index throws.
 
 The UpdateByQuery result is never assigned or checked for IsValid, so a rejected script (missing index, mapping conflict, painless compile error) leaves every document unrenamed while the migration completes and its version is recorded. ElasticSearchDataMigrator.EnsureValid exists for exactly this reason but the schema builder does not use it. The field names are also interpolated raw into the Painless source, so a name containing a quote breaks or alters the script.
 
@@ -2465,11 +2521,15 @@ The UpdateByQuery result is never assigned or checked for IsValid, so a rejected
 
 `../Birko.Data.Migrations.ElasticSearch/Context/ElasticSearchSchemaBuilder.cs:146`
 
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). TASK-274 had turned the silent no-op into a refusal on all four. Now RavenDB and Cosmos DB `Build()` create the index through their index managers (a generated map; the TASK-628 name registry), each refusing what it cannot express (Unique on both); ElasticSearch and InfluxDB keep the refusal (no field index to create). Live: `IX_Code` exists by name after a migration's Build on both.
+
 IIndexBuilder.Build() is a default no-op interface method (Birko.Data.Patterns/Schema/IIndexBuilder.cs:19) and none of ElasticIndexBuilder, RavenIndexBuilder (RavenDBSchemaBuilder.cs:142), CosmosIndexBuilder (CosmosDBSchemaBuilder.cs:216) or InfluxIndexBuilder (InfluxDBSchemaBuilder.cs:131) overrides it. A migration that declares an index runs to completion, records its version, and creates nothing; the _fields list and Unique() flag go into an `internal bool IsUnique` nothing reads.
 
 #### SH-M201 — Migrations index maps Version as keyword, so the descending sort is lexicographic
 
 `../Birko.Data.Migrations.ElasticSearch/ElasticSearchMigrationStore.cs:45`
+
+**Verdict: CONFIRMED, fixed** (TASK-152, measured 2026-10-15). A new migrations index maps `Version` as `long` (measured in the mapping). An existing keyword-mapped index cannot change type in place, so `GetAppliedVersions` no longer depends on the sort: it refuses a result whose total exceeds what was read, instead of keeping a lexicographic top 10,000.
 
 `.Keyword(k => k.Name(n => n.Version))` maps the long Version as a string, so the `.Sort(sort => sort.Descending(f => f.Version))` at line 85 orders "9" above "10". The CR-M105 comment states the sort exists so a Size(10000) truncation keeps the NEWEST versions; with keyword ordering it keeps the lexicographically largest instead, so past 10 000 applied migrations GetCurrentVersion() can report a lower version and Migrate() re-runs the gap.
 
@@ -2477,17 +2537,23 @@ IIndexBuilder.Build() is a default no-op interface method (Birko.Data.Patterns/S
 
 `../Birko.Data.Migrations.ElasticSearch/ElasticSearchMigrationStore.cs:73`
 
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-152, measured 2026-10-15). The read path was fixed by SH-H029; `Initialize` still read a failed Exists as absent and ignored the create's response. Both are checked now (an already-exists race is accepted). Offline: an unreachable cluster fails initialisation.
+
 `_client.Indices.Exists(indexName).Exists` returns false both when the index is missing and when the request itself fails (auth, cluster unavailable), because Nest surfaces failures as an invalid response with Exists == false. GetAppliedVersions then returns an empty set (a second path to the same wrong answer as line 88), and Initialize() at line 35 attempts to create an index that already exists.
 
 #### SH-M203 — MongoDB index builder discards Sparse(), WithProperty() and the field type
 
 `../Birko.Data.Migrations.MongoDB/Context/MongoSchemaBuilder.cs:131`
 
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-152, measured 2026-10-15). `Sparse` was fixed and `WithProperty` refused by TASK-274; the field type was still dropped. The builder now takes its keys from `MongoDBIndexManager.KeysFor`, the manager's own producer. Live: text and hashed migration indexes read back as such.
+
 Sparse() and WithProperty() are `=> this` and IndexFieldType is recorded but never used (Build at line 147 only sets Name and Unique, always Ascending/Descending). MongoDB natively supports sparse, TTL, partial and text/geo/hashed indexes, so `CreateIndex(...).WithField("email").Unique().Sparse().Build()` silently produces a DENSE unique index — which then rejects every second document missing that field with a duplicate-key error on null.
 
 #### SH-M204 — Continuous-aggregate DDL hardcodes a bucket column literally named "time"
 
 `../Birko.Data.Migrations.TimescaleDB/TimescaleDBMigration.cs:139`
+
+**Verdict: CONFIRMED, fixed earlier** (TASK-152, 2026-10-15, by reading). TASK-255 made the bucketing column the validated `timeColumn` parameter (`TimescaleDBMigration.BuildContinuousAggregateSql`, line 454).
 
 BuildContinuousAggregateSql emits `time_bucket('{timeBucket}', time)` with no parameter for the time column, so CreateContinuousAggregate fails on any hypertable whose timestamp column is named recorded_at/ts/created_at. BuildCompressionPolicySql immediately above was fixed for exactly this class of hardcoding (CR-H070 made orderByColumn a parameter); the aggregate helper was left behind.
 

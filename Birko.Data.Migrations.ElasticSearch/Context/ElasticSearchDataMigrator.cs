@@ -68,6 +68,9 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
                 return descriptor;
             });
 
+            // SH-M197 (TASK-152): the one call in this file that skipped the check. A missing index or a failed request
+            // answers Count = 0, which a migration guarded by "== 0" reads as an empty index (and re-seeds it).
+            EnsureValid(response, $"Count on index '{collection}'");
             return response.Count;
         }
 
@@ -138,13 +141,29 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
         /// (mapping/version conflict, reindex error, partial bulk failure) would be silently swallowed
         /// and the migration recorded as applied (CR-H059). Mirrors ElasticSearchMigrationStore.
         /// </summary>
-        private static void EnsureValid(IResponse response, string operation)
+        internal static void EnsureValid(IResponse response, string operation)
         {
             if (response == null || !response.IsValid)
             {
                 throw new InvalidOperationException(
                     $"ElasticSearch migration step failed: {operation}. {response?.DebugInformation}",
                     response?.OriginalException);
+            }
+
+            // SH-M198 (TASK-152): a by-query call that hit version conflicts or per-document failures still answers a
+            // VALID response, so a partly applied update or delete passed and the migration was recorded. BulkInsert
+            // already inspected its item errors; these did not.
+            var (conflicts, failures) = response switch
+            {
+                UpdateByQueryResponse u => (u.VersionConflicts, u.Failures?.Count ?? 0),
+                DeleteByQueryResponse d => (d.VersionConflicts, d.Failures?.Count ?? 0),
+                _ => (0L, 0),
+            };
+            if (conflicts > 0 || failures > 0)
+            {
+                throw new InvalidOperationException(
+                    $"ElasticSearch migration step was only partly applied: {operation} reported {conflicts} version conflict(s) "
+                    + $"and {failures} failure(s).");
             }
         }
 
@@ -175,72 +194,41 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
         /// </summary>
         private static QueryContainer ParseFilter(string filterJson, out int termCount)
         {
-            using var doc = JsonDocument.Parse(filterJson);
+            // TASK-152: terms from the one shared reader (SH-M175). Null takes the filter dialect's meaning (SH-M176)
+            // through `exists`: a TermQuery with a null value is CONDITIONLESS in NEST and is dropped from the request,
+            // so {"x": null} would have left a must clause that constrains nothing.
             var mustClauses = new List<QueryContainer>();
-
-            foreach (var property in doc.RootElement.EnumerateObject())
+            foreach (var term in MigrationFilterTerms.Parse(filterJson))
             {
-                var fieldName = property.Name;
-
-                if (property.Value.ValueKind == JsonValueKind.Object)
+                var field = term.Field;
+                var exists = new QueryContainer(new ExistsQuery { Field = field });
+                mustClauses.Add(term.Operator switch
                 {
-                    foreach (var op in property.Value.EnumerateObject())
+                    MigrationFilterOperator.Equal when term.Value == null
+                        => new QueryContainer(new BoolQuery { MustNot = new[] { exists } }),
+                    MigrationFilterOperator.NotEqual when term.Value == null => exists,
+                    MigrationFilterOperator.Equal => new QueryContainer(new TermQuery { Field = field, Value = term.Value }),
+                    MigrationFilterOperator.NotEqual => new QueryContainer(new BoolQuery
                     {
-                        var value = ExtractValue(op.Value);
-                        switch (op.Name)
-                        {
-                            case "$gt":
-                                mustClauses.Add(new QueryContainer(new NumericRangeQuery
-                                {
-                                    Field = fieldName,
-                                    GreaterThan = ToRangeBound(value, fieldName, op.Name)
-                                }));
-                                break;
-                            case "$gte":
-                                mustClauses.Add(new QueryContainer(new NumericRangeQuery
-                                {
-                                    Field = fieldName,
-                                    GreaterThanOrEqualTo = ToRangeBound(value, fieldName, op.Name)
-                                }));
-                                break;
-                            case "$lt":
-                                mustClauses.Add(new QueryContainer(new NumericRangeQuery
-                                {
-                                    Field = fieldName,
-                                    LessThan = ToRangeBound(value, fieldName, op.Name)
-                                }));
-                                break;
-                            case "$lte":
-                                mustClauses.Add(new QueryContainer(new NumericRangeQuery
-                                {
-                                    Field = fieldName,
-                                    LessThanOrEqualTo = ToRangeBound(value, fieldName, op.Name)
-                                }));
-                                break;
-                            case "$ne":
-                                mustClauses.Add(new QueryContainer(new BoolQuery
-                                {
-                                    MustNot = new[] { new QueryContainer(new TermQuery { Field = fieldName, Value = value }) }
-                                }));
-                                break;
-                            default:
-                                mustClauses.Add(new QueryContainer(new TermQuery
-                                {
-                                    Field = fieldName,
-                                    Value = value
-                                }));
-                                break;
-                        }
-                    }
-                }
-                else
-                {
-                    mustClauses.Add(new QueryContainer(new TermQuery
+                        MustNot = new[] { new QueryContainer(new TermQuery { Field = field, Value = term.Value }) }
+                    }),
+                    MigrationFilterOperator.GreaterThan => new QueryContainer(new NumericRangeQuery
                     {
-                        Field = fieldName,
-                        Value = ExtractValue(property.Value)
-                    }));
-                }
+                        Field = field, GreaterThan = ToRangeBound(term.Value, field, "$gt")
+                    }),
+                    MigrationFilterOperator.GreaterThanOrEqual => new QueryContainer(new NumericRangeQuery
+                    {
+                        Field = field, GreaterThanOrEqualTo = ToRangeBound(term.Value, field, "$gte")
+                    }),
+                    MigrationFilterOperator.LessThan => new QueryContainer(new NumericRangeQuery
+                    {
+                        Field = field, LessThan = ToRangeBound(term.Value, field, "$lt")
+                    }),
+                    _ => new QueryContainer(new NumericRangeQuery
+                    {
+                        Field = field, LessThanOrEqualTo = ToRangeBound(term.Value, field, "$lte")
+                    }),
+                });
             }
 
             termCount = mustClauses.Count;
@@ -260,25 +248,17 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
             var sourceParts = new List<string>(keys.Count);
             for (var i = 0; i < keys.Count; i++)
             {
+                // TASK-152 (with SH-M199): the field NAME is a param too. It was interpolated as `ctx._source.{name}`, so a
+                // name with a quote, a dot or a space broke or altered the script.
                 var paramName = $"p{i}";
+                var fieldParam = $"f{i}";
                 scriptParams[paramName] = updates[keys[i]];
-                sourceParts.Add($"ctx._source.{keys[i]} = params.{paramName}");
+                scriptParams[fieldParam] = keys[i];
+                sourceParts.Add($"ctx._source[params.{fieldParam}] = params.{paramName}");
             }
             return string.Join("; ", sourceParts);
         }
 
-        private static object? ExtractValue(JsonElement element)
-        {
-            return element.ValueKind switch
-            {
-                JsonValueKind.String => element.GetString(),
-                JsonValueKind.Number => element.TryGetInt64(out var l) ? l : element.GetDouble(),
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.Null => null,
-                _ => element.ToString()
-            };
-        }
 
         /// <summary>
         /// Coerces a range-operator value to a double for a NumericRangeQuery, throwing a clear

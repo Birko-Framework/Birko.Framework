@@ -266,6 +266,9 @@ namespace Birko.Data.SQL.Connectors
         /// <summary>The reader drift uses for this provider's stored indexes (TASK-622).</summary>
         protected override Birko.Data.SQL.IndexManagement.SqlIndexManager? CreateIndexManager() => new Birko.Data.SQL.SQLite.IndexManagement.SqLiteIndexManager(this);
 
+        /// <inheritdoc />
+        public override string? TableExistsSql => "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @tableName";
+
         protected override string? StoredColumnsSql(string tableName)
         {
             var literal = SqlLiteral.EscapeLiteral(tableName);

@@ -116,26 +116,52 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
     public void RecordMigration(Data.Migrations.IMigration migration)
     {
         EnsureInitialized();
-
-        var response = _container!.ReadItemAsync<MigrationsStateDocument>(
-            _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey)
-        ).GetAwaiter().GetResult();
-
-        var state = response.Resource;
-        state.AppliedMigrations ??= new Dictionary<string, MigrationRecord>();
-
-        state.AppliedMigrations[migration.Version.ToString()] = new MigrationRecord
+        UpdateState(state =>
         {
-            Version = migration.Version,
-            Name = migration.Name,
-            Description = migration.Description,
-            CreatedAt = migration.CreatedAt,
-            AppliedAt = DateTime.UtcNow
-        };
+            state.AppliedMigrations ??= new Dictionary<string, MigrationRecord>();
+            state.AppliedMigrations[migration.Version.ToString()] = new MigrationRecord
+            {
+                Version = migration.Version,
+                Name = migration.Name,
+                Description = migration.Description,
+                CreatedAt = migration.CreatedAt,
+                AppliedAt = DateTime.UtcNow
+            };
+            return true;
+        });
+    }
 
-        _container.ReplaceItemAsync(state, _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey))
-            .GetAwaiter().GetResult();
+    /// <summary>
+    /// Reads the state document, applies <paramref name="change"/>, and replaces it only if nobody wrote it in between,
+    /// re-reading on a conflict.
+    /// </summary>
+    /// <remarks>
+    /// SH-M186 (TASK-152): the replace carried no ETag, so two processes recording different versions at startup each
+    /// wrote back the document they had read, and one version was lost: that migration ran again on the next Migrate.
+    /// </remarks>
+    private void UpdateState(Func<MigrationsStateDocument, bool> change)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var response = _container!.ReadItemAsync<MigrationsStateDocument>(
+                _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey)
+            ).GetAwaiter().GetResult();
 
+            if (!change(response.Resource)) return;
+
+            try
+            {
+                _container.ReplaceItemAsync(response.Resource, _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey),
+                    new ItemRequestOptions { IfMatchEtag = response.ETag }).GetAwaiter().GetResult();
+                return;
+            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed && attempt < 50)
+            {
+                // Another writer got there first: read its document and apply the change to that, after a jittered
+                // pause so contending writers stop colliding in lockstep.
+                System.Threading.Thread.Sleep(Random.Shared.Next(1, 10 * Math.Min(attempt, 10)));
+            }
+        }
     }
 
     /// <summary>
@@ -154,18 +180,7 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
     public void RemoveMigration(Data.Migrations.IMigration migration)
     {
         EnsureInitialized();
-
-        var response = _container!.ReadItemAsync<MigrationsStateDocument>(
-            _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey)
-        ).GetAwaiter().GetResult();
-
-        var state = response.Resource;
-        if (state?.AppliedMigrations != null)
-        {
-            state.AppliedMigrations.Remove(migration.Version.ToString());
-            _container.ReplaceItemAsync(state, _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey))
-                .GetAwaiter().GetResult();
-        }
+        UpdateState(state => state?.AppliedMigrations?.Remove(migration.Version.ToString()) == true);
     }
 
     /// <summary>

@@ -102,6 +102,7 @@ namespace Birko.Data.Migrations.SQL.Context
 
         public void CopyData(string sourceCollection, string targetCollection, string? transformJson = null)
         {
+            MigrationFilter.RefuseTransform(transformJson, "SQL"); // SH-M196 (TASK-152): it was never read
             ExecuteCommand($"INSERT INTO {QuoteIdentifier(targetCollection)} SELECT * FROM {QuoteIdentifier(sourceCollection)}");
         }
 
@@ -156,56 +157,33 @@ namespace Birko.Data.Migrations.SQL.Context
             // CR-L150: quote field identifiers via the caller's dialect-aware quoter; fall back to ANSI quotes.
             quoteIdentifier ??= id => $"\"{id}\"";
 
-            if (string.IsNullOrWhiteSpace(filterJson) || filterJson.Trim() == "{}")
-                return string.Empty;
-
+            // TASK-152: terms from the one shared reader (SH-M175: an unknown operator was equality; SH-M176: null was
+            // compared with = / <>, which matches nothing). NotEqual is null-safe, as the filter's dialect defines it.
             var conditions = new List<string>();
-            using var doc = JsonDocument.Parse(filterJson);
-
-            foreach (var property in doc.RootElement.EnumerateObject())
+            foreach (var term in MigrationFilterTerms.Parse(filterJson))
             {
-                var fieldName = property.Name;
+                var column = quoteIdentifier(term.Field);
+                if (term.Value == null)
+                {
+                    conditions.Add(term.Operator == MigrationFilterOperator.Equal ? $"{column} IS NULL" : $"{column} IS NOT NULL");
+                    continue;
+                }
 
-                if (property.Value.ValueKind == JsonValueKind.Object)
+                var paramName = $"@p{paramIndex++}";
+                parameters.Add((paramName, term.Value));
+                conditions.Add(term.Operator switch
                 {
-                    foreach (var op in property.Value.EnumerateObject())
-                    {
-                        var sqlOp = op.Name switch
-                        {
-                            "$gt" => ">",
-                            "$gte" => ">=",
-                            "$lt" => "<",
-                            "$lte" => "<=",
-                            "$ne" => "<>",
-                            _ => "="
-                        };
-                        var paramName = $"@p{paramIndex++}";
-                        conditions.Add($"{quoteIdentifier(fieldName)} {sqlOp} {paramName}");
-                        parameters.Add((paramName, ExtractValue(op.Value)));
-                    }
-                }
-                else
-                {
-                    var paramName = $"@p{paramIndex++}";
-                    conditions.Add($"{quoteIdentifier(fieldName)} = {paramName}");
-                    parameters.Add((paramName, ExtractValue(property.Value)));
-                }
+                    MigrationFilterOperator.Equal => $"{column} = {paramName}",
+                    MigrationFilterOperator.NotEqual => $"({column} <> {paramName} OR {column} IS NULL)",
+                    MigrationFilterOperator.GreaterThan => $"{column} > {paramName}",
+                    MigrationFilterOperator.GreaterThanOrEqual => $"{column} >= {paramName}",
+                    MigrationFilterOperator.LessThan => $"{column} < {paramName}",
+                    _ => $"{column} <= {paramName}",
+                });
             }
 
             return string.Join(" AND ", conditions);
         }
 
-        private static object? ExtractValue(JsonElement element)
-        {
-            return element.ValueKind switch
-            {
-                JsonValueKind.String => element.GetString(),
-                JsonValueKind.Number => element.TryGetInt64(out var l) ? l : element.GetDouble(),
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.Null => null,
-                _ => element.ToString()
-            };
-        }
     }
 }

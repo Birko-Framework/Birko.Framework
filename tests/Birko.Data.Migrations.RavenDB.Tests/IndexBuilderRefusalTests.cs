@@ -55,9 +55,11 @@ public class IndexBuilderRefusalTests
     [Fact]
     public void Build_refuses_rather_than_creating_nothing()
     {
+        // TASK-152 (SH-M200): inverted from "Build refuses the whole declaration". Build now creates the index through
+        // RavenDBIndexManager, which refuses Unique before any request (SH-M432): a RavenDB index enforces nothing.
         Action act = () => Builder().WithField("Code").Unique().Build();
 
         act.Should().Throw<NotSupportedException>()
-            .Which.Message.Should().Contain("does not create indexes");
+            .Which.Message.Should().Contain("cannot be created Unique");
     }
 }

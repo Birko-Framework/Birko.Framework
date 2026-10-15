@@ -43,24 +43,7 @@ namespace Birko.Data.MongoDB.IndexManagement
 
             var collection = _client.Database.GetCollection<BsonDocument>(scope!);
 
-            var keysBuilder = Builders<BsonDocument>.IndexKeys;
-            var keysList = new List<IndexKeysDefinition<BsonDocument>>();
-
-            foreach (var field in definition.Fields)
-            {
-                keysList.Add(field.FieldType switch
-                {
-                    IndexFieldType.Text => keysBuilder.Text(field.Name),
-                    IndexFieldType.Hashed => keysBuilder.Hashed(field.Name),
-                    IndexFieldType.Geo2d => keysBuilder.Geo2D(field.Name),
-                    IndexFieldType.Geo2dSphere => keysBuilder.Geo2DSphere(field.Name),
-                    _ => field.IsDescending
-                        ? keysBuilder.Descending(field.Name)
-                        : keysBuilder.Ascending(field.Name)
-                });
-            }
-
-            var keys = keysBuilder.Combine(keysList);
+            var keys = KeysFor(definition.Fields);
             var options = new CreateIndexOptions
             {
                 Name = definition.Name,
@@ -217,6 +200,25 @@ namespace Birko.Data.MongoDB.IndexManagement
         #endregion
 
         #region Helpers
+
+        /// <summary>
+        /// The index keys for <paramref name="fields"/>, each by its field type and direction. The one producer for both
+        /// doors onto a MongoDB index: this manager and the migration schema builder (TASK-152, SH-M203).
+        /// </summary>
+        public static IndexKeysDefinition<BsonDocument> KeysFor(IEnumerable<IndexField> fields)
+        {
+            var keysBuilder = Builders<BsonDocument>.IndexKeys;
+            return keysBuilder.Combine(fields.Select(field => field.FieldType switch
+            {
+                IndexFieldType.Text => keysBuilder.Text(field.Name),
+                IndexFieldType.Hashed => keysBuilder.Hashed(field.Name),
+                IndexFieldType.Geo2d => keysBuilder.Geo2D(field.Name),
+                IndexFieldType.Geo2dSphere => keysBuilder.Geo2DSphere(field.Name),
+                _ => field.IsDescending
+                    ? keysBuilder.Descending(field.Name)
+                    : keysBuilder.Ascending(field.Name)
+            }));
+        }
 
         internal static void ValidateScope(string? scope)
         {

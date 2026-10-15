@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Schema and index metadata: 19 medium defects fixed
+
+[[TASK-154]]. A `char` or `byte`-enum column threw on every read or write, and a get-only property broke every read.
+An inherited `[IndexedField]` created the index on one table only. The index managers misreported uniqueness,
+direction and other schemas. `LoadTable` returns no null (throws; `TryLoadTable` for null), and ElasticSearch index
+management no longer reads a failed request as "absent". Spawned [[TASK-627]] and [[TASK-628]].
+
 ## 2026-10-15 — Filter translation: 18 medium defects fixed on SQL and ElasticSearch
 
 [[TASK-153]]. `25 > x.Age` returned the other rows, `IsNullOrEmpty` matched nothing, `StartsWith("A_1")` matched

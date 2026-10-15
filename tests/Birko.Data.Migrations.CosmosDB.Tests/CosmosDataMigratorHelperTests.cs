@@ -62,7 +62,9 @@ public class CosmosDataMigratorHelperTests
         Parse("{\"age\":{\"$gte\":18}}").Clause.Should().Be("c[\"age\"] >= @p0");
         Parse("{\"age\":{\"$lt\":65}}").Clause.Should().Be("c[\"age\"] < @p0");
         Parse("{\"age\":{\"$lte\":65}}").Clause.Should().Be("c[\"age\"] <= @p0");
-        Parse("{\"state\":{\"$ne\":\"x\"}}").Clause.Should().Be("c[\"state\"] != @p0");
+        // SH-M176 (TASK-152): inverted from `c["state"] != @p0`, which is undefined, so false, for a document without
+        // the property; the filter's dialect matches it.
+        Parse("{\"state\":{\"$ne\":\"x\"}}").Clause.Should().Be("(NOT IS_DEFINED(c[\"state\"]) OR c[\"state\"] != @p0)");
 
         // The operator is what each row is about; the value must still arrive.
         OnlyValue("{\"status\":\"active\"}").Should().Be("active");

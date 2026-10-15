@@ -68,8 +68,7 @@ namespace Birko.Data.Migrations.RavenDB
             }
             catch (Exception ex)
             {
-                var failedMigration = executed.Count > 0 ? migrations[executed.Count] : migrations[0];
-                throw new Exceptions.MigrationException(failedMigration, direction, "Migration failed. RavenDB state may be inconsistent.", ex);
+                throw RunFailed(migrations, executed.Count, direction, "Migration failed. RavenDB state may be inconsistent.", ex);
             }
         }
     }

@@ -74,15 +74,21 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 
         public void RenameField(string collectionName, string oldName, string newName)
         {
-            // Use _update_by_query to rename fields across all documents
-            _client.UpdateByQuery<dynamic>(descriptor => descriptor
+            // SH-M199 (TASK-152): the response was discarded, so a refused script (missing index, mapping conflict, compile
+            // error) left every document unrenamed and the migration was recorded; and both names were interpolated into
+            // the Painless source. The names are params now, only documents that HAVE the old field are touched (others
+            // gained the new one as null), and the response is checked like every data step.
+            var response = _client.UpdateByQuery<dynamic>(descriptor => descriptor
                 .Index(collectionName)
-                .Query(q => q.MatchAll())
+                .Query(q => q.Exists(e => e.Field(oldName)))
+                .Refresh()
                 .Script(s => s
-                    .Source($"ctx._source.{newName} = ctx._source.remove('{oldName}')")
+                    .Source("ctx._source[params.newName] = ctx._source.remove(params.oldName)")
                     .Lang("painless")
+                    .Params(p => p.Add("oldName", oldName).Add("newName", newName))
                 )
             );
+            ElasticSearchDataMigrator.EnsureValid(response, $"RenameField '{oldName}' -> '{newName}' on index '{collectionName}'");
         }
 
         private class ElasticCollectionBuilder : ICollectionBuilder

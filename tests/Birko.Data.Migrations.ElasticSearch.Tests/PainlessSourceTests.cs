@@ -24,7 +24,9 @@ public class PainlessSourceTests
 
         var source = ElasticSearchDataMigrator.BuildPainlessSource(updates, out var scriptParams);
 
-        source.Should().Be("ctx._source.status = params.p0; ctx._source.count = params.p1; ctx._source.enabled = params.p2");
+        // TASK-152: the field NAME is a param as well (it was `ctx._source.status`, interpolated).
+        source.Should().Be("ctx._source[params.f0] = params.p0; ctx._source[params.f1] = params.p1; ctx._source[params.f2] = params.p2");
+        scriptParams["f0"].Should().Be("status");
         // No raw value is baked into the script text.
         source.Should().NotContain("O'Brien");
         source.Should().NotContain("42");

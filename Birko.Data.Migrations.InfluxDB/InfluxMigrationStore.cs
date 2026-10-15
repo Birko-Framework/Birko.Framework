@@ -124,11 +124,14 @@ namespace Birko.Data.Migrations.InfluxDB
             EnsureInitialized();
 
             var queryApi = _client.GetQueryApi();
+            // TASK-152: from the epoch. A version point carries its migration's CreatedAt, and `-10y` made a migration
+            // created more than ten years ago (a fixed historical date) read as never applied, so it was replayed.
             var query = $@"
                 from(bucket: ""{EscapeFluxString(BucketName)}"")
-                |> range(start: -10y)
+                |> range(start: 0)
                 |> filter(fn: (r) => r._measurement == ""{MigrationMeasurement}"")
                 |> filter(fn: (r) => r._field == ""version"")
+                |> group()
                 |> distinct(column: ""_value"")
             ";
 
@@ -193,8 +196,12 @@ namespace Birko.Data.Migrations.InfluxDB
             // never disposed (leak) and its async Flush() didn't guarantee commit before a later read
             // (CR-H060). Mirrors AsyncInfluxDBStore.
             var writeApi = _client.GetWriteApiAsync();
+            // SH-M189 (TASK-152): the version is a TAG as well as a field. A point's identity is measurement + tags + time,
+            // and with the name as the only tag two migrations sharing a name and a CreatedAt millisecond overwrote each
+            // other, so one applied version vanished.
             var point = PointData.Measurement(MigrationMeasurement)
                 .Tag("name", migration.Name)
+                .Tag("version", migration.Version.ToString(System.Globalization.CultureInfo.InvariantCulture))
                 .Field("version", migration.Version)
                 .Field("description", migration.Description ?? "")
                 .Timestamp(migration.CreatedAt, WritePrecision.Ms);
@@ -219,22 +226,28 @@ namespace Birko.Data.Migrations.InfluxDB
         {
             EnsureInitialized();
 
+            // SH-M188 (TASK-152): the delete window used to start at migration.CreatedAt - 1 minute, but CreatedAt is set
+            // when the migration object is constructed, so in a later process (the usual rollback) it is "now" and the
+            // window missed the point written days earlier: nothing deleted, success reported, and Rollback could never
+            // pass that version. SH-M189: the predicate was the name alone, deleting every version sharing it. The
+            // version's own points are looked up instead, and each is deleted at its exact timestamp by its own tags.
             var deleteApi = _client.GetDeleteApi();
-            // CR-M111: escape the interpolated name so a value containing a quote/backslash can't break
-            // (or alter) the delete predicate.
-            // TASK-618: the tag key is QUOTED. `name` is a keyword in the delete-predicate grammar, and the bare
-            // form was a 400 ("found NAME, expected identifier") on every call.
-            var fluxPredicate = $"_measurement=\"{MigrationMeasurement}\" AND \"name\"=\"{EscapeFluxString(migration.Name)}\"";
+            foreach (var (time, name, versionTagged) in FindVersionPoints(migration.Version))
+            {
+                // CR-M111: escaped. TASK-618: tag keys quoted (`name` is a keyword in the delete-predicate grammar).
+                var predicate = $"_measurement=\"{MigrationMeasurement}\" AND \"name\"=\"{EscapeFluxString(name)}\""
+                    + (versionTagged ? $" AND \"version\"=\"{migration.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)}\"" : "");
 
-            var start = migration.CreatedAt.AddMinutes(-1);
-            var stop = DateTime.UtcNow;
+                // Waited on, and not caught: a refused delete propagates rather than reporting a downgrade that left the
+                // migration recorded (rule 22; measured at TASK-618, a predicate matching nothing is a 204).
+                deleteApi.Delete(time, time.AddMilliseconds(1), predicate, BucketName, _migrationsBucket!.OrgID).GetAwaiter().GetResult();
+            }
 
-            // Waited on, and not caught. `Delete` returns a Task, and this call used to discard it: the delete
-            // raced the next read and any failure went unobserved, so the CR-L146 catch below it never ran either.
-            // That catch swallowed every InfluxException on the theory that "already deleted" raises one. Measured,
-            // it does not: a predicate that matches nothing is a 204. A refused delete now propagates instead of
-            // reporting a downgrade that left the migration recorded (rule 22).
-            deleteApi.Delete(start, stop, fluxPredicate, BucketName, _migrationsBucket!.OrgID).GetAwaiter().GetResult();
+            if (FindVersionPoints(migration.Version).Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Migration {migration.Version} ({migration.Name}) is still recorded in bucket '{BucketName}' after its delete.");
+            }
         }
 
         /// <summary>
@@ -269,6 +282,27 @@ namespace Birko.Data.Migrations.InfluxDB
         /// Escapes a value for safe interpolation into a double-quoted Flux string literal (CR-M111):
         /// backslashes and embedded double quotes are backslash-escaped.
         /// </summary>
+        /// <summary>The points recording <paramref name="version"/>: their time, name tag, and whether they carry a version tag.</summary>
+        private List<(DateTime Time, string Name, bool VersionTagged)> FindVersionPoints(long version)
+        {
+            var query = $@"
+                from(bucket: ""{EscapeFluxString(BucketName)}"")
+                |> range(start: 0)
+                |> filter(fn: (r) => r._measurement == ""{MigrationMeasurement}"" and r._field == ""version"" and r._value == {version.ToString(System.Globalization.CultureInfo.InvariantCulture)})
+            ";
+            var points = new List<(DateTime, string, bool)>();
+            foreach (var table in _client.GetQueryApi().QueryAsync(query, _organization).GetAwaiter().GetResult())
+            {
+                foreach (var record in table.Records)
+                {
+                    if (record.GetTimeInDateTime() is not DateTime time) continue;
+                    var name = record.GetValueByKey("name")?.ToString() ?? string.Empty;
+                    points.Add((DateTime.SpecifyKind(time, DateTimeKind.Utc), name, record.Values.ContainsKey("version")));
+                }
+            }
+            return points;
+        }
+
         internal static string EscapeFluxString(string? value)
             => (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"");
     }

@@ -78,7 +78,9 @@ namespace Birko.Data.Migrations.RavenDB.Context
         public long CountDocuments(string collection, string? filterJson = null)
         {
             using var session = _store.OpenSession();
-            var query = session.Advanced.DocumentQuery<dynamic>(collection);
+            // TASK-152, measured live: the first parameter is the INDEX name, so passing the collection there asked for an
+            // index called after it and every count threw IndexDoesNotExistException.
+            var query = session.Advanced.DocumentQuery<dynamic>(collectionName: collection);
 
             if (!Data.Migrations.Context.MigrationFilter.IsExplicitMatchAll(filterJson))
             {
@@ -142,46 +144,54 @@ namespace Birko.Data.Migrations.RavenDB.Context
         /// </summary>
         internal static (string Rql, IReadOnlyDictionary<string, object?> Parameters) ParseFilterToRql(string? filterJson)
         {
+            // TASK-152: terms from the one shared reader (SH-M175: an unknown operator was equality). RQL's `!=` already
+            // matches a document without the field; `= null` does not (measured: 0), so null equality also takes the
+            // absent field, as the filter's dialect means (SH-M176).
             var parameters = new Dictionary<string, object?>();
-            if (string.IsNullOrWhiteSpace(filterJson) || filterJson!.Trim() == "{}")
-                return (string.Empty, parameters);
-
-            using var doc = JsonDocument.Parse(filterJson);
             var conditions = new List<string>();
             var index = 0;
-
-            foreach (var property in doc.RootElement.EnumerateObject())
+            foreach (var term in MigrationFilterTerms.Parse(filterJson))
             {
-                var fieldName = property.Name;
+                var field = RqlField(term.Field);
+                if (term.Value == null)
+                {
+                    conditions.Add(term.Operator == MigrationFilterOperator.Equal
+                        ? $"({field} = null or (true and not exists({field})))"
+                        : $"(exists({field}) and {field} != null)");
+                    continue;
+                }
 
-                if (property.Value.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var op in property.Value.EnumerateObject())
-                    {
-                        var rqlOp = op.Name switch
-                        {
-                            "$gt" => ">",
-                            "$gte" => ">=",
-                            "$lt" => "<",
-                            "$lte" => "<=",
-                            "$ne" => "!=",
-                            _ => "="
-                        };
-                        var paramName = $"p{index++}";
-                        conditions.Add($"{fieldName} {rqlOp} ${paramName}");
-                        parameters[paramName] = ExtractValue(op.Value);
-                    }
-                }
-                else
-                {
-                    var paramName = $"p{index++}";
-                    conditions.Add($"{fieldName} = ${paramName}");
-                    parameters[paramName] = ExtractValue(property.Value);
-                }
+                var paramName = $"p{index++}";
+                conditions.Add($"{field} {RqlOperator(term.Operator)} ${paramName}");
+                parameters[paramName] = term.Value;
             }
 
             return (string.Join(" AND ", conditions), parameters);
         }
+
+        private static string RqlOperator(MigrationFilterOperator op) => op switch
+        {
+            MigrationFilterOperator.Equal => "=",
+            MigrationFilterOperator.NotEqual => "!=",
+            MigrationFilterOperator.GreaterThan => ">",
+            MigrationFilterOperator.GreaterThanOrEqual => ">=",
+            MigrationFilterOperator.LessThan => "<",
+            _ => "<=",
+        };
+
+        private static readonly System.Text.RegularExpressions.Regex RqlPath =
+            new(@"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$");
+
+        /// <summary>
+        /// A field name as it reaches RQL text. Values are bound; a field name cannot be, so it is held to a plain
+        /// (dotted) identifier and anything else refused (rule 33): it was interpolated raw, so a crafted key in a
+        /// delete filter rewrote the query.
+        /// </summary>
+        internal static string RqlField(string field)
+            => RqlPath.IsMatch(field)
+                ? field
+                : throw new NotSupportedException(
+                    $"Migration filter field '{field}' is not a plain identifier path, so it cannot be put into an RQL query. Use Raw().");
 
         /// <summary>
         /// Applies the filter to <paramref name="query"/> and reports whether it added any term at all
@@ -190,68 +200,38 @@ namespace Birko.Data.Migrations.RavenDB.Context
         /// </summary>
         private static bool ApplyFilterToQuery(IDocumentQuery<dynamic> query, string filterJson)
         {
-            using var doc = JsonDocument.Parse(filterJson);
+            // TASK-152: the same terms as ParseFilterToRql, so the two RavenDB translations cannot disagree.
             var applied = 0;
-
-            foreach (var property in doc.RootElement.EnumerateObject())
+            foreach (var term in MigrationFilterTerms.Parse(filterJson))
             {
-                var fieldName = property.Name;
-
-                if (property.Value.ValueKind == JsonValueKind.Object)
+                var field = RqlField(term.Field);
+                if (term.Value == null)
                 {
-                    foreach (var op in property.Value.EnumerateObject())
-                    {
-                        var value = ExtractValue(op.Value);
-                        switch (op.Name)
-                        {
-                            case "$gt":
-                                query.WhereGreaterThan(fieldName, value);
-                                applied++;
-                                break;
-                            case "$gte":
-                                query.WhereGreaterThanOrEqual(fieldName, value);
-                                applied++;
-                                break;
-                            case "$lt":
-                                query.WhereLessThan(fieldName, value);
-                                applied++;
-                                break;
-                            case "$lte":
-                                query.WhereLessThanOrEqual(fieldName, value);
-                                applied++;
-                                break;
-                            case "$ne":
-                                query.WhereNotEquals(fieldName, value);
-                                applied++;
-                                break;
-                            default:
-                                query.WhereEquals(fieldName, value);
-                                applied++;
-                                break;
-                        }
-                    }
-                }
-                else
-                {
-                    query.WhereEquals(fieldName, ExtractValue(property.Value));
+                    // As ParseFilterToRql: null equality takes the absent field too (SH-M176).
+                    query.OpenSubclause();
+                    if (term.Operator == MigrationFilterOperator.Equal)
+                        query.WhereEquals(field, (object?)null).OrElse().Not.WhereExists(field);
+                    else
+                        query.WhereExists(field).AndAlso().WhereNotEquals(field, (object?)null);
+                    query.CloseSubclause();
                     applied++;
+                    continue;
                 }
+
+                switch (term.Operator)
+                {
+                    case MigrationFilterOperator.Equal: query.WhereEquals(field, term.Value); break;
+                    case MigrationFilterOperator.NotEqual: query.WhereNotEquals(field, term.Value); break;
+                    case MigrationFilterOperator.GreaterThan: query.WhereGreaterThan(field, term.Value); break;
+                    case MigrationFilterOperator.GreaterThanOrEqual: query.WhereGreaterThanOrEqual(field, term.Value); break;
+                    case MigrationFilterOperator.LessThan: query.WhereLessThan(field, term.Value); break;
+                    default: query.WhereLessThanOrEqual(field, term.Value); break;
+                }
+                applied++;
             }
 
             return applied > 0;
         }
 
-        internal static object? ExtractValue(JsonElement element)
-        {
-            return element.ValueKind switch
-            {
-                JsonValueKind.String => element.GetString(),
-                JsonValueKind.Number => element.TryGetInt64(out var l) ? l : element.GetDouble(),
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.Null => null,
-                _ => element.ToString()
-            };
-        }
     }
 }

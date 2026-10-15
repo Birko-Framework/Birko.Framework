@@ -585,6 +585,18 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
+        /// A query answering a count greater than 0 when a table named by the parameter <c>@tableName</c> exists where an
+        /// unqualified <c>CREATE TABLE</c> on this connection would put it, or null when the provider has none.
+        /// </summary>
+        /// <remarks>
+        /// SH-M181 (TASK-152): the migration schema builder asked <c>INFORMATION_SCHEMA.TABLES</c> by name alone, which
+        /// spans every schema (SQL Server, PostgreSQL) and on MySQL every database on the server. A
+        /// <c>CollectionExists</c>-guarded create was then skipped because another database had a table of that name,
+        /// and the migration recorded with no table. Each provider scopes it the way its own DDL resolves a bare name.
+        /// </remarks>
+        public virtual string? TableExistsSql => null;
+
+        /// <summary>
         /// Quotes a SQL identifier (table or column name) to prevent reserved word conflicts and injection.
         /// Default uses ANSI SQL double quotes. Override for provider-specific quoting.
         /// </summary>

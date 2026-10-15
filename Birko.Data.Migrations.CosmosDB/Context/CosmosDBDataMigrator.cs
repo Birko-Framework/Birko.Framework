@@ -155,13 +155,21 @@ public class CosmosDBDataMigrator : IDataMigrator
             ? "SELECT VALUE COUNT(1) FROM c"
             : $"SELECT VALUE COUNT(1) FROM c WHERE {whereClause}";
 
+        // SH-M184 (TASK-152): every page is read and summed. A cross-partition aggregate can answer an empty first page
+        // while the pipeline drains partitions, and reading only that page counted 0.
         var iterator = container.GetItemQueryIterator<long>(Bind(query, parameters));
-        var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
-        return response.FirstOrDefault();
+        long total = 0;
+        while (iterator.HasMoreResults)
+        {
+            foreach (var count in iterator.ReadNextAsync().GetAwaiter().GetResult())
+                total += count;
+        }
+        return total;
     }
 
     public void CopyData(string sourceCollection, string targetCollection, string? transformJson = null)
     {
+        Birko.Data.Migrations.Context.MigrationFilter.RefuseTransform(transformJson, "CosmosDB");
         var sourceContainer = _database.GetContainer(sourceCollection);
         var targetContainer = _database.GetContainer(targetCollection);
 
@@ -237,38 +245,33 @@ public class CosmosDBDataMigrator : IDataMigrator
     /// </remarks>
     internal static string ParseFilterToSql(string? filterJson, IList<KeyValuePair<string, object?>> parameters)
     {
-        if (string.IsNullOrWhiteSpace(filterJson) || filterJson!.Trim() == "{}")
-            return string.Empty;
-
-        using var doc = JsonDocument.Parse(filterJson);
+        // TASK-152: terms from the one shared reader (SH-M175). Null and NotEqual take the filter dialect's meaning
+        // (SH-M176): in Cosmos SQL an absent property is undefined, and `c.x = null` / `c.x != v` are undefined for it,
+        // so a document without the field matched neither {"x": null} nor {"x": {"$ne": v}}.
         var conditions = new List<string>();
-
-        foreach (var property in doc.RootElement.EnumerateObject())
+        foreach (var term in MigrationFilterTerms.Parse(filterJson))
         {
             // CR-M104's rule, unchanged -- only moved, so CosmosDBSchemaBuilder can share it
             // (TASK-450: it interpolated a field name with no escaping at all).
-            var fieldName = QuoteFieldPath(property.Name);
+            var field = QuoteFieldPath(term.Field);
+            if (term.Value == null)
+            {
+                conditions.Add(term.Operator == MigrationFilterOperator.Equal
+                    ? $"(NOT IS_DEFINED({field}) OR IS_NULL({field}))"
+                    : $"(IS_DEFINED({field}) AND NOT IS_NULL({field}))");
+                continue;
+            }
 
-            if (property.Value.ValueKind == JsonValueKind.Object)
+            var value = BindValue(term.Value, parameters);
+            conditions.Add(term.Operator switch
             {
-                foreach (var op in property.Value.EnumerateObject())
-                {
-                    var sqlOp = op.Name switch
-                    {
-                        "$gt" => ">",
-                        "$gte" => ">=",
-                        "$lt" => "<",
-                        "$lte" => "<=",
-                        "$ne" => "!=",
-                        _ => "="
-                    };
-                    conditions.Add($"{fieldName} {sqlOp} {BindValue(ExtractValue(op.Value), parameters)}");
-                }
-            }
-            else
-            {
-                conditions.Add($"{fieldName} = {BindValue(ExtractValue(property.Value), parameters)}");
-            }
+                MigrationFilterOperator.Equal => $"{field} = {value}",
+                MigrationFilterOperator.NotEqual => $"(NOT IS_DEFINED({field}) OR {field} != {value})",
+                MigrationFilterOperator.GreaterThan => $"{field} > {value}",
+                MigrationFilterOperator.GreaterThanOrEqual => $"{field} >= {value}",
+                MigrationFilterOperator.LessThan => $"{field} < {value}",
+                _ => $"{field} <= {value}",
+            });
         }
 
         return string.Join(" AND ", conditions);

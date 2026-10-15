@@ -113,7 +113,7 @@ namespace Birko.Data.Migrations.RavenDB.Context
             private readonly string _collectionName;
             private readonly string _indexName;
             private readonly IDocumentStore _store;
-            private readonly List<(string Name, bool Descending)> _fields = new();
+            private readonly List<(string Name, bool Descending, IndexFieldType FieldType)> _fields = new();
             private bool _unique;
 
             public RavenIndexBuilder(string collectionName, string indexName, IDocumentStore store)
@@ -125,7 +125,7 @@ namespace Birko.Data.Migrations.RavenDB.Context
 
             public IIndexBuilder WithField(string name, bool descending = false, IndexFieldType fieldType = IndexFieldType.Standard)
             {
-                _fields.Add((name, descending));
+                _fields.Add((name, descending, fieldType));
                 return this;
             }
 
@@ -148,24 +148,28 @@ namespace Birko.Data.Migrations.RavenDB.Context
                     "RavenDB", $"index property '{key}'", "a Raven index is a map/reduce definition rather than a field list, so this builder cannot express one", "Use Raw(), or IIndexManager.CreateAsync with a Map/Maps/Reduce entry in IndexDefinition.Properties, which RavenDBIndexManager does honour.");
 
             /// <summary>
-            /// <b>Refuses the whole declaration (TASK-274).</b> This builder used to inherit
-            /// <c>IIndexBuilder.Build()</c>'s no-op default while accumulating fields and a <c>Unique()</c> flag
-            /// and holding a live client — so a migration read as though it had declared an index and the
-            /// database never got one. That is the lost-flag defect TASK-246 fixed in the SQL builder, total
-            /// rather than partial. Silence was the worst of the three options; refusing is honest and costs
-            /// nothing, because nothing called it (measured: 0 uses across all 16 consumer repos).
+            /// Creates the index through <see cref="Birko.Data.RavenDB.IndexManagement.RavenDBIndexManager"/>, the other
+            /// door onto the same feature (SH-M200, TASK-152): a map over the declared fields of the collection. TASK-274
+            /// refused the whole declaration because the builder created nothing; the manager generates the map and
+            /// refuses what a RavenDB index cannot be (Unique, a field name that is not an identifier).
             /// </summary>
             public void Build()
-                => throw Birko.Data.Patterns.Schema.IndexBuilderSupport.NotImplementedHere(
-                    "RavenDB", _indexName, "Use Raw(), or IIndexManager.CreateAsync with a Map/Maps/Reduce entry in IndexDefinition.Properties, which RavenDBIndexManager does honour.");
+            {
+                if (_fields.Count == 0)
+                    throw new InvalidOperationException($"Index '{_indexName}' on '{_collectionName}' declares no field.");
+                if (_fields.Exists(f => f.Descending))
+                    throw Birko.Data.Patterns.Schema.IndexBuilderSupport.Unsupported(
+                        "RavenDB", "a descending field", "a RavenDB index field has no direction; ordering is chosen by the query", "Declare the field ascending.");
 
-            /// <summary>
-            /// Exposes whether <see cref="Unique"/> was called. RavenDB enforces uniqueness via
-            /// application-level deduplication or compare-exchange operations rather than index
-            /// metadata, so <see cref="_unique"/> is captured here but not yet translated into a
-            /// store operation. Reserved for when that wiring lands.
-            /// </summary>
-            internal bool IsUnique => _unique;
+                var definition = new Birko.Data.Patterns.IndexManagement.IndexDefinition
+                {
+                    Name = _indexName,
+                    Unique = _unique,
+                    Fields = _fields.ConvertAll(f => new Birko.Data.Patterns.IndexManagement.IndexField { Name = f.Name, FieldType = f.FieldType }),
+                };
+                new Birko.Data.RavenDB.IndexManagement.RavenDBIndexManager(_store)
+                    .CreateAsync(definition, _collectionName).GetAwaiter().GetResult();
+            }
         }
     }
 }
