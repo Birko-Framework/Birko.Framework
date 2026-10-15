@@ -8,9 +8,10 @@ namespace Birko.Data.Repositories.Tests;
 
 /// <summary>
 /// CR-M133: the base repositories' null-store fallbacks and the bulk repository's type-mismatch guard
-/// had no coverage. A null-store AbstractRepository degrades gracefully (null / Guid.Empty / 0 /
-/// Activator-new / no-op), while AbstractBulkRepository throws InvalidOperationException when its Store
-/// is not an IBulkStore.
+/// had no coverage. TASK-162 (SH-M219) changed the null-store contract: the graceful degradation these tests used to
+/// pin (null / Guid.Empty / 0 / a silent no-op) made a mis-wired repository indistinguishable from an empty one, so
+/// every data operation now throws. Two answers stay: CreateInstance activates a new instance, and Destroy with no store
+/// has nothing to destroy.
 /// </summary>
 public class AbstractRepositoryFallbackTests
 {
@@ -27,27 +28,27 @@ public class AbstractRepositoryFallbackTests
     }
 
     [Fact]
-    public void Read_with_null_store_returns_null()
+    public void Read_with_null_store_throws()
     {
         var repo = new NullStoreRepository();
 
-        repo.Read(Guid.NewGuid()).Should().BeNull();
-        repo.Read(e => e.Guid == Guid.Empty).Should().BeNull();
+        repo.Invoking(r => r.Read(Guid.NewGuid())).Should().Throw<InvalidOperationException>().WithMessage("*no store*");
+        repo.Invoking(r => r.Read(e => e.Guid == Guid.Empty)).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void Create_and_Save_with_null_store_return_empty_guid()
+    public void Create_and_Save_with_null_store_throw()
     {
         var repo = new NullStoreRepository();
 
-        repo.Create(new Entity()).Should().Be(Guid.Empty);
-        repo.Save(new Entity()).Should().Be(Guid.Empty);
+        repo.Invoking(r => r.Create(new Entity())).Should().Throw<InvalidOperationException>();
+        repo.Invoking(r => r.Save(new Entity())).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void Count_with_null_store_returns_zero()
+    public void Count_with_null_store_throws()
     {
-        new NullStoreRepository().Count().Should().Be(0);
+        new NullStoreRepository().Invoking(r => r.Count()).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
@@ -57,12 +58,12 @@ public class AbstractRepositoryFallbackTests
     }
 
     [Fact]
-    public void Update_Delete_Destroy_with_null_store_do_not_throw()
+    public void Update_and_Delete_with_null_store_throw_and_Destroy_has_nothing_to_destroy()
     {
         var repo = new NullStoreRepository();
 
-        repo.Invoking(r => r.Update(new Entity())).Should().NotThrow();
-        repo.Invoking(r => r.Delete(new Entity())).Should().NotThrow();
+        repo.Invoking(r => r.Update(new Entity())).Should().Throw<InvalidOperationException>();
+        repo.Invoking(r => r.Delete(new Entity())).Should().Throw<InvalidOperationException>();
         repo.Invoking(r => r.Destroy()).Should().NotThrow();
     }
 

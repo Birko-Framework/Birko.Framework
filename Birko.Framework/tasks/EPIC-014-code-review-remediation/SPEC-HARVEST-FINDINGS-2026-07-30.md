@@ -2443,11 +2443,15 @@ BuildContinuousAggregateSql emits `time_bucket('{timeBucket}', time)` with no pa
 
 `../Birko.Data.SQL.ViewModel/Extensions/IDataBaseRepository.cs:20`
 
+**Verdict: CONFIRMED, fixed earlier** (TASK-162, measured 2026-10-15, by reading). The `ReadOne` extension that reached past the store through `repository.Connector` was removed; its doc records why it must not come back.
+
 Every store CRUD entry point runs EnsureInitialized() → InitCore(), which for SQL is Connector?.CreateTable(new[]{typeof(T)}) plus Connector?.DoInit() (DataBaseStore.cs:95-99). ReadOne never touches the store, so on a repository whose store has not been used yet the SELECT runs against a table that was never created (provider error, e.g. "no such table") and the OnInit hooks registered via the repository's own AddOnInit have not fired. Order-dependent: the same call succeeds if any other repository operation ran first.
 
 #### SH-M206 — _modelHash is a plain Dictionary mutated with no synchronization on singleton repositories
 
 `../Birko.Data.ViewModel/Repositories/AbstractViewModelRepository.cs:24`
+
+**Verdict: CONFIRMED by reading, fixed; not reproduced** (TASK-162, measured 2026-10-15). `_modelHash` was a plain `Dictionary` written by every read on a repository the locator and singleton registration share. Now a `ConcurrentDictionary`, and `_isReadMode` is volatile. The concurrent-read test (32 parallel reads of 50 rows) passed on the old code too, so it is a pin, not evidence.
 
 _modelHash is a plain Dictionary written from StoreHash (83), RemoveHash (96) and CheckHashChange (115) and cleared from the ReadMode setter (39) with no lock. AddRepositorySingleton and RepositoryLocator hand one repository instance to all callers, and LoadInstance → StoreHash runs on every read, so two concurrent reads can resize the Dictionary simultaneously — corrupted buckets / lost entries / spin, not an exception. _isReadMode (23) is a non-volatile bool read by every write guard. Identical in AbstractAsyncViewModelRepository.cs:26, where concurrency is the norm.
 
@@ -2455,11 +2459,15 @@ _modelHash is a plain Dictionary written from StoreHash (83), RemoveHash (96) an
 
 `../Birko.Data.ViewModel/Repositories/AbstractViewModelRepository.cs:92`
 
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). `RemoveHash` had no caller, so a deleted model stayed tracked. Single and bulk deletes, sync and async, now untrack. `tests/Birko.Data.ViewModel.Tests/ViewModelRepositoryTriageTests.cs`.
+
 RemoveHash has no call site anywhere in Birko.Data.ViewModel / Birko.Data.SQL.ViewModel / Birko.Data.Repositories (grepped), and Delete/DeleteAsync do not remove the deleted model's entry; the only pruning is the ReadMode=true setter. Every read adds a SHA-256 entry, including bulk reads (AbstractBulkViewModelRepository.cs:48, AbstractAsyncBulkViewModelRepository.cs:91 call LoadInstance per row), so paging a large table through a scoped or singleton repository hashes every row and retains one entry per Guid for the repository's lifetime, unbounded.
 
 #### SH-M208 — DataBaseRepository accepts a non-bulk wrapper its own bulk methods then reject at runtime
 
 `../Birko.Data.SQL.ViewModel/Repositories/DataBaseRepository.cs:29`
+
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). A non-bulk `TenantStoreWrapper` around a SQL bulk store constructed fine and every bulk call then threw. The constructor refuses a store that is not itself a bulk store. `tests/Birko.Data.SQL.ViewModel.Tests/DataBaseRepositoryBulkWrapperTests.cs`.
 
 The constructor validates via IsStoreOfType, which inspects the INNERMOST store (StoreExtensions.cs:63-87), while every inherited bulk method tests the OUTERMOST reference (Store is not IBulkStore<TModel> — AbstractBulkViewModelRepository.cs:41/60/80/96/107/118/129). TenantStoreWrapper<TStore,T> implements only IStore<T>/IStoreWrapper<T> (TenantStoreWrapper.cs:12), so a repository wrapping a DataBaseBulkStore in it constructs fine and then throws ArgumentException from Read/Create/Update/Delete. The async sibling can't: its parameter is IAsyncBulkStore (AsyncDataBaseRepository.cs:54).
 
@@ -2467,11 +2475,15 @@ The constructor validates via IsStoreOfType, which inspects the INNERMOST store 
 
 `../Birko.Data.Repositories/AbstractAsyncBulkRepository.cs:46`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). The async bulk repositories (plain and ViewModel) answered empty and did nothing without a bulk store; they throw, as the sync ones do. `tests/Birko.Data.Repositories.Tests/RepositoryContractTriageTests.cs`.
+
 BulkStore is `Store as IAsyncBulkStore<T>` (24); when the cast fails every method returns early — ReadAsync yields Array.Empty<T>(), ReadFirstAsync null, and CreateAsync/UpdateAsync/DeleteAsync including the filter overloads (87/94/112) complete successfully having done nothing. AbstractBulkRepository throws InvalidOperationException for the identical state. A bulk delete-by-filter that silently deletes nothing is indistinguishable from one that matched no rows. Same in AbstractAsyncBulkViewModelRepository.cs:58/105/120/130/140/150.
 
 #### SH-M210 — RepositoryLocator default keys don't match between create and destroy — cached repositories leak
 
 `../Birko.Data.Repositories/RepositoryLocator.cs:158`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). `GetRepository<TStore, TRepository>` defaulted its key to the store type and `Destroy<TRepository>()` to the repository type; both use the repository type now. `tests/Birko.Data.Repositories.Tests/RepositoryContractTriageTests.cs`.
 
 GetRepository<TStore,TRepository>(store) defaults its key to typeof(TStore).FullName (34) but Destroy<TRepository>() defaults to typeof(TRepository).FullName (158). A repository created through the common no-key overload can never be found by the no-key Destroy: TryGetValue misses, the method returns silently, and the repository plus its store/connection stays in the static cache for the process lifetime.
 
@@ -2479,11 +2491,15 @@ GetRepository<TStore,TRepository>(store) defaults its key to typeof(TStore).Full
 
 `../Birko.Data.Repositories/RepositoryLocator.cs:44`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). On a cache hit the store argument was ignored. The locator records the store each repository was built around and refuses a different instance under the same key.
+
 The cache key is the store TYPE, not the instance, and the store parameter is consulted only inside the `if (!ContainsKey(type))` miss branch. GetRepository<MyStore,MyRepo>(storeB) after GetRepository<MyStore,MyRepo>(storeA) returns the repository built around storeA with no signal that storeB was ignored, so two differently configured stores of the same type (different tenant, connection or settings) silently collapse onto whichever was seen first.
 
 #### SH-M212 — Destroy<TRepoA>(key) destroys the store shared by every repository cached under that key
 
 `../Birko.Data.Repositories/RepositoryLocator.cs:172`
+
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). `Destroy<RepoA>(key)` destroyed the store a sibling under the same key still used. Every repository cached on the destroyed store instance is evicted with it.
 
 The cache is key → (repository type → instance), so GetRepository<MyStore,RepoA>(store) and GetRepository<MyStore,RepoB>(store) share one key and one store instance. Destroy<RepoA>(key) removes only RepoA's entry and then calls repository.Destroy() (172), which is Store?.Destroy() (AbstractRepository.cs:119) — for SQL that is Connector.DropTable (DataBaseStore.cs:104). RepoB remains cached pointing at a destroyed store and its next call fails or no-ops with no indication why.
 
@@ -2491,11 +2507,15 @@ The cache is key → (repository type → instance), so GetRepository<MyStore,Re
 
 `../Birko.Data.Repositories/IBaseRepository.cs:27`
 
+**Verdict: CONFIRMED, fixed earlier** (TASK-162, measured 2026-10-15, by reading). `IBaseRepository.Destroy` is documented "PERMANENTLY DELETES every row the underlying store can see. This is not disposal."
+
 IBaseRepository.Destroy is documented "Destroys the repository and releases all resources" and AbstractRepository.Destroy (117) / AbstractViewModelRepository.Destroy forward to Store?.Destroy(). For the SQL family that is DataBaseStore.Destroy → Connector?.DropTable(new[]{typeof(T)}) (DataBaseStore.cs:102-105). A consumer calling repository.Destroy() from a Dispose/teardown path — or RepositoryLocator.Destroy<TRepository>(), whose doc frames it as cache eviction — drops the entity's table and all its rows. No repository-layer doc says the call destroys data.
 
 #### SH-M214 — Bulk ViewModel paging cannot express an order, so limit/offset pages are unstable
 
 `../Birko.Data.ViewModel/Repositories/AbstractBulkViewModelRepository.cs:46`
+
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). A ViewModel page read sent LIMIT/OFFSET with no order, and the interface takes none. A paged read (limit or offset given) is ordered by `Guid`; an unpaged one is left alone. `tests/Birko.Data.ViewModel.Tests/ViewModelRepositoryTriageTests.cs`.
 
 Read hard-codes null for the store's orderBy — Read(filter?.Filter(), null, limit, offset) — and IBulkViewModelReadRepository.Read (IBulkViewModelRepository.cs:26) has no orderBy parameter, so callers cannot supply one. SQL/ES/Mongo return unordered rows for an unordered query, so successive pages (offset 0 then 20) can repeat and skip rows. The plain model bulk repository can pass Stores.OrderBy<T> (IBulkRepository.cs:31) and the ReadOne extension can pass orderByExpr, so only the ViewModel bulk family cannot. Same at AbstractAsyncBulkViewModelRepository.cs:85.
 
@@ -2503,11 +2523,15 @@ Read hard-codes null for the store's orderBy — Read(filter?.Filter(), null, li
 
 `../Birko.Data.ViewModel/Repositories/AbstractBulkViewModelRepository.cs:41`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). The bulk `Read` validated on the first MoveNext; it validates when called and returns a separate iterator.
+
 Read is a `yield return` iterator, so the `Store is not IBulkStore<TModel>` guard and its ArgumentException do not execute when Read is called — they execute on the first MoveNext(). A caller that builds the sequence in one place and enumerates it elsewhere gets the exception from an unexpected frame, and a caller that never enumerates never learns the store is wrong.
 
 #### SH-M216 — ViewModel Delete has no null-argument guard while Create and Update do
 
 `../Birko.Data.ViewModel/Repositories/AbstractViewModelRepository.cs:232`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). `Delete(null)` and the sync bulk writes with null data are no-ops, as `Create` / `Update` and the async twins are.
 
 Create (190) and Update (213) return early on data == null; Delete checks only Store, then calls LoadModelInstance(data) → MapToModel(null, target), so any MapToModel reading source members throws NullReferenceException instead of the siblings' no-op. Same asymmetry in AbstractAsyncViewModelRepository.DeleteAsync:241 and in sync bulk Create(IEnumerable):57, Update(IEnumerable):77, Delete(IEnumerable):126, which reach data.Select(...) unguarded while every async bulk twin checks data == null (AbstractAsyncBulkViewModelRepository.cs:58/105/150).
 
@@ -2515,11 +2539,15 @@ Create (190) and Update (213) return early on data == null; Delete checks only S
 
 `../Birko.Data.ViewModel/Repositories/AbstractViewModelRepository.cs:226`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed earlier (SH-H035)** (TASK-162, measured 2026-10-15, by reading). The `return null!` skip from the store delegate was removed when the update merge was rewritten.
+
 When CheckHashChange reports no change the delegate returns null! through a non-nullable T, relying on every store to null-check a result none of them even read; a store that did dereference it would throw NullReferenceException. data.LoadFrom(item) on the next line runs unconditionally, so the caller's ViewModel is refreshed from a model whose persistence was nominally skipped. CheckHashChange also defaults update:true, advancing the stored hash before the store persists. Same shape in AbstractAsyncViewModelRepository.cs:232.
 
 #### SH-M218 — AddRepository overloads capture one shared store instance regardless of requested lifetime
 
 `../Birko.Data.Repositories/ServiceCollectionExtensions.cs:49`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). `AddRepository<TRepository>(store, lifetime)` shared one instance across a Scoped or Transient registration; anything but Singleton is refused, pointing at the store-type overload. The duplicate-descriptor half is left as it is: a later registration winning is how DI overrides work. `tests/Birko.Data.Repositories.Tests/RepositoryContractTriageTests.cs`.
 
 AddRepository<TRepository>(IBaseStore store, lifetime) closes over the single instance passed at registration, so even a Scoped or Transient repository gets the same store on every resolution — defeating per-scope isolation for stateful stores (open connection, change tracking, tenant scoping). All three overloads use services.Add rather than a TryAdd variant, so repeated registration silently duplicates descriptors, and the store passed to this overload is never registered in the container, so nothing ever disposes it or calls its Destroy().
 
@@ -2527,11 +2555,15 @@ AddRepository<TRepository>(IBaseStore store, lifetime) closes over the single in
 
 `../Birko.Data.Repositories/AbstractRepository.cs:55`
 
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). A repository with no store answered every call as if it had worked. Every data operation now throws `InvalidOperationException`, on the plain and the ViewModel repositories alike (same root cause, fixed together); `CreateInstance` still activates a new instance and `Destroy` with no store has nothing to destroy. The six `AbstractRepositoryFallbackTests` that pinned the silent answers are inverted.
+
 With Store == null, Create returns Guid.Empty (55), Save returns Guid.Empty (97), Update/Delete/Destroy are Store?.X(...) no-ops (66/76/119) and Count returns 0 (86); the async family is identical (AbstractAsyncRepository.cs:59/70/81/103/125). Guid.Empty is exactly what a caller sees for "nothing persisted", so a mis-wired repository — e.g. DataBaseRepository constructed with an explicit null, which does NOT self-provision a store — accepts and discards every write while reporting success.
 
 #### SH-M220 — Async single-item DeleteAsync bypasses the LoadModelInstance extension point
 
 `../Birko.Data.ViewModel/Repositories/AbstractAsyncViewModelRepository.cs:242`
+
+**Verdict: CONFIRMED, fixed** (TASK-162, measured 2026-10-15). The async single `DeleteAsync` inlined the mapping; it calls `LoadModelInstance`, so an override is used. `tests/Birko.Data.ViewModel.Tests/ViewModelRepositoryTriageTests.cs`.
 
 DeleteAsync inlines `TModel item = CreateModelInstance(); MapToModel(data, item);` instead of calling the public virtual LoadModelInstance(data) that Create/Update and every bulk path use. A subclass overriding LoadModelInstance (the documented ViewModel→Model hook, e.g. to set a discriminator or the key needed to locate the row) has its override skipped on exactly that one path, so the model handed to Store.DeleteAsync differs from the one used everywhere else. The sync Delete does call LoadModelInstance (AbstractViewModelRepository.cs:242).
 

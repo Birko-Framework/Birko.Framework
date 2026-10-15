@@ -113,7 +113,8 @@ public class PropertyUpdateTests
     {
         var act = () => new PropertyUpdate<Item>().Set(x => x.Field, 1).ApplyTo(new Item());
 
-        act.Should().Throw<ArgumentException>().WithMessage("*Unable to resolve property*");
+        // Since TASK-170 (SH-M026) the builder refuses a non-property selector itself, before ApplyTo ever runs.
+        act.Should().Throw<ArgumentException>().WithMessage("*top-level property*");
     }
 
     [Fact]

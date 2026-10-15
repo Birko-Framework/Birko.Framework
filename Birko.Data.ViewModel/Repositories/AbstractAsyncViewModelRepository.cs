@@ -23,8 +23,11 @@ namespace Birko.Data.Repositories
     {
         #region Properties and Fields
 
-        private bool _isReadMode = false;
-        protected IDictionary<Guid, byte[]> _modelHash = new Dictionary<Guid, byte[]>();
+        // SH-M206 (TASK-162): one repository instance is shared by every caller (singleton registration,
+        // RepositoryLocator), and every read writes the hash table, so a plain Dictionary could be corrupted by two
+        // concurrent reads. A concurrent one, and a volatile flag the write guards read.
+        private volatile bool _isReadMode = false;
+        protected IDictionary<Guid, byte[]> _modelHash = new System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]>();
         protected ISerializer Serializer { get; set; }
         protected IAsyncStore<TModel>? Store { get; set; }
 
@@ -273,6 +276,13 @@ namespace Birko.Data.Repositories
 
         #endregion
 
+        /// <summary>
+        /// SH-M219 (TASK-162), on the ViewModel repositories too. With no store every operation answered as if it had
+        /// worked (Guid.Empty, a no-op write, a count of 0, a null read); now it refuses.
+        /// </summary>
+        protected InvalidOperationException NoStore()
+            => new($"{GetType().Name} has no store; construct it with one.");
+
         #region Core CRUD Operations - Single Item
 
         /// <summary>
@@ -280,7 +290,7 @@ namespace Birko.Data.Repositories
         /// </summary>
         public virtual async Task<TViewModel?> ReadAsync(IFilter<TModel>? filter = null, CancellationToken ct = default)
         {
-            if (Store == null) return default;
+            if (Store == null) throw NoStore();
             var model = await Store.ReadAsync(filter?.Filter(), ct);
             return LoadInstance(model);
         }
@@ -288,7 +298,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<TViewModel?> ReadOneAsync(IFilter<TModel>? filter = null, CancellationToken ct = default)
         {
-            if (Store == null) return default;
+            if (Store == null) throw NoStore();
             var model = await Store.ReadAsync(filter?.Filter(), ct);
             return LoadInstance(model);
         }
@@ -297,7 +307,8 @@ namespace Birko.Data.Repositories
         public virtual async Task<Guid> CreateAsync(TViewModel data, ProcessDataDelegate<TModel>? processDelegate = null, CancellationToken ct = default)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
-            if (Store == null || data == null) return Guid.Empty;
+            if (Store == null) throw NoStore();
+            if (data == null) return Guid.Empty;
 
             TModel item = LoadModelInstance(data);
             // SH-H035: ProcessDataDelegate is a TRANSFORM, and no store reads a StoreDataDelegate's
@@ -325,7 +336,8 @@ namespace Birko.Data.Repositories
         public virtual async Task UpdateAsync(TViewModel data, ProcessDataDelegate<TModel>? processDelegate = null, CancellationToken ct = default)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
-            if (Store == null || data == null) return;
+            if (Store == null) throw NoStore();
+            if (data == null) return;
 
             // SH-H034: map onto a detached copy of the STORED row, never onto a fresh instance.
             var merged = await LoadModelInstanceForUpdateAsync(data, ct).ConfigureAwait(false);
@@ -354,10 +366,12 @@ namespace Birko.Data.Repositories
         public virtual async Task DeleteAsync(TViewModel data, CancellationToken ct = default)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
-            if (Store == null) return;
-            TModel item = CreateModelInstance();
-            MapToModel(data, item);
+            if (Store == null) throw NoStore();
+            if (data == null) return; // SH-M216 (TASK-162)
+            // SH-M220 (TASK-162): through the LoadModelInstance hook, as every other path is; inlining it skipped an override.
+            TModel item = LoadModelInstance(data);
             await Store.DeleteAsync(item, ct);
+            RemoveHash(item); // SH-M207 (TASK-162)
         }
 
         #endregion
@@ -367,7 +381,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<long> CountAsync(IFilter<TModel>? filter = null, CancellationToken ct = default)
         {
-            if (Store == null) return 0;
+            if (Store == null) throw NoStore();
             return await Store.CountAsync(filter?.Filter(), ct);
         }
 
@@ -378,7 +392,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task DestroyAsync(CancellationToken ct = default)
         {
-            if (Store == null) return;
+            if (Store == null) return; // no store, nothing to destroy (TASK-162)
             await Store.DestroyAsync(ct);
         }
 

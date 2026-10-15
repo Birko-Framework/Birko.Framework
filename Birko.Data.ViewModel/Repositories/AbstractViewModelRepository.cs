@@ -21,8 +21,11 @@ namespace Birko.Data.Repositories
     {
         #region Properties and Fields
 
-        private bool _isReadMode = false;
-        protected IDictionary<Guid, byte[]> _modelHash = new Dictionary<Guid, byte[]>();
+        // SH-M206 (TASK-162): one repository instance is shared by every caller (singleton registration,
+        // RepositoryLocator), and every read writes the hash table, so a plain Dictionary could be corrupted by two
+        // concurrent reads. A concurrent one, and a volatile flag the write guards read.
+        private volatile bool _isReadMode = false;
+        protected IDictionary<Guid, byte[]> _modelHash = new System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]>();
         protected ISerializer Serializer { get; set; }
         protected IStore<TModel>? Store { get; set; }
 
@@ -246,15 +249,19 @@ namespace Birko.Data.Repositories
 
         #endregion
 
+        /// <summary>
+        /// SH-M219 (TASK-162), on the ViewModel repositories too. With no store every operation answered as if it had
+        /// worked (Guid.Empty, a no-op write, a count of 0, a null read); now it refuses.
+        /// </summary>
+        protected InvalidOperationException NoStore()
+            => new($"{GetType().Name} has no store; construct it with one.");
+
         #region Core CRUD Operations
 
         /// <inheritdoc />
         public virtual long Count(IFilter<TModel>? filter = null)
         {
-            if (Store == null)
-            {
-                return 0;
-            }
+            if (Store == null) throw NoStore();
             return Store.Count(filter?.Filter());
         }
 
@@ -292,10 +299,7 @@ namespace Birko.Data.Repositories
         /// </remarks>
         public virtual TViewModel? ReadOne(IFilter<TModel>? filter, OrderBy<TModel>? orderBy)
         {
-            if (Store == null)
-            {
-                return default;
-            }
+            if (Store == null) throw NoStore();
 
             if (orderBy == null || Store is not IBulkReadStore<TModel> bulk)
             {
@@ -312,10 +316,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual TViewModel? Read(IFilter<TModel>? filter = null)
         {
-            if (Store == null)
-            {
-                return default;
-            }
+            if (Store == null) throw NoStore();
             var model = Store.Read(filter?.Filter());
             return LoadInstance(model);
         }
@@ -327,10 +328,8 @@ namespace Birko.Data.Repositories
             {
                 throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             }
-            if (Store == null || data == null)
-            {
-                return Guid.Empty;
-            }
+            if (Store == null) throw NoStore();
+            if (data == null) return Guid.Empty;
 
             TModel item = LoadModelInstance(data);
             // SH-H035: ProcessDataDelegate is a TRANSFORM, and no store reads a StoreDataDelegate's
@@ -361,10 +360,8 @@ namespace Birko.Data.Repositories
             {
                 throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             }
-            if (Store == null || data == null)
-            {
-                return;
-            }
+            if (Store == null) throw NoStore();
+            if (data == null) return;
 
             // SH-H034: map onto a detached copy of the STORED row, never onto a fresh instance.
             TModel item = LoadModelInstanceForUpdate(data, out _);
@@ -395,12 +392,11 @@ namespace Birko.Data.Repositories
             {
                 throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             }
-            if (Store == null)
-            {
-                return;
-            }
+            if (Store == null) throw NoStore();
+            if (data == null) return; // SH-M216 (TASK-162): as Create and Update do
             TModel item = LoadModelInstance(data);
             Store.Delete(item);
+            RemoveHash(item); // SH-M207 (TASK-162): a deleted model is no longer tracked
         }
 
         #endregion
@@ -410,7 +406,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Destroy()
         {
-            Store?.Destroy();
+            Store?.Destroy(); // no store, nothing to destroy: the one honest no-op (TASK-162)
         }
 
         #endregion

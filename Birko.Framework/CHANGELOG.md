@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-14 — InfluxDB `RemoveMigration` removes the record
+
+[[TASK-618]]. The delete predicate named the tag `name`, a keyword in InfluxDB's delete grammar (a 400). The client's
+`Delete` Task was never awaited, and a catch swallowed the error besides, so every downgrade reported success and left
+the migration recorded as applied. The key is quoted, the call awaited, and a refused delete now throws.
+
 ## 2026-10-14 — InfluxDB migrations can record what they apply
 
 [[TASK-617]]. The bookkeeping bucket was `_migrations`, and InfluxDB 2 refuses names starting with `_`, so

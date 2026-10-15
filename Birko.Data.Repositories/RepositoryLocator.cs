@@ -14,6 +14,10 @@ namespace Birko.Data.Repositories
 
         private static readonly object _lockObject = new();
         private static IDictionary<string, IDictionary<Type, object>>? _repositories;
+        // TASK-162: the store each cached repository was built around, where the locator was handed one, so a second
+        // call with a DIFFERENT store is refused (SH-M211) and a Destroy evicts every repository on the destroyed
+        // store (SH-M212).
+        private static readonly Dictionary<object, object> _storeOf = new(ReferenceEqualityComparer.Instance);
 
         #endregion
 
@@ -31,7 +35,9 @@ namespace Birko.Data.Repositories
             where TStore : class, Stores.IBaseStore
             where TRepository : IBaseRepository
         {
-            var id = key ?? typeof(TStore).FullName ?? string.Empty;
+            // SH-M210 (TASK-162): keyed by the REPOSITORY type by default, as the factory overload and Destroy<TRepository>()
+            // are. Keyed by the store type, a repository created here could never be found by the no-key Destroy.
+            var id = key ?? typeof(TRepository).FullName ?? string.Empty;
             var type = typeof(TRepository);
             lock (_lockObject)
             {
@@ -43,7 +49,16 @@ namespace Birko.Data.Repositories
 
                 if (!_repositories[id].ContainsKey(type))
                 {
-                    _repositories[id].Add(type, (TRepository)Activator.CreateInstance(type, store)!);
+                    var created = (TRepository)Activator.CreateInstance(type, store)!;
+                    _repositories[id].Add(type, created);
+                    _storeOf[created] = store;
+                }
+                else if (_storeOf.TryGetValue(_repositories[id][type], out var cachedStore) && !ReferenceEquals(cachedStore, store))
+                {
+                    // SH-M211 (TASK-162): the store passed was silently ignored on a cache hit, so two differently
+                    // configured stores of one type collapsed onto whichever came first.
+                    throw new InvalidOperationException(
+                        $"{type.Name} is already cached under '{id}' for a different store instance. Pass a key per store.");
                 }
                 // Read inside the lock (CR-H081): _repositories is a plain Dictionary, so an
                 // unlocked read can race a concurrent writer's resize/Remove (undefined behavior).
@@ -74,7 +89,9 @@ namespace Birko.Data.Repositories
                 if (!_repositories[id].ContainsKey(type))
                 {
                     var store = storeFactory();
-                    _repositories[id].Add(type, (TRepository)Activator.CreateInstance(type, store)!);
+                    var created = (TRepository)Activator.CreateInstance(type, store)!;
+                    _repositories[id].Add(type, created);
+                    _storeOf[created] = store;
                 }
                 return (TRepository)_repositories[id][type];
             }
@@ -166,6 +183,24 @@ namespace Birko.Data.Repositories
                 if (!byType.Any())
                 {
                     _repositories.Remove(id);
+                }
+
+                // SH-M212 (TASK-162): Destroy() destroys the STORE (for SQL, the table), and every other repository cached
+                // on that same store instance would keep pointing at it. They are evicted with it.
+                if (_storeOf.Remove(repoObj, out var destroyedStore))
+                {
+                    foreach (var (otherKey, otherByType) in _repositories.ToList())
+                    {
+                        foreach (var (otherType, other) in otherByType.ToList())
+                        {
+                            if (_storeOf.TryGetValue(other, out var s) && ReferenceEquals(s, destroyedStore))
+                            {
+                                otherByType.Remove(otherType);
+                                _storeOf.Remove(other);
+                            }
+                        }
+                        if (!otherByType.Any()) _repositories.Remove(otherKey);
+                    }
                 }
             }
 

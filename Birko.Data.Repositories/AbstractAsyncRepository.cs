@@ -38,14 +38,14 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
         {
-            if (Store == null) return default;
+            if (Store == null) throw NoStore();
             return await Store.ReadAsync(guid, ct);
         }
 
         /// <inheritdoc />
         public virtual async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
-            if (Store == null) return default;
+            if (Store == null) throw NoStore();
             return await Store.ReadAsync(filter, ct);
         }
 
@@ -56,7 +56,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<Guid> CreateAsync(T data, CancellationToken ct = default)
         {
-            if (Store == null) return Guid.Empty;
+            if (Store == null) throw NoStore();
             return await Store.CreateAsync(data, ct: ct);
         }
 
@@ -89,7 +89,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
-            if (Store == null) return 0;
+            if (Store == null) throw NoStore();
             return await Store.CountAsync(filter, ct);
         }
 
@@ -100,11 +100,19 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<Guid> SaveAsync(T data, CancellationToken ct = default)
         {
-            if (Store == null) return Guid.Empty;
+            if (Store == null) throw NoStore();
             return await Store.SaveAsync(data, ct: ct);
         }
 
         #endregion
+
+        /// <summary>
+        /// SH-M219 (TASK-162). A repository with no store used to answer every call as if it had worked: a create
+        /// returned Guid.Empty, an update or delete did nothing, a count was 0, a read was null or empty. A mis-wired
+        /// repository was indistinguishable from an empty one, so every operation now refuses.
+        /// </summary>
+        protected InvalidOperationException NoStore()
+            => new($"{GetType().Name} has no store; construct it with one (or let its default constructor provide it).");
 
         #region Factory Methods
 

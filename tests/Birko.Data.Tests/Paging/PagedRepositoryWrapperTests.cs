@@ -42,13 +42,17 @@ public class PagedRepositoryWrapperTests
             if (filter != null) query = query.AsQueryable().Where(filter);
             if (orderBy != null)
             {
+                // Keys after the first are tie-breaks (ThenBy), as the real stores' OrderByHelper applies them. Re-sorting
+                // per key let the last key win, which went unnoticed while every order had one key (TASK-171 appends Guid).
+                IOrderedEnumerable<TestModel>? ordered = null;
                 foreach (var field in orderBy.Fields)
                 {
                     var prop = typeof(TestModel).GetProperty(field.PropertyName)!;
-                    query = field.Descending
-                        ? query.OrderByDescending(x => prop.GetValue(x))
-                        : query.OrderBy(x => prop.GetValue(x));
+                    ordered = ordered == null
+                        ? (field.Descending ? query.OrderByDescending(x => prop.GetValue(x)) : query.OrderBy(x => prop.GetValue(x)))
+                        : (field.Descending ? ordered.ThenByDescending(x => prop.GetValue(x)) : ordered.ThenBy(x => prop.GetValue(x)));
                 }
+                if (ordered != null) query = ordered;
             }
             if (offset.HasValue) query = query.Skip(offset.Value);
             if (limit.HasValue) query = query.Take(limit.Value);

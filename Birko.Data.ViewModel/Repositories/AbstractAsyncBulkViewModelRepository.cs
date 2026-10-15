@@ -23,6 +23,17 @@ namespace Birko.Data.Repositories
         /// <summary>
         /// Gets the async bulk store for bulk operations.
         /// </summary>
+        /// <summary>
+        /// SH-M209 (TASK-162): a store that is not a bulk store made every bulk call yield nothing or do nothing, where
+        /// the sync twin throws. Now this one throws too.
+        /// </summary>
+        private InvalidOperationException NotBulk()
+            => Store == null ? NoStore() : new($"Store is not type of {typeof(Stores.IAsyncBulkStore<TModel>)}");
+
+        /// <summary>SH-M214 (TASK-162): a paged read is ordered by Guid, so its window is stable.</summary>
+        protected static Stores.OrderBy<TModel>? PageOrder(int? limit, int? offset)
+            => limit != null || offset != null ? Stores.OrderBy<TModel>.By(x => x.Guid) : null;
+
         protected Stores.IAsyncBulkStore<TModel>? BulkStore
         {
             get
@@ -55,10 +66,8 @@ namespace Birko.Data.Repositories
         public virtual async Task CreateAsync(IEnumerable<TViewModel> data, Stores.StoreDataDelegate<TModel>? storeDelegate = null, CancellationToken ct = default)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
-            if (BulkStore == null || data == null)
-            {
-                return;
-            }
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162)
+            if (data == null) return;
 
             // CR-M179: route through LoadModelInstance so the ViewModel→Model mapping matches the
             // single-item path (uniform behavior). CR-L237: LoadModelInstance returns a non-null TModel
@@ -77,12 +86,9 @@ namespace Birko.Data.Repositories
             int? offset = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
-            if (BulkStore is null)
-            {
-                yield break;
-            }
+            if (BulkStore is null) throw NotBulk(); // SH-M209 (TASK-162)
 
-            var models = await BulkStore.ReadAsync(filter, null, limit, offset, ct);
+            var models = await BulkStore.ReadAsync(filter, PageOrder(limit, offset), limit, offset, ct); // SH-M214
             foreach (var model in models)
             {
                 // CR-M179: use LoadInstance so change-tracking (StoreHash) is populated for bulk-read
@@ -102,10 +108,8 @@ namespace Birko.Data.Repositories
         public virtual async Task UpdateAsync(IEnumerable<TViewModel> data, Stores.StoreDataDelegate<TModel>? storeDelegate = null, CancellationToken ct = default)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
-            if (BulkStore == null || data == null)
-            {
-                return;
-            }
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162)
+            if (data == null) return;
 
             // CR-M179 mapping. SH-H034: map onto the STORED row, not onto a fresh instance, or every
             // column this ViewModel does not map is blanked. Materialized deliberately (reversing
@@ -126,7 +130,7 @@ namespace Birko.Data.Repositories
         public virtual async Task UpdateAsync(Expression<Func<TModel, bool>> filter, Action<TModel> updateAction, CancellationToken ct = default)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
-            if (BulkStore == null) return;
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162)
             await BulkStore.UpdateAsync(filter, updateAction, ct).ConfigureAwait(false);
         }
 
@@ -136,7 +140,7 @@ namespace Birko.Data.Repositories
         public virtual async Task UpdateAsync(Expression<Func<TModel, bool>> filter, Stores.PropertyUpdate<TModel> updates, CancellationToken ct = default)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
-            if (BulkStore == null) return;
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162)
             await BulkStore.UpdateAsync(filter, updates, ct).ConfigureAwait(false);
         }
 
@@ -146,7 +150,7 @@ namespace Birko.Data.Repositories
         public virtual async Task DeleteAsync(Expression<Func<TModel, bool>> filter, CancellationToken ct = default)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
-            if (BulkStore == null) return;
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162)
             await BulkStore.DeleteAsync(filter, ct).ConfigureAwait(false);
         }
 
@@ -156,13 +160,13 @@ namespace Birko.Data.Repositories
         public virtual async Task DeleteAsync(IEnumerable<TViewModel> data, CancellationToken ct = default)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
-            if (BulkStore == null || data == null)
-            {
-                return;
-            }
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162)
+            if (data == null) return;
 
             // CR-M179 mapping; CR-L237 drops the dead .Where(m => m != null).ToList()! (lazy projection).
-            await BulkStore.DeleteAsync(data.Select(LoadModelInstance), ct).ConfigureAwait(false);
+            var models = data.Select(LoadModelInstance).ToList();
+            await BulkStore.DeleteAsync(models, ct).ConfigureAwait(false);
+            foreach (var model in models) RemoveHash(model); // SH-M207 (TASK-162)
         }
 
         #endregion

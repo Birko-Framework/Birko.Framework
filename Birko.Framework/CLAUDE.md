@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Repositories: no store, no silent success; the locator keeps one store per key (2026-10-15)
+
+[[TASK-162]]. A repository with no store answered every call as if it had worked. It now throws (plain and ViewModel).
+The locator's default key never matched its `Destroy`, ignored a second store on a cache hit, and destroyed the store
+under a sibling. `AddRepository(store, lifetime)` takes only Singleton. ViewModel paged reads are ordered.
 ### Tenant isolation: tenant-scoped bulk writes check the caller's filter; the header guard is enforced (2026-10-15)
 
 [[TASK-161]]. Through the tenant bulk wrapper, a null filter deleted every row of the tenant. Tenant repository
@@ -334,11 +339,6 @@ throws `ArgumentException`.
 concurrent increments over 3,000 documents all "succeeded" and left 1,000 increments of 9,000, and a racing delete left
 2,432 rows. A version conflict now throws `StoreConcurrencyException` (`Applied`, `Conflicts`). Another failure or a
 timeout throws `StoreException`. The job queue treats a conflicted claim as a lost race.
-### InfluxDB `RemoveMigration` removes the record (2026-10-14)
-
-[[TASK-618]]. The delete predicate named the tag `name`, a keyword in InfluxDB's delete grammar (a 400). The client's
-`Delete` Task was never awaited, and a catch swallowed the error besides, so every downgrade reported success and left
-the migration recorded as applied. The key is quoted, the call awaited, and a refused delete now throws.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

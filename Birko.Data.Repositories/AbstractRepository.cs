@@ -36,13 +36,13 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual T? Read(Guid guid)
         {
-            return Store?.Read(guid);
+            return (Store ?? throw NoStore()).Read(guid);
         }
 
         /// <inheritdoc />
         public virtual T? Read(Expression<Func<T, bool>>? filter = null)
         {
-            return Store?.Read(filter);
+            return (Store ?? throw NoStore()).Read(filter);
         }
 
         #endregion
@@ -52,7 +52,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual Guid Create(T data)
         {
-            if (Store == null) return Guid.Empty;
+            if (Store == null) throw NoStore();
             return Store.Create(data);
         }
 
@@ -63,7 +63,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Update(T data)
         {
-            Store?.Update(data);
+            (Store ?? throw NoStore()).Update(data);
         }
 
         #endregion
@@ -73,7 +73,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Delete(T data)
         {
-            Store?.Delete(data);
+            (Store ?? throw NoStore()).Delete(data);
         }
 
         #endregion
@@ -83,7 +83,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual long Count(Expression<Func<T, bool>>? filter = null)
         {
-            if (Store == null) return 0;
+            if (Store == null) throw NoStore();
             return Store.Count(filter);
         }
 
@@ -94,11 +94,19 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual Guid Save(T data)
         {
-            if (Store == null) return Guid.Empty;
+            if (Store == null) throw NoStore();
             return Store.Save(data);
         }
 
         #endregion
+
+        /// <summary>
+        /// SH-M219 (TASK-162). A repository with no store used to answer every call as if it had worked: a create
+        /// returned Guid.Empty, an update or delete did nothing, a count was 0, a read was null or empty. A mis-wired
+        /// repository was indistinguishable from an empty one, so every operation now refuses.
+        /// </summary>
+        protected InvalidOperationException NoStore()
+            => new($"{GetType().Name} has no store; construct it with one (or let its default constructor provide it).");
 
         #region Factory Methods
 
@@ -116,7 +124,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Destroy()
         {
-            Store?.Destroy();
+            Store?.Destroy(); // no store, nothing to destroy: the one honest no-op (TASK-162)
         }
 
         #endregion

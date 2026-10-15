@@ -13,7 +13,8 @@ finding-ids: SH-M001 … SH-M428
 
 ## Progress
 
-**127 / 428 closed by this story's tasks.** All 18 of `tenant-isolation` ([[TASK-161]], done 2026-10-15): 18 confirmed;
+**143 / 428 closed by this story's tasks.** All 16 of `repository-contract` ([[TASK-162]], done 2026-10-15): 16 confirmed;
+13 fixed there, 3 found already fixed. All 18 of `tenant-isolation` ([[TASK-161]], done 2026-10-15): 18 confirmed;
 3 fixed there, 2 found already fixed, `SH-M353` decided by [[TASK-328]], `SH-M338` owned by [[TASK-127]],
 `SH-M342`–`SH-M352` spawned as [[TASK-630]]. All 12 of `specifications-and-paging` ([[TASK-171]], done 2026-10-15): 11
 confirmed, 1 narrower; 9 fixed there, `SH-M295`, `SH-M297`, `SH-M299` owned by [[TASK-144]]. All 14 of `bulk-filter-operations` ([[TASK-170]], done 2026-10-15): 12

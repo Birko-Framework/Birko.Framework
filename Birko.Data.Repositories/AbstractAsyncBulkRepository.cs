@@ -23,6 +23,13 @@ namespace Birko.Data.Repositories
         /// </summary>
         protected Stores.IAsyncBulkStore<T>? BulkStore => Store as Stores.IAsyncBulkStore<T>;
 
+        /// <summary>
+        /// SH-M209 (TASK-162). A store that is not a bulk store made every bulk call return empty or do nothing, so a
+        /// delete-by-filter that deleted nothing looked like one that matched nothing. The sync twin throws this.
+        /// </summary>
+        private InvalidOperationException NotBulk()
+            => Store == null ? NoStore() : new($"Store is not type of {typeof(Stores.IAsyncBulkStore<T>)}");
+
         #endregion
 
         #region Constructors
@@ -43,21 +50,21 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default)
         {
-            if (BulkStore == null) return Array.Empty<T>();
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162): the sync twin throws for this
             return await BulkStore.ReadAsync(ct);
         }
 
         /// <inheritdoc />
         public virtual async Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
         {
-            if (BulkStore == null) return Array.Empty<T>();
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162): the sync twin throws for this
             return await BulkStore.ReadAsync(filter, orderBy, limit, offset, ct);
         }
 
         /// <inheritdoc />
         public virtual async Task<T?> ReadFirstAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
-            if (BulkStore == null) return null;
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162): the sync twin throws for this
             return await BulkStore.ReadFirstAsync(filter, ct);
         }
 
@@ -68,7 +75,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task CreateAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
-            if (BulkStore == null) return;
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162): the sync twin throws for this
             await BulkStore.CreateAsync(data, ct: ct);
         }
 
@@ -79,21 +86,21 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task UpdateAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
-            if (BulkStore == null) return;
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162): the sync twin throws for this
             await BulkStore.UpdateAsync(data, ct: ct);
         }
 
         /// <inheritdoc />
         public virtual async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
         {
-            if (BulkStore == null) return;
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162): the sync twin throws for this
             await BulkStore.UpdateAsync(filter, updateAction, ct);
         }
 
         /// <inheritdoc />
         public virtual async Task UpdateAsync(Expression<Func<T, bool>> filter, Stores.PropertyUpdate<T> updates, CancellationToken ct = default)
         {
-            if (BulkStore == null) return;
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162): the sync twin throws for this
             await BulkStore.UpdateAsync(filter, updates, ct);
         }
 
@@ -104,14 +111,14 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
-            if (BulkStore == null) return;
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162): the sync twin throws for this
             await BulkStore.DeleteAsync(data, ct);
         }
 
         /// <inheritdoc />
         public virtual async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
         {
-            if (BulkStore == null) return;
+            if (BulkStore == null) throw NotBulk(); // SH-M209 (TASK-162): the sync twin throws for this
             await BulkStore.DeleteAsync(filter, ct);
         }
 

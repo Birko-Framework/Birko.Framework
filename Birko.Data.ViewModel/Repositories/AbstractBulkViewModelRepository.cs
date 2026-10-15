@@ -33,17 +33,29 @@ namespace Birko.Data.Repositories
 
         #endregion
 
+        /// <summary>
+        /// SH-M214 (TASK-162): a page read sent LIMIT/OFFSET with no order, so consecutive pages could repeat and skip
+        /// rows, and this interface takes no order. A paged read is ordered by Guid, which makes the window stable.
+        /// </summary>
+        protected static OrderBy<TModel>? PageOrder(int? limit, int? offset)
+            => limit != null || offset != null ? OrderBy<TModel>.By(x => x.Guid) : null;
+
         #region Core CRUD Operations - Bulk
 
         /// <inheritdoc />
         public virtual IEnumerable<TViewModel> Read(IFilter<TModel>? filter = null, int? limit = null, int? offset = null)
         {
-            if (Store is not IBulkStore<TModel>)
+            // SH-M215 (TASK-162): validated when called, not on the first MoveNext; the iterator below is separate.
+            if (Store is not IBulkStore<TModel> bulk)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
             }
+            return ReadIterator(bulk, filter, limit, offset);
+        }
 
-            foreach (var item in ((IBulkStore<TModel>)Store).Read(filter?.Filter(), null, limit, offset))
+        private IEnumerable<TViewModel> ReadIterator(IBulkStore<TModel> bulk, IFilter<TModel>? filter, int? limit, int? offset)
+        {
+            foreach (var item in bulk.Read(filter?.Filter(), PageOrder(limit, offset), limit, offset))
             {
                 var instance = LoadInstance(item);
                 if (instance != null)
@@ -57,6 +69,7 @@ namespace Birko.Data.Repositories
         public virtual void Create(IEnumerable<TViewModel> data, ProcessDataDelegate<TModel>? processDelegate = null)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
+            if (data == null) return; // SH-M216 (TASK-162): as the async twins do
             if (Store is not IBulkStore<TModel>)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
@@ -77,6 +90,7 @@ namespace Birko.Data.Repositories
         public virtual void Update(IEnumerable<TViewModel> data, ProcessDataDelegate<TModel>? processDelegate = null)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
+            if (data == null) return; // SH-M216 (TASK-162): as the async twins do
             if (Store is not IBulkStore<TModel>)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
@@ -132,6 +146,7 @@ namespace Birko.Data.Repositories
         public virtual void Delete(IEnumerable<TViewModel> data)
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
+            if (data == null) return; // SH-M216 (TASK-162): as the async twins do
             if (Store is not IBulkStore<TModel>)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");

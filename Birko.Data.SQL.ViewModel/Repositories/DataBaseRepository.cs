@@ -26,6 +26,14 @@ namespace Birko.Data.SQL.Repositories
 
         public DataBaseRepository(IStore<TModel>? store) : base(null)
         {
+            // SH-M208 (TASK-162): IsStoreOfType inspects the INNERMOST store while every inherited bulk method tests the
+            // OUTERMOST one, so a non-bulk wrapper (TenantStoreWrapper) constructed fine and every bulk call then threw.
+            if (store != null && store is not IBulkStore<TModel>)
+            {
+                throw new ArgumentException(
+                    $"Store must be a bulk store; {store.GetType().Name} is not. Wrap with the bulk wrapper (AsTenantAware picks it).",
+                    nameof(store));
+            }
             if (store != null && !store.IsStoreOfType<TModel, DataBaseBulkStore<TConnector, TModel>>())
             {
                 throw new ArgumentException(

@@ -52,6 +52,14 @@ namespace Birko.Data.Repositories
             ServiceLifetime lifetime = ServiceLifetime.Scoped)
             where TRepository : class, IBaseRepository
         {
+            // SH-M218 (TASK-162): the one instance passed here was handed to every resolution, so a Scoped or Transient
+            // repository shared one store across scopes (connection, change tracking, tenant). Only Singleton is what
+            // this overload can deliver; register the store type instead for the others.
+            if (lifetime != ServiceLifetime.Singleton)
+                throw new ArgumentException(
+                    $"A repository over one store instance can only be Singleton, not {lifetime}: every resolution would share it. "
+                    + "Register the store type (AddRepository<TStore, TRepository>) for a per-scope store.",
+                    nameof(lifetime));
             services.Add(new ServiceDescriptor(typeof(TRepository), sp =>
             {
                 return Activator.CreateInstance(typeof(TRepository), store) as TRepository
