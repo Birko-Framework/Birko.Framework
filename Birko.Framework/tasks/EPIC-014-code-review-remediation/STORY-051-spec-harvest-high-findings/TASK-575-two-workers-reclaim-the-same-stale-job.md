@@ -36,7 +36,7 @@ also bury a row another worker has just legitimately reclaimed.
 - [x] The Dead burial is guarded the same way, so it cannot overwrite a row another worker reclaimed meanwhile
 - [x] A concurrency test with two workers on one stale row asserts exactly one claim
 - [x] A regression test fails on the current code and passes with the fix
-- [ ] `/specs regen` of the area, with the spec diff reviewed, is the fix's evidence (EPIC-014's standing constraint)
+- [x] `/specs regen` of the area, with the spec diff reviewed, is the fix's evidence (EPIC-014's standing constraint) — done 2026-10-16 (batched regen of 17 areas, diffs reviewed and confirmed)
 
 ## Out of scope
 

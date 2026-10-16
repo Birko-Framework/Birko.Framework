@@ -1,12 +1,13 @@
 ---
 area: specifications-and-paging
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.Patterns/Paging/AsyncPagedRepositoryWrapper.cs
   - ../Birko.Data.Patterns/Paging/IPagedRepository.cs
   - ../Birko.Data.Patterns/Paging/PagedRepositoryWrapper.cs
   - ../Birko.Data.Patterns/Paging/PagedResult.cs
+  - ../Birko.Data.Patterns/Paging/PagingOrder.cs
   - ../Birko.Data.Patterns/Specification/AndSpecification.cs
   - ../Birko.Data.Patterns/Specification/ISpecification.cs
   - ../Birko.Data.Patterns/Specification/NotSpecification.cs
@@ -99,6 +100,18 @@ The system SHALL provide `Specification<T>.And(other)`, `.Or(other)` and `.Not()
 respectively, and SHALL provide the operator overloads `&`, `|` and `!` on `Specification<T>` that
 delegate to those three methods.
 
+The composites SHALL `override` `IsSatisfiedBy` to evaluate their operands' own `IsSatisfiedBy` —
+`AndSpecification<T>` as `left && right`, `OrSpecification<T>` as `left || right` (both short-circuiting),
+and `NotSpecification<T>` as `!inner` — rather than compiling the combined `ToExpression()`, so an operand
+that overrides `IsSatisfiedBy` (such as a `RuleSpecification<T>`) keeps its own in-memory semantics inside
+a composite (SH-M298, [[TASK-171]]).
+
+#### Scenario: Composite in-memory evaluation reaches each operand
+
+- **Given** `new AndSpecification<Order>(a, b)` where `a.IsSatisfiedBy` returns false
+- **When** the composite's `IsSatisfiedBy(order)` is called
+- **Then** `a.IsSatisfiedBy(order)` is invoked, `b.IsSatisfiedBy` is not (short-circuit), the result is false, and the composite's `ToExpression()` is never compiled
+
 #### Scenario: Operator form equals method form
 
 - **Given** two `Specification<Order>` instances `a` and `b`
@@ -178,6 +191,20 @@ The system SHALL throw `ArgumentNullException` from the constructors of `AndSpec
 - **When** the constructor runs
 - **Then** it completes successfully (the `_rule` field is assigned without a null check) and the failure is deferred to the first `ToExpression()` / `IsSatisfiedBy` call, which dereferences `rule.IsEnabled`
 
+### Requirement: RuleSpecification's store filter is the shared rule-to-LINQ translator
+
+The system SHALL implement `RuleSpecification<T>.ToExpression()` as a call to
+`Birko.Rules.RuleExpressionConverter.ToExpression<T>(rule)`, and SHALL NOT carry a translator of its own,
+so a rule filters a store identically whether it reaches the store through a `RuleSpecification<T>` or
+through the converter directly (SH-M299, [[TASK-144]]). Every translation rule in the requirements below is
+therefore the converter's.
+
+#### Scenario: The two entry points produce the same filter
+
+- **Given** one rule tree `rule`
+- **When** `new RuleSpecification<Order>(rule).ToExpression()` and `RuleExpressionConverter.ToExpression<Order>(rule)` are each built
+- **Then** both are produced by the same code path and select the same rows from any store
+
 ### Requirement: RuleSpecification evaluates in memory through the rule evaluator
 
 The system SHALL have `RuleSpecification<T>` `override` (not shadow) `IsSatisfiedBy`, evaluating the rule
@@ -188,8 +215,8 @@ evaluator is supplied the system SHALL default to a new `RuleEvaluator()`.
 #### Scenario: Evaluation via a composed specification still reaches the rule evaluator
 
 - **Given** a `RuleSpecification<Order>` combined into `new AndSpecification<Order>(ruleSpec, other)`
-- **When** the composite's `IsSatisfiedBy` runs (which compiles the composite expression) versus when `ruleSpec.IsSatisfiedBy` is called directly through an `ISpecification<Order>` reference
-- **Then** the direct call dispatches to the `RuleSpecification` override and uses `IRuleEvaluator`, because `IsSatisfiedBy` is an override rather than a `new` member
+- **When** the composite's `IsSatisfiedBy` runs, and separately when `ruleSpec.IsSatisfiedBy` is called directly through an `ISpecification<Order>` reference
+- **Then** both dispatch to the `RuleSpecification` override and use `IRuleEvaluator`: the direct call because `IsSatisfiedBy` is an override rather than a `new` member, and the composite because it evaluates its operands' `IsSatisfiedBy` instead of compiling the combined expression (previously the composite compiled `ToExpression()` and bypassed the evaluator)
 
 #### Scenario: Custom evaluator is honoured
 
@@ -209,6 +236,13 @@ The system SHALL resolve a leaf rule's `Field` to a public instance property of 
 `BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase`, and SHALL return
 `Expression.Constant(false)` for that leaf when no such property exists.
 
+A `Field` containing dots (`"Address.City"`) SHALL be resolved segment by segment, each against the
+previous segment's property type with the same binding flags; the leaf is unresolved when any segment is.
+The resolved path SHALL be cached per `(entity type, field)` in a process-wide `ConcurrentDictionary`,
+unresolved paths included. For a nested field the system SHALL wrap the leaf — after any negation has been
+applied — in `AndAlso` null guards on every intermediate member whose type can hold null, so a null
+intermediate matches neither the leaf nor its negation.
+
 #### Scenario: Field name differs in casing
 
 - **Given** `T` has a property `CustomerName` and the rule's `Field` is `"customername"`
@@ -227,6 +261,18 @@ The system SHALL resolve a leaf rule's `Field` to a public instance property of 
 - **When** `ToExpression()` is built
 - **Then** the lookup fails (the binding flags exclude non-public and static members) and the leaf becomes `Expression.Constant(false)`
 
+#### Scenario: Nested field
+
+- **Given** `T` has a reference-typed property `Address` whose type has a `string` property `City`, and a rule `Address.City Equal "Brno"` with `IsNegated = true`
+- **When** `ToExpression()` is built
+- **Then** the body is `x.Address != null && !(x.Address.City == "Brno")` — an entity whose `Address` is null matches neither the rule nor its negation
+
+#### Scenario: Nested field with an unknown segment
+
+- **Given** a rule with `Field = "Address.NoSuchMember"`
+- **When** `ToExpression()` is built
+- **Then** the leaf is an unevaluable match-none, as for an unresolved top-level field
+
 ### Requirement: Leaf operator translation table
 
 The system SHALL translate a leaf rule's `ComparisonOperator` to an expression as follows: `IsNull` /
@@ -235,7 +281,9 @@ The system SHALL translate a leaf rule's `ComparisonOperator` to an expression a
 `Between` to `AndAlso(member >= lower, member <= upper)`; `Contains`, `StartsWith`, `EndsWith` to the
 corresponding guarded `string` method call; `NotContains` to the negation of the guarded `Contains` call;
 `Like` to an anchored `StartsWith` / `EndsWith` / `Contains` / equality according to its `%` placement;
-`In` to a chain of `OrElse` equalities; and `NotIn` to the negation of that chain.
+`In` to a chain of `OrElse` equalities; and `NotIn` to the negation of that chain. For `In` / `NotIn` a
+`null` value SHALL be an unevaluable match-none for both operators, and a value that is not a collection —
+a `string` included — SHALL be read as a single candidate, as the in-memory evaluator reads it.
 
 An operator value with **no arm** SHALL throw `NotSupportedException` naming the operator and the field.
 It SHALL NOT fall back to a constant: a fallback constant is indistinguishable from a real predicate, and
@@ -263,6 +311,12 @@ declared operators — into match-everything on a filter that also drives bulk `
   `NotIn` over the same empty set correctly matches every row. "In the empty set" is false for every row
   and its negation is true for every row; this is the only all-rows outcome the translator produces on
   purpose
+
+#### Scenario: Membership with a single value or a null set
+
+- **Given** a leaf rule `Status In "Open"` on a `string` property, and separately `Status In null` / `Status NotIn null`
+- **When** `ToExpression()` is built
+- **Then** the first leaf is `x.Status == "Open"`; the null-set leaves both match nothing, `NotIn` included
 
 #### Scenario: SQL-style wildcard translates by its anchors
 
@@ -328,11 +382,13 @@ degradation.)
 - **When** `ToExpression()` is built
 - **Then** both match nothing rather than every row
 
-### Requirement: Null-check translation builds a typed null constant with no nullability guard
+### Requirement: Null-check translation builds a typed null constant, and a non-nullable member is never null
 
 The system SHALL translate `IsNull` / `IsNotNull` by constructing `Expression.Constant(null,
-member.Type)` and comparing the member against it with `Expression.Equal` / `Expression.NotEqual`, with
-no check that `member.Type` can hold null.
+member.Type)` and comparing the member against it with `Expression.Equal` / `Expression.NotEqual` when
+`member.Type` can hold null. When `member.Type` is a non-nullable value type the system SHALL instead emit
+the constant `false` for `IsNull` and `true` for `IsNotNull` — a real predicate, so negation applies to it
+— as the in-memory evaluator answers (SH-M290, [[TASK-171]]).
 
 #### Scenario: Null check on a reference-typed property
 
@@ -346,22 +402,31 @@ no check that `member.Type` can hold null.
 - **When** `ToExpression()` is built
 - **Then** the body is `x.ClosedAt != (DateTime?)null`
 
-#### Scenario: Null check on a non-nullable value type throws
+#### Scenario: Null check on a non-nullable value type
 
-- **Given** a rule `Qty IsNull` on a non-nullable `int` property
+- **Given** a rule `Qty IsNull` on a non-nullable `int` property, and separately `Qty IsNotNull`
 - **When** `ToExpression()` is built
-- **Then** `Expression.Constant(null, typeof(int))` throws `ArgumentException` ("Argument types do not match") out of `ToExpression()` — unlike the comparison operators, the null-check path has no graceful degradation
+- **Then** the first leaf is `Constant(false)` and the second `Constant(true)`; with `IsNegated = true` they invert, because they are real answers rather than degradations — previously `Expression.Constant(null, typeof(int))` threw `ArgumentException` out of `ToExpression()`
 
 ### Requirement: Non-convertible rule values make a comparison leaf unsatisfiable
 
 The system SHALL convert a leaf rule's `Value` (and `UpperValue` for `Between`) to the member's type via
 `TryConvertConstant`, which: returns false when the value is null and the target is a non-nullable value
 type; passes the value through unchanged when `targetType.IsInstanceOfType(value)` (covering enums and
-exact type matches); otherwise calls `Convert.ChangeType` against the target's non-nullable underlying
-type; and returns false when the conversion raises `InvalidCastException`, `FormatException`,
-`OverflowException` or `ArgumentException`. When conversion fails the system SHALL emit an **unevaluable**
-match-none leaf for that leaf rather than throwing — unevaluable rather than merely false, so that a
-negated comparison with a non-convertible value cannot invert into match-all.
+exact type matches); otherwise, against the target's non-nullable underlying type, parses a `string` with
+`Guid.Parse` for a `Guid`, `DateTime.Parse` / `DateTimeOffset.Parse` with the invariant culture for those
+types, and case-insensitive `Enum.Parse` for an enum, converts a non-string value to an enum with
+`Enum.ToObject`, and otherwise calls `Convert.ChangeType` with `CultureInfo.InvariantCulture` (SH-M292,
+SH-M293, [[TASK-171]]); and returns false when the conversion raises `InvalidCastException`,
+`FormatException`, `OverflowException` or `ArgumentException`. When conversion fails the system SHALL emit
+an **unevaluable** match-none leaf for that leaf rather than throwing — unevaluable rather than merely
+false, so that a negated comparison with a non-convertible value cannot invert into match-all.
+
+For the six comparison operators, a fractional `double` / `float` / `decimal` value against an integral
+member SHALL be compared in `double` (the member converted to `double` / `double?`) rather than rounded to
+the member's type (SH-M294), and a comparison the member type has no operator for (`string > string`,
+`bool >= bool`) SHALL be an unevaluable match-none rather than an exception (SH-M291); `Between` SHALL
+degrade the same way when its type has no ordering.
 
 #### Scenario: Numeric string is converted
 
@@ -387,6 +452,24 @@ negated comparison with a non-convertible value cannot invert into match-all.
 - **When** `ToExpression()` is built
 - **Then** the `IsInstanceOfType` branch passes the enum through unchanged (bypassing `Convert.ChangeType`, which cannot handle it) and the comparison is emitted
 
+#### Scenario: Text values for a Guid, an enum and a date
+
+- **Given** rules `Id Equal "3f2504e0-4f89-11d3-9a0c-0305e82c3301"` on a `Guid` property, `Status Equal "open"` on an `OrderStatus` property, and `CreatedAt GreaterThan "2026-01-02"` on a `DateTime` property, built on a host whose current culture is `sk-SK`
+- **When** `ToExpression()` is built
+- **Then** the Guid is parsed, the enum is parsed case-insensitively to `OrderStatus.Open`, and the date is parsed with the invariant culture — previously the Guid and enum text failed conversion and the leaf matched nothing
+
+#### Scenario: Fractional value against an integral member
+
+- **Given** a rule `Qty Equal 10.7` on an `int` property
+- **When** `ToExpression()` is built
+- **Then** the body is `(double)x.Qty == 10.7`, which no integer satisfies — previously `Convert.ChangeType` rounded the value to `11`
+
+#### Scenario: Ordering a type with no comparison operator
+
+- **Given** a rule `Name GreaterThan "m"` on a `string` property
+- **When** `ToExpression()` is built
+- **Then** `Expression.GreaterThan` raises `InvalidOperationException`, the translator catches it, and the leaf is an unevaluable match-none — in both polarities
+
 #### Scenario: Between with one bad bound
 
 - **Given** a rule `Between` with a valid lower bound and a non-convertible upper bound
@@ -403,8 +486,9 @@ negated comparison with a non-convertible value cannot invert into match-all.
 
 The system SHALL translate `Contains` / `StartsWith` / `EndsWith` to a call of the
 `string(string, StringComparison)` overload with `StringComparison.OrdinalIgnoreCase`, converting the
-rule value with `value?.ToString() ?? string.Empty`, and SHALL wrap the call as
-`AndAlso(member != null, call)`. When the resolved member is not of type `string` the system SHALL emit an
+rule value with `value.ToString() ?? string.Empty`, and SHALL wrap the call as
+`AndAlso(member != null, call)`. When the resolved member is not of type `string`, or the rule value is
+`null`, the system SHALL emit an
 **unevaluable** match-none leaf instead — unevaluable rather than merely false, so neither `NotContains`
 nor an `IsNegated` flag can invert it into match-all. The null guard, by contrast, produces a **real**
 predicate: a null field genuinely does not match, so negating it is meaningful and `NotContains` over a
@@ -434,11 +518,11 @@ the first argument alone, so case sensitivity there follows the column's databas
   match-none because the expression path cannot follow — no portable translation of
   `column.ToString().Contains(…)` exists across the SQL providers and ElasticSearch
 
-#### Scenario: Null rule value becomes an empty needle
+#### Scenario: Null rule value matches nothing
 
-- **Given** a rule `Name Contains null`
+- **Given** a rule `Name Contains null`, and separately `Name NotContains null`
 - **When** `ToExpression()` is built and compiled
-- **Then** the needle is `string.Empty`, so every entity with a non-null `Name` satisfies the leaf
+- **Then** both leaves match nothing — "contains nothing" is not a predicate (SH-M296, [[TASK-171]]); previously the needle became `string.Empty`, so every entity with a non-null `Name` satisfied `Contains`
 
 #### Scenario: The same leaf is collation-dependent at a SQL store
 
@@ -538,8 +622,10 @@ a disabled rule inside a group is dropped from the composition and never reaches
 
 The system SHALL accept a `RuleSet` in the `RuleSpecification<T>` constructor and wrap it via
 `WrapRuleSet`: when `ruleSet.IsEnabled` is false it SHALL produce an **empty** `RuleGroup(LogicOperator
-.And, new List<IRule>())` (leaving that group's own `IsEnabled` at its default `true`); otherwise it
-SHALL produce `RuleGroup(LogicOperator.And, ruleSet.Rules)` carrying `IsEnabled = ruleSet.IsEnabled`.
+.And)` (leaving that group's own `IsEnabled` at its default `true`); otherwise it SHALL produce
+`RuleGroup(LogicOperator.And, ruleSet.Rules.Snapshot())` carrying `IsEnabled = ruleSet.IsEnabled`. The
+group SHALL hold its own copy of the rules taken at construction, so the specification does not follow
+later edits to the `RuleSet` (SH-M370, [[TASK-156]]).
 
 #### Scenario: Enabled rule set becomes a conjunction
 
@@ -552,6 +638,12 @@ SHALL produce `RuleGroup(LogicOperator.And, ruleSet.Rules)` carrying `IsEnabled 
 - **Given** a `RuleSet` with `IsEnabled = false` and two rules
 - **When** `ToExpression()` is built
 - **Then** the empty wrapper group has no enabled children and yields `Expression.Constant(false)` — the rules are discarded and the specification matches nothing (the same outcome as a disabled *root rule*, which also yields match-none)
+
+#### Scenario: Rule set edited after the specification is built
+
+- **Given** `new RuleSpecification<Order>(ruleSet)` over an enabled `RuleSet` with rules `[A]`
+- **When** rule `B` is added to `ruleSet.Rules` and `ToExpression()` is then built
+- **Then** the body is `A` alone — the wrapper group copied the rules when the specification was constructed; previously it shared the set's list and the expression included `B`
 
 ### Requirement: Rule expression uses a single parameter named "x"
 
@@ -626,7 +718,9 @@ no exception, and SHALL report the **clamped** values in the returned `PagedResu
 The system SHALL compute the read offset as `(page - 1) * pageSize` after clamping, and pass `pageSize`
 as the `limit` and that offset as the `offset` to the wrapped repository's
 `Read(filter, orderBy, limit, offset)` / `ReadAsync(filter, orderBy, limit, offset, ct)`. The
-multiplication SHALL be performed in unchecked `int` arithmetic.
+multiplication SHALL be performed in `long` arithmetic; when the offset exceeds `int.MaxValue` the system
+SHALL NOT read, and SHALL return an empty `Items` list with `TotalCount` from `Count(filter)` /
+`CountAsync(filter, ct)` and the clamped page and page size (SH-M300, [[TASK-171]]).
 
 #### Scenario: Third page of twenty
 
@@ -634,11 +728,37 @@ multiplication SHALL be performed in unchecked `int` arithmetic.
 - **When** `ReadPaged` executes
 - **Then** the repository is called with `limit: 20, offset: 40`
 
-#### Scenario: Very large page number overflows
+#### Scenario: Very large page number is an empty page
 
 - **Given** `page = int.MaxValue` and `pageSize = 20`
 - **When** `ReadPaged` executes
-- **Then** `(page - 1) * pageSize` wraps around in unchecked `int` arithmetic and a negative offset is handed to the repository — the wrapper performs no overflow check
+- **Then** the offset computed in `long` exceeds `int.MaxValue`, the repository's `Read` is not called, only `Count(filter)` is, and the result has empty `Items`, the filtered `TotalCount`, `Page = int.MaxValue` and `PageSize = 20` — previously the `int` multiplication wrapped and a negative offset was handed to the repository
+
+### Requirement: Every paged read is totally ordered
+
+The system SHALL, in both wrappers, replace the caller's `orderBy` with a total order before reading, via
+`PagingOrder.Total`: a null `orderBy` becomes ascending by `Guid`; an `orderBy` that already has a field
+whose `PropertyName` is exactly `"Guid"` (ordinal) is used as given; any other `orderBy` is copied field by
+field, with names and directions preserved, into a new `OrderBy<T>` with ascending `Guid` appended as the
+last key. The caller's `OrderBy<T>` instance SHALL NOT be modified (SH-M301, [[TASK-171]]).
+
+#### Scenario: No ordering supplied
+
+- **Given** `ReadPaged(filter, orderBy: null, page: 2, pageSize: 10)`
+- **When** the call executes
+- **Then** the repository receives an `OrderBy<T>` with the single ascending key `Guid`, so no row can appear on two pages or on none
+
+#### Scenario: Caller's order keeps precedence
+
+- **Given** `orderBy = OrderBy<Order>.ByDescending(o => o.CreatedAt)`
+- **When** `ReadPaged` executes
+- **Then** the repository receives `CreatedAt` descending, then `Guid` ascending, and the caller's `orderBy` still has its single field
+
+#### Scenario: Order already keyed on Guid
+
+- **Given** an `orderBy` whose fields include `Guid`
+- **When** `ReadPaged` executes
+- **Then** that same instance is passed to the repository unchanged
 
 ### Requirement: Items are read first, then counted, sequentially and non-atomically
 

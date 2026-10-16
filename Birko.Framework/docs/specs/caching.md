@@ -1,7 +1,7 @@
 ---
 area: caching
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Caching.Hybrid/HybridCache.cs
   - ../Birko.Caching.Hybrid/HybridCacheOptions.cs
@@ -1107,8 +1107,9 @@ before computing a prefix; the write overrides still call `base`.
 
 ### Requirement: Cached SQL store resolves its table name once at construction
 
-The system SHALL resolve `_tableName` in the constructor via `SQL.DataBase.LoadTable(typeof(T))`,
-falling back to `typeof(T).Name` when no table is found or its `Name` is empty, and SHALL reject a null
+The system SHALL resolve `_tableName` in the constructor via `SQL.DataBase.TryLoadTable(typeof(T))` — the
+non-throwing lookup, since `LoadTable` throws `TableAttributeException` for an unmapped type — falling
+back to `typeof(T).Name` when no table is found or its `Name` is empty, and SHALL reject a null
 `cache` argument with `ArgumentNullException` while defaulting a null `options` to
 `new SqlCacheOptions()`.
 
@@ -1120,7 +1121,7 @@ falling back to `typeof(T).Name` when no table is found or its `Name` is empty, 
 
 #### Scenario: Unmapped type falls back to the CLR type name
 
-- **Given** `LoadTable(typeof(T))` returns null
+- **Given** `TryLoadTable(typeof(T))` returns null (no `[Table]` or registered name, or no mapped columns)
 - **When** the store is constructed
 - **Then** `_tableName` is `typeof(T).Name`
 

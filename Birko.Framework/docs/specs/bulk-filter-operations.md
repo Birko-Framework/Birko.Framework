@@ -1,7 +1,7 @@
 ---
 area: bulk-filter-operations
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
   - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
@@ -144,6 +144,17 @@ changing a requirement here: the connector's expression-path `UPDATE` is now gat
 than its bound values (every `PropertyUpdate` assignment binds one, so the bulk path cannot observe it), and the
 identity and delegate changes are specified in `store-crud-contract`.
 
+Scoped regen on 2026-10-16, after **TASK-170** (a SQL store with no connector refuses at lazy init; the sync
+SQL bulk read and the async sync-connector fallback are materialised; `Set` of a nested member is refused;
+two sets of one property are last-wins on SQL; an empty `PropertyUpdate` writes nothing on the portable path;
+a row deleted between the read and its write is skipped; `AggregateAsync` falls back to the sync connector),
+**TASK-629** (a SQL bulk collection write is one transaction), **TASK-501** / **TASK-502** (the ElasticSearch
+script writes a null as `null` under the stored field name and the by-query response is checked),
+**TASK-153** (an ElasticSearch store with no client throws) and **TASK-272** (the destructive funnels name the
+table through `TableIdentifier`). TASK-159, TASK-171, TASK-567, TASK-625 and TASK-632 touched these sources
+too; their changes here are `PropertyUpdate.Clone`, `OrderBy.ThenByName` and the duplicate / unique
+translation around the bulk collection writes.
+
 ## Requirements
 
 ### Requirement: Bulk read surface
@@ -171,16 +182,19 @@ optional filter, optional `OrderBy<T>`, optional limit and optional offset, plus
 - **Given** a `DataBaseBulkStore<DB,T>` with a non-null `Connector`
 - **When** `Read(filter, orderBy, limit, offset)` is called
 - **Then** `ReadCore` calls `Connector.Select(typeof(T), filter as LambdaExpression,
-  orderBy?.ToDictionary(), limit, offset)` and returns `.OfType<T>()` of the result — unmaterialised:
-  `Select` is an iterator method, so no query has run when `Read` returns, and the connection and
-  `DbDataReader` are opened inside `RunReaderCommand` on the thread that later enumerates the sequence
-  and closed only when that enumerator is disposed
+  orderBy?.ToDictionary(), limit, offset)` and returns `.OfType<T>().ToList()` of the result — materialised
+  (TASK-170): the connector's `Select` is an iterator that holds its connection and `DbDataReader` open until
+  enumeration ends, so the rows are read and the connection released before `Read` returns, and a write
+  issued inside `foreach (var x in store.Read(f))` no longer runs against a live reader
 
-#### Scenario: SQL bulk read with no connector returns an empty sequence
+#### Scenario: SQL bulk read with no connector refuses at lazy init
 
-- **Given** a `DataBaseBulkStore<DB,T>` whose `Connector` is null
+- **Given** a `DataBaseBulkStore<DB,T>` whose `Connector` is null (its `SetSettings` was never called)
 - **When** `Read(filter)` is called
-- **Then** `ReadCore` returns `Enumerable.Empty<T>()` — no exception is thrown
+- **Then** `EnsureInitialized()` reaches `InitCore`, which throws `InvalidOperationException` ("… has no
+  database connector: call SetSettings with the database's settings first.") — before TASK-170 the read
+  answered `Enumerable.Empty<T>()`, so a misconfigured store looked like an empty table. `ReadCore`'s own
+  null-connector fallback to an empty sequence remains but is no longer reached through `Read`
 
 #### Scenario: Repeating one property in the sort loses the earlier direction
 
@@ -309,6 +323,14 @@ quoted.
 - **Then** `ArgumentException` names both `NoSuchThing` and the entity type, instead of the provider
   answering with a column name the developer never wrote
 
+#### Scenario: A secondary key named by string is resolved like the first
+
+- **Given** `OrderBy<T>.ByName("Rank").ThenByName("Label", descending: true)` (TASK-171)
+- **When** the keys are resolved
+- **Then** `ThenByName` appends an `OrderByField` carrying the caller's string exactly as `ByName` does, and
+  that key passes through the same three lookups — so the clause is `ORDER BY Rank ASC, label_col DESC`, and
+  an unknown or injected secondary key raises the same `ArgumentException`
+
 #### Scenario: No sort keys emit no clause
 
 - **Given** `Read(filter, null, null, null)`
@@ -392,15 +414,16 @@ persisting each one individually through the single-entity `Update(item)`.
 - **Then** the matching entities are awaited from `ReadAsync(filter, null, null, null, ct)`,
   materialised, and each is awaited through `UpdateAsync(item, ct: ct)` in sequence — never in parallel
 
-#### Scenario: A match deleted between the read and its write ends the loop part-way
+#### Scenario: A match deleted between the read and its write is skipped
 
 - **Given** a bulk store whose filter matches three entities, the second of which is deleted by another caller
   after the read has materialised the list
 - **When** `Update(filter, action)` / `UpdateAsync(filter, action, ct)` reaches it
-- **Then** the single-entity `Update` throws `EntityNotFoundException` for it (TASK-555 — it used to write nothing
-  and report success), the loop does not catch it, so the first entity has been written and the third is not —
-  unlike the in-memory, SQL and MongoDB bulk `Update(IEnumerable<T>)`, which write every stored item before
-  reporting the misses
+- **Then** the single-entity `Update` throws `EntityNotFoundException` for it (TASK-555), and the loop catches
+  and discards it (TASK-170, SH-M434): the row no longer matches the filter, so it is skipped as a SQL
+  `UPDATE … WHERE` would skip it, the first and third entities are written, and the call completes without an
+  exception — the same holds for the `UpdateAll` action loops of the abstract bases and for both SQL bulk
+  stores' action loops
 
 #### Scenario: The SQL bulk store keeps the same read-modify-save action path
 
@@ -417,7 +440,8 @@ persisting each one individually through the single-entity `Update(item)`.
 The system SHALL, in `AbstractBulkStore<T>` / `AbstractAsyncBulkStore<T>`, implement
 `Update(filter, PropertyUpdate<T>)` by delegating to the action overload with
 `entity => updates.ApplyTo(entity)` — that is, by reading each matching entity, mutating it via
-reflection and re-saving the **whole entity**.
+reflection and re-saving the **whole entity** — and SHALL return without reading or writing anything when
+the update has no assignments.
 
 #### Scenario: Named properties are applied via reflection then the entity is saved
 
@@ -426,16 +450,20 @@ reflection and re-saving the **whole entity**.
 - **Then** each matching entity is read, `ApplyTo` sets `Name` on it by reflection, and the single-entity
   `Update(item)` persists the entity — including every other property as it was read
 
-#### Scenario: An empty PropertyUpdate still rewrites every matching row
+#### Scenario: An empty PropertyUpdate writes nothing
 
-- **Given** an `AbstractBulkStore<T>` and a `PropertyUpdate<T>` with zero assignments
-- **When** `Update(filter, updates)` is called
-- **Then** every matching entity is still read and passed to the single-entity `Update`, because the
-  delegation happens before any emptiness check
+- **Given** an `AbstractBulkStore<T>` / `AbstractAsyncBulkStore<T>` and a `PropertyUpdate<T>` with zero assignments
+- **When** `Update(filter, updates)` / `UpdateAsync(filter, updates, ct)` / `UpdateAll(updates)` /
+  `UpdateAllAsync(updates, ct)` is called
+- **Then** it returns (a completed task on the async side) without reading any entity and without calling the
+  single-entity `Update` — as the SQL path already did. Before TASK-170 (SH-M032) every matched entity was read
+  and re-saved, so `UpdatedAt`, audit fields and concurrency versions moved for rows nobody changed
+- **And** on the filtered overloads `RequireFilter` and `RequireBoundedFilter` still run first, so an empty
+  update with a null or unbounded filter is refused rather than silently ignored
 
 #### Scenario: Async PropertyUpdate fallback delegates without awaiting itself
 
-- **Given** an `AbstractAsyncBulkStore<T>`
+- **Given** an `AbstractAsyncBulkStore<T>` and a `PropertyUpdate<T>` with at least one assignment
 - **When** `UpdateAsync(filter, updates, ct)` is called
 - **Then** it returns the task from `UpdateAsync(filter, entity => updates.ApplyTo(entity), ct)`
   directly, without an intermediate `await`
@@ -460,7 +488,12 @@ and must name the increment branch to read a delta. `ApplyTo` SHALL apply the en
 each target by unwrapping a `Convert` / `ConvertChecked` body to its operand and taking the
 `MemberExpression`'s `PropertyInfo`: a set assigns its value, an increment reads the current value and
 assigns `checked(current + delta)` in the property's own type. A selector that does not resolve to a
-property SHALL throw rather than be skipped.
+property SHALL throw rather than be skipped. `Set` SHALL refuse, when it is **declared**, any selector that is
+not a direct access to a top-level property of `T` — a single `Convert` over one is allowed — with
+`ArgumentException` for the `property` parameter (TASK-170, SH-M026), so the reflection refusals of `ApplyTo`
+below are no longer reachable through the public builder. `Clone()` SHALL return a new `PropertyUpdate<T>`
+holding the same assignments in the same order, so a caller (a decorator adding its own assignment) can extend
+a copy without mutating the instance it was given (TASK-159).
 
 #### Scenario: Set returns the same instance for chaining
 
@@ -482,20 +515,38 @@ property SHALL throw rather than be skipped.
 - **When** `ApplyTo(entity)` runs
 - **Then** the operand is taken as the `MemberExpression` and the underlying property is set
 - **And** any other unary node (a negation, say) is not unwrapped, so its selector does not resolve
+- **And** `Set` itself unwraps only `Convert`, so a `ConvertChecked` or other unary selector is refused at
+  declaration with `ArgumentException` and never reaches `ApplyTo`
 
 #### Scenario: A non-property member is refused
 
-- **Given** an assignment whose resolved member is not a `PropertyInfo` (for example a public field)
-- **When** `ApplyTo(entity)` runs
-- **Then** it throws `ArgumentException("Unable to resolve property from expression: …")` and no
-  further assignment is applied
+- **Given** a selector whose resolved member is not a `PropertyInfo` (for example a public field)
+- **When** `Set(selector, value)` is called
+- **Then** it throws `ArgumentException("Set needs a direct access to a top-level property of T; '…' is not
+  one.")` and no assignment is recorded
+- **And** `ApplyTo` keeps its own refusal — `ArgumentException("Unable to resolve property from expression:
+  …")`, with no further assignment applied — for an assignment that reached it by any other route
 
 #### Scenario: A non-member selector throws ArgumentException
 
-- **Given** an assignment whose lambda body is neither a `MemberExpression` nor a convert over one (for
+- **Given** a selector whose lambda body is neither a `MemberExpression` nor a convert over one (for
   example `x => x.Compute()`)
-- **When** `ApplyTo(entity)` runs
-- **Then** it throws `ArgumentException("Unable to resolve property from expression: …")`
+- **When** `Set(selector, value)` is called
+- **Then** it throws `ArgumentException` for the `property` parameter, before any backend sees the update
+
+#### Scenario: A nested member selector is refused at Set
+
+- **Given** `Set(x => x.Owner.Name, "n")`
+- **When** the call is made
+- **Then** it throws `ArgumentException`, because the member's `Expression` is not the lambda's parameter —
+  before TASK-170 (SH-M026) the SQL path resolved the leaf alone and wrote `T`'s own `Name` column while the
+  portable path threw, the rule `Increment` already applied
+
+#### Scenario: Clone copies the assignments without sharing them
+
+- **Given** a `PropertyUpdate<T>` holding `Set(x => x.Name, "a")`
+- **When** `Clone()` is called and `Set(x => x.Count, 5)` is added to the copy
+- **Then** the copy holds both assignments in order and the original still holds only the first
 
 #### Scenario: An increment adds to the current value
 
@@ -566,7 +617,8 @@ bare, a set as `col = @SETcol` and an increment as `col = ` followed by the stor
 `IncrementExpression(field, col, @SETcol)` — `col + @SETcol` by default — translate the filter through
 `DataBase.ParseConditionExpression`, and issue one connector
 `Update(tableName, fields, values, conditions, isExpressionValues: true, allowAllRows)` — reading no
-entities and invoking no per-entity update path. The `@SET…` parameter name SHALL have one producer,
+entities and invoking no per-entity update path. Two assignments to one member SHALL be last-wins, as
+`ApplyTo` applies them; two different members mapped onto one column SHALL be refused. The `@SET…` parameter name SHALL have one producer,
 `AbstractConnector.SetParameterName(column)` (`"@SET"` + the column with `.` removed), used both by these
 fragments and by the connector's own non-expression SET rendering.
 
@@ -585,7 +637,9 @@ fragments and by the connector's own non-expression SET rendering.
 - **Given** a SQL bulk store and `new PropertyUpdate<T>().Set(x => x.Name, "n").Increment(x => x.Count, 1)`
 - **When** `Update(filter, updates)` is called
 - **Then** one statement is issued, `UPDATE <quoted table> SET Name = @SETName, Count = Count + @SETCount
-  WHERE …`, with the column names unquoted and the delta bound as `@SETCount`
+  WHERE …`, with the column names unquoted and the delta bound as `@SETCount`; the table is rendered by the
+  connector's `TableIdentifier` (TASK-272), which is the bare `QuoteIdentifier(name)` for a model without a
+  schema and the schema-qualified or schema-prefixed relation for one with
 - **And** the addition happens on the server, so N concurrent `Increment(x => x.Count, 1)` calls on one
   row leave it exactly N higher
 
@@ -619,15 +673,35 @@ fragments and by the connector's own non-expression SET rendering.
 - **Given** an assignment whose body does not resolve to a `PropertyInfo`
 - **When** the SQL override calls `DataBase.GetFieldFromLambda(property)`
 - **Then** `GetFieldFromLambda` throws
-  `ArgumentException("Unable to resolve property from expression: …", "expr")` and no statement is issued
+  `ArgumentException("Unable to resolve property from expression: …", "expr")` and no statement is issued —
+  though `Set` / `Increment` already refuse such a selector when it is declared, so this is a backstop
 
-#### Scenario: Two assignments to the same property throw on the duplicate key
+#### Scenario: A property that maps to no column throws ArgumentException naming it
+
+- **Given** `Set(x => x.Ignored, v)` where `Ignored` is an `[IgnoreField]` / `[NotMapped]` / unsupported-type
+  property
+- **When** `Update(filter, updates)` is called on a SQL bulk store
+- **Then** `GetFieldFromLambda` throws `ArgumentException("'…' names T.Ignored, which is not a mapped
+  column.", "expr")` and no statement is issued — before TASK-170 (SH-M027) `First()` threw
+  `InvalidOperationException` "Sequence contains no elements", naming nothing
+
+#### Scenario: Two assignments to the same property keep the last
 
 - **Given** `new PropertyUpdate<T>().Set(x => x.Name, "a").Set(x => x.Name, "b")` on a SQL bulk store
 - **When** `Update(filter, updates)` is called
-- **Then** the translator's second `values.Add(parameter, value)` throws `ArgumentException` for the
-  duplicate dictionary key and no statement is issued — only two sets can reach this, because an
-  increment beside another assignment to its member is refused when the update is declared
+- **Then** the translator removes the earlier fragment and its `@SETName` value and keeps the second, so one
+  statement sets `Name = @SETName` bound to `"b"` — the same result `ApplyTo` reaches on the portable path
+  (TASK-170, SH-M030; it used to throw `ArgumentException` on the duplicate dictionary key). Only two sets can
+  reach this, because an increment beside another assignment to its member is refused when the update is
+  declared
+
+#### Scenario: Two different properties mapped onto one column are refused
+
+- **Given** two properties whose fields share one column name (compared `OrdinalIgnoreCase`) and a
+  `PropertyUpdate<T>` setting both
+- **When** `Update(filter, updates)` is called on a SQL bulk store
+- **Then** the translator throws `InvalidOperationException` naming both member paths and the column, and no
+  statement is issued
 
 #### Scenario: The async override prefers the async connector
 
@@ -642,14 +716,17 @@ fragments and by the connector's own non-expression SET rendering.
 - **When** `UpdateAsync(filter, updates, ct)` is called
 - **Then** it awaits `Task.Run(() => Connector!.Update(table.Name, fields, values, conditions, true, allowAllRows), ct)`
 
-#### Scenario: No connector means the update is silently dropped
+#### Scenario: No connector means the update is refused at lazy init
 
 - **Given** a SQL bulk store whose `Connector` is null
 - **When** `Update(filter, updates)` / `UpdateAsync(filter, updates, ct)` is called with a **non-null**
   filter
-- **Then** the method returns without error, without translating the filter and without writing anything
-- **And** with a null filter it instead throws, because `RequireFilter` precedes the `Connector == null`
-  early return — a missing store does not excuse a missing filter
+- **Then** `EnsureInitialized()` / `EnsureInitializedAsync(ct)` throws `InvalidOperationException` from
+  `InitCore` / `InitCoreAsync` ("… has no database connector …"), without translating the filter and without
+  writing anything — before TASK-170 (SH-M031) the call returned as if it had worked. The
+  `Connector == null` early return that follows is no longer reached
+- **And** with a null filter it instead throws `ArgumentNullException`, because `RequireFilter` precedes
+  initialisation — a missing store does not excuse a missing filter
 
 ### Requirement: Document-store PropertyUpdate translations render sets and increments natively
 
@@ -659,9 +736,11 @@ through the shared `MongoPropertyUpdateTranslator.Build` as one combined update 
 `UpdateMany`, inside `TransactionContext` when one is set. It SHALL refuse an increment whose member is
 serialized with a string representation before anything is sent. The system SHALL, in
 `ElasticSearchStore<T>` / `AsyncElasticSearchStore<T>`, render the assignments through the shared
-`ElasticSearchStoreHelper.BuildUpdateScript` as one inline painless script run by `UpdateByQuery`. Both
-backends run their filter guards first and return without writing when the collection / connector is
-missing or the update has no assignments.
+`ElasticSearchStoreHelper.BuildUpdateScript` as one inline painless script run by `UpdateByQuery`, and SHALL
+throw unless that by-query write ran to completion (`ElasticSearchStoreHelper.RequireComplete`, shared with
+`Delete(filter)`'s `DeleteByQuery`). Both backends run their filter guards first and return without writing
+when the update has no assignments. MongoDB also returns without writing when its collection is missing;
+an ElasticSearch store with no client does not return silently (TASK-153) — see the scenario below.
 
 #### Scenario: MongoDB renders a set and an increment in one UpdateMany
 
@@ -697,30 +776,52 @@ missing or the update has no assignments.
 - **Given** an `ElasticSearchStore<T>` and `new PropertyUpdate<T>().Set(x => x.Name, "n").Increment(x => x.Count, 1)`
 - **When** `Update(filter, updates)` is called
 - **Then** the script is `ctx._source.name = params.p_Name; ctx._source.count += params.p_Count` — each
-  field name is the property name with its first letter lower-cased, each parameter `p_<PropertyName>`
+  field name is the field the document is stored under (`ElasticSearch.StoredFieldName`, the producer the
+  filter and sort translators share: the `Name` a NEST mapping attribute declares, else the property name
+  camel-cased), each parameter `p_<PropertyName>`
 
-#### Scenario: ElasticSearch sends a null value as an empty string
+#### Scenario: ElasticSearch writes a mapping-renamed property where it is read
+
+- **Given** a property carrying a NEST mapping attribute or `[PropertyName("n")]`
+- **When** it is set or incremented through a `PropertyUpdate<T>`
+- **Then** the script assigns `ctx._source.n`, not the camel-cased C# name (TASK-501)
+
+#### Scenario: ElasticSearch writes a null value as a literal null
 
 - **Given** `Set(x => x.Name, null)` on an ElasticSearch store
-- **When** the script parameters are built
-- **Then** `p_Name` is `string.Empty`, so the field is written as `""` rather than null (TASK-501)
+- **When** the script is built
+- **Then** the fragment is `ctx._source.name = null` and no `p_Name` parameter is bound — before TASK-501 the
+  value was bound as `string.Empty`, so a string was stored as `""` and a nullable number or date field was
+  handed a string, which the mapping refused with a 400 that failed the whole update
 
-#### Scenario: ElasticSearch does not report an UpdateByQuery that lost documents
+#### Scenario: ElasticSearch refuses a by-query write that did not complete
 
-- **Given** a contended document on which `UpdateByQuery` hits a version conflict
-- **When** the store's `Update(filter, updates)` runs
-- **Then** the store (sync and async) does not inspect the `UpdateByQuery` response, so the conflict is not
-  reported and an increment on that document can be lost silently — the painless `+=` is per document, not
-  a server-side atomic counter (TASK-502)
+- **Given** an `UpdateByQuery` (from `Update(filter, updates)`) or `DeleteByQuery` (from `Delete(filter)`),
+  sync or async
+- **When** the response reports a version conflict, is invalid, carries failures, or timed out
+- **Then** a version conflict throws `StoreConcurrencyException` carrying `Applied` (documents updated /
+  deleted) and `Conflicts`, stating that the remaining matches were not processed; any other failure throws
+  `StoreException`; a timeout throws `StoreException` even when the response is otherwise valid (TASK-502) —
+  the store used to discard the response, so a contended increment could be lost silently. The write is still
+  partial: documents before the conflict stay written and the caller decides
 
-#### Scenario: ElasticSearch resolves the selector with an unchecked cast
+#### Scenario: ElasticSearch refuses a selector that is not a property
 
-- **Given** an assignment whose selector is neither a member access nor a unary node over one (for example
-  `x => x.Compute()`), or one that names a public field
+- **Given** an assignment whose selector resolves to no `PropertyInfo` (a method call, or a public field)
 - **When** `BuildUpdateScript` runs
-- **Then** the `(MemberExpression)` cast throws `InvalidCastException` for the first, and the field's name is
-  used as if it were a property for the second — unlike `ApplyTo` and the MongoDB translator, which both
-  refuse with `ArgumentException`
+- **Then** it throws `ArgumentException("Unable to resolve property from expression: …")`, as `ApplyTo` and
+  the MongoDB translator do (TASK-501) — though `Set` / `Increment` already refuse such a selector when it is
+  declared
+
+#### Scenario: ElasticSearch with no client throws instead of reporting success
+
+- **Given** an ElasticSearch store whose `SetSettings` was never called (`SetSettings` with any settings type
+  other than ElasticSearch `Settings` now throws `ArgumentException`, TASK-153)
+- **When** `Update(filter, updates)` / `Delete(filter)` or their async twins are called with a bounded filter
+- **Then** the async store's lazy `InitAsync` calls `RequireConnector`, which throws `InvalidOperationException`
+  ("… has no ElasticSearch client …"); the sync store's lazy `Init` dereferences `Connector!` first and so throws
+  `NullReferenceException` before its own `RequireConnector` is reached — either way nothing is reported as
+  written
 
 ### Requirement: Filter-based delete — portable read-then-delete versus native DELETE
 
@@ -759,13 +860,15 @@ connector delete against the translated filter without reading anything.
   `AsyncConnector` is non-null, otherwise
   `Task.Run(() => Connector!.Delete(typeof(T), filter as LambdaExpression), ct)`
 
-#### Scenario: No connector means the delete is silently dropped
+#### Scenario: No connector means the delete is refused at lazy init
 
 - **Given** a SQL bulk store whose `Connector` is null
 - **When** `Delete(filter)` / `DeleteAsync(filter, ct)` is called with a **non-null** filter
-- **Then** the method returns without error and no rows are deleted
-- **And** with a null filter it instead throws, because `RequireFilter` precedes the `Connector == null`
-  early return
+- **Then** lazy initialisation throws `InvalidOperationException` ("… has no database connector …") and no
+  rows are deleted — before TASK-170 (SH-M031) the method returned without error. On the async store an
+  explicit `x => true` reaches the same refusal through `DeleteAllAsync`, which initialises first
+- **And** with a null filter it instead throws `ArgumentNullException`, because `RequireFilter` precedes
+  initialisation
 
 ### Requirement: A destructive statement that would carry no WHERE is refused, not issued
 
@@ -909,7 +1012,8 @@ added and its failure mode is a refused destructive operation on working code.
 - **When** `DeleteAll()` is called
 - **Then** the connector's `DeleteAll(type)` runs `Delete(table, conditions: null, allowAllRows: true)`,
   the guard is bypassed by the explicit flag, and the emitted statement is `DELETE FROM <table>` with no
-  WHERE and no `1 = 1`
+  WHERE and no `1 = 1` — `<table>` being the connector's `TableIdentifier(tableName)` (TASK-272), which is
+  exactly the quoted table name for a model without a schema
 
 #### Scenario: An explicit constant-true filter routes to the same door
 
@@ -1166,6 +1270,16 @@ bulk collection operation before delegating to its `*Core` method, and the SQL b
 operation. The default bulk update SHALL catch each item's `EntityNotFoundException`, keep going, and throw one
 `EntityNotFoundException` naming every missed `Guid` after the loop (TASK-555).
 
+On the SQL bulk stores, each public collection `Create` / `Update` / `Delete` (and async twin) SHALL run its
+`*Core` as **one transaction** (`Atomically` / `AtomicallyAsync`, TASK-629): inside an existing boundary — the
+store's `TransactionContext`, or an ambient SQL transaction for the same settings id — it joins that boundary;
+otherwise it opens a connection and transaction, publishes them as the ambient scope so every per-item write
+and a provider's native bulk insert join it, commits at the end and rolls back on any failure or cancellation.
+The collection `Create` SHALL translate a duplicate-key failure into the shared duplicate-create
+refusal, and the collection `Update` SHALL translate a unique-index violation into
+`StoreUniqueViolationException`, on the abstract bases and the SQL bulk stores alike (TASK-567, TASK-625,
+TASK-632).
+
 #### Scenario: Bulk create initialises then delegates
 
 - **Given** an uninitialised bulk store
@@ -1193,6 +1307,36 @@ operation. The default bulk update SHALL catch each item's `EntityNotFoundExcept
 - **Then** the per-item update of the second throws `EntityNotFoundException`, which the loop catches, the third
   is still updated, and after the loop one `EntityNotFoundException` naming the second's `Guid` is thrown —
   before TASK-555 the miss wrote nothing and reported success
+- **And** outside a transaction boundary that report is the one exception that **commits** the batch's own
+  transaction before propagating, so the stored items stay written
+
+#### Scenario: A SQL bulk collection write that fails part-way leaves nothing written
+
+- **Given** a SQL bulk store outside any transaction boundary, and `Create(items)` / `Delete(items)` /
+  `Update(items)` (or an async twin) whose item k fails with a database error, or whose token is cancelled
+- **When** the call runs
+- **Then** the batch's own transaction is rolled back — on the async side with `CancellationToken.None`, so a
+  cancelled batch is still rolled back — and items 0..k-1 are not left written; before TASK-629 (SH-M028)
+  each item committed on its own
+
+#### Scenario: A SQL bulk collection write inside a boundary joins it
+
+- **Given** a SQL bulk store with a `TransactionContext` set, or called inside an ambient SQL transaction for
+  the same database
+- **When** a collection `Create` / `Update` / `Delete` is called
+- **Then** no transaction of its own is opened: the write runs inside the caller's boundary, which decides
+  whether it commits
+
+#### Scenario: A duplicate in a collection create is the shared refusal
+
+- **Given** a bulk store and a collection containing an entity whose key is already stored
+- **When** `Create(items)` / `CreateAsync(items, …)` is called
+- **Then** a failure the provider recognises as a duplicate key (`IsDuplicateKeyException`; on SQL
+  `DuplicateCreate.IsDuplicate(Connector, ex)`, around the seam so a native bulk insert is covered too) is
+  rethrown as the shared duplicate-create refusal, `StoreException.DuplicateCreate` — a
+  `StoreUniqueViolationException`; a collection `Update` colliding with a unique index is rethrown as
+  `StoreException.UniqueViolation`, the same exception type, and on the update paths (and the abstract bases'
+  create) an exception that already is one passes through unchanged
 
 #### Scenario: The action-based filter update initialises indirectly
 
@@ -1205,9 +1349,10 @@ operation. The default bulk update SHALL catch each item's `EntityNotFoundExcept
 
 The system SHALL, in `AsyncDataBaseBulkStore<DB,T>.ReadCoreAsync`, return an empty sequence when
 `Connector` is null, stream through `AsyncConnector.SelectAsync` when an async connector is present,
-and otherwise wrap the synchronous `Connector.Select` in `Task.Run` with the cancellation token — which,
-because `Select` is an iterator method, offloads only the construction of the enumerator: the query
-itself still runs on whichever thread enumerates the returned sequence.
+and otherwise wrap the synchronous `Connector.Select` in `Task.Run` with the cancellation token, enumerating
+the result into a list **inside** that task (TASK-170, SH-M024) — so the query runs off the caller's thread,
+which it did not while only the iterator's construction was offloaded. Reaching `ReadCoreAsync` through
+`ReadAsync` requires a connector, because lazy initialisation refuses a store without one.
 
 #### Scenario: Async connector results are streamed and type-filtered
 
@@ -1220,17 +1365,20 @@ itself still runs on whichever thread enumerates the returned sequence.
 
 - **Given** an `AsyncDataBaseBulkStore<DB,T>` with a non-null `Connector` and a null `AsyncConnector`
 - **When** `ReadAsync(filter, …, ct)` is called
-- **Then** `Task.Run(() => Connector!.Select(…), ct)` is awaited, a null result maps to
-  `Enumerable.Empty<T>()`, and a non-null result is returned as `results.OfType<T>()` — still
-  unenumerated, so unlike the `AsyncConnector` branch (which materialises a `List<T>` inside the
-  method) this path returns before any row is read, and the connection is opened, `ct` unobserved, on
-  the caller's thread when the awaited result is enumerated
+- **Then** `Task.Run(() => Connector!.Select(…)?.OfType<T>().ToList(), ct)` is awaited, a null result maps to
+  `Enumerable.Empty<T>()`, and a non-null result is the materialised list — like the `AsyncConnector` branch,
+  every row is read before the method returns, inside the task, so a query failure surfaces from the awaited
+  call rather than later on the caller's thread. No shipped SQL connector reaches this branch: all four are
+  `AbstractAsyncConnector`
 
-#### Scenario: No connector at all yields an empty result
+#### Scenario: No connector at all is refused at lazy init
 
 - **Given** an `AsyncDataBaseBulkStore<DB,T>` whose `Connector` is null
 - **When** `ReadAsync(filter, …, ct)` is called
-- **Then** `ReadCoreAsync` returns `Enumerable.Empty<T>()` before consulting `AsyncConnector`
+- **Then** `EnsureInitializedAsync(ct)` throws `InvalidOperationException` from `InitCoreAsync` ("… has no
+  database connector …") before `ReadCoreAsync` runs — before TASK-170 (SH-M031) the read answered
+  `Enumerable.Empty<T>()`. `ReadCoreAsync`'s own null-connector return of an empty sequence remains for a
+  direct call
 
 #### Scenario: The parameterless async read reads everything
 
@@ -1241,9 +1389,9 @@ itself still runs on whichever thread enumerates the returned sequence.
 ### Requirement: Aggregation on SQL bulk stores
 
 The system SHALL expose `Aggregate(AggregateQuery<T>)` on `DataBaseBulkStore<DB,T>` and
-`AggregateAsync(AggregateQuery<T>, ct)` on `AsyncDataBaseBulkStore<DB,T>`, each initialising first,
-returning an empty read-only result when the required connector is absent, and otherwise materialising
-every row produced by the connector's aggregate select.
+`AggregateAsync(AggregateQuery<T>, ct)` on `AsyncDataBaseBulkStore<DB,T>`, each initialising first — which
+refuses a store with no `Connector` (TASK-170) — and materialising every row produced by the connector's
+aggregate select, the async one falling back to the synchronous aggregate when there is no async connector.
 
 #### Scenario: Sync aggregation needs only the synchronous connector
 
@@ -1252,12 +1400,20 @@ every row produced by the connector's aggregate select.
 - **Then** `EnsureInitialized()` runs and every row of `Connector.SelectAggregate(typeof(T), query)` is
   collected into a read-only `AggregateResult` list
 
-#### Scenario: Async aggregation requires both connectors and otherwise returns empty
+#### Scenario: Async aggregation falls back to the sync connector
 
-- **Given** an `AsyncDataBaseBulkStore<DB,T>` whose `AsyncConnector` is null (regardless of `Connector`)
+- **Given** an `AsyncDataBaseBulkStore<DB,T>` with a non-null `Connector` and a null `AsyncConnector`
 - **When** `AggregateAsync(query, ct)` is called
-- **Then** it returns `Array.Empty<AggregateResult>()` — there is no `Task.Run` fallback to the
-  synchronous `SelectAggregate`, unlike the read/update/delete paths
+- **Then** it awaits `Task.Run(() => Connector.SelectAggregate(typeof(T), query).ToList().AsReadOnly(), ct)`
+  and returns those rows — the same fallback the read/update/delete paths use. Before TASK-170 (SH-M034) it
+  returned `Array.Empty<AggregateResult>()`, answering no groups at all
+
+#### Scenario: Aggregation with no connector is refused
+
+- **Given** a `DataBaseBulkStore<DB,T>` / `AsyncDataBaseBulkStore<DB,T>` whose `Connector` is null
+- **When** `Aggregate(query)` / `AggregateAsync(query, ct)` is called
+- **Then** lazy initialisation throws `InvalidOperationException` ("… has no database connector …"); the
+  methods' own empty-result return for a null connector is no longer reached
 
 #### Scenario: Async aggregation streams rows when both connectors exist
 

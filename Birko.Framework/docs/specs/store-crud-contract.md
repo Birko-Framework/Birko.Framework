@@ -1,7 +1,7 @@
 ---
 area: store-crud-contract
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.Core/Exceptions/StoreException.cs
   - ../Birko.Data.InMemory/Stores/AbstractAsyncInMemoryStore.cs
@@ -426,8 +426,8 @@ RavenDB **bulk** create overwrote the caller's Guid — CR-L190's recorded decis
 
 The system SHALL, in `CreateCore` / `CreateCoreAsync`, return `Guid.Empty` without storing anything when
 `data` is `null`; otherwise assign the identity with `data.EnsureGuid()`, refuse a key already stored with
-`StoreException` **before** invoking the delegate, invoke the delegate, add the entity with `TryAdd` (a concurrent
-create of the same key also throws), and return `data.Guid.Value`. A create never replaces a stored entity
+`StoreUniqueViolationException` (a `StoreException`, TASK-632) **before** invoking the delegate, invoke the delegate,
+add the entity with `TryAdd` (a concurrent create of the same key also throws it), and return `data.Guid.Value`. A create never replaces a stored entity
 (SH-M310, [[TASK-163]]): a real backend's primary key rejects the duplicate, and the canonical test double does too.
 
 #### Scenario: Creating an entity with no identifier
@@ -440,8 +440,8 @@ create of the same key also throws), and return `data.Guid.Value`. A create neve
 
 - **Given** `_items` already contains an entity under `g`
 - **When** `Create(other)` is called with `other.Guid == g`
-- **Then** `StoreException` ("Create does not replace — use Update") is thrown, the delegate is not invoked, and
-  the stored entity is unchanged
+- **Then** `StoreUniqueViolationException` ("Create does not replace — use Update") is thrown, the delegate is not
+  invoked, and the stored entity is unchanged
 
 #### Scenario: Creating null
 
@@ -603,8 +603,8 @@ The system SHALL treat a `null` collection as a no-op in bulk `CreateCore`, `Upd
 writes to items with `Guid.HasValue` whose key already exists in `_items`, replacing each as the single-item update
 does, and SHALL then throw one `EntityNotFoundException` naming every other item (an item with no `Guid` is named
 as `Guid.Empty`) — so bulk update does fail, after writing the stored items (TASK-555); SHALL
-refuse a bulk create containing a key already stored, or a key repeated inside the batch, with `StoreException`
-**before writing anything**; and SHALL restrict bulk delete to items with `Guid.HasValue`.
+refuse a bulk create containing a key already stored, or a key repeated inside the batch, with
+`StoreUniqueViolationException` **before writing anything**; and SHALL restrict bulk delete to items with `Guid.HasValue`.
 
 #### Scenario: Bulk create over a collection containing nulls
 
@@ -617,7 +617,8 @@ refuse a bulk create containing a key already stored, or a key repeated inside t
 
 - **Given** a store holding an entity under `g`, and a batch of a fresh entity plus one carrying `g`
 - **When** bulk `Create(data)` runs
-- **Then** `StoreException` is thrown and **neither** entity is written — the whole batch is checked first
+- **Then** `StoreUniqueViolationException` is thrown and **neither** entity is written — the whole batch is checked
+  first
 
 #### Scenario: Bulk update where only some items exist
 
@@ -912,10 +913,50 @@ or the innermost store `GetUnwrappedStore` reaches `is TStore` — the store a b
 - **When** `IsStoreOfType<Invoice, TStore>()` is called
 - **Then** `false` is returned rather than throwing
 
+### Requirement: A write refused for a key or unique value already held surfaces as StoreUniqueViolationException
+
+The system SHALL wrap `CreateCore` / `CreateCoreAsync` and `UpdateCore` / `UpdateCoreAsync` in the public `Create` /
+`CreateAsync` and `Update` / `UpdateAsync` wrappers of `AbstractStore<T>` / `AbstractAsyncStore<T>` with a filter on
+the `protected virtual bool IsDuplicateKeyException(Exception ex)` hook, which returns `false` in the bases and is
+overridden by a provider whose driver signals the refusal with its own exception (TASK-625). A recognised exception
+SHALL be rethrown from `Create` as `StoreException.DuplicateCreate(typeof(T), ex)` and from `Update` as
+`StoreException.UniqueViolation(typeof(T), ex)` (TASK-632), the driver's exception as `InnerException`. Both factories
+return `StoreUniqueViolationException : StoreException`, so an existing `catch (StoreException)` still selects the
+refusal while a caller that can repair the collision (the slug and default decorators retry) selects exactly it. An
+exception that already is a `StoreUniqueViolationException` SHALL pass through unwrapped.
+
+#### Scenario: A driver duplicate-key error on create
+
+- **Given** a provider whose `IsDuplicateKeyException` recognises its driver's duplicate-key exception
+- **When** `Create(entity)` hits a key already stored
+- **Then** `StoreUniqueViolationException` is thrown with the message "Create of {Type} refused: an entity with the
+  same key is already stored. Create never overwrites; use Update or Save for a stored entity." and the driver's
+  exception as `InnerException`
+
+#### Scenario: An update colliding with a unique index
+
+- **Given** a provider whose `IsDuplicateKeyException` recognises the exception its driver raises for the update
+- **When** `Update(entity)` would store a value a unique index already holds for another entity
+- **Then** `StoreUniqueViolationException` is thrown with the message "Update of {Type} refused: it would store a value
+  a unique index already holds for another entity."
+
+#### Scenario: A provider that already throws the subclass
+
+- **Given** a `*Core` member that throws `StoreUniqueViolationException` itself (the in-memory stores do)
+- **When** the public wrapper catches it
+- **Then** the filter excludes it and it propagates unchanged — its own message, not the factory's
+
+#### Scenario: A store that does not override the hook
+
+- **Given** a store whose `IsDuplicateKeyException` is the base's `false`
+- **When** its `CreateCore` or `UpdateCore` throws anything
+- **Then** the exception propagates untranslated
+
 ### Requirement: StoreException is the store-layer exception type and carries an optional inner exception
 
 The system SHALL declare `Birko.Data.Exceptions.StoreException : Exception` with a `(string message)`
-constructor delegating to `(string message, Exception? innerException)` with a `null` inner exception.
+constructor delegating to `(string message, Exception? innerException)` with a `null` inner exception, and the
+subclass `StoreUniqueViolationException(string message, Exception? innerException)` for a unique refusal.
 
 #### Scenario: Backend failure wrapped for the caller
 
@@ -927,7 +968,7 @@ constructor delegating to `(string message, Exception? innerException)` with a `
 
 - **Given** the abstract bases, the in-memory stores, `StoreLocator` and `StoreExtensions`
 - **When** invalid input is supplied
-- **Then** an in-memory create of a key already stored throws `StoreException`, and an in-memory update (single or
+- **Then** an in-memory create of a key already stored throws `StoreUniqueViolationException`, and an in-memory update (single or
   bulk) of an entity with no `Guid` or an unstored one throws its subclass `EntityNotFoundException` ([[TASK-555]]);
   a `null` entity, a read or delete of an unknown key, and a delete with no identifier are still answered with
   `Guid.Empty`, `null`, `false` or a silent no-op. `StoreLocator` refuses with `ArgumentException` (not a store) and

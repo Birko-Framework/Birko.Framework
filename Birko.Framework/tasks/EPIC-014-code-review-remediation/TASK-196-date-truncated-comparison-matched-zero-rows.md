@@ -73,7 +73,7 @@ into an unsatisfiable AND.
       **all 10 red on revert**, asserting on the parsed `Condition` tree so they hold independently
       of any one dialect
 - [x] End-to-end proof against real SQLite — lives in Symbio's `DatePredicateTranslationTests`
-- [ ] `/specs regen` for `filter-expression-translation` — **still outstanding**, see below
+- [x] `/specs regen` for `filter-expression-translation` — done 2026-10-16 (batched regen of 17 areas, diffs reviewed and confirmed)
 
 ## Outcome
 

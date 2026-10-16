@@ -1,7 +1,7 @@
 ---
 area: filter-expression-translation
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
   - ../Birko.Data.Core/Expressions/DateTruncation.cs
@@ -186,6 +186,42 @@ rejecting it (TASK-222).
 - **When** the normalizer runs
 - **Then** the result is still an `OrElse` of two `AndAlso` nodes — SQL and ElasticSearch depend on receiving AND/OR/NOT here, so the reduction must not go further than the constants
 
+### Requirement: A member reached through an interface is rebound to the concrete property
+
+`ExpressionNormalizer` SHALL rewrite a property access whose member is declared on an **interface** to an
+access of the concrete receiver type's own property of the same name and property type, searched
+most-derived first (`DeclaredOnly` on each type up the `BaseType` chain). A `Convert` / `TypeAs` of a
+concrete receiver to the interface SHALL be stripped first. The member SHALL be left as it is when the
+receiver is itself interface-typed, when no public instance property of that name and type exists (an
+explicit implementation), or when the member is not a property.
+
+This exists because in generic code `k => k.Scope == s` written against `TKnowledge : ISyncKnowledgeItem`
+binds `k.Scope` to the interface property, which carries none of the model's mapping attributes, so a
+translator that names fields from those attributes built the wrong field (TASK-157).
+
+#### Scenario: An interface-bound member takes the model's mapping
+
+- **Given** a model whose `Scope` property carries `[Keyword(Name = "scope")]`, and a predicate built in
+  generic code so that `k.Scope` binds to `ISyncKnowledgeItem.Scope`
+- **When** the normalizer visits the member
+- **Then** the access is rebound to the model's own `Scope` property, so ElasticSearch queries the declared
+  `scope` field rather than a dynamic `.keyword` sub-field that does not exist, and SQL honours a
+  `[NamedField]` remap
+
+#### Scenario: A constrained type parameter's Convert is stripped
+
+- **Given** `Convert(x, IFace).Member` — the shape a type parameter without a class constraint produces —
+  where `x` is a concrete model
+- **When** the normalizer visits it
+- **Then** the result is the concrete property accessed directly off `x`
+
+#### Scenario: An explicit implementation keeps the interface member
+
+- **Given** a model that implements the interface property explicitly, so it declares no public property of
+  that name
+- **When** the normalizer visits the access
+- **Then** the interface member is kept unchanged
+
 ### Requirement: Parameter-sharing predicate composition
 
 `ExpressionParameterReplacer` SHALL combine two `Expression<Func<T, bool>>` lambdas with `AndAlso` /
@@ -265,7 +301,10 @@ produced when an AND/OR tree short-circuits to a constant.
 `DataBase.ParseConditionExpression` SHALL map `Equal` to `ConditionType.Equal`, `NotEqual` to
 `ConditionType.Equal` with `IsNot = true`, `LessThan` to `Less`, `LessThanOrEqual` to `LessAndEqual`,
 `GreaterThan` to `Greather`, and `GreaterThanOrEqual` to `GreatherAndEqual`; and the rendering
-strategies SHALL invert each comparison operator when `IsNot` is set.
+strategies SHALL invert each comparison operator when `IsNot` is set. Because a condition is rendered
+`column op value` whichever side each operand came from, a comparison whose parameter-free operand is on
+the LEFT and parameter-bound operand on the right SHALL swap the operands and mirror the operator via
+`FlipComparison` before the condition is built (SH-M123, TASK-153).
 
 #### Scenario: Not-equal renders as `<>`
 
@@ -279,11 +318,11 @@ strategies SHALL invert each comparison operator when `IsNot` is set.
 - **When** `ComparisonConditionStrategy.GetOperator` runs
 - **Then** it returns `" <= "`, not `"NOT >"`
 
-#### Scenario: An ordering comparison with the constant on the left keeps the written operator
+#### Scenario: An ordering comparison with the constant on the left mirrors the operator
 
 - **Given** `x => 5 > x.Age`
-- **When** the comparison branch assigns `ConditionType.Greather` from the node type, then binds the constant `5` as the condition's value and `Age` as its name
-- **Then** the rendered SQL is `Age > @param(5)` — the operands are swapped without flipping the operator, so the predicate means `Age > 5` rather than `Age < 5`. (Only the value-expression path, via `BuildValueComparison`/`FlipComparison`, flips.)
+- **When** the comparison branch assigns `ConditionType.Greather` from the node type, finds the left operand parameter-free and the right parameter-bound, swaps them and flips the type to `Less`
+- **Then** the rendered SQL is `Age < @param(5)`, meaning what C# means. Before TASK-153 the operands were swapped without flipping and `25 > x.Age` returned the ages 30–60 where C# selects 10 and 20; an equality is symmetric and is unaffected
 
 #### Scenario: A comparison the switch does not cover defaults to equality
 
@@ -372,14 +411,35 @@ The SQL translator SHALL map `StartsWith` to `ConditionType.StartsWith`, `EndsWi
 `ConditionType.EndsWith`, and `String.Contains` to `ConditionType.Like`; SHALL take ONLY the first
 argument as the search pattern for those three methods, ignoring any `StringComparison`, `bool` or
 `CultureInfo` overload argument; and `SqlBuilderContext.FormatValue` SHALL wrap the bound value with
-`value%`, `%value%` and `%value` respectively. `LikeConditionStrategy` SHALL render ` LIKE ` or
-` NOT LIKE `.
+`value%`, `%value%` and `%value` respectively, after `SqlBuilderContext.EscapeLikePattern` has prefixed
+each LIKE metacharacter in the value — `%`, `_`, `[` (SQL Server's character class) and the escape
+character itself — with `SqlBuilderContext.LikeEscapeCharacter` (`!`). `LikeConditionStrategy` SHALL render
+` LIKE ` or ` NOT LIKE ` followed by the bound value and ` ESCAPE '!'`. The escape character is not the
+backslash, because inside a MySQL string literal a backslash is itself an escape (SH-M134, TASK-153).
+
+A `String.StartsWith` / `EndsWith` / `Contains` whose object AND pattern argument both reference the
+parameter (`x.Name.StartsWith(x.Code)`) SHALL be refused with `NotSupportedException`: a LIKE pattern built
+from a column needs string concatenation, which the providers do not spell alike (SH-M125).
 
 #### Scenario: Culture-aware Contains ignores the comparison argument
 
 - **Given** `x => x.Title.Contains(query, StringComparison.OrdinalIgnoreCase)`
 - **When** the arguments are processed
-- **Then** only `query` is parsed as the pattern, the enum argument is skipped, and the SQL is `Title LIKE @param` with the parameter bound to `%query%`
+- **Then** only `query` is parsed as the pattern, the enum argument is skipped, and the SQL is `Title LIKE @param ESCAPE '!'` with the parameter bound to `%query%`
+
+#### Scenario: A metacharacter in the search term stays literal
+
+- **Given** `x => x.Code.StartsWith("A_1")` over rows `A_1` and `A21`
+- **When** the value is formatted
+- **Then** the bound pattern is `A!_1%` and only `A_1` is returned; before TASK-153 the pattern was `A_1%`,
+  the `_` matched any character, and `A21` was returned too. `Contains("100%")` binds `%100!%%` likewise
+
+#### Scenario: A column used as the pattern is refused
+
+- **Given** `x => x.Name.StartsWith(x.Prefix)`
+- **When** the method branch sees a parameter-bound object and a parameter-bound first argument
+- **Then** `NotSupportedException` is thrown. Before this both columns were parsed into one condition, the
+  object overwriting the pattern, and the rendered `Name LIKE NULL` matched no row
 
 #### Scenario: StartsWith wildcards only on the right
 
@@ -396,16 +456,22 @@ argument as the search pattern for those three methods, ignoring any `StringComp
 ### Requirement: SQL method calls outside the recognised set
 
 For a method call whose name is not one of `StartsWith`, `EndsWith`, `Contains`, `ToLower`,
-`ToLowerInvariant`, `ToUpper`, `ToUpperInvariant`, `DataBase.ParseConditionExpression` SHALL leave the
+`ToLowerInvariant`, `ToUpper`, `ToUpperInvariant`, and which is not `string.IsNullOrEmpty` over a
+parameter-bound argument, `DataBase.ParseConditionExpression` SHALL leave the
 condition type at its incoming value (`ConditionType.Equal` for a freshly created condition), parse each
 non-skipped argument into that condition, then parse the call's `Object` into it, and return the
 condition.
 
-#### Scenario: String.IsNullOrEmpty produces an always-unknown equality
+`string.IsNullOrEmpty(arg)` over a parameter-bound argument SHALL be translated to the OR group
+`(Col IS NULL OR Col = @p)` with `@p` bound to the empty string, nested as a sub-condition of the incoming
+condition so that an enclosing `!` negates the whole group; an argument that does not resolve to a single
+column SHALL be refused with `NotSupportedException` (SH-M127, TASK-153).
+
+#### Scenario: String.IsNullOrEmpty is a null-or-empty test
 
 - **Given** `x => string.IsNullOrEmpty(x.Name)`
-- **When** the method name matches no case in the switch, the single argument `x.Name` resolves the condition's `Name`, and no value is ever bound
-- **Then** the condition is `Type = Equal` with `Values = null`, which `EqualConditionStrategy` renders as `Name = NULL` — UNKNOWN for every row, so the predicate matches nothing. ElasticSearch translates the same call to `BoolQuery.MustNot(WildcardQuery "*")`
+- **When** the method branch probes the argument and it resolves to the column `Table.Name`
+- **Then** the clause is `(Table.Name IS NULL OR Table.Name = @p)` with `@p = ''`, and its negation renders `NOT (…)`, which is right under three-valued logic. Before TASK-153 the condition was `Name = NULL`, so both the call and its negation matched no row. ElasticSearch translates the same call to "missing OR the exact empty string" (§ *ElasticSearch string and collection methods*)
 
 #### Scenario: A conversion operator call is recursed through
 
@@ -856,10 +922,21 @@ When either side of a comparison (after stripping `Convert`) is numeric arithmet
 to the other side. The same rendering SHALL serve the value operand of a set `Contains` (§ *SQL IN
 translation and empty sets*), so a computed operand resolves identically whether it appears in a
 comparison or in an `IN` — one renderer, not one per operator. Constants inside such a fragment SHALL be inlined as portable SQL literals rather
-than parameterised. When the value expression is on the LEFT and the constant on the right, the
+than parameterised; a string constant containing a backslash SHALL be refused with
+`NotSupportedException`, because MySQL's default `sql_mode` reads `\'` as an escaped quote, so doubling `'`
+does not contain the literal there and the renderer has no dialect (SH-M139, TASK-153). When the value expression is on the LEFT and the constant on the right, the
 operator SHALL be used as-is; when the constant is on the left and the parameter-bearing expression on
-the right, the comparison SHALL be flipped via `FlipComparison`. When both sides reference the
-parameter, the right fragment SHALL be emitted verbatim with `IsField = true`.
+the right, the comparison SHALL be flipped via `FlipComparison`. A bare `bool` column used as a CASE test
+SHALL be rendered `(column = '1')` (`BoolColumnTest`), which all four providers accept: `column <> 0` is
+`boolean <> integer` on PostgreSQL and a bare BIT is no predicate on SQL Server (SH-M135/SH-M136).
+
+When both sides reference the parameter — any operator, whether or not either side is a value
+expression — the comparison SHALL be built by `BuildColumnComparison` before the value-expression,
+`.Date`-range and ordinary paths are consulted: each side is rendered through `RenderValueFragment`, the
+right fragment emitted verbatim with `IsField = true`. An `==` or `!=` where either operand's type can be
+null SHALL be rendered null-safe, so it answers what C# answers: `A = B OR (A IS NULL AND B IS NULL)`, and
+`A <> B OR (A IS NULL AND B IS NOT NULL) OR (A IS NOT NULL AND B IS NULL)`. A column's `.Date` on either side
+SHALL be refused with `NotSupportedException`, since no date truncation is portable (TASK-574).
 
 #### Scenario: Column arithmetic in WHERE
 
@@ -877,13 +954,40 @@ parameter, the right fragment SHALL be emitted verbatim with `IsField = true`.
 
 - **Given** `x => (x.Vip ? x.Premium : x.Score) > 100`
 - **When** `RenderValueFragment` handles the `ConditionalExpression`
-- **Then** the fragment is `CASE WHEN (Table.Vip <> 0) THEN Table.Premium ELSE Table.Score END`, the boolean test rendered by `RenderBoolFragment` with a bare bool column compared to `0`
+- **Then** the fragment is `CASE WHEN (Table.Vip = '1') THEN Table.Premium ELSE Table.Score END`, the boolean test rendered by `RenderBoolFragment` with a bare bool column compared to the literal `'1'`. Before TASK-153 it was `(Table.Vip <> 0)`, which PostgreSQL refused with `operator does not exist: boolean <> integer`
 
 #### Scenario: Column-versus-column comparison
 
 - **Given** `x => x.Total == x.A + x.B`
 - **When** both sides reference the parameter
 - **Then** the condition is created with `isField: true` and the right fragment is emitted verbatim, not bound as a parameter
+
+#### Scenario: Two plain columns are both rendered
+
+- **Given** `x => x.A == x.B` over non-nullable columns
+- **When** `BuildColumnComparison` runs
+- **Then** the clause is `Table.A = Table.B`. Before TASK-574 both operands were parsed into one condition,
+  the right one's name overwrote the left's and no value was bound, so the clause was `Table.B = NULL` and
+  matched no row, for every operator
+
+#### Scenario: A nullable column equality is null-safe
+
+- **Given** `x => x.A == x.B` where either column is nullable
+- **Then** the clause is `(Table.A = Table.B OR (Table.A IS NULL AND Table.B IS NULL))`, so two null values
+  match as `null == null` does in C#; `!=` renders the three-arm form and matches a row where exactly one is null
+
+#### Scenario: A column's .Date against another column is refused
+
+- **Given** `x => x.OpenedAt.Date == x.ClosedAt.Date`, or `x.Start.Date < x.End`
+- **Then** `NotSupportedException` is thrown, naming the comparison — `DATE()` is not T-SQL and
+  `CAST(… AS DATE)` reads SQLite's stored text as a number, so refusing replaces a wrong answer
+
+#### Scenario: A backslash in an inlined string is refused
+
+- **Given** `x => (x.Code ?? fallback) == target` where `fallback` is `\' OR 1=1 -- `
+- **When** `InlineConstant` reaches the string
+- **Then** `NotSupportedException` is thrown. Before TASK-153 the literal `'\'' OR 1=1 -- '` was emitted,
+  which MySQL at its default `sql_mode` read as a closed literal followed by executable SQL
 
 #### Scenario: Constant on the left flips the operator
 
@@ -922,7 +1026,7 @@ The SQL translator SHALL wrap a resolved column in `LOWER(...)` for `ToLower`/`T
 whose inner expression resolves to a column; a `DateTime.Date` access that does not resolve to a column
 SHALL be evaluated as a constant. The `DATE(...)` wrapper SHALL be reached only by a `.Date` comparison
 that is not rewritten to a range (§ *A `.Date` comparison against a value is a half-open range on the raw
-column*): column-versus-column, or a value side that does not evaluate to a `DateTime`.
+column*) and is not column-versus-column: a value side that does not evaluate to a `DateTime`.
 
 #### Scenario: Case-insensitive comparison via LOWER
 
@@ -930,13 +1034,13 @@ column*): column-versus-column, or a value side that does not evaluate to a `Dat
 - **When** the `ToLower` case runs and the inner member resolves to `Table.Name`
 - **Then** the condition name becomes `LOWER(Table.Name)`
 
-#### Scenario: Date truncation on the column side
+#### Scenario: Date truncation on both column sides is refused
 
 - **Given** `x => x.OpenedAt.Date == x.ClosedAt.Date` — both sides a column `.Date`, so no range rewrite applies
-- **When** each side's `.Date` member is parsed into the same comparison condition and its inner member contains the parameter
-- **Then** the condition name becomes `DATE(Table.OpenedAt)` and is then overwritten by the right side's
-  `DATE(Table.ClosedAt)`, with no value bound — the rendered clause is `DATE(Table.ClosedAt) = NULL`, which
-  matches no row (and `DATE()` is not a T-SQL function)
+- **When** the comparison branch finds both operands parameter-bound and hands them to `BuildColumnComparison`
+- **Then** `NotSupportedException` is thrown. Before TASK-574 each side's `.Date` was parsed into the same
+  condition, the right side's `DATE(Table.ClosedAt)` overwrote the left's with no value bound, and the
+  rendered `DATE(Table.ClosedAt) = NULL` matched no row
 
 #### Scenario: Date truncation on the constant side
 
@@ -954,8 +1058,9 @@ column*): column-versus-column, or a value side that does not evaluate to a `Dat
 day: `==` becomes `col >= d AND col < d+1`; `!=` becomes `col < d OR col >= d+1`; `<` becomes `col < d`;
 `<=` becomes `col < d+1`; `>` becomes `col >= d+1`; `>=` becomes `col >= d`. When the column is on the right
 the operator SHALL be mirrored first. The range SHALL be nested as a sub-condition of an enclosing parent
-rather than merged into it, so the `!=` arm's own `IsOr` survives. Column-versus-column, a value that does
-not evaluate to a `DateTime`, and a column that does not resolve SHALL fall back to the ordinary path.
+rather than merged into it, so the `!=` arm's own `IsOr` survives. A value that does not evaluate to a
+`DateTime`, and a column that does not resolve, SHALL fall back to the ordinary path; column-versus-column
+never reaches this rewrite, being claimed (and, with a `.Date`, refused) by `BuildColumnComparison` first.
 
 `Birko.Data.Expressions.DateTruncation.Rewrite` SHALL perform the same rewrite at expression level, with the
 same operator table, for backends that hand the raw tree to a driver; it SHALL return the filter unchanged
@@ -1166,9 +1271,13 @@ command and the condition sequence are non-null AND the rendered clause is non-e
 `LimitOffsetDefinition` SHALL emit ` LIMIT @LIMIT[ OFFSET @OFFSET]` by default and `MSSqlConnector`
 SHALL override it to ` OFFSET @OFFSET ROWS FETCH NEXT @LIMIT ROWS ONLY` — always emitting the `OFFSET`
 half and binding `@OFFSET` to `0` when `offset` is null, because T-SQL has no standalone `FETCH`; both SHALL
-emit nothing when `limit` is null. A provider whose paging is legal only beside a sort declares
+emit nothing when `limit` and `offset` are both null. An `offset` with no `limit` SHALL be honoured rather
+than dropped (TASK-151): the default form emits ` LIMIT {UnboundedLimit} OFFSET @OFFSET`, where the
+dialect's "no limit" operand is `-1` (SQLite, the base), `ALL` (PostgreSQL) or `18446744073709551615`
+(MySQL), and `MSSqlConnector` emits ` OFFSET @OFFSET ROWS` with no `FETCH`. `CreateSelectCommand` SHALL
+append the paging clause when either `limit` or `offset` is set. A provider whose paging is legal only beside a sort declares
 `RequiresOrderByForPaging` (SQL Server alone), and for it `CreateSelectCommand` SHALL append
-` ORDER BY (SELECT NULL)` to a limited SELECT the caller did not sort, before the paging clause (TASK-278).
+` ORDER BY (SELECT NULL)` to a limited or offset SELECT the caller did not sort, before the paging clause (TASK-278).
 
 #### Scenario: Empty rendered clause appends nothing
 
@@ -1176,11 +1285,19 @@ emit nothing when `limit` is null. A provider whose paging is legal only beside 
 - **When** `AddWhere` runs
 - **Then** `ConditionDefinition` returns an empty string and the command text is left untouched
 
-#### Scenario: Offset without limit is ignored
+#### Scenario: Offset without limit skips the rows it names
 
 - **Given** `limit = null` and `offset = 20`
-- **When** `LimitOffsetDefinition` runs on the base connector
-- **Then** it returns `null` and no parameters are bound
+- **When** `LimitOffsetDefinition` runs
+- **Then** the base connector returns ` LIMIT -1 OFFSET @OFFSET`, PostgreSQL ` LIMIT ALL OFFSET @OFFSET`,
+  MySQL ` LIMIT 18446744073709551615 OFFSET @OFFSET` and SQL Server ` OFFSET @OFFSET ROWS`, each with only
+  `@OFFSET` bound. Before TASK-151 the offset was dropped and the read returned the first page
+
+#### Scenario: Neither limit nor offset
+
+- **Given** `limit = null` and `offset = null`
+- **When** `LimitOffsetDefinition` runs
+- **Then** the base connector returns `null` (SQL Server an empty string) and no parameters are bound
 
 #### Scenario: MSSQL pagination shape
 
@@ -1207,6 +1324,10 @@ emit nothing when `limit` is null. A provider whose paging is legal only beside 
 `AbstractConnectorBase.CreateSelectCommand` SHALL emit every `FROM` and `JOIN` table reference as the
 **quoted** table name followed by a **bare** alias equal to that name (`SelectTableReference`), and SHALL
 emit the table unaliased when its name is not a plain identifier (`\A[A-Za-z_][A-Za-z0-9_]*\z`).
+The quoted relation SHALL come from `TableIdentifier`, so an entity declared in a database schema
+(`[Table(Schema = …)]`, or the connection's default `ISqlSchemaSettings.Schema`) is read from
+`"schema"."name"` where the provider `SupportsSchemas` (PostgreSQL, TimescaleDB, SQL Server) and from the
+prefixed `schema__name` elsewhere (MySQL, SQLite), while the alias stays the bare **logical** name (TASK-272).
 
 Every other clause this builder produces qualifies its columns with the **bare** table name — the
 projection via `Table.GetSelectFields(withName: true)`, the `WHERE` via
@@ -1227,6 +1348,15 @@ matching it.
   missing table and returned an **empty result**, so every read of every entity whose table name was not
   already all-lower-case silently returned nothing
 
+#### Scenario: A table in a schema keeps its logical alias
+
+- **Given** an entity mapped to table `evts` in schema `reporting`
+- **When** a filtered read is built
+- **Then** the reference is `"reporting"."evts" AS evts` on PostgreSQL and `[reporting].[evts] AS evts` on
+  SQL Server, and `` `reporting__evts` AS evts `` on MySQL (`"reporting__evts" AS evts` on SQLite) — the
+  `WHERE`'s `evts.Column` qualifiers resolve against the alias on every provider. A model without a schema
+  renders byte-identically to before
+
 #### Scenario: A table name that cannot take a bare alias is emitted unaliased
 
 - **Given** a table named `My Table`
@@ -1243,10 +1373,14 @@ matching it.
 
 ### Requirement: SQL join condition assembly
 
-`AbstractConnectorBase.CreateSelectCommand` SHALL map `JoinType.Inner` to ` INNER JOIN `,
-`JoinType.LeftOuter` to ` LEFT OUTER JOIN ` and anything else to ` CROSS JOIN `, SHALL render the
-join's conditions inside ` ON (...)` for non-Cross joins, and SHALL EMIT NO JOIN AT ALL for a join
-group whose conditions collection is empty.
+`AbstractConnectorBase.CreateSelectCommand` SHALL render EVERY join group, choosing its keyword through
+`Join.Keyword` — the one producer shared with the view builder — which SHALL map an `Inner` join with
+conditions to ` INNER JOIN `, a `LeftOuter` join with conditions to ` LEFT OUTER JOIN ` and a `Cross` join
+without conditions to ` CROSS JOIN `, and SHALL refuse with `NotSupportedException` a `Cross` join that
+carries conditions (it would be a cartesian product) and an `Inner` / `LeftOuter` join that carries none.
+A group's conditions SHALL be rendered inside ` ON (...)` whenever there are any. A `Join` constructed or
+created without a join type SHALL be `Inner` when given conditions and `Cross` otherwise, and
+`Join.Create(left, right, condition)` SHALL default to `Inner` (TASK-626, SH-M147/SH-M148).
 
 #### Scenario: Inner join with an ON clause
 
@@ -1256,11 +1390,25 @@ group whose conditions collection is empty.
   condition — the joined table is aliased on the same rule as the `FROM` table, because the `ON` clause's
   own operands are bare-qualified
 
-#### Scenario: Conditionless join is dropped
+#### Scenario: Conditionless cross join is emitted
 
 - **Given** `Join.Create("A", "B", JoinType.Cross)` with no conditions
-- **When** the join groups are filtered by `Where(x => x.Value.Any())`
-- **Then** the group is skipped entirely and no `CROSS JOIN` text is emitted
+- **When** the select command is built
+- **Then** ` CROSS JOIN "B" AS B` is emitted with no `ON`, and the read returns the product (3 rows to 6,
+  measured). Before TASK-626 a conditionless group was skipped and no `CROSS JOIN` text was emitted
+
+#### Scenario: Conditions without a join type make an inner join
+
+- **Given** `Join.Create("A", "B", cond)` or `new Join("A", "B", conditions: [cond])` with no type
+- **Then** the join is `Inner` and renders ` INNER JOIN … ON (…)`. Before TASK-626 the default was `Cross`,
+  whose conditions were not rendered, so the read returned the cartesian product (6 rows where 2 were asked for)
+
+#### Scenario: A join whose type contradicts its conditions is refused
+
+- **Given** a `Cross` join carrying a condition, or an `Inner` / `LeftOuter` join carrying none
+- **When** the select command is built
+- **Then** `NotSupportedException` naming both tables is thrown, rather than a cartesian product or a
+  silently dropped join
 
 #### Scenario: Join conditions are added cumulatively
 
@@ -1273,18 +1421,33 @@ group whose conditions collection is empty.
 `DataBase.ParseExpression` SHALL render an expression in VALUE position (an UPDATE SET right-hand side
 or a view field) as SQL text and SHALL collect every constant it meets into the supplied parameter
 dictionary under keys `@Const{count}`. It SHALL render a `ConditionalExpression` as
-`CASE WHEN … THEN … ELSE … END`, a `Coalesce` as `COALESCE(left, right)`, an equality against a null
+`CASE WHEN … THEN … ELSE … END` — a test that is a bare `bool` column rendered `(column = '1')`, the same
+`BoolColumnTest` the WHERE-side renderer uses, qualified only when the caller asked for table names — a
+`Coalesce` as `COALESCE(left, right)`, an equality against a null
 constant as `(operand IS NULL)` / `(operand IS NOT NULL)`, arithmetic and comparison operators inside
 parentheses, `Replace` as `REPLACE(...)`, `ToLower`/`ToLowerInvariant` as `LOWER(...)`,
 `ToUpper`/`ToUpperInvariant` as `UPPER(...)`, and `DateTime.Date` on a column as `DATE(column)`. Any
 other parameter-free method call SHALL be evaluated and bound as a constant; a parameter-bound one is
-refused (§ *An unrecognised call in an UPDATE SET value is refused, never invoked*).
+refused (§ *An unrecognised call in an UPDATE SET value is refused, never invoked*). A parameter-free
+member chain (`filter.Range.From`) SHALL be evaluated and bound as a constant; a parameter-bound member that
+is not a mapped column of the entity (`x.Sub.Count`) SHALL be refused with `NotSupportedException` (SH-M149,
+TASK-153).
 
 #### Scenario: Ternary SET value
 
 - **Given** the value expression `x => x.Vip ? x.Premium : x.Score`
 - **When** `ParseExpression` runs
-- **Then** it returns `CASE WHEN Table.Vip THEN Table.Premium ELSE Table.Score END`
+- **Then** it returns `CASE WHEN (Table.Vip = '1') THEN Table.Premium ELSE Table.Score END`. Before TASK-153
+  the test was the bare `Table.Vip`, which SQL Server refused (a BIT is no predicate, error 4145); in an
+  UPDATE's SET the column is unqualified, because PostgreSQL refuses `"T".col` there
+
+#### Scenario: A nested member is refused rather than rendered as a null fragment
+
+- **Given** the value expression `x => x.Sub.Count`
+- **When** `ParseExpression` reaches the member
+- **Then** `NotSupportedException` is thrown. Before TASK-153 it recursed without the entity type, produced
+  a null fragment, and emitted SQL such as `( = @Const0)`; a closure chain such as `holder.Sub.Count` is
+  still bound as `@Const{n}`
 
 #### Scenario: Null test inside a CASE becomes IS NULL
 
@@ -1325,6 +1488,14 @@ wrapping the group in `NOT`, so a match-nothing member is never inverted into ma
 OR group as an OR sub-condition (`Condition.OrSubCondition`) and an AND group as an AND one (FIELD-026 and
 `SH-M128`, fixed by TASK-559 — a disabled tree used to convert to an empty sequence, and every OR group
 rendered as AND).
+
+Each leaf operator SHALL answer what `RuleEvaluator` answers for the same rule (TASK-153): `Between` SHALL be
+`>= lower AND <= upper`, negated by De Morgan to `< lower OR > upper`, and SHALL raise `ArgumentException`
+when either bound is null (SH-M129); `Equal` / `NotEqual` with a null value SHALL be `IS NULL` /
+`IS NOT NULL` (SH-M130); an `In` / `NotIn` whose value is a `string` SHALL bind that string as ONE value
+(SH-M131); and a `Like` whose value is a string SHALL read a `%` only at either end, mapping `%v%` to a
+substring match, `%v` to a suffix, `v%` to a prefix and anything else to equality, the rest of the pattern
+literal (SH-M132).
 
 #### Scenario: Disabled rule matches nothing
 
@@ -1378,6 +1549,13 @@ Because a `[View]` type has no `[Table]`, its fields resolve only through the `R
 delegate; that delegate SHALL therefore be registered at module load, not merely as a side effect of the
 first `LoadView`, so that resolution at the caller does not depend on what has already run in the process.
 
+`DataBase.ScopeFieldResolver(resolver)` SHALL install a field resolver for the current async flow only
+(an `AsyncLocal`), until the returned scope is disposed, which restores the previous one. A predicate's
+column resolution (`ResolveColumnName`, the WHERE-side lookup) SHALL consult that scoped resolver BEFORE the
+entity's table metadata and `ResolveFieldSelectName`, so a store that knows its own view resolves a filter on
+it without registering anything process-wide (TASK-151, rule 36). Rule-field resolution
+(`ResolveRuleField`) does not consult it.
+
 #### Scenario: A view field resolves on the first call in a process
 
 - **Given** a fresh process in which nothing has loaded a view
@@ -1386,6 +1564,14 @@ first `LoadView`, so that resolution at the caller does not depend on what has a
   Previously the delegate was registered only inside `LoadView`, so the first such call raised
   `ArgumentException` for a valid field and the identical call succeeded later — an order-dependent,
   first-call-only failure. The ORDER BY sink never had this: the connector invokes it after `LoadView`
+
+#### Scenario: A scoped resolver answers first, and only for its own flow
+
+- **Given** a `DataBase.ScopeFieldResolver(...)` scope opened by one caller
+- **When** that caller's predicate is parsed, and a concurrent caller's predicate is parsed on another flow
+- **Then** the first caller's columns come from its resolver whenever it answers non-null, falling back to
+  table metadata otherwise; the other flow never sees it; and disposing the scope (once or twice) restores
+  whatever resolver was in effect before it
 
 #### Scenario: A remapped property filters on its mapped column
 
@@ -1460,11 +1646,34 @@ first `LoadView`, so that resolution at the caller does not depend on what has a
   `IsOr` never joins it to a sibling in the flat chain (it used to be `AndSubCondition` with `IsOr` set on the
   children, which the renderer ignores — the group rendered `(a AND b)`, `SH-M128`)
 
-#### Scenario: A Between rule keeps only its lower bound
+#### Scenario: A Between rule keeps both bounds
 
-- **Given** a leaf rule with `Operator = ComparisonOperator.Between`
+- **Given** a leaf rule with `Operator = ComparisonOperator.Between`, `Value = 15`, `UpperValue = 35`
+- **When** `ConvertLeaf` runs
+- **Then** it returns an AND sub-condition of `Field >= 15` and `Field <= 35`, and negated an OR
+  sub-condition of `Field < 15` and `Field > 35`. Before TASK-153 `MapOperator` returned a single `>=` with
+  no upper bound, and `Between Age 15..35` returned the ages 20–60
+- **And** a `Between` rule missing either bound raises `ArgumentException`
+
+#### Scenario: A null-valued equality rule is a null test
+
+- **Given** a rule `Equal` (or `NotEqual`) with `Value = null`
+- **When** `ConvertLeaf` runs
+- **Then** the condition is `IsNull` (with `IsNot` for `NotEqual`, flipped again by the rule's negation),
+  rendering `IS NULL` / `IS NOT NULL` — before TASK-153 both rendered `Field = NULL` and returned no rows
+
+#### Scenario: An In rule over a string binds one value
+
+- **Given** a rule `Name In "ABC"`
 - **When** `MapOperator` runs
-- **Then** it returns `(ConditionType.GreatherAndEqual, [rule.Value])` — a single `>=` comparison with no upper bound
+- **Then** the value set is `["ABC"]`, not `'A', 'B', 'C'` (which returned the row named `A`)
+
+#### Scenario: A Like rule keeps its anchoring
+
+- **Given** a rule `Like "FV2026%"`
+- **When** `ConvertLeaf` runs
+- **Then** the condition is a `StartsWith` on `FV2026`, so the bound pattern is `FV2026%` and `XFV2026` is
+  not matched; before TASK-153 the pattern was wrapped again as `%FV2026%%`
 
 #### Scenario: Negated group is pushed down to its leaves
 
@@ -1512,6 +1721,31 @@ and their async counterparts) SHALL use `ParseRequiredFilterQuery`.
 - **Given** `ReadCore(filter: null)`
 - **When** `ParseFilterQuery` returns `null` and `ReadStream(QueryContainer?, …)` receives it
 - **Then** `request.Query` is left unset and the search returns everything
+
+### Requirement: An ElasticSearch store that cannot answer refuses rather than answering empty
+
+`ElasticSearchStore.SetSettings` and `AsyncElasticSearchStore.SetSettings` SHALL throw `ArgumentException`
+for settings that are not ElasticSearch settings, rather than ignoring them and leaving the store with no
+client. Every read, count, aggregate, search, highlight and filter-based write that needs the client SHALL
+call `RequireConnector()`, which throws `InvalidOperationException` when there is none, instead of
+answering an empty result or returning as if the write had run (SH-M146, TASK-153). `DetectMappingDrift`
+still reports "unsupported" without a client. The filter-based `Delete` / `Update` SHALL inspect the
+by-query response: a version conflict SHALL throw `StoreConcurrencyException`, and any other failure or a
+timeout `StoreException` (TASK-502).
+
+#### Scenario: Foreign settings are refused
+
+- **Given** an ElasticSearch store and an `ISettings` of another kind
+- **When** `SetSettings` is called
+- **Then** `ArgumentException` naming the settings type is thrown. Before TASK-153 the call succeeded, and
+  every write then reported success while writing nothing and every read answered empty — a misconfigured
+  store indistinguishable from an empty index
+
+#### Scenario: A filtered delete with no client throws
+
+- **Given** a store whose client was never set
+- **When** `Delete(filter)` or a read is issued
+- **Then** `InvalidOperationException` is thrown; previously `if (Connector == null) return;` reported success
 
 ### Requirement: ElasticSearch predicate-position handling
 
@@ -1606,7 +1840,10 @@ non-null `Field` and the value from whichever yielded a non-null `Value`, and SH
 it could not bound*), emit `TermQuery` for `==`, and a `BoolQuery.MustNot` wrapping a
 `TermQuery` for `!=`. When the field is known and the value is null it SHALL emit
 `BoolQuery.MustNot(ExistsQuery)` for `==` and `ExistsQuery` for `!=`, and `null` for any other
-operator. It SHALL return `null` when either field or value is unavailable.
+operator. It SHALL return `null` when either field or value is unavailable, and when BOTH operands yield a
+field (`x.A == x.B`), since a term or range query compares a field with a value (SH-M126). When the field
+comes from the right operand and the left yielded none, it SHALL mirror an ordering operator (`>` ↔ `<`,
+`>=` ↔ `<=`) before building the query (SH-M124, TASK-153).
 
 #### Scenario: Numeric greater-than becomes a range query
 
@@ -1632,20 +1869,45 @@ operator. It SHALL return `null` when either field or value is unavailable.
 - **When** the null-value branch matches neither `Equal` nor `NotEqual`
 - **Then** `null` is returned, which `ParseFilterQuery` converts into a `NotSupportedException`
 
-#### Scenario: Constant on the left is not flipped
+#### Scenario: Constant on the left mirrors the operator
 
 - **Given** `x => 18 > x.Age`
-- **When** `ParseComparison` takes `field` from the right operand and `value` from the left, then switches on `binary.NodeType`
-- **Then** a `NumericRangeQuery { Field = "age", GreaterThan = 18 }` is produced, meaning `Age > 18` — the operator is not flipped to compensate for the swapped operands
+- **When** `ParseComparison` takes `field` from the right operand and `value` from the left, and mirrors `>` to `<`
+- **Then** a `NumericRangeQuery { Field = "age", LessThan = 18 }` is produced, meaning `Age < 18` as in C#. Before TASK-153 the operator was not mirrored and the query meant `Age > 18`
+
+#### Scenario: Two fields are refused rather than read as a null test
+
+- **Given** `x => x.A == x.B`
+- **When** both operands translate to a field
+- **Then** `null` is returned and `ParseFilterQuery` throws. Before TASK-153 the missing value made it the
+  null comparison, `MustNot(exists a)` — an unrelated set of documents
+
+#### Scenario: An untranslatable operand beside a field is still read as a null test
+
+- **Given** `x => x.Name == x.Sub.Name` or `x => x.Code == x.Name.Substring(1)`, where the second operand
+  translates to `null` (a nested member, an unknown parameter-bound call)
+- **When** `ParseComparison` finds a field on one side and no query at all on the other
+- **Then** the field-and-field refusal does not apply (only one side yielded a field), the value is `null`,
+  and the null-comparison branch emits `BoolQuery { MustNot = [ExistsQuery name.keyword] }` for `==` (an
+  `ExistsQuery` for `!=`) — "no value" and "untranslatable" are not told apart here
 
 ### Requirement: ElasticSearch field naming
 
-`FormatFieldName` SHALL lower-case the first character of the property name and leave the rest
-unchanged, SHALL return `null` for a null/empty name, and SHALL prefix the result with
-`{prefix}.` when a field prefix is in effect. `ParseMember` and `TryScriptFieldName` SHALL append
-`.keyword` to a `string`-typed field unless it already ends with `.keyword` (case-insensitively).
-`IsDirectMemberOfParameter` SHALL accept a member accessed off the parameter, off a `TypeAs`, or off a
-`Convert` of the parameter.
+`StoredFieldName` SHALL be the one producer of a member's field name: the `Name` its NEST mapping
+attribute (`ElasticsearchPropertyAttributeBase`, else `PropertyNameAttribute`) declares, prefixed with
+`{prefix}.` when a field prefix is in effect, and otherwise `FormatFieldName`, which SHALL lower-case the
+first character of the property name and leave the rest unchanged, SHALL return `null` for a null/empty
+name, and SHALL prefix the result with `{prefix}.` when a field prefix is in effect. An EXACT match (a term,
+wildcard, prefix, doc-value script or sort) SHALL target `ExactFieldName`: for a `string` member with no
+mapping attribute — dynamically mapped as `text` with a `keyword` sub-field — the stored name plus
+`.keyword`; for a `[Keyword]` member the stored name itself, which has no sub-field; and for a string with
+any other mapping (`[Text]`) a `NotSupportedException`, since it has no exact form (TASK-613). `ParseMember`
+and `TryScriptFieldName` SHALL use `ExactFieldName`; a bare `bool` member and `HasValue` SHALL use
+`StoredFieldName`. `ElasticSearch.Sorts(orderBy)` SHALL be the one producer of every store's sort clauses,
+resolving each key as a member name, then a stored field name, then a unique case-insensitive member name,
+naming the field through `ExactFieldName`, and throwing `ArgumentException` for a key that resolves to no
+member (TASK-615). `IsDirectMemberOfParameter` SHALL accept a member accessed off the parameter, off a
+`TypeAs`, or off a `Convert` of the parameter.
 
 #### Scenario: camelCase conversion
 
@@ -1658,6 +1920,32 @@ unchanged, SHALL return `null` for a null/empty name, and SHALL prefix the resul
 - **Given** `x => x.Name == "abc"`
 - **When** `ParseMember` resolves the `string` member
 - **Then** the term query field is `name.keyword`
+
+#### Scenario: A keyword-mapped string is matched on its own field
+
+- **Given** `[Keyword] string Code` and `x => x.Code == "A1"`
+- **Then** the term query field is `code`, with no `.keyword` suffix. Before TASK-613 every string was
+  suffixed, the field did not exist, and ElasticSearch answered zero hits rather than an error — every
+  lookup by such a member came back empty
+
+#### Scenario: A declared field name is honoured
+
+- **Given** a member mapped with `[Keyword(Name = "scope")]` or `[PropertyName("scope")]`
+- **Then** the query names `scope`, not the camelCase of the CLR name
+
+#### Scenario: An exact match on a text-mapped string is refused
+
+- **Given** `[Text] string Body` and `x => x.Body == "a"`
+- **Then** `NotSupportedException` is raised (and `ParseFilterQuery` rethrows it wrapped), naming the member
+  and advising `[Keyword]`
+
+#### Scenario: Sorting names the stored field
+
+- **Given** `OrderBy<T>` on `UpdatedAt` and on a string member `Name`
+- **When** a store builds its search request
+- **Then** the sorts are on `updatedAt` and `name.keyword`. Before TASK-615 the CLR name was sent verbatim,
+  and every `orderBy` was a 400 "No mapping found for [UpdatedAt]"; an unknown key now throws
+  `ArgumentException` before any request
 
 #### Scenario: Nested prefix from Any
 
@@ -1715,11 +2003,13 @@ mirroring SQL `LIKE '%x%'`, which `query_string` over a keyword field never did.
 
 ### Requirement: ElasticSearch string and collection methods
 
-`ParseMethodCall` SHALL translate `IsNullOrEmpty` to `BoolQuery.MustNot(WildcardQuery value "*")`,
+`ParseMethodCall` SHALL translate `IsNullOrEmpty` to a `BoolQuery` whose `Should` holds
+`MustNot(ExistsQuery)` and a verbatim `TermQuery` on `""`, with `MinimumShouldMatch = 1` — missing, or exactly
+empty (SH-M141; `IsVerbatim` because NEST otherwise drops a term on `""` as conditionless),
 `StartsWith` to `PrefixQuery`, `EndsWith` to `WildcardQuery` with value `"*" + EscapeWildcardValue(value)`,
 `String.Contains` to `WildcardQuery` with value `"*" + EscapeWildcardValue(value) + "*"` on the field
 (§ *ElasticSearch substring matching uses a query type with no grammar*), `MultiMatch` to `MultiMatchQuery`, `Any` to
-`NestedQuery`, `Property(name)` to a field-only `TermQuery`, and `ToLower`/`ToLowerInvariant`/
+`NestedQuery` — over `MatchAllQuery` when it has no predicate argument (SH-M143) — `Property(name)` to a field-only `TermQuery`, and `ToLower`/`ToLowerInvariant`/
 `ToUpper`/`ToUpperInvariant` transparently to the wrapped expression. Any other method SHALL be
 evaluated as a constant, yielding a value-only `TermQuery` or `null`.
 
@@ -1728,6 +2018,18 @@ evaluated as a constant, yielding a value-only `TermQuery` or `null`.
 - **Given** `x => x.Name.EndsWith("son")`
 - **When** the call is translated
 - **Then** a `WildcardQuery { Field = "name.keyword", Value = "*son" }` is produced
+
+#### Scenario: IsNullOrEmpty matches an indexed empty string
+
+- **Given** documents whose `Name` is missing, `""` and `"a"`, and `x => string.IsNullOrEmpty(x.Name)`
+- **Then** the first two are returned. Before TASK-153 the query was `MustNot(wildcard "*")`, and because
+  `*` matches zero characters the indexed `""` was excluded — the translation meant "missing"
+
+#### Scenario: A parameterless Any is "has any nested document"
+
+- **Given** `x => x.Lines.Any()`
+- **Then** the query is `NestedQuery { Path = lines, Query = MatchAllQuery }`. Before TASK-153 the single
+  argument served as both collection and predicate, giving a nested term query with no value
 
 #### Scenario: Case normalisation is transparent
 
@@ -1796,7 +2098,8 @@ collection.
 
 `ParseMember` SHALL translate `Nullable<T>.HasValue` on a direct member of the parameter into an
 `ExistsQuery`, SHALL evaluate a parameter-free member as a value-only `TermQuery` (or `null` when the
-value is null), and SHALL recurse into `member.Expression` for a parameter-bound sub-expression.
+value is null), and SHALL return `null` for a parameter-bound member that is not a direct member of the
+parameter (`x.Sub.Prop`), rather than recursing to the parent member (SH-M142, TASK-153).
 `ParseUnary` SHALL make `Convert` transparent, wrap `Not` in `BoolQuery.MustNot`, and return `null` for
 every other unary node type.
 
@@ -1805,6 +2108,13 @@ every other unary node type.
 - **Given** `x => x.ClosedAt.HasValue`
 - **When** `ParseMember` matches the `HasValue` branch
 - **Then** an `ExistsQuery { Field = "closedAt" }` is returned
+
+#### Scenario: A nested member is refused rather than read as its parent
+
+- **Given** `x => x.Sub.Count == 1`
+- **When** `ParseMember` finds `x.Sub.Count` is not a direct member of the parameter
+- **Then** `null` is returned and `ParseFilterQuery` throws. Before TASK-153 it recursed to `x.Sub` and the
+  comparison ran as `sub == 1`
 
 #### Scenario: Negation wraps in MustNot
 
@@ -1879,8 +2189,9 @@ it cannot script. A field on the left of `??` SHALL be scripted as
 
 `ElasticSearch.EvaluateExpression` SHALL return `null` immediately for any expression that references a
 lambda parameter, SHALL unwrap `op_Implicit`/`op_Explicit` special-name single-argument conversions by
-evaluating their argument, and SHALL cache compiled fallback delegates keyed by the expression's
-`ToString()`.
+evaluating their argument, and SHALL cache compiled fallback delegates in a `ConditionalWeakTable` keyed by
+the expression OBJECT, as `DataBase` does — not by its `ToString()`, which two closures from one call site
+share and which a static dictionary never released (SH-M151, TASK-153).
 
 #### Scenario: Parameter-bound expression is never compiled
 
@@ -1894,6 +2205,13 @@ evaluating their argument, and SHALL cache compiled fallback delegates keyed by 
 - **When** `EvaluateExpression` sees the special-name `op_Implicit` call
 - **Then** it evaluates the array argument instead of invoking the ref-struct-returning conversion via reflection
 
+#### Scenario: Two closures from one call site each bind their own value
+
+- **Given** the same predicate built twice from one call site with different captured values
+- **Then** each translation binds its own value — the normalizer folds every parameter-free subtree to a
+  constant before the cache is reached, and the cache is keyed by object identity, so a textual collision
+  can no longer hand one caller another caller's delegate
+
 ### Requirement: SQL expression evaluation and parameter detection
 
 `DataBase.EvaluateExpression` SHALL read `ConstantExpression` values directly, read field/property
@@ -1902,7 +2220,10 @@ was null), invoke parameter-free method calls reflectively on evaluated operands
 materialise `NewArrayInit` into a typed array, and compile a cached parameterless lambda only when the
 expression contains no parameter — returning `null` otherwise. `DataBase.ContainsParameter` SHALL be
 memoized per expression instance via a `ConditionalWeakTable` and SHALL treat any
-`LambdaExpression` with at least one parameter as containing a parameter.
+`LambdaExpression` with at least one parameter as containing a parameter. For any node kind its explicit
+arms do not cover — `NewArray`, `New`, `Invocation`, `TypeIs`, `ListInit`, `Index`, … — it SHALL search the
+subtree with an `ExpressionVisitor` for a `ParameterExpression`, rather than answering `false` (SH-M150,
+TASK-153).
 
 #### Scenario: Closure field access
 
@@ -1927,6 +2248,13 @@ memoized per expression instance via a `ConditionalWeakTable` and SHALL treat an
 - **Given** a `NewArrayExpression` whose `Type.GetElementType()` is `null`
 - **When** the branch runs
 - **Then** `null` is returned
+
+#### Scenario: A parameter inside an array initialiser or invocation is found
+
+- **Given** `new[] { x.A, 1 }`, `pred.Invoke(x)` or `x.Payload is string` as a subtree
+- **When** `ContainsParameter` is asked
+- **Then** it answers `true`, so the subtree is never compiled as a constant. Before TASK-153 these node
+  kinds answered `false`, and the compile path threw "variable 'x' … is not defined"
 
 #### Scenario: Compiled delegates are cached by expression identity
 

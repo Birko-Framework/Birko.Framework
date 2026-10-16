@@ -1,7 +1,7 @@
 ---
 area: background-jobs
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueue.cs
   - ../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueueSchema.cs
@@ -344,11 +344,17 @@ provide **no** concurrency protection at all on Cosmos DB.
 - **When** `DequeueAsync` finishes its loop
 - **Then** it returns `null` even though eligible jobs exist
 
-#### Scenario: Elasticsearch claiming is best-effort because of refresh latency
+#### Scenario: Elasticsearch treats a conflicted claim as a lost race
 
-- **Given** an `ElasticSearchJobQueue` and two racing workers
-- **When** both perform the conditional update and re-read within the index refresh interval (~1s)
-- **Then** the re-read may observe stale state and both workers may return the same descriptor; the design narrows but does not close the double-dispatch window, so handlers must be idempotent
+- **Given** an `ElasticSearchJobQueue` and two racing workers that read the same eligible candidate
+- **When** worker A's conditional `update_by_query` lands first and worker B's then matches the version A replaced
+- **Then** B's `UpdateAsync` throws `StoreConcurrencyException`, which the dequeue loop catches and treats as a lost race, moving on to the next candidate within the same `MaxClaimAttempts` budget; any other store failure propagates
+
+#### Scenario: Elasticsearch verifies its claim with a realtime read
+
+- **Given** an `ElasticSearchJobQueue` holding two pending jobs on one queue
+- **When** `DequeueAsync` performs its conditional update and reads the claimed document back
+- **Then** the read-back is `ReadRealtimeAsync(claimId)` — a realtime GET by document id that sees the claim's own write before the index refreshes — so the `ClaimToken` comparison succeeds and the call returns that one job, while the other stays `Pending`; a search-based re-read used to miss the claim until refresh, so one call claimed both jobs, left them in `Processing` and returned `null` (TASK-616)
 
 #### Scenario: Redis performs the whole claim in one script
 
@@ -379,11 +385,14 @@ provide **no** concurrency protection at all on Cosmos DB.
 The system SHALL, on `SqlJobQueue<DB>` only, additionally treat as a dequeue candidate a job in
 `Processing` whose `LastAttemptAt` is non-null and earlier than `now - claimTimeout`, where
 `claimTimeout` is a constructor argument defaulting to 30 minutes (the default `JobQueueOptions.JobTimeout`),
-and SHALL claim it through the same `ClaimToken` conditional update as any other candidate. When such
+and SHALL claim it through the same `ClaimToken` conditional update as any other candidate, except that a
+reclaim's filter requires the row to be still stale — `j.Guid == claimId && j.Status == Processing &&
+j.LastAttemptAt != null && j.LastAttemptAt < staleBefore` — rather than merely still `Processing`. When such
 a stale candidate's `AttemptCount` is already `>= MaxRetries` (the row's own value, with no queue-policy
 fallback), the system SHALL instead mark it `Dead`, stamp `CompletedAt`, set `LastError` to an
 `"Abandoned: held in Processing for longer than {claimTimeout} after {AttemptCount} attempt(s), and the attempt budget is spent."`
-message, and move on to the next candidate within the same `MaxClaimAttempts` budget. No other backend
+message, and move on to the next candidate within the same `MaxClaimAttempts` budget; that burial is a
+conditional `PropertyUpdate` under the same still-stale filter, not a write of the whole row. No other backend
 reclaims a `Processing` job.
 
 #### Scenario: A job held in Processing past the claim timeout is re-offered
@@ -410,11 +419,17 @@ reclaims a `Processing` job.
 - **When** another worker calls `DequeueAsync()`
 - **Then** the job is claimed a second time — nothing distinguishes a dead holder from a slow one, so reclaiming is safe only for idempotent jobs
 
-#### Scenario: Two workers that read the same stale job can both reclaim it
+#### Scenario: Two workers that read the same stale job reclaim it once
 
 - **Given** two `SqlJobQueue<DB>` workers that both read the same stale `Processing` candidate before either writes
-- **When** worker A's conditional update and re-read complete, and then worker B issues its own update filtered on `j.Guid == claimId && j.Status == Processing`
-- **Then** B's filter still matches — reclaiming leaves `Status` at `Processing`, so the status guard cannot exclude the second reclaimer — B's `ClaimToken` verifies on its re-read, and both workers return the same job
+- **When** worker A's conditional update and re-read complete, and then worker B issues its own update filtered on the still-stale condition
+- **Then** B's filter no longer matches — A's write set `LastAttemptAt` to its `now`, which is not earlier than `staleBefore` — so B's `ClaimToken` does not verify on its re-read, B moves on to the next candidate, and only A returns the job (TASK-575; the filter used to be `j.Status == Processing` alone, which a reclaim does not change, so both workers returned the job)
+
+#### Scenario: A job completed by its slow worker is not buried Dead
+
+- **Given** a `SqlJobQueue<DB>` worker that read a stale `Processing` candidate with its attempt budget spent, and the job's original (slow, not dead) worker then calls `CompleteAsync`
+- **When** the reclaiming worker issues its `Dead` burial
+- **Then** the still-stale filter no longer matches the `Completed` row, so it stays `Completed`; the burial used to be a read-modify-write of the whole row, which overwrote the completed job as `Dead` (TASK-575)
 
 ### Requirement: Completing a job
 

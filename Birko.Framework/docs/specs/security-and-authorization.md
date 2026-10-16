@@ -1,7 +1,7 @@
 ---
 area: security-and-authorization
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Security.AspNetCore/Authentication/JwtAuthenticationOptions.cs
   - ../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs
@@ -20,6 +20,36 @@ sources:
   - ../Birko.Security.AzureKeyVault/AzureKeyVaultSecretProvider.cs
   - ../Birko.Security.AzureKeyVault/AzureKeyVaultSettings.cs
   - ../Birko.Security.BCrypt/Hashing/BCryptPasswordHasher.cs
+  - ../Birko.Security.Grants.SQL/GrantSqlIndexes.cs
+  - ../Birko.Security.Grants.SQL/GrantSqlMappings.cs
+  - ../Birko.Security.Grants.SQL/Mappings/InvitationMapping.cs
+  - ../Birko.Security.Grants.SQL/Mappings/ResourceGrantMapping.cs
+  - ../Birko.Security.Grants.SQL/Stores/SqlGrantStores.cs
+  - ../Birko.Security.Grants/GrantConfigurationException.cs
+  - ../Birko.Security.Grants/GrantErrorCodes.cs
+  - ../Birko.Security.Grants/GrantOptions.cs
+  - ../Birko.Security.Grants/GrantRefusedException.cs
+  - ../Birko.Security.Grants/GrantRoleTable.cs
+  - ../Birko.Security.Grants/GrantSignInOptions.cs
+  - ../Birko.Security.Grants/Internal/KeyedLock.cs
+  - ../Birko.Security.Grants/Internal/TokenHasher.cs
+  - ../Birko.Security.Grants/Models/Invitation.cs
+  - ../Birko.Security.Grants/Models/ResourceGrant.cs
+  - ../Birko.Security.Grants/ResourceVisibility.cs
+  - ../Birko.Security.Grants/Services/AdminGrantService.cs
+  - ../Birko.Security.Grants/Services/BootstrapAdminGrantSource.cs
+  - ../Birko.Security.Grants/Services/GrantService.cs
+  - ../Birko.Security.Grants/Services/GrantSignInService.cs
+  - ../Birko.Security.Grants/Services/GrantedResources.cs
+  - ../Birko.Security.Grants/Services/IAdminGrantService.cs
+  - ../Birko.Security.Grants/Services/IGrantAdminSource.cs
+  - ../Birko.Security.Grants/Services/IGrantService.cs
+  - ../Birko.Security.Grants/Services/IGrantSignInService.cs
+  - ../Birko.Security.Grants/Services/IInvitationService.cs
+  - ../Birko.Security.Grants/Services/InvitationService.cs
+  - ../Birko.Security.Grants/Stores/GrantPredicates.cs
+  - ../Birko.Security.Grants/Stores/IInvitationStore.cs
+  - ../Birko.Security.Grants/Stores/IResourceGrantStore.cs
   - ../Birko.Security.Jwt/JwtTokenProvider.cs
   - ../Birko.Security.Jwt/OpenIdConnect/HttpOidcSigningKeySource.cs
   - ../Birko.Security.Jwt/OpenIdConnect/IOidcIdTokenVerifier.cs
@@ -59,12 +89,14 @@ shaped-by-unresolved: 266
 
 ## Purpose
 
-This capability is the framework's security substrate. It answers five questions for any Birko-based
+This capability is the framework's security substrate. It answers six questions for any Birko-based
 application: how a password is stored and checked, how bytes are encrypted at rest, how a caller proves
 who they are (an internally minted JWT, an externally issued OpenID Connect id token, or a static
 pre-shared token bound to an IP), where secrets come from (HashiCorp Vault, Azure Key Vault, or any other
-`ISecretProvider` — optionally projected straight into `IConfiguration`), and how an authenticated caller's
-permissions are read and enforced on an endpoint.
+`ISecretProvider` — optionally projected straight into `IConfiguration`), how an authenticated caller's
+permissions are read and enforced on an endpoint, and — through `Birko.Security.Grants` — which role a user
+holds on one particular resource, who may share it, and how an invitation or a bootstrap identity turns into
+such a grant at sign-in.
 
 Consumers are ASP.NET Core applications (via `AddBirkoSecurity` / `AddBirkoJwtBearer` / `RequirePermission`),
 console and worker processes (the hashers, the encryption provider, the token provider and the secret
@@ -106,7 +138,7 @@ The system SHALL make `Pbkdf2PasswordHasher.Verify` return `false` — never thr
 string that is not a well-formed hash of this format, and SHALL make that judgement **before** any
 comparison is attempted. A stored string is well-formed only when it has exactly 4 colon-separated
 segments, an algorithm tag of `PBKDF2-SHA512`, an iteration segment that parses as an `int` greater than
-zero, salt and hash segments that are both valid Base64 (the `FormatException` is caught), a salt that
+zero and no greater than the larger of 10,000,000 and the hasher's own configured count, salt and hash segments that are both valid Base64 (the `FormatException` is caught), a salt that
 decodes to at least one byte, and a hash that decodes to exactly `HashSize` (32) bytes. The system SHALL
 compare the recomputed and stored hashes with `CryptographicOperations.FixedTimeEquals`, and SHALL throw
 `ArgumentNullException` when either argument is null.
@@ -138,6 +170,12 @@ to `''`, or a half-finished migration — none of which is treated as a reason t
 - **When** `Verify("p", stored)` is called
 - **Then** it returns `false` and nothing is thrown; the `iterations <= 0` guard rejects the value before `Rfc2898DeriveBytes.Pbkdf2` can raise `ArgumentOutOfRangeException` out of the login path
 
+#### Scenario: Stored iteration count above the ceiling
+
+- **Given** a hasher constructed with the default 600,000 iterations and a stored value `"PBKDF2-SHA512:2147483647:{valid base64 salt}:{valid base64 hash}"`
+- **When** `Verify("p", stored)` is called
+- **Then** it returns `false` without deriving a key, because the count exceeds `Math.Max(10_000_000, 600_000)`; a hasher constructed with 20,000,000 iterations would still verify a hash stored at 20,000,000
+
 #### Scenario: Empty salt and hash segments are rejected
 
 - **Given** a stored value `"PBKDF2-SHA512:600000::"`, as left by a truncated column or a half-finished migration
@@ -157,7 +195,9 @@ output size — and SHALL reject any stored hash segment whose decoded length di
 The iteration count, by contrast, is taken from the stored string rather than from the hasher's own
 configuration, so hashes written under an older iteration count remain verifiable. There is no
 verification-time iteration minimum: a stored hash whose iteration segment is far below the constructor's
-10,000 floor still verifies successfully, and `Pbkdf2PasswordHasher` exposes no rehash-needed query.
+10,000 floor still verifies successfully, and `Pbkdf2PasswordHasher` exposes no rehash-needed query. There is
+a verification-time maximum (see the well-formedness rule above), so a stored count cannot make one login
+attempt cost hours of CPU.
 
 Because PBKDF2 output is prefix-stable, deriving to `storedHash.Length` would let a truncated column decide
 how many bytes were compared — a 1-byte segment would match an arbitrary password roughly 1 in 256, and a
@@ -203,16 +243,15 @@ at construction with `ArgumentOutOfRangeException`, and SHALL default to `Defaul
 ### Requirement: BCrypt verification accepts $2a$ and $2b$ and rejects anything malformed
 
 The system SHALL accept, in `Verify`, only a 60-character string with `$` at indices 0, 3 and 6, `2` at index 1,
-`a` or `b` at index 2, and every character in indices 7…59 drawn from the BCrypt-Base64 alphabet
+`a` or `b` at index 2, two ASCII digits at indices 4–5 whose value lies within `MinWorkFactor` (4) …
+`MaxWorkFactor` (31), and every character in indices 7…59 drawn from the BCrypt-Base64 alphabet
 `./A-Za-z0-9`; anything else SHALL return `false` without reaching the decoder. The system SHALL re-hash the
 candidate against the stored 29-character salt prefix and compare with
 `CryptographicOperations.FixedTimeEquals` over the UTF-8 bytes of the two full hash strings.
 
-That shape guard does not inspect the two cost digits at indices 4–5 — digits and letters are both in the
-BCrypt-Base64 alphabet — so a 60-character in-alphabet hash whose cost does not parse (`$2a$ab$…`) or parses
-outside `MinWorkFactor`…`MaxWorkFactor` (`$2a$99$…`) passes it, reaches `HashPassword`, and raises
-`ArgumentException("Invalid BCrypt cost factor")` out of `Verify` rather than returning `false`. `NeedsRehash`
-on the same input does not throw.
+A shaped hash whose cost does not parse (`$2a$ab$…`) or parses outside the range (`$2a$99$…`) is therefore
+answered `false` by the shape guard, never by an exception out of `HashPassword`; `NeedsRehash` on the same
+input answers `true`.
 
 #### Scenario: Hash from another implementation tagged $2b$
 
@@ -236,7 +275,13 @@ on the same input does not throw.
 
 - **Given** a 60-character in-alphabet hash reading `$2a$99$…`
 - **When** `Verify("p", hash)` is called
-- **Then** `ArgumentException("Invalid BCrypt cost factor")` propagates out of `Verify` — the shape guard let it through and `HashPassword` rejected the cost
+- **Then** it returns `false` and nothing is thrown — the shape guard rejects the cost before `HashPassword` is reached
+
+#### Scenario: Shaped hash whose cost is not two digits
+
+- **Given** a 60-character in-alphabet hash reading `$2a$ab$…`
+- **When** `Verify("p", hash)` is called
+- **Then** it returns `false`
 
 ### Requirement: BCrypt truncates the password at 72 bytes including its NUL terminator
 
@@ -353,18 +398,22 @@ same UTC instant, and `TokenResult.RefreshToken` SHALL be left null.
 - **When** `GenerateToken(claims, new TokenOptions { Secret = "" })` is called
 - **Then** `ArgumentException("Secret must be provided.")` is thrown rather than an opaque signing failure
 
-### Requirement: JWT validation returns a result object and never throws
+### Requirement: JWT validation requires an issuer and audience, and returns a result object for every token failure
 
-The system SHALL make `JwtTokenProvider.ValidateToken` validate the signing key and lifetime with a fixed
-one-minute `ClockSkew`, and SHALL return `TokenValidationResult.Failure` with a categorised message for
-every failure: `"Token has expired."` for `SecurityTokenExpiredException`,
+The system SHALL make `JwtTokenProvider.ValidateToken` validate the signing key, the lifetime (with a fixed
+one-minute `ClockSkew`), and **always** the issuer and audience against `TokenOptions.Issuer` /
+`TokenOptions.Audience`. A `TokenOptions` (the default or a per-call override) whose `Issuer` or `Audience` is
+null or whitespace SHALL be refused before any validation with
+`ArgumentException("Issuer and Audience must be provided to validate a token.")` — a configuration error,
+thrown like the missing-secret one, not a `Failure` result. The constructor does not check them, so the
+refusal surfaces at the first `ValidateToken`, while `GenerateToken` still mints tokens without them.
+
+For every failure of the token itself the system SHALL return `TokenValidationResult.Failure` with a
+categorised message: `"Token has expired."` for `SecurityTokenExpiredException`,
 `"Token validation failed: {message}"` for any other `SecurityTokenException`, and
-`"Unexpected error: {message}"` for anything else. On success it SHALL return every claim of the resulting
-principal as a `Type → Value` dictionary.
-
-The system SHALL validate `iss` only when `TokenOptions.Issuer` is non-empty and `aud` only when
-`TokenOptions.Audience` is non-empty — with both left empty, a correctly signed token is accepted whatever
-issuer or audience it names.
+`"Unexpected error: {message}"` for anything else. On success it SHALL group the principal's claims by type
+(ordinal) and keep every distinct value of each type in token order: `ClaimValues` holds them as a list per
+type, and `Claims` holds one string per type with the values joined by `';'`.
 
 #### Scenario: Expired token
 
@@ -378,17 +427,29 @@ issuer or audience it names.
 - **When** `ValidateToken` is called
 - **Then** a `Failure` result is returned; no exception escapes
 
-#### Scenario: Issuer check skipped when unconfigured
+#### Scenario: Issuer or audience unconfigured
 
 - **Given** `TokenOptions` with `Secret` set and `Issuer`/`Audience` left empty
-- **When** a validly signed token bearing `iss: "attacker"` is validated
-- **Then** `IsValid` is true, because `ValidateIssuer` was computed as `!string.IsNullOrEmpty(opts.Issuer)` — false
+- **When** `ValidateToken(token)` is called with any token
+- **Then** `ArgumentException("Issuer and Audience must be provided to validate a token.")` is thrown and no token is accepted whatever issuer it names
 
-#### Scenario: Duplicate claim types collide
+#### Scenario: Token from another issuer
 
-- **Given** a token carrying two claims of the same type
+- **Given** `TokenOptions` with `Issuer = "A"` and `Audience = "A"`
+- **When** a token signed with the same secret but bearing `iss: "B"` is validated
+- **Then** a `"Token validation failed: …"` failure is returned
+
+#### Scenario: Repeated claim types are kept
+
+- **Given** a valid token carrying two `role` claims, `"admin"` and `"auditor"`
 - **When** `ValidateToken` is called
-- **Then** the `ToDictionary` projection throws, is caught by the general handler, and a `"Unexpected error: …"` failure is returned
+- **Then** `IsValid` is true, `ClaimValues["role"]` is `["admin", "auditor"]` and `Claims["role"]` is `"admin;auditor"`
+
+#### Scenario: A single-valued success result
+
+- **Given** a caller building `TokenValidationResult.Success(dictionary)` from a `string → string` dictionary
+- **When** `ClaimValues` is read
+- **Then** each key maps to a one-element list holding its value
 
 ### Requirement: Refresh tokens are opaque random strings
 
@@ -569,15 +630,19 @@ contains the permission or `"*"`. No store or database is consulted.
 - **When** `GetPermissionsAsync(someGuid)` is called
 - **Then** an empty list is returned
 
-### Requirement: JWT bearer wiring accepts a token from the query string
+### Requirement: JWT bearer wiring accepts a token from the query string only where a header cannot be set
 
 The system SHALL, in `AddBirkoJwtBearer`, require a non-empty `Secret` (throwing `ArgumentException`
 otherwise), register `JwtAuthenticationOptions`, `ClaimMappingOptions`, an `ITokenProvider`
 (`JwtTokenProvider`) and `TokenServiceAdapter` as singletons, and configure JWT bearer as both the default
 authenticate and challenge scheme. The bearer handler SHALL always validate issuer, audience, signing key
 and lifetime — with `ValidIssuer = Issuer` (default `"Birko"`), `ValidAudience = Audience ?? Issuer`, and
-`ClockSkew = ClockSkewSeconds` seconds (default 60) — and SHALL, in `OnMessageReceived`, take the token from
-the `?token=` query-string parameter whenever it is present, for any request.
+`ClockSkew = ClockSkewSeconds` seconds (default 60). In `OnMessageReceived` it SHALL take the token from a
+non-empty `?token=` query-string parameter only when the request carries no `Authorization` header **and**
+is a WebSocket upgrade, or has an `Accept` value containing `text/event-stream` (case-insensitive), or has a
+path that starts, by segment and case-insensitively, with one of `JwtAuthenticationOptions.QueryTokenPathPrefixes`
+(empty by default; each entry trimmed of whitespace and `/`, blank entries ignored). On any other request the
+query parameter is ignored.
 
 #### Scenario: Missing secret
 
@@ -593,20 +658,45 @@ the `?token=` query-string parameter whenever it is present, for any request.
 
 #### Scenario: SSE connection carrying the token in the URL
 
-- **Given** an `EventSource` request to `/events?token=<jwt>` with no `Authorization` header
+- **Given** an `EventSource` request to `/events?token=<jwt>` with `Accept: text/event-stream` and no `Authorization` header
 - **When** the request is authenticated
 - **Then** `context.Token` is set from the query value and the request authenticates
 
+#### Scenario: Ordinary request carrying a token in the URL
+
+- **Given** a plain `GET /api/orders?token=<jwt>` with no `Authorization` header, not a WebSocket upgrade, and no configured prefix covering `/api`
+- **When** the request is authenticated
+- **Then** the query value is not used and the request is unauthenticated
+
+#### Scenario: A header always wins over the query string
+
+- **Given** a WebSocket upgrade carrying both `Authorization: Bearer <a>` and `?token=<b>`
+- **When** the request is authenticated
+- **Then** the query value is ignored and the header's token is the one validated
+
+#### Scenario: A configured download path
+
+- **Given** `QueryTokenPathPrefixes = ["/files/"]`
+- **When** `GET /Files/report.pdf?token=<jwt>` arrives with no `Authorization` header
+- **Then** the token is taken from the query string; `/filesystem?token=…` is not covered, because matching is by segment
+
 ### Requirement: One-line security registration selects a tenant resolver and defaults to strict tenancy
 
-The system SHALL, in `AddBirkoSecurity`, call `AddBirkoJwtBearer` with the nested `Jwt` options, add
-`IHttpContextAccessor`, register the resolved `BirkoSecurityOptions` as a singleton, register
-`ICurrentUser` → `ClaimsCurrentUser` and `IPermissionChecker` → `ClaimsPermissionChecker` as scoped,
+The system SHALL, in `AddBirkoSecurity`, call `AddBirkoJwtBearer` with the nested `Jwt` options (including
+`QueryTokenPathPrefixes`), add `IHttpContextAccessor`, register the resolved `BirkoSecurityOptions` as a
+singleton, register `ICurrentUser` → `ClaimsCurrentUser` as scoped **only when no `ICurrentUser` is already
+registered** (`TryAddScoped`) and `IPermissionChecker` → `ClaimsPermissionChecker` as scoped,
 register `Birko.Data.Tenant.Models.ITenantContext` as `Tenant.Current` plus `ITenantContext` →
 `TenantContextAdapter`, and select the tenant resolver from `TenantResolverType`: `Header` →
 `HeaderTenantResolver`, `Subdomain` → `SubdomainTenantResolver` (throwing `ArgumentException` when
 `SubdomainLookup` is null), `Custom` → nothing registered. `RequireTenantHeaderMatchesClaim` SHALL default
 to `true` and `WildcardPermissionEnabled` to `true`.
+
+The system SHALL also register an `IStartupFilter` that, after the application's pipeline has been built,
+throws `InvalidOperationException` — so the host refuses to start — when `RequireTenantHeaderMatchesClaim` is
+true and `UseBirkoTenantHeaderGuard()` was never called on the application builder (it marks the builder's
+`Properties`). The guard is not inserted on the application's behalf, because it must run after
+authentication; setting `RequireTenantHeaderMatchesClaim = false` is the explicit opt-out and starts as before.
 
 #### Scenario: Subdomain resolution without a lookup
 
@@ -626,10 +716,22 @@ to `true` and `WildcardPermissionEnabled` to `true`.
 - **When** `BirkoSecurityOptions` is resolved from the container
 - **Then** `RequireTenantHeaderMatchesClaim` is `true`
 
+#### Scenario: Pipeline without the tenant header guard
+
+- **Given** `AddBirkoSecurity` with default options and an application that never calls `app.UseBirkoTenantHeaderGuard()`
+- **When** the host builds its pipeline
+- **Then** `InvalidOperationException` is thrown naming `RequireTenantHeaderMatchesClaim` and `UseBirkoTenantHeaderGuard()`, and the host does not start
+
+#### Scenario: Guard explicitly opted out
+
+- **Given** `RequireTenantHeaderMatchesClaim = false` and no `UseBirkoTenantHeaderGuard()` call
+- **When** the host builds its pipeline
+- **Then** it starts
+
 ### Requirement: Switching to resolved permissions replaces the registered ICurrentUser
 
-The system SHALL make `UseResolvedPermissions` remove the first existing `ICurrentUser` service descriptor
-(if any) and register `ICurrentUser` → `ResolvedPermissionsCurrentUser` as scoped, leaving the concrete
+The system SHALL make `UseResolvedPermissions` remove every existing `ICurrentUser` service descriptor
+and register `ICurrentUser` → `ResolvedPermissionsCurrentUser` as scoped, leaving the concrete
 `IUserPermissionResolver` registration to the application. `UseBirkoPermissionResolution` SHALL add
 `PermissionResolutionMiddleware` to the pipeline, which must be placed after `UseAuthentication`.
 
@@ -638,6 +740,12 @@ The system SHALL make `UseResolvedPermissions` remove the first existing `ICurre
 - **Given** a service collection where `AddBirkoSecurity` already registered `ICurrentUser` → `ClaimsCurrentUser`
 - **When** `UseResolvedPermissions()` is called
 - **Then** resolving `ICurrentUser` yields a `ResolvedPermissionsCurrentUser`
+
+#### Scenario: Called before AddBirkoSecurity
+
+- **Given** a service collection on which `UseResolvedPermissions()` is called first and `AddBirkoSecurity` afterwards
+- **When** `ICurrentUser` is resolved
+- **Then** it is a `ResolvedPermissionsCurrentUser` and it is the only `ICurrentUser` registration — `AddBirkoSecurity`'s `TryAddScoped` added nothing, so the order of the two calls does not matter
 
 #### Scenario: Resolver not registered
 
@@ -718,6 +826,7 @@ enabled but yields neither collection after expansion SHALL return `false` and l
 - **Given** a binding `{ Token = "T", AllowedIps = [] }` with `Enabled = true`
 - **When** `ValidateToken("T", "10.0.0.1")` is called
 - **Then** it returns `false` for every possible IP, while the binding still makes `IsAuthenticationEnabled()` true
+- **And** an error was logged at construction saying the binding has no allowed IP after expansion, so its token is refused from every address — the binding is kept, so a plain `Tokens` entry for the same token is still not reached
 
 #### Scenario: Plain token accepted
 
@@ -759,22 +868,45 @@ environment or configuration change has no effect on an existing instance.
 - **When** `API_TOKEN` is set afterwards and `ValidateToken("s3cret", ip)` is called
 - **Then** it returns `false`
 
-### Requirement: The service releases its lock and its client IP extraction has a fixed header precedence
+### Requirement: The service releases its lock and believes forwarding headers only from trusted proxies
 
 The system SHALL implement `IDisposable` on `AuthenticationService`, disposing the
-`ReaderWriterLockSlim` once and idempotently. `GetClientIpAddress` SHALL consult, in order,
-`X-Forwarded-For` (taking the first comma-separated, trimmed entry), `X-Real-IP`, `CF-Connecting-IP`, and
-finally the supplied fallback IP — returning the first non-whitespace value found.
+`ReaderWriterLockSlim` once and idempotently.
 
-#### Scenario: Proxy chain
+`GetClientIpAddress(getHeaderValue, fallbackIp, trustedProxies)` SHALL return the connection's own address
+(`fallbackIp`, unchanged) whenever `trustedProxies` is null or empty, or `fallbackIp` is not one of them —
+the forwarding headers are then not read at all. Only when the peer is trusted SHALL it consult, in order:
+`X-Forwarded-For`, walked from the **right**, returning the first hop that is not itself a trusted proxy (or
+the leftmost hop when every hop is trusted); then `X-Real-IP`, trimmed; then `CF-Connecting-IP`, trimmed;
+and finally `fallbackIp`. A trusted-proxy entry is either an address, compared after mapping IPv4-mapped IPv6
+to IPv4, or a CIDR range (it contains `/`), matched against the address and its IPv4-mapped form; an address
+given with a port (`10.0.0.5:51234`, `[::1]:51234`) is parsed to its address; an unparseable address is never
+trusted. The instance method `ResolveClientIp(getHeaderValue, connectionIp)` SHALL apply the configuration's
+`AuthenticationConfiguration.TrustedProxies` (empty by default), expanded once at construction like tokens
+(`${VAR}` references, blank results dropped). The REST, SOAP, SSE and WebSocket authentication wrappers resolve the
+client IP through `ResolveClientIp`.
 
-- **Given** `X-Forwarded-For: 203.0.113.7, 10.0.0.1` and a fallback of `10.0.0.1`
+#### Scenario: Proxy chain behind a trusted proxy
+
+- **Given** `X-Forwarded-For: 203.0.113.7, 10.0.0.1`, a fallback of `10.0.0.1` and trusted proxies `["10.0.0.0/8"]`
 - **When** `GetClientIpAddress` is called
-- **Then** `"203.0.113.7"` is returned
+- **Then** `"203.0.113.7"` is returned — `10.0.0.1` is skipped as a trusted hop
+
+#### Scenario: Forged header from an untrusted peer
+
+- **Given** a direct connection from `198.51.100.9` sending `X-Forwarded-For: 10.0.0.1`, and no trusted proxies configured
+- **When** `ResolveClientIp` is called
+- **Then** `"198.51.100.9"` is returned, so the forged address cannot satisfy a token binding's allow-list
+
+#### Scenario: Client-written left end is not believed
+
+- **Given** trusted proxies `["10.0.0.5"]`, a fallback of `10.0.0.5` and `X-Forwarded-For: 10.0.0.1, 203.0.113.7`
+- **When** `GetClientIpAddress` is called
+- **Then** `"203.0.113.7"` is returned — the rightmost hop no trusted proxy vouches for, not the `10.0.0.1` the client prepended
 
 #### Scenario: No forwarding headers
 
-- **Given** all three headers absent and a fallback of `"127.0.0.1"`
+- **Given** a trusted peer `"127.0.0.1"`, all three headers absent and a fallback of `"127.0.0.1"`
 - **When** `GetClientIpAddress` is called
 - **Then** `"127.0.0.1"` is returned
 
@@ -912,18 +1044,16 @@ The system SHALL read `sub` from the validated `JsonWebToken` payload rather tha
 - **When** verification succeeds
 - **Then** `Identity.Email` is `"user@example.com"`
 
-### Requirement: Provider names are matched case-insensitively and duplicates fail at construction
+### Requirement: Provider names are matched by their canonical form and duplicates fail at construction
 
-The system SHALL re-key the supplied provider map with `StringComparer.OrdinalIgnoreCase` unless it is
-already a `Dictionary<string, OidcProviderOptions>` with that exact comparer, so `"Google"` and `"google"`
-resolve identically. A map that holds two spellings of the same name SHALL therefore throw at construction
-rather than silently preferring one at login time. A null key source or null map SHALL throw
-`ArgumentNullException`.
+The system SHALL always re-key the supplied provider map by `Canonical(name)` (trim + lower-case invariant)
+under an ordinal comparer, whatever comparer the caller's dictionary uses, so `"Google"`, `"google"` and
+`" Google "` resolve identically. A map that holds two spellings of the same canonical name SHALL therefore
+throw at construction rather than silently preferring one at login time. A null key source or null map SHALL
+throw `ArgumentNullException`.
 
-The lookup SHALL use the **raw** supplied name; `Canonical` (trim + lower-case) is computed only after the
-lookup has succeeded, for the key-source cache key and the returned identity. Matching is therefore
-case-insensitive but not whitespace-insensitive: `"  google  "` yields `ProviderNotConfigured` even though
-that provider is configured.
+The lookup SHALL use the canonical form of the supplied name — the same form used for the key-source cache
+key and the returned identity — so matching is both case- and surrounding-whitespace-insensitive.
 
 #### Scenario: Case-insensitive lookup from an ordinal dictionary
 
@@ -931,21 +1061,30 @@ that provider is configured.
 - **When** the verifier is constructed and `VerifyAsync("GOOGLE", token)` is called
 - **Then** the `"google"` options are used
 
+#### Scenario: Surrounding whitespace in the supplied name
+
+- **Given** a configured `"google"` provider
+- **When** `VerifyAsync("  google  ", validToken)` is called
+- **Then** the `"google"` options are used, not `ProviderNotConfigured`
+
 #### Scenario: Two spellings of one provider
 
-- **Given** an ordinal dictionary containing both `"Google"` and `"google"`
+- **Given** an ordinal dictionary containing both `"Google"` and `"google"` (or `"google"` and `" google"`)
 - **When** `new OidcIdTokenVerifier(keySource, providers)` is constructed
 - **Then** the re-keying `ToDictionary` throws for the duplicate key, at construction
 
-### Requirement: JWKS key sets are cached per provider and served stale on failure
+### Requirement: JWKS key sets are cached per provider and served stale on failure for a bounded time
 
 The system SHALL make `HttpOidcSigningKeySource.GetSigningKeysAsync` return the cached key set while it is
 younger than the cache duration (`DefaultCacheDuration` = 1 hour, overridable) unless `forceRefresh` is
 requested. It SHALL fetch `OidcProviderOptions.JwksUri` and cache only a **non-empty** result — a JWKS that
 parses but exposes no signing keys SHALL be returned without being cached, and SHALL set `LastFetchError`.
 On any exception other than `OperationCanceledException` it SHALL record `LastFetchError` and return the
-previously cached (stale) key set if one exists, otherwise an empty collection; `OperationCanceledException`
-SHALL propagate. Provider keys SHALL be cached under a case-insensitive key.
+previously cached (stale) key set only while that set is younger than the maximum stale age
+(`DefaultMaxStaleAge` = 24 hours, overridable), otherwise an empty collection; `OperationCanceledException`
+SHALL propagate. `LastServedStale` SHALL be true exactly when the last answer was a stale set served because
+a fetch failed. Ages SHALL be measured with the injectable `IDateTimeProvider` (the system clock by
+default). Provider keys SHALL be cached under a case-insensitive key.
 
 #### Scenario: Second call inside the window does not hit the network
 
@@ -958,6 +1097,13 @@ SHALL propagate. Provider keys SHALL be cached under a case-insensitive key.
 - **Given** a cached key set and a JWKS endpoint that now returns 503
 - **When** the cache has expired and keys are requested
 - **Then** `LastFetchError` is set to the thrown exception and the stale cached keys are returned
+- **And** `LastServedStale` is true
+
+#### Scenario: Endpoint down past the maximum stale age
+
+- **Given** a key set cached 25 hours ago, the default 24-hour maximum stale age, and a JWKS endpoint that fails
+- **When** keys are requested
+- **Then** an empty collection is returned and `LastServedStale` is false, so a key the provider revoked while the endpoint was down stops being accepted
 
 #### Scenario: First fetch ever fails
 
@@ -1008,6 +1154,25 @@ caller-supplied `HttpClient` is never mutated; only a client the provider create
 A `404` SHALL yield null from the read paths and SHALL be tolerated by delete; any other non-success status
 SHALL throw via `EnsureSuccessStatusCode`.
 
+The system SHALL place the key (and a list path) into the URL one `/`-separated segment at a time, each
+escaped with `Uri.EscapeDataString`, so `/` keeps its meaning of nesting and every other character is data. A
+key with an empty, `.` or `..` segment SHALL be refused with `ArgumentException` before any request is sent,
+because dot segments are resolved by `new Uri(base, path)` and would address another Vault endpoint. A list
+path has its trailing `/` trimmed first (a folder name from a listing ends with one), and an empty list path
+lists the mount root.
+
+#### Scenario: Path traversal in a key is refused
+
+- **Given** any `VaultSecretProvider`
+- **When** `DeleteSecretAsync("../../sys/policy/x")` is called
+- **Then** `ArgumentException` is thrown and no request reaches Vault
+
+#### Scenario: Query characters in a key are data
+
+- **Given** KV v2
+- **When** `GetSecretAsync("app/a?b")` is called
+- **Then** the request path is `{mount}/data/app/a%3Fb` — the `?` does not start a query string
+
 #### Scenario: Two providers over one shared HttpClient
 
 - **Given** one `HttpClient` injected into two `VaultSecretProvider` instances with different tokens
@@ -1032,14 +1197,14 @@ SHALL throw via `EnsureSuccessStatusCode`.
 - **When** `IsHealthyAsync()` is called
 - **Then** `false` is returned
 
-### Requirement: Vault responses are parsed defensively for KV v2 but not for KV v1
+### Requirement: Vault responses are parsed defensively for KV v2 and KV v1
 
 The system SHALL, for `KvVersion == 2`, tolerate a `200` whose body lacks `data` or the inner `data` node by
 returning a `SecretResult` with an empty `Value` (from `GetSecretWithMetadataAsync`) or null (from
 `GetSecretPairsAsync`). `Version`, `CreatedAt` and custom metadata SHALL be read from `data.metadata` when
 present, and `UpdatedAt` SHALL be populated only from a real `updated_time`/`mtime` field — never copied from
-`created_time`. For `KvVersion == 1`, `ParseKv1Response` SHALL call `root.GetProperty("data")` directly, so a
-`200` whose body lacks `data` throws `KeyNotFoundException`.
+`created_time`. For `KvVersion == 1`, `ParseKv1Response` SHALL likewise return a `SecretResult` with an empty
+`Value` when the body lacks `data` or `data` is not a JSON object.
 
 #### Scenario: Malformed KV2 body
 
@@ -1051,7 +1216,7 @@ present, and `UpdatedAt` SHALL be populated only from a real `updated_time`/`mti
 
 - **Given** `KvVersion = 1` and a 200 response body of `{}`
 - **When** `GetSecretWithMetadataAsync(key)` is called
-- **Then** `KeyNotFoundException` propagates to the caller
+- **Then** a `SecretResult` with `Value == ""` is returned and nothing is thrown
 
 #### Scenario: No update timestamp in KV2 metadata
 
@@ -1134,6 +1299,26 @@ it does not change which URI the vault is reached over.
 - **Then** a trace warning was written at construction, `InsecureSecretIdsAllowed` is true, and `name` is
   returned
 
+### Requirement: Azure Key Vault secret names are refused unless they are Key Vault names
+
+The system SHALL, before building the `secrets/{name}` route for `GetSecretAsync`, `GetSecretWithMetadataAsync`,
+`SetSecretAsync` and `DeleteSecretAsync`, require the name to be 1–127 characters of ASCII letters, digits
+and `-`, throwing `ArgumentException` otherwise. The name is refused rather than escaped, because nothing
+outside that alphabet names a secret, and an unescaped `/`, `..`, `?` or `&` would otherwise select a version
+segment, another route, or extra query parameters.
+
+#### Scenario: A slash would become the version segment
+
+- **Given** any `AzureKeyVaultSecretProvider`
+- **When** `DeleteSecretAsync("db/1234")` is called
+- **Then** `ArgumentException` is thrown and no request is sent
+
+#### Scenario: A valid name
+
+- **Given** the name `App-Db-Password`
+- **When** `GetSecretAsync("App-Db-Password")` is called
+- **Then** the request goes to `{VaultUri}/secrets/App-Db-Password?api-version=7.4`
+
 ### Requirement: Secret listing scoping differs between the Vault and Azure Key Vault providers
 
 The system SHALL make `VaultSecretProvider.ListSecretsAsync(path)` issue a `LIST` against
@@ -1141,7 +1326,15 @@ The system SHALL make `VaultSecretProvider.ListSecretsAsync(path)` issue a `LIST
 `AzureKeyVaultSecretProvider.ListSecretsAsync(path)` SHALL always request the vault-wide
 `secrets?api-version=7.4` collection and filter the extracted names client-side with
 `StartsWith(path, OrdinalIgnoreCase)`. The `path` argument therefore means "KV folder" for Vault and "secret
-name prefix" for Azure Key Vault.
+name prefix" for Azure Key Vault. `ISecretProvider.IsHierarchical` SHALL state which: its default is `true`
+(names are a tree and a listing answers children relative to the path), and `AzureKeyVaultSecretProvider`
+SHALL answer `false` (names are flat and a listing answers full names).
+
+The Azure Key Vault listing SHALL follow every `nextLink` until a page has none, accumulating the names of
+all pages. It SHALL follow a `nextLink` only when it starts (case-insensitively) with the vault's own base
+URI — any other throws `InvalidOperationException` without being requested, so the access token is never
+sent elsewhere — and SHALL throw `InvalidOperationException` for a `nextLink` already read. A `404` on any
+page SHALL end the listing with the names gathered so far.
 
 #### Scenario: Listing a Vault folder
 
@@ -1154,6 +1347,18 @@ name prefix" for Azure Key Vault.
 - **Given** a vault with secrets `App-Db`, `App-Api` and `Other`
 - **When** `ListSecretsAsync("App-")` is called
 - **Then** all secrets are enumerated over the wire and `{ "App-Db", "App-Api" }` is returned
+
+#### Scenario: A vault larger than one page
+
+- **Given** a first list page carrying `App-Db` and a `nextLink` on the same vault, whose page carries `App-Api` and no `nextLink`
+- **When** `ListSecretsAsync("App-")` is called
+- **Then** both pages are requested and `{ "App-Db", "App-Api" }` is returned
+
+#### Scenario: A nextLink pointing outside the vault
+
+- **Given** a list page whose `nextLink` is `https://elsewhere.example/secrets?...`
+- **When** `ListSecretsAsync()` is called
+- **Then** `InvalidOperationException` is thrown and no request is sent to that address
 
 #### Scenario: Empty vault
 
@@ -1191,6 +1396,14 @@ key to that delimiter — so a Vault field `Security--DevCertificate--Fingerprin
 paths only when `recursive` is true (its default), skipping empty child names and trimming a trailing `/`
 from each; `LocalVaultConfigurationProvider` SHALL always recurse.
 
+For a provider whose `IsHierarchical` is false (Azure Key Vault), `SecretConfigurationProvider` SHALL NOT walk
+children. It SHALL load the secret named by the path itself (when the path is non-empty) at the root prefix,
+and — only when `recursive` is true — list once with the path as a name prefix and load every listed name
+of the form `{path}--{rest}` (any name when the path is empty) at the prefix `rest` with each `--` read as a
+level; a listed name that merely starts with the path without the `--` separator, or equals `{path}--`, is
+skipped. A listing failure is reported through the diagnostics sink as
+`"SecretConfiguration: warning listing '{path}': …"` and ends the load.
+
 #### Scenario: Nested field name
 
 - **Given** a secret path whose pairs include the key `Security--DevCertificate--Fingerprint`
@@ -1208,6 +1421,12 @@ from each; `LocalVaultConfigurationProvider` SHALL always recurse.
 - **Given** a KV folder `app` containing a child `db` with a field `password`
 - **When** the recursive load runs
 - **Then** `config["app:db:password"]`'s value is present — the child prefix is joined with the delimiter
+
+#### Scenario: Flat provider under a path
+
+- **Given** an Azure Key Vault provider holding `app--db--password = "pw"` and `apple = "x"`, registered with `AddSecretConfiguration(provider, "app")`
+- **When** the configuration is loaded
+- **Then** the vault is listed once, `config["db:password:value"]` is `"pw"` (the provider's single-field `value` pair under the level `db:password`), and `apple` is not loaded
 
 ### Requirement: LocalVault configuration is opt-in by environment variable and ordered by specificity
 
@@ -1291,3 +1510,319 @@ wildcard handling.
 - **Given** an `IUserPermissionResolver` implementing just `GetAsync`
 - **When** `GetRolesAsync(userId, tenantId)` is called
 - **Then** the interface default returns an empty set
+
+### Requirement: The grant role table is validated once and refuses anything undeclared
+
+The system SHALL make `GrantOptions.Build()` produce an immutable `GrantRoleTable`, throwing
+`GrantConfigurationException` (an `InvalidOperationException`) when a role, action or resource-type name is
+null or whitespace, equals the reserved `"*"`, or contains `':'`; when a role or resource type is declared
+twice; when a role allows no actions; when a resource type has an undefined `ResourceVisibility`; when no
+resource type is declared; when `ShareAction` (default `"share"`) is allowed by no role; or when `OwnerRole`
+(default `"owner"`) is undeclared or does not allow the share action. Names compare ordinally. A resource type
+declared without a visibility SHALL be `ResourceVisibility.Granted`. Every later lookup of an undeclared role
+(`ActionsOf`, `RequireRole`), action (`Allows`, `RequireAction`) or resource type (`VisibilityOf`,
+`RequireResourceType`) SHALL throw `GrantConfigurationException` rather than answer "no".
+
+#### Scenario: A typo in an action name fails loudly
+
+- **Given** a table whose roles allow `read`, `edit`, `delete` and `share`
+- **When** `CanAsync(user, "presentation", id, "raed")` is called
+- **Then** `GrantConfigurationException` is thrown — not `false`
+
+#### Scenario: A colon inside a name
+
+- **Given** `new GrantOptions().DefineRole("owner", "share", "b:c")`
+- **When** `Build()` is called
+- **Then** `GrantConfigurationException` is thrown, because `"{type}:{action}"` permission strings could otherwise collide across types
+
+#### Scenario: The owner role cannot share
+
+- **Given** `DefineRole("owner", "read")` and `DefineRole("admin", "read", "share")`
+- **When** `Build()` is called
+- **Then** `GrantConfigurationException` says the owner role must allow the share action
+
+### Requirement: A grant check counts admins, type-wide grants and grants on exactly that resource
+
+The system SHALL make `GrantService.CanAsync(user, type, resourceId, action, tenant)` return `true` when the
+`IGrantAdminSource` (default `BootstrapAdminGrantSource`) says the user is an admin in that tenant scope, and
+otherwise when the union of the actions of the user's grants on that type — type-wide grants
+(`ResourceId == null`) plus grants whose `ResourceId` equals `resourceId` — contains the action. With
+`resourceId` null only type-wide grants count. `ResourceVisibility` SHALL never change the answer. Nothing is
+cached, so a revoke takes effect on the next check. A stored grant whose role is no longer declared makes the
+check throw `GrantConfigurationException`.
+
+#### Scenario: Type-wide grant
+
+- **Given** a user holding `viewer` (allows `read`) on `presentation` with `ResourceId = null`
+- **When** `CanAsync(user, "presentation", anyId, "read")` is called
+- **Then** it returns `true`
+
+#### Scenario: A grant on another resource does not count
+
+- **Given** a user holding `editor` on presentation A only
+- **When** `CanAsync(user, "presentation", B, "edit")` is called
+- **Then** it returns `false`
+
+#### Scenario: Create-style check with no resource
+
+- **Given** a user holding `owner` on presentation A only
+- **When** `CanAsync(user, "presentation", null, "edit")` is called
+- **Then** it returns `false`, because only type-wide grants count when no resource is named
+
+### Requirement: Grant queries scope tenants explicitly and render null as an explicit null test
+
+The system SHALL take the tenant as an explicit argument on every `IGrantService` method and never read an
+ambient tenant. Reads and checks (`ListForUserAsync`, `ListTypeWideForUserAsync`, `ListForResourceAsync`,
+`HasAdminGrantAsync`) SHALL be "in scope": with a tenant, untenanted grants plus that tenant's; with none,
+untenanted grants only — a tenant-bound grant never matches outside its tenant. A grant's identity
+(`GetExactAsync`, update/delete by key) and the last-owner and last-admin counts SHALL be "exact": the tenant
+and resource columns equal the arguments, null included. Every predicate SHALL be built by
+`GrantPredicates` with a separate branch for a null argument, so a null is always an explicit `== null` term
+and never a comparison against a null variable, which SQL would read as match-nothing.
+
+#### Scenario: Untenanted grant applies in every tenant
+
+- **Given** a user's untenanted `editor` grant on presentation A
+- **When** `CanAsync(user, "presentation", A, "edit", tenantGuid: T)` is called
+- **Then** it returns `true`
+
+#### Scenario: Tenant-bound grant does not leak
+
+- **Given** a user's `editor` grant on presentation A in tenant T1
+- **When** `CanAsync(user, "presentation", A, "edit", tenantGuid: T2)` or `CanAsync(…, tenantGuid: null)` is called
+- **Then** it returns `false`
+
+### Requirement: Listing reports type-wide reach separately from exact ids
+
+The system SHALL make `ListResourcesAsync(user, type, action, tenant)` return `GrantedResources(true, [])`
+for an admin, and otherwise consider only the user's in-scope grants on that type whose role allows the
+action: `AllOfType` is true when any of them is type-wide, and `Ids` lists the distinct resource ids of the
+exact ones. `ListGranteesAsync(type, resourceId, tenant)` SHALL return every in-scope grant on that resource
+or type-wide on its type, each flagged `IsTypeWide` when its `ResourceId` is null.
+
+#### Scenario: Type-wide grant without the action
+
+- **Given** a user holding a type-wide role on `presentation` that does not allow `read`, and `viewer` on presentation A
+- **When** `ListResourcesAsync(user, "presentation", "read")` is called
+- **Then** `AllOfType` is false and `Ids` is `[A]`
+
+#### Scenario: Admin
+
+- **Given** an admin
+- **When** `ListResourcesAsync` is called
+- **Then** `AllOfType` is true and `Ids` is empty — "no ids" does not mean "nothing"
+
+### Requirement: Granting needs the share action and every action of the role, and never escalates
+
+The system SHALL let a non-admin caller write or remove a grant on (type, resource, tenant) only when the
+caller's own effective actions there include `ShareAction` — otherwise `GrantRefusedException` with
+`GrantErrorCodes.NotAuthorized` — and include every required action — otherwise `GrantRefusedException`
+with `GrantErrorCodes.Escalation` naming the missing ones. `AuthorizeGrantAsync` SHALL require the role's
+actions; `GrantAsync` SHALL require the union of the new role's actions and, when the user already holds a
+grant with that exact key, the replaced role's; `RevokeAsync` SHALL require the removed role's actions, except
+that a caller removing their own grant needs nothing. An admin passes every rule, and for an admin the
+required set is never resolved, so an admin can still replace or remove a grant whose role was retired.
+`GrantAsync` SHALL create the grant (`GrantedBy` = caller, `CreatedAt` from the clock) or, when the key
+exists with a different role, update `Role` and `GrantedBy` by the key — every row with that key; the same
+role writes nothing. `RevokeAsync` SHALL delete every row with the key and return `false` when none existed.
+`Guid.Empty` as a resource id SHALL be refused with `ArgumentException` (null means type-wide). The reserved
+admin grant cannot be written or removed here, since `"*"` is never a declared type.
+
+#### Scenario: Editor tries to make someone an owner
+
+- **Given** a caller holding a role with `read`, `edit` and `share` on presentation A, and `owner` allowing also `delete`
+- **When** `GrantAsync(caller, other, "presentation", A, "owner")` is called
+- **Then** `GrantRefusedException` with `Code = "Grant.Escalation"` is thrown, naming `delete`
+
+#### Scenario: Caller without share
+
+- **Given** a caller holding `editor` (no `share`) on presentation A
+- **When** `GrantAsync(caller, other, "presentation", A, "viewer")` is called
+- **Then** `GrantRefusedException` with `Code = "Grant.NotAuthorized"` is thrown
+
+#### Scenario: Leaving a resource
+
+- **Given** a user holding `viewer` on presentation A and no share right
+- **When** `RevokeAsync(user, user, "presentation", A)` is called
+- **Then** the grant is deleted and `true` is returned
+
+### Requirement: A resource is never left without an owner
+
+The system SHALL refuse, with `GrantRefusedException` and `GrantErrorCodes.LastOwner`, a `GrantAsync` that
+replaces an owner's role on a specific resource, or a `RevokeAsync` that removes an owner grant on a specific
+resource, when the exact-key count of owner grants there is at most one. Because that count cannot be
+serialised across processes, the system SHALL re-count after the write with `CancellationToken.None` and,
+finding zero owners, compensate — restore the previous role and `GrantedBy`, or re-create the deleted grant
+as a new record with a fresh identity — and then throw `LastOwner`. Type-wide owner grants are not protected
+by this rule.
+
+#### Scenario: Sole owner demotes themselves
+
+- **Given** presentation A whose only owner is U
+- **When** `GrantAsync(U, U, "presentation", A, "viewer")` is called
+- **Then** `GrantRefusedException` with `Code = "Grant.LastOwner"` is thrown and U is still owner
+
+#### Scenario: Concurrent removal in another process
+
+- **Given** two owners of A, each removed at once by a different process, both passing the pre-check
+- **When** the second delete finds zero owners on its re-count
+- **Then** that process re-creates its deleted owner grant and throws `LastOwner`
+
+### Requirement: Redeeming upgrades but never downgrades, and creators claim only unowned resources
+
+The system SHALL make `GrantAtLeastAsync` return the existing grant unchanged, without authorizing or
+writing, when its role's actions are a superset of the requested role's; throw `GrantRefusedException` with
+`GrantErrorCodes.RoleConflict` when neither action set contains the other; and otherwise authorize and write
+the requested role as `GrantAsync` would — the coverage decision and the write under one resource lock.
+`GrantOwnerOnCreateAsync(user, type, resourceId, tenant)` SHALL perform no authorization check, refuse
+`Guid.Empty` with `ArgumentException`, return an existing owner grant of that user unchanged, refuse with
+`GrantErrorCodes.NotAuthorized` when the resource already has any other owner, upgrade the user's existing
+non-owner grant to the owner role, or else create an owner grant with `GrantedBy = null`.
+
+#### Scenario: Invitation for less than the user holds
+
+- **Given** a user who is `owner` of A and an invitation granting `viewer` on A
+- **When** `GrantAtLeastAsync(inviter, user, "presentation", A, "viewer")` runs
+- **Then** the owner grant is returned unchanged and nothing is written
+
+#### Scenario: Claiming someone else's resource
+
+- **Given** presentation A owned by U
+- **When** `GrantOwnerOnCreateAsync(V, "presentation", A)` is called
+- **Then** `GrantRefusedException` with `Code = "Grant.NotAuthorized"` is thrown
+
+### Requirement: Admins hold a reserved grant, and the last admin of a scope cannot be removed
+
+The system SHALL treat a user as an admin, through `BootstrapAdminGrantSource`, when they hold the reserved
+grant `{ResourceType = "*", ResourceId = null, Role = "*"}` in tenant scope — an untenanted one is an admin in
+every tenant. `AdminGrantService.RevokeAdminAsync(caller, user, tenant)` SHALL require the caller to be an
+admin in that scope unless removing themselves (`GrantErrorCodes.NotAuthorized` otherwise), return `false`
+when the user holds no admin grant with exactly that tenant, and refuse with `GrantErrorCodes.LastAdmin` when
+the admins administering the scope — the exact-tenant admin grants plus, for a tenant, the untenanted ones —
+number at most one; after deleting it SHALL re-count with `CancellationToken.None` and, finding none,
+re-create the grant and throw `LastAdmin`.
+
+#### Scenario: Tenant admin removable while a global admin exists
+
+- **Given** tenant T with one tenant admin A and one untenanted admin G
+- **When** `RevokeAdminAsync(G, A, T)` is called
+- **Then** A's grant is removed and `true` is returned
+
+#### Scenario: Last global admin
+
+- **Given** a single untenanted admin G
+- **When** `RevokeAdminAsync(G, G, null)` is called
+- **Then** `GrantRefusedException` with `Code = "Grant.LastAdmin"` is thrown
+
+### Requirement: Invitations are authorized like a grant and store only the token's hash
+
+The system SHALL make `InvitationService.CreateAsync` normalise the email by trimming and folding only ASCII
+`A–Z` to lower case, refuse with `ArgumentException` an email that is not ASCII-printable without spaces or
+does not have exactly one `@` with text on both sides, require the type and role to be declared, authorize
+exactly as `AuthorizeGrantAsync`, and store an `Invitation` whose `TokenHash` is the upper-case hex SHA-256 of
+a fresh 32-byte base64url token and whose `ExpiresAt` is `now + GrantSignInOptions.InvitationLifetime`
+(default 7 days; a non-positive lifetime throws `GrantConfigurationException` at construction). The plaintext
+token SHALL be returned once, in `InvitationCreated`, and never stored. `RevokeAsync` SHALL return `false` for
+an absent invitation or one that is redeemed, revoked or expired; the inviter may revoke without further
+checks and anyone else must pass `AuthorizeGrantAsync` for its role and resource. It SHALL set `RevokedAt`
+with a filtered update conditional on the invitation still being unredeemed and unrevoked, and report the
+re-read state, not the intent.
+
+#### Scenario: Non-ASCII email refused
+
+- **Given** the email `"Kate@example.com"` (KELVIN SIGN)
+- **When** `CreateAsync` is called
+- **Then** `ArgumentException` is thrown, so no other mailbox can fold onto this one
+
+#### Scenario: Token is returned once
+
+- **Given** a successful `CreateAsync`
+- **When** the stored invitation is read
+- **Then** it carries only `TokenHash`, equal to `SHA256(token)` in upper-case hex
+
+### Requirement: An invitation is redeemed once, for its own verified email, as its inviter
+
+The system SHALL redeem an invitation under a per-invitation lock by first checking the email — a mismatch
+answers `EmailMismatch` before revealing whether it is used, revoked or expired — then its state
+(`InvitationRevoked`, `InvitationUsed`, `InvitationExpired` when `ExpiresAt <= now`), then claiming it with a
+filtered update that sets `RedeemedAt`/`RedeemedBy` only where it is still unredeemed and unrevoked, and
+re-reading to see whose claim stuck. It SHALL then call `GrantAtLeastAsync` as the inviter, so the grant rules
+run again at redemption. A `GrantRefusedException` SHALL be reported as its code, a
+`GrantConfigurationException` as `InvitationInvalid`, and in both cases — and on cancellation, which is
+rethrown — the claim SHALL be released. Single use across processes holds only on a backend that runs a
+filtered property update as one conditional statement (SQL, MongoDB); file and in-memory stores get
+single use within one process only.
+
+#### Scenario: Inviter has lost the share right
+
+- **Given** a pending invitation whose inviter is not an admin and no longer holds `share` on the resource
+- **When** the invitee signs in with the verified email
+- **Then** the invitation is reported as skipped with `Grant.NotAuthorized` and is left pending
+
+#### Scenario: Retired role
+
+- **Given** a pending invitation whose role was removed from the role table
+- **When** it is redeemed
+- **Then** it is skipped with `Invitation.Invalid` and nothing is thrown
+
+### Requirement: Sign-in makes bootstrap admins and redeems invitations in a fixed order
+
+The system SHALL make `GrantSignInService.OnSignInAsync` first ensure the untenanted admin grant for a
+context whose `provider:subject` is listed in `GrantSignInOptions.BootstrapAdmins` (provider compared
+trimmed and case-insensitively, subject trimmed and exactly; an entry without both parts throws
+`GrantConfigurationException` at construction; writing is idempotent and reported as `AdminGrantWritten`);
+then redeem every pending, unexpired invitation for the normalised email except the token's own, skipping
+each with `EmailNotVerified` when `EmailVerified` is false and reporting other refusals in `Skipped`; and
+last redeem the explicit `InvitationToken`, throwing `GrantRefusedException` — `InvitationNotFound`,
+`EmailNotVerified`, or the redemption's code — only for that token, after everything else is written.
+
+#### Scenario: Dead link does not cost the other invitations
+
+- **Given** two pending invitations for the user's verified email and an `InvitationToken` matching nothing
+- **When** `OnSignInAsync` runs
+- **Then** both invitations are redeemed and written, and then `GrantRefusedException` with `Code = "Invitation.NotFound"` is thrown
+
+#### Scenario: Bootstrap admin by external identity
+
+- **Given** `BootstrapAdmins = ["GitHub:4821337"]`
+- **When** a user signs in with `Provider = "github"`, `Subject = "4821337"`
+- **Then** `IsBootstrapAdmin` is true and, on the first such sign-in, `AdminGrantWritten` is true
+
+### Requirement: Grant writes on one key are serialised in process
+
+The system SHALL serialise grant writes on one (type, resource, tenant) key, admin writes per tenant scope,
+and redemption/revocation per invitation through a process-wide `KeyedLock` shared by every service
+instance; an entry SHALL exist only while it is held or awaited and be removed on the last release, and a
+cancelled wait SHALL leave no entry behind. Across processes the post-write re-counts above are the only
+protection.
+
+#### Scenario: Two services over one store
+
+- **Given** two `GrantService` instances constructed with the public constructor
+- **When** both grant on the same resource at once
+- **Then** the writes run one after the other, and afterwards no lock entry remains
+
+### Requirement: Grants persist on any SQL provider with their lookup indexes
+
+The system SHALL provide `SqlResourceGrantStore<DB>` and `SqlInvitationStore<DB>`, bare
+`AsyncDataBaseBulkStore` subclasses whose lookups are the store interfaces' default methods, and
+`GrantSqlMappings.Register`, which maps `ResourceGrant` to table `BirkoResourceGrants` (required `UserGuid`,
+`ResourceType`, `Role`) and `Invitation` to `BirkoInvitations` (`TokenHash` required and declared unique;
+required `Email`, `ResourceType`, `Role`). `GrantSqlIndexes.EnsureAsync(grants, invitations, indexManager)`
+SHALL initialise both stores and create, when absent, `IX_BirkoResourceGrants_User` (UserGuid, ResourceType),
+`IX_BirkoResourceGrants_Resource` (ResourceType, ResourceId) and `IX_BirkoInvitations_Email` (Email) through
+the caller-supplied provider index manager, throwing `ArgumentNullException` for a null argument and
+`InvalidOperationException` for a store without a connector. No unique index is declared on a grant's
+(user, type, resource, tenant) key, which is why updates and deletes go by the key rather than by the entity.
+
+#### Scenario: Idempotent index ensure
+
+- **Given** the three indexes already present
+- **When** `EnsureAsync` runs again
+- **Then** `ExistsAsync` answers true for each and nothing is created
+
+#### Scenario: No index manager
+
+- **Given** valid stores
+- **When** `EnsureAsync(grants, invitations, null!)` is called
+- **Then** `ArgumentNullException` is thrown before either store is initialised

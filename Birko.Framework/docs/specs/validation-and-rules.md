@@ -1,7 +1,7 @@
 ---
 area: validation-and-rules
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Rules/Context/DictionaryRuleContext.cs
   - ../Birko.Rules/Context/IRuleContext.cs
@@ -11,6 +11,7 @@ sources:
   - ../Birko.Rules/Core/LogicOperator.cs
   - ../Birko.Rules/Core/Rule.cs
   - ../Birko.Rules/Core/RuleGroup.cs
+  - ../Birko.Rules/Core/RuleList.cs
   - ../Birko.Rules/Core/RuleResult.cs
   - ../Birko.Rules/Core/RuleSet.cs
   - ../Birko.Rules/Core/RuleSeverity.cs
@@ -69,7 +70,7 @@ at every call site.
 
 The system SHALL represent a rule as either a leaf `Rule` (a single `Field` / `Operator` / `Value`
 condition, with `UpperValue` for `Between` and an `IsNegated` flag) or a composite `RuleGroup`
-(a `LogicOperator` plus a `List<IRule>` of children, itself an `IRule`, nestable), both exposing the
+(a `LogicOperator` plus a `RuleList` of children, itself an `IRule`, nestable), both exposing the
 `IRule` metadata `Name`, `Description`, `Severity` and `IsEnabled`, and SHALL default `Severity` to
 `RuleSeverity.Info` and `IsEnabled` to `true`.
 
@@ -97,13 +98,44 @@ condition, with `UpperValue` for `Between` and an `IsNegated` flag) or a composi
 - **When** the instance is inspected
 - **Then** `IsEnabled` is `true`, `Description` is `null` and `Rules` is an empty list
 
+### Requirement: Rule lists are copy-on-write and safe to edit during evaluation
+
+The system SHALL hold the rules of a `RuleSet` and of a `RuleGroup` in `RuleList`, an `IList<IRule>` /
+`IReadOnlyList<IRule>` whose every edit (`Add`, `AddRange`, `Insert`, `Remove`, `RemoveAt`, `Clear`, the
+indexer setter) copies the current array under a lock and publishes the new array, and whose reads
+(`Count`, the indexer, `Contains`, `IndexOf`, `CopyTo`, enumeration, `Snapshot()`) take no lock and see the
+array current when they started. `RuleEvaluator` and `RuleExpressionConverter` SHALL evaluate a set's or a
+group's rules from such a snapshot. The constructors copy the supplied sequence (`RuleList(null)` throws
+`ArgumentNullException`), and assigning `RuleSet.Rules = null` SHALL throw `ArgumentNullException`
+(SH-M370, TASK-156).
+
+#### Scenario: A reload edits the rule set while it is evaluated
+
+- **Given** a `RuleSet` being evaluated by `RuleEvaluator.Evaluate(ruleSet, context)` on one thread
+- **When** another thread calls `ruleSet.Rules.Add(…)` or `Clear()` mid-evaluation
+- **Then** no "Collection was modified" exception is thrown; the evaluation runs over the rules as they were when it took its snapshot, and the edit is visible to the next evaluation
+
+#### Scenario: A snapshot is not changed by a later edit
+
+- **Given** `var snapshot = ruleSet.Rules.Snapshot()` on a set of two rules
+- **When** a third rule is added
+- **Then** `snapshot` still holds two rules and `ruleSet.Rules.Count` is `3`
+
+#### Scenario: Constructors copy their input
+
+- **Given** a `List<IRule>` passed to `new RuleGroup(LogicOperator.And, list)`
+- **When** the caller later adds to `list`
+- **Then** the group's `Rules` is unchanged
+
 ### Requirement: Dictionary-backed rule context
 
-The system SHALL provide `DictionaryRuleContext`, which resolves fields by delegating directly to the
+The system SHALL provide `DictionaryRuleContext`, which resolves fields against the
 `Dictionary<string, object?>` handed to its constructor — retaining that instance by reference
-(no copy) and therefore inheriting **that dictionary's key comparer**, so field lookup is
-case-sensitive for a dictionary created with the default comparer — and SHALL throw
-`ArgumentNullException` if the dictionary is `null`.
+(no copy) — first by an exact lookup with **that dictionary's own key comparer** and, on a miss, by a
+scan for the first key equal to the field under `OrdinalIgnoreCase`, so field lookup is
+case-insensitive whatever comparer the caller's dictionary uses (SH-M369, TASK-156); `From(...)` builds
+its dictionary with `StringComparer.OrdinalIgnoreCase`. It SHALL throw `ArgumentNullException` if the
+dictionary is `null`, and it is an open context (`HasFixedFields` is `false`).
 
 #### Scenario: Field present in the dictionary
 
@@ -111,10 +143,16 @@ case-sensitive for a dictionary created with the default comparer — and SHALL 
 - **When** `TryGetValue("Temp", out var v)` is called
 - **Then** it returns `true` and `v` is `91.5`; `HasField("Temp")` returns `true`
 
-#### Scenario: Case mismatch is not resolved
+#### Scenario: Case mismatch is resolved
 
-- **Given** `DictionaryRuleContext.From(("Temp", 91.5))` (default ordinal, case-sensitive comparer)
+- **Given** `new DictionaryRuleContext(new Dictionary<string, object?> { ["Temp"] = 91.5 })` (default ordinal, case-sensitive comparer)
 - **When** `TryGetValue("temp", out var v)` is called
+- **Then** the exact lookup misses, the case-insensitive fallback finds `"Temp"`, and it returns `true` with `v == 91.5` — as `ObjectRuleContext` and the translator resolve fields
+
+#### Scenario: Absent field
+
+- **Given** `DictionaryRuleContext.From(("Temp", 91.5))`
+- **When** `TryGetValue("Humidity", out var v)` is called
 - **Then** it returns `false` and `v` is `null`
 
 #### Scenario: Null dictionary rejected
@@ -131,12 +169,15 @@ case-sensitive for a dictionary created with the default comparer — and SHALL 
 
 ### Requirement: Object-backed rule context resolves public instance properties case-insensitively
 
-The system SHALL provide `ObjectRuleContext<T>`, which resolves a field name to a public instance
-property of `T` using `BindingFlags.IgnoreCase`, caches the resolved `PropertyInfo` (including a
-negative result) in a `ConcurrentDictionary` keyed case-insensitively and scoped to the closed
-generic type, returns `true` with the property's value when the property exists (even if that value
-is `null`), returns `false` with a `null` value when it does not, and SHALL throw
-`ArgumentNullException` when constructed with a `null` instance.
+The system SHALL provide `ObjectRuleContext<T>`, which resolves a field name — a property name or a
+dotted path (`Address.City`), split on `'.'` — to a chain of public instance properties starting at `T`
+using `BindingFlags.IgnoreCase`, caches the resolved path (including a negative result) in a
+`ConcurrentDictionary` keyed case-insensitively and scoped to the closed generic type, returns `true`
+with the leaf property's value when every segment exists and no intermediate value is `null` (even if
+the leaf value is `null`), returns `false` with a `null` value when a segment does not exist or an
+intermediate is `null`, reports `HasField` from the path resolution alone, reports `HasFixedFields`
+as `true`, and SHALL throw `ArgumentNullException` when constructed with a `null` instance (TASK-144,
+SH-M297).
 
 #### Scenario: Property found regardless of casing
 
@@ -150,11 +191,17 @@ is `null`), returns `false` with a `null` value when it does not, and SHALL thro
 - **When** `TryGetValue("Name", out var v)` is called
 - **Then** it returns `true` and `v` is `null` — distinguishing "present but null" from "absent"
 
-#### Scenario: Dotted path is not a supported field name
+#### Scenario: Dotted path resolves a nested property
 
-- **Given** an instance with `Address.City`
+- **Given** an instance whose `Address.City` is `"Prague"`
+- **When** `TryGetValue("address.city", out var v)` is called
+- **Then** it returns `true` and `v` is `"Prague"`, walking the same path `RuleExpressionConverter` builds
+
+#### Scenario: A null intermediate has no value
+
+- **Given** an instance whose `Address` is `null`
 - **When** `TryGetValue("Address.City", out var v)` is called
-- **Then** it returns `false`, because the lookup is a single `GetProperty("Address.City")` with no splitting on `'.'` — unlike `RuleExpressionConverter`, which does split nested paths
+- **Then** it returns `false` and `v` is `null`, while `HasField("Address.City")` still returns `true`
 
 #### Scenario: Non-existent field
 
@@ -166,9 +213,11 @@ is `null`), returns `false` with a `null` value when it does not, and SHALL thro
 
 The system SHALL evaluate a leaf `Rule` by resolving `Field` from the context and applying
 `Operator` through `ComparisonHelper.Compare`, SHALL return `NoMatch` immediately for a disabled rule
-or for an unrecognised `IRule` implementation, SHALL evaluate `IsNull` / `IsNotNull` **without
-requiring the field to exist**, SHALL return `NoMatch` for every other operator when the field is
-absent, and SHALL carry the resolved field value on the result as `ActualValue`.
+or for an unrecognised `IRule` implementation, SHALL return `NoMatch` — for every operator, negated or
+not — when the context has fixed fields (`IRuleContext.HasFixedFields`, default `false`) and cannot
+reach the field, SHALL otherwise evaluate `IsNull` / `IsNotNull` **without requiring the field to
+exist**, SHALL return `NoMatch` for every other operator when the field is absent, and SHALL carry the
+resolved field value on the result as `ActualValue`.
 
 #### Scenario: Matching comparison
 
@@ -188,6 +237,12 @@ absent, and SHALL carry the resolved field value on the result as `ActualValue`.
 - **When** `Evaluate` is called
 - **Then** `IsMatch` is `true`, because the evaluator ignores the `TryGetValue` return value for null operators and compares the `out` default (`null`)
 
+#### Scenario: A typed context's unreachable field matches nothing
+
+- **Given** an `ObjectRuleContext<T>` and `new Rule("Typo", ComparisonOperator.IsNull, null)` — or `Address.City IsNull` on an entity whose `Address` is `null`
+- **When** `Evaluate` is called, with or without `IsNegated`
+- **Then** `IsMatch` is `false`: the context has fixed fields, so a field it cannot reach has no value at all, as the store filter answers (TASK-144, SH-M297). Before, `Typo IsNull` matched every entity in memory
+
 #### Scenario: Negation is applied on a present field but skipped on an absent one
 
 - **Given** `new Rule("Temp", ComparisonOperator.GreaterThan, 80) { IsNegated = true }`
@@ -204,6 +259,12 @@ absent, and SHALL carry the resolved field value on the result as `ActualValue`.
   for a non-string member, and negation is applied only to an answer the comparison could actually give —
   a `false` meaning *"does not apply"* must not invert into a match, which is the same widening that
   affected the expression translator
+
+#### Scenario: Negation is skipped for what the translator degrades
+
+- **Given** a negated `Contains null`, a negated `In null`, or a negated `Like "a%b"` (interior `%`) on a string field
+- **When** the rule is evaluated
+- **Then** `IsMatch` is `false`: `CanEvaluate` reports a null needle, a null set and an interior-`%` pattern as unanswerable, so the negation is not applied — the store filter matches nothing for the same rules (TASK-156)
 
 ### Requirement: Group rule evaluation
 
@@ -278,10 +339,13 @@ The system SHALL expose `EvaluateAll` (a result per input rule, matches and non-
 
 ### Requirement: Comparison semantics — numeric promotion with fractional tolerance
 
-The system SHALL compare values numerically whenever **both** operands can be converted to `double`
-(`double`, `int`, `long`, `float`, `decimal`, `short`, `byte`, or any value whose `ToString()`
-parses as an invariant-culture number), SHALL treat a zero difference as equal, SHALL require exact
-equality when both promoted values are integral, and SHALL otherwise accept a relative tolerance of
+The system SHALL compare two **exact** numbers (any integer type or `decimal`) exactly, as `decimal`
+(SH-M360, TASK-156). Otherwise it SHALL compare values numerically, as `double`, whenever both operands
+are numbers (`double`, `float`, `decimal` or any integer type), or one is a number and the other a
+`string` that parses with `NumberStyles.Float` in the invariant culture to a finite value — a string is
+read as a number **only against a numeric side**, never against another string (SH-M361, TASK-156). In
+the `double` comparison it SHALL treat a zero difference as equal, SHALL require exact equality when
+both promoted values are integral, and SHALL otherwise accept a relative tolerance of
 `1e-6 * max(|a|,|b|)`.
 
 #### Scenario: Cross-type integral equality
@@ -294,7 +358,13 @@ equality when both promoted values are integral, and SHALL otherwise accept a re
 
 - **Given** an actual value of `1_000_000_000L` and an expected value of `1_000_000_001L`
 - **When** `Equal` is evaluated
-- **Then** both promoted values are integral, so the relative tolerance is not applied and the result is `false`
+- **Then** both are exact numbers, compared as `decimal`, and the result is `false`
+
+#### Scenario: Integers beyond double precision and long decimals compare exactly
+
+- **Given** an actual value of `9007199254740993L` and an expected value of `9007199254740992L`, or `1.0000000000000000001m` and `1.0m`
+- **When** `Equal` is evaluated
+- **Then** the result is `false` — promoting both to `double` used to equate them
 
 #### Scenario: float→double promotion error is absorbed
 
@@ -306,7 +376,13 @@ equality when both promoted values are integral, and SHALL otherwise accept a re
 
 - **Given** an actual value of the string `"5"` and an expected value of `int 5`
 - **When** `Equal` is evaluated
-- **Then** `double.TryParse` succeeds for both and the result is `true`
+- **Then** the other side is a number, so the string is parsed and the result is `true`
+
+#### Scenario: Two numeric-looking strings compare as text
+
+- **Given** an actual value of the string `"007"` and an expected value of the string `"7"` (or `"(5)"` and `"-5"`, or `"1,000"` and `"1000"`)
+- **When** `Equal` is evaluated
+- **Then** neither side is a number, so no parse is attempted, and the result is `false` — as the store compares them
 
 #### Scenario: Non-numeric fallback compares ToString case-insensitively
 
@@ -316,7 +392,8 @@ equality when both promoted values are integral, and SHALL otherwise accept a re
 
 ### Requirement: Comparison semantics — ordering, null and Between
 
-The system SHALL order values by numeric promotion first, then `DateTime`, then `IComparable`
+The system SHALL order values exactly (as `decimal`) when both are exact numbers, then by numeric
+promotion (under the same string-against-a-number rule as equality), then `DateTime`, then `IComparable`
 (swallowing a thrown comparison exception and falling through), then an ordinal-ignore-case
 `ToString()` comparison; SHALL rank a `null` actual value **below** any non-`null` expected value and
 a `null` expected value **below** any non-`null` actual value; and SHALL treat `Between` as the
@@ -350,6 +427,12 @@ inclusive conjunction `actual >= Value && actual <= UpperValue`.
 - **When** an ordering operator is evaluated
 - **Then** the `CompareTo` `ArgumentException` is caught and the comparison falls through to the ordinal-ignore-case `ToString()` comparison
 
+#### Scenario: Two numeric-looking strings order as strings
+
+- **Given** an actual value of the string `"10"` and an expected value of the string `"9"`
+- **When** `GreaterThan` is evaluated
+- **Then** neither side is a number, so `string.CompareTo` (the `IComparable` step, culture-sensitive) orders `"10"` before `"9"` and the rule does not match. The translator has no store form for ordering strings and degrades such a leaf to match-nothing, so string ordering is evaluator-only
+
 ### Requirement: Comparison semantics — string operators and LIKE
 
 The system SHALL apply `Contains`, `NotContains`, `StartsWith`, `EndsWith` and `Like` **only to a `string`
@@ -359,9 +442,12 @@ declared types). Against a non-string actual all five SHALL evaluate to `false` 
 produces match-all.
 
 For a string actual the system SHALL call the corresponding `string` method on `actual.ToString()` with
-`StringComparison.OrdinalIgnoreCase` (returning `false` — and therefore `true` for `NotContains` —
-whenever either side is `null`), and SHALL implement `Like` as SQL-style `%` wildcard matching: `%text%` →
-contains, `%text` → ends-with, `text%` → starts-with, and no wildcard → case-insensitive equality.
+`StringComparison.OrdinalIgnoreCase` (returning `false` whenever either side is `null`; `NotContains`
+returns `true` for a `null` actual and `false` for a `null` needle, which is no predicate — SH-M296,
+TASK-171), and SHALL implement `Like` as SQL-style `%` wildcard matching honoured **only at the ends**,
+as the translator reads it (TASK-156): `%text%` → contains, `%text` → ends-with, `text%` → starts-with,
+no wildcard → case-insensitive equality, a lone `%` → any non-null value; a `null` or empty pattern, or
+one with an interior `%`, matches nothing (SH-M362), and `_` is a literal character.
 
 This engine previously stringified any actual value, so `Code Contains "234"` matched an `int 12345`. That
 answer could not be reconciled with the expression path, which runs against a database where no portable
@@ -392,11 +478,17 @@ existing test depended on the stringified behaviour.
 - **When** the pattern is `"Warehouse"` with no wildcard
 - **Then** it matches only that exact value, ignoring case
 
-#### Scenario: Bare "%" pattern throws
+#### Scenario: Bare "%" pattern matches any value
 
 - **Given** `new Rule("Name", ComparisonOperator.Like, "%")`
 - **When** the rule is evaluated against any non-null string value
-- **Then** `LikeString` takes the both-ends branch (a single `'%'` satisfies both `StartsWith('%')` and `EndsWith('%')`) and evaluates `pattern[1..^1]` on a one-character string, throwing `ArgumentOutOfRangeException`
+- **Then** it matches: the trimmed core is empty and every string contains it. It used to slice `pattern[1..^1]` on a one-character string and throw `ArgumentOutOfRangeException` (SH-M359)
+
+#### Scenario: Interior wildcard matches nothing
+
+- **Given** `new Rule("Name", ComparisonOperator.Like, "Ware%house")` and an actual value of `"Warehouse"` or of the literal `"Ware%house"`
+- **When** the rule is evaluated, negated or not
+- **Then** it does not match — neither engine guesses at an interior `%` (SH-M362)
 
 #### Scenario: Null operand short-circuits
 
@@ -404,12 +496,19 @@ existing test depended on the stringified behaviour.
 - **When** `Contains "x"` is evaluated
 - **Then** the result is `false`; the corresponding `NotContains "x"` evaluates to `true`
 
+#### Scenario: A null needle matches nothing under NotContains too
+
+- **Given** an actual value of `"abc"` and `NotContains null`
+- **When** the rule is evaluated
+- **Then** the result is `false`, as `Contains null` is and as the store filter answers — not the inversion of "contains nothing"
+
 ### Requirement: Comparison semantics — collection membership
 
 The system SHALL treat `In` as membership in `Value` when `Value` is a non-`string` `IEnumerable`
 (comparing each element with the same equality semantics as `Equal`), SHALL treat a `string` `Value`
 as a single candidate rather than a character sequence, SHALL return `false` when either the actual
-value or `Value` is `null`, and SHALL define `NotIn` as the exact negation of that result.
+value or `Value` is `null`, and SHALL define `NotIn` as the exact negation of that result except when
+`Value` is `null`, where `NotIn` is `false` too — a null set is no predicate (TASK-156).
 
 #### Scenario: Membership in a typed array
 
@@ -431,13 +530,22 @@ value or `Value` is `null`, and SHALL define `NotIn` as the exact negation of th
 - **When** the actual value is `null` and `Value` is a populated array
 - **Then** `In` does not match and `NotIn` matches
 
+#### Scenario: A null set matches nothing in both polarities
+
+- **Given** `new Rule("Status", ComparisonOperator.NotIn, null)` and an actual value of `2`
+- **When** the rule is evaluated
+- **Then** it does not match, and neither does the corresponding `In` — before TASK-156 `NotIn null` matched every value in memory while the store matched none
+
 ### Requirement: Rule tree to LINQ predicate conversion
 
 The system SHALL convert a rule tree into `Expression<Func<T,bool>>` via
-`RuleExpressionConverter.ToExpression<T>` and SHALL select the same rows as `RuleSpecification` and
-`RuleEvaluator`. It SHALL never return `null`. It SHALL answer **match-nothing** (`x => false`) for a
-disabled rule, an empty or all-disabled group, a disabled `RuleSet`, an empty rule list, and a field that
-resolves to no property. That answer is never inverted by an enclosing negation: `A AND <match-nothing>`
+`RuleExpressionConverter.ToExpression<T>` — the one rule-to-LINQ translator, which
+`RuleSpecification.ToExpression()` calls (TASK-144) — and SHALL select the same rows as `RuleSpecification`
+and `RuleEvaluator`, with one recorded divergence: string `Equal` / `NotEqual` (and a `Like` with no
+wildcard) is case-sensitive here and case-insensitive in the evaluator. It SHALL never return `null`. It
+SHALL answer **match-nothing** (`x => false`) for a disabled rule, an empty or all-disabled group, a
+disabled `RuleSet`, an empty rule list, a field that resolves to no property, and a leaf whose value or
+member type it cannot express. That answer is never inverted by an enclosing negation: `A AND <match-nothing>`
 matches nothing, and `A OR <match-nothing>` is `A`. It SHALL AND-combine the enabled rules of a `RuleSet` or
 `IEnumerable<IRule>` and skip their disabled members. It SHALL apply `RuleGroup.IsNegated` by De Morgan down
 to the leaves: a negated group flips its connective and inverts each leaf. It never wraps the combined group
@@ -475,7 +583,7 @@ in `Expression.Not`. (FIELD-025 and `SH-M358` were fixed by TASK-558. Before tha
 
 - **Given** `ToExpression<T>` called concurrently from multiple threads for the same `(Type, field)` pair
 - **When** property resolution runs
-- **Then** the shared `ConcurrentDictionary<(Type, string), PropertyInfo?>` is used, so no dictionary corruption occurs
+- **Then** the shared `ConcurrentDictionary<(Type, string), PropertyInfo[]?>` path cache is used, so no dictionary corruption occurs
 
 ### Requirement: Expression conversion — property resolution and nested paths
 
@@ -484,7 +592,8 @@ properties case-insensitively. When any segment cannot be resolved it SHALL trea
 match-nothing. The rule is never dropped, as it was before TASK-558. The system SHALL guard a nested access
 by prefixing `AndAlso` null checks for every intermediate segment whose type is nullable. The checks go
 outside any negation, whether it comes from the rule's own `IsNegated` or from an enclosing negated group,
-so a null intermediate never matches. Whether it should match a negated rule is `SH-M367`, still open.
+so a null intermediate never matches — which `ObjectRuleContext` and the evaluator now answer the same
+way (TASK-144; `SH-M367` resolved by that decision).
 
 #### Scenario: Nested field builds a guarded member access
 
@@ -521,21 +630,30 @@ so a null intermediate never matches. Whether it should match a negated rule is 
 ### Requirement: Expression conversion — per-operator predicate construction
 
 The system SHALL build each operator as follows: `IsNull` as equality with a typed `null` constant,
-or the constant `false` for a non-nullable value type (and `IsNotNull` as its `Not`); the ordering
-operators as `Expression.MakeBinary`; `Equal` / `NotEqual` on a `string` property as
-`string.Equals(member, constant, StringComparison.OrdinalIgnoreCase)`; `Between` as
-`member >= lower && member <= upper`; `Contains` / `StartsWith` / `EndsWith` as a null-guarded
-`string` method call with `OrdinalIgnoreCase`; `Like` by rewriting the `%` pattern onto those string
-methods; `In` as an `OrElse` chain of equality tests; and any unrecognised operator as match-nothing —
-not a constant `false` body, so neither the leaf's own `IsNegated` nor an enclosing negated group inverts
-it into a match. Leaf `IsNegated` SHALL wrap the operator body in `Expression.Not` before the nested null
-guards are prepended.
+or the constant `false` for a non-nullable value type (and `IsNotNull` as the matching inequality, or
+the constant `true`); the comparison operators (`Equal`, `NotEqual` and the ordering operators) as the
+corresponding `Expression` binary node — on a `string` property plain `==` / `!=`, the
+store-translatable form, so string equality is **case-sensitive** at the store (SH-M295, TASK-144) — with
+the member converted to `double` when the value is fractional and the member integral (SH-M294); a
+comparison for which the type defines no operator (`string > string`, `bool >= bool`) as an unevaluable
+leaf (SH-M291); `Between` as `member >= lower && member <= upper`, unevaluable when a bound cannot be
+converted or the type has no ordering; `Contains` / `StartsWith` / `EndsWith` as a null-guarded
+`string` method call with `OrdinalIgnoreCase`, unevaluable on a non-`string` member or for a `null`
+needle (SH-M296); `NotContains` / `NotIn` as the `Not` of their positive form unless that form is
+unevaluable; `Like` by rewriting a `%` at the start and/or end onto those string methods (no wildcard →
+case-sensitive `==`), unevaluable on a non-`string` member, for a `null` or empty pattern, or for an
+interior `%`; and `In` as an `OrElse` chain of equality tests over the candidates (a non-collection value
+is one candidate), unevaluable for a `null` set or any candidate that cannot be converted. An unevaluable
+leaf is the constant `false` and is **never negated**. An operator with no arm SHALL throw
+`NotSupportedException` naming the operator and the field, rather than becoming a constant (SH-H041).
+Leaf `IsNegated` (combined with an enclosing negated group) SHALL wrap a non-degraded operator body in
+`Expression.Not` before the nested null guards are prepended.
 
-#### Scenario: String equality is case-insensitive
+#### Scenario: String equality is case-sensitive
 
 - **Given** `new Rule("Name", ComparisonOperator.Equal, "abc")` on a `string Name`
 - **When** the compiled predicate is applied to an entity with `Name == "ABC"`
-- **Then** it returns `true`
+- **Then** it returns `false` — the body is plain `x.Name == "abc"`, which every store translates; `RuleEvaluator` answers `Match` for the same rule, the one recorded divergence between the engines
 
 #### Scenario: IsNull on a non-nullable value type is constant-folded
 
@@ -543,11 +661,29 @@ guards are prepended.
 - **When** the predicate is compiled and applied
 - **Then** it always returns `false`, and the matching `IsNotNull` rule always returns `true`
 
-#### Scenario: String operator on a non-string property throws
+#### Scenario: String operator on a non-string property matches nothing
 
-- **Given** `new Rule("Age", ComparisonOperator.Contains, "1")` where `Age` is `int`
+- **Given** `new Rule("Age", ComparisonOperator.Contains, "1")` where `Age` is `int`, negated or not, or the same field under `NotContains "1"`
 - **When** `ToExpression<T>` is called
-- **Then** an `InvalidOperationException` is thrown — `String operator 'Contains' cannot be applied to property of type 'Int32'.` — whereas the in-memory `ComparisonHelper` would have evaluated the same rule successfully via `ToString()`
+- **Then** no exception is thrown and the predicate selects no rows, as `ComparisonHelper` answers for a non-string actual
+
+#### Scenario: A fractional value against an integral member is not rounded
+
+- **Given** `new Rule("Qty", ComparisonOperator.Equal, 10.7)` where `Qty` is `int`
+- **When** the predicate is applied to an entity with `Qty == 11`
+- **Then** it returns `false`: the member is compared as `double`, not the value rounded to `11` by `Convert.ChangeType`
+
+#### Scenario: Ordering a string degrades instead of throwing
+
+- **Given** `new Rule("Name", ComparisonOperator.GreaterThan, "m")` on a `string Name`
+- **When** `ToExpression<T>` is called
+- **Then** no exception is thrown and the predicate selects no rows, negated or not — no store orders strings as the evaluator does
+
+#### Scenario: A null needle matches nothing
+
+- **Given** `new Rule("Name", ComparisonOperator.Contains, null)` or `NotContains null`
+- **When** the predicate is applied
+- **Then** it selects no rows — the needle used to become `""`, which every string contains
 
 #### Scenario: Empty In and NotIn sets
 
@@ -557,17 +693,31 @@ guards are prepended.
 - **When** the operator is `NotIn` with the same empty set
 - **Then** the body is `Not(false)`, matching every row
 
-#### Scenario: A negated unrecognised operator still matches nothing
+#### Scenario: A null In set and a scalar In value
 
-- **Given** a leaf whose `Operator` is a value the converter has no case for, with `IsNegated = true`
+- **Given** `new Rule("Status", ComparisonOperator.In, null)` or `NotIn null`
+- **When** the predicate is applied
+- **Then** it selects no rows in both polarities
+- **When** the `Value` is the scalar `2` instead of a collection
+- **Then** the body is the single equality `x.Status == 2`, as the evaluator reads one candidate
+
+#### Scenario: An unrecognised operator throws
+
+- **Given** a leaf whose `Operator` is a value the converter has no arm for, negated or not
 - **When** `ToExpression<T>` is called
-- **Then** the predicate selects no rows (`x => false`); inside an `Or` group the leaf vanishes, and inside an `And` group the group matches nothing
+- **Then** a `NotSupportedException` is thrown naming `ComparisonOperator.{value}` and the field — a gap in the code is not turned into a constant that changes the filter silently
 
-#### Scenario: Bare "%" LIKE pattern matches everything instead of throwing
+#### Scenario: Bare "%" LIKE pattern matches every non-null value
 
 - **Given** `new Rule("Name", ComparisonOperator.Like, "%")`
-- **When** the predicate is built (the both-ends branch is skipped by its `pattern.Length > 1` guard) and applied
-- **Then** it reduces to `Name != null && Name.EndsWith("")`, i.e. every non-null value matches — while the in-memory path throws `ArgumentOutOfRangeException` for the same rule
+- **When** the predicate is built and applied
+- **Then** the trimmed core is empty and it reduces to `Name != null && Name.Contains("", OrdinalIgnoreCase)`, i.e. every non-null value matches — as the in-memory path now answers for the same rule
+
+#### Scenario: Interior LIKE wildcard matches nothing
+
+- **Given** `new Rule("Name", ComparisonOperator.Like, "a%b")`, negated or not
+- **When** the predicate is applied
+- **Then** it selects no rows; the pattern is not matched as a literal
 
 ### Requirement: Expression conversion — rule value coercion
 
@@ -575,8 +725,9 @@ The system SHALL coerce a rule's `Value` to the target property's underlying typ
 as a constant: pass through an already-assignable value, parse a `string` into `Guid`, `DateTime` or
 `DateTimeOffset` using the invariant culture, parse or convert an enum (`Enum.Parse` ignoring case
 for a string, `Enum.ToObject` otherwise), and otherwise call `Convert.ChangeType` with the invariant
-culture; a coercion that the framework rejects SHALL surface as the underlying exception rather than
-being suppressed.
+culture; a `null` value against a non-nullable value type, or a coercion that the framework rejects
+(`InvalidCastException`, `FormatException`, `OverflowException`, `ArgumentException`), SHALL make the
+leaf unevaluable — match-nothing, never negated — rather than throwing (TASK-171, TASK-144).
 
 #### Scenario: String value coerced to Guid
 
@@ -590,17 +741,17 @@ being suppressed.
 - **When** the predicate is built
 - **Then** `Enum.Parse(underlying, "active", ignoreCase: true)` supplies the constant
 
-#### Scenario: Null value against a non-nullable property throws
+#### Scenario: Null value against a non-nullable property matches nothing
 
-- **Given** `new Rule("Age", ComparisonOperator.Equal, null)` where `Age` is `int`
+- **Given** `new Rule("Age", ComparisonOperator.Equal, null)` where `Age` is `int`, negated or not
 - **When** `ToExpression<T>` is called
-- **Then** `ConvertValue` returns `null` and `Expression.Constant(null, typeof(int))` throws `ArgumentException` — whereas the in-memory path evaluates the same rule to a plain non-match
+- **Then** no exception is thrown and the predicate selects no rows — the in-memory path evaluates the same rule to a plain non-match
 
-#### Scenario: Uncoercible value propagates the conversion exception
+#### Scenario: Uncoercible value matches nothing
 
-- **Given** a rule whose `Value` is `"not-a-number"` against an `int` property
+- **Given** a rule whose `Value` is `"not-a-number"` against an `int` property, or a malformed Guid text against a `Guid` property
 - **When** `ToExpression<T>` is called
-- **Then** the `Convert.ChangeType` `FormatException` propagates to the caller
+- **Then** the conversion exception is caught and the leaf selects no rows, negated or not
 
 ### Requirement: Validation result accumulation
 
@@ -677,8 +828,11 @@ result via `Task.FromResult` (never awaiting anything, and ignoring the cancella
 ### Requirement: Property name extraction from the rule expression
 
 The system SHALL derive a `PropertyRule<T>`'s `PropertyName` from the expression body by unwrapping a
-`Convert` unary node and taking `MemberExpression.Member.Name`, SHALL throw `ArgumentException` for
-any other expression shape, and SHALL read values through the compiled delegate at validation time.
+`Convert` unary node and joining with `'.'` the names of the member chain from the lambda parameter to
+the accessed member (SH-M372, TASK-156), SHALL throw `ArgumentException` for any other expression shape
+(including a chain that does not start at the parameter), and SHALL read values at validation time
+through the compiled delegate for a single member, or for a nested path by walking the chain with
+reflection and answering `null` when an intermediate is `null`.
 
 #### Scenario: Simple property access
 
@@ -692,11 +846,11 @@ any other expression shape, and SHALL read values through the compiled delegate 
 - **When** the rule is registered
 - **Then** the inserted `Convert` node is unwrapped and `PropertyName` is `"Temperature"`
 
-#### Scenario: Nested path loses the parent segment
+#### Scenario: Nested path keeps the whole path
 
 - **Given** `RuleFor(x => x.Address.City)`
 - **When** the rule is registered
-- **Then** `PropertyName` is `"City"`, not `"Address.City"` — errors are reported against the leaf name only
+- **Then** `PropertyName` is `"Address.City"` — so `RuleFor(x => x.Wyrm.MaxParallel)` and `RuleFor(x => x.Wyvern.MaxParallel)` report under different keys; both were `"MaxParallel"` before
 
 #### Scenario: Non-member expression rejected
 
@@ -704,11 +858,11 @@ any other expression shape, and SHALL read values through the compiled delegate 
 - **When** the rule is registered
 - **Then** an `ArgumentException` is thrown: `Expression must be a simple property access, got: …`
 
-#### Scenario: Null intermediate on a nested path faults at validation time
+#### Scenario: Null intermediate on a nested path reads as a null value
 
-- **Given** `RuleFor(x => x.Address.City)` and an instance whose `Address` is `null`
+- **Given** `RuleFor(x => x.Address.City).Required().MaxLength(3)` and an instance whose `Address` is `null`
 - **When** `Validate(instance)` is called
-- **Then** the compiled accessor dereferences `null` and a `NullReferenceException` propagates out of `Validate` — the fluent path has no equivalent of `RuleExpressionConverter`'s null guards
+- **Then** no exception is thrown; the rules see `null`, so `Required` reports `REQUIRED` against `"Address.City"` and `MaxLength` passes. The compiled accessor used to throw `NullReferenceException` out of `Validate`
 
 ### Requirement: Built-in rule catalogue and the null-is-valid convention
 
@@ -766,18 +920,46 @@ runtime type as **invalid** in those same rules (`EmailRule`, `LengthRule` and `
 - **When** only `min` is supplied and the value is far above it
 - **Then** it is valid, because the `max` half of the check is skipped
 
-### Requirement: Range rule comparison is unguarded against operand type mismatch
+### Requirement: Regex rule runs with a match timeout and without implicit compilation
 
-The system SHALL evaluate `RangeRule` by calling `IComparable.CompareTo` on the property value with
-the configured bound as a boxed `object`, without a type-compatibility check or exception guard, so a
-bound whose runtime type differs from the property's type SHALL propagate the framework's
-`ArgumentException` out of `Validate`.
+The system SHALL construct a pattern-based `RegexRule` with `RegexOptions.None` by default (not
+`Compiled`) and a match timeout of `RegexRule.DefaultMatchTimeout` (one second) unless the caller passes
+`matchTimeout`, SHALL use a caller-supplied `Regex` instance as given, and SHALL report a value whose
+match times out (`RegexMatchTimeoutException`) as **invalid** rather than propagating the exception
+(SH-M376, TASK-156).
+
+#### Scenario: A catastrophically backtracking pattern does not spin the request
+
+- **Given** `new RegexRule("Code", "^(a+)+$", matchTimeout: TimeSpan.FromMilliseconds(50))` and a long value of `a`s ending in `!`
+- **When** `IsValid` is called
+- **Then** it returns `false` once the timeout elapses, and no exception escapes `Validate`
+
+#### Scenario: Default options
+
+- **Given** `RuleFor(x => x.SerialNumber).Matches("^[A-Z0-9-]+$")`
+- **When** the rule is built
+- **Then** its regex has `RegexOptions.None` and a one-second match timeout; `RegexOptions.Compiled` is opt-in through the options parameter
+
+### Requirement: Range rule compares numeric bounds by value
+
+The system SHALL evaluate `RangeRule` by calling `IComparable.CompareTo` directly when the property
+value and the bound have the same runtime type; when both are numbers of different types it SHALL
+compare them by value — as `double` if either is a `double` or `float`, otherwise exactly as `decimal`
+(SH-M371, TASK-156); and for any other type mismatch it SHALL call `CompareTo` and rethrow its
+`ArgumentException` as an `InvalidOperationException` naming the property and both types — a
+misconfigured rule, not an `OUT_OF_RANGE` result.
 
 #### Scenario: int literal bounds on a double property
 
 - **Given** `RuleFor(x => x.Temperature).Range(-50, 150)` where `Temperature` is `double`
-- **When** `Validate(instance)` is called
-- **Then** `((IComparable)temperature).CompareTo((object)(int)-50)` throws `ArgumentException` (`Object must be of type Double.`) and the exception escapes `Validate` instead of producing an `OUT_OF_RANGE` error
+- **When** `Validate(instance)` is called for `Temperature == 200d`, and again for `Temperature == 20d`
+- **Then** the first reports a single `OUT_OF_RANGE` error and the second is valid; no exception escapes `Validate` (it used to throw `Object must be of type Double.`)
+
+#### Scenario: A non-numeric bound of another type is a configuration error
+
+- **Given** `RuleFor(x => x.Qty).Range("a", "z")` where `Qty` is `int`
+- **When** `Validate` is called
+- **Then** an `InvalidOperationException` is thrown — `The range of 'Qty' has a String bound, which cannot be compared with its Int32 value.` — wrapping the `CompareTo` `ArgumentException`
 
 #### Scenario: Matching bound types compare normally
 
@@ -817,9 +999,10 @@ The system SHALL implement `Must(Func<TProp,bool>)` so that the predicate runs o
 matches `TProp`, and a value that does not match is valid exactly when the value is `null` and
 `TProp` is a nullable type; SHALL implement `MustSatisfy(Func<T,bool>)` as a `CustomRule<T>` that
 receives the whole instance from `ValidationContext.Instance` and returns valid when the instance is
-not of type `T`; SHALL implement `In` by rejecting an empty allowed-value set up front and otherwise
-requiring the value to match `TProp` and be present in the set; and SHALL implement `NotEqual`
-through `object.Equals`.
+not of type `T`; SHALL implement `In` (a `params TProp[]` overload, and an `IEnumerable<TProp>` overload
+taking an optional message) by rejecting a `null` or empty allowed-value set up front and otherwise
+accepting a `null` value or a value that matches `TProp` and is present in the set (SH-M375, TASK-156);
+and SHALL implement `NotEqual` through `object.Equals`.
 
 #### Scenario: Must does not reject null for a reference-typed property
 
@@ -839,11 +1022,19 @@ through `object.Equals`.
 - **When** the validator is constructed
 - **Then** an `ArgumentException` — `At least one allowed value must be provided.` — is thrown, rather than producing a property that no value can satisfy
 
-#### Scenario: In treats null as a failure, unlike the other rules
+#### Scenario: In passes null, like the other rules
 
 - **Given** `RuleFor(x => x.Status).In("A", "B")` and an instance whose `Status` is `null`
 - **When** `Validate` runs
-- **Then** `value is TProp typed` fails and a `NOT_IN_SET` error is reported — `In` does not follow the null-is-valid convention of `EmailRule` / `LengthRule` / `RangeRule` / `RegexRule`, and its message cannot be overridden
+- **Then** no error is reported — `In` follows the null-is-valid convention of `EmailRule` / `LengthRule` / `RangeRule` / `RegexRule`; a missing value is `Required`'s to report
+- **When** `Status` is `"C"`
+- **Then** a `NOT_IN_SET` error is reported with the default message `'Status' must be one of: A, B.`
+
+#### Scenario: In takes a custom message
+
+- **Given** `RuleFor(x => x.Status).In(new[] { "A", "B" }, "Unknown status")` and an instance whose `Status` is `"C"`
+- **When** `Validate` runs
+- **Then** the `NOT_IN_SET` error's `Message` is `"Unknown status"`
 
 #### Scenario: MustSatisfy sees the whole model
 
@@ -960,9 +1151,16 @@ validator with `ArgumentNullException`, and exposes the wrapped store through `G
 The system SHALL provide `AsyncValidatingStoreWrapper<TStore, T>` mirroring the sync wrapper over
 `IAsyncStore<T>` (awaiting `IValidator<T>.ValidateAsync` before `CreateAsync`, `UpdateAsync` and
 `SaveAsync`), and `AsyncValidatingBulkStoreWrapper<TStore, T>` which extends it with `IAsyncBulkStore<T>`
-and, for the enumerable `CreateAsync` / `UpdateAsync` overloads, validates **every** item, merges all
-failures into one aggregated `ValidationResult` and throws a single `ValidationException` only after
-the whole batch has been checked.
+and, for the enumerable `CreateAsync` / `UpdateAsync` overloads, materialises the batch once,
+validates **every** item, merges all failures into one aggregated `ValidationResult` and throws a single
+`ValidationException` only after the whole batch has been checked, passing the materialised list to the
+inner store (SH-M374, TASK-156). It SHALL validate both filtered updates (SH-M373, TASK-156): each first
+rejects a `null` filter with `ArgumentNullException` and an all-rows filter through
+`BoundedFilterGuard` (naming `UpdateAllAsync(updateAction)` as the door); `UpdateAsync(filter, Action<T>)`
+reads the matches, applies the action, validates them and writes them as one collection
+`UpdateAsync` (writing nothing when nothing matched); `UpdateAsync(filter, PropertyUpdate<T>)` reads the
+matches, applies the update to those copies only to validate them, and then runs the inner store's
+native filtered update, so a row changed between the preview and the write is validated as it was read.
 
 #### Scenario: Batch failures are aggregated, not reported one at a time
 
@@ -976,11 +1174,25 @@ the whole batch has been checked.
 - **When** `UpdateAsync(batch)` is awaited
 - **Then** the aggregated result is valid and the batch is forwarded to the inner store
 
-#### Scenario: Filter-based bulk operations bypass validation
+#### Scenario: Filter-based updates are validated
 
 - **Given** a bulk wrapper whose validator would reject the mutation's outcome
 - **When** `UpdateAsync(filter, updateAction)` or `UpdateAsync(filter, propertyUpdate)` is awaited
-- **Then** the call is forwarded straight to the inner store with no validation performed on the affected entities
+- **Then** a `ValidationException` aggregating the affected entities' errors is thrown and nothing is written; before TASK-156 both forwarded straight to the inner store unvalidated
+
+#### Scenario: A valid filtered PropertyUpdate runs natively
+
+- **Given** a bulk wrapper and `UpdateAsync(filter, new PropertyUpdate<T>().Increment(x => x.Count, 1))` whose outcome validates
+- **When** it is awaited
+- **Then** the preview copies are validated and the inner store's own `UpdateAsync(filter, updates)` performs the write, keeping the increment atomic
+
+#### Scenario: Filtered updates refuse a missing or all-rows filter
+
+- **Given** a bulk wrapper
+- **When** `UpdateAsync(null, updateAction)` is awaited
+- **Then** an `ArgumentNullException` naming `filter` is thrown
+- **When** the filter reduces to every row
+- **Then** `BoundedFilterGuard` refuses it with a `WholeTableWriteException` before anything is read
 
 #### Scenario: Deletes and reads are unvalidated
 
@@ -988,11 +1200,11 @@ the whole batch has been checked.
 - **When** `DeleteAsync(data)`, `DeleteAsync(filter)`, `ReadAsync(...)` or `CountAsync(...)` is awaited
 - **Then** each is forwarded to the inner store unchanged
 
-#### Scenario: Batch input is enumerated twice
+#### Scenario: Batch input is enumerated once
 
 - **Given** a lazily-generated `IEnumerable<T>` passed to `CreateAsync`
 - **When** the call is awaited
-- **Then** the sequence is enumerated once for validation and again by the inner store, so a single-pass or side-effecting generator is re-run
+- **Then** the sequence is materialised once; the entities validated are the entities the inner store writes. A single-pass generator used to be validated and then written empty
 
 ### Requirement: No synchronous bulk validating wrapper exists
 

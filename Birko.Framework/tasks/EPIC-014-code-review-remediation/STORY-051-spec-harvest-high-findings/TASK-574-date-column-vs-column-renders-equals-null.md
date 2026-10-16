@@ -35,7 +35,7 @@ reproducing.
 - [x] `x.A.Date == x.B.Date` (and `!=`, `<`, `>`) translates to a comparison of both columns' dates on every SQL provider, or is refused with `NotSupportedException` — never a silent match-nothing
 - [x] Plain `x.A == x.B` checked for the same overwrite; fixed here if it shares the cause, spawned otherwise
 - [x] A regression test fails on the current code and passes with the fix
-- [ ] `/specs regen` of the area, with the spec diff reviewed, is the fix's evidence (EPIC-014's standing constraint)
+- [x] `/specs regen` of the area, with the spec diff reviewed, is the fix's evidence (EPIC-014's standing constraint) — done 2026-10-16 (batched regen of 17 areas, diffs reviewed and confirmed)
 
 ## Resolution (2026-10-15)
 

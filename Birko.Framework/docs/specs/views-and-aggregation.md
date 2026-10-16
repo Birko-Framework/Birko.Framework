@@ -1,7 +1,7 @@
 ---
 area: views-and-aggregation
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
   - ../Birko.Data.CosmosDB.Views/CosmosViewStore.cs
@@ -78,10 +78,11 @@ Alongside the view layer sits a lower-level, store-facing aggregation contract:
 and the shared `OrderBy<T>`, `OrderByHelper` and `TimeIntervalParser` utilities that both
 layers depend on.
 
-The backends do **not** behave uniformly. Persistent-view support, join support,
-group-by-only handling, and the meaning of `CountAsync` on an aggregate view all differ per
-backend; those divergences are recorded explicitly below because they are the operational
-reality of this capability.
+The backends do **not** behave uniformly. Persistent-view support, on-the-fly support and
+join support all differ per backend; where a backend cannot honour part of a definition it
+refuses it with an exception rather than answering a differently-shaped result. Those
+divergences are recorded explicitly below because they are the operational reality of this
+capability.
 
 ## Regen provenance
 
@@ -161,7 +162,10 @@ The system SHALL reject an invalid definition at `Build()` time with an
 (2) `QueryMode` is `Persistent` or `Auto` while `Name` is null, empty or whitespace;
 (3) aggregates are present, `GroupBy` is empty and at least one field is selected;
 (4) aggregates are present, `GroupBy` is non-empty and some selected field's
-`{SourceType.FullName}.{SourceProperty}` is absent from the set of grouped keys.
+`{SourceType.FullName}.{SourceProperty}` is absent from the set of grouped keys;
+(5) some `GroupBy` clause has no field selector with the same `SourceType` and
+`SourceProperty` — with or without aggregates — so every row carries the key it was grouped
+by.
 
 #### Scenario: Missing primary source
 
@@ -193,11 +197,11 @@ The system SHALL reject an invalid definition at `Build()` time with an
 - **When** `Build()` runs
 - **Then** the definition builds successfully with `HasAggregates == true`, `HasGroupBy == false` and zero fields (a global aggregate)
 
-#### Scenario: A GroupBy field that is not Selected passes builder validation
+#### Scenario: A GroupBy field that is not Selected is rejected
 
 - **Given** a builder with `From<Order>()`, `GroupBy<Order>(o => o.Status)`, no `Select` calls, and a `Sum`
 - **When** `Build()` runs
-- **Then** the definition builds successfully — the builder only checks selected-field-implies-grouped, never grouped-field-implies-selected (the SQL backend rejects this shape later, see the SQL translation requirement)
+- **Then** an `InvalidOperationException` is thrown: "GroupBy field 'Status' on 'Order' is not selected. Select() it into a view property, so each row carries the key it was grouped by." — the builder checks grouped-field-implies-selected as well as selected-field-implies-grouped, so one portable meaning replaces the per-backend answers this shape used to get (the SQL translator's own check remains for a definition constructed directly)
 
 ### Requirement: Aggregate target-property validation
 
@@ -272,7 +276,12 @@ The system SHALL interpret `ViewQueryMode` as: `OnTheFly` — generate the query
 against the source data; `Persistent` — query a pre-created persistent artifact; `Auto` — try
 the persistent artifact and fall back to on-the-fly. Every `IViewManager.EnsureAsync`
 implementation except Cosmos DB's SHALL return without doing work when the mode is
-`OnTheFly`; `CosmosViewManager.EnsureAsync` SHALL be a no-op for every mode.
+`OnTheFly`, and `ElasticSearchViewManager.EnsureAsync` SHALL also return without work for
+`Auto` — only a `Persistent` view has an index of its own there. `CosmosViewManager.EnsureAsync`
+SHALL never create anything: it SHALL throw `ArgumentNullException` for a null definition,
+`NotSupportedException` for a `Persistent` definition or one with joins, and otherwise return
+`Task.CompletedTask`. RavenDB SHALL have no on-the-fly form (see *RavenDB view store
+execution*).
 
 #### Scenario: OnTheFly Ensure is a no-op on SQL, MongoDB, ElasticSearch and RavenDB
 
@@ -282,46 +291,67 @@ implementation except Cosmos DB's SHALL return without doing work when the mode 
 
 #### Scenario: Cosmos Ensure never creates anything
 
-- **Given** a definition with `QueryMode == ViewQueryMode.Persistent` and a name
+- **Given** a definition with `QueryMode == ViewQueryMode.OnTheFly` or `Auto` and no joins
 - **When** `CosmosViewManager.EnsureAsync` is called
 - **Then** it returns `Task.CompletedTask` without contacting the database — Cosmos DB has no native view support and its views are always computed on-the-fly
+
+#### Scenario: Cosmos Ensure refuses a Persistent definition
+
+- **Given** a definition with `QueryMode == ViewQueryMode.Persistent` and a name
+- **When** `CosmosViewManager.EnsureAsync` is called
+- **Then** a `NotSupportedException` is thrown reading that Cosmos DB has no stored views and the view cannot be Persistent — ensuring it used to report success and create nothing
 
 #### Scenario: MongoDB Auto mode falls back when the view is absent
 
 - **Given** a `MongoViewStore` whose definition is `Auto` with name `"order_summary"` and no such view exists
 - **When** `QueryAsync` runs
-- **Then** the store checks the collection-name listing, finds nothing, and executes the base pipeline plus the query stages against the primary source collection instead of returning an empty result
+- **Then** the store checks the collection-name listing for a collection named `"order_summary"` of `type: "view"`, finds nothing, and executes the base pipeline plus the query stages against the primary source collection instead of returning an empty result
 
-#### Scenario: MongoDB Persistent mode uses the view unconditionally
+#### Scenario: MongoDB Persistent mode uses the view, and a missing view is an error
 
 - **Given** a `MongoViewStore` whose definition is `Persistent` with a name
 - **When** `QueryAsync` runs
-- **Then** the query stages are aggregated directly against the named view collection with **no** existence check and **without** prepending the base pipeline
+- **Then** the same view-only existence check runs; when the view exists the query stages are aggregated directly against it **without** prepending the base pipeline, and when it does not an `InvalidOperationException` reads "Persistent view '<name>' does not exist. Create it with IViewManager.EnsureAsync, or use Auto mode." — aggregating over a missing view used to answer an empty cursor, indistinguishable from an empty view
 
-### Requirement: Persistent-view creation is not an update on SQL and MongoDB
+### Requirement: Persistent-view Ensure creates or replaces on SQL, MongoDB and RavenDB
 
-The system SHALL, on `SqlViewManager` and `MongoViewManager`, create the persistent artifact
-only when it does not already exist and leave an existing artifact untouched even if the
-`ViewDefinition` has since changed; on `RavenViewManager` it SHALL always send the translated
-index definition, which replaces any existing index of that name.
+The system SHALL, on `SqlViewManager`, drop an existing view of that name and then create it
+from the current definition (`DropView`/`DropViewAsync` followed by `CreateView`/`CreateViewAsync`),
+and create it outright when absent; on `MongoViewManager` it SHALL run a `collMod` command
+carrying the definition's source collection (`viewOn`) and translated `pipeline` when a view of
+that name exists, and the `create` command otherwise; on `RavenViewManager` it SHALL always send
+the translated index definition, which replaces any existing index of that name. A changed
+`ViewDefinition` therefore reaches the persistent artifact on every Ensure.
 
-#### Scenario: SQL Ensure skips an existing view
+#### Scenario: SQL Ensure replaces an existing view
 
 - **Given** a persistent SQL view named `"order_summary"` that already exists but was created from an older definition
 - **When** `SqlViewManager.EnsureAsync` is called with the new definition
-- **Then** `ViewExists`/`ViewExistsAsync` returns true and no `CREATE VIEW` is issued — the stale view remains
+- **Then** `ViewExists`/`ViewExistsAsync` returns true, the view is dropped and `CREATE VIEW` is issued from the new definition — queries read the new columns rather than the stale view
 
-#### Scenario: MongoDB Ensure skips an existing view
+#### Scenario: MongoDB Ensure modifies an existing view
 
-- **Given** a MongoDB view named `"order_summary"` already listed among the database's collections
+- **Given** a MongoDB view named `"order_summary"` already listed among the database's collections with `type: "view"`
 - **When** `MongoViewManager.EnsureAsync` is called
-- **Then** it returns after the existence check without running the `create`/`viewOn`/`pipeline` command
+- **Then** a `collMod` command with `viewOn` set to the primary source collection and the newly translated `pipeline` is run, and the `create` command is not
 
 #### Scenario: RavenDB Ensure replaces the index
 
 - **Given** a RavenDB static index named `"order_summary"` built from an older definition
 - **When** `RavenViewManager.EnsureAsync` is called with a new definition
 - **Then** a `PutIndexesOperation` carrying the newly translated `Maps` (and `Reduce`, when the definition has aggregates) is sent, overwriting the existing index
+
+#### Scenario: A RavenDB map-only index stores its view fields
+
+- **Given** a definition without aggregates
+- **When** `RavenViewManager.EnsureAsync` builds the index definition
+- **Then** no `Reduce` is set and every field selector's `ViewProperty` gets `IndexFieldOptions { Storage = FieldStorage.Yes }`, so the store can project the view from the index — a map-only index otherwise answers with the source documents, and a renamed or joined field never reached the view
+
+#### Scenario: RavenDB collections are named by the store's convention
+
+- **Given** a `RavenViewManager` over a document store
+- **When** the index is translated
+- **Then** `RavenViewTranslator.TranslateToMapReduce(definition, documentStore.Conventions.GetCollectionName)` is used, so the map reads `docs.Orders` for `Order` under Raven's default convention rather than `docs.Order`, a collection no Birko-stored document is in
 
 ### Requirement: View manager name validation and idempotent teardown
 
@@ -332,8 +362,12 @@ no-ops returning `Task.CompletedTask` without inspecting it. The system
 SHALL throw `InvalidOperationException` with the message "View name is required for
 persistent views." from `EnsureAsync` when a non-`OnTheFly` definition resolves to no name
 (SQL, MongoDB, ElasticSearch, RavenDB). `DropAsync` SHALL treat a missing artifact as
-success on ElasticSearch (HTTP 404) and Cosmos DB (`CosmosException` with
-`HttpStatusCode.NotFound`).
+success on ElasticSearch (HTTP 404) and MongoDB (no collection of that name is listed). On
+MongoDB, `DropAsync` and `ExistsAsync` SHALL mean **views only**: `ExistsAsync` filters the
+listing by `type: "view"`, and `DropAsync` of an ordinary collection SHALL throw
+`InvalidOperationException` rather than drop it. On Cosmos DB, where no container is ever a
+view, `DropAsync` SHALL do nothing and `ExistsAsync` SHALL always return `false`, neither
+contacting the database once the name is validated.
 
 #### Scenario: Blank view name is rejected
 
@@ -347,17 +381,17 @@ success on ElasticSearch (HTTP 404) and Cosmos DB (`CosmosException` with
 - **When** `ElasticSearchViewManager.DropAsync("order_summary")` is called and the delete response carries `ServerError.Status == 404`
 - **Then** the method returns normally instead of throwing
 
-#### Scenario: Dropping a non-existent Cosmos container succeeds
+#### Scenario: Dropping a Cosmos view touches nothing
 
-- **Given** no container named `"order_summary"` exists
-- **When** `CosmosViewManager.DropAsync("order_summary")` is called and `DeleteContainerAsync` throws `CosmosException` with `HttpStatusCode.NotFound`
-- **Then** the exception is swallowed and the method returns normally
+- **Given** any valid name, whether or not a container of that name exists
+- **When** `CosmosViewManager.DropAsync("order_summary")` is called
+- **Then** the method returns normally without calling `DeleteContainerAsync`, and `ExistsAsync("order_summary")` returns `false`
 
-#### Scenario: Drop deletes a same-named real collection or container
+#### Scenario: Drop never deletes a same-named real collection or container
 
 - **Given** a MongoDB collection (not a view) named `"Order"`, or a Cosmos container named `"Order"`
 - **When** `MongoViewManager.DropAsync("Order")` or `CosmosViewManager.DropAsync("Order")` is called
-- **Then** the real collection / container and its documents are deleted — neither implementation verifies that the target is a view
+- **Then** MongoDB throws `InvalidOperationException` ("'Order' is a collection, not a view; DropAsync drops only views.") and Cosmos DB does nothing — the data collection / container and its documents survive. The name derived for an unnamed view is the source collection's, so both used to delete data
 
 ### Requirement: Refresh is a no-op on every backend except ElasticSearch
 
@@ -391,26 +425,28 @@ no create, update or delete operation on a view store. A `null` filter SHALL mea
 
 - **Given** any `IViewStore<TView>` implementation
 - **When** `QueryAsync()` is called with all arguments defaulted
-- **Then** no predicate is applied: SQL passes `conditions == null`, MongoDB adds no `$match` stage, ElasticSearch uses `MatchAllQuery`, RavenDB and Cosmos DB omit the `Where` call
+- **Then** no predicate is applied: SQL passes `conditions == null`, MongoDB adds no `$match` stage, ElasticSearch uses `MatchAllQuery`, RavenDB omits the `Where` call and Cosmos DB appends no `WHERE` clause
 
 #### Scenario: QueryFirstAsync on an empty result returns null
 
 - **Given** a view whose filter matches nothing
 - **When** `QueryFirstAsync(filter)` is called
-- **Then** `null` is returned (SQL `FirstOrDefault`, MongoDB `results.FirstOrDefault()` guard, ElasticSearch `results.FirstOrDefault()`, Raven `FirstOrDefaultAsync`, Cosmos `response.FirstOrDefault()`)
+- **Then** `null` is returned (SQL `FirstOrDefault`, MongoDB `results.FirstOrDefault()` guard, ElasticSearch `results.FirstOrDefault()`, Raven `FirstOrDefaultAsync`, Cosmos `FirstOrDefault()` over the collected rows)
 
 ### Requirement: SQL view translation
 
 The system SHALL translate a `ViewDefinition` into SQL `View` metadata by resolving each
-referenced source type through `DataBase.LoadTable`, and SHALL fail fast with an exception
+referenced source type through `DataBase.TryLoadTable`, and SHALL fail fast with an exception
 rather than silently dropping a column or a join, specifically: `ArgumentNullException` for a
-null definition; `NotSupportedException` when a `GroupBy` field is not also `Select`ed;
+null definition; `NotSupportedException` when a `GroupBy` field is not also `Select`ed, or
+when a join's type is not `Inner`, `LeftOuter` or `Cross` (an unknown type used to map to
+`Cross`, whose condition is not rendered);
 `InvalidOperationException` for an unmapped source type, an unmapped source property, a
 missing public instance view property, or a `Count(*)` whose base table has no fields.
 
 #### Scenario: GroupBy without a matching Select is rejected
 
-- **Given** a definition grouping by `Order.Status` where `Status` is not in `Fields`
+- **Given** a definition, constructed directly rather than through the builder (which now refuses this shape first), grouping by `Order.Status` where `Status` is not in `Fields`
 - **When** `SqlViewTranslator.Translate` runs
 - **Then** a `NotSupportedException` explains that the SQL view backend derives `GROUP BY` from the projected non-aggregate fields, so the group-by field must also be selected
 
@@ -467,7 +503,10 @@ missing public instance view property, or a `Count(*)` whose base table has no f
 The system SHALL execute SQL view queries through the connector, preferring genuine async
 I/O — `SelectAsync` / `SelectCountAsync` on an `AbstractAsyncConnector`, threading the
 `CancellationToken` — and falling back to synchronous `Select` / `SelectCount` otherwise;
-SHALL parse the filter with `DataBase.ParseConditionExpression`; SHALL translate
+SHALL parse the filter with `DataBase.ParseConditionExpression` inside a per-call
+`DataBase.ScopeFieldResolver` scope that resolves `TView`'s properties against this store's own
+view fields, refusing a filter on an aggregate view property with `NotSupportedException`
+(it would need `HAVING`); SHALL translate
 `OrderBy<TView>` to a `Dictionary<string,bool>` (view property name → descending), returning
 `null` when there are no sort fields — the connector resolves those keys against the view's
 fields, so the store passes them through unvalidated on purpose (see *View sort keys are
@@ -499,11 +538,17 @@ before each operation; and SHALL materialize each row by reading reader columns
 - **When** the async path runs
 - **Then** the item is skipped by the `item is TView` test; on the synchronous path the same object causes `.Cast<TView>()` to throw `InvalidCastException`
 
-#### Scenario: A non-null filter is resolved against TView's own SQL mapping, not the view's fields
+#### Scenario: A non-null filter is resolved against the view's own fields
 
 - **Given** a `SqlViewStore<OrderSummary>` built from a portable definition and the filter `v => v.Status == 3`
 - **When** `DataBase.ParseConditionExpression` resolves `Status` against the lambda's parameter type `OrderSummary`
-- **Then** resolution goes through `LoadTable(typeof(OrderSummary))` and then the `ResolveFieldSelectName` view hook, both of which require SQL mapping attributes on `TView`; the definition's `FieldSelector` list is never consulted, so for a plain portable view POCO the condition is left with no name and the query fails with `InvalidOperationException("Condition name cannot be null or empty")`
+- **Then** the scoped resolver — consulted ahead of `TryLoadTable(typeof(OrderSummary))` and the process-wide `ResolveFieldSelectName` hook — finds the view field whose `Property.Name` is `Status` and answers `field.GetSelectName(withTableName)`, so a plain portable view POCO with no SQL mapping attributes is filterable. The scope is an `AsyncLocal` disposed when parsing ends (the conditions are materialised inside it), so nothing is registered process-wide. A property no view field carries falls through to the default resolution. Previously every filtered query on a portable view failed with `InvalidOperationException("Condition name cannot be null or empty")`
+
+#### Scenario: A filter on an aggregate view property is refused
+
+- **Given** a view whose `Sum` of `Order.Total` targets `TView.Total`, and the filter `v => v.Total > 1000m`
+- **When** the filter is parsed
+- **Then** a `NotSupportedException` reads "A filter on aggregate view property '<TView>.Total' would need HAVING, which view filters do not emit." — the condition is never rendered as a `WHERE` on the pre-aggregation rows
 
 #### Scenario: Order-by keys are resolved against the view's fields, per path
 
@@ -625,7 +670,8 @@ disagree).
 
 The system SHALL translate a `ViewDefinition` into an ordered list of BSON aggregation
 stages: one `$lookup` per join into the field `_joined_{RightTypeName}` followed by an
-`$unwind` that sets `preserveNullAndEmptyArrays: true` only for `JoinType.LeftOuter`; a
+`$unwind` that sets `preserveNullAndEmptyArrays: true` only for `JoinType.LeftOuter`, a
+`JoinType.Cross` join being refused with `NotSupportedException`; a
 `$group` stage when aggregates are present; and a final `$project` that always sets
 `_id: 0`, maps each field selector to its view property, and includes each aggregate view
 property as `1`. The `$project` stage SHALL be omitted entirely when it would contain nothing
@@ -640,11 +686,11 @@ translated pipeline — it is added at query time. A null definition SHALL raise
 - **When** the pipeline is translated
 - **Then** stages are `$lookup` (`from: "Customer"`, `as: "_joined_Customer"`) followed by `$unwind { path: "$_joined_Customer" }` with no `preserveNullAndEmptyArrays` key
 
-#### Scenario: Cross join is translated identically to Inner
+#### Scenario: Cross join is refused
 
 - **Given** a join with `JoinType.Cross`
 - **When** the pipeline is translated
-- **Then** the `$unwind` omits `preserveNullAndEmptyArrays` — the Cross join type is indistinguishable from Inner in the MongoDB translation
+- **Then** a `NotSupportedException` explains that a Cross join cannot be a MongoDB view because `$lookup` joins on keys, and to use Inner or LeftOuter — it used to be rendered as an equality join, a different row set from SQL's
 
 #### Scenario: Joined-source field paths are prefixed
 
@@ -725,20 +771,39 @@ SHALL append `$count: "count"` and return `0` when the pipeline yields no docume
 ### Requirement: RavenDB map/reduce translation
 
 The system SHALL translate a `ViewDefinition` into a `(map, reduce)` string pair where `map`
-is always produced and `reduce` is `null` unless the definition has aggregates. The map SHALL
-read `from entity in docs.{PrimarySource.Name}`, emit one
-`let joined[N] = LoadDocument<{RightType.Name}>(entity.{LeftProperty})` per join (aliases
-`joined`, `joined2`, `joined3`, …), and select each field as
-`{ViewProperty} = {alias}.{SourceProperty}`. For aggregates the map SHALL emit `1` for
+is always produced and `reduce` is `null` unless the definition has aggregates. Collection names
+SHALL come from a supplied `Func<Type, string>` (the document store's
+`Conventions.GetCollectionName`), or from `DocumentConventions.DefaultGetCollectionName` when
+none is given (the one-argument overload), and SHALL be refused with `NotSupportedException`
+unless they are identifiers (a letter or `_` followed by letters, digits or `_`). The map SHALL
+read `from entity in docs.{collection(PrimarySource)}`, emit one
+`let joined[N] = LoadDocument("{right}/" + {leftAlias}.{LeftProperty}, "{right}")` per join
+(aliases `joined`, `joined2`, `joined3`, …; `{right}` the right type's collection, `{leftAlias}`
+the alias of the join's `LeftType`), followed by `where joined[N] != null` for an `Inner` join,
+and select each field as `{ViewProperty} = {alias}.{SourceProperty}`. A join whose
+`RightProperty` is not `Guid`, or whose type is neither `Inner` nor `LeftOuter`, SHALL be
+refused with `NotSupportedException`. For aggregates the map SHALL emit `1` for
 `Count`, the raw source value for `Sum`/`Min`/`Max`, and for `Avg` both the raw value and a
 `{ViewProperty}_Sum` plus a `{ViewProperty}_Count = 1` helper. A null definition SHALL raise
 `ArgumentNullException`.
 
-#### Scenario: Join right-hand key and join type are ignored
+#### Scenario: A join loads the related document by its id
 
-- **Given** a `LeftJoin<Order, Customer, Guid>(o => o.CustomerGuid, c => c.Guid)`
+- **Given** a `LeftJoin<Order, Customer, Guid>(o => o.CustomerGuid, c => c.Guid)` under Raven's default collection convention
 - **When** the map is built
-- **Then** it emits `let joined = LoadDocument<Customer>(entity.CustomerGuid)` — `RightProperty` (`Guid`) and `JoinType` (`LeftOuter`) never appear; the translation assumes the left property holds a document id
+- **Then** it emits `from entity in docs.Orders` and `let joined = LoadDocument("Customers/" + entity.CustomerGuid, "Customers")` with no `where` line — a document's id is `{collection}/{guid}`. The old `LoadDocument<Customer>(entity.CustomerGuid)` form did not compile on the server, which knows no CLR model types
+
+#### Scenario: An Inner join drops parents that loaded nothing
+
+- **Given** an `Inner` join from `Order` to `Customer`
+- **When** the map is built
+- **Then** the `let joined = …` line is followed by `where joined != null`
+
+#### Scenario: A join on anything but the right side's identity is refused
+
+- **Given** a join whose `RightProperty` is `Code`, or whose `JoinType` is `Cross`
+- **When** the map is built
+- **Then** a `NotSupportedException` is thrown — an index loads a related document by id only, and Raven has no cross join
 
 #### Scenario: A source type not found among join right-hand types falls back to entity
 
@@ -750,7 +815,7 @@ read `from entity in docs.{PrimarySource.Name}`, emit one
 
 - **Given** an `Avg` aggregate on `Order.Total` targeting `TView.AvgTotal`
 - **When** map and reduce are built
-- **Then** the map emits `AvgTotal`, `AvgTotal_Sum` and `AvgTotal_Count = 1`, and the reduce emits `AvgTotal_Sum = g.Sum(x => x.AvgTotal_Sum)`, `AvgTotal_Count = g.Sum(x => x.AvgTotal_Count)` and `AvgTotal = g.Sum(x => x.AvgTotal_Sum) / g.Sum(x => x.AvgTotal_Count)` so incremental re-reduce cannot double-average
+- **Then** the map emits `AvgTotal`, `AvgTotal_Sum` and `AvgTotal_Count = 1`, and the reduce emits `AvgTotal_Sum = g.Sum(x => x.AvgTotal_Sum)`, `AvgTotal_Count = g.Sum(x => x.AvgTotal_Count)` and `AvgTotal = (double)g.Sum(x => x.AvgTotal_Sum) / (double)g.Sum(x => x.AvgTotal_Count)` so incremental re-reduce cannot double-average, and an integer column does not average by integer division (10 and 15 to 12)
 
 #### Scenario: Global aggregate groups by a constant
 
@@ -766,24 +831,40 @@ read `from entity in docs.{PrimarySource.Name}`, emit one
 
 #### Scenario: A GroupBy field with no matching selector falls back to its source name
 
-- **Given** `GroupBy<Order>(o => o.Status)` where no field selector maps `Order.Status`
+- **Given** `GroupBy<Order>(o => o.Status)` where no field selector maps `Order.Status` (only reachable when constructed outside the builder, which now refuses an unselected GroupBy)
 - **When** `FindViewPropertyForGroupBy` resolves it
 - **Then** the raw property name `"Status"` is used as the reduce key, which must coincidentally match a name the map emitted
 
 ### Requirement: RavenDB view store execution
 
-The system SHALL choose the Raven query source from the mode: `OnTheFly` — a dynamic
-`session.Query<TView>()`; `Auto` — the static index when a name is present, else a dynamic
-query; `Persistent` — the static index by name, throwing `InvalidOperationException` when no
-name is set. It SHALL apply the filter with `Where`, ordering with `OrderByHelper.ApplyTo`,
-then `Skip`/`Take`, and SHALL throw `InvalidOperationException` if the resulting queryable is
-not an `IRavenQueryable<TView>`. Each call SHALL open and dispose its own async session.
+The system SHALL choose the Raven query source from the mode: `OnTheFly` — refused with
+`NotSupportedException`, a RavenDB view being a static index; `Auto` — the static index by
+name, throwing `InvalidOperationException` when no name is set or a `GetIndexOperation` for it
+answers `null`; `Persistent` — the static index by name, throwing `InvalidOperationException`
+when no name is set. It SHALL apply the filter with `Where`, ordering with
+`OrderByHelper.ApplyTo`, then `Skip`/`Take`, and SHALL throw `InvalidOperationException` if the
+resulting queryable is not an `IRavenQueryable<TView>`. For a definition without aggregates,
+`QueryAsync` and `QueryFirstAsync` SHALL project the rows with `ProjectInto<TView>()` from the
+index's stored fields; a map-reduce index already answers with its reduce results.
+Each call SHALL open and dispose its own async session.
 
-#### Scenario: OnTheFly ignores the view definition entirely
+#### Scenario: OnTheFly is refused
 
-- **Given** an `OnTheFly` definition with joins, aggregates and renamed field selectors
+- **Given** an `OnTheFly` definition
+- **When** `QueryAsync`, `QueryFirstAsync` or `CountAsync` runs
+- **Then** a `NotSupportedException` explains that a RavenDB view is a static index and OnTheFly cannot evaluate it, directing the caller to Persistent or Auto and `IViewManager.EnsureAsync`. It used to issue `session.Query<TView>()`, a dynamic query over the collection named after the view type, which ignored the definition and answered empty
+
+#### Scenario: Auto reports a missing index
+
+- **Given** an `Auto` definition whose named index does not exist
 - **When** `QueryAsync` runs
-- **Then** `session.Query<TView>()` issues a plain dynamic query over the collection Raven infers from `TView`; `Fields`, `Joins`, `Aggregates` and `GroupBy` are never consulted and `RavenViewTranslator` is never invoked
+- **Then** an `InvalidOperationException` reads "View index '<name>' does not exist, and RavenDB has no on-the-fly view to fall back to. Create it with IViewManager.EnsureAsync." — before any query is issued
+
+#### Scenario: A map-only view is projected from its stored fields
+
+- **Given** a `Persistent` definition with a renamed field selector and no aggregates
+- **When** `QueryAsync` runs
+- **Then** the query is `ProjectInto<TView>()`-projected, so the renamed view property carries the index's stored value rather than the source document's (absent) property
 
 #### Scenario: Persistent without a name is rejected
 
@@ -814,22 +895,42 @@ and the manager SHALL both use this one resolver so they cannot target different
 
 - **Given** an `Auto` definition named `"order_summary"` over primary source `Order`
 - **When** the resolver runs
-- **Then** `"order"` is returned, and `ElasticSearchViewManager.EnsureAsync` for that definition therefore creates the `"order"` index (not `"order_summary"`) if it is missing
+- **Then** `"order"` is returned, and `ElasticSearchViewManager.EnsureAsync` for that definition returns without creating anything — it used to create the `"order"` source index with dynamic mapping, while `DropAsync("order_summary")` targeted another index
 
 ### Requirement: ElasticSearch view store execution
 
-The system SHALL route a view query with aggregates through an aggregation search
-(`Size = 0`) and a view query without aggregates through a document search with `_source`
-include-filtering, and SHALL throw `InvalidOperationException` including the NEST
+The system SHALL route a view query with aggregates **or** group-by clauses through an
+aggregation search (`Size = 0`) and any other view query through a document search with
+`_source` include-filtering, and SHALL throw `InvalidOperationException` including the NEST
 `DebugInformation` whenever a response is invalid or carries an `OriginalException`.
-Join clauses SHALL be ignored — only primary-source fields are queried. The effective page
-size SHALL be clamped so `From + Size` never exceeds 10000.
+A definition with joins SHALL be refused at construction with `NotSupportedException`.
+The documents read SHALL be of the primary source's type, or of `TView` for a `Persistent`
+view with a name (view-shaped documents in the view's own index). Every name a caller uses is a
+**view** property and SHALL be mapped to the stored field of the document property it selects —
+through `ElasticSearch.StoredFieldName` for `_source` includes and `ElasticSearch.ExactFieldName`
+for sorts, group keys and metric fields — and each returned document SHALL be projected into a
+`TView` field by field. The effective page size SHALL be clamped so `From + Size` never exceeds
+10000.
 
-#### Scenario: Aggregate query ignores ordering and offset
+A grouping view SHALL be read as a `CompositeAggregation("group_by")` with one
+`TermsCompositeAggregationSource` per group key named `k0`, `k1`, … (`MissingBucket = true`) and
+metrics named `m0`, `m1`, … by position, paged with `After` in pages of `GroupPageSize` (default
+1000) until a page is short or has no `AfterKey`; each key SHALL be written to the view property
+that selects it. Its rows SHALL then be ordered with `OrderByHelper.ApplyTo`, skipped by a
+positive `offset` and taken by `limit` in memory, and `CountAsync` SHALL count those rows. An
+aggregate with no group-by SHALL yield exactly one row.
+
+#### Scenario: Aggregate query reads every group, then orders and pages them
 
 - **Given** an aggregate view and `QueryAsync(filter, OrderBy<TView>.ByDescending(v => v.Total), limit: 50, offset: 100)`
 - **When** the query executes
-- **Then** the search request carries `Size = 0`, the filter query and the aggregations only; `orderBy` and `offset` are never passed to `ExecuteAggregateQueryAsync` and have no effect, while `limit` becomes the group-by bucket `size`
+- **Then** each search request carries `Size = 0`, the filter query and the composite aggregation only; every composite page is read, and the resulting rows are sorted by `Total` descending, the first 100 skipped and 50 returned. `orderBy` and `offset` used to have no effect, `limit` became the bucket `size`, and only the first page of groups was ever read
+
+#### Scenario: Two aggregates of one function over one field both survive
+
+- **Given** `Sum(Order.Total) → TView.A` and `Sum(Order.Total) → TView.B`
+- **When** the metric aggregations are built
+- **Then** they are named `m0` and `m1`, so neither replaces the other — the old `{fn}_{field}` name collided
 
 #### Scenario: Window clamping
 
@@ -845,33 +946,45 @@ size SHALL be clamped so `From + Size` never exceeds 10000.
 
 #### Scenario: An untranslatable filter is not widened to match-all
 
-- **Given** a filter expression `ElasticSearch.ParseFilterQuery` cannot translate
+- **Given** a filter expression `ElasticSearch.ParseExpression` cannot translate
 - **When** `BuildFilterQuery` runs
-- **Then** the helper throws rather than returning null, so the query never silently becomes a full-result set; a null filter, by contrast, deliberately yields `MatchAllQuery`
+- **Then** a `NotSupportedException` is thrown — a parser failure of any other type is wrapped in one, and a null translation raises one — so the query never silently becomes a full-result set; a null filter, by contrast, deliberately yields `MatchAllQuery`
 
-#### Scenario: Count ignores grouping and aggregation
+#### Scenario: A filter on a view property tests the stored field it selects
+
+- **Given** a field selector mapping `Order.StatusCode` → `TView.Status` and the filter `v => v.Status == 3`
+- **When** `BuildFilterQuery` runs
+- **Then** the lambda is rewritten onto the document type (`o => o.StatusCode == 3`, with a `Convert` where the types differ) and translated by the entity store's parser, so it tests the stored field of `StatusCode`; a view property that selects no field is used as-is when the document type has such a property, and refused with `NotSupportedException` otherwise. A filter on an aggregate view property is refused with `NotSupportedException` (it would need `HAVING`), and a filter reading the view row itself rather than a property of it is refused
+
+#### Scenario: A sort names the stored field
+
+- **Given** a non-grouping view and `OrderBy<TView>.By(v => v.Status)` where `Status` selects `Order.StatusCode`
+- **When** the search request is built
+- **Then** its `FieldSort.Field` is the exact (sortable) stored field of `StatusCode` — it used to be the CLR view-property name, which ElasticSearch rejected
+
+#### Scenario: Count of a grouping view counts its rows
 
 - **Given** an aggregate view grouping 1 000 000 orders into 12 status buckets
 - **When** `CountAsync()` is called
-- **Then** a `CountRequest` against the resolved index returns `1000000` — the raw document count, not the number of groups
+- **Then** every group is read and `12` is returned; an aggregate view with no group-by counts `1`, and only a non-grouping view sends a `CountRequest` for the raw document count
 
-#### Scenario: Grouped aggregate parsing prefers composite over terms
+#### Scenario: Group keys land in the view property that selects them
 
-- **Given** an aggregation response containing a `group_by` aggregation
-- **When** `ParseGroupedAggregateResponse` runs
-- **Then** the composite form is consumed if present; otherwise the terms form is used and only `GroupBy[0]` is populated from `bucket.Key`; if neither is present an empty sequence is returned
+- **Given** a view grouping by `Order.StatusCode` selected into `TView.Status`, and by `Order.Currency` selected into `TView.Currency`
+- **When** a composite page is read
+- **Then** each bucket's `k0` value is written to `Status` and `k1` to `Currency` — a grouped view used to look its keys up by source-property name and returned rows with no keys
 
 #### Scenario: Enum and Guid view properties round-trip
 
 - **Given** a view property of an enum type receiving the string `"Active"`, and a `Guid` property receiving a string GUID
 - **When** `ConvertValue` runs
-- **Then** `Enum.Parse(..., ignoreCase: true)` and `Guid.Parse` are used; a value whose shape does not match the target type causes `ConvertValue` to return `false` and the property is left at its default with no error
+- **Then** `Enum.Parse(..., ignoreCase: true)` and `Guid.Parse` are used; a value whose shape does not match the target type causes `ConvertValue` to return `false` (catching only `FormatException`, `InvalidCastException`, `OverflowException` and `ArgumentException`), and `SetPropertyValue` then throws `InvalidOperationException` naming the value, the view property and its type — the property is no longer left at its default with no error
 
-#### Scenario: Non-writable or null values are skipped
+#### Scenario: Null values are skipped, a missing property is refused
 
-- **Given** a get-only view property, or an aggregation that returned no value
+- **Given** an aggregation or key that returned no value, or a view property that does not exist or is get-only
 - **When** `SetPropertyValue` runs
-- **Then** it returns without assigning
+- **Then** a null value returns without assigning, while a missing or non-writable property throws `NotSupportedException`; a value already of the property's type is assigned as-is
 
 ### Requirement: ElasticSearch aggregation building and parsing
 
@@ -881,7 +994,11 @@ The system SHALL build one NEST metric aggregation per `AggregateField` keyed by
 source field or `"_id"` when no field is given, and SHALL throw `NotSupportedException` for
 any other function value. Grouping SHALL use a `TermsAggregation` named `"group_by"` for a
 single field and a `CompositeAggregation` named `"group_by"` for two or more, with a default
-bucket `size` of 10000. Extracted metric values SHALL always be surfaced as `double?`.
+bucket `size` of 10000 (`DefaultGroupBySize`). Extracted metric values SHALL always be surfaced as `double?`.
+When parsing a grouped response, the system SHALL throw `InvalidOperationException` for a
+terms aggregation under a query with more than one group-by field, and for a response that is
+not every group — a terms aggregation with `sum_other_doc_count > 0`, or a terms or composite
+aggregation holding `DefaultGroupBySize` buckets or more.
 
 #### Scenario: Count without a source field counts _id
 
@@ -913,33 +1030,63 @@ bucket `size` of 10000. Extracted metric values SHALL always be surfaced as `dou
 - **When** `StoreAggregationHelper.ParseToTime` runs
 - **Then** `TimeIntervalParser.Parse` yields `TimeSpan.Zero` and a `Nest.Time("1h")` is returned
 
-#### Scenario: Multi-field terms grouping loses its keys
+#### Scenario: Multi-field terms grouping is refused
 
 - **Given** a response parsed with `hasGroupBy == true`, more than one `GroupByFields` entry, and a `group_by` **terms** aggregation
 - **When** `ParseAggregateResponse` runs
-- **Then** the `if (query.GroupByFields.Count == 1)` guard skips key assignment and each row carries only metric values
+- **Then** an `InvalidOperationException` reports that a terms bucket carries one key while the query groups by several fields — each row used to carry only metric values, so the rows could not be told apart
 
-#### Scenario: Min/Max on a non-numeric field is surfaced as a double and then dropped
+#### Scenario: A truncated group-by response is refused
+
+- **Given** a `group_by` terms aggregation whose `sum_other_doc_count` is greater than zero, or a terms or composite aggregation returning `DefaultGroupBySize` (10000) buckets or more
+- **When** `ParseAggregateResponse` runs, at the top level or inside a time bucket
+- **Then** an `InvalidOperationException` names how many groups were returned and how many documents were left out (or that a full page may have a successor), and advises narrowing the filter or grouping by fewer distinct values — a high-cardinality group-by used to return a complete-looking subset
+
+#### Scenario: Min/Max on a date field is converted from epoch milliseconds
 
 - **Given** the aggregate `Min<Order,DateTime>(o => o.Created, v => v.Earliest)` — a shape `ViewDefinitionBuilder` permits — and a `min` aggregation whose value NEST reports as epoch milliseconds
 - **When** `ExtractMetricValues` returns it as a `double?` and `ElasticSearchViewStore.SetPropertyValue` assigns it
-- **Then** `Convert.ChangeType(double, typeof(DateTime))` throws inside `ConvertValue`, which returns `false`, and `TView.Earliest` is left at `default(DateTime)` with no error — the `double?` surface makes date and string `Min`/`Max` unreachable on this backend
+- **Then** `ConvertValue` reads the number as Unix milliseconds and `TView.Earliest` is the UTC instant (a `DateTimeOffset` target gets the offset form; a string is parsed invariantly assuming UTC; an unspecified-kind `DateTime` is taken as UTC). It used to be left at `default(DateTime)` with no error
 
 ### Requirement: Cosmos DB view store execution
 
-The system SHALL take the hand-built Cosmos SQL path in `QueryAsync` whenever the definition
-has aggregates **or** group-by clauses, and the LINQ path (`GetItemLinqQueryable`) otherwise;
-`QueryFirstAsync` and `CountAsync` SHALL branch on `HasAggregates` alone. The SQL path SHALL
-map view property names back to source field names in the `WHERE` clause, order aggregate
-results by their SELECT alias and group keys by `c.{source field}`, and SHALL emit
-`OFFSET {offset ?? 0} LIMIT {limit ?? int.MaxValue}` whenever either paging argument is
-present. Joins are not supported.
+The system SHALL take the hand-built grouping Cosmos SQL path in `QueryAsync`,
+`QueryFirstAsync` and `CountAsync` alike whenever the definition has aggregates **or** group-by
+clauses, and otherwise a hand-built projection —
+`SELECT c["{SourceProperty}"] AS {ViewProperty}, … FROM c` (or `SELECT VALUE c` when there are
+no field selectors) for queries, `SELECT VALUE COUNT(1) FROM c` (results summed) for a count.
+Both paths SHALL map view property names back to source field names in the `WHERE` clause,
+order aggregate results by their SELECT alias and other keys by `c.{source field}`, and SHALL
+emit `OFFSET {offset ?? 0} LIMIT {limit ?? int.MaxValue}` whenever either paging argument is
+present. A grouping view's `CountAsync` SHALL run the view's own grouping query and return the
+number of groups it yields. A definition with joins SHALL be refused at construction with
+`NotSupportedException`, and every call on a `Persistent` definition SHALL throw
+`NotSupportedException`, Cosmos DB having no stored views; `OnTheFly` and `Auto` are computed
+on the fly.
 
-#### Scenario: Group-by-only view is routed inconsistently
+#### Scenario: Group-by-only view is routed consistently
 
 - **Given** a definition with `HasGroupBy == true` and `HasAggregates == false`
-- **When** `QueryAsync` is called
-- **Then** the grouping SQL path is used; but calling `QueryFirstAsync` or `CountAsync` on the same definition takes the LINQ path and returns raw ungrouped documents / the raw document count
+- **When** `QueryAsync`, `QueryFirstAsync` or `CountAsync` is called
+- **Then** each takes the grouping SQL path: `QueryFirstAsync` answers the first group and `CountAsync` the number of groups — they used to take the LINQ path and return a raw ungrouped document / the raw document count
+
+#### Scenario: A plain view is projected under its view names
+
+- **Given** a definition without aggregates or group-by, selecting `Order.StatusCode` into `TView.Status`
+- **When** `QueryAsync(v => v.Status == 3)` runs
+- **Then** the statement is `SELECT c["StatusCode"] AS Status FROM c WHERE c.StatusCode = @p0` with `3` bound — the old LINQ path deserialised raw documents into the view, so a renamed field stayed default and a filter or sort on a view name tested a field that does not exist
+
+#### Scenario: A Persistent definition or a join is refused
+
+- **Given** a `Persistent` definition, or one that joins `Customer`
+- **When** a `CosmosViewStore` is constructed over the join, or any query or count is called on the Persistent one
+- **Then** a `NotSupportedException` is thrown — a join explains that a Cosmos DB view reads one container and to denormalise the joined fields; joins used to be accepted and never read, every joined property staying default
+
+#### Scenario: A filter on an aggregate view property is refused
+
+- **Given** an aggregate view whose `Sum` targets `TView.Total`, and the filter `v => v.Total > 100`
+- **When** the `WHERE` clause is built
+- **Then** `MapViewPropertyToSource` throws `NotSupportedException` — a `WHERE` runs on the documents before grouping, and an aggregate would need `HAVING`
 
 #### Scenario: WHERE clause is translated to source field names
 
@@ -1000,8 +1147,8 @@ API with no caller text in them.
 #### Scenario: The count path refuses it too
 
 - **Given** the same untranslatable filter
-- **When** `BuildCountAggregateSql` runs
-- **Then** it refuses identically; `BuildAggregateSql` and `BuildCountAggregateSql` each carry their own translate-then-append pair and both are guarded
+- **When** `CountAsync` runs, on a grouping or a plain view
+- **Then** it refuses identically; every statement — grouping, projection and count — appends its `WHERE` through the one `Where` helper, and a grouping view's count runs `BuildAggregateSql` itself
 
 #### Scenario: An operand that cannot be evaluated is reported as a translation failure
 
@@ -1073,6 +1220,8 @@ names), `Aggregates`, an optional `TimeBucketInterval` plus `TimeColumn`, an opt
 explicit `Alias`, or `"{function-lowercase}_{SourcePropertyName}"` when no alias is given.
 Server-side aggregation SHALL be offered as the *optional* interfaces
 `IAggregatableStore<T>.Aggregate` and `IAsyncAggregatableStore<T>.AggregateAsync`.
+`WithFilter(filter)` SHALL return a new query identical in every other member, with `filter`
+in place of `Filter` (what a scoping decorator uses to narrow a caller's query).
 
 #### Scenario: Default alias derivation
 
@@ -1092,15 +1241,25 @@ Server-side aggregation SHALL be offered as the *optional* interfaces
 - **When** its collections are inspected
 - **Then** `GroupByFields` and `Aggregates` are empty and every optional member is `null`
 
+#### Scenario: WithFilter replaces only the filter
+
+- **Given** a query with a filter, group-by fields, aggregates, a time bucket, ordering and paging
+- **When** `WithFilter(other)` is called
+- **Then** a new `AggregateQuery<T>` is returned whose `Filter` is `other` and whose every other member is the original's; the original is unchanged
+
 ### Requirement: LINQ aggregation fallback
 
 The system SHALL provide `AggregateHelper.LinqAggregateAsync` as the aggregation
 implementation for stores without native support: it SHALL compile and apply `Filter`, and
-when both `Aggregates` and `GroupByFields` are empty SHALL return one `AggregateResult` per
-source item holding every public instance property of that item. Otherwise it SHALL group by
-the composite key formed from the resolvable group-by properties (joined with `"|"` over
-`ToString()`, `null` rendering as the empty string), compute each aggregate per group, and
-apply ordering, offset and limit. Grouping SHALL NOT mutate the source entities.
+SHALL resolve every group-by field, aggregate source property and time column
+case-insensitively against `T`'s public instance properties, throwing `ArgumentException`
+("Aggregate {role} '{name}' is not a property of {T}.") for a name that resolves to nothing.
+When `Aggregates` and `GroupByFields` are both empty and no time bucketing is requested it
+SHALL return one `AggregateResult` per source item holding every public instance property of
+that item, ordered and paged like any other result. Otherwise it SHALL group by the key tuple of
+the group-by values (plus the bucket time when bucketing), compared element by element with
+`object.Equals`, compute each aggregate per group, and apply ordering, offset and limit.
+Grouping SHALL NOT mutate the source entities.
 `LinqAggregate` SHALL be a blocking wrapper (`GetAwaiter().GetResult()`) over the async form.
 
 #### Scenario: No aggregates and no grouping returns raw rows
@@ -1109,17 +1268,29 @@ apply ordering, offset and limit. Grouping SHALL NOT mutate the source entities.
 - **When** `LinqAggregateAsync` runs
 - **Then** three `AggregateResult`s are returned, each keyed by the entity's public property names
 
+#### Scenario: Raw rows are ordered and paged
+
+- **Given** five `Order` instances and a query with no aggregates or grouping but `OrderBy == { ["Number"] = false }`, `Offset == 1`, `Limit == 2`
+- **When** `LinqAggregateAsync` runs
+- **Then** two raw rows are returned — the second and third by `Number` — through the same `ApplyOrderingAndPaging` as aggregated rows; they used to be returned whole
+
+#### Scenario: Group keys are compared as tuples, not joined strings
+
+- **Given** orders grouped by two string fields with values `("a|b", "c")` and `("a", "b|c")`, or one field holding `null` on one order and `""` on another
+- **When** the helper groups them
+- **Then** each falls into its own group — the old `"|"`-joined key put both pairs (and `null` with `""`) in one group
+
 #### Scenario: Count uses the group size, other functions read the property
 
 - **Given** orders grouped by `Status` with aggregates `Count` and `Sum` of `Total`
 - **When** the helper runs
 - **Then** each row carries the group key under its group-by field name, `count_<x>` set to `group.Count()` as an `int`, and `sum_Total` computed by `AggregateMath`
 
-#### Scenario: An unresolvable aggregate source property is silently omitted
+#### Scenario: An unresolvable aggregate source property is refused
 
 - **Given** an `AggregateField(Sum, "Nonexistent")`
 - **When** the helper runs
-- **Then** the property lookup returns null, the aggregate is skipped with `continue`, and the result row simply has no `sum_Nonexistent` key
+- **Then** an `ArgumentException` reads "Aggregate aggregate source 'Nonexistent' is not a property of Order." — the aggregate used to be skipped and its column was simply absent
 
 #### Scenario: Time bucketing does not mutate the source entities
 
@@ -1127,17 +1298,17 @@ apply ordering, offset and limit. Grouping SHALL NOT mutate the source entities.
 - **When** the helper groups and builds rows
 - **Then** each row gains a `bucket_time` computed by `AggregateMath.TruncateToBucket`, and every source entity's `Created` value is unchanged
 
-#### Scenario: An unparseable or zero interval disables bucketing
+#### Scenario: An unparseable or zero interval is refused
 
-- **Given** `TimeBucketInterval == "fortnightly"` (or a `TimeColumn` that does not resolve to a property)
+- **Given** `TimeBucketInterval == "fortnightly"`, or a `TimeColumn` that does not resolve to a property, or only one of `TimeBucketInterval` / `TimeColumn` set
 - **When** the helper runs
-- **Then** `bucketTicks` is `0` (or `timeProp` is null), the `bucketTicks > 0` guard skips bucketing entirely, and no `bucket_time` key appears in any row — with no error raised
+- **Then** an `ArgumentException` is thrown — "Time bucket interval 'fortnightly' is not a positive interval.", the unresolved-property message, or "Time bucketing needs both TimeBucketInterval and TimeColumn." respectively. Bucketing used to be skipped silently with no `bucket_time` key in any row
 
-#### Scenario: An unresolvable group-by field shifts the remaining key labels
+#### Scenario: An unresolvable group-by field is refused
 
 - **Given** `GroupByFields == ["Bogus", "Status"]` where `Bogus` is not a property of `T`
-- **When** the helper builds the result rows
-- **Then** the null property is filtered out of `keyProperties`, leaving one entry, and the row-labelling loop writes the **`Status`** value under the key **`"Bogus"`** because it indexes `GroupByFields` by the position in the shortened `keyProperties` array
+- **When** the helper runs
+- **Then** an `ArgumentException` reads "Aggregate group-by field 'Bogus' is not a property of <T>." — the field used to be filtered out of the key array, so the `Status` value was written under the key `"Bogus"`
 
 #### Scenario: Ordering and paging are applied after aggregation
 
@@ -1149,17 +1320,25 @@ apply ordering, offset and limit. Grouping SHALL NOT mutate the source entities.
 
 The system SHALL compute aggregates over boxed values in `AggregateMath`:
 `TruncateToBucket` floors a `DateTime` to a multiple of `bucketTicks` preserving its `Kind`;
-`ComputeSum` and `ComputeAvg` return `null` for an empty value list and dispatch on the
-property's underlying (non-nullable) type across `decimal`, `double`, `float`, `int` and
-`long`, returning `null` for any other type; `ComputeAggregate` returns the supplied
+`ComputeSum` and `ComputeAvg` throw `NotSupportedException` for a non-numeric underlying
+(non-nullable) property type — checked before the values, so even for an empty list — return
+`null` for an empty value list, and dispatch across `decimal`, `double`, `float`, `int` and
+`long` natively, summing `short`, `byte`, `sbyte`, `ushort` and `uint` as `long` and `ulong` as
+`decimal`, and averaging every one of those integral types as `double`; `ComputeAggregate` returns the supplied
 `groupCount` for `Count` without inspecting the values, strips nulls before `Sum`/`Avg`, and
 returns `Min`/`Max` via the default comparer or `null` when nothing non-null remains.
 
-#### Scenario: Sum over an unsupported numeric type returns null
+#### Scenario: Sum over a small integral type is a long
 
-- **Given** a property of type `short` (or `byte`, `uint`, `ulong`) holding non-null values
+- **Given** a property of type `short` (or `byte`, `sbyte`, `ushort`, `uint`) holding non-null values, and one of type `ulong`
 - **When** `ComputeSum` runs
-- **Then** `null` is returned — no type branch matches, and no exception is raised
+- **Then** the `short`-like sums are returned as `long` and the `ulong` sum as `decimal` (which holds any `ulong` sum) — these used to answer `null` where SQL `SUM` and ES `sum` answer a number
+
+#### Scenario: Sum over a non-numeric type is refused
+
+- **Given** a property of type `string` (or `DateTime`)
+- **When** `ComputeSum` or `ComputeAvg` runs
+- **Then** a `NotSupportedException` reads "Sum is not defined for String." (or "Avg …"), never `null`
 
 #### Scenario: Count ignores the value list
 
@@ -1209,7 +1388,8 @@ missing, the value is `null`, or the conversion throws.
 The system SHALL build an `OrderBy<T>` only through the static factories
 `By`, `ByDescending` and `ByName` — the constructor is private — each starting a fresh
 single-field specification, with `ThenBy` / `ThenByDescending` appending further fields in
-call order. `ToDictionary()` SHALL project the fields to property-name → descending, so
+call order, and `ThenByName(propertyName, descending = false)` appending a field by name with
+no property check, as `ByName` starts one. `ToDictionary()` SHALL project the fields to property-name → descending, so
 repeated sorts on the same property collapse to the last one.
 
 #### Scenario: Multi-level sort preserves order
@@ -1223,6 +1403,12 @@ repeated sorts on the same property collapse to the last one.
 - **Given** `OrderBy<Order>.ByName("bucket_time", descending: true)`
 - **When** `Fields` is read
 - **Then** it contains a single `OrderByField("bucket_time", true)` with no compile-time or runtime property check
+
+#### Scenario: ThenByName appends a named key
+
+- **Given** `OrderBy<Order>.ByName("Created", descending: true).ThenByName("Guid")`
+- **When** `Fields` is read
+- **Then** it contains `OrderByField("Created", true)` followed by `OrderByField("Guid", false)`, and `ThenByName` returns the same instance
 
 #### Scenario: Duplicate property collapses in ToDictionary
 
@@ -1259,8 +1445,10 @@ empty `Fields` SHALL return the input sequence unchanged.
 
 ### Requirement: Time-interval parsing
 
-The system SHALL parse an interval string by first attempting `TimeSpan.TryParse`, then
-falling back to a two-token `"{number} {unit}"` form recognising second(s)/s,
+The system SHALL parse an interval string culture-invariantly, by first attempting
+`TimeSpan.TryParse` with `CultureInfo.InvariantCulture`, then falling back to a two-token
+`"{number} {unit}"` form (split on spaces with empty entries removed, the number parsed with
+`NumberStyles.Float` invariantly) recognising second(s)/s,
 minute(s)/m/min/mins, hour(s)/h/hr/hrs and day(s)/d case-insensitively, and SHALL return
 `TimeSpan.Zero` — never throw — for a null, whitespace, unrecognised-unit or otherwise
 unparseable input. `ToSqlInterval` SHALL render a parsed non-zero span as the largest whole
@@ -1272,6 +1460,12 @@ unchanged when parsing yields zero.
 - **Given** the inputs `"5 minutes"`, `"30 s"`, `"1 hr"` and `"00:15:00"`
 - **When** `TimeIntervalParser.Parse` runs
 - **Then** the results are 5 minutes, 30 seconds, 1 hour and 15 minutes
+
+#### Scenario: Parsing does not depend on the process culture
+
+- **Given** the current culture is `sk-SK` (comma decimal separator) and the inputs `"1.5 hours"` and `"2  minutes"` (two spaces)
+- **When** `Parse` runs
+- **Then** 90 minutes and 2 minutes are returned — the first used to come back as `TimeSpan.Zero` under a comma-decimal culture, so one query bucketed differently by process locale
 
 #### Scenario: A bare number is interpreted as days
 

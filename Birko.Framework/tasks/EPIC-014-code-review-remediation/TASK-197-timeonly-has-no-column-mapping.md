@@ -72,7 +72,7 @@ midnight is a real time that a range query would match.
       arm**, reached through `DataBase.LoadTable` rather than by constructing the field
 - [x] Finding id corrected: the working-tree code cited **SH-H038**, which is an unrelated
       ElasticSearch reindex finding (`b5d8eef` / `2bd177a`)
-- [ ] `/specs regen` for `schema-index-and-ddl` — **still outstanding**
+- [x] `/specs regen` for `schema-index-and-ddl` — done 2026-10-16 (batched regen of 17 areas, diffs reviewed and confirmed)
 
 ## Outcome
 

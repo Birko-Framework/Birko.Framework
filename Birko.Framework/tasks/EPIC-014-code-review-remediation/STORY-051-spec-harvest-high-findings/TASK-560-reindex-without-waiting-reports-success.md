@@ -43,7 +43,7 @@ The task is no longer a decision task: it is runnable by [[fix-next]].
       carries `response.Task` and says it is pending, and no refresh of a target still being written
 - [x] Tests pin the decision with a canned task-id response (the fake transport in
       `ReindexFailureReportingTests` already answers by path)
-- [ ] `/specs regen schema-index-and-ddl`
+- [x] `/specs regen schema-index-and-ddl` — done 2026-10-16 (batched regen of 17 areas, diffs reviewed and confirmed)
 
 ## Out of scope
 

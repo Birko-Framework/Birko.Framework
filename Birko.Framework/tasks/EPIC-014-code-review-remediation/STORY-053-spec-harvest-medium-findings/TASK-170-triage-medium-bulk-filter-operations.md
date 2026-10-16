@@ -66,7 +66,7 @@ what the code *does*, defects included, which is exactly what let it find them. 
       Findings sharing a root cause are fixed **together**, not one edit each
 - [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
-- [ ] Any behavioural fix is followed by `/specs regen bulk-filter-operations`, with the spec diff reviewed as the change's
+- [x] Any behavioural fix is followed by `/specs regen bulk-filter-operations`, with the spec diff reviewed as the change's — done 2026-10-16 (batched regen of 17 areas, diffs reviewed and confirmed)
       evidence
 - [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone

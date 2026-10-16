@@ -1,7 +1,7 @@
 ---
 area: repository-contract
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.Core/ViewModels/AbstractLogViewModel.cs
   - ../Birko.Data.Core/ViewModels/LogViewModel.cs
@@ -65,8 +65,8 @@ distinct families that share nothing but the `IBaseRepository`/`IAsyncBaseReposi
 interfaces and the `Birko.Data.Repositories` namespace.
 
 The **model repository** family (`Birko.Data.Repositories`) is a thin pass-through: a repository holds
-one store and forwards `Read`/`Create`/`Update`/`Delete`/`Count`/`Save` to it, adding only null-store
-tolerance and a `CreateInstance` fallback. The **ViewModel repository** family
+one store and forwards `Read`/`Create`/`Update`/`Delete`/`Count`/`Save` to it, adding only a
+refusal when no store is present and a `CreateInstance` fallback. The **ViewModel repository** family
 (`Birko.Data.ViewModel`, plus the SQL specialisation in `Birko.Data.SQL.ViewModel`) sits over the same
 stores but presents a *presentation* type (`TViewModel`) instead of the persisted `TModel`. It owns the
 ViewModel↔Model mapping, a SHA-256 hash-based change tracker (which does not gate writes), a
@@ -113,12 +113,17 @@ returning the saved entity's `Guid`.
   callback cannot be supplied through a plain model repository (only the ViewModel repositories accept
   a delegate, as `ProcessDataDelegate<TModel>`)
 
-### Requirement: Model repository delegates to its store and tolerates a null store
+### Requirement: Model repository delegates to its store and refuses to operate without one
 
 The system SHALL forward every `AbstractRepository<T>` / `AbstractAsyncRepository<T>` operation to the
-injected store, and when the store is `null` SHALL return a neutral value instead of throwing:
-`default`/`null` for reads, `Guid.Empty` for `Create` and `Save`, `0` for `Count`, and a silent no-op
-for `Update`, `Delete` and `Destroy`.
+injected store, and when the store is `null` SHALL throw the `InvalidOperationException` built by the
+protected `NoStore()` helper (message `{GetType().Name} has no store; construct it with one (or let its
+default constructor provide it).`) from every data operation — `Read`, `Create`, `Update`, `Delete`,
+`Count` and `Save` on the sync repository; `ReadAsync`, `CreateAsync`, `CountAsync` and `SaveAsync` on
+the async one — instead of answering `default`/`null`, `Guid.Empty` or `0`. `Destroy` / `DestroyAsync`
+SHALL remain a silent no-op (there is nothing to destroy) and `CreateInstance()` SHALL keep its
+`Activator` fallback. The async `UpdateAsync` and `DeleteAsync` SHALL still return silently when `Store`
+is `null`, unlike their sync twins.
 
 #### Scenario: Read forwards to the store
 
@@ -126,17 +131,25 @@ for `Update`, `Delete` and `Destroy`.
 - **When** `Read(guid)` is called
 - **Then** the call is forwarded as `Store.Read(guid)` and its result returned unchanged
 
-#### Scenario: Null store makes Create silently succeed with an empty Guid
+#### Scenario: Null store makes Create throw
 
 - **Given** an `AbstractRepository<T>` subclass constructed with `store: null`
 - **When** `Create(data)` is called
-- **Then** no exception is thrown and `Guid.Empty` is returned, with nothing persisted
+- **Then** an `InvalidOperationException` containing `has no store` is thrown, with nothing persisted,
+  rather than `Guid.Empty` being returned
 
-#### Scenario: Null store makes Count report zero
+#### Scenario: Null store makes Count throw
 
 - **Given** an `AbstractAsyncRepository<T>` subclass constructed with `store: null`
 - **When** `await CountAsync()` is awaited
-- **Then** it completes with `0`
+- **Then** it faults with `InvalidOperationException` rather than completing with `0`
+
+#### Scenario: Null store still makes the async Update and Delete silent no-ops
+
+- **Given** an `AbstractAsyncRepository<T>` subclass constructed with `store: null`
+- **When** `await UpdateAsync(data)` or `await DeleteAsync(data)` is awaited
+- **Then** the task completes successfully with nothing written, while the sync `Update(data)` /
+  `Delete(data)` on `AbstractRepository<T>` throw `InvalidOperationException` for the same condition
 
 #### Scenario: Null store makes Destroy a no-op
 
@@ -162,14 +175,15 @@ SHALL fall back to `Activator.CreateInstance<T>()` when `Store` is `null`.
 - **Then** `Activator.CreateInstance<T>()` is returned, which throws if `T` has no public parameterless
   constructor
 
-### Requirement: Bulk model repository requires a bulk store, and the sync and async families disagree on the failure mode
+### Requirement: Bulk model repository requires a bulk store, and both families throw when it is missing
 
 The system SHALL require the injected store to be an `IBulkStore<T>` / `IAsyncBulkStore<T>` for bulk
-operations, but SHALL react differently per family: `AbstractBulkRepository<T>` throws
-`InvalidOperationException("Store is not type of …")` on every bulk method when the store is not an
-`IBulkStore<T>`, whereas `AbstractAsyncBulkRepository<T>` resolves `BulkStore` as
-`Store as IAsyncBulkStore<T>` and, when that yields `null`, silently returns `Array.Empty<T>()` from
-the collection reads, `null` from `ReadFirstAsync`, and completes the bulk writes as no-ops.
+operations and SHALL throw `InvalidOperationException` from every bulk method in both families when it
+is not: `AbstractBulkRepository<T>` throws `InvalidOperationException("Store is not type of …")` when
+the store is not an `IBulkStore<T>` (a `null` store included), and `AbstractAsyncBulkRepository<T>`
+resolves `BulkStore` as `Store as IAsyncBulkStore<T>` and, when that yields `null`, throws from the
+collection reads, `ReadFirstAsync` and every bulk write — the `NoStore()` exception when `Store` itself
+is `null`, otherwise `InvalidOperationException("Store is not type of …IAsyncBulkStore…")`.
 
 #### Scenario: Sync bulk read against a non-bulk store throws
 
@@ -178,19 +192,26 @@ the collection reads, `null` from `ReadFirstAsync`, and completes the bulk write
 - **When** `Read()` is called
 - **Then** an `InvalidOperationException` whose message contains `Store is not type of` is thrown
 
-#### Scenario: Async bulk read against a non-bulk store silently returns nothing
+#### Scenario: Async bulk read against a non-bulk store throws
 
 - **Given** an `AbstractAsyncBulkRepository<T>` constructed with an `IAsyncStore<T>` that does not
   implement `IAsyncBulkStore<T>`
 - **When** `await ReadAsync()` is awaited
-- **Then** an empty `IEnumerable<T>` (`Array.Empty<T>()`) is returned and no exception is thrown
+- **Then** an `InvalidOperationException` whose message contains `Store is not type of` is thrown,
+  rather than an empty sequence being returned
 
-#### Scenario: Async bulk delete-by-filter against a non-bulk store silently discards the request
+#### Scenario: Async bulk delete-by-filter against a non-bulk store is refused
 
 - **Given** an `AbstractAsyncBulkRepository<T>` whose `BulkStore` resolves to `null`
 - **When** `await DeleteAsync(x => x.Guid == someGuid)` is awaited
-- **Then** the task completes successfully, nothing is deleted, and the caller receives no signal that
-  the delete was dropped
+- **Then** the task faults with `InvalidOperationException`, nothing is deleted, and a dropped delete
+  can no longer be mistaken for one that matched nothing
+
+#### Scenario: Async bulk repository with no store reports the missing store
+
+- **Given** an `AbstractAsyncBulkRepository<T>` constructed with `store: null`
+- **When** any bulk method is awaited
+- **Then** the `NoStore()` exception (`… has no store …`) is thrown rather than the not-a-bulk-store one
 
 #### Scenario: Sync bulk filter-update against a non-bulk store throws before touching data
 
@@ -296,7 +317,9 @@ underlying store, where `RavenDBStore`, `InfluxDBStore` and the SQL stores do im
 The system SHALL maintain a static two-level cache `key → (repository type → instance)` guarded by a
 single lock, SHALL construct a missing repository via `Activator.CreateInstance(type, store)`, and
 SHALL return the cached instance on every subsequent call for the same key and type — performing both
-the miss-check and the read inside the lock.
+the miss-check and the read inside the lock. Where the locator was handed a store (the store-keyed and
+factory overloads), it SHALL record, by reference, the store each cached repository was built around,
+and the store-keyed overload SHALL refuse a cache hit whose recorded store is a different instance.
 
 #### Scenario: Second call returns the cached instance
 
@@ -304,11 +327,12 @@ the miss-check and the read inside the lock.
 - **When** it is called again with the same type arguments
 - **Then** the identical repository instance is returned and no new instance is constructed
 
-#### Scenario: Store-keyed overload defaults the key to the store type name
+#### Scenario: Store-keyed overload defaults the key to the repository type name
 
 - **Given** `key` is not supplied to `GetRepository<TStore, TRepository>(store, key)`
 - **When** the cache key is computed
-- **Then** it is `typeof(TStore).FullName ?? string.Empty`
+- **Then** it is `typeof(TRepository).FullName ?? string.Empty`, the same default the factory overload
+  and `Destroy<TRepository>()` use
 
 #### Scenario: Factory overload defaults the key to the repository type name
 
@@ -323,13 +347,15 @@ the miss-check and the read inside the lock.
 - **Then** `storeFactory()` is not invoked and the cached repository (built with the earlier store) is
   returned
 
-#### Scenario: A different store instance of the same type is ignored on a cache hit
+#### Scenario: A different store instance under a cached key is refused
 
 - **Given** `GetRepository<TStore, TRepository>(storeA)` has cached a repository under
-  `typeof(TStore).FullName`
+  `typeof(TRepository).FullName`
 - **When** `GetRepository<TStore, TRepository>(storeB)` is called with a different instance of the same
   store type and no explicit key
-- **Then** the cached repository built around `storeA` is returned and `storeB` is silently discarded
+- **Then** an `InvalidOperationException` is thrown whose message says the repository is already cached
+  under that key for a different store instance and to pass a key per store; passing `storeA` again
+  returns the cached repository
 
 #### Scenario: Concurrent creation is serialised
 
@@ -373,7 +399,10 @@ repository type and pointing at the store-injecting overloads.
 The system SHALL, in `Destroy<TRepository>(key)`, resolve the key as
 `key ?? typeof(TRepository).FullName ?? string.Empty`, capture and remove the cached repository inside
 the lock, prune the key bucket when it becomes empty, and call `repository.Destroy()` *after*
-releasing the lock; and SHALL return silently when the cache, the key or the type is absent.
+releasing the lock; and SHALL return silently when the cache, the key or the type is absent. When the
+destroyed repository has a recorded store, the system SHALL also evict, under the same lock, every other
+cached repository recorded against that same store instance (pruning emptied buckets), without calling
+`Destroy()` on them.
 
 #### Scenario: Destroy removes then destroys
 
@@ -388,14 +417,22 @@ releasing the lock; and SHALL return silently when the cache, the key or the typ
 - **When** `Destroy<TRepository>()` is called
 - **Then** the method returns without throwing and without calling any `Destroy()`
 
-#### Scenario: Default keys do not line up between creation and destruction
+#### Scenario: Default keys line up between creation and destruction
 
 - **Given** a repository created by `GetRepository<TStore, TRepository>(store)` with no explicit key,
-  therefore cached under `typeof(TStore).FullName`
+  therefore cached under `typeof(TRepository).FullName`
 - **When** `Destroy<TRepository>()` is called with no explicit key, resolving to
   `typeof(TRepository).FullName`
-- **Then** no entry is found, nothing is destroyed and the cached repository remains for the process
-  lifetime
+- **Then** the entry is found, removed and destroyed
+
+#### Scenario: Repositories sharing the destroyed store are evicted with it
+
+- **Given** two repositories cached by the locator around the same store instance (under different keys
+  or types)
+- **When** `Destroy<TRepository>(key)` destroys one of them
+- **Then** the other is removed from the cache too, so the next `GetRepository` call builds a fresh
+  repository instead of returning one whose store was destroyed; only the targeted repository's
+  `Destroy()` is invoked
 
 #### Scenario: Settings-keyed destroy mirrors the settings-keyed creation
 
@@ -411,7 +448,10 @@ itself with the given lifetime and registers `TRepository` via a factory which r
 throwing `InvalidOperationException($"Failed to create instance of {name}")` when the cast to
 `TRepository` yields `null`; SHALL default the lifetime to `ServiceLifetime.Scoped`; and SHALL expose
 `AddRepositorySingleton`/`AddRepositoryScoped`/`AddRepositoryTransient` as lifetime-fixed aliases plus
-overloads taking a pre-built store instance or a `Func<IServiceProvider, IBaseStore>` factory.
+overloads taking a pre-built store instance or a `Func<IServiceProvider, IBaseStore>` factory. The
+pre-built-store overload SHALL accept only `ServiceLifetime.Singleton` and SHALL throw
+`ArgumentException` (paramName `lifetime`) for any other lifetime — including its own default,
+`ServiceLifetime.Scoped`.
 
 #### Scenario: Store and repository are both registered
 
@@ -427,12 +467,14 @@ overloads taking a pre-built store instance or a `Func<IServiceProvider, IBaseSt
 - **Then** `Activator.CreateInstance(typeof(MyRepository), store)` is attempted with the store as the
   only argument, so the second dependency is not injected from the container
 
-#### Scenario: A shared store instance is captured for every resolution
+#### Scenario: A shared store instance can only be registered as a singleton
 
-- **Given** `services.AddRepository<MyRepository>(storeInstance, ServiceLifetime.Transient)`
-- **When** the repository is resolved from two different scopes
-- **Then** both repositories are constructed around the same captured `storeInstance`, regardless of
-  the requested lifetime
+- **Given** `services.AddRepository<MyRepository>(storeInstance, ServiceLifetime.Transient)` (or
+  `Scoped`, or the lifetime omitted, which defaults to `Scoped`)
+- **When** the call runs
+- **Then** `ArgumentException` is thrown naming the lifetime and pointing at
+  `AddRepository<TStore, TRepository>` for a per-scope store, and nothing is registered; with
+  `ServiceLifetime.Singleton` the repository is registered around the captured `storeInstance`
 
 #### Scenario: Repeated registration duplicates descriptors
 
@@ -542,20 +584,24 @@ rather than accumulate into them.
 - **Then** `data.LoadFrom(item)` is executed, propagating store-assigned values (e.g. `Guid`) back into
   the caller's ViewModel
 
-#### Scenario: Delete does not guard against a null viewmodel
+#### Scenario: Delete of a null viewmodel is a no-op
 
-- **Given** `Delete(null)` on an `AbstractViewModelRepository` with a non-null store and `ReadMode == false`
+- **Given** `Delete(null)` / `DeleteAsync(null)` on an `AbstractViewModelRepository` /
+  `AbstractAsyncViewModelRepository` with a non-null store and `ReadMode == false`
 - **When** the call runs
-- **Then** control reaches `LoadModelInstance(null)` → `MapToModel(null, target)`, unlike `Create` and
-  `Update` which return early on `data == null`
+- **Then** it returns early without reaching `MapToModel` or the store, as `Create` and `Update` do on
+  `data == null`; a non-null ViewModel is mapped through `LoadModelInstance` on both the sync and async
+  paths, so an override of that hook applies to deletes too
 
 ### Requirement: ViewModel repositories track a SHA-256 model hash that does not gate the write
 
-The system SHALL maintain `IDictionary<Guid, byte[]> _modelHash` keyed by the model's `Guid`, SHALL
-populate it from `StoreHash` (only when `ReadMode` is false and `data.Guid.HasValue`) using
-`StringHelper.CalculateSHA256Hash(Serializer.Serialize(data))`, and SHALL refresh the stored hash on a
-successful `Update`. The hash SHALL NOT decide whether the write happens: a single-item `Update` always
-reaches the store.
+The system SHALL maintain `IDictionary<Guid, byte[]> _modelHash` keyed by the model's `Guid`, backed by
+a `ConcurrentDictionary<Guid, byte[]>` (with the `ReadMode` flag `volatile`) because one repository
+instance is shared by every caller of a singleton registration or the locator, SHALL populate it from
+`StoreHash` (only when `ReadMode` is false and `data.Guid.HasValue`) using
+`StringHelper.CalculateSHA256Hash(Serializer.Serialize(data))`, SHALL refresh the stored hash on a
+successful `Update`, and SHALL drop a model's hash through `RemoveHash` after a successful delete. The
+hash SHALL NOT decide whether the write happens: a single-item `Update` always reaches the store.
 
 No store can take that decision — `StoreDataDelegate<T>`'s return value is read by no backend, so the
 `null!` that once expressed "skip this write" suppressed nothing. Taking the decision in the repository
@@ -603,6 +649,20 @@ domain event. Whether to make that change is deferred.
 - **Then** `StoreHash` is not called for them (unlike the single-item `Create`, whose store delegate
   calls `StoreHash(x)`), so the entities remain untracked until read back
 
+#### Scenario: A deleted model is no longer tracked
+
+- **Given** a model whose hash was recorded by a read
+- **When** it is deleted through the single-item `Delete(vm)` / `DeleteAsync(vm)` or the async bulk
+  `DeleteAsync(IEnumerable<TViewModel>)`, and the store call returns
+- **Then** `RemoveHash` drops its entry from `_modelHash`; the sync bulk `Delete(IEnumerable<TViewModel>)`
+  calls no `RemoveHash`, so its deleted models stay in the table
+
+#### Scenario: Concurrent reads share the hash table safely
+
+- **Given** one ViewModel repository instance used by several threads at once
+- **When** their reads each call `StoreHash`
+- **Then** the writes go to a `ConcurrentDictionary`, so concurrent recording cannot corrupt the table
+
 ### Requirement: ReadMode makes a ViewModel repository read-only and clears change tracking
 
 The system SHALL, when `ReadMode` is set to `true`, clear `_modelHash` if it is non-empty, SHALL make
@@ -628,7 +688,7 @@ filter-based ones — checking the flag *before* any store or null-argument chec
 
 - **Given** `ReadMode == true` and `Store == null`
 - **When** `CreateAsync(vm)` is awaited
-- **Then** the exception is thrown rather than `Guid.Empty` being returned
+- **Then** the `Repository is in Read Mode` exception is thrown rather than the no-store exception
 
 #### Scenario: Reads remain available in read mode
 
@@ -643,6 +703,34 @@ filter-based ones — checking the flag *before* any store or null-argument chec
 - **When** their members are inspected
 - **Then** no `ReadMode` property or read-mode guard exists, so the non-ViewModel repositories can
   always write
+
+### Requirement: ViewModel repositories refuse to operate without a store
+
+The system SHALL throw, from `AbstractViewModelRepository` and `AbstractAsyncViewModelRepository`, the
+`InvalidOperationException` built by their protected `NoStore()` helper (message
+`{GetType().Name} has no store; construct it with one.`) whenever `Store` is `null` on `Read`,
+`ReadOne` (both forms), `Count`, `Create`, `Update` and `Delete` and their async counterparts — checked
+after the read-mode guard and before the `data == null` early return — and SHALL keep `Destroy` /
+`DestroyAsync` a silent no-op and `CreateModelInstance()` on its `Activator` fallback.
+
+#### Scenario: A store-less ViewModel repository refuses a create
+
+- **Given** an `AbstractViewModelRepository` whose `Store` is `null` and `ReadMode == false`
+- **When** `Create(vm)` is called
+- **Then** `InvalidOperationException` containing `has no store` is thrown rather than `Guid.Empty`
+  being returned
+
+#### Scenario: A store-less ViewModel repository refuses even with null data
+
+- **Given** an `AbstractAsyncViewModelRepository` whose `Store` is `null`
+- **When** `await UpdateAsync(null!)` is awaited
+- **Then** the no-store exception is thrown, because the store check precedes the `data == null` return
+
+#### Scenario: Destroying a store-less ViewModel repository is a no-op
+
+- **Given** a ViewModel repository whose `Store` is `null`
+- **When** `Destroy()` / `await DestroyAsync()` is called
+- **Then** it returns without effect
 
 ### Requirement: ProcessDataDelegate is a transform whose result is honoured on every path
 
@@ -705,12 +793,14 @@ instance produced there would be discarded and the pre-transform model persisted
 - **Then** it accepts `Stores.StoreDataDelegate<TModel>?` (forwarded straight to the store) rather than
   `ProcessDataDelegate<TModel>?`, diverging from its sync sibling
 
-### Requirement: Bulk ViewModel repositories require a bulk store, throwing ArgumentException — lazily on the read path
+### Requirement: Bulk ViewModel repositories require a bulk store, throwing ArgumentException when called
 
 The system SHALL check `Store is not IBulkStore<TModel>` in every `AbstractBulkViewModelRepository`
-method and throw `ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}")`; and because
-`Read(filter, limit, offset)` is a `yield return` iterator, that check SHALL execute only when the
-returned sequence is first enumerated, not when `Read` is called.
+method and throw `ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}")`; SHALL
+perform that check in `Read(filter, limit, offset)` itself, which validates and then returns a separate
+`yield return` iterator, so the exception surfaces when `Read` is called; and SHALL return early, after
+the read-mode guard and before the store check, from the collection `Create`, `Update` and `Delete` when
+`data` is `null`.
 
 #### Scenario: Bulk create against a non-bulk store throws ArgumentException
 
@@ -719,40 +809,57 @@ returned sequence is first enumerated, not when `Read` is called.
 - **Then** `ArgumentException` is thrown (not the `InvalidOperationException` used by the non-ViewModel
   `AbstractBulkRepository` for the same condition)
 
-#### Scenario: The read path defers the exception to enumeration
+#### Scenario: The read path validates when called
 
 - **Given** the same repository
 - **When** `var seq = Read(filter, 10, 0);` executes
-- **Then** no exception is raised; the `ArgumentException` surfaces on the first `MoveNext()` of `seq`
+- **Then** the `ArgumentException` is raised by that call, before any enumeration of `seq`
 
 #### Scenario: A null store also fails the check
 
 - **Given** `Store == null`
-- **When** any bulk ViewModel method runs
+- **When** any bulk ViewModel method runs with non-null `data`
 - **Then** `null is not IBulkStore<TModel>` holds and `ArgumentException` is thrown
+
+#### Scenario: Null data on a sync bulk write is silently ignored
+
+- **Given** `ReadMode == false`
+- **When** `Create((IEnumerable<TViewModel>)null!)`, `Update(null!)` or `Delete(null!)` is called
+- **Then** the method returns without checking or calling the store, as the async twins do
 
 #### Scenario: Bulk read projects each model and drops nulls
 
 - **Given** a bulk store returning three models
 - **When** `Read(filter, limit, offset)` is enumerated
-- **Then** `((IBulkStore<TModel>)Store).Read(filter?.Filter(), null, limit, offset)` is called — always
-  with `null` for `orderBy`, which the ViewModel bulk contract cannot express — and each non-null
-  `LoadInstance(item)` is yielded
+- **Then** the bulk store's `Read(filter?.Filter(), orderBy, limit, offset)` is called — with `orderBy`
+  being `OrderBy<TModel>.By(x => x.Guid)` when `limit` or `offset` is supplied (the ViewModel bulk
+  contract takes no ordering, so a page is ordered by `Guid` to keep its window stable) and `null`
+  otherwise — and each non-null `LoadInstance(item)` is yielded
 
-### Requirement: Async bulk ViewModel repository streams results and no-ops without a bulk store
+### Requirement: Async bulk ViewModel repository streams results and throws without a bulk store
 
 The system SHALL expose the async bulk read as
 `IAsyncEnumerable<TViewModel> ReadAsync(Expression<Func<TModel, bool>>? filter, int? limit, int? offset, CancellationToken ct)`
-with `[EnumeratorCancellation]`, SHALL `yield break` when `BulkStore` is `null`, SHALL await the whole
-underlying `BulkStore.ReadAsync(...)` result before yielding, and SHALL return early (no exception)
-from every async bulk write when `BulkStore` or `data` is `null`.
+with `[EnumeratorCancellation]`, SHALL throw `InvalidOperationException` when `BulkStore` is `null` —
+the `NoStore()` exception when `Store` is `null`, otherwise `Store is not type of …IAsyncBulkStore…` —
+SHALL pass `OrderBy<TModel>.By(x => x.Guid)` as the ordering when `limit` or `offset` is supplied (and
+`null` otherwise), SHALL await the whole underlying `BulkStore.ReadAsync(...)` result before yielding,
+and SHALL throw the same exception from every async bulk write when `BulkStore` is `null`, returning
+early (no exception) only when `data` is `null` on a valid bulk store.
 
-#### Scenario: Missing bulk store yields an empty stream
+#### Scenario: Missing bulk store faults the stream
 
 - **Given** an `AbstractAsyncBulkViewModelRepository` whose `Store` does not implement
   `IAsyncBulkStore<TModel>`
 - **When** the `IAsyncEnumerable<TViewModel>` from `ReadAsync(...)` is enumerated
-- **Then** it completes immediately with no elements
+- **Then** the first `MoveNextAsync()` throws `InvalidOperationException` (the method is an async
+  iterator, so calling `ReadAsync` itself raises nothing)
+
+#### Scenario: Missing bulk store refuses a bulk write
+
+- **Given** the same repository with `ReadMode == false`
+- **When** `await UpdateAsync(filter, updates)` or `await DeleteAsync(filter)` is awaited
+- **Then** `InvalidOperationException` is thrown and nothing is written
 
 #### Scenario: The async bulk read takes a raw expression, not IFilter
 
@@ -768,13 +875,19 @@ from every async bulk write when `BulkStore` or `data` is `null`.
 - **When** `await CreateAsync((IEnumerable<TViewModel>)null!)` is awaited
 - **Then** the method returns without calling the store and without throwing
 
-#### Scenario: Models are projected lazily
+#### Scenario: Created models are projected lazily
 
-- **Given** `CreateAsync(IEnumerable<TViewModel> data, storeDelegate, ct)` or
-  `DeleteAsync(IEnumerable<TViewModel> data, ct)`
+- **Given** `CreateAsync(IEnumerable<TViewModel> data, storeDelegate, ct)`
 - **When** it runs
-- **Then** `data.Select(LoadModelInstance)` is passed to `BulkStore.CreateAsync` / `BulkStore.DeleteAsync`
-  unmaterialised — no intermediate `ToList()` — and the store drives the enumeration
+- **Then** `data.Select(LoadModelInstance)` is passed to `BulkStore.CreateAsync` unmaterialised — no
+  intermediate `ToList()` — and the store drives the enumeration
+
+#### Scenario: Deleted models are materialised so their hashes can be dropped
+
+- **Given** `DeleteAsync(IEnumerable<TViewModel> data, ct)`
+- **When** it runs
+- **Then** `data.Select(LoadModelInstance).ToList()` is passed to `BulkStore.DeleteAsync`, and after it
+  returns `RemoveHash` runs for each of those models
 
 #### Scenario: The bulk update materialises the merged models before writing
 
@@ -792,16 +905,19 @@ The system SHALL, in `DataBaseRepository<TConnector, TViewModel, TModel>` and
 `IsStoreOfType<TModel, AsyncDataBaseBulkStore<TConnector, TModel>>` with `ArgumentException`
 (paramName `store`), SHALL accept wrappers around such a store, and SHALL resolve `Connector` by
 unwrapping (`GetUnwrappedStore<...>()?.Connector`), yielding `null` when the innermost store is not of
-the expected concrete type.
+the expected concrete type. Because the inherited bulk methods test the *outermost* reference, the sync
+`DataBaseRepository` constructor SHALL first reject a non-null store that is not itself an
+`IBulkStore<TModel>` with `ArgumentException` (paramName `store`, message beginning
+`Store must be a bulk store;`); the async constructor takes an `IAsyncBulkStore<TModel>?`, so the type
+system enforces the same.
 
-#### Scenario: A tenant-wrapped database store is accepted by the constructor and then rejected by every bulk method
+#### Scenario: A non-bulk tenant wrapper is rejected by the constructor
 
 - **Given** a `DataBaseBulkStore<SqLiteConnector, TModel>` inside a `TenantStoreWrapper`
 - **When** it is passed to the `DataBaseRepository` constructor
-- **Then** `IsStoreOfType` succeeds through the wrapper and `Store` is assigned — but
-  `TenantStoreWrapper<TStore, T>` implements only `IStore<T>`/`IStoreWrapper<T>`, while the inherited
-  `AbstractBulkViewModelRepository` methods test the *outer* reference (`Store is not IBulkStore<TModel>`),
-  so every bulk read/create/update/delete on the accepted repository throws `ArgumentException`; only the
+- **Then** `ArgumentException` is thrown whose message begins `Store must be a bulk store;` and points
+  at the bulk wrapper — `TenantStoreWrapper<TStore, T>` implements only `IStore<T>`/`IStoreWrapper<T>`,
+  so `IsStoreOfType` alone would have accepted a repository on which every bulk method then threw; the
   `IBulkStore<T>`-implementing `TenantBulkStoreWrapper` passes both checks
 
 #### Scenario: An unrelated store is rejected
@@ -831,8 +947,8 @@ the expected concrete type.
 - **Given** `new MyDataBaseRepository(store: null)` (explicit null through the store-taking constructor)
 - **When** any operation runs
 - **Then** the base constructor received `null` and did not substitute a default, so `Store` stays
-  `null` and reads return `default`, `Count` returns `0`, `Create` returns `Guid.Empty` and writes are
-  no-ops
+  `null`; the single-item operations throw the no-store `InvalidOperationException` and the bulk ones
+  throw (`ArgumentException` on the sync repository, `InvalidOperationException` on the async one)
 
 #### Scenario: The parameterless constructor self-provisions a store
 
@@ -894,7 +1010,7 @@ repositories SHALL replace a `null` store (and the parameterless constructor) wi
 - **Given** `new MongoDBModelRepository<T>(store: null)` (or the RavenDB, CosmosDB or InfluxDB equivalent,
   sync or async)
 - **When** construction completes
-- **Then** `Store` is a newly constructed backend store, so the null-store tolerance of the abstract
+- **Then** `Store` is a newly constructed backend store, so the no-store refusal of the abstract
   repositories never engages for these types
 
 #### Scenario: An unrelated store is rejected by a backend repository
@@ -991,11 +1107,11 @@ alternative that preserved ordering is precisely the connector bypass.
 - **Then** a correctly tenant-scoped row is returned with the ordering not applied — the decorator is
   never unwrapped to honour it
 
-#### Scenario: No store yields default
+#### Scenario: No store is refused
 
 - **Given** a repository whose `Store` is `null`
 - **When** `ReadOne` is called in either form
-- **Then** `default` is returned without querying anything
+- **Then** the no-store `InvalidOperationException` is thrown without querying anything
 
 #### Scenario: Unwrapping a decorated store is the escape hatch, and it strips tenant scoping
 

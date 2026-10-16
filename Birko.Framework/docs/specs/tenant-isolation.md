@@ -1,10 +1,8 @@
 ---
 area: tenant-isolation
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
-  - ../Birko.Data.Sync.Tenant/Models/ITenantSyncKnowledgeItem.cs
-  - ../Birko.Data.Sync.Tenant/Models/TenantSyncKnowledgeItem.cs
   - ../Birko.Data.Sync.Tenant/Models/TenantSyncOptions.cs
   - ../Birko.Data.Sync.Tenant/Models/TenantSyncResult.cs
   - ../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs
@@ -26,6 +24,7 @@ sources:
   - ../Birko.Data.Tenant/Stores/TenantStoreExtensions.cs
   - ../Birko.Data.Tenant/Stores/TenantStoreWrapper.cs
   - ../Birko.EventBus.Tenant/Extensions/EventTenantScopeServiceCollectionExtensions.cs
+  - ../Birko.EventBus.Tenant/Extensions/TenantContextWiringCheck.cs
   - ../Birko.EventBus.Tenant/TenantEventEnricher.cs
   - ../Birko.EventBus.Tenant/TenantEventScopeAccessor.cs
   - ../Birko.Security.AspNetCore/Extensions/TenantHeaderGuardExtensions.cs
@@ -94,12 +93,6 @@ non-nullable `Guid TenantGuid` and a nullable `string? TenantName`, both read/wr
 - **Given** a model type `T`
 - **When** `TenantStoreWrapper<TStore, T>` or `AsyncTenantStoreWrapper<TStore, T>` is closed over `T`
 - **Then** `T` must satisfy `where T : Birko.Data.Models.AbstractModel, ITenant`, so a model without both a Guid identity and a `TenantGuid` cannot be wrapped
-
-#### Scenario: Sync knowledge item is tenant-aware by composition
-
-- **Given** `ITenantSyncKnowledgeItem`
-- **When** its declaration is inspected
-- **Then** it adds no members of its own and derives its shape entirely from `ISyncKnowledgeItem` plus `ITenant`, and `TenantSyncKnowledgeItem` implements it with `TenantGuid` as a non-nullable `Guid`
 
 ### Requirement: Ambient tenant context backed by AsyncLocal
 
@@ -528,7 +521,10 @@ stamped or written.
 
 The system SHALL pass `TenantFilter(filter).Filter()!` to the inner store for
 `Update(filter, Action<T>)`, `Update(filter, PropertyUpdate<T>)` and `Delete(filter)` in both the
-sync and async bulk wrappers.
+sync and async bulk wrappers. Before the tenant predicate is added, the system SHALL check the
+**caller's** filter in `RequireCallerFilter`: a null filter throws `ArgumentNullException`, and a
+filter that reduces to every row is refused by `BoundedFilterGuard.Require` with
+`WholeTableWriteException`, with the explicit `x => true` constant let through.
 
 #### Scenario: Filter-based delete cannot reach another tenant's rows
 
@@ -547,6 +543,55 @@ sync and async bulk wrappers.
 - **Given** a Permissive bulk wrapper with no tenant set
 - **When** `Delete(x => x.Obsolete)` is called
 - **Then** the inner store receives `x => x.Obsolete` alone and rows are deleted across every tenant
+
+#### Scenario: A null filter is refused before the tenant term is added
+
+- **Given** a bulk wrapper with tenant `t`
+- **When** `Delete(null)` or `UpdateAsync(null, updates)` is called
+- **Then** an `ArgumentNullException` naming `filter` is thrown and nothing reaches the inner store — the tenant-composed filter would otherwise be a bounded-looking "every row of tenant `t`" that the inner store's own guards accept
+
+#### Scenario: A filter that reduces to every row is refused
+
+- **Given** a bulk wrapper with tenant `t`
+- **When** `Update(x => !empty.Contains(x.Name), action)` is called with an empty `empty`
+- **Then** `BoundedFilterGuard` throws `WholeTableWriteException` for the caller's filter before `TenantFilter` runs, and the inner store is not called
+
+#### Scenario: The explicit all-rows constant writes the whole tenant
+
+- **Given** a bulk wrapper with tenant `t`
+- **When** `Delete(x => true)` is called
+- **Then** the guard lets it through and the inner store receives `x => true && x.TenantGuid == t`, deleting every row of tenant `t`
+
+#### Scenario: The caller-filter check runs before the Strict seam
+
+- **Given** a Strict bulk wrapper with no tenant set
+- **When** `Delete(null)` is called
+- **Then** `ArgumentNullException` is thrown rather than `TenantScopeRequiredException`, because `RequireCallerFilter` precedes `TenantFilter`
+
+### Requirement: Async bulk wrapper aggregates within the tenant scope
+
+The system SHALL implement `IAsyncAggregatableStore<T>` on `AsyncTenantBulkStoreWrapper`, running
+`AggregateAsync(query)` as `StoreChain.AggregateThrough(_innerStore, query.WithFilter(TenantFilter(query.Filter).Filter()), ct)`,
+so an aggregate is narrowed exactly as a read is. The sync bulk wrapper and the two non-bulk wrappers
+SHALL NOT implement it.
+
+#### Scenario: An aggregate counts only the current tenant's rows
+
+- **Given** an `AsyncTenantBulkStoreWrapper` with tenant `t` over an aggregatable inner store holding rows of `t` and `u`
+- **When** `AggregateAsync(query)` is awaited with a query filter `x => x.Active`
+- **Then** the inner store receives a copy of the query whose filter is `Active && TenantGuid == t`
+
+#### Scenario: Strict with no tenant refuses an aggregate
+
+- **Given** a Strict async bulk wrapper with no tenant and no all-tenants scope
+- **When** `AggregateAsync(query)` is awaited
+- **Then** `TenantScopeRequiredException` with `Operation == "read"` is thrown, because the aggregate shares the read seam
+
+#### Scenario: An inner store that cannot aggregate is reported
+
+- **Given** an async bulk wrapper whose inner store does not implement `IAsyncAggregatableStore<T>`
+- **When** `AggregateAsync(query)` is awaited
+- **Then** `NotSupportedException` is thrown naming the inner store's type and the entity type
 
 ### Requirement: Save routes to create or update by the item's guid
 
@@ -647,22 +692,29 @@ the non-bulk wrapper, defaulting `tenantContext` to null and `mode` to `Permissi
 
 The system SHALL, in `RepositoryServiceCollectionExtensions`, register the inner store and then a
 repository factory that resolves `ITenantContext` via `sp.GetService<ITenantContext>() ?? Models.Tenant.Current`,
-wraps the store in `TenantStoreWrapper<,>` / `AsyncTenantStoreWrapper<,>` (never the bulk wrapper),
-and constructs the repository via `Activator.CreateInstance(typeof(TRepository), wrappedStore)`,
-throwing `InvalidOperationException` when that yields null. Default lifetime is `Scoped`; default
-mode is `Permissive`.
+wraps the store with `innerStore.AsTenantAware(tenantContext, mode)` — so a bulk store gets the bulk
+wrapper, as everywhere else — and constructs the repository via
+`Activator.CreateInstance(typeof(TRepository), wrappedStore)`, throwing `InvalidOperationException`
+when that yields null. The async registrations SHALL constrain `TRepository` to `IAsyncBaseRepository`
+and the sync ones to `IBaseRepository`. Default lifetime is `Scoped`; default mode is `Permissive`.
 
 #### Scenario: Repository receives a tenant-wrapped store
 
 - **Given** `services.AddTenantAsyncRepositoryScoped<MyStore, MyRepository, MyModel>(TenantIsolationMode.Strict)`
 - **When** `MyRepository` is resolved
-- **Then** it is constructed with an `AsyncTenantStoreWrapper<MyStore, MyModel>` built with mode `Strict` and the scoped `ITenantContext`
+- **Then** it is constructed with a tenant wrapper chosen by `AsTenantAware` — an `AsyncTenantStoreWrapper<IAsyncStore<MyModel>, MyModel>` for a non-bulk `MyStore` — built with mode `Strict` and the scoped `ITenantContext`
 
-#### Scenario: A bulk inner store is still wrapped non-bulk
+#### Scenario: A bulk inner store gets the bulk wrapper
 
 - **Given** `TStore` implements `IAsyncBulkStore<TModel>`
-- **When** `AddTenantAsyncRepository<TStore, TRepository, TModel>` builds the wrapper
-- **Then** it constructs `AsyncTenantStoreWrapper<TStore, TModel>`, which does not implement `IAsyncBulkStore<TModel>` — diverging from `AsTenantAware`, which would have chosen the bulk wrapper
+- **When** `AddTenantAsyncRepository<TStore, TRepository, TModel>` or the store-factory overload builds the wrapper
+- **Then** it is an `AsyncTenantBulkStoreWrapper<IAsyncBulkStore<TModel>, TModel>`, so a bulk repository can be constructed over it and its filtered writes are tenant-composed
+
+#### Scenario: An async repository is registrable
+
+- **Given** an async repository implementing `IAsyncBaseRepository` but not `IBaseRepository`
+- **When** `AddTenantAsyncRepository`, `AddTenantAsyncRepositoryScoped` or the async store-factory overload is called with it
+- **Then** the call compiles and registers it — the async overloads constrain `TRepository` to `IAsyncBaseRepository`
 
 #### Scenario: Repository construction failure is reported
 
@@ -1086,14 +1138,30 @@ tenant and therefore lands in the addresses-no-tenant case rather than being a s
 
 ### Requirement: Header-guard wiring
 
-The system SHALL expose `UseBirkoTenantHeaderGuard(this IApplicationBuilder)` as
-`app.UseMiddleware<TenantHeaderClaimGuardMiddleware>()`, safe to call unconditionally.
+The system SHALL expose `UseBirkoTenantHeaderGuard(this IApplicationBuilder)`, which sets
+`app.Properties["Birko.Security.TenantHeaderGuard"]` (`TenantHeaderGuardStartupCheck.Marker`) to true
+and then calls `app.UseMiddleware<TenantHeaderClaimGuardMiddleware>()`, safe to call unconditionally.
+`AddBirkoSecurity` registers a `TenantHeaderGuardStartupCheck` startup filter that, after the app's
+pipeline is built, throws `InvalidOperationException` when `RequireTenantHeaderMatchesClaim` is true
+and the marker is absent.
 
 #### Scenario: Registration is a single call
 
 - **Given** an app builder
 - **When** `UseBirkoTenantHeaderGuard()` is called
 - **Then** `TenantHeaderClaimGuardMiddleware` is added to the pipeline at that position, and with the option disabled it behaves as a pass-through rather than needing conditional registration
+
+#### Scenario: A pipeline without the guard refuses to start
+
+- **Given** `AddBirkoSecurity` with the default `RequireTenantHeaderMatchesClaim = true` and an app that never calls `UseBirkoTenantHeaderGuard()`
+- **When** the host builds its pipeline
+- **Then** an `InvalidOperationException` is thrown telling the caller to call `app.UseBirkoTenantHeaderGuard()` after `UseAuthentication()` or to set `RequireTenantHeaderMatchesClaim = false`
+
+#### Scenario: Opting out starts without the guard
+
+- **Given** `RequireTenantHeaderMatchesClaim = false` and no `UseBirkoTenantHeaderGuard()` call
+- **When** the host builds its pipeline
+- **Then** it starts as before
 
 ### Requirement: Published events capture the ambient tenant
 
@@ -1131,7 +1199,11 @@ SHALL throw `ArgumentNullException` for a null tenant context.
 The system SHALL, in `TenantEventScopeAccessor.RunWithScopeAsync`, throw `ArgumentNullException` for
 a null `body`, run the body inside `WithTenantAsync(tenant, null, body)` when
 `context?.TenantGuid is Guid tenant`, and inside `WithAllTenantsAsync(body)` when the context is null
-or its `TenantGuid` is null.
+or its `TenantGuid` is null. Every all-tenants dispatch SHALL be recorded, before the body runs, on
+`AllTenantsDispatches` — current state keyed by `EventContext.Source` (`"(unknown)"` when null or
+empty) as an `AllTenantsDispatch(Source, Count, LastDispatchedAt)` — and announced through
+`OnAllTenantsDispatch`, whose throwing subscribers are counted in `SubscriberFailures` and never
+propagated.
 
 #### Scenario: A tenant-attributed event dispatches inside that tenant
 
@@ -1157,38 +1229,83 @@ or its `TenantGuid` is null.
 - **When** `RunWithScopeAsync(null, body)` is awaited
 - **Then** the `?.` short-circuits and the body runs inside `WithAllTenantsAsync`
 
+#### Scenario: All-tenants dispatches are counted per source
+
+- **Given** two dispatches of events with `Source == "billing"` and a null `TenantGuid`
+- **When** `AllTenantsDispatches` is read
+- **Then** it holds one entry for `"billing"` with `Count == 2` and the UTC time of the last dispatch; a tenant-attributed dispatch adds nothing
+
+#### Scenario: A throwing diagnostic subscriber does not fail the dispatch
+
+- **Given** an `OnAllTenantsDispatch` subscriber that throws
+- **When** a tenant-less event is dispatched
+- **Then** the handler still runs inside `WithAllTenantsAsync`, the exception is swallowed, and `SubscriberFailures` is incremented
+
 ### Requirement: Event/tenant bridge registration registers both halves as singletons
 
 The system SHALL, in `AddEventTenantScope`, throw `ArgumentNullException` for a null service
-collection and register `IEventScopeAccessor` → `TenantEventScopeAccessor` and `IEventEnricher` →
-`TenantEventEnricher` as singleton **instances** over one `ITenantContext`; the parameterless
-overload SHALL use `Birko.Data.Tenant.Models.Tenant.Current`.
+collection or a null tenant context, and register `IEventScopeAccessor` → `TenantEventScopeAccessor`
+and `IEventEnricher` → `TenantEventEnricher` as singleton **factories** returning one pre-built
+instance each over that `ITenantContext`, both running one shared `TenantContextWiringCheck` before
+they return; the parameterless overload SHALL use `Birko.Data.Tenant.Models.Tenant.Current`.
 
 #### Scenario: Both sides share one context instance
 
 - **Given** `services.AddEventTenantScope(myContext)`
-- **When** the descriptors are inspected
-- **Then** both singletons hold instances constructed over `myContext`, so what the enricher captures is what the accessor restores
+- **When** both halves are resolved
+- **Then** both are instances constructed over `myContext`, so what the enricher captures is what the accessor restores
 
 #### Scenario: The default overload binds the static singleton
 
 - **Given** `services.AddEventTenantScope()`
 - **When** the bridge is used
-- **Then** it observes `Tenant.Current`, which only matches store/repository behaviour if the app's `ITenantContext` registration is that same instance
+- **Then** it observes `Tenant.Current`, and the wiring check refuses it unless the app's `ITenantContext` registration is that same instance or absent
 
-#### Scenario: A mismatched registration widens a tenant-scoped event to all tenants
+#### Scenario: A mismatched registration is refused when the bridge is first built
 
 - **Given** `services.AddEventTenantScope()` and `AddTenantContext*` — which registers `typeof(TenantContext)`, a **different** instance, whose `AsyncLocal` state is per-instance
-- **When** an event is published inside a request's tenant scope and later dispatched
-- **Then** the enricher reads the bridge's context, sees `HasTenant == false`, and leaves `EventContext.TenantGuid` null; the accessor cannot distinguish that from a genuine system event and runs the handler inside `WithAllTenantsAsync`, so a tenant-scoped event is dispatched across **every** tenant
-- **And** `AddBirkoSecurity` is unaffected, because it registers `_ => Tenant.Current` — the same instance the bridge holds
+- **When** the container first resolves `IEventScopeAccessor` or `IEventEnricher` (with the outbox hosted, at host start)
+- **Then** an `InvalidOperationException` is thrown explaining that every tenant event would be stamped as a system event and dispatched across all tenants, instead of the bridge silently widening tenant-scoped events
+- **And** `AddBirkoSecurity` is accepted, because it registers `_ => Tenant.Current` — the same instance the bridge holds
+
+### Requirement: The event/tenant bridge checks the application's context by identity
+
+The system SHALL, in `TenantContextWiringCheck.Verify`, once per bridge registration (double-checked
+under a lock), resolve `ITenantContext` from a throwaway scope it disposes, and throw
+`InvalidOperationException` when a context is registered and is not `ReferenceEquals` to the context
+the bridge reads. No registered context SHALL pass. A passing check SHALL not run again; a failing one
+runs again on the next resolve.
+
+#### Scenario: Identity, not lifetime, decides
+
+- **Given** an `ITenantContext` registered scoped as `_ => Tenant.Current`, and the bridge over `Tenant.Current`
+- **When** the check runs
+- **Then** it passes, although the registration is scoped
+
+#### Scenario: A separate singleton is refused
+
+- **Given** `AddTenantContextSingleton()` and `AddEventTenantScope()`
+- **When** either half is first resolved
+- **Then** the check throws, because the singleton `TenantContext` is not `Tenant.Current`
+
+#### Scenario: No registered context passes
+
+- **Given** a container with no `ITenantContext` registration
+- **When** either half is first resolved
+- **Then** the check passes, since the application can only be using the context it gave the bridge
+
+#### Scenario: The check registers late enough to see the app's registration
+
+- **Given** `AddEventTenantScope()` called before `AddBirkoSecurity()`
+- **When** the container is built and the bridge resolved
+- **Then** the check sees the later `ITenantContext` registration, because it runs in the factories rather than in `AddEventTenantScope`
 
 ### Requirement: Tenant-scoped sync resolves exactly one tenant per run
 
 The system SHALL, in `TenantSyncProvider.ResolveTenantScope`, resolve the run's tenant **once** per
 `PreviewAsync`/`SyncAsync` call as `TenantSyncOptions.TenantGuid` when set and otherwise the ambient
 `CurrentTenantGuid` when `HasTenant` is true, and SHALL supply that one value to the fetch predicates,
-the save predicates, the knowledge/last-sync keys and the knowledge items alike. The system SHALL
+the save predicates, the knowledge scope and the result alike. The system SHALL
 throw `TenantMismatchException` when an explicit option tenant and an ambient tenant are both present
 and differ, and SHALL throw `TenantScopeRequiredException` when neither source supplies a tenant and
 the entity type declares a `TenantGuid` property; both refusals SHALL be suppressed while
@@ -1247,7 +1364,13 @@ instance or promote a plain `SyncOptions` into a `TenantSyncOptions`.
 
 - **Given** effective tenant `t` and scope `"invoices"`
 - **When** the provider loads knowledge and last-sync time
-- **Then** `GetKnowledgeAsync("invoices", t, ct)` and `GetLastSyncTimeAsync("invoices", t, ct)` are called, and on completion `SetLastSyncTimeAsync("invoices", t, now, ct)`
+- **Then** the engine runs on a clone of the options whose `Scope` is `TenantScope("invoices", t)` = `"invoices@tenant:{t:N}"`, so knowledge reads, `GetLastSyncTimeAsync` and `SetLastSyncTimeAsync` all use that tenant-qualified scope
+
+#### Scenario: The result reports the caller's scope and the resolved tenant
+
+- **Given** effective tenant `t`, scope `"invoices"`, and ambient tenant `t` named `"Acme"`
+- **When** `SyncAsync(options)` returns
+- **Then** it is a `TenantSyncResult` with `Scope == "invoices"`, `TenantGuid == t` and `TenantName` taken from `TenantSyncOptions.TenantName`, else `"Acme"` because the resolved tenant equals the ambient one; `PreviewAsync` likewise sets `preview.Scope` back to `"invoices"`
 
 ### Requirement: Tenant sync scopes the fetch predicates, not only the save predicates
 
@@ -1256,8 +1379,10 @@ The system SHALL, in `ApplyTenantFiltering`, conjoin a `TenantGuid`-equality pre
 `CanSaveToLocal` and `CanSaveToRemote` with a reflection-based `BelongsToTenant` check, whenever the
 run resolved a tenant and the entity type declares a `TenantGuid` property. `BuildTenantPredicate`
 SHALL emit an unlifted equality for a `Guid` or `Guid?` property and return null for any other
-property type. The system SHALL additionally drop any materialized row failing `BelongsToTenant` in
-`GetAllItemsAsync`, so the tenant guarantee does not depend on the backend honouring the predicate.
+property type. The shared engine SHALL additionally enforce the fetch predicate in process on the
+materialized rows, so the tenant guarantee does not depend on the backend honouring the predicate.
+`ApplyTenantFiltering` SHALL return a new `SyncFilterOptions<T>` and never write to the caller's
+instance.
 
 #### Scenario: Another tenant's rows never enter the comparison
 
@@ -1274,8 +1399,14 @@ property type. The system SHALL additionally drop any materialized row failing `
 #### Scenario: A backend that ignores the predicate is still scoped
 
 - **Given** a store whose filter translation discards the predicate it is handed
-- **When** `GetAllItemsAsync` materializes the rows
-- **Then** rows failing `BelongsToTenant` are dropped in-process, so no foreign row reaches the compare or delete paths
+- **When** the engine materializes the rows
+- **Then** rows failing the tenant fetch predicate are dropped in-process, so no foreign row reaches the compare or delete paths
+
+#### Scenario: A reused filter instance scopes each run independently
+
+- **Given** one `SyncFilterOptions<T>` reused across `foreach (t) SyncAsync(new TenantSyncOptions { TenantGuid = t }, filterOptions)`
+- **When** the loop runs
+- **Then** each run's tenant term is composed onto a copy, so the caller's predicates are unchanged after each call and no run is conjoined with an earlier tenant
 
 #### Scenario: Cross-tenant items are not saved
 
@@ -1319,175 +1450,60 @@ property type. The system SHALL additionally drop any materialized row failing `
 - **When** `ApplyTenantFiltering` runs
 - **Then** no wrapping happens and every item on both sides is eligible, regardless of its `TenantGuid`
 
-### Requirement: Sync knowledge items are stamped with the run's resolved tenant
+### Requirement: Sync knowledge is kept apart by a tenant-qualified scope
 
-The system SHALL, in `CreateKnowledgeItem`, stamp the `TenantGuid` supplied by the caller — the one
-value `ResolveTenantScope` returned for the run — as `TenantGuid ?? Guid.Empty` on a
-`TenantSyncKnowledgeItem`, and record `IsLocalDeleted` / `IsRemoteDeleted` only as
-`hasKnowledge && item == null`.
+The system SHALL keep each tenant's sync knowledge apart by running the engine under
+`TenantScope(scope, tenantGuid)`, which returns `"{scope}@tenant:{tenantGuid:N}"` for a resolved
+tenant and the caller's `scope` unchanged otherwise, so any `IAsyncSyncKnowledgeItemStore<TKnowledge>`
+can be used and no knowledge item carries a tenant of its own.
 
 #### Scenario: Knowledge is keyed to the tenant the writes were scoped to
 
 - **Given** a run resolved to tenant `u` over stores holding items of `u` and `t`
 - **When** the knowledge updates are written
-- **Then** every knowledge item carries `TenantGuid == u`, and no foreign entity's guid appears among them
+- **Then** every knowledge item is written under the scope `"{scope}@tenant:{u:N}"`, and no foreign entity's guid appears among them
 
-#### Scenario: No tenant anywhere stamps the zero guid
+#### Scenario: Two tenants' knowledge for one scope does not collide
+
+- **Given** runs for tenants `t` and `u` with the same `Scope` against one knowledge store
+- **When** each loads its knowledge and last-sync time
+- **Then** each reads only the rows of its own tenant-qualified scope, so one tenant's sync cannot mark another's items as already synced or deleted
+
+#### Scenario: No tenant anywhere uses the caller's scope
 
 - **Given** a run that resolved no tenant (a non-tenant entity type, or an all-tenants scope)
-- **When** a knowledge item is created
-- **Then** its `TenantGuid` is `Guid.Empty`
+- **When** knowledge is read and written
+- **Then** the caller's `Scope` is used as given, so that knowledge is separate from every tenant's
 
-#### Scenario: A first-seen one-sided item is not marked deleted
+### Requirement: Tenant sync runs the shared engine
 
-- **Given** an item present locally, absent remotely, with no prior knowledge entry
-- **When** the knowledge item is created
-- **Then** `IsRemoteDeleted` is false, because `hasKnowledge` is false — absence alone is not evidence of deletion
+The system SHALL implement `TenantSyncProvider<TStore, T, TKnowledge>` (where `TStore : IAsyncBulkStore<T>`,
+`T : AbstractModel`, `TKnowledge : AbstractModel, ISyncKnowledgeItem`) over one
+`AsyncSyncProvider<TStore, T, TKnowledge>` built from the local store, remote store and knowledge
+store, and SHALL contribute only the resolved tenant, the tenant-qualified scope and the tenant
+filter options; the batch loop, action decision, conflict resolution, version hashing, preview and
+error collection SHALL be the engine's. The engine SHALL be handed `options.Clone()` with only its
+`Scope` replaced, so the caller's `SyncOptions` is never written to. The non-generic
+`ISyncProvider` entry points SHALL accept a null filter or a `SyncFilterOptions<T>` and throw
+`ArgumentException` for filter options of any other type.
 
-#### Scenario: A previously-synced item now absent is marked deleted
+#### Scenario: The caller's options are not mutated
 
-- **Given** an item with a prior knowledge entry, now absent remotely
-- **When** the knowledge item is created
-- **Then** `IsRemoteDeleted` is true, which later drives a `SyncAction.Delete` on the local side
+- **Given** a `TenantSyncOptions` with `Scope == "invoices"` and `Direction == Upload`
+- **When** `SyncAsync(options)` runs as an initial sync
+- **Then** `options.Scope` is still `"invoices"`, `options.Direction` is still `Upload` and `options.TenantGuid` is unchanged — only the engine's clone carries the qualified scope
 
-### Requirement: Deterministic version hashing and cached timestamp reflection
+#### Scenario: A filter of another entity type is refused
 
-The system SHALL resolve the `UpdatedAt` property once per closed generic type into a
-`static readonly PropertyInfo?`, accepting both `DateTime` and `DateTime?` and caching null
-otherwise; `GetVersionHash` SHALL return null for a null entity, the round-trip `"O"` string of
-`UpdatedAt` when present, otherwise the uppercase hex SHA-256 of the entity's
-`System.Text.Json` serialization, and `string.Empty` if that serialization or hashing throws.
+- **Given** a provider over `Invoice`
+- **When** `((ISyncProvider)provider).SyncAsync(options, new SyncFilterOptions<Customer>())` is awaited
+- **Then** an `ArgumentException` naming `filterOptions` is thrown rather than the run proceeding unfiltered
 
-#### Scenario: Timestamped entity hashes to its timestamp
-
-- **Given** an entity with `UpdatedAt` set
-- **When** `GetVersionHash(entity)` is called
-- **Then** the result is `UpdatedAt.ToString("O")`
-
-#### Scenario: Untimestamped entity hashes deterministically
-
-- **Given** two entities with no `UpdatedAt` property but identical serialized state
-- **When** `GetVersionHash` is called on each
-- **Then** the two hashes are equal, so repeated syncs compare stable versions
-
-#### Scenario: An unserializable entity degrades to an empty version
-
-- **Given** an entity whose JSON serialization throws (e.g. a reference cycle)
-- **When** `GetVersionHash` is called
-- **Then** `string.Empty` is returned and no exception escapes
-
-#### Scenario: A non-DateTime UpdatedAt is ignored
-
-- **Given** a model with a `string UpdatedAt` property
-- **When** `GetUpdatedAt` is called
-- **Then** the cached `PropertyInfo` is null and the method returns null, sending version hashing down the content-hash path
-
-### Requirement: Preview propagates failures while Sync collects them
-
-The system SHALL let any exception escape `ExecutePreviewAsync` unchanged, and SHALL, in
-`ExecuteSyncAsync`, catch per-item exceptions into `result.Errors` (incrementing
-`progress.Errors`) and catch any outer exception into a single `SyncError { Message = "Sync failed" }`
-with `result.Success = false`, `EndTime`/`Duration` filled and progress reported as
-`SyncPhase.Failed`.
-
-#### Scenario: A store read failure surfaces from Preview
+#### Scenario: Engine failures surface as the engine reports them
 
 - **Given** a local store whose `ReadAsync` throws
-- **When** `PreviewAsync` is awaited
-- **Then** the original exception propagates to the caller — it is not reported as a conflict on a partial preview
-
-#### Scenario: A store read failure is swallowed into the result by Sync
-
-- **Given** the same failing store
-- **When** `SyncAsync` is awaited
-- **Then** it returns a `SyncResult` with `Success == false` and one `SyncError` whose `Message` is `"Sync failed"` and whose `Exception` is the original
-
-#### Scenario: One failing item does not abort the run
-
-- **Given** a batch where one item's write throws
-- **When** the sync continues
-- **Then** a `SyncError` with that item's `ItemGuid` and the action name is recorded, `progress.Errors` is incremented, and the remaining items are still processed
-
-#### Scenario: Duplicate entity guids abort differently per entry point
-
-- **Given** two items on the same side sharing a guid (e.g. both `Guid.Empty`)
-- **When** `localItems.ToDictionary(GetGuid)` runs
-- **Then** an `ArgumentException` is thrown, which propagates out of `PreviewAsync` but is converted into a `"Sync failed"` `SyncError` by `SyncAsync`
-
-### Requirement: Sync direction, cancellation and batch reporting
-
-The system SHALL compute `effectiveDirection = isInitialSync ? SyncDirection.Download : options.Direction`
-into a local variable, report it as `result.Direction`, check
-`options.CancellationToken.IsCancellationRequested` at both the batch loop and the item loop, and
-invoke `OnBatchCompleted` after each batch with `BatchNumber = (i / BatchSize) + 1`,
-`Processed = batchGuids.Count` and `Errors = result.Errors.Skip(result.Errors.Count - progress.Errors)`.
-
-#### Scenario: Initial sync downloads regardless of the requested direction
-
-- **Given** no recorded last-sync time and `Direction = Upload`
-- **When** `SyncAsync` runs
-- **Then** `result.IsInitialSync` is true, `result.Direction` is `Download`, and creates are applied to the local store
-
-#### Scenario: The caller's options object is not mutated for direction
-
-- **Given** `options.Direction == Upload` and an initial sync
-- **When** the run completes
-- **Then** `options.Direction` is still `Upload`; only the local `effectiveDirection` and `result.Direction` reflect the override
-
-#### Scenario: Cancellation stops the outer batch loop promptly
-
-- **Given** a token cancelled mid-batch
-- **When** the current batch's item loop breaks
-- **Then** the enclosing `for` also breaks on its next iteration check, so no further batches are iterated
-
-#### Scenario: Batch error reporting repeats earlier batches' errors
-
-- **Given** one error in batch 1 and one error in batch 2
-- **When** `OnBatchCompleted` fires for batch 2
-- **Then** `progress.Errors` is 2, so `Skip(Count - 2)` yields both errors — batch 2's callback reports batch 1's error as well
-
-#### Scenario: Conflict resolution failures reach the per-item handler
-
-- **Given** a conflict whose resolution write throws
-- **When** `ApplyConflictResolutionAsync` propagates
-- **Then** the caller's per-item `catch` records a `SyncError` and `result.Success` becomes false
-
-### Requirement: Sync conflict determination and resolution
-
-The system SHALL determine an action per item from existence on each side, the knowledge entry's
-`IsLocalDeleted`/`IsRemoteDeleted` flags and `options.Direction`, and SHALL resolve a `Conflict`
-through `options.OnConflict`, then `CustomConflictResolver` when the policy is `Custom`, then a
-policy switch defaulting to `ConflictResolution.UseLocal`.
-
-#### Scenario: Bidirectional presence on both sides consults the policy
-
-- **Given** an item present locally and remotely, `Direction = Bidirectional`, `ConflictPolicy = NewestWins`, and both sides carrying `UpdatedAt`
-- **When** the action is determined
-- **Then** it is `SyncAction.Update` with the winner being the side whose `UpdatedAt` is greater, and ties resolve to `"remote"` (the `>` comparison is strict)
-
-#### Scenario: Local edit versus remote delete is a conflict
-
-- **Given** an item present locally, absent remotely, with a knowledge entry whose `IsRemoteDeleted` is true, in `Bidirectional`
-- **When** the action is determined
-- **Then** it is `SyncAction.Conflict` with reason `"Modified locally but deleted remotely"`
-
-#### Scenario: Missing timestamps default to local
-
-- **Given** `NewestWins` and entities with no resolvable `UpdatedAt`
-- **When** `GetNewest` / `GetNewestConflictResolution` runs
-- **Then** `"local"` / `ConflictResolution.UseLocal` is returned
-
-#### Scenario: A Custom policy with no resolver falls back to UseLocal
-
-- **Given** `ConflictPolicy = Custom` and `CustomConflictResolver == null`
-- **When** `ResolveConflict` runs
-- **Then** the policy switch's default arm returns `ConflictResolution.UseLocal`
-
-#### Scenario: Download-only never writes to the remote
-
-- **Given** `Direction = Download` and an item present only locally with no remote-delete knowledge
-- **When** the action is determined
-- **Then** it is `SyncAction.Skip` — the local-only create is not uploaded
+- **When** `PreviewAsync` and `SyncAsync` are awaited
+- **Then** the outcome is the shared engine's — the provider adds no catch of its own, and `SyncAsync` copies the engine's `Success`, counts, `Errors`, timing, `Direction` and `IsInitialSync` into the `TenantSyncResult`
 
 ### Requirement: Tenant-scoped sync queue keys
 
@@ -1524,20 +1540,22 @@ and key via the base two-argument `GetQueueKey`.
 ### Requirement: Tenant-aware sync setup helpers
 
 The system SHALL expose `TenantSyncProviderExtensions.CreateTenantSync` and `WithTenantSync` to build
-a `TenantSyncProvider<TStore, T>` over a local store, a remote store, an `ISyncKnowledgeStore` and an
-optional `ITenantContext`, and SHALL require the entity type to expose a `Guid` property.
+a `TenantSyncProvider<TStore, T, TKnowledge>` over a local store, a remote store, an
+`IAsyncSyncKnowledgeItemStore<TKnowledge>` and an optional `ITenantContext`; `CreateTenantSync`
+returns a `TenantSyncSetup<TStore, T, TKnowledge>` carrying the provider and the knowledge store. The
+entity's `Guid` identity SHALL come from the `T : AbstractModel` constraint rather than a runtime check.
 
-#### Scenario: A model without a Guid property is rejected at construction
+#### Scenario: A model without a Guid identity cannot be closed over
 
-- **Given** a model type with no `Guid` property
-- **When** `new TenantSyncProvider<TStore, T>(...)` runs
-- **Then** an `InvalidOperationException` is thrown stating the type must have a `Guid` property
+- **Given** a model type that does not derive from `AbstractModel`
+- **When** `TenantSyncProvider<TStore, T, TKnowledge>` is closed over it
+- **Then** it does not compile — there is no runtime `Guid`-property check
 
 #### Scenario: Null stores are rejected
 
 - **Given** a null local store, remote store or knowledge store
 - **When** the constructor runs
-- **Then** an `ArgumentNullException` naming that parameter is thrown
+- **Then** an `ArgumentNullException` naming that parameter is thrown by the shared engine's constructor
 
 #### Scenario: Omitted context defaults to the static singleton
 

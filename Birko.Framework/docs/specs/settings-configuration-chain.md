@@ -1,7 +1,7 @@
 ---
 area: settings-configuration-chain
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Configuration/Settings.cs
   - ../Birko.Data.CosmosDB/Stores/Settings.cs
@@ -77,7 +77,9 @@ and `Port` appended, i.e. `"{Location}:{Name}:{UserName}:{Port}"`.
 
 The system SHALL allow descendants to override `GetId()` without calling `base.GetId()`, and the
 concrete backends SHALL do so with mutually incompatible field orders and field sets:
-`SqlSettings.GetId()` returns `"{Location}:{Port}:{Name}:{UserName}"`, `MongoDB.Stores.Settings.GetId()`
+`SqlSettings.GetId()` returns `"{Location}:{Port}:{Name}:{UserName}"` (with `:{Schema}` appended when
+`Schema` is non-empty), `SqLiteSettings.GetId()` returns `base.GetId()` (with `:{Schema}` appended when
+`Schema` is non-empty), `MongoDB.Stores.Settings.GetId()`
 returns the same `"{Location}:{Port}:{Name}:{UserName}"`, `CosmosDB.Stores.Settings.GetId()` returns
 `"{Location}:{Name}:{UserName}"` (no port), `RavenDB.Stores.Settings.GetId()` returns
 `"{Location}:{Name}"` (no username, no port), `InfluxDB.Stores.Settings.GetId()` returns
@@ -120,11 +122,17 @@ returns the same `"{Location}:{Port}:{Name}:{UserName}"`, `CosmosDB.Stores.Setti
 - **When** `GetId()` is called
 - **Then** it returns `"http://localhost:8086:acme:metrics"` — `Bucket` reads through to the base `Name`
 
-#### Scenario: SQLite and ElasticSearch inherit the two-field base identity
+#### Scenario: SQLite without a schema and ElasticSearch share the two-field base identity
 
-- **Given** a `SqLiteSettings("C:\\data", "app.db", "secret")` and an `ElasticSearch.Stores.Settings` with `Location = "C:\\data"`, `Name = "app.db"`
+- **Given** a `SqLiteSettings("C:\\data", "app.db", "secret")` with `Schema` unset and an `ElasticSearch.Stores.Settings` with `Location = "C:\\data"`, `Name = "app.db"`
 - **When** `GetId()` is called on each
-- **Then** both return `"C:\data:app.db"`, because neither overrides `GetId()`
+- **Then** both return `"C:\data:app.db"` — ElasticSearch does not override `GetId()`, and the SQLite override returns `base.GetId()` unchanged when `Schema` is null or empty
+
+#### Scenario: A default schema extends the SQL and SQLite identities
+
+- **Given** a `SqlSettings` with `Location = "srv"`, `Name = "db"`, `UserName = "sa"`, `Port = 1433`, `Schema = "sales"` and a `SqLiteSettings("C:\\data", "app.db")` with `Schema = "sales"`
+- **When** `GetId()` is called on each
+- **Then** they return `"srv:1433:db:sa:sales"` and `"C:\data:app.db:sales"` — two settings differing only by schema do not share an identity
 
 ### Requirement: No secret is ever part of a settings identity
 
@@ -501,6 +509,32 @@ copy it (together with `CommandTimeout`) in `LoadFrom`, and SHALL include it in 
 - **When** `GetId()` is called on each
 - **Then** both return `"C:\data:app.db"`
 
+### Requirement: SQL and SQLite settings carry a connection-wide default schema, in the identity but not the connection string
+
+The system SHALL implement `Birko.Data.SQL.Stores.ISqlSchemaSettings` (a single nullable `Schema`
+getter) on `SqlSettings` — and so on all four SQL providers, none of which redeclares it — and on
+`SqLiteSettings`, each exposing `Schema` as a settable nullable string defaulting to `null`. Each SHALL
+copy `Schema` in its same-type `LoadFrom`, SHALL append it to `GetId()` only when it is non-empty, and
+SHALL NOT include it in `GetConnectionString()`.
+
+#### Scenario: Schema defaults to null and leaves the identity unchanged
+
+- **Given** a default-constructed `SqlSettings` and a default-constructed `SqLiteSettings`
+- **When** `Schema` and `GetId()` are read
+- **Then** `Schema` is `null` on both and each `GetId()` is the same string it was before the property existed
+
+#### Scenario: The schema is copied by LoadFrom
+
+- **Given** a target `PostgreSqlSettings` and a source `PostgreSqlSettings { Schema = "sales" }`, and a target `SqLiteSettings` and a source `SqLiteSettings { Schema = "sales" }`
+- **When** `target.LoadFrom((Birko.Configuration.Settings)source)` is called on each pair
+- **Then** both targets have `Schema == "sales"`
+
+#### Scenario: The schema is not part of any connection string
+
+- **Given** an `MSSqlSettings` and a `SqLiteSettings`, each with `Schema = "sales"`
+- **When** `GetConnectionString()` is called on each
+- **Then** neither returned string contains the schema — it is applied by the connector to table identifiers, not by the driver
+
 ### Requirement: MongoDB prefers an explicit raw connection string and otherwise composes a mongodb:// URI
 
 The system SHALL return `RawConnectionString` verbatim from `GetConnectionString()` whenever it is
@@ -705,6 +739,34 @@ caught it was environment-gated *and* could not have passed if ungated.
 - **Given** a default-constructed `CosmosDB.Stores.Settings`
 - **When** `PartitionKeyPath` is read
 - **Then** it is `"/id"`
+
+### Requirement: CosmosDB settings accept any PartitionKeyPath and the stores refuse one other than /id
+
+The system SHALL let `CosmosDB.Stores.Settings.PartitionKeyPath` be assigned and copied by `LoadFrom`
+without validation, and SHALL provide an internal `RequireAddressablePartitionKeyPath()` that returns
+when the path is null, empty or `"/id"` and otherwise throws `NotSupportedException` naming the path
+and stating that only a container partitioned on `'/id'` is accepted. `CosmosDBStore` and
+`AsyncCosmosDBStore` SHALL call it in their settings-taking constructors and in
+`SetSettings(ISettings)` (for a Cosmos settings object or one loaded from a `RemoteSettings`), before
+creating a `CosmosClient`.
+
+#### Scenario: A non-/id path is refused when the store takes the settings
+
+- **Given** a `CosmosDB.Stores.Settings` with `PartitionKeyPath = "/tenantId"`
+- **When** it is passed to `SetSettings` on a `CosmosDBStore` or `AsyncCosmosDBStore`, or to their constructor that takes settings
+- **Then** a `NotSupportedException` is thrown whose message names `'/tenantId'`, and no `CosmosClient` is created
+
+#### Scenario: The settings object itself accepts the path
+
+- **Given** a `CosmosDB.Stores.Settings`
+- **When** `PartitionKeyPath = "/tenantId"` is assigned, or copied from another instance by `LoadFrom`
+- **Then** no exception is thrown — the refusal happens only when a store takes the settings
+
+#### Scenario: An empty path is accepted
+
+- **Given** a `CosmosDB.Stores.Settings` with `PartitionKeyPath = ""`
+- **When** a Cosmos store takes the settings
+- **Then** no exception is thrown, because a null or empty path passes the check alongside `"/id"`
 
 ### Requirement: RavenDB settings build and initialize a DocumentStore, ignoring the credential slots
 

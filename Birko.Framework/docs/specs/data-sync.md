@@ -1,7 +1,7 @@
 ---
 area: data-sync
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.Aggregates/Core/AggregateDefinition.cs
   - ../Birko.Data.Aggregates/Core/ExpressionHelper.cs
@@ -18,7 +18,6 @@ sources:
   - ../Birko.Data.Aggregates/Mapping/SyncOperationType.cs
   - ../Birko.Data.Sync.CosmosDB/Models/CosmosSyncKnowledgeItem.cs
   - ../Birko.Data.Sync.CosmosDB/Stores/AsyncCosmosSyncKnowledgeStore.cs
-  - ../Birko.Data.Sync.CosmosDB/Stores/CosmosSyncKnowledgeQuery.cs
   - ../Birko.Data.Sync.CosmosDB/Stores/CosmosSyncKnowledgeStore.cs
   - ../Birko.Data.Sync.ElasticSearch/Models/ElasticSyncKnowledgeItem.cs
   - ../Birko.Data.Sync.ElasticSearch/Stores/AsyncElasticSyncKnowledgeStore.cs
@@ -52,7 +51,6 @@ sources:
   - ../Birko.Data.Sync/Models/SyncResult.cs
   - ../Birko.Data.Sync/Stores/IAsyncSyncKnowledgeItemStore.cs
   - ../Birko.Data.Sync/Stores/ISyncKnowledgeItemStore.cs
-  - ../Birko.Data.Sync/Stores/ISyncKnowledgeStore.cs
   - ../Birko.Data.Sync/SyncProvider.cs
   - ../Birko.Data.Sync/SyncQueue.cs
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
@@ -77,10 +75,10 @@ batches, resolve conflicts according to a policy, and persist a knowledge row pe
 history. A `Preview`/`PreviewAsync` pair produces the same decisions without writing anything.
 
 Sync knowledge is a per-backend concern: `Birko.Data.Sync.Sql`, `.Json`, `.Xml`, `.MongoDb`,
-`.ElasticSearch`, `.RavenDB` and `.CosmosDB` each ship a knowledge model plus a store, and they do **not**
-all expose the same contract — only some implement the provider-facing
-`ISyncKnowledgeItemStore<T>` / `IAsyncSyncKnowledgeItemStore<T>` interfaces, and the RavenDB and CosmosDB
-stores expose a different, tenant-parameterised surface instead. `SyncQueue` serialises sync runs.
+`.ElasticSearch`, `.RavenDB` and `.CosmosDB` each ship a knowledge model plus a store, and every one of
+them implements the provider-facing `IAsyncSyncKnowledgeItemStore<T>` interface; `.Sql`, `.RavenDB` and
+`.CosmosDB` also implement the synchronous `ISyncKnowledgeItemStore<T>`. No knowledge store carries a
+tenant; a tenant's knowledge is kept apart by a tenant-qualified scope. `SyncQueue` serialises sync runs.
 
 `Birko.Data.Aggregates` is the companion piece for syncing *shapes* rather than rows: an
 `AggregateDefinition<T>` declares which related entities belong to a root, `AggregateMapper<T>` flattens a
@@ -121,12 +119,14 @@ mapping a non-`Guid` or null property value to `Guid.Empty` via `GetGuid`.
 ### Requirement: Initial sync is forced to Download and never overwrites existing local rows
 
 The system SHALL treat a scope whose knowledge store reports no last-sync time as an initial sync, SHALL
-overwrite `options.Direction` with `SyncDirection.Download`, and SHALL emit `SyncAction.Create` only for
-entities that exist remotely and not locally — every other combination is `SyncAction.Skip`.
+report `SyncDirection.Download` as the run's direction without writing to the caller's `SyncOptions`, and
+SHALL emit `SyncAction.Create` only for entities that exist remotely and not locally — every other
+combination is `SyncAction.Skip`.
 
-`Sync`/`SyncAsync` set `isInitialSync = !lastSyncTime.HasValue`, assign `result.IsInitialSync`, then mutate
-`options.Direction = SyncDirection.Download`. `DetermineSyncAction`'s initial-sync branch returns
-`Create` for remote-only, and `Skip` for both other cases (including "already exists locally").
+`Sync`/`SyncAsync` set `isInitialSync = !lastSyncTime.HasValue`, assign `result.IsInitialSync`, then set
+`result.Direction = SyncDirection.Download`. `DetermineSyncAction`'s initial-sync branch is evaluated before
+it reads `Direction`, and returns `Create` for remote-only, and `Skip` for both other cases (including
+"already exists locally").
 
 #### Scenario: First run downloads remote-only entities
 
@@ -141,28 +141,68 @@ entities that exist remotely and not locally — every other combination is `Syn
 - **When** `Sync` runs
 - **Then** the action is `Skip`, no store write occurs, and `result.Skipped` is incremented
 
-#### Scenario: Requested direction is reported, not the direction used
+#### Scenario: The direction used is reported, and the caller's options are untouched
 
 - **Given** a caller passes `SyncOptions { Direction = Bidirectional }` on an initial sync
 - **When** `Sync` returns
-- **Then** `result.Direction` is `Bidirectional` because it was captured before the override
-- **And** the caller's own `SyncOptions` instance now has `Direction == Download`, because the override mutates the passed object
+- **Then** `result.Direction` is `Download`, the direction the run actually used
+- **And** the caller's own `SyncOptions` instance still has `Direction == Bidirectional`, so a reused options object does not stay Download for later runs
+
+#### Scenario: A first run that reconciled nothing still ends the initial sync
+
+- **Given** an initial sync where both stores are empty, or only local-only entities exist (which the initial sync skips)
+- **When** `Sync` completes
+- **Then** a scope marker knowledge row with `EntityGuid = Guid.Empty` and null versions is persisted alongside the round's knowledge, and the last sync time is stamped onto it
+- **And** the next run is not an initial sync, so its local-only entities are uploaded under `Bidirectional`
+
+### Requirement: Change and deletion are judged against a known pair
+
+The system SHALL, outside an initial sync, treat a knowledge row as a **known pair** only when it has
+`IsLocalDeleted == false`, `IsRemoteDeleted == false` and non-empty `LocalVersion` and `RemoteVersion` —
+a record that both sides held the entity at the last reconcile. A side SHALL count as **deleted** only when
+a known pair exists and that side no longer holds the entity, and a present side SHALL count as **changed**
+when there is no known pair or its current version hash differs from the version the pair recorded for it.
+The stored `IsLocalDeleted` / `IsRemoteDeleted` flags SHALL NOT by themselves signal a deletion.
+
+`DetermineSyncAction` computes `knownPair`, `localDeleted = knownPair && !localExists`,
+`remoteDeleted = knownPair && !remoteExists`, `localChanged` / `remoteChanged` via
+`HasChanged(item, recordedVersion)` (`GetVersionHash(item) != recordedVersion`), and
+`unchangedPair = knownPair && both exist && neither changed`.
+
+#### Scenario: A deletion after a synced round propagates instead of being re-created
+
+- **Given** entity `G` was reconciled on both sides by an earlier run, leaving a known pair
+- **And** `G` is then deleted from the remote store and is unchanged locally
+- **When** `Sync` runs with `Direction = Bidirectional`
+- **Then** the action is `Delete` with `DeleteOn = "local"`, the local copy is deleted, and `result.Created` is 0
+
+#### Scenario: A legacy tombstone row is not a known pair
+
+- **Given** entity `G` exists only locally and its knowledge row has `IsRemoteDeleted = true` and a null `RemoteVersion`
+- **When** `Sync` runs with `Direction = Bidirectional`
+- **Then** there is no known pair, so `G` is not treated as remotely deleted and the action is `Create` on the remote
 
 ### Requirement: Download-only action selection
 
 The system SHALL, when `Direction` is `Download`, create locally what exists only remotely, update locally
-whenever the entity exists on both sides, delete locally only when knowledge records the entity as remotely
-deleted, and skip otherwise.
+when the entity exists on both sides unless it is an unchanged known pair (which is skipped), delete locally
+only when a known pair records the entity and it is now absent remotely, and skip otherwise.
 
-`DetermineSyncAction`'s Download branch returns `Create`; `(Update, "remote")`;
-`(Delete, DeleteOn = "local")` when `knowledgeItem?.IsRemoteDeleted == true`; else `Skip`.
+`DetermineSyncAction`'s Download branch returns `Create`; `Skip` for `unchangedPair` else
+`(Update, "remote")`; `(Delete, DeleteOn = "local")` when `remoteDeleted`; else `Skip`.
 
-#### Scenario: Existing-on-both entity is rewritten every run
+#### Scenario: An unchanged pair is skipped
 
-- **Given** `Direction = Download` and entity `G` exists in both stores with identical contents
+- **Given** `Direction = Download` and entity `G` exists in both stores, unchanged on both sides since the known pair was recorded
+- **When** `Sync` runs
+- **Then** the action is `Skip`, no store write occurs, and `result.Skipped` is incremented
+
+#### Scenario: Existing-on-both entity with no known pair is rewritten from remote
+
+- **Given** `Direction = Download` and entity `G` exists in both stores with no knowledge row
 - **When** `Sync` runs
 - **Then** the action is `Update` with winner `"remote"` and `_localStore.Update(remoteItem, null)` is called
-- **And** `result.Updated` is incremented — no comparison against `knowledgeItem.RemoteVersion` is performed
+- **And** `result.Updated` is incremented — the same holds when only the local side changed, because Download always takes the remote copy
 
 #### Scenario: Local-only entity with no knowledge is skipped in Download
 
@@ -172,15 +212,16 @@ deleted, and skip otherwise.
 
 #### Scenario: Local-only entity known to be remotely deleted is deleted locally
 
-- **Given** `Direction = Download`, entity `G` exists only locally, and its knowledge row has `IsRemoteDeleted = true`
+- **Given** `Direction = Download`, entity `G` exists only locally, and its knowledge row is a known pair
 - **When** `Sync` runs
 - **Then** `_localStore.Delete(localItem)` is called and `result.Deleted` is incremented
 
 ### Requirement: Upload-only action selection
 
 The system SHALL, when `Direction` is `Upload`, mirror the Download rules with the sides exchanged: create
-remotely what exists only locally, update remotely when both sides hold the entity, delete remotely only
-when knowledge records `IsLocalDeleted`, and skip otherwise.
+remotely what exists only locally, update remotely when both sides hold the entity unless it is an
+unchanged known pair, delete remotely only when a known pair records the entity and it is now absent
+locally, and skip otherwise.
 
 #### Scenario: Local-only entity is created remotely
 
@@ -190,45 +231,64 @@ when knowledge records `IsLocalDeleted`, and skip otherwise.
 
 #### Scenario: Remote-only entity known to be locally deleted is deleted remotely
 
-- **Given** `Direction = Upload`, entity `G` exists only remotely, and its knowledge row has `IsLocalDeleted = true`
+- **Given** `Direction = Upload`, entity `G` exists only remotely, and its knowledge row is a known pair
 - **When** `Sync` runs
 - **Then** `_remoteStore.Delete(remoteItem)` is called and `result.Deleted` is incremented
 
-### Requirement: Bidirectional both-sides-present never reports a conflict
+### Requirement: Bidirectional both-sides-present compares against the known pair
 
-The system SHALL, when `Direction` is `Bidirectional` and the entity exists on both sides, always return
-`SyncAction.Update` with the winner chosen by `GetWinner(local, remote, options.ConflictPolicy)`, and SHALL
-NOT emit `SyncAction.Conflict` for this case, SHALL NOT invoke `OnConflict`, and SHALL NOT invoke
-`CustomConflictResolver`.
+The system SHALL, when `Direction` is `Bidirectional` and the entity exists on both sides, return
+`SyncAction.Skip` for an unchanged known pair; SHALL, when a known pair exists and exactly one side changed,
+return `SyncAction.Update` with that side as the winner regardless of policy; SHALL, when both sides
+changed (or there is no known pair), return `Update` with winner `"local"` under `LocalWins` and `"remote"`
+under `RemoteWins`; SHALL, for any other policy with a known pair and both sides changed, return
+`SyncAction.Conflict` carrying both items and the reason `"Modified on both sides"`; and SHALL, with no known
+pair under any other policy, return `Update` with the winner chosen by `GetWinner(local, remote,
+options.ConflictPolicy)`, invoking neither `OnConflict` nor `CustomConflictResolver`.
 
 `GetWinner` maps `LocalWins → "local"`, `RemoteWins → "remote"`, `NewestWins → GetNewest(...)`, and every
 other value — including `ConflictResolutionPolicy.Custom` — to the default arm `_ => "local"`.
 
-#### Scenario: Custom policy silently degrades to LocalWins
+#### Scenario: A both-sides edit is a conflict that reaches the custom resolver
 
 - **Given** `Direction = Bidirectional`, `ConflictPolicy = Custom`, a non-null `CustomConflictResolver`
-- **And** entity `G` exists on both sides
+- **And** entity `G` has a known pair and both sides changed since it was recorded
+- **When** `Sync` runs
+- **Then** the action is `Conflict` with `ConflictInfo { LocalItem = localItem, RemoteItem = remoteItem, Reason = "Modified on both sides" }`
+- **And** `CustomConflictResolver` is invoked and `result.Conflicts` is 1
+
+#### Scenario: Custom policy without a known pair silently degrades to LocalWins
+
+- **Given** `Direction = Bidirectional`, `ConflictPolicy = Custom`, a non-null `CustomConflictResolver`
+- **And** entity `G` exists on both sides with no knowledge row
 - **When** `Sync` runs
 - **Then** the winner is `"local"`, `_remoteStore.Update(localItem, null)` is called
 - **And** `CustomConflictResolver` is never invoked and `result.Conflicts` stays 0
 
+#### Scenario: One side changed wins regardless of policy
+
+- **Given** `Direction = Bidirectional`, `ConflictPolicy = LocalWins`, and entity `G` has a known pair in which only the remote side changed
+- **When** `Sync` runs
+- **Then** the action is `Update` with winner `"remote"` and the local store is updated from the remote item
+
 #### Scenario: NewestWins picks the later UpdatedAt
 
-- **Given** `Direction = Bidirectional`, `ConflictPolicy = NewestWins`, local `UpdatedAt` is later than remote's
+- **Given** `Direction = Bidirectional`, `ConflictPolicy = NewestWins`, no knowledge row for the entity, and local `UpdatedAt` is later than remote's
 - **When** `Sync` runs
 - **Then** the winner is `"local"` and the remote store is updated from the local item
 
-### Requirement: Bidirectional one-sided presence branches on the knowledge deletion flags
+### Requirement: Bidirectional one-sided presence branches on the known pair
 
 The system SHALL, when `Direction` is `Bidirectional` and the entity exists on exactly one side, return
-`SyncAction.Create` when no knowledge row marks the *other* side as deleted; and when the other side is
-marked deleted, SHALL resolve by policy — `RemoteWins`/`LocalWins` producing a `Delete` or a `Create`, and
-any other policy producing `SyncAction.Conflict` carrying a `ConflictInfo` with only the surviving item
-populated.
+`SyncAction.Create` when there is no known pair (the *other* side is not deleted); and when a known pair
+shows the other side deleted, SHALL return `Delete` on the surviving side when the survivor is unchanged
+since the pair was recorded, and otherwise SHALL resolve by policy — `RemoteWins`/`LocalWins` producing a
+`Delete` or a `Create`, and any other policy producing `SyncAction.Conflict` carrying a `ConflictInfo` with
+only the surviving item populated.
 
 #### Scenario: Local-only, remote recorded as deleted, RemoteWins
 
-- **Given** `Direction = Bidirectional`, `ConflictPolicy = RemoteWins`, entity `G` exists only locally with knowledge `IsRemoteDeleted = true`
+- **Given** `Direction = Bidirectional`, `ConflictPolicy = RemoteWins`, entity `G` exists only locally with a known pair, and the local copy changed since
 - **When** `Sync` runs
 - **Then** the action is `Delete` with `DeleteOn = "local"` and the local row is deleted
 
@@ -239,9 +299,15 @@ populated.
 - **Then** the action is `Conflict` with `ConflictInfo { LocalItem = localItem, RemoteItem = null, Reason = "Modified locally but deleted remotely" }`
 - **And** `result.Conflicts` is incremented
 
+#### Scenario: An unchanged survivor follows the deletion under any policy
+
+- **Given** `Direction = Bidirectional`, `ConflictPolicy = LocalWins`, entity `G` exists only locally with a known pair, and the local copy is unchanged since
+- **When** `Sync` runs
+- **Then** the action is `Delete` with `DeleteOn = "local"`
+
 #### Scenario: Remote-only, local recorded as deleted, LocalWins
 
-- **Given** `Direction = Bidirectional`, `ConflictPolicy = LocalWins`, entity `G` exists only remotely with knowledge `IsLocalDeleted = true`
+- **Given** `Direction = Bidirectional`, `ConflictPolicy = LocalWins`, entity `G` exists only remotely with a known pair, and the remote copy changed since
 - **When** `Sync` runs
 - **Then** the action is `Delete` with `DeleteOn = "remote"`
 
@@ -281,28 +347,30 @@ that increments `progress.SkippedItems`.
 
 - **Given** the state left by the first scenario, under any `ConflictPolicy`
 - **When** `Sync` runs again with `Direction = Bidirectional`
-- **Then** the entity now exists on both sides, so the action is `Update` rather than `Delete`
+- **Then** the entity now exists on both sides as an unchanged known pair, so the action is `Skip` rather than `Delete`
 - **And** both copies remain and `result.Deleted` is 0
 
 ### Requirement: Conflict resolution writes on the winning side, including one-sided conflicts
 
 The system SHALL apply a conflict resolution to whichever sides are materialised. With **both** items
-present it SHALL `Update` the losing side. With only **one** item present — which is the only shape the
-provider actually produces, since conflicts are raised solely by the two one-sided-presence branches — it
+present — the shape raised when both sides of a known pair changed — it SHALL `Update` the losing side.
+With only **one** item present — the shape raised by the two one-sided-presence branches — it
 SHALL either re-create the entity on the side that lost it, when the resolution favours the surviving side,
-or delete the surviving copy, when the resolution favours the side on which the entity was deleted. Those
+or delete the surviving copy, when the resolution favours the side on which the entity was deleted; every
+write, deletes included, SHALL pass the save filter of the side it writes to. Those
 outcomes SHALL match what `DetermineSyncAction`'s `LocalWins` / `RemoteWins` shortcuts already return for
 the identical state, so a policy and its conflict path cannot disagree. The system SHALL count
-`ConflictResolution.Skip` as a skipped item, and SHALL take no action at all for `ConflictResolution.Merge`,
-which has no mechanism behind it.
+`ConflictResolution.Skip`, and a resolution whose write a save filter blocked, as a skipped item that is not
+recorded as reconciled, and SHALL refuse `ConflictResolution.Merge`, which has no mechanism behind it, by
+failing the item with a `SyncError`.
 
 `ApplyConflictResolution` has three `UseLocal` arms and three `UseRemote` arms — both-present, surviving-side
-only, and deleted-side only — and returns the `(local, remote)` pair as it stands after the write. `Merge`
-has no `case`.
+only, and deleted-side only — and returns the `(local, remote, applied)` triple as it stands after the
+write. The `Merge` case throws `NotSupportedException`.
 
 #### Scenario: A local-only conflict resolved UseLocal re-creates the remote
 
-- **Given** a `Conflict` raised by the local-only / `IsRemoteDeleted` path, so `remoteItem` is null
+- **Given** a `Conflict` raised by the local-only / remote-deleted path (a known pair whose remote side is gone), so `remoteItem` is null
 - **And** `ConflictPolicy = NewestWins`, so `GetNewestConflictResolution` sees `RemoteItem == null` and returns `UseLocal`
 - **When** `ApplyConflictResolution` runs
 - **Then** the local entity is created on `_remoteStore` and `progress.CreatedItems` is incremented
@@ -310,7 +378,7 @@ has no `case`.
 
 #### Scenario: A remote-only conflict resolved UseRemote re-creates the local
 
-- **Given** a `Conflict` raised by the remote-only / `IsLocalDeleted` path, so `localItem` is null
+- **Given** a `Conflict` raised by the remote-only / local-deleted path, so `localItem` is null
 - **And** the resolution is `UseRemote`
 - **When** `ApplyConflictResolution` runs
 - **Then** the remote entity is created on `_localStore` and `progress.CreatedItems` is incremented
@@ -321,17 +389,18 @@ has no `case`.
 - **When** `ApplyConflictResolution` runs
 - **Then** the surviving local copy is deleted and `progress.DeletedItems` is incremented
 
-#### Scenario: Merge resolution is inert
+#### Scenario: Merge resolution is refused as an error
 
 - **Given** `ConflictPolicy = Custom` with a resolver returning `ConflictResolution.Merge`
 - **When** a `Conflict` action is applied
-- **Then** no store write occurs and neither `UpdatedItems` nor `SkippedItems` is incremented
+- **Then** `NotSupportedException` reading `ConflictResolution.Merge is not supported for <T> <guid>: no merge exists. Resolve with UseLocal, UseRemote or Skip.` is reported through `options.OnError` and rethrown
+- **And** the per-item handler records a `SyncError` for the item, no store write occurs, no knowledge row is emitted, and `result.Success` is false
 
 #### Scenario: Skip resolution counts as a skip
 
 - **Given** a custom resolver returning `ConflictResolution.Skip`
 - **When** a `Conflict` action is applied
-- **Then** `progress.SkippedItems` is incremented and no store write occurs
+- **Then** `progress.SkippedItems` is incremented, no store write occurs, and no knowledge row is emitted, so the conflict is raised again next run
 
 ### Requirement: Conflict resolution is chosen by policy with a custom hook
 
@@ -375,20 +444,30 @@ timestamps are present and **equal**, the system SHALL select `"remote"`.
 - **When** `GetNewest` runs
 - **Then** both lookups return null and the result is `"local"`
 
-### Requirement: Version hashes are derived from UpdatedAt with a random fallback
+### Requirement: Version hashes are derived from UpdatedAt with a content-hash fallback
 
 The system SHALL derive an entity's version hash as its `UpdatedAt` rendered with the round-trip `"O"`
-format, SHALL return null for a null entity, and SHALL return a **freshly generated random**
-`Guid.NewGuid().ToString()` when the entity exists but has no usable `UpdatedAt`.
+format, SHALL return null for a null entity, SHALL return the upper-case hex SHA-256 of the entity's
+`System.Text.Json` serialization (of its runtime type) when the entity exists but has no usable `UpdatedAt`,
+and SHALL return a **freshly generated random** `Guid.NewGuid().ToString()` only when that serialization
+throws. A present entity SHALL never get an empty version.
 
-`GetVersionHash` returns `updatedAt?.ToString("O") ?? Guid.NewGuid().ToString()`.
+`GetVersionHash` returns `updatedAt.Value.ToString("O")`, else
+`Convert.ToHexString(SHA256.HashData(UTF8(JsonSerializer.Serialize(entity, entity.GetType()))))`, else (on
+any exception) `Guid.NewGuid().ToString()`.
 
-#### Scenario: Missing timestamp yields a non-reproducible hash
+#### Scenario: Missing timestamp yields a reproducible content hash
 
 - **Given** an entity with no `UpdatedAt` property
-- **When** `GetVersionHash` is called twice on the same instance
-- **Then** the two calls return different values
-- **And** the persisted knowledge row's `LocalVersion` therefore cannot be compared across runs
+- **When** `GetVersionHash` is called twice on the same unchanged instance
+- **Then** the two calls return the same value, so an unchanged row is recognised as unchanged across runs and skipped
+- **And** changing any serialized field changes the hash
+
+#### Scenario: An unserializable entity always counts as changed
+
+- **Given** an entity with no `UpdatedAt` whose serialization throws
+- **When** `GetVersionHash` is called twice
+- **Then** the two calls return different random values, so `HasChanged` is always true for it
 
 #### Scenario: Absent entity yields a null hash which sets the deletion flag
 
@@ -402,9 +481,8 @@ The system SHALL build each knowledge row from the local and remote entities **a
 action has been applied**, not from the pre-action dictionaries: after a create the destination's version
 hash SHALL be the source entity's hash, after an update the updated side SHALL carry the winner's hash, and
 after a delete the deleted side's hash SHALL be null. Because `IsLocalDeleted` / `IsRemoteDeleted` are
-derived as `string.IsNullOrEmpty(hash)`, this is what keeps those flags meaning "deleted" rather than merely
-"absent when the decision was taken" — the two `Delete` branches of `DetermineSyncAction` read them as the
-former.
+derived as `string.IsNullOrEmpty(hash)`, this is what keeps a row written after a create or update a
+known pair for the next run.
 
 `ProcessBatch`/`ProcessBatchAsync` track an `effectiveLocal` / `effectiveRemote` pair through the switch and
 pass those to `CreateKnowledgeItem`.
@@ -427,10 +505,35 @@ pass those to `CreateKnowledgeItem`.
 - **When** the knowledge row is written
 - **Then** `LocalVersion` is null and `IsLocalDeleted` is true
 
+### Requirement: Only a reconciled state is recorded as knowledge
+
+The system SHALL emit an item's knowledge row only when every write its action needed happened and the
+post-action state is reconciled — both sides hold the entity, or neither does. A one-sided state (an initial
+sync that skipped a local-only entity, a create, update or delete a save filter blocked, a conflict left
+unresolved by `Skip` or by a blocked write) SHALL emit no row, so the existing row, if any, is left as it
+was and the difference is decided again next run.
+
+`ProcessBatch`/`ProcessBatchAsync` keep a `reconciled` flag (cleared by a blocked update or delete, and set
+from the conflict resolution's `applied`), and emit only when `reconciled && IsReconciled(effectiveLocal,
+effectiveRemote)`, where `IsReconciled(local, remote) => (local == null) == (remote == null)`.
+
+#### Scenario: A local-only entity skipped by the initial sync survives the second run
+
+- **Given** entity `G` exists only locally at an initial sync, which skips it and writes no row for it
+- **When** the second run executes with `Direction = Bidirectional` and `ConflictPolicy = RemoteWins`
+- **Then** there is no known pair for `G`, so it is uploaded rather than deleted
+
+#### Scenario: A blocked create leaves no knowledge
+
+- **Given** a `Create` toward the local store that `CanSaveToLocal` blocks
+- **When** the item is processed
+- **Then** `progress.SkippedItems` is incremented and no knowledge row is emitted for it
+
 ### Requirement: Save filters gate every write and their block action is honoured per branch
 
 The system SHALL treat a null `CanSaveToLocal`/`CanSaveToRemote` as "permitted", SHALL consult the predicate
-otherwise, and on a block SHALL apply `SyncFilterOptions.OnSaveFilterBlock`: `Skip` does nothing,
+otherwise — for creates, updates and deletes alike, a delete consulting the filter of the side it removes
+from — and on a block SHALL apply `SyncFilterOptions.OnSaveFilterBlock`: `Skip` does nothing,
 `LogAsError` invokes `options.OnError` with a `SaveFilter` operation, `ThrowException` throws
 `InvalidOperationException`, and `MarkConflict` invokes `options.OnConflict` with a `ConflictInfo` carrying
 the block reason.
@@ -441,12 +544,18 @@ the block reason.
 - **When** the `Create` case runs under `Direction = Download`
 - **Then** no local write occurs, `progress.SkippedItems` is incremented, and no callback fires
 
-#### Scenario: A blocked update produces no write and no counter change
+#### Scenario: A blocked update counts as skipped and is retried
 
 - **Given** an `Update` action with winner `"remote"` and `CanSaveToLocal` returning false
 - **When** the `Update` case runs
 - **Then** the `else if (winner == "local" ...)` branch is also evaluated and fails, so no write occurs
-- **And** neither `UpdatedItems` nor `SkippedItems` is incremented
+- **And** `SkippedItems` is incremented and no knowledge row is emitted, so the difference is decided again next run
+
+#### Scenario: A blocked delete keeps the row
+
+- **Given** a `Delete` action with `DeleteOn = "local"` and `CanSaveToLocal` returning false for the local copy
+- **When** the `Delete` case runs
+- **Then** no delete occurs, `SkippedItems` is incremented, and no knowledge row is emitted
 
 #### Scenario: ThrowException surfaces as a recorded per-item error, not an aborted run
 
@@ -455,27 +564,36 @@ the block reason.
 - **Then** the `InvalidOperationException` is caught by the per-item handler, a `SyncError` with `ItemGuid = G` and `Operation = "Create"` is added, `progress.Errors` is incremented
 - **And** the remaining items in the batch are still processed, and `result.Success` ends up false
 
-#### Scenario: A save-filter throw during conflict resolution escapes result.Errors
+#### Scenario: A save-filter throw during conflict resolution reaches result.Errors
 
 - **Given** `OnSaveFilterBlock = ThrowException` and a `Conflict` whose resolution attempts a blocked save
 - **When** `ApplyConflictResolution` runs
-- **Then** the exception is caught inside `ApplyConflictResolution`, reported only through `options.OnError` with `Operation = "ConflictResolution"`
-- **And** it is not added to `result.Errors`, so `result.Success` can still be true
+- **Then** the exception is reported through `options.OnError` with `Operation = "ConflictResolution"` and rethrown
+- **And** the per-item handler adds a `SyncError` with `Operation = "Conflict"` to `result.Errors`, so `result.Success` is false
 
 ### Requirement: Batching, item capping and cancellation
 
-The system SHALL process the union of local and remote Guids in slices of `options.BatchSize`, SHALL cap the
-union to `options.MaxItems` when that value is non-null and `>= 0` and the union is larger, SHALL invoke
+The system SHALL refuse a null `options` with `ArgumentNullException` and a non-positive
+`options.BatchSize` with `ArgumentOutOfRangeException`, thrown from `Sync`/`SyncAsync` to the caller before
+any read; SHALL process the union of local and remote Guids in slices of `options.BatchSize`; SHALL cap the
+union to `options.MaxItems` when that value is non-null and `>= 0` and the union is larger, taking the
+Guids whose action is not `Skip` first and then ascending Guid order; SHALL invoke
 `OnBatchStarting` with a 1-based batch number before each slice and `OnBatchCompleted` with a
 `SyncBatchResult` after it, and SHALL stop processing further items and further batches once
-`options.CancellationToken.IsCancellationRequested`.
+`options.CancellationToken.IsCancellationRequested`. `Preview`/`PreviewAsync` apply the same cap.
 
-#### Scenario: MaxItems truncates the union
+#### Scenario: MaxItems truncates the union, work first
 
-- **Given** the union of local and remote Guids has 250 entries and `MaxItems = 100`
+- **Given** the union of local and remote Guids has 250 entries, 30 of which need work, and `MaxItems = 100`
 - **When** `Sync` runs
-- **Then** only the first 100 Guids of `localDict.Keys.Union(remoteDict.Keys)` are processed
-- **And** which 100 those are depends on dictionary enumeration order, not on any explicit ordering
+- **Then** `SelectGuids` processes the 30 that need work plus the 70 lowest settled Guids, ordered by `(Settled, Guid)`
+- **And** repeated capped runs converge instead of re-taking the same settled items
+
+#### Scenario: A non-positive batch size is refused
+
+- **Given** `SyncOptions { BatchSize = 0 }` (or a negative value)
+- **When** `Sync` is called
+- **Then** `ArgumentOutOfRangeException` reading `SyncOptions.BatchSize must be positive.` propagates to the caller, instead of a divide-by-zero `Sync failed` or a loop that never advances
 
 #### Scenario: MaxItems of zero processes nothing
 
@@ -504,15 +622,25 @@ union to `options.MaxItems` when that value is non-null and `>= 0` and the union
 The system SHALL, after all batches, partition the collected knowledge items by whether an existing
 knowledge row for the same `EntityGuid` was read at the start of the run: for an existing row with a
 non-null `Guid` it SHALL copy that `Guid` onto the new item and route it to a bulk `Update`; otherwise it
-SHALL null the item's `Guid` and route it to a bulk `Create`. It SHALL then stamp the scope's last sync
-time to `DateTime.UtcNow`.
+SHALL null the item's `Guid` and route it to a bulk `Create`. Every run SHALL add a scope marker item
+(`CreateKnowledgeItem(Guid.Empty, null, null, options)`) to the collected items, upserted the same way. It
+SHALL then stamp the scope's last sync time to `DateTime.UtcNow`.
+
+The knowledge read at the start is keyed by `EntityGuid` through `BuildKnowledgeDictionary`: when two rows
+share an `EntityGuid`, the one with the latest `LastSyncedAt` is kept, and the run's upsert updates that one.
 
 #### Scenario: First run inserts knowledge rows
 
-- **Given** no knowledge rows exist for scope `"Products"` and three entities are processed
+- **Given** no knowledge rows exist for scope `"Products"` and three entities are reconciled
 - **When** `Sync` completes
-- **Then** all three knowledge items have their `Guid` set to null and are passed to `_knowledgeStore.Create(list, null)`
+- **Then** the three knowledge items plus the scope marker have their `Guid` set to null and are passed to `_knowledgeStore.Create(list, null)`
 - **And** `_knowledgeStore.SetLastSyncTime("Products", <utcNow>)` is called
+
+#### Scenario: Duplicate knowledge rows for one entity do not break the run
+
+- **Given** two knowledge rows in scope `"Products"` share `EntityGuid = G`, with different `LastSyncedAt`
+- **When** `Sync` reads the scope's knowledge
+- **Then** no exception is thrown; the most recently synced row is used for `G`, and its `Guid` is reused for the update
 
 #### Scenario: Second run reuses the existing knowledge row identity
 
@@ -531,7 +659,8 @@ time to `DateTime.UtcNow`.
 
 The system SHALL expose `Preview`/`PreviewAsync` which reads knowledge and both sides, runs the same
 `DetermineSyncAction` decision per Guid, and returns a `SyncPreview` with per-action counters and a
-`SyncItemPreview` list — writing nothing to any store, and not stamping the last sync time.
+`SyncItemPreview` list — writing nothing to any store, and not stamping the last sync time. A failure
+SHALL propagate to the caller rather than be reported as a conflict.
 
 #### Scenario: Preview populates per-item reasons and versions
 
@@ -539,18 +668,23 @@ The system SHALL expose `Preview`/`PreviewAsync` which reads knowledge and both 
 - **When** `PreviewAsync` runs
 - **Then** `preview.ToCreate` is 1 and the item's `Reason` is `"New item from remote"`, `LocalVersion` is null and `RemoteVersion` is the remote hash
 
-#### Scenario: Preview swallows failures and reports them as a conflict
+#### Scenario: Preview failures propagate
 
 - **Given** the remote side contains a duplicate Guid, so `BuildEntityDictionary` throws `InvalidOperationException`
 - **When** `Preview` runs
-- **Then** the general `catch` increments `preview.Conflicts` and returns the partially-filled preview
-- **And** no exception reaches the caller, so a structural data error is indistinguishable from a real conflict
+- **Then** the exception reaches the caller; `Preview` has no catch, so no partially-filled preview is returned and nothing is counted as a conflict
 
 #### Scenario: Cancellation is not disguised as a conflict
 
 - **Given** a store read throws `OperationCanceledException`
 - **When** `Preview` runs
-- **Then** the dedicated `catch (OperationCanceledException)` rethrows and the exception propagates to the caller
+- **Then** the exception propagates to the caller
+
+#### Scenario: Delete reasons name the side that deleted
+
+- **Given** a `Delete` action for an entity the local side no longer holds
+- **When** the preview item is built
+- **Then** its `Reason` is `"Deleted locally"`; for an entity the remote side no longer holds it is `"Deleted remotely"`
 
 ### Requirement: Progress callbacks carry a phase snapshot, not accumulated counters
 
@@ -615,19 +749,21 @@ conflicts or skips influence it. It SHALL always populate `StartTime`, `EndTime`
 
 The system SHALL compute a scope's last sync time as the maximum `LastSyncedAt` across that scope's
 knowledge rows and return null when the scope has no rows; and SHALL implement "set" by stamping the value
-onto every existing row in the scope — which means stamping a scope with no rows persists nothing even
-though the value is echoed back to the caller. A null `lastSyncTime` SHALL short-circuit and return null
-without touching any row.
+onto every existing row in the scope — which means stamping a scope with no rows persists nothing, and the
+setter then returns null rather than echoing the value, so a caller can tell a persisted stamp from a
+discarded one. A null `lastSyncTime` SHALL short-circuit and return null without touching any row. Because
+the sync providers write a scope marker row every run, a stamp at the end of a run always lands.
 
 This holds identically for `SqlSyncKnowledgeStore`, `AsyncSqlSyncKnowledgeStore`,
-`AsyncJsonSyncKnowledgeStore`, `AsyncXmlSyncKnowledgeStore`, `AsyncElasticSyncKnowledgeStore` and
-`AsyncMongoSyncKnowledgeStore`.
+`AsyncJsonSyncKnowledgeStore`, `AsyncXmlSyncKnowledgeStore`, `AsyncElasticSyncKnowledgeStore`,
+`AsyncMongoSyncKnowledgeStore`, `RavenSyncKnowledgeStore`, `AsyncRavenSyncKnowledgeStore`,
+`CosmosSyncKnowledgeStore` and `AsyncCosmosSyncKnowledgeStore`.
 
 #### Scenario: Stamping an empty scope leaves it reading as never-synced
 
 - **Given** scope `"Orders"` has zero knowledge rows
 - **When** `SetLastSyncTimeAsync("Orders", someTime, ct)` is called and then `GetLastSyncTimeAsync("Orders", ct)`
-- **Then** the setter returns `someTime` but the getter returns null, so the next `SyncAsync` treats the scope as an initial sync
+- **Then** the setter returns null and the getter returns null, so the next `SyncAsync` treats the scope as an initial sync
 
 #### Scenario: Null time is a no-op
 
@@ -641,12 +777,11 @@ This holds identically for `SqlSyncKnowledgeStore`, `AsyncSqlSyncKnowledgeStore`
 - **When** `SetLastSyncTimeAsync` stamps the scope
 - **Then** all 500 rows get the new `LastSyncedAt`, so a later `GetLastSyncTimeAsync` returns exactly that value
 
-### Requirement: Knowledge-store write strategy differs per backend
+### Requirement: Knowledge stores stamp a scope with one bulk write
 
-The system SHALL, in `AsyncJsonSyncKnowledgeStore` and `AsyncXmlSyncKnowledgeStore`, apply the last-sync
-stamp through a **single bulk** `UpdateAsync(items, ...)` call guarded by `items.Count > 0`; and SHALL, in
-`SqlSyncKnowledgeStore`, `AsyncSqlSyncKnowledgeStore`, `AsyncElasticSyncKnowledgeStore` and
-`AsyncMongoSyncKnowledgeStore`, apply it with **one `Update`/`UpdateAsync` call per row**.
+The system SHALL, in every knowledge store, materialise the scope's rows with `ToList()` before any write,
+and apply the last-sync stamp through a **single bulk** `Update(items)` / `UpdateAsync(items, ...)` call,
+issued only when the scope has at least one row.
 
 #### Scenario: JSON store rewrites the file once
 
@@ -654,23 +789,34 @@ stamp through a **single bulk** `UpdateAsync(items, ...)` call guarded by `items
 - **When** `SetLastSyncTimeAsync` runs
 - **Then** exactly one `UpdateAsync(List<JsonSyncKnowledgeItem>, ...)` call is made
 
-#### Scenario: ElasticSearch store issues one update per document
+#### Scenario: ElasticSearch store issues one bulk update
 
 - **Given** 200 knowledge items in a scope backed by `AsyncElasticSyncKnowledgeStore`
 - **When** `SetLastSyncTimeAsync` runs
-- **Then** 200 separate `UpdateAsync(item, ...)` calls are made
+- **Then** exactly one `UpdateAsync(List<ElasticSyncKnowledgeItem>, ...)` call is made
 
-### Requirement: Only some backends supply a provider-compatible knowledge store
+#### Scenario: The SQL store does not write while its reader is open
 
-The system SHALL offer `ISyncKnowledgeItemStore<T>` (usable by the synchronous `SyncProvider`) **only** from
-`Birko.Data.Sync.Sql`; SHALL offer `IAsyncSyncKnowledgeItemStore<T>` (usable by `AsyncSyncProvider`) from
-`Birko.Data.Sync.Sql`, `.Json`, `.Xml`, `.MongoDb` and `.ElasticSearch`; and SHALL expose the RavenDB and
-CosmosDB knowledge stores as plain backend stores that implement **neither** interface and provide no
-`CreateKnowledgeItem`, so they cannot be passed to either provider.
+- **Given** a scope backed by `SqlSyncKnowledgeStore`
+- **When** `SetLastSyncTime` runs
+- **Then** the rows are read to a list first and then written by one `Update(items)` call, rather than updated one by one while the connector's lazy reader is still open
+
+### Requirement: Every backend supplies a provider-compatible knowledge store
+
+The system SHALL offer `ISyncKnowledgeItemStore<T>` (usable by the synchronous `SyncProvider`) from
+`Birko.Data.Sync.Sql`, `.RavenDB` and `.CosmosDB`; and SHALL offer `IAsyncSyncKnowledgeItemStore<T>` (usable
+by `AsyncSyncProvider`) from `Birko.Data.Sync.Sql`, `.Json`, `.Xml`, `.MongoDb`, `.ElasticSearch`, `.RavenDB`
+and `.CosmosDB`. Each store's `CreateKnowledgeItem(guid, localHash, remoteHash, options)` SHALL return a
+row with a fresh `Guid.NewGuid()`, `EntityGuid = guid`, `Scope = options.Scope`, `LastSyncedAt =
+DateTime.UtcNow`, the two versions, and `IsLocalDeleted` / `IsRemoteDeleted` set to
+`string.IsNullOrEmpty` of the matching hash. No knowledge store or model SHALL carry a tenant: there is no
+tenant-parameterised knowledge API, and tenant isolation comes from a tenant-qualified `Scope`.
 
 `SqlSyncKnowledgeStore : DataBaseBulkStore<DB, SqlSyncKnowledgeItem>, ISyncKnowledgeItemStore<...>`;
-`AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledgeItem>` and
-`AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowledgeItem>` declare no sync interface.
+`RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>, ISyncKnowledgeItemStore<...>`;
+`AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledgeItem>, IAsyncSyncKnowledgeItemStore<...>`;
+`CosmosSyncKnowledgeStore : CosmosDBStore<CosmosSyncKnowledgeItem>, ISyncKnowledgeItemStore<...>`;
+`AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowledgeItem>, IAsyncSyncKnowledgeItemStore<...>`.
 
 #### Scenario: A synchronous sync against MongoDB is not constructible
 
@@ -678,115 +824,17 @@ CosmosDB knowledge stores as plain backend stores that implement **neither** int
 - **When** they look for an `ISyncKnowledgeItemStore<MongoSyncKnowledgeItem>` implementation
 - **Then** none exists — `Birko.Data.Sync.MongoDb` ships only `AsyncMongoSyncKnowledgeStore`
 
-#### Scenario: The RavenDB knowledge store cannot back AsyncSyncProvider
+#### Scenario: The RavenDB knowledge store backs AsyncSyncProvider
 
 - **Given** an `AsyncRavenSyncKnowledgeStore`
 - **When** it is passed as the `IAsyncSyncKnowledgeItemStore<RavenSyncKnowledgeItem>` argument of `AsyncSyncProvider`
-- **Then** it does not compile, because the class implements neither that interface nor `GetLastSyncTimeAsync(string, CancellationToken)` / `CreateKnowledgeItem`
+- **Then** it compiles and the engine reads, upserts and stamps knowledge through the store's ordinary bulk CRUD, scoped by `Scope` alone
 
-### Requirement: Tenant-scoped knowledge stores treat a null tenant as "every tenant in the scope"
+#### Scenario: Re-syncing an entity updates its existing Cosmos row
 
-The system SHALL scope both RavenDB and CosmosDB knowledge queries by tenant **only when
-`tenantId.HasValue`**; a null `tenantId` SHALL match every row in the scope, and SHALL NOT be emitted as an
-equality against null. A null tenant is not an absence of information — `TenantSyncProvider.ResolveTenantScope`
-returns null only for an explicit `ITenantContext.IsAllTenantsScope` or for an entity type with no
-`TenantGuid` property, and both mean the whole scope. This applies to `GetKnowledge`, `GetKnowledgeItem`,
-`DeleteKnowledge`, `GetLastSyncTime` and `SetLastSyncTime` in both the sync and async variants of each store.
-
-CosmosDB builds the predicate through the single producer `CosmosSyncKnowledgeQuery.ApplyScope`; RavenDB
-guards each query with `if (tenantId.HasValue)`.
-
-#### Scenario: Null tenant reads everything in RavenDB
-
-- **Given** scope `"Products"` holds knowledge rows for tenants `A` and `B`
-- **When** `GetKnowledgeAsync("Products", null, ct)` is called on `AsyncRavenSyncKnowledgeStore`
-- **Then** rows from both tenants are returned
-
-#### Scenario: Null tenant reads everything in CosmosDB too
-
-- **Given** the same distribution in CosmosDB
-- **When** `GetKnowledgeAsync("Products", null, ct)` is called on `AsyncCosmosSyncKnowledgeStore`
-- **Then** the rendered query carries no `TenantGuid` term at all, so rows from both tenants and any untenanted rows are returned
-- **And** in particular no `root["TenantGuid"] = null` is emitted, which in the Cosmos SQL dialect evaluates to Undefined and would match no document
-
-#### Scenario: A supplied tenant still narrows the CosmosDB query
-
-- **Given** scope `"Products"` holds rows for tenants `A` and `B`
-- **When** `GetKnowledgeAsync("Products", A, ct)` is called
-- **Then** the rendered query carries the `TenantGuid` term and only tenant `A`'s rows are returned
-
-#### Scenario: Null tenant delete is scope-wide in RavenDB
-
-- **Given** scope `"Products"` holds rows for tenants `A` and `B`
-- **When** `DeleteKnowledgeAsync("Products", null, ct)` is called on the RavenDB store
-- **Then** every row in the scope is deleted regardless of tenant
-
-#### Scenario: Duplicate EntityGuid within a scope breaks the read
-
-- **Given** two knowledge rows in the same scope and tenant share an `EntityGuid`
-- **When** `GetKnowledgeAsync` builds its dictionary via `ToDictionary(x => x.EntityGuid, ...)`
-- **Then** `ArgumentException` is thrown
-
-### Requirement: RavenDB knowledge identity is derived deterministically from the natural key
-
-The system SHALL, when converting a foreign `ISyncKnowledgeItem` into a `RavenSyncKnowledgeItem` with a null
-`Guid`, derive the `Guid` as an MD5 hash of `"{EntityGuid:N}|{Scope}|{TenantGuid:N}"` so re-syncing the same
-natural key upserts one document rather than accumulating duplicates; SHALL copy `TenantGuid` and
-`TenantName` across when the source implements `ITenant`; and SHALL return an item that is **already** a
-`RavenSyncKnowledgeItem` unchanged, without deriving a Guid and without stamping tenant fields.
-
-#### Scenario: Re-syncing the same natural key reuses one document
-
-- **Given** an `ISyncKnowledgeItem` with `EntityGuid = G`, `Scope = "Products"`, no `Guid`, and no `ITenant` implementation
-- **When** `ConvertToRavenItem` is called on two separate runs
-- **Then** both produce the same `Guid`, computed as `DeterministicGuid(G, "Products", Guid.Empty)`, so `session.Store` upserts
-
-#### Scenario: An already-Raven item with a null Guid passes through unmodified
-
-- **Given** a `RavenSyncKnowledgeItem` instance whose `Guid` is null
-- **When** `ConvertToRavenItem` receives it
-- **Then** it is returned as-is with `Guid` still null, and no deterministic Guid or tenant stamp is applied
-
-#### Scenario: Tenant travels on the item, not as a method parameter
-
-- **Given** a source item implementing `ITenant` with `TenantGuid = T`
-- **When** it is converted and stored
-- **Then** the resulting document carries `TenantGuid = T`, which is what makes the tenant-scoped `Where(x => x.TenantGuid == tenantId.Value)` queries match
-
-### Requirement: CosmosDB knowledge mapping guarantees a Guid and prefers the explicit tenant
-
-The system SHALL map any `ISyncKnowledgeItem` to a `CosmosSyncKnowledgeItem` through
-`FromInterface(item, tenantId)`, which SHALL populate a `Guid` with `Guid.NewGuid()` when the source has
-none (an item that is already a `CosmosSyncKnowledgeItem` goes through `AbstractModel.EnsureGuid()`, so a
-`Guid.Empty` is replaced as well; a foreign item is copied with `item.Guid ?? Guid.NewGuid()`, so its
-`Guid.Empty` is kept), SHALL let an explicit non-null `tenantId` overwrite the `TenantGuid` of an item that is already a
-`CosmosSyncKnowledgeItem`, and SHALL leave that item's existing `TenantGuid` intact when `tenantId` is null.
-Upsert and replace SHALL use the item's own `Guid` string as both document id and partition key.
-
-#### Scenario: Passthrough item gets a Guid so the partition key dereference is safe
-
-- **Given** an existing `CosmosSyncKnowledgeItem` with `Guid = null`
-- **When** `UpdateKnowledgeAsync` maps and upserts it
-- **Then** `FromInterface` assigns a fresh `Guid` via `EnsureGuid()` and `new PartitionKey(cosmosItem.Guid!.Value.ToString())` is well-defined
-
-#### Scenario: Null tenant argument does not erase a carried tenant
-
-- **Given** a `CosmosSyncKnowledgeItem` with `TenantGuid = T`
-- **When** `UpdateKnowledgeAsync(items, tenantId: null, ct)` runs
-- **Then** the stored document still has `TenantGuid = T`
-
-#### Scenario: Passthrough item with an empty Guid gets a fresh one
-
-- **Given** an existing `CosmosSyncKnowledgeItem` with `Guid = Guid.Empty`
-- **When** `FromInterface` maps it
-- **Then** `EnsureGuid()` replaces the empty value with a fresh `Guid`, so the document is not keyed and partitioned under `00000000-0000-0000-0000-000000000000`
-- **And** a foreign `ISyncKnowledgeItem` whose `Guid` is `Guid.Empty` is still copied with that empty value, because the materializing branch only substitutes a null
-
-#### Scenario: Foreign knowledge items produce a new document identity each round
-
-- **Given** a `SqlSyncKnowledgeItem` (whose `CreateKnowledgeItem` assigns a fresh `Guid.NewGuid()` per call) fed into `UpdateKnowledgeAsync`
-- **When** the same entity is synced twice
-- **Then** `FromInterface` copies each distinct `Guid` and two separate Cosmos documents are upserted for the same `EntityGuid`
+- **Given** an `AsyncCosmosSyncKnowledgeStore` holding a row for `EntityGuid = G` with `Guid = K`
+- **When** `AsyncSyncProvider` reconciles `G` again
+- **Then** the engine copies `K` onto the new knowledge item and updates it, so no second document is written for `G`
 
 ### Requirement: Knowledge models carry the same logical fields with per-backend persistence shape
 
@@ -794,8 +842,9 @@ The system SHALL implement `ISyncKnowledgeItem` on an `AbstractModel` descendant
 `EntityGuid`, `Scope`, `LastSyncedAt`, `LocalVersion`, `RemoteVersion`, `IsLocalDeleted`, `IsRemoteDeleted`
 and `Metadata`; and SHALL carry backend-specific identity and mapping in addition:
 `SqlSyncKnowledgeItem` maps to table `SyncKnowledge` with `Guid` as primary field plus an
-`IncrementField Id`; `MongoSyncKnowledgeItem` carries a `[BsonId]` ObjectId string `Id` and is marked
-`[BsonIgnoreExtraElements]`; `ElasticSyncKnowledgeItem` carries a deterministic application key `Id`
+`IncrementField Id`; `MongoSyncKnowledgeItem` has no identity of its own beyond `AbstractModel.Guid`, which
+is its `_id`, maps `EntityGuid` to `entityGuid` through the framework's registered Guid serializer, and is
+marked `[BsonIgnoreExtraElements]`; `ElasticSyncKnowledgeItem` carries a deterministic application key `Id`
 (`{EntityGuid:N}_{Scope}`) mapped to the non-reserved keyword field `docKey`; `CosmosSyncKnowledgeItem`
 and `RavenSyncKnowledgeItem` normalise a null `Scope` assignment to the empty string.
 
@@ -817,12 +866,22 @@ and `RavenSyncKnowledgeItem` normalise a null `Scope` assignment to the empty st
 - **When** it is deserialized into `MongoSyncKnowledgeItem`
 - **Then** the read succeeds, because `[BsonIgnoreExtraElements]` suppresses the driver's default unmapped-element failure
 
-### Requirement: Sync queue serialises runs through one global semaphore
+#### Scenario: The Mongo knowledge model maps and writes
+
+- **Given** `AsyncMongoSyncKnowledgeStore` and a fresh `MongoSyncKnowledgeItem`
+- **When** the engine reads the scope's knowledge and then creates the row
+- **Then** the class map is accepted (there is no second `_id` member) and `EntityGuid` serializes, so a Mongo-backed sync runs
+- **And** a collection written before `AbstractModel.Guid` became `_id` (ObjectId `_id`) is not readable and has to be dropped
+
+### Requirement: Sync queue gates each scope and bounds runs through one global semaphore
 
 The system SHALL construct `SyncQueue` with a `SemaphoreSlim(maxConcurrentSyncs, maxConcurrentSyncs)` that
-is **shared across all scopes**, SHALL record a `QueuedSync` per enqueue in a per-scope-key queue, SHALL
-acquire the semaphore before running the operation and SHALL release it in a `finally`. The per-scope queues
-are bookkeeping for `GetQueueLength`/`GetAllQueueLengths` only and do not themselves order or exclude work.
+is **shared across all scopes**, SHALL additionally hold a per-queue-key gate (`SemaphoreSlim(1, 1)`,
+reference-counted and disposed when its last user leaves) for the whole run so that at most one run per key
+executes at a time, SHALL acquire the key's gate before a shared permit, and SHALL release in a `finally`
+only what was actually acquired. It SHALL record a `QueuedSync` per enqueue in a per-key queue and remove
+that specific record when the run starts or when its wait is cancelled, so `GetQueueLength` /
+`GetAllQueueLengths` count waiting runs only.
 
 #### Scenario: Default queue permits one run at a time overall
 
@@ -830,18 +889,19 @@ are bookkeeping for `GetQueueLength`/`GetAllQueueLengths` only and do not themse
 - **When** operations for two different scopes `"Products"` and `"Orders"` are enqueued concurrently
 - **Then** they execute one after the other, because the single semaphore is not per-scope
 
-#### Scenario: A concurrency limit above one lets two runs of the same scope overlap
+#### Scenario: A concurrency limit above one never overlaps two runs of the same scope
 
 - **Given** a `SyncQueue(maxConcurrentSyncs: 2)`
 - **When** two operations for the same scope `"Products"` are enqueued concurrently
-- **Then** both acquire the semaphore and run at the same time — `DequeueNext` only pops a bookkeeping record and does not exclude same-key work
+- **Then** they run one after the other, because the second waits on the scope's gate
+- **And** it waits without holding a shared permit, so a run of another scope can use it meanwhile
 
-#### Scenario: Cancellation while waiting releases a permit that was never acquired
+#### Scenario: Cancellation while waiting releases nothing it did not acquire
 
 - **Given** a `SyncQueue(1)` whose permit is held by a running operation
-- **When** a second `EnqueueAsync` is cancelled inside `await _semaphore.WaitAsync(cancellationToken)`
-- **Then** the `finally` still calls `_semaphore.Release()`, raising the available count above the number of permits actually held
-- **And** the cancelled `QueuedSync` record is never dequeued, so `GetQueueLength(scope)` keeps counting it
+- **When** a second `EnqueueAsync` is cancelled while waiting
+- **Then** the `finally` releases only the gate or permit that call actually holds, so the available count never exceeds `maxConcurrentSyncs`
+- **And** the cancelled `QueuedSync` record is removed, so `GetQueueLength(scope)` no longer counts it
 
 #### Scenario: Queue keys can incorporate a tenant
 
@@ -849,15 +909,15 @@ are bookkeeping for `GetQueueLength`/`GetAllQueueLengths` only and do not themse
 - **When** a tenant id `T` is supplied
 - **Then** the key is `"{scope}_{T}"`; with a null tenant it is the bare scope
 
-### Requirement: Aggregate definitions are declared fluently, with the lambda shape as the only validation
+### Requirement: Aggregate definitions are declared fluently, and keyless or duplicate navigations are refused
 
 The system SHALL let a derived `AggregateDefinition<T>` register relationships with
 `HasMany(navigation)` (`OneToMany`) and `HasOne(navigation)` (`OneToOne`), SHALL extract the navigation
 property name from the lambda — unwrapping a conversion `UnaryExpression` — SHALL throw `ArgumentException`
 when the lambda does not resolve to a property, and SHALL expose the registered descriptors as a read-only
-list alongside `RootType`. Registration is otherwise unvalidated: nothing requires `Via` or `Through` to
-have been called, nothing rejects a null `ForeignKeyProperty`, and nothing rejects the same navigation
-property being registered more than once.
+list alongside `RootType`. It SHALL throw `InvalidOperationException` when a navigation property is
+registered a second time (at the `HasMany`/`HasOne` call), and when `Relationships` is read while any
+relationship has neither a `ForeignKeyProperty` (from `Via`) nor a `JunctionType` (from `Through`).
 
 #### Scenario: HasMany with Via records a direct foreign key
 
@@ -882,6 +942,18 @@ property being registered more than once.
 - **Given** `HasMany(p => p.Tags.Where(t => t.Active))`
 - **When** `ExpressionHelper.GetPropertyName` runs
 - **Then** `ArgumentException` is thrown with a message reading `does not refer to a property`
+
+#### Scenario: A navigation registered twice is refused
+
+- **Given** a definition calling `HasMany(p => p.Tags).Via(t => t.ProductGuid)` twice
+- **When** the second `HasMany` runs
+- **Then** `InvalidOperationException` is thrown reading `<Definition>: the navigation 'Tags' is already registered; register each navigation once.`
+
+#### Scenario: A relationship with no key is refused when read
+
+- **Given** a definition calling `HasMany(p => p.Tags)` with neither `Via` nor `Through`
+- **When** `Relationships` is read (for instance by `Flatten` or `Expand`)
+- **Then** `InvalidOperationException` is thrown reading `<Definition>: the relationship 'Tags' has no key. Call .Via(child => child.ParentGuid) or .Through<TJunction>(parentFk, childFk) on it.`
 
 ### Requirement: Flattening resolves each relationship through a data provider
 
@@ -1077,7 +1149,12 @@ accept `SyncFilterOptions<T>` in `DetermineSyncAction` without reading it; the s
 ### Requirement: Fetch predicates narrow each side independently
 
 The system SHALL pass `SyncFilterOptions<T>.LocalFetchPredicate` to the local store's read and
-`RemoteFetchPredicate` to the remote store's read, and SHALL treat a null predicate as an unfiltered read.
+`RemoteFetchPredicate` to the remote store's read, SHALL then apply the same predicate, compiled, to the
+returned items in process, and SHALL treat a null predicate as an unfiltered read.
+
+`GetAllItems`/`GetAllItemsAsync` return `EnforceFetchPredicate(store.Read(filter, ...), filter)`, so a
+backend that translates a predicate too widely still cannot put non-matching rows on the compare, delete
+or knowledge paths.
 
 #### Scenario: Asymmetric predicates change what counts as "missing"
 
@@ -1090,3 +1167,21 @@ The system SHALL pass `SyncFilterOptions<T>.LocalFetchPredicate` to the local st
 - **Given** `filterOptions` is null
 - **When** `Sync` runs
 - **Then** both stores are read with a null filter
+
+#### Scenario: A backend that widens the predicate is narrowed in process
+
+- **Given** `LocalFetchPredicate = x => x.Active` and a local store whose translation of it returns every row
+- **When** `Sync` reads the local side
+- **Then** the inactive rows are filtered out before `BuildEntityDictionary`, so they are neither compared, deleted nor recorded
+
+### Requirement: Sync options can be copied without touching the caller's instance
+
+The system SHALL expose `SyncOptions.Clone()`, returning a shallow `MemberwiseClone` of the same runtime type,
+so a caller can run the engine with one value changed (such as a tenant-qualified `Scope`) while the
+original instance, and any members of a derived options class, are preserved.
+
+#### Scenario: A clone keeps its derived type and leaves the original unchanged
+
+- **Given** an instance of a class derived from `SyncOptions` with `Scope = "Products"`
+- **When** `Clone()` is called and the copy's `Scope` is set to `"Products:T"`
+- **Then** the copy is of the derived type with its own members copied, and the original still has `Scope = "Products"`

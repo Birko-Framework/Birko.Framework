@@ -1,7 +1,7 @@
 ---
 area: store-decorator-composition
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.Composition/StoreWrapperBuilder.cs
   - ../Birko.Data.Patterns/Concurrency/AsyncVersionedStoreWrapper.cs
@@ -30,6 +30,7 @@ sources:
   - ../Birko.Data.Patterns/Decorators/TimestampStoreWrapper.cs
   - ../Birko.Data.Patterns/Models/IAuditContext.cs
   - ../Birko.Data.Patterns/Models/IAuditable.cs
+  - ../Birko.Data.Patterns/Models/IDefaultMarker.cs
   - ../Birko.Data.Patterns/Models/ISluggable.cs
   - ../Birko.Data.Patterns/Models/ISoftDeletable.cs
   - ../Birko.Time.Abstractions/Core/IDateTimeProvider.cs
@@ -195,7 +196,9 @@ argument followed by the decorator's context arguments, casting the result back 
 
 The system SHALL expose composition through `StoreWrapperBuilder` only for async bulk stores
 (`IAsyncBulkStore<T>` in, `IAsyncBulkStore<T>` out) with `T` constrained to `AbstractModel, new()`, and
-SHALL NOT include the optimistic-concurrency decorators in any generated chain.
+SHALL NOT include the optimistic-concurrency decorators in any generated chain — refusing an `IVersioned` `T`
+with `NotSupportedException` before any decorator is constructed, rather than returning a chain that never
+checks or increments `Version`.
 
 #### Scenario: No synchronous composition entry point
 
@@ -203,11 +206,11 @@ SHALL NOT include the optimistic-concurrency decorators in any generated chain.
 - **When** they look for a builder overload accepting `IBulkStore<T>`
 - **Then** none exists — the sync decorators must be composed by hand, in whatever order the consumer chooses
 
-#### Scenario: Versioned entity gets no concurrency decorator
+#### Scenario: Versioned entity is refused
 
-- **Given** `T` implements `IVersioned`
+- **Given** `T` implements `IVersioned` (with or without any other marker interface)
 - **When** `StoreWrapperBuilder.Build` is called
-- **Then** neither `VersionedStoreWrapper<T>` nor `AsyncVersionedStoreWrapper<T>` is added, so optimistic concurrency is not enforced unless the consumer wraps the store itself
+- **Then** a `NotSupportedException` is thrown directly (not wrapped in a `TargetInvocationException`) whose message names `T`, states that the builder has no optimistic-concurrency link, and tells the caller to wrap the store in `AsyncVersionedStoreWrapper` themselves; no chain is returned
 
 ### Requirement: Inner-store exposure
 
@@ -233,6 +236,36 @@ decorators, which returns `_innerStore as TInner` (null when the cast fails).
 - **Given** an `AsyncVersionedStoreWrapper<T>` or `VersionedStoreWrapper<T>`
 - **When** the caller attempts `GetInnerStoreAs<TInner>()`
 - **Then** the member does not exist — these two decorators implement only the non-generic `IStoreWrapper`, unlike every decorator in `Birko.Data.Patterns.Decorators`, which implements `IStoreWrapper<T>`
+
+### Requirement: Aggregation forwarded with each decorator's scope
+
+The system SHALL make every async bulk decorator a builder chain can contain from this area —
+`AsyncAuditBulkStoreWrapper`, `AsyncTimestampBulkStoreWrapper`, `AsyncSoftDeleteBulkStoreWrapper`,
+`AsyncSluggableBulkStoreWrapper` and `AsyncDefaultStoreWrapper` — implement `IAsyncAggregatableStore<T>`, and
+SHALL answer `AggregateAsync(query, ct)` by forwarding to its inner store through `StoreChain.AggregateThrough`:
+unchanged for the Audit, Timestamp, Sluggable and Default decorators, which do not scope reads, and with the
+query's filter narrowed by `SoftDeleteFilter.CombineWithNotDeleted(query.Filter)` (via `query.WithFilter`) for
+the SoftDelete decorator. When the inner store is not an `IAsyncAggregatableStore<T>`, the call SHALL throw
+`NotSupportedException` naming the inner store's type and `T`. The synchronous decorators SHALL NOT implement
+aggregation.
+
+#### Scenario: A composed chain still aggregates
+
+- **Given** a chain Default → Sluggable → SoftDelete → Timestamp → raw store, where the raw store implements `IAsyncAggregatableStore<T>`
+- **When** the outermost decorator is cast to `IAsyncAggregatableStore<T>` and `AggregateAsync(query)` is called
+- **Then** the cast succeeds and each link forwards the query inward, so the raw store aggregates it
+
+#### Scenario: Soft-deleted rows are excluded from an aggregate
+
+- **Given** an `AsyncSoftDeleteBulkStoreWrapper` over an aggregatable store holding three active and two soft-deleted rows, and a query whose `Filter` is null
+- **When** `AggregateAsync(query)` is called
+- **Then** the inner store receives a copy of the query whose filter is `x => x.DeletedAt == null`, so only the three active rows are aggregated; the caller's query object is not modified
+
+#### Scenario: Inner store without aggregation
+
+- **Given** an `AsyncTimestampBulkStoreWrapper` whose inner store does not implement `IAsyncAggregatableStore<T>`
+- **When** `AggregateAsync(query)` is called
+- **Then** a `NotSupportedException` is thrown stating that the inner store's type does not support aggregation, so the chain cannot aggregate `T`
 
 ### Requirement: Constructor argument validation
 
@@ -301,8 +334,9 @@ before overwriting `UpdatedAt` with `_clock.UtcNow`. Deletes SHALL pass through 
 
 The system SHALL read `_clock.UtcNow` once per bulk or filter-based call and apply that single value to
 every affected entity, SHALL apply the caller's `Action<T>` BEFORE computing `PrevUpdatedAt`/`UpdatedAt`, and
-SHALL — on the `PropertyUpdate<T>` overload only — append an `UpdatedAt` assignment without maintaining
-`PrevUpdatedAt`.
+SHALL — on the `PropertyUpdate<T>` overload only — append an `UpdatedAt` assignment to a clone of the caller's
+`PropertyUpdate<T>` without maintaining `PrevUpdatedAt`. Bulk create and update SHALL materialize the stamped
+projection into a list once before handing it to the inner store.
 
 #### Scenario: One clock reading for a whole batch
 
@@ -320,13 +354,13 @@ SHALL — on the `PropertyUpdate<T>` overload only — append an `UpdatedAt` ass
 
 - **Given** a `PropertyUpdate<T>` setting only a business field
 - **When** `AsyncTimestampBulkStoreWrapper.UpdateAsync(filter, updates)` is called
-- **Then** `updates.Set(x => x.UpdatedAt, _clock.UtcNow)` is appended and forwarded, and no `PrevUpdatedAt` assignment is added — unlike the `Action<T>` overload, the previous-timestamp chain is not maintained on this path
+- **Then** `updates.Clone().Set(x => x.UpdatedAt, _clock.UtcNow)` is forwarded — the caller's `updates` instance is left without the `UpdatedAt` assignment — and no `PrevUpdatedAt` assignment is added; unlike the `Action<T>` overload, the previous-timestamp chain is not maintained on this path
 
-#### Scenario: Bulk projection is lazily evaluated
+#### Scenario: Bulk projection is materialized once
 
 - **Given** `TimestampBulkStoreWrapper.Update(items)` where `items` is a lazily enumerable source
-- **When** the inner store enumerates the projected sequence twice
-- **Then** the mutation lambda runs twice per entity, so on the second pass `PrevUpdatedAt` is set to the `UpdatedAt` written by the first pass and both fields end up equal to the batch `now`
+- **When** the inner store enumerates the sequence it receives twice
+- **Then** the mutation lambda has run exactly once per entity, because the projection was materialized with `ToList()` before the inner call, so `PrevUpdatedAt` holds the entity's prior `UpdatedAt` and `UpdatedAt` the batch `now`
 
 ### Requirement: Audit stamping
 
@@ -360,8 +394,9 @@ The system SHALL set both `CreatedBy` and `UpdatedBy` to `_auditContext.CurrentU
 ### Requirement: Audit stamping overrides caller-supplied audit values on filter-based updates
 
 The system SHALL, on the `Action<T>` filter-update overload, invoke the caller's action first and then
-assign `UpdatedBy` — so the decorator's value wins; and SHALL, on the `PropertyUpdate<T>` overload, mutate
-the caller's `PropertyUpdate<T>` instance in place by appending an `UpdatedBy` assignment before forwarding it.
+assign `UpdatedBy` — so the decorator's value wins; and SHALL, on the `PropertyUpdate<T>` overload, forward a
+clone of the caller's `PropertyUpdate<T>` with an `UpdatedBy` assignment appended, leaving the caller's
+instance unmodified.
 
 #### Scenario: Caller action cannot set UpdatedBy
 
@@ -369,11 +404,17 @@ the caller's `PropertyUpdate<T>` instance in place by appending an `UpdatedBy` a
 - **When** `AuditBulkStoreWrapper.Update(filter, action)` is called with an audit context for `currentUser`
 - **Then** the persisted `UpdatedBy` is `currentUser`, because the decorator's assignment runs after the action
 
-#### Scenario: The caller's PropertyUpdate instance is mutated
+#### Scenario: The caller's PropertyUpdate instance is not mutated
 
 - **Given** a `PropertyUpdate<T> updates` object held by the caller
 - **When** `AsyncAuditBulkStoreWrapper.UpdateAsync(filter, updates)` is called
-- **Then** `updates.Set(x => x.UpdatedBy, ...)` has appended an assignment to that same instance, so reusing `updates` for a second call carries the previous `UpdatedBy` assignment (and, when a Timestamp decorator is also in the chain, an additional `UpdatedAt` assignment) into the second call
+- **Then** the inner store receives `updates.Clone()` with the `UpdatedBy` assignment appended, and `updates` itself carries no `UpdatedBy` (nor, when a Timestamp decorator is also in the chain, `UpdatedAt`) assignment afterwards, so reusing it for a second call stamps afresh
+
+#### Scenario: Bulk audit projection is materialized once
+
+- **Given** `AuditBulkStoreWrapper.Create(items)` or `AsyncAuditBulkStoreWrapper.UpdateAsync(items)` with a lazily enumerable source
+- **When** the decorator forwards the batch
+- **Then** the stamping projection is materialized with `ToList()` first, so the inner store receives a list whose entities were each stamped once
 
 ### Requirement: Soft-delete read filtering
 
@@ -416,7 +457,11 @@ read-by-Guid by fetching the entity and returning null when its `DeletedAt` is n
 The system SHALL, on every delete path of the soft-delete decorators, set `DeletedAt` to `_clock.UtcNow` and
 issue an UPDATE against the inner store instead of a delete — using the inner single-entity update for
 `Delete(T)`, the inner bulk update for `Delete(IEnumerable<T>)`, and the inner
-filter-plus-`Action<T>` update for `Delete(filter)`.
+filter-plus-`PropertyUpdate<T>` update (one native `Set(x => x.DeletedAt, now)`) for `Delete(filter)`. A row
+the inner store already holds as soft-deleted SHALL keep its original `DeletedAt`: the entity-based paths read
+the stored state first and skip such rows, and the filter path combines the filter with `DeletedAt == null`.
+`Delete(filter)` SHALL refuse a null filter with `ArgumentNullException` and a filter that reduces to every row
+with `WholeTableWriteException` (via `BoundedFilterGuard`; the explicit `x => true` is accepted).
 
 #### Scenario: Entity delete becomes an update
 
@@ -424,17 +469,29 @@ filter-plus-`Action<T>` update for `Delete(filter)`.
 - **When** `SoftDeleteStoreWrapper.Delete(data)` is called
 - **Then** `data.DeletedAt` is `2026-06-01T00:00:00Z` and `_innerStore.Update(data)` is invoked — with no `storeDelegate` forwarded — and no row is physically removed
 
+#### Scenario: Deleting an already-deleted entity is a no-op
+
+- **Given** an entity whose stored row (read by Guid from the inner store) already has a non-null `DeletedAt`
+- **When** `SoftDeleteStoreWrapper.Delete(data)` or `AsyncSoftDeleteStoreWrapper.DeleteAsync(data)` is called
+- **Then** the decorator returns without stamping `data.DeletedAt` and without issuing any inner update
+
 #### Scenario: Filter delete stamps only rows that are not already deleted
 
 - **Given** two active rows and one already-deleted row all matching `x => x.CategoryId == c`
 - **When** `AsyncSoftDeleteBulkStoreWrapper.DeleteAsync(x => x.CategoryId == c)` is called
-- **Then** the inner filter-update predicate is `x => x.CategoryId == c && x.DeletedAt == null`, so only the two active rows are stamped and the already-deleted row keeps its original `DeletedAt`
+- **Then** the inner filter-update predicate is `x => x.CategoryId == c && x.DeletedAt == null` and the update is a `PropertyUpdate<T>` setting `DeletedAt` to the clock reading, so only the two active rows are stamped and the already-deleted row keeps its original `DeletedAt`
 
-#### Scenario: Entity-collection delete re-stamps already-deleted rows
+#### Scenario: Filter delete without a usable filter is refused
 
-- **Given** a collection containing an entity whose `DeletedAt` is already `2026-01-01`
+- **Given** a soft-delete bulk decorator
+- **When** `Delete(null)` / `DeleteAsync(null)` is called, or `Delete(filter)` with a filter that reduces to every row (other than the explicit `x => true`)
+- **Then** an `ArgumentNullException` for `filter` (message: a filtered soft delete on `T` needs a filter) or a `WholeTableWriteException` is thrown, and no inner update is issued
+
+#### Scenario: Entity-collection delete keeps already-deleted rows' instant
+
+- **Given** a collection containing an entity whose stored row's `DeletedAt` is already `2026-01-01`, and one active entity
 - **When** `SoftDeleteBulkStoreWrapper.Delete(items)` is called with a clock reading `2026-06-01`
-- **Then** that entity's `DeletedAt` is overwritten with `2026-06-01`, because the entity-based delete paths apply no not-deleted guard
+- **Then** one inner read `x => ids.Contains(x.Guid) && x.DeletedAt != null` finds the deleted row, which is left out; only the active entity is stamped `2026-06-01` and passed to the inner bulk update, and when no item is active no inner update is issued
 
 #### Scenario: One clock reading per bulk delete
 
@@ -442,11 +499,16 @@ filter-plus-`Action<T>` update for `Delete(filter)`.
 - **When** `SoftDeleteBulkStoreWrapper.Delete(items)` or `Delete(filter)` is called
 - **Then** `_clock.UtcNow` is read once and the same instant is written to every affected row
 
-### Requirement: Soft-delete write paths do not guard against deleted state
+### Requirement: Soft-delete write paths treat a deleted row as not found
 
-The system SHALL force `DeletedAt` to null on every create path, and SHALL forward entity-based updates to
-the inner store without any not-deleted check — so an update can be applied to, or can resurrect, a
-soft-deleted row.
+The system SHALL force `DeletedAt` to null on every create path (bulk creates materializing the projection
+once), and SHALL treat a row the inner store holds as soft-deleted as not found on every entity-based update
+path: the single-entity update reads the row by Guid from the inner store and throws
+`EntityNotFoundException(typeof(T), data.Guid)` without writing when its `DeletedAt` is non-null; the bulk
+update reads which of the batch's Guids are stored as deleted, writes the remaining items (including items with
+a null Guid) in one inner bulk update, and then throws `EntityNotFoundException` naming the deleted Guids. The
+filter-based update overloads SHALL refuse a null filter with `ArgumentNullException` and a filter that reduces
+to every row with `WholeTableWriteException`, and SHALL otherwise combine the filter with `DeletedAt == null`.
 
 #### Scenario: Create clears any deleted marker
 
@@ -454,17 +516,29 @@ soft-deleted row.
 - **When** `AsyncSoftDeleteStoreWrapper.CreateAsync(data)` is called
 - **Then** `DeletedAt` is reset to null before the inner create
 
-#### Scenario: Updating a soft-deleted entity succeeds
+#### Scenario: Updating a soft-deleted entity is not found
 
-- **Given** a soft-deleted row loaded out-of-band (the decorator's own reads cannot return it)
-- **When** `SoftDeleteStoreWrapper.Update(data)` is called
-- **Then** the update is forwarded unchanged, and if `data.DeletedAt` was set to null the row becomes visible to reads again
+- **Given** a soft-deleted row loaded out-of-band (the decorator's own reads cannot return it), with `data.DeletedAt` set back to null by the caller
+- **When** `SoftDeleteStoreWrapper.Update(data)` or `AsyncSoftDeleteStoreWrapper.UpdateAsync(data)` is called
+- **Then** an `EntityNotFoundException` naming the entity's Guid is thrown, no inner update is issued, and the row stays soft-deleted
+
+#### Scenario: Bulk update writes the live items and reports the deleted ones
+
+- **Given** a batch of two entities, A active and B soft-deleted in storage
+- **When** `SoftDeleteBulkStoreWrapper.Update(items)` or `AsyncSoftDeleteBulkStoreWrapper.UpdateAsync(items)` is called
+- **Then** the inner bulk update receives only A, and afterwards an `EntityNotFoundException` naming B's Guid is thrown
 
 #### Scenario: Filter-based update excludes deleted rows
 
 - **Given** an already-deleted row matching the caller's filter
 - **When** `SoftDeleteBulkStoreWrapper.Update(filter, updateAction)` or `Update(filter, updates)` is called
-- **Then** the predicate is combined with `DeletedAt == null` and the deleted row is not modified — unlike the entity-based update path
+- **Then** the predicate is combined with `DeletedAt == null` and the deleted row is not modified
+
+#### Scenario: Filter-based update without a filter is refused
+
+- **Given** a soft-delete bulk decorator
+- **When** `Update(null, updateAction)` or `UpdateAsync(null, updates)` is called
+- **Then** an `ArgumentNullException` for `filter` is thrown (message: a filtered soft update on `T` needs a filter) and the inner store is not called
 
 #### Scenario: No escape hatch for reading deleted rows
 
@@ -544,9 +618,9 @@ while it reports the candidate taken, append an incrementing numeric suffix that
 
 The system SHALL, before every single-entity create and update, choose the slug source as the entity's own
 `Slug` when it is not null-or-whitespace and otherwise `GetSlugSource()`, normalize it, and resolve
-uniqueness by reading the inner store with the predicate `entity => entity.Slug == slug`, treating a
-candidate as taken when a row exists AND its `Guid` differs from the excluded id (null on create, the
-entity's own `Guid` on update). A candidate for which the entity's `ISluggable.IsReservedSlug(candidate)`
+uniqueness by reading the inner store with the predicate `entity => entity.Slug == slug` on create and
+`entity => entity.Slug == slug && entity.Guid != excludeId` on update (the excluded id being the entity's own
+`Guid`), treating a candidate as taken whenever that read returns any row. A candidate for which the entity's `ISluggable.IsReservedSlug(candidate)`
 returns true SHALL also be treated as taken, before the inner store is probed; the interface's default
 implementation reserves nothing.
 
@@ -566,7 +640,13 @@ implementation reserves nothing.
 
 - **Given** a stored entity with `Slug = "widget"` and the same Guid
 - **When** `AsyncSluggableStoreWrapper.UpdateAsync(data)` is called with `data.Slug` still `"widget"`
-- **Then** the probe finds the row but its `Guid` equals `excludeId`, so the candidate is not considered taken and the slug stays `"widget"` with no suffix
+- **Then** the probe's filter excludes the entity's own Guid, so it returns no row, the candidate is not considered taken and the slug stays `"widget"` with no suffix
+
+#### Scenario: An existing duplicate is seen on update
+
+- **Given** two stored rows, the entity's own and another, both holding `Slug = "widget"`
+- **When** the entity is updated with `Slug` still `"widget"`
+- **Then** the probe `Slug == "widget" && Guid != ownGuid` returns the other row, so `"widget"` is taken and the entity is moved to `"widget-2"` (or the next free suffix)
 
 #### Scenario: Unresolvable source falls back
 
@@ -583,10 +663,9 @@ implementation reserves nothing.
 ### Requirement: Slug batch uniqueness tracking
 
 The system SHALL materialize a bulk slug write's source collection exactly once before mutating it, resolve
-each item's slug sequentially against the shared inner store, and — for `AsyncSluggableBulkStoreWrapper`
-create and update, and `SluggableBulkStoreWrapper` create — additionally treat a slug already claimed
-earlier in the same batch as taken using an `OrdinalIgnoreCase` set. `SluggableBulkStoreWrapper.Update`
-SHALL NOT perform this within-batch tracking.
+each item's slug sequentially against the shared inner store, and — for create and update on both
+`AsyncSluggableBulkStoreWrapper` and `SluggableBulkStoreWrapper` — additionally treat a slug already claimed
+earlier in the same batch as taken using an `OrdinalIgnoreCase` set.
 
 #### Scenario: Two new items with the same title get distinct slugs
 
@@ -600,13 +679,11 @@ SHALL NOT perform this within-batch tracking.
 - **When** the batch is created
 - **Then** the tracking set built with `StringComparer.OrdinalIgnoreCase` still reports the candidate taken
 
-#### Scenario: Async batch update tracks in-batch slugs, sync does not
+#### Scenario: Batch update tracks in-batch slugs, sync and async alike
 
 - **Given** a batch of two existing entities with different Guids, both re-resolving to base slug `"widget"`, and no other row holding that slug
-- **When** `AsyncSluggableBulkStoreWrapper.UpdateAsync(items)` is called
+- **When** `AsyncSluggableBulkStoreWrapper.UpdateAsync(items)` or `SluggableBulkStoreWrapper.Update(items)` is called
 - **Then** the first keeps `"widget"` and the second gets `"widget-2"`
-- **When** `SluggableBulkStoreWrapper.Update(items)` is called for the same batch
-- **Then** `ResolveSlug(item, item.Guid)` is invoked with no batch set, so both items resolve to `"widget"` and two rows carry the same slug
 
 #### Scenario: Lazy source is materialized before mutation
 
@@ -626,12 +703,48 @@ SHALL NOT perform this within-batch tracking.
 - **When** `SluggableBulkStoreWrapper.Update(filter, updates)` or `Update(filter, updateAction)` is called
 - **Then** the call is forwarded to the inner store verbatim, with no normalization and no uniqueness check
 
+### Requirement: Slug write retried on a unique-index refusal
+
+The system SHALL, when the inner store refuses a slug decorator's create or update with
+`StoreUniqueViolationException`, re-resolve the slug and write again, up to `MaxSlugAttempts` (5) writes in
+total, but only while the refusal is attributable to the slug: a row other than the written entity's Guid now
+holds the entity's resolved slug (for a batch, any item's). A batch create SHALL additionally be retried only
+while no item of the batch (by non-null Guid) is stored. Otherwise — the slug is free, the attempts are spent,
+or part of a batch create is stored — the `StoreUniqueViolationException` SHALL propagate. Batch updates are
+retried even when partly applied. Without a unique index on the slug the store never refuses, and two
+concurrent writers can still both resolve the same slug.
+
+#### Scenario: A concurrent writer took the slug
+
+- **Given** an inner store with a unique index on `Slug`, and a concurrent writer that stores `"widget"` between this create's probe and its write
+- **When** `SluggableStoreWrapper.Create(data)` or `AsyncSluggableStoreWrapper.CreateAsync(data)` is called for an entity resolving to `"widget"`
+- **Then** the first inner create is refused, the probe finds `"widget"` held by another row, the slug is re-resolved to `"widget-2"` and the second inner create succeeds
+
+#### Scenario: A refusal for another key surfaces at once
+
+- **Given** an inner store that refuses a create with `StoreUniqueViolationException` for a unique key other than the slug, while no other row holds the resolved slug
+- **When** the entity is created through the slug decorator
+- **Then** the exception propagates after one write, with no retry
+
+#### Scenario: Retries are bounded
+
+- **Given** an inner store that refuses every write while some other row keeps holding each newly resolved slug
+- **When** the entity is created through the slug decorator
+- **Then** the fifth refusal propagates as `StoreUniqueViolationException`
+
+#### Scenario: A partly stored batch create is not retried
+
+- **Given** `AsyncSluggableBulkStoreWrapper.CreateAsync(items)` whose inner collection create stored some items before being refused
+- **When** the refusal is handled
+- **Then** the count of stored batch Guids is non-zero, so the exception propagates rather than creating those items twice
+
 ### Requirement: Single-default enforcement
 
 The system SHALL, whenever an entity is written with `IsDefault == true` through the Default decorator's
 single-entity create, update or save path, first read all rows matching `e => e.IsDefault` from the inner
-store, clear the flag on every row whose `Guid` differs from the written entity's, and write those cleared
-rows back as a bulk update — skipping the write entirely when no other default exists.
+store, clear the flag on every row whose `Guid` differs from the written entity's (a null written `Guid`
+excluding nothing), and write those cleared rows back as a bulk update — skipping the write entirely when no
+other default exists.
 
 #### Scenario: Promoting a new default demotes the old one
 
@@ -660,51 +773,98 @@ rows back as a bulk update — skipping the write entirely when no other default
 ### Requirement: Default-flag collapsing on batch writes
 
 The system SHALL, when a batch write contains more than one entity with `IsDefault == true`, clear the flag
-on all but the LAST such entity in enumeration order, and on batch update SHALL exclude every Guid present
-in the batch from the corrective clearing pass.
+on all but the LAST such entity in enumeration order, SHALL run the corrective clearing pass only when the
+batch keeps a default, and on batch update SHALL exclude every non-null Guid present in the batch from the
+corrective clearing pass and hand the inner store the batch ordered non-defaults first.
 
 #### Scenario: Three defaults in one create batch
 
 - **Given** a batch of five entities of which the 1st, 3rd and 5th have `IsDefault = true`
 - **When** `DefaultStoreWrapper.Create(items)` is called
-- **Then** stored defaults are cleared first, then the 1st and 3rd entities have `IsDefault` set to false and only the 5th is persisted as default
+- **Then** the 1st and 3rd entities have `IsDefault` set to false, stored defaults are cleared, and only the 5th is persisted as default
+
+#### Scenario: A batch without a default clears nothing
+
+- **Given** a create or update batch in which no entity has `IsDefault = true`
+- **When** it is written through the Default decorator
+- **Then** no stored default is read or cleared and the batch is forwarded to the inner store
 
 #### Scenario: Batch update protects its own rows
 
 - **Given** a batch update containing rows A, B and C where B and C are marked default
 - **When** `DefaultStoreWrapper.Update(items)` is called
-- **Then** B is demoted, C stays default, and `UnsetOtherDefaults(C.Guid, {A,B,C})` clears only stored defaults outside the batch — A and B are not written twice by the corrective pass
+- **Then** B is demoted, C stays default, and `UnsetOtherDefaults(C.Guid, {A,B,C})` clears only stored defaults outside the batch — A and B are not written twice by the corrective pass — and the inner update receives A and B before C
 
 #### Scenario: Create-batch exclusion uses a null Guid
 
 - **Given** `Create(items)` calling `UnsetOtherDefaults(null)`
-- **When** the candidate list `allDefaults.Where(e => e.Guid != excludeGuid)` is evaluated with `excludeGuid == null`
-- **Then** any existing default row whose `Guid` is null is filtered OUT of the clearing pass and keeps `IsDefault = true`
+- **When** the candidate list is evaluated with `excludeGuid == null`
+- **Then** nothing is excluded, so an existing default row whose `Guid` is null is cleared like any other; likewise a null Guid in a batch update's exclusion set protects no stored row
+
+### Requirement: Default marker kept in step and refused promotions retried
+
+The system SHALL, for an entity implementing `IDefaultMarker`, set `DefaultMarker` to `true` when `IsDefault`
+is true and to `null` otherwise (never `false`) on every entity the Default decorators write — the written
+entity or batch, and every row the corrective pass demotes. When the inner store refuses a write with
+`StoreUniqueViolationException` while the written entity (or the batch's kept default) is a default and some
+other stored row is still `IsDefault`, the system SHALL clear the other defaults again and repeat the write,
+up to `MaxDefaultAttempts` (5) writes, so the last writer wins; a refusal while no other default is stored,
+for a non-default write, or after the attempts are spent SHALL propagate. A batch create SHALL be retried only
+while no item of the batch (by non-null Guid) is stored. Without a unique index over the marker, or on a store
+that enforces none, concurrent promotions can still both store a default.
+
+#### Scenario: Marker follows the flag
+
+- **Given** a `T : IDefaultMarker` with one stored default row
+- **When** a new entity with `IsDefault = true` is created through `AsyncDefaultStoreWrapper.CreateAsync`
+- **Then** the demoted row is written with `IsDefault = false` and `DefaultMarker = null`, and the new entity with `DefaultMarker = true`
+
+#### Scenario: Concurrent promotion refused by the unique index, then retried
+
+- **Given** a `T : IDefaultMarker` under a unique index on `DefaultMarker`, and a concurrent writer that stores another default between this write's clearing pass and its write
+- **When** `DefaultStoreWrapper.Update(data)` is called with `data.IsDefault = true`
+- **Then** the first inner update is refused, another default is found stored, the clearing pass runs again and demotes it, and the second inner update stores `data` as the only default
+
+#### Scenario: A refusal for another key surfaces at once
+
+- **Given** an inner store that refuses the write with `StoreUniqueViolationException` while no other default is stored
+- **When** an entity with `IsDefault = true` is created through the Default decorator
+- **Then** the exception propagates after one write, with no retry
 
 ### Requirement: Default-flag enforcement on filter-based updates
 
-The system SHALL enforce the single-default invariant on the `Action<T>` filter-update overload — reading
-matched rows and applying the corrective pass per row — but SHALL forward the `PropertyUpdate<T>` overload
-straight to the inner store with no enforcement. The async and sync implementations of the `Action<T>`
-overload SHALL differ in how the corrective pass is sequenced.
+The system SHALL enforce the single-default invariant on the `Action<T>` filter-update overload — sync and
+async alike — by reading the matched rows from the inner store, applying the action to each, and writing them
+back through the decorator's own batch update (one collection write, with batch collapsing, the clearing pass,
+the marker and the retry), issuing no write when nothing matched. The `PropertyUpdate<T>` overload SHALL take
+the same path (applying the update to each read row) when one of its assignments targets `IsDefault`, and
+SHALL otherwise be forwarded to the inner store natively. The `Action<T>` path SHALL refuse a null filter with
+`ArgumentNullException` and a filter that reduces to every row with `WholeTableWriteException`, naming
+`UpdateAll(updateAction)` (async: `UpdateAllAsync(updateAction)`) as the all-rows door.
 
-#### Scenario: PropertyUpdate can set IsDefault on many rows
+#### Scenario: PropertyUpdate setting IsDefault on many rows leaves one default
 
 - **Given** a `PropertyUpdate<T>` with `Set(x => x.IsDefault, true)` and a filter matching four rows
 - **When** `AsyncDefaultStoreWrapper.UpdateAsync(filter, updates)` or `DefaultStoreWrapper.Update(filter, updates)` is called
-- **Then** the call is forwarded verbatim and four rows end up with `IsDefault = true`, violating the invariant the decorator exists to enforce
+- **Then** the four rows are read, the update is applied to each in memory, and the batch update keeps only the last of them as default, clearing every other stored default
 
-#### Scenario: Async Action overload reads then writes row by row
+#### Scenario: PropertyUpdate not touching IsDefault stays native
+
+- **Given** a `PropertyUpdate<T>` that assigns only a business field
+- **When** it is applied through the Default decorator with a filter
+- **Then** the call is forwarded to the inner store's `Update(filter, updates)` verbatim, with no read
+
+#### Scenario: Action overload reads, applies, then writes once
 
 - **Given** a filter matching three rows and an action setting `IsDefault = true`
-- **When** `AsyncDefaultStoreWrapper.UpdateAsync(filter, updateAction, ct)` is called
-- **Then** the rows are first read via `_innerStore.ReadAsync(filter, null, null, null, ct)`, then for each row the action is applied, `UnsetOtherDefaultsAsync(row.Guid)` runs, and `_innerStore.UpdateAsync(row)` is issued individually — so each successive row demotes the previously promoted one and only the last row remains default
+- **When** `AsyncDefaultStoreWrapper.UpdateAsync(filter, updateAction, ct)` or `DefaultStoreWrapper.Update(filter, updateAction)` is called
+- **Then** the rows are first read via the inner bulk read with that filter, the action is applied to each, and one decorator batch update writes them — so only the last matched row remains default
 
-#### Scenario: Sync Action overload re-enters the inner store from inside its own update callback
+#### Scenario: Filtered default update without a filter is refused
 
-- **Given** the same filter and action
-- **When** `DefaultStoreWrapper.Update(filter, updateAction)` is called
-- **Then** the corrective `UnsetOtherDefaults(item.Guid)` — itself an inner-store read plus bulk update — executes inside the callback the inner store invokes while processing its own filter-based update, rather than after a completed read pass as in the async implementation
+- **Given** the Default decorator
+- **When** `Update(null, updateAction)` is called
+- **Then** an `ArgumentNullException` for `filter` is thrown and nothing is read or written
 
 ### Requirement: Optimistic concurrency version stamping
 
@@ -719,10 +879,11 @@ value the caller supplied.
 
 ### Requirement: Optimistic concurrency conflict detection
 
-The system SHALL, before forwarding an update, read the stored entity by `data.Guid ?? Guid.Empty` and throw
-`ConcurrentUpdateException(typeof(T), guid, data.Version)` when either no row was found or the stored
-`Version` differs from `data.Version`; and SHALL otherwise increment `data.Version` before forwarding. This
-check is a non-atomic read-check-write at the decorator level.
+The system SHALL, before forwarding an update, read the stored entity by `data.Guid ?? Guid.Empty`, throw
+`EntityNotFoundException(typeof(T), data.Guid)` when no row was found, and throw
+`ConcurrentUpdateException(typeof(T), guid, data.Version)` when the stored `Version` differs from
+`data.Version`; and SHALL otherwise increment `data.Version` before forwarding, restoring the previous value if
+the inner update throws. This check is a non-atomic read-check-write at the decorator level.
 
 #### Scenario: Matching version proceeds and increments
 
@@ -736,17 +897,17 @@ check is a non-atomic read-check-write at the decorator level.
 - **When** `UpdateAsync(data)` is called
 - **Then** a `ConcurrentUpdateException` is thrown whose `EntityType` is `typeof(T)`, `EntityGuid` is the entity's Guid, `ExpectedVersion` is `3`, and whose message reads `Concurrency conflict on {TypeName} (Id: {guid}). Expected version 3 but the entity has been modified.`; `data.Version` is left at `3` and no inner update is issued
 
-#### Scenario: Missing row is treated as a conflict
+#### Scenario: Missing row is not found
 
 - **Given** an entity whose Guid no longer exists in storage (or whose `Guid` is null, so `Guid.Empty` is read)
 - **When** `Update` / `UpdateAsync` is called
-- **Then** a `ConcurrentUpdateException` is thrown rather than the update silently proceeding
+- **Then** an `EntityNotFoundException` for `typeof(T)` naming `data.Guid` is thrown rather than the update silently proceeding, and `data.Version` is unchanged
 
-#### Scenario: Version is incremented before the inner write can fail
+#### Scenario: A failed inner write restores the version
 
 - **Given** an inner store whose update throws
-- **When** `UpdateAsync(data)` is called with a matching version
-- **Then** `data.Version` has already been incremented when the inner exception surfaces, leaving the in-memory entity one version ahead of storage
+- **When** `UpdateAsync(data)` is called with a matching version `3`
+- **Then** the inner exception propagates and `data.Version` is back at `3`, matching storage, so a retry is not a conflict
 
 #### Scenario: Concurrent updaters can both pass the check
 
@@ -795,11 +956,17 @@ update that missed and the create that follows it.
 - **When** `TimestampStoreWrapper.Save(data)` is called
 - **Then** the decorator's `Update` runs and misses, then its `Create` runs under the same Guid (re-stamping `CreatedAt`/`UpdatedAt` and clearing `PrevUpdatedAt`), and the create's Guid is returned; a store delegate passed to `Save` is applied at most once
 
-#### Scenario: Versioned Save of an unstored Guid is a conflict, not a create
+#### Scenario: Versioned Save of an unstored Guid creates it
 
 - **Given** an `IVersioned` entity with a non-empty `Guid` that no stored row holds
 - **When** `VersionedStoreWrapper.Save(data)` or `AsyncVersionedStoreWrapper.SaveAsync(data)` is called
-- **Then** the versioned update throws `ConcurrentUpdateException` for the missing row, which `StoreSave` does not catch, so the exception propagates and nothing is created
+- **Then** the versioned update throws `EntityNotFoundException` naming that Guid, `StoreSave` catches it and runs the versioned create, so the entity is created under that Guid with `Version = 1` and the create's Guid is returned
+
+#### Scenario: Save of a soft-deleted entity falls through to create
+
+- **Given** an entity with a non-empty `Guid` whose stored row is soft-deleted
+- **When** `SoftDeleteStoreWrapper.Save(data)` or `AsyncSoftDeleteStoreWrapper.SaveAsync(data)` is called
+- **Then** the decorator's update throws `EntityNotFoundException` naming that Guid, so `StoreSave` runs the decorator's create under the same Guid (with `DeletedAt` reset to null) against an inner store that still holds the row — the outcome is whatever the inner store does with a create of an existing Guid
 
 #### Scenario: Default decorator's Save bypasses its own Create/Update
 

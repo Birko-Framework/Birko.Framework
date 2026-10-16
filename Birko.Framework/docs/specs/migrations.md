@@ -1,7 +1,7 @@
 ---
 area: migrations
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBMigrationContext.cs
@@ -15,6 +15,7 @@ sources:
   - ../Birko.Data.Migrations.ElasticSearch/ElasticSearchMigrationRunner.cs
   - ../Birko.Data.Migrations.ElasticSearch/ElasticSearchMigrationStore.cs
   - ../Birko.Data.Migrations.ElasticSearch/Settings/ElasticSearchMigrationSettings.cs
+  - ../Birko.Data.Migrations.InfluxDB/Context/InfluxBucketLookup.cs
   - ../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs
   - ../Birko.Data.Migrations.InfluxDB/Context/InfluxDBMigrationContext.cs
   - ../Birko.Data.Migrations.InfluxDB/Context/InfluxDBSchemaBuilder.cs
@@ -50,6 +51,7 @@ sources:
   - ../Birko.Data.Migrations/Context/IDataMigrator.cs
   - ../Birko.Data.Migrations/Context/IMigrationContext.cs
   - ../Birko.Data.Migrations/Context/MigrationFilter.cs
+  - ../Birko.Data.Migrations/Context/MigrationFilterTerm.cs
   - ../Birko.Data.Migrations/Exceptions/MigrationException.cs
   - ../Birko.Data.Migrations/IMigration.cs
   - ../Birko.Data.Migrations/IMigrationRunner.cs
@@ -224,12 +226,14 @@ set), `Initialize()` SHALL call `IMigrationStore.Initialize()`, and `InitializeA
 
 ### Requirement: Migrate resolves its target and refuses downgrades
 
-The system SHALL treat a null `targetVersion` as `LatestVersion`. When the resolved target equals the
-current version it SHALL return a successful `MigrationResult` with `FromVersion == ToVersion ==
-current`, `Direction = Up` and an empty `ExecutedMigrations`. When the target is **less** than the
+The system SHALL treat a null `targetVersion` as `LatestVersion`. When the target is **less** than the
 current version it SHALL return a failed `MigrationResult` whose `ErrorMessage` is `"Target version
 {target} is less than current version {current}. Use Rollback for downgrades."` and whose
-`ToVersion` equals `FromVersion`. Otherwise it SHALL call `ExecuteMigrations(current, target, Up)`.
+`ToVersion` equals `FromVersion`. Otherwise, when the selection of migrations to run (see the selection
+requirement below) is empty, it SHALL return a successful `MigrationResult` with `FromVersion =
+current`, `ToVersion = target`, `Direction = Up` and an empty `ExecutedMigrations` — "nothing to run" is
+decided by the selection, not by `target == current` (SH-M182, TASK-152). Otherwise it SHALL call
+`ExecuteMigrations(current, target, Up)`, even when `target == current`.
 
 #### Scenario: Already at latest
 
@@ -244,6 +248,13 @@ current version it SHALL return a failed `MigrationResult` whose `ErrorMessage` 
 - **When** `Migrate(3)` is called
 - **Then** the result has `Success = false`, `FromVersion = 5`, `ToVersion = 5`, `Direction = Up` and
   the "Use Rollback for downgrades" message; no migration is executed and no exception is thrown
+
+#### Scenario: A lower target is refused even when a back-dated migration below it is pending
+
+- **Given** applied versions `{1, 5}` and an unapplied registered migration of `Version = 3`
+- **When** `Migrate(4)` is called
+- **Then** the downgrade guard fires first (`4 < 5`) and the "Use Rollback for downgrades" failure is
+  returned; migration 3 runs only through `Migrate()` or a target of at least `5`
 
 #### Scenario: MigrateAsync reads the current version asynchronously
 
@@ -273,13 +284,15 @@ Down)`.
 - **When** `Rollback(0)` is called
 - **Then** migrations 3, 2, 1 are executed `Down` in that order
 
-### Requirement: Migration selection is a version-range window, not an applied-set difference
+### Requirement: Migration selection is drawn from the applied set, bounded by the target
 
-The system SHALL select `Up` migrations as `Version > fromVersion && Version <= toVersion` ordered
-ascending, and `Down` migrations as `Version <= fromVersion && Version > toVersion` ordered
-descending. `GetPendingMigrations()` and `GetAppliedMigrations()` SHALL, by contrast, be computed
-against `IMigrationStore.GetAppliedVersions()` — pending is every registered migration whose version
-is not in the applied set, applied is every registered migration whose version is in it.
+The system SHALL select migrations against `IMigrationStore.GetAppliedVersions()`, as
+`GetPendingMigrations()` and `GetAppliedMigrations()` are (SH-M182 / SH-M183, TASK-152). `Up` SHALL select
+every registered migration whose version is **not** in the applied set and is `<= toVersion`, ordered
+ascending — `fromVersion` does not bound it. `Down` SHALL select every registered migration whose version
+**is** in the applied set with `Version <= fromVersion && Version > toVersion`, ordered descending.
+`GetPendingMigrations()` SHALL be every registered migration whose version is not in the applied set, and
+`GetAppliedMigrations()` every registered migration whose version is in it.
 
 #### Scenario: Up range excludes the current version and includes the target
 
@@ -293,12 +306,20 @@ is not in the applied set, applied is every registered migration whose version i
 - **When** `Rollback(1)` is called
 - **Then** migrations 3 and 2 are executed `Down`, and migration 1 is left applied
 
-#### Scenario: A back-dated unapplied migration is reported pending but never migrated
+#### Scenario: A back-dated unapplied migration is migrated
 
 - **Given** applied versions `{1, 5}` and a newly registered migration of `Version = 3`
 - **When** `GetPendingMigrations()` is called and then `Migrate()` is called
-- **Then** `GetPendingMigrations()` includes migration 3, but `Migrate()` computes `current = 5`,
-  `target = 5`, returns the already-at-target successful result, and migration 3 is never executed
+- **Then** `GetPendingMigrations()` includes migration 3, and `Migrate()` computes `current = 5`,
+  `target = 5`, selects migration 3 from the applied set and executes it; the result has
+  `FromVersion = ToVersion = 5` with migration 3 in `ExecutedMigrations`
+
+#### Scenario: A rollback never runs Down for a migration that was not applied
+
+- **Given** registered versions `{1, 2, 3}`, applied versions `{1, 3}` (version 2 never applied)
+- **When** `Rollback(0)` is called
+- **Then** only migrations 3 and 1 are executed `Down`, in that order; migration 2's `Down` is not run,
+  because its `Up` never made the changes it would undo
 
 ### Requirement: The asynchronous execution hook falls back to blocking synchronous execution
 
@@ -325,7 +346,7 @@ synchronous `ExecuteMigrations`.
 ### Requirement: An execution failure raises MigrationException rather than a failed result
 
 The system SHALL, for every backend runner, throw `MigrationException` when a migration body or a
-store record write throws, and SHALL NOT return a `MigrationResult` with `Success = false` for an
+store record write throws, or when a migration body leaves a schema builder chain without `Build()`, and SHALL NOT return a `MigrationResult` with `Success = false` for an
 execution error. A non-successful `MigrationResult` is produced only by the target/direction guards
 described above. `MigrationException` SHALL carry the offending `IMigration` in `Migration` and the
 `MigrationDirection` in `Direction`, and the original exception as `InnerException`.
@@ -355,13 +376,28 @@ described above. `MigrationException` SHALL carry the offending `IMigration` in 
 - **Then** it blames `migrations[executed.Count]` — index 1, the second migration — because one had
   already been appended to `executed`
 
-#### Scenario: MongoDB distinguishes a post-loop commit failure
+#### Scenario: A failure after every migration ran blames none of them, on every runner
 
-- **Given** a MongoDB batch where every migration succeeded but `session.CommitTransaction()` throws
-- **When** the exception is built
-- **Then** because `executed.Count == migrations.Count`, the runner uses the message-only constructor
-  (`"Migration transaction failed to commit. Changes rolled back if session was used."`) with no
-  `Migration` attached, instead of indexing past the end of the list
+- **Given** a batch where every migration succeeded but the step after the loop throws — a SQL
+  `transaction.Commit()` or a MongoDB `session.CommitTransaction()`
+- **When** the exception is built by the shared `AbstractMigrationRunner.RunFailed`
+- **Then** because `executed.Count == migrations.Count`, the message-only constructor is used with no
+  `Migration` attached, and the message is the runner's own failure message followed by `" Every migration
+  ran; the failure came after them ({ExceptionType}: {message})."` — instead of indexing past the end of
+  the list and replacing the real failure with an `ArgumentOutOfRangeException` (SH-M172, TASK-152; only
+  MongoDB guarded this before)
+
+#### Scenario: A migration that leaves a schema chain unfinished fails and is not recorded
+
+- **Given** a migration whose `Up` calls `context.Schema.CreateIndex("Invoice", "IX_Number").WithField("Number")`
+  (or a `CreateCollection(...)` chain) and never calls `Build()`, on any of the seven runners
+- **When** the runner executes it through `AbstractMigrationRunner.ApplyMigration`
+- **Then** after `Up`/`Down` returns, the context's `Schema.PendingBuilds` is non-empty and a
+  `MigrationException` is thrown naming each unfinished chain (`CreateIndex("Invoice", "IX_Number")`) and
+  stating that the migration is not recorded; the runner's catch wraps it as the `InnerException` of its
+  own failure `MigrationException`, before the version is recorded (TASK-627)
+- **And** a collection chain counts as unfinished even on a backend that created the collection eagerly
+  (MongoDB, ElasticSearch, InfluxDB), so a migration that passes on one provider passes on all
 
 ### Requirement: Empty selection short-circuits before any connection work
 
@@ -675,15 +711,20 @@ The system SHALL create the migrations index when `Indices.Exists` reports it ab
 `ElasticSearchMigrationSettings.NumberOfShards ?? 1` and `NumberOfReplicas ?? 0` (both settings
 default to `1`, so the `?? 0` arm is reached only when a caller explicitly assigns `null` — a
 default-configured migrations index therefore gets **one** replica, not zero), with `Version`
-mapped as a keyword and `Name`/`Description` as text and `CreatedAt`/`AppliedAt` as dates. Index name
+mapped as a `long` number (SH-M201, TASK-152; it was a keyword, which orders `"9"` above `"10"`) and
+`Name`/`Description` as text and `CreatedAt`/`AppliedAt` as dates. `Initialize()` SHALL throw
+`InvalidOperationException` when the existence check is invalid for any reason other than a 404, and
+when the create response is invalid for any reason other than `resource_already_exists_exception`
+(SH-M202). Index name
 SHALL be `MigrationsIndex` (default `"__migrations"`), prefixed with `"{Settings.Name}_"` when
 `Name` is non-empty, lower-cased. `RecordMigration` SHALL index the document with `Refresh.True` and
 throw `InvalidOperationException` when the response is invalid. `RemoveMigration` SHALL delete by id
 with `Refresh.True`, tolerating a 404. `GetAppliedVersions` SHALL return an **empty set** when the
 index genuinely does not exist, and SHALL otherwise throw `InvalidOperationException` when **either**
 the existence check or the search fails — an existence response that is invalid for any reason other
-than a 404, or a search response that is invalid. It SHALL read at most 10 000 documents sorted
-**descending** by version.
+than a 404, or a search response that is invalid. It SHALL read up to 10 000 documents unsorted, with
+the total hit count tracked, and SHALL throw `InvalidOperationException` when the total exceeds the
+documents returned rather than return a partial set.
 
 #### Scenario: Applied version immediately visible
 
@@ -715,13 +756,20 @@ than a 404, or a search response that is invalid. It SHALL read at most 10 000 d
 - **When** `RemoveMigration` runs
 - **Then** the invalid response with `ServerError.Status == 404` is ignored and no exception is thrown
 
-#### Scenario: More than 10 000 applied migrations truncate the oldest
+#### Scenario: More than 10 000 applied migrations are refused rather than truncated
 
 - **Given** an index holding 10 500 migration documents
 - **When** `GetAppliedVersions()` is called
-- **Then** the descending sort with `Size(10000)` returns the 10 000 **highest** versions, so
-  `GetCurrentVersion()` remains correct while `GetPendingMigrations()` misreports the oldest 500 as
-  pending
+- **Then** the search returns 10 000 documents with `Total = 10500`, and `InvalidOperationException` is
+  thrown stating that a partial set would misreport the current version — no truncated set is returned
+  (SH-M201; the descending sort it replaces was lexicographic on an index whose `Version` is a keyword)
+
+#### Scenario: An initialisation against an unreachable cluster fails
+
+- **Given** a cluster whose `Indices.Exists` response is invalid with no 404 (unreachable or unauthorized)
+- **When** `Initialize()` runs
+- **Then** `InvalidOperationException` (`"Cannot initialise migrations index '…': the existence check
+  failed. …"`) is thrown instead of attempting a create and reporting success
 
 ### Requirement: ElasticSearch migrations have no transaction
 
@@ -743,9 +791,11 @@ The system SHALL store migration state as a single `MigrationsStateDocument` who
 `RavenMigrationSettings.MigrationsDocumentId` (default `"Migrations/State"`), holding a dictionary
 keyed by the version's string form. `Initialize()` SHALL create the document when absent.
 `RecordMigration` SHALL load-or-construct the document, set the record and `SaveChanges()`.
-`RemoveMigration` SHALL remove the key and save only when the document and dictionary exist. Reads
-SHALL open a fresh session each time and SHALL return an empty set when the document or its
-dictionary is null.
+`RemoveMigration` SHALL remove the key and save only when the key was present. Both writes SHALL save
+in a session with `UseOptimisticConcurrency = true` and, on a `ConcurrencyException`, SHALL reload the
+document and reapply the change after a jittered pause, for up to 50 attempts, the last conflict
+propagating (SH-M187, TASK-152). Reads SHALL open a fresh session each time and SHALL return an empty
+set when the document or its dictionary is null.
 
 #### Scenario: Two modules share one Raven database
 
@@ -754,12 +804,13 @@ dictionary is null.
 - **When** each records its own migrations
 - **Then** the two state documents are independent and neither module sees the other's versions
 
-#### Scenario: Concurrent recording is last-write-wins
+#### Scenario: Concurrent recording keeps both versions
 
 - **Given** two processes recording different versions at the same time
 - **When** both load the state document, mutate it and `SaveChanges()`
-- **Then** the document is replaced wholesale with no optimistic-concurrency check, so one process's
-  version can be lost
+- **Then** the second save fails its optimistic-concurrency check, that process reloads the document the
+  first one saved, adds its own version to it and saves again — both versions are recorded, where the
+  previous last-write-wins save lost one and the migration ran again
 
 ### Requirement: The CosmosDB migration store keeps one state item in a dedicated container
 
@@ -770,7 +821,10 @@ path hard-coded to `"/partitionKey"`, then read the state item with id
 (default `"migrations"`), creating it when the read raises `CosmosException` with
 `HttpStatusCode.NotFound`. `GetAppliedVersions` SHALL return an empty set on `NotFound`.
 `RecordMigration` and `RemoveMigration` SHALL re-read the state item, mutate the dictionary and
-`ReplaceItemAsync`. All calls SHALL be made synchronously via `.GetAwaiter().GetResult()`.
+`ReplaceItemAsync` with `IfMatchEtag` set to the ETag that was read; on `PreconditionFailed` (412) they
+SHALL re-read and reapply after a jittered pause, for up to 50 attempts (SH-M186, TASK-152).
+`RemoveMigration` SHALL replace nothing when the version was not recorded. All calls SHALL be made
+synchronously via `.GetAwaiter().GetResult()`.
 
 #### Scenario: First run creates container and state item
 
@@ -779,6 +833,13 @@ path hard-coded to `"/partitionKey"`, then read the state item with id
 - **Then** the container is created and the initial state item with an empty `AppliedMigrations`
   dictionary is inserted
 
+#### Scenario: Concurrent recording on Cosmos keeps both versions
+
+- **Given** two processes recording different versions against the same state item
+- **When** both read it and replace it
+- **Then** the second replace fails with 412 because the ETag moved, that process re-reads the item the
+  first one wrote and replaces it with both versions present
+
 #### Scenario: Async store members do not perform async I/O
 
 - **Given** `RecordMigrationAsync(migration, token)`
@@ -786,20 +847,32 @@ path hard-coded to `"/partitionKey"`, then read the state item with id
 - **Then** it observes the token once via `ThrowIfCancellationRequested()`, calls the synchronous
   `RecordMigration`, and returns `Task.CompletedTask`
 
-### Requirement: The InfluxDB migration store tracks versions as points in a fixed bucket
+### Requirement: The InfluxDB migration store tracks versions as points in a configurable bucket
 
-The system SHALL use the hard-coded bucket `"_migrations"` and measurement `"migrations"` — there is
-no settings class for the InfluxDB migration backend, and the organization is supplied to the runner
-constructor. `Initialize()` SHALL find the bucket by case-insensitive name or create it with a
+The system SHALL keep bookkeeping in measurement `"migrations"` of the bucket named by the optional
+`bucketName` argument of `InfluxMigrationStore` / `migrationsBucketName` of `InfluxMigrationRunner`,
+defaulting to `InfluxMigrationStore.DefaultMigrationsBucketName = "birko_migrations"` (TASK-617; the old
+`"_migrations"` is a name InfluxDB 2 refuses, so the bucket could never be created). A blank name or one
+starting with `_` SHALL be refused with `ArgumentException` at construction. There is no settings class
+for the InfluxDB migration backend, and the organization **name** is supplied to the runner
+constructor. Every bucket lookup in this backend SHALL go through `InfluxBucketLookup.Find`: a
+server-side filter on organization plus name, compared again with an **ordinal** (case-sensitive) match,
+with a `NotFoundException` read as "absent" (TASK-612); a create SHALL resolve the organization name to
+its id first, throwing `InvalidOperationException` when the organization does not exist.
+`Initialize()` SHALL find the bucket or create it with a
 **infinite** retention rule (`Expire` with a `0` second period) — migration bookkeeping must never
-expire. `GetAppliedVersions()` SHALL run a Flux query over `range(start:
--10y)` filtered to `_field == "version"` with `distinct`, parse each `_value` with
+expire. `GetAppliedVersions()` SHALL run a Flux query over `range(start: 0)` (TASK-152; it was `-10y`)
+filtered to the measurement and `_field == "version"`, `group()`ed, with `distinct`, parse each `_value` with
 `long.TryParse`, and SHALL throw `InvalidOperationException` on an `InfluxException` rather than
 returning whatever versions were collected.
 `RecordMigration` SHALL write a point via the non-batching `GetWriteApiAsync()` with the migration
-name as a tag, `version` and `description` as fields, and `CreatedAt` as the millisecond timestamp.
-`RemoveMigration` SHALL delete over `[CreatedAt - 1 minute, UtcNow]` with the predicate
-`_measurement="migrations" AND name="{escaped name}"`, swallowing `InfluxException`.
+name **and the version** as tags (SH-M189), `version` and `description` as fields, and `CreatedAt` as the
+millisecond timestamp. `RemoveMigration` SHALL query the points whose `version` field equals the
+migration's version, delete each one over `[time, time + 1 ms]` with the predicate
+`_measurement="migrations" AND "name"="{escaped name}"` (plus `AND "version"="{version}"` when the point
+carries the version tag) — tag keys quoted, because `name` is a keyword of the delete grammar (TASK-618) —
+**waiting** on each delete and letting its failure propagate, and SHALL then throw
+`InvalidOperationException` when a point for that version is still present (SH-M188).
 
 #### Scenario: A query failure is reported rather than read as an empty bucket
 
@@ -811,7 +884,7 @@ name as a tag, `version` and `description` as fields, and `CreatedAt` as the mil
 
 #### Scenario: Bookkeeping written before today survives indefinitely
 
-- **Given** a migration whose `CreatedAt` is more than a year in the past, and a `_migrations` bucket
+- **Given** a migration whose `CreatedAt` is more than a year in the past, and a `birko_migrations` bucket
   this store created
 - **When** `RecordMigration` writes its point, timestamped with that `CreatedAt`
 - **Then** the point is retained, because the bucket carries no expiry — under the previous 365-day
@@ -830,6 +903,28 @@ name as a tag, `version` and `description` as fields, and `CreatedAt` as the mil
 - **Given** a programming error inside the version query loop that raises `NullReferenceException`
 - **When** `GetAppliedVersions()` runs
 - **Then** the exception propagates rather than being read as "no applied versions"
+
+#### Scenario: A rollback in a later process deletes the version it recorded
+
+- **Given** version `4` recorded days ago, and a rollback run in a new process, where the migration
+  object's `CreatedAt` is the moment it was constructed
+- **When** `RemoveMigration` runs
+- **Then** the point is found by its `version` field rather than by a window around `CreatedAt`, deleted
+  at its own timestamp, and confirmed gone; a migration sharing the same name but another version is not
+  touched
+
+#### Scenario: A reserved bookkeeping bucket name is refused
+
+- **Given** `new InfluxMigrationRunner(client, "org", "_migrations")`
+- **When** the store is constructed
+- **Then** `ArgumentException` is thrown stating that the name must not start with `_`, which InfluxDB 2
+  reserves for system buckets
+
+#### Scenario: Bucket names are matched exactly, within the organization
+
+- **Given** buckets `metrics` and `Metrics` in the organization, and a `Metrics` bucket in another one
+- **When** a migration component looks up `"Metrics"`
+- **Then** only this organization's `Metrics` is found — not `metrics`, and not the other organization's
 
 ### Requirement: A migration context exposes schema, data, provider name and a raw escape hatch
 
@@ -852,21 +947,24 @@ which invokes the supplied action with the backend's native handle. Constructors
 - **Then** it returns `"SQL"`, `"TimescaleDB"`, `"MongoDB"`, `"ElasticSearch"`, `"RavenDB"`,
   `"CosmosDB"` or `"InfluxDB"` respectively
 
-### Requirement: Collection and index builders are terminal-operation based, and only some backends implement the terminal
+### Requirement: Collection and index builders are terminal-operation based, and every unfinished chain is refused
 
 The system SHALL define `ICollectionBuilder.Build()` and `IIndexBuilder.Build()` as default no-op
 interface methods that a migration must call to finish a `CreateCollection(...).WithField(...)` or
-`CreateIndex(...).WithField(...)` chain. Only the SQL builders override **both** terminals; the
-MongoDB index builder overrides `IIndexBuilder.Build()`; the ElasticSearch, RavenDB, CosmosDB and
-InfluxDB index builders and the MongoDB/ElasticSearch/RavenDB/CosmosDB/InfluxDB collection builders
-do **not** override `Build()`.
+`CreateIndex(...).WithField(...)` chain. Every backend's schema builder SHALL hand out its chains through
+a `SchemaBuildLedger` and expose the never-built ones as `ISchemaBuilder.PendingBuilds`, which the runner
+reads after each migration (TASK-627). The SQL and CosmosDB builders override **both** terminals; the
+MongoDB and RavenDB index builders override `IIndexBuilder.Build()` to create the index; the
+ElasticSearch and InfluxDB index builders override it to **refuse** with `NotSupportedException`; the
+MongoDB/ElasticSearch/RavenDB/InfluxDB collection builders do **not** override `Build()`.
 
 #### Scenario: SQL collection chain must be terminated
 
 - **Given** a SQL migration calling `context.Schema.CreateCollection("Foo").WithField("Id",
   FieldType.Guid, isPrimary: true)` and never calling `Build()`
 - **When** the migration completes
-- **Then** no `CREATE TABLE` is emitted — the accumulated definition is discarded
+- **Then** no `CREATE TABLE` is emitted, and the runner fails the migration with a `MigrationException`
+  naming `CreateCollection("Foo")` instead of recording it as applied
 
 #### Scenario: SQL Build is idempotent
 
@@ -880,13 +978,26 @@ do **not** override `Build()`.
 - **When** `Build()` is called
 - **Then** `InvalidOperationException` (`"Index must have at least one field."`) is thrown
 
-#### Scenario: ElasticSearch, RavenDB, CosmosDB and InfluxDB CreateIndex create nothing
+#### Scenario: ElasticSearch and InfluxDB CreateIndex refuse at Build
 
 - **Given** a migration calling `context.Schema.CreateIndex("things", "byName").WithField("name").Build()`
-  on any of those four backends
-- **When** the migration completes
-- **Then** the default no-op `Build()` runs and no index is created; `Unique()` is recorded only in
-  an `internal bool IsUnique` (ElasticSearch, RavenDB, CosmosDB) or discarded entirely (InfluxDB)
+  on ElasticSearch or InfluxDB
+- **When** `Build()` runs
+- **Then** `NotSupportedException` is thrown (ElasticSearch: not implemented, use `Raw()` for a mapping,
+  template or alias; InfluxDB: no custom indexes exist) and no index is created; ElasticSearch's
+  `Unique()` is recorded only in an `internal bool IsUnique`, while InfluxDB's chain methods are no-ops
+
+#### Scenario: RavenDB and CosmosDB CreateIndex create the index through their index manager
+
+- **Given** `context.Schema.CreateIndex("things", "byName").WithField("name").Build()` on RavenDB or
+  CosmosDB
+- **When** `Build()` runs
+- **Then** an `IndexDefinition` named `byName` with the declared fields, field types and `Unique` flag is
+  passed to `RavenDBIndexManager.CreateAsync` / `CosmosDBIndexManager.CreateAsync` for collection
+  `things`, which creates it or refuses what the backend cannot express — `Unique` is refused by both
+  (SH-M200, TASK-152)
+- **And** a declaration with no field throws `InvalidOperationException`, and on RavenDB a descending
+  field throws `NotSupportedException` (a Raven index field has no direction)
 
 #### Scenario: MongoDB index is created on Build
 
@@ -894,6 +1005,8 @@ do **not** override `Build()`.
 - **When** the migration runs
 - **Then** a `CreateIndexModel` with `Name = "byName"` and `Unique = true` is created (using the
   session when one is active); with zero fields, `Build()` returns without creating anything
+- **And** the keys come from `MongoDBIndexManager.KeysFor`, so a field declared with a text, hashed or
+  geo `IndexFieldType` builds that kind of key rather than a plain ascending one (SH-M203, TASK-152)
 
 ### Requirement: The SQL schema builder requires a connector and has no raw-SQL fallback
 
@@ -901,10 +1014,14 @@ The system SHALL require a non-null `AbstractConnector` in `SqlSchemaBuilder`, `
 `SqlDataMigrator`, throwing `ArgumentNullException` otherwise, and SHALL route `DropCollection`,
 `DropIndex`, `AddField`, `DropField`, `CreateCollection(...).Build()` and `CreateIndex(...).Build()`
 through that connector after calling `SetExternalTransaction(connection, transaction)`. Identifiers
-SHALL be quoted via `connector.QuoteIdentifier`. `RenameField` SHALL use raw
-`ALTER TABLE … RENAME COLUMN … TO …` because no connector equivalent exists, but SHALL quote through
-the connector's dialect. `CollectionExists` SHALL query `sqlite_master` when the connection type name
-contains `"Sqlite"` and `INFORMATION_SCHEMA.TABLES` otherwise.
+SHALL be quoted via `connector.QuoteIdentifier`. `RenameField` SHALL execute the connector's
+`RenameColumnSql(collection, from, to, quoteColumns: false)` (TASK-272, TASK-637), so the table is named in
+its schema and SQL Server uses `sp_rename`; both column names SHALL be emitted **bare** — the old name
+resolved by `DataBase.MigrationColumn` (the stored column of a loaded entity's property of that name,
+else a validated plain identifier), the new name validated by `DataBase.ValidateColumnIdentifier`.
+`CollectionExists` SHALL run the connector's `TableExistsSql` with `@tableName` bound to
+`connector.TableExistsArgument(name)`, and SHALL throw `NotSupportedException` when the connector has no
+such query (SH-M181, TASK-152).
 
 #### Scenario: A null connector is refused, and the message names the alternative
 
@@ -933,12 +1050,23 @@ contains `"Sqlite"` and `INFORMATION_SCHEMA.TABLES` otherwise.
   `_primaryKeyFields`, so this is a capability the removal dropped deliberately — nothing in the
   repository or any consumer declares one this way
 
-#### Scenario: SQLite existence check
+#### Scenario: Existence check is the connector's own, scoped query
 
-- **Given** a `SqliteConnection`
+- **Given** a connector-backed builder
 - **When** `CollectionExists("Foo")` is called
-- **Then** `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @tableName` is run,
-  not the `INFORMATION_SCHEMA` variant which does not exist in SQLite
+- **Then** SQLite runs `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @tableName`,
+  MySQL scopes `information_schema.TABLES` to `TABLE_SCHEMA = DATABASE()`, PostgreSQL resolves
+  `to_regclass(@tableName)` in `pg_class`, and SQL Server tests `OBJECT_ID(@tableName, N'U')` — no longer an
+  unscoped `INFORMATION_SCHEMA.TABLES` lookup by name that answered for a table in any schema or database
+
+#### Scenario: A renamed column is found on PostgreSQL by its model property name
+
+- **Given** a PostgreSQL table created by the framework for an entity with property `Name` (stored bare,
+  so folded to `name`)
+- **When** a migration calls `context.Schema.RenameField("Docs", "Name", "Title")`
+- **Then** the statement names the columns bare, so PostgreSQL folds them as it folded the `CREATE TABLE`;
+  a quoted `"Name"` would have failed with 42703. A `[NamedField]` property resolves to its stored column,
+  and a new name that is not a plain identifier throws `ArgumentException`
 
 #### Scenario: Column types come from the provider, not a portable table
 
@@ -1014,9 +1142,11 @@ no-op for CosmosDB.
 
 - **Given** `context.Schema.RenameField("things", "old", "new")`
 - **When** each backend runs it
-- **Then** SQL emits `ALTER TABLE … RENAME COLUMN`; MongoDB issues `UpdateMany` with
-  `$rename` over an empty filter; ElasticSearch issues `_update_by_query` with the Painless source
-  `ctx._source.new = ctx._source.remove('old')`; RavenDB issues a `PatchByQueryOperation` with `FROM
+- **Then** SQL emits the connector's `RenameColumnSql` (`ALTER TABLE … RENAME COLUMN`, `sp_rename` on SQL
+  Server); MongoDB issues `UpdateMany` with
+  `$rename` over an empty filter; ElasticSearch issues `_update_by_query` over the documents where `old`
+  **exists**, with `Refresh`, the Painless source
+  `ctx._source[params.newName] = ctx._source.remove(params.oldName)` and both names as script params; RavenDB issues a `PatchByQueryOperation` with `FROM
   'things' UPDATE { this.new = this.old; delete this.old; }`; CosmosDB queries every document where
   `IS_DEFINED(c["old"])` and point-patches each with `Set /new` + `Remove /old`; InfluxDB does
   nothing at all
@@ -1035,26 +1165,30 @@ no-op for CosmosDB.
 - **Then** the projection additionally selects `c.tenantId` and the point patch uses a partition key
   built from that value via `CosmosDBDataMigrator.BuildPartitionKey`, not from the document id
 
-#### Scenario: ElasticSearch rename result is not validated
+#### Scenario: ElasticSearch rename result is validated
 
-- **Given** an `_update_by_query` that the cluster rejects
+- **Given** an `_update_by_query` that the cluster rejects, or that reports version conflicts or
+  per-document failures
 - **When** `ElasticSearchSchemaBuilder.RenameField` runs
-- **Then** the response is discarded without an `IsValid` check, so the migration is recorded as
-  applied
+- **Then** the response goes through `ElasticSearchDataMigrator.EnsureValid` and an
+  `InvalidOperationException` is thrown, so the migration is not recorded as applied (SH-M199,
+  TASK-152); a document without the old field is not touched, where it used to gain the new field as null
 
 ### Requirement: Collection creation and dropping differ sharply across backends
 
 The system SHALL implement `CreateCollection`/`DropCollection` as follows. SQL: `CreateCollection`
 returns a builder that emits `CREATE TABLE` on `Build()`; `DropCollection` calls
-`connector.DropTable` or falls back to `DROP TABLE IF EXISTS`. MongoDB: `CreateCollection`
+`connector.DropTable`. MongoDB: `CreateCollection`
 eagerly calls `database.CreateCollection` before returning the builder; `DropCollection` drops the
 collection. ElasticSearch: `CreateCollection` creates the index with 1 shard / 0 replicas when
 absent; `DropCollection` deletes it when present. RavenDB: `CreateCollection` creates nothing (Raven
 collections are implicit) and `DropCollection` issues a `DeleteByQueryOperation` for `FROM
-'{name}'`, waiting for completion. CosmosDB: `CreateCollection` calls
-`CreateContainerIfNotExistsAsync` with the partition-key path `"/id"` and `DropCollection` deletes
-the container. InfluxDB: `CreateCollection` creates a bucket with no retention rule when absent and
-`DropCollection` deletes the bucket.
+'{name}'`, waiting for completion. CosmosDB: `CreateCollection` creates nothing until `Build()`,
+which calls `CreateContainerIfNotExistsAsync` with the partition-key path `"/id"` (SH-M174, TASK-152);
+`WithField` SHALL throw `NotSupportedException` for a primary field other than `id` / `Guid`
+(case-insensitive) and for a unique non-primary field; `DropCollection` deletes the container.
+InfluxDB: `CreateCollection` creates a bucket with no retention rule when the exact-name lookup finds
+none, and `DropCollection` deletes the bucket the exact-name lookup finds.
 
 #### Scenario: RavenDB DropCollection empties rather than removes
 
@@ -1063,14 +1197,16 @@ the container. InfluxDB: `CreateCollection` creates a bucket with no retention r
 - **Then** all documents matching `FROM 'Orders'` are deleted and the operation is awaited; the
   collection name simply stops appearing once it holds no documents
 
-#### Scenario: CosmosDB partition key cannot be chosen through the builder
+#### Scenario: CosmosDB refuses a partition key it would ignore
 
 - **Given** `context.Schema.CreateCollection("Orders").WithField("tenantId", FieldType.String,
   isPrimary: true)`
 - **When** the chain runs
-- **Then** the container was already created with partition-key path `"/id"` by `CreateCollection`,
-  the builder records `_partitionKeyPath = "/tenantId"` in a private field, and no `Build()` override
-  exists to apply it — so the requested partition key is silently ignored
+- **Then** `WithField` throws `NotSupportedException` stating the container is partitioned on `/id`, and
+  no container is created; `CreateCollection("Orders").WithField("id", FieldType.String, isPrimary:
+  true).Build()` creates `Orders` partitioned on `/id`
+- **And** `WithField("code", FieldType.String, isUnique: true)` is refused too, because a unique key holds
+  per logical partition and on `/id` rejects nothing (TASK-628)
 
 #### Scenario: RavenDB CollectionExists means "holds at least one document"
 
@@ -1088,13 +1224,30 @@ the container. InfluxDB: `CreateCollection` creates a bucket with no retention r
 
 ### Requirement: The data migrator's filter argument is a Mongo-style JSON object translated per backend
 
-The system SHALL accept `filterJson` as a JSON object whose properties are field names. A scalar
-value SHALL mean equality. An object value SHALL be read operator-by-operator, honouring `$gt`,
-`$gte`, `$lt`, `$lte` and `$ne`, and SHALL translate **any other operator name to equality**. Values
-SHALL be extracted as string / `long` (falling back to `double`) / `bool` / `null`, with arrays and
-nested objects degraded to their raw JSON text via `ToString()`. Multiple conditions SHALL be
-combined with AND. A null, whitespace or `"{}"` filter SHALL mean "no restriction" — that is the
-**only** way to mean it.
+The system SHALL accept `filterJson` as a JSON object whose properties are field names, read by one
+shared reader, `MigrationFilterTerms.Parse`, for the SQL, ElasticSearch, RavenDB and CosmosDB migrators
+(TASK-152). A scalar value SHALL mean equality. An object value SHALL be read operator-by-operator,
+honouring `$eq`, `$ne`, `$gt`, `$gte`, `$lt` and `$lte`, and SHALL **refuse any other operator** with
+`NotSupportedException` naming the supported ones (SH-M175; it used to become equality). Values SHALL be
+extracted as string / `long` (falling back to `double`) / `bool` / `null`; an array or object value SHALL
+be refused with `NotSupportedException`, as SHALL an ordering operator compared with `null`, and a root
+that is not a JSON object SHALL throw `ArgumentException`. Multiple conditions SHALL be combined with AND.
+A null, whitespace or `"{}"` filter SHALL mean "no restriction" — that is the **only** way to mean it.
+
+Null SHALL take the filter dialect's (MongoDB's) meaning on every backend (SH-M176): `{"x": null}` matches
+a document whose `x` is null **or absent**, `{"x": {"$ne": null}}` one whose `x` has a value, and
+`{"x": {"$ne": v}}` also matches a document with no `x`. SQL renders `x IS NULL` / `x IS NOT NULL` and
+`(x <> @pN OR x IS NULL)`; CosmosDB `(NOT IS_DEFINED(f) OR IS_NULL(f))`, `(IS_DEFINED(f) AND NOT
+IS_NULL(f))` and `(NOT IS_DEFINED(f) OR f != @pN)`; RavenDB `(x = null or (true and not exists(x)))` and
+`(exists(x) and x != null)`; ElasticSearch a `must_not exists` and an `exists` query.
+
+On SQL, the table SHALL be named through `connector.TableIdentifier` (schema included, TASK-272) and each
+filter column SHALL be emitted **bare**, resolved by `DataBase.MigrationColumn(collection, name)`: the
+stored column of the loaded entity's property (or column) of that name, case-insensitively — so a
+`[NamedField]` remap is honoured — else the name itself, validated as a plain unqualified identifier
+(`ArgumentException` otherwise) (TASK-637). On RavenDB, a filter field name SHALL be a plain, optionally
+dotted identifier path and anything else SHALL be refused with `NotSupportedException`, because it is
+interpolated into RQL.
 
 A filter that was supplied yet yields **no terms** — `{"status":{}}`, where the object branch is taken
 and the operator loop adds nothing — SHALL be refused with
@@ -1120,17 +1273,32 @@ builder's `RenameField` — SHALL use the same producer for it.
 
 - **Given** `filterJson = {"status":"active","age":{"$gte":18,"$lt":65}}`
 - **When** it is translated
-- **Then** SQL yields `"status" = @p0 AND "age" >= @p1 AND "age" < @p2`; CosmosDB yields
+- **Then** SQL yields `status = @p0 AND age >= @p1 AND age < @p2` (bare columns, or the mapped stored
+  columns of a loaded entity); CosmosDB yields
   `c["status"] = @p0 AND c["age"] >= @p1 AND c["age"] < @p2` with the three values bound; RavenDB yields `status = $p0 AND age
   >= $p1 AND age < $p2` with RQL query parameters; ElasticSearch yields a `bool.must` of a `TermQuery`
   and two `NumericRangeQuery` clauses; MongoDB passes the document through to the driver unchanged
 
-#### Scenario: An unsupported operator becomes equality
+#### Scenario: An unsupported operator is refused
 
-- **Given** `filterJson = {"tags":{"$in":["a","b"]}}`
+- **Given** `filterJson = {"tags":{"$in":["a","b"]}}`, or `$exists`, `$regex` or `$not`
 - **When** it is translated by the SQL, ElasticSearch, RavenDB or CosmosDB migrator
-- **Then** the `$in` falls into the `_ => "="` / default arm and produces an equality comparison
-  against the array's JSON text (`["a","b"]`), matching nothing, rather than raising an error
+- **Then** `NotSupportedException` is thrown naming the operator, the field and the supported operators,
+  before any statement is issued — it no longer becomes an equality against the operand's JSON text
+
+#### Scenario: An array or document value is refused
+
+- **Given** `filterJson = {"tags":["a","b"]}`
+- **When** it is translated by any of those four migrators
+- **Then** `NotSupportedException` is thrown stating that only a string, number, boolean or null can be
+  compared
+
+#### Scenario: Null matches an absent field, as in MongoDB
+
+- **Given** `filterJson = {"deletedAt":null}` and a document or row with no `deletedAt` value
+- **When** `DeleteDocuments` runs on SQL, CosmosDB, RavenDB or ElasticSearch
+- **Then** that document is deleted along with any whose `deletedAt` is null; and `{"status":{"$ne":"x"}}`
+  also matches a document that has no `status`
 
 #### Scenario: A Cosmos filter value cannot reach the statement
 
@@ -1168,12 +1336,13 @@ builder's `RenameField` — SHALL use the same producer for it.
   object itself is non-null and well-formed — an empty `bool.must` is match-all in Elasticsearch, so a
   null check would not have seen it
 
-#### Scenario: ElasticSearch rejects a non-numeric range bound
+#### Scenario: A range bound of null is refused by the shared reader
 
 - **Given** `filterJson = {"age":{"$gt":null}}`
-- **When** the ElasticSearch migrator translates it
-- **Then** `ToRangeBound` throws `ArgumentException` (`"Range operator '$gt' on field 'age' requires a
-  non-null numeric value."`) instead of silently becoming `> 0`
+- **When** the SQL, ElasticSearch, RavenDB or CosmosDB migrator translates it
+- **Then** `MigrationFilterTerms.Parse` throws `NotSupportedException` (`"Migration filter operator '$gt'
+  on field 'age' compares with null, which orders nothing."`) before ElasticSearch's `ToRangeBound` is
+  reached, instead of silently becoming `> 0`
 
 #### Scenario: ElasticSearch range operators are always numeric
 
@@ -1182,12 +1351,12 @@ builder's `RenameField` — SHALL use the same producer for it.
 - **Then** `ToRangeBound` attempts `Convert.ToDouble("2026-01-01")` and throws `ArgumentException`
   — date ranges are not expressible through this dialect
 
-#### Scenario: SQL $ne against null never matches
+#### Scenario: SQL $ne against null is IS NOT NULL
 
 - **Given** `filterJson = {"deletedAt":{"$ne":null}}`
 - **When** the SQL migrator translates it
-- **Then** it emits `"deletedAt" <> @p0` with the parameter bound to `DBNull.Value`, a predicate that
-  is never true in SQL, rather than `IS NOT NULL`
+- **Then** it emits `deletedAt IS NOT NULL` with no parameter, rather than `"deletedAt" <> @p0` bound to
+  `DBNull.Value`, which was never true in SQL
 
 #### Scenario: InfluxDB refuses JSON filters outright
 
@@ -1198,27 +1367,51 @@ builder's `RenameField` — SHALL use the same producer for it.
 
 ### Requirement: Update and delete of documents are parameterised or explicitly unsupported
 
-The system SHALL return without doing anything when `updates` is null or empty. SQL SHALL emit a
-single `UPDATE … SET col = @pN` statement with dialect-quoted identifiers. MongoDB SHALL issue one
+The system SHALL return without doing anything when `updates` is null or empty (except on InfluxDB,
+which refuses first). SQL SHALL emit a single `UPDATE {TableIdentifier} SET col = @pN` statement whose
+columns are bare and resolved by `DataBase.MigrationColumn` (TASK-637). MongoDB SHALL issue one
 `UpdateMany` with `$set`. ElasticSearch SHALL issue `_update_by_query` with a Painless script that
-assigns each value from a script parameter (`ctx._source.field = params.pN`) and SHALL throw when the
-response is invalid. RavenDB SHALL issue a `PatchByQueryOperation` with `$uN` query parameters and
+assigns each value from a script parameter, the field name being a script parameter too
+(`ctx._source[params.fN] = params.pN`), and SHALL throw when the response is invalid **or** reports any
+version conflict or per-document failure (SH-M198, TASK-152); `_delete_by_query` SHALL be checked the same
+way. RavenDB SHALL issue a `PatchByQueryOperation` with `$uN` query parameters and
 wait for completion. CosmosDB SHALL query matching ids (plus the partition-key field), then issue one
-`PatchItemAsync` per document. InfluxDB `UpdateDocuments` SHALL be a **silent no-op**.
+`PatchItemAsync` per document. InfluxDB `UpdateDocuments` SHALL throw `NotSupportedException` — points
+are immutable (SH-M191; it was a silent no-op). InfluxDB `DeleteDocuments` SHALL throw
+`InvalidOperationException` when the bucket is not found by exact name (SH-M193), and SHALL wait on the
+delete so that a refused predicate propagates (TASK-619).
 
-#### Scenario: InfluxDB update silently does nothing
+#### Scenario: InfluxDB update is refused
 
 - **Given** `context.Data.UpdateDocuments("readings", "{}", new Dictionary<string, object> { ["x"] = 1 })`
 - **When** the migration runs on InfluxDB
-- **Then** no write is attempted, no exception is thrown, and the migration is recorded as applied
+- **Then** `NotSupportedException` is thrown stating that points are immutable, so the migration fails
+  instead of being recorded as applied with nothing changed
 
-#### Scenario: ElasticSearch update values survive quoting
+#### Scenario: InfluxDB delete from a misspelt bucket fails
+
+- **Given** `context.Data.DeleteDocuments("readngs", "")` where no bucket of that exact name exists in the
+  organization
+- **When** the migration runs
+- **Then** `InvalidOperationException` is thrown naming the bucket and organization, instead of deleting
+  nothing and reporting success
+
+#### Scenario: ElasticSearch update values and field names survive quoting
 
 - **Given** `updates = { ["note"] = "he said \"hi\"", ["flag"] = true }`
 - **When** `BuildPainlessSource` runs
-- **Then** the script source is `ctx._source.note = params.p0; ctx._source.flag = params.p1` and the
-  values are carried as serialised script params, so quotes/backslashes/bools/dates are not broken by
+- **Then** the script source is `ctx._source[params.f0] = params.p0; ctx._source[params.f1] = params.p1`
+  with `f0 = "note"` and `f1 = "flag"`, and the values are carried as serialised script params, so
+  quotes/backslashes/bools/dates — and a field name with a quote, dot or space — are not broken by
   string formatting
+
+#### Scenario: A partly applied ElasticSearch by-query step fails
+
+- **Given** an `_update_by_query` or `_delete_by_query` whose response is valid but reports version
+  conflicts or failures
+- **When** `UpdateDocuments` or `DeleteDocuments` runs
+- **Then** `InvalidOperationException` (`"ElasticSearch migration step was only partly applied: …"`) is
+  thrown with the conflict and failure counts, so the migration is not recorded
 
 #### Scenario: CosmosDB update is per-document, not server-side
 
@@ -1242,11 +1435,16 @@ straight copy. **ElasticSearch** SHALL throw `NotSupportedException` when `trans
 non-empty, and otherwise `ReindexOnServer` with `WaitForCompletion(true)` followed by a refresh of
 the target, failing the step when the reindex response is invalid **or incomplete** — timed out or cancelled, judged by
 `ReindexHelper.IncompleteReason` (a partial copy that `IsValid` passes — SH-H038, [[TASK-319]]). **RavenDB** SHALL **always** throw `NotSupportedException` — the operation is
-unimplemented. **SQL** SHALL emit `INSERT INTO {target} SELECT * FROM {source}` and **silently
-ignore** `transformJson`. **CosmosDB** SHALL page every source document and upsert it into the target
-container, **silently ignoring** `transformJson`. **InfluxDB** SHALL query the source bucket over
-`range(start: -100y)`, rebuild each record as a point tagged `_original_bucket = source`, preserve the
-original timestamp, and write the points to the target bucket, **silently ignoring** `transformJson`.
+unimplemented. **SQL**, **CosmosDB** and **InfluxDB** SHALL refuse a transform through
+`MigrationFilter.RefuseTransform` — `NotSupportedException` for any `transformJson` other than null, blank
+or `"{}"`, before anything is copied (SH-M196, TASK-152; each used to accept it and never read it).
+Without one, **SQL** SHALL emit `INSERT INTO {target} SELECT * FROM {source}` with both tables named
+through `connector.TableIdentifier`; **CosmosDB** SHALL page every source document and upsert it into the
+target container; **InfluxDB** SHALL query the source bucket over `range(start: 0)` and rebuild each Flux
+record as one point of the record's measurement, carrying its non-underscore columns (other than
+`result` and `table`) as tags and its `_field` / `_value` as a field of the value's runtime type,
+preserving the original timestamp, and write the points to the target bucket (SH-M194; it used to copy
+`_field` / `_value` as a tag and a field of those names and add an `_original_bucket` tag).
 
 #### Scenario: MongoDB honours an array of transform stages
 
@@ -1261,12 +1459,14 @@ original timestamp, and write the points to the target bucket, **silently ignori
 - **Then** `NotSupportedException` is thrown explaining that a cross-collection copy must re-key
   documents into the target collection
 
-#### Scenario: SQL copy drops a requested transform without warning
+#### Scenario: SQL copy refuses a requested transform
 
-- **Given** `context.Data.CopyData("Old", "New", "{\"$set\":{\"x\":1}}")` on SQL
+- **Given** `context.Data.CopyData("Old", "New", "{\"$set\":{\"x\":1}}")` on SQL (or CosmosDB, or
+  InfluxDB)
 - **When** the migration runs
-- **Then** `INSERT INTO "New" SELECT * FROM "Old"` is executed, the transform is discarded and no
-  exception is raised
+- **Then** `NotSupportedException` is thrown stating the copy would be untransformed, and no `INSERT`
+  is executed; `CopyData("Old", "New")` or a `"{}"` transform executes `INSERT INTO "New" SELECT * FROM
+  "Old"`
 
 #### Scenario: ElasticSearch copy rejects a transform instead of dropping it
 
@@ -1274,41 +1474,50 @@ original timestamp, and write the points to the target bucket, **silently ignori
 - **When** the migration runs
 - **Then** `NotSupportedException` is thrown before any reindex is attempted
 
-### Requirement: Document counting honours the collection and filter except on InfluxDB
+### Requirement: Document counting honours the collection and filter, and InfluxDB refuses a filter
 
-The system SHALL count documents as follows. SQL: `SELECT COUNT(*) FROM {table}` plus the translated
+The system SHALL count documents as follows. SQL: `SELECT COUNT(*) FROM {TableIdentifier}` plus the translated
 `WHERE`. MongoDB: `CountDocuments(filter)` (session-aware). ElasticSearch: a `Count` request with the
-translated query, returning `response.Count` **without validating the response**. RavenDB: the
-collection-scoped `DocumentQuery` with the filter applied, executed with `Take(0)` and read from
-`QueryStatistics.TotalResults`. CosmosDB: `SELECT VALUE COUNT(1) FROM c` plus the translated `WHERE`.
-InfluxDB: a Flux `count()`/`group()`/`sum()` over `range(start: -100y)` with `filter(fn: (r) => true)`
-that **ignores `filterJson` entirely**.
+translated query, returning `response.Count` only after `EnsureValid` (SH-M197, TASK-152). RavenDB: the
+collection-scoped `DocumentQuery` — opened with `collectionName:`, not as an index name — with the filter
+applied, executed with `Take(0)` and read from `QueryStatistics.TotalResults`. CosmosDB: `SELECT VALUE
+COUNT(1) FROM c` plus the translated `WHERE`, **summing every page** of the result (SH-M184).
+InfluxDB: a Flux `count()`/`group()`/`sum()` over `range(start: 0)`; any filter other than null, blank or
+`"{}"` SHALL be refused with `NotSupportedException` (SH-M192).
 
-#### Scenario: InfluxDB count ignores the filter
+#### Scenario: InfluxDB count refuses a filter
 
 - **Given** `context.Data.CountDocuments("readings", "{\"host\":\"a\"}")`
 - **When** it runs
-- **Then** the Flux query filters on `true`, so the total number of records in the bucket is returned
-  regardless of the requested filter
+- **Then** `NotSupportedException` is thrown, rather than the total number of records in the bucket being
+  returned as if it answered the filter; without a filter the whole bucket is counted
 
-#### Scenario: ElasticSearch count of a missing index returns zero
+#### Scenario: ElasticSearch count of a missing index fails
 
 - **Given** an index that does not exist
 - **When** `CountDocuments` runs
-- **Then** the invalid response's `Count` (0) is returned with no exception, so a migration guarded by
-  `if (Count == 0)` proceeds as though the collection were empty
+- **Then** the invalid response is rejected by `EnsureValid` with `InvalidOperationException`, so a
+  migration guarded by `if (Count == 0)` does not proceed as though the collection were empty
 
 #### Scenario: RavenDB count is scoped to the collection
 
 - **Given** a database with documents in several collections
 - **When** `CountDocuments("Orders")` runs
 - **Then** the count comes from the `Orders`-scoped `DocumentQuery`'s statistics, not from a
-  database-wide query
+  database-wide query — and not from an index named `Orders`, which used to throw
+  `IndexDoesNotExistException` on every count
+
+#### Scenario: A Cosmos cross-partition count reads every page
+
+- **Given** a cross-partition `COUNT` whose first page is empty while the pipeline drains partitions
+- **When** `CountDocuments` runs
+- **Then** all pages are read and their values summed, rather than answering `0` from the first page
 
 ### Requirement: Bulk insert places documents in the requested collection
 
 The system SHALL skip null and empty documents in every backend. SQL SHALL issue one parameterised
-`INSERT INTO {table} (cols) VALUES (@p0, …)` per document. MongoDB SHALL `InsertMany` the converted
+`INSERT INTO {TableIdentifier} (cols) VALUES (@p0, …)` per document, its columns bare and resolved by
+`DataBase.MigrationColumn` (TASK-637). MongoDB SHALL `InsertMany` the converted
 `BsonDocument`s (session-aware) only when at least one survives filtering. ElasticSearch SHALL
 build one `BulkDescriptor`, validate the response, throw `InvalidOperationException` when
 `bulkResponse.Errors` is set (reporting the first item error), and refresh the index. RavenDB SHALL
@@ -1317,7 +1526,9 @@ force the target collection by setting the `@collection` metadata on each docume
 the partition key from the container's real partition-key property (falling back to the id), and issue
 all `CreateItemAsync` calls concurrently via `Task.WhenAll`. InfluxDB SHALL derive the measurement
 from a `_measurement` key (default `"migration_data"`), skip keys starting with `_` and the key
-`"time"`, and honour a `DateTime` `_time`/`time` value as the point timestamp.
+`"time"`, and honour a `DateTime` `_time`/`time` value as the point timestamp; a document that yields
+no field (only string values, which become tags) SHALL be refused with `NotSupportedException` rather
+than dropped by the client (SH-M195, TASK-152).
 
 #### Scenario: RavenDB bulk insert lands in the named collection
 
@@ -1339,6 +1550,20 @@ from a `_measurement` key (default `"migration_data"`), skip keys starting with 
 - **Then** the string becomes a **tag**, the bool / integral / floating-point values become typed
   fields, `null` is skipped, and anything else (including `DateTime` and `byte[]`) is written as its
   `ToString()` representation
+
+#### Scenario: An InfluxDB document of strings only is refused
+
+- **Given** `BulkInsert("readings", [ { ["host"] = "a" } ])`
+- **When** the insert runs on InfluxDB
+- **Then** `NotSupportedException` is thrown, because the point would have tags but no field and would
+  not be written
+
+#### Scenario: A SQL bulk insert names a mapped entity's stored columns
+
+- **Given** a loaded entity mapped to table `Docs` whose property `Title` carries `[NamedField("doc_title")]`
+- **When** `BulkInsert("Docs", [ { ["Title"] = "x" } ])` runs
+- **Then** the statement is `INSERT INTO "Docs" (doc_title) VALUES (@p0)` — the table quoted by the
+  connector's `TableIdentifier`, the column bare — and a key that is neither a mapped property nor a plain identifier throws `ArgumentException`
 
 #### Scenario: All backends skip empty documents
 

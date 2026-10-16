@@ -1,7 +1,7 @@
 ---
 area: schema-index-and-ddl
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.CosmosDB/IndexManagement/CosmosDBIndexManager.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs
@@ -10,6 +10,7 @@ sources:
   - ../Birko.Data.ElasticSearch/IndexManagement/ReindexHelper.cs
   - ../Birko.Data.MongoDB/IndexManagement/MongoDBIndexManager.cs
   - ../Birko.Data.Patterns/IndexManagement/IIndexManager.cs
+  - ../Birko.Data.Patterns/IndexManagement/IndexDeclarationDrift.cs
   - ../Birko.Data.Patterns/IndexManagement/IndexDefinition.cs
   - ../Birko.Data.Patterns/IndexManagement/IndexInfo.cs
   - ../Birko.Data.Patterns/IndexManagement/IndexManagementException.cs
@@ -19,6 +20,7 @@ sources:
   - ../Birko.Data.Patterns/Schema/IIndexBuilder.cs
   - ../Birko.Data.Patterns/Schema/ISchemaBuilder.cs
   - ../Birko.Data.Patterns/Schema/IndexBuilderSupport.cs
+  - ../Birko.Data.Patterns/Schema/SchemaBuildLedger.cs
   - ../Birko.Data.RavenDB/IndexManagement/RavenDBIndexManager.cs
   - ../Birko.Data.SQL.MSSql/IndexManagement/MSSqlIndexManager.cs
   - ../Birko.Data.SQL.MySQL/IndexManagement/MySqlIndexManager.cs
@@ -87,7 +89,7 @@ own `IIndexManager` implementations — `MongoDBIndexManager`, `RavenDBIndexMana
 
 The layers are deliberately *not* isomorphic, and the divergences below are load-bearing: the portable
 `FieldType` enum names types the SQL field factory cannot map, and the portable `IndexDefinition` carries
-flags several providers silently ignore.
+flags several providers cannot honour and therefore refuse.
 
 ## Requirements
 
@@ -143,7 +145,10 @@ The system SHALL expose `ISchemaBuilder` as the migration-facing DDL surface wit
 `CreateCollection(name)` returning an `ICollectionBuilder`, `DropCollection(name)`, `CollectionExists(name)`,
 `CreateIndex(collectionName, indexName)` returning an `IIndexBuilder`, `DropIndex(collectionName, indexName)`,
 `AddField(collectionName, FieldDescriptor)`, `DropField(collectionName, fieldName)` and
-`RenameField(collectionName, oldName, newName)`; all are synchronous and none returns a result object.
+`RenameField(collectionName, oldName, newName)`; all are synchronous and none returns a result object. It
+SHALL additionally expose the read-only `PendingBuilds` — the `CreateCollection` / `CreateIndex` chains the
+builder handed out and never finished with `Build()` — as a default interface member returning an empty list
+for a builder that does not track them.
 
 #### Scenario: Collection creation is a builder chain, not a single call
 
@@ -162,7 +167,8 @@ The system SHALL expose `ISchemaBuilder` as the migration-facing DDL surface wit
 The system SHALL declare `Build()` on both `ICollectionBuilder` and `IIndexBuilder` as a **default interface
 method with an empty body**, so providers that create eagerly inherit a no-op while providers that must know
 the whole definition first (SQL, which emits a single `CREATE TABLE` / `CREATE INDEX`) override it; a chain
-left unterminated by `Build()` therefore SHALL silently perform no work on those providers.
+left unterminated by `Build()` therefore SHALL perform no work on those providers, and is detected only through
+a builder that tracks its chains in a `SchemaBuildLedger` and reports them in `PendingBuilds`.
 
 #### Scenario: Eager provider needs no terminator
 
@@ -170,11 +176,14 @@ left unterminated by `Build()` therefore SHALL silently perform no work on those
 - **When** a migration calls `CreateCollection("x").WithField("a", FieldType.String)` and never calls `Build()`
 - **Then** the collection still exists, because the inherited `Build()` is a no-op
 
-#### Scenario: Deferred provider silently does nothing without Build()
+#### Scenario: Deferred provider does nothing without Build(), and a tracking builder reports it
 
 - **Given** a provider that overrides `Build()` to emit the accumulated DDL
 - **When** a migration calls `CreateIndex("Invoice", "IX_Number").WithField("Number")` and omits `Build()`
-- **Then** no `CREATE INDEX` is emitted and the migration reports success — the omission is not detected
+- **Then** no `CREATE INDEX` is emitted and the call returns normally; a builder that tracks its chains lists
+  `CreateIndex("Invoice", "IX_Number")` in `PendingBuilds`, which is how a migration runner refuses to record
+  the migration, while a builder that does not track keeps the default empty `PendingBuilds` and the omission
+  stays undetected
 
 #### Scenario: Index builder accumulators
 
@@ -183,6 +192,35 @@ left unterminated by `Build()` therefore SHALL silently perform no work on those
   are called
 - **Then** each returns the same builder type for chaining, and `WithField` defaults to
   `descending: false` and `fieldType: IndexFieldType.Standard`
+
+### Requirement: A build ledger records which chains were finished
+
+The system SHALL provide `SchemaBuildLedger`, which wraps an `IIndexBuilder` (`Track(inner, collectionName,
+indexName)`) or an `ICollectionBuilder` (`Track(inner, collectionName)`) in a tracking builder that forwards every
+accumulator call to the inner builder and returns itself for chaining, and SHALL report in `Pending` the
+description — `CreateIndex("<collection>", "<index>")` or `CreateCollection("<collection>")` — of every tracked
+chain whose `Build()` was never called. The tracking builder's `Build()` SHALL mark the chain built **before**
+invoking the inner `Build()`, so a `Build()` that throws is not also reported pending. A collection chain SHALL be
+pending until built even on a provider whose `CreateCollection` creates eagerly, so the rule is the same on every
+provider. Recording and reading are synchronised on one lock.
+
+#### Scenario: An unbuilt chain is pending, a built one is not
+
+- **Given** a ledger tracking `CreateIndex("Invoice", "IX_Number")` and `CreateCollection("Audit")`
+- **When** only the collection chain calls `Build()`
+- **Then** `Pending` is exactly `["CreateIndex(\"Invoice\", \"IX_Number\")"]`
+
+#### Scenario: A collection created eagerly is still pending without Build()
+
+- **Given** a provider whose `CreateCollection` already created the container, its builder tracked by a ledger
+- **When** the migration calls `.WithField(...)` and never `Build()`
+- **Then** the collection exists and the chain is nevertheless listed in `Pending`
+
+#### Scenario: A failing Build is not pending
+
+- **Given** a tracked index chain whose inner `Build()` throws
+- **When** `Build()` is called
+- **Then** the inner exception propagates and the chain is absent from `Pending`
 
 ### Requirement: Index builder refusals have one producer
 
@@ -282,6 +320,41 @@ interface contract RavenDB SHALL ignore it because its indexes are database-wide
 - **When** `ExistsAsync("invoices", scope: "anything")` is called
 - **Then** the scope is never read and existence is checked for the ES index `"invoices"`
 
+### Requirement: Declared indexes are compared with what an index manager reports
+
+The system SHALL provide `IndexDeclarationDriftDetector.DetectAsync(manager, declared, scope, ct)`, which looks
+up every declared `IndexDefinition` with the manager's own `GetInfoAsync(name, scope)` and returns an
+`IndexDeclarationReport` carrying the scope, the declared count, the `Drifts` and the `Unverified` entries; it
+SHALL create nothing. A null manager or declared list SHALL throw `ArgumentNullException`, and a declared entry
+that is null or has a blank name SHALL throw `ArgumentException("Every declared index needs a name.")`. Per
+declared index it SHALL record: `Missing` when the lookup answers null; `Unverified` ("the lookup failed: …") when
+the lookup throws anything but `OperationCanceledException`, which propagates; `Unverified` ("the store reports no
+fields for it") when the stored index has no fields; `ColumnsDiffer` when the field lists differ in count or, by
+position, in ordinal name, direction or `FieldType`; and, independently of the field comparison, `UniquenessDiffers`
+when `Unique` disagrees. `IsClean` SHALL be true only when there are neither drifts nor unverified entries. Each
+shape SHALL be described as `[UNIQUE ](Name[ DESC][ <FieldType>], …)`, with the field type shown only when not
+`Standard`.
+
+#### Scenario: An absent index is missing
+
+- **Given** a declared `IX_Code` over `Code` that the manager's `GetInfoAsync` answers null for
+- **When** `DetectAsync` runs
+- **Then** the report holds one `Missing` drift whose `Declared` is `(Code)` and `Stored` is null, and `IsClean`
+  is false
+
+#### Scenario: Uncomparable is never clean
+
+- **Given** a declared index the store reports with no fields (a RavenDB map it did not generate, a Cosmos path no
+  name registered), or a lookup that throws
+- **When** `DetectAsync` runs
+- **Then** the index is listed in `Unverified` with the reason and not in `Drifts`, and `IsClean` is false
+
+#### Scenario: Uniqueness is compared even when the fields could not be
+
+- **Given** a declared unique index whose stored entry reports no fields and `Unique == false`
+- **When** `DetectAsync` runs
+- **Then** it is listed both in `Unverified` and as a `UniquenessDiffers` drift
+
 ### Requirement: SQL table discovery from attributes
 
 The system SHALL resolve a model type to a `Tables.Table` by scanning the type's attributes (including
@@ -289,7 +362,8 @@ inherited ones) for `Birko.Data.SQL.Attributes.Table`, `System.ComponentModel.Da
 or **any attribute whose full type name is `"Birko.Data.SQL.Attributes.Table"`** (the cross-assembly
 shared-project case, read via reflection), taking the first attribute that yields a non-empty name; and
 SHALL fall back to a name registered through `RegisterTableName` only when no such attribute produced a
-table.
+table. `LoadTable` SHALL throw `Exceptions.TableAttributeException` for a type that maps to no table, and
+`TryLoadTable` SHALL answer `null` for it; both answers SHALL be cached.
 
 #### Scenario: Birko attribute wins directly
 
@@ -304,7 +378,7 @@ table.
   direct `is Birko.Data.SQL.Attributes.Table` test fails
 - **When** `LoadTable` runs
 - **Then** the attribute is still matched by `GetType().FullName == "Birko.Data.SQL.Attributes.Table"` and
-  its `Name` property is read reflectively
+  its `Name` and `Schema` properties are read reflectively
 
 #### Scenario: Fluent registration is a fallback, not an override
 
@@ -318,16 +392,19 @@ table.
 
 - **Given** `LoadTable(typeof(Foo))` has already cached a table
 - **When** `RegisterTableName(typeof(Foo), "other")` is called
-- **Then** the entry is removed from `_tableCache` so the next `LoadTable` recomputes, while the separate
-  `_fieldsCache` entry for `Foo` is left intact
+- **Then** the entry is removed from `_tableCache` — and so is a cached "maps to no table" answer and the
+  type's recorded schema — so the next `LoadTable` recomputes, while the separate `_fieldsCache` entry for
+  `Foo` is left intact
 
-#### Scenario: Unmapped type yields null through a non-nullable signature
+#### Scenario: An unmapped type is refused by LoadTable and answered null by TryLoadTable
 
 - **Given** a type with neither a table attribute nor a registered name (or one whose `Fields` come out
   empty)
 - **When** `DataBase.LoadTable(type)` is called
-- **Then** `ComputeTable` returns `null`, nothing is cached, and `LoadTable` returns that `null` through its
-  non-nullable `Tables.Table` return type via `return table!`
+- **Then** a `TableAttributeException` is thrown stating that the type maps to no table and must carry a
+  `[Table("name")]` attribute (or a registered name) and at least one mapped property
+- **And** `DataBase.TryLoadTable(type)` returns `null`, and that answer is remembered in `_unmappedTypes` so the
+  type is not recomputed until a `RegisterTableName` for it clears the entry
 
 #### Scenario: Duplicate column names abort table load
 
@@ -354,6 +431,67 @@ no table or to a table with no fields.
   attribute
 - **When** the call completes
 - **Then** the returned array contains only the `Invoice` table and no error is reported
+
+### Requirement: An entity's table can live in a database schema
+
+The system SHALL read a table's schema from `Birko.Data.SQL.Attributes.Table.Schema`, from DataAnnotations'
+`TableAttribute.Schema`, from a cross-assembly `Table` attribute's `Schema` property, or — for a registered name —
+from `RegisterTableName(type, name, schema)` (the two-argument overload registering no schema), and SHALL carry it
+on `Tables.Table.Schema` while `Tables.Table.Name` stays the **logical** name every column qualifier resolves
+against; an empty schema SHALL mean none. A schema SHALL be a plain identifier — an ASCII letter or underscore,
+then ASCII letters, digits or underscores — else `TableAttributeException`. Each loaded table SHALL be recorded by
+logical name (case-insensitively) so `DataBase.TableSchema(name)` answers the schema a loaded entity declared, or
+null; and table load SHALL refuse with `TableAttributeException` a logical name declared in two different schemas
+by two types, and two types whose tables would be the same relation where a schema is stored as the
+`DataBase.PrefixedTableName` form `schema__name` (MySQL, SQLite), checked on every provider at once.
+
+#### Scenario: Both attribute families carry the schema
+
+- **Given** `[Table("evts", Schema = "reporting")]` on one entity and DataAnnotations'
+  `[Table("evts2", Schema = "reporting")]` on another
+- **When** the tables are loaded
+- **Then** both have `Schema == "reporting"`, their `Name` is the declared logical name, and
+  `DataBase.TableSchema("evts")` answers `"reporting"`
+
+#### Scenario: A schema that is not a plain identifier is refused
+
+- **Given** `[Table("evts", Schema = "rep-orting")]`
+- **When** the table is loaded
+- **Then** `TableAttributeException` is thrown stating that the schema is not a plain identifier
+
+#### Scenario: A prefixed name colliding with a schema-qualified one is refused
+
+- **Given** one entity declared as `reporting.evts` and another declared as the plain table `reporting__evts`
+- **When** the second is loaded
+- **Then** `TableAttributeException` is thrown naming both types and the table `reporting__evts` they would share
+  on MySQL and SQLite
+
+#### Scenario: One logical name in two schemas is refused
+
+- **Given** two types both declaring logical name `evts`, one in schema `a` and one in schema `b`
+- **When** the second is loaded
+- **Then** `TableAttributeException` is thrown, because the logical name is the alias its columns are qualified
+  with and can live in one schema only
+
+### Requirement: A migration's column name resolves through the loaded entity
+
+The system SHALL expose `DataBase.TableNamed(name)`, answering the loaded table whose logical name is `name` (or
+null), and `DataBase.MigrationColumn(tableName, name)`, answering the stored column name of the mapped field whose
+property name — else whose column name — equals `name` case-insensitively, and otherwise `name` itself after
+`ValidateColumnIdentifier` accepts it as a plain identifier.
+
+#### Scenario: A property name finds its remapped column
+
+- **Given** a loaded table `Invoice` whose property `Number` carries `[NamedField("inv_no")]`
+- **When** `MigrationColumn("Invoice", "Number")` is called
+- **Then** `"inv_no"` is returned
+
+#### Scenario: A name nothing maps is validated, not quoted
+
+- **Given** no loaded entity named `Legacy`
+- **When** `MigrationColumn("Legacy", "Col; DROP")` is called
+- **Then** `ValidateColumnIdentifier` refuses the name with `ArgumentException`; a plain name such as `"Col"` is
+  returned unchanged
 
 ### Requirement: Table metadata helpers
 
@@ -466,7 +604,8 @@ qualifier to `avpersons`, and the statement failed with *missing FROM-clause ent
 ### Requirement: Column exclusion attributes
 
 The system SHALL skip a property entirely — producing no field and therefore no column — when it carries
-`[IgnoreField]` (Birko) or `[NotMapped]` (DataAnnotations).
+`[IgnoreField]` (Birko) or `[NotMapped]` (DataAnnotations), and SHALL not consider a property that has no setter
+(`CanWrite == false`) at all when enumerating a type's fields; a private setter still counts.
 
 #### Scenario: IgnoreField removes the column
 
@@ -481,6 +620,13 @@ The system SHALL skip a property entirely — producing no field and therefore n
 - **When** `LoadField` runs
 - **Then** the property is still skipped, because the `[NotMapped]` check reads the property's attributes
   directly
+
+#### Scenario: A computed get-only property is not a column
+
+- **Given** `public string Display => First + " " + Last;` on a `[Table]` model
+- **When** `LoadFields` enumerates the type
+- **Then** `Display` produces no field — it could never be set from a row — while a property with a private
+  setter is still mapped
 
 ### Requirement: An unmappable property fails table load rather than vanishing
 
@@ -588,23 +734,32 @@ supplying decimal precision/scale.
 The system SHALL, when a property carries no directly castable `Birko.Data.SQL.Attributes.Field`, collect
 the attributes whose full type name starts with `"Birko.Data.SQL.Attributes."` and rebuild local equivalents
 by short type name: `PrimaryField`, `UniqueField`, `RequiredField`, `IncrementField`, `IgnoreField`,
-`NamedField` (only with a non-empty `Name`), `PrecisionField`, `ScaleField`, `MaxLengthField` and
-`IndexedField` (name, order, descending); any other subtype — including `UtcField` — SHALL be skipped
-without error. The numeric values of `PrecisionField`, `ScaleField` and `MaxLengthField` SHALL be read with
-`GetProperty(...)`, and because those attributes declare them as public fields rather than properties the
-rebuilt attribute SHALL carry `0`.
+`UtcField`, `NamedField` (name), `MaxLengthField`, `PrecisionField`, `ScaleField` and `IndexedField` (name,
+order, descending, unique, `WhereNotNull`, `WhereNull`). Every carried value SHALL be read as whichever public
+instance member the foreign attribute declares — a property, else a field — and a member it lacks SHALL throw
+`Exceptions.FieldAttributeException` stating it was compiled from different Birko.Data.SQL sources. Any other
+subtype under that namespace SHALL throw `FieldAttributeException` naming the property, the attribute type and its
+assembly, rather than being skipped.
 
-#### Scenario: A foreign-assembly UtcField is dropped
+#### Scenario: A foreign-assembly UtcField keeps the column an instant
 
 - **Given** a `DateTime` property carrying a `UtcField` compiled into a different assembly
 - **When** `LoadField` runs
-- **Then** the attribute is not rebuilt, and the property maps to a plain wall-clock `DateTimeField`
+- **Then** a local `UtcField` is rebuilt and the property maps to a `UtcDateTimeField`
 
-#### Scenario: A foreign-assembly MaxLengthField loses its width
+#### Scenario: A foreign-assembly MaxLengthField keeps its width
 
 - **Given** a `string` property carrying `[MaxLengthField(50)]` compiled into a different assembly
 - **When** `LoadField` runs
-- **Then** the rebuilt `MaxLengthField` has `MaxLength == 0` and an unbounded `StringField` is produced
+- **Then** the value is read from the attribute's public field, the rebuilt `MaxLengthField` has
+  `MaxLength == 50`, and a 50-character `CharField` is produced
+
+#### Scenario: An attribute the rebuild does not know fails table load
+
+- **Given** a property carrying, from another assembly, an attribute under `Birko.Data.SQL.Attributes.` that is not
+  one of the rebuilt types
+- **When** `LoadField` runs
+- **Then** `FieldAttributeException` is thrown, advising to compile both from the same Birko.Data.SQL sources
 
 ### Requirement: CLR-type to SQL field mapping
 
@@ -621,7 +776,9 @@ property carries `[UtcField]` — `UtcDateTimeField` / `NullableUtcDateTimeField
 `[MaxLengthField]` width when greater than zero, else the `[PrecisionField]` value when greater than zero,
 else `null`; `char` → `CharField` of
 length 1; `string` → `CharField` when an effective length greater than zero is known else `StringField`;
-any enum or `Nullable<enum>` → `IntegerField` / `NullableIntegerField`; and SHALL throw
+any enum or `Nullable<enum>` whose underlying type is not `long`, `ulong` or `uint` → `IntegerField` /
+`NullableIntegerField`, an enum backed by one of those three raising `Exceptions.FieldAttributeException`
+because its values may not fit the 32-bit column; and SHALL throw
 `Exceptions.FieldAttributeException` naming the declaring type, the property and its CLR type — rather
 than returning `null` and silently skipping the property — for every other type. A `[UtcField]` on any
 property whose type is not `DateTime` / `DateTime?` SHALL raise `FieldAttributeException` instead of being
@@ -638,6 +795,13 @@ ignored.
 - **Given** `public InvoiceState? State { get; set; }`
 - **When** the field is created
 - **Then** a `NullableIntegerField` is produced, resolved via `Nullable.GetUnderlyingType(...).IsEnum`
+
+#### Scenario: A long-backed enum is refused
+
+- **Given** `public Flags Mask { get; set; }` where `enum Flags : long`
+- **When** the field is created
+- **Then** `FieldAttributeException` is thrown naming the property, the enum and its `Int64` backing type and
+  advising to back it by `int` or smaller; a `byte`-backed enum maps to an `IntegerField`
 
 #### Scenario: long, double and byte[] properties map to their own columns
 
@@ -743,8 +907,9 @@ value rather than throwing.
 
 - **Given** an `IntegerField` bound to an enum property whose value is `InvoiceState.Paid`
 - **When** `Write(entity)` is called
-- **Then** the boxed enum is cast `(int)` and the integer returned; a null property value returns `null`
-  before any cast
+- **Then** the boxed enum is converted with `Convert.ToInt32(value, InvariantCulture)` and the integer
+  returned, so an enum backed by `byte`, `short` or `int` writes alike; a null property value returns `null`
+  before any conversion
 
 #### Scenario: String and char fields both null-check
 
@@ -752,12 +917,12 @@ value rather than throwing.
 - **When** `Read` is called
 - **Then** `null` is assigned (both implement the `IsDBNull` branch, `CharField` overriding `StringField`)
 
-#### Scenario: CharField reads a string into a char property
+#### Scenario: CharField reads a char property as the first character
 
 - **Given** `public char Flag { get; set; }`, which `CreateAbstractField` maps to `CharField` with length 1
-- **When** `CharField.Read` runs and assigns `reader.GetString(index)` via `Property.SetValue`
-- **Then** a `string` is assigned to a `char` property and reflection raises an argument/type mismatch at
-  runtime — `CharField` only round-trips `string` properties, not `char` ones
+- **When** `CharField.Read` runs over a non-NULL column
+- **Then** the property receives the column string's first character, or `'\0'` for an empty string, while a
+  `string` property mapped to `CharField` (a declared length) still receives the whole string
 
 #### Scenario: An instant reads back as UTC
 
@@ -813,7 +978,11 @@ property's underlying (non-nullable) type when that type is a value type, `null`
 ### Requirement: Primary-key resolution with a Guid fallback
 
 The system SHALL return the fields marked `IsPrimary` for a type, and — when none is marked — SHALL fall
-back to the field whose property is named `"Guid"`, returning an empty sequence only when neither exists.
+back to the field whose property is named `"Guid"`, returning an empty sequence only when neither exists (or
+the type maps to no table). At table load, an `AbstractModel` descendant whose fields declare no primary key
+SHALL have its `Guid` field marked `IsPrimary` and `IsImplicitPrimary`; `Tables.Table.DeclarePrimary(field)`
+SHALL make a field a declared key and clear every implicit key on the table, so a key declared after load
+replaces the promoted `Guid` rather than joining it in a composite.
 
 #### Scenario: Attribute-declared primary keys win
 
@@ -826,7 +995,15 @@ back to the field whose property is named `"Guid"`, returning an empty sequence 
 - **Given** an `AbstractModel` descendant with no `[PrimaryField]` anywhere
 - **When** `GetPrimaryFields` is called
 - **Then** the field mapped from the `Guid` property is returned, so UPDATE/DELETE can be qualified with a
-  WHERE clause
+  WHERE clause — and since table load promoted it, that field carries `IsPrimary == true` and
+  `IsImplicitPrimary == true`, so the table's DDL declares it the `PRIMARY KEY`
+
+#### Scenario: A key declared after load replaces the implicit one
+
+- **Given** such a table, whose promoted `Guid` is the implicit key, and a fluent mapping declaring `Code` the key
+  through `DeclarePrimary`
+- **When** the primary fields are read
+- **Then** only `Code` is primary; `Guid` has `IsPrimary == false` and `IsImplicitPrimary == false`
 
 #### Scenario: Neither key nor Guid yields an empty result
 
@@ -864,9 +1041,10 @@ fields renders one table-level composite key rather than one inline `PRIMARY KEY
 
 The system SHALL resolve a property access lambda to an `AbstractField` via `GetField<T,P>` and the
 non-generic `GetFieldFromLambda`, accepting a `MemberExpression` body or a `UnaryExpression` wrapping one,
-remapping properties reflected on `AbstractLogModel`/`AbstractModel` to their
-`AbstractDatabaseLogModel`/`AbstractDatabaseModel` counterparts, and throwing `ArgumentException` when no
-property can be resolved.
+resolving a property declared on an **interface** to the property of that name on the lambda's parameter type
+(most-derived first, keeping the interface property when none is found by name), remapping properties
+reflected on `AbstractLogModel`/`AbstractModel` to their `AbstractDatabaseLogModel`/`AbstractDatabaseModel`
+counterparts, and throwing `ArgumentException` when no property can be resolved.
 
 #### Scenario: Boxed/converted member access is unwrapped
 
@@ -887,6 +1065,16 @@ property can be resolved.
 - **When** `GetField` is called
 - **Then** `LoadField` returns an empty sequence and the trailing `.First()` throws
   `InvalidOperationException` rather than a descriptive error
+- **And** `GetFieldFromLambda` given the same lambda instead throws `ArgumentException` stating that the named
+  member is not a mapped column
+
+#### Scenario: An interface-typed member honours the model's column name
+
+- **Given** `x => x.UpdatedBy` where the lambda parameter is the model type but the member binds to an interface
+  property, and the model's `UpdatedBy` carries `[NamedField("updated_by")]`
+- **When** `GetField` or `GetFieldFromLambda` is called
+- **Then** the model's own property is used and the field is named `"updated_by"`; an explicit interface
+  implementation, not found by name, keeps the interface property
 
 ### Requirement: Per-property index discovery
 
@@ -894,7 +1082,9 @@ The system SHALL build the table's index dictionary by scanning all public insta
 inherited ones) for `[IndexedField]` — both the directly castable attribute and any attribute whose full
 name is `"Birko.Data.SQL.Attributes.IndexedField"` from another assembly, read reflectively — grouping the
 contributions by index name into one `Tables.IndexDefinition` per name, and SHALL mark the whole index
-`Unique` if **any** contributing attribute sets `IsUnique`.
+`Unique` if **any** contributing attribute sets `IsUnique`. It SHALL throw `Exceptions.TableAttributeException`
+for an `[IndexedField]` on a property declared by a base class of the loaded type, and for an `[IndexedField]` on
+a property that is not a mapped column.
 
 #### Scenario: Two properties form one composite index
 
@@ -923,22 +1113,20 @@ contributions by index name into one `Tables.IndexDefinition` per name, and SHAL
 - **Then** the index column name is `"tenant_guid"`, resolved by matching `field.Property.Name` against the
   property name
 
-#### Scenario: An index on an unmapped property silently names a non-existent column
+#### Scenario: An index on an unmapped property is refused
 
-- **Given** `[IgnoreField] [IndexedField("IX_Bad")] public string Scratch { get; set; }` — the deliberate
-  opt-out is now the only way to reach this, because an unsupported CLR type fails table load outright
-  instead of producing a fieldless property
+- **Given** `[IgnoreField] [IndexedField("IX_Bad")] public string Scratch { get; set; }`
 - **When** `LoadIndexes` runs
-- **Then** no matching field is found and the column name falls back to the property name `"Scratch"`,
-  producing an index definition over a column that the table does not have; no exception is raised
+- **Then** no matching field is found and `TableAttributeException` is thrown stating that the property is not a
+  mapped column, instead of an index over a column the table does not have
 
-#### Scenario: A base-class IndexedField lands on every derived table
+#### Scenario: A base-class IndexedField is refused
 
 - **Given** `[IndexedField("IX_Tenant")]` declared on a shared base class property
-- **When** `LoadIndexes` runs for each derived `[Table]` type
-- **Then** every derived table's index dictionary contains `"IX_Tenant"` with the same database-global index
-  name, because `type.GetProperties(Public | Instance)` includes inherited properties and `[IndexedField]`
-  is `Inherited = true`
+- **When** `LoadIndexes` runs for a derived `[Table]` type
+- **Then** `TableAttributeException` is thrown naming the base class and property and advising a
+  table-specific `[CompositeIndex]` on each derived class — index names are database-wide on PostgreSQL and
+  SQLite, so every derived table declaring the same name would leave all but the first without the index
 
 ### Requirement: Class-level composite index discovery
 
@@ -973,9 +1161,9 @@ assigning columns `Order` equal to their position in the list; and SHALL **throw
 
 ### Requirement: Index column ordering
 
-The system SHALL sort each index's columns by their `Order` value using `List<T>.Sort` after all
-contributions are collected; `[IndexedField]` supplies `Order` from the attribute (default `0`) and
-`[CompositeIndex]` supplies the positional index.
+The system SHALL order each index's columns stably by their `Order` value, ties kept in the order the
+columns were contributed, after all contributions are collected; `[IndexedField]` supplies `Order` from the
+attribute (default `0`) and `[CompositeIndex]` supplies the positional index.
 
 #### Scenario: Explicit orders are honoured
 
@@ -983,13 +1171,13 @@ contributions are collected; `[IndexedField]` supplies `Order` from the attribut
 - **When** sorting completes
 - **Then** the `Order == 0` column precedes the `Order == 1` column
 
-#### Scenario: Tied orders have unspecified relative order
+#### Scenario: Tied orders keep their contribution order
 
 - **Given** a composite index declared as `[IndexedField("IX_AB")]` on two properties, both defaulting to
   `Order == 0`
-- **When** `idx.Columns.Sort((a, b) => a.Order.CompareTo(b.Order))` runs
-- **Then** the comparison reports the two columns equal and `List<T>.Sort` (an unstable sort) may emit them
-  in either order, so the physical column order of the index is not determined by the declaration
+- **When** the columns are ordered by `Order`, then by position
+- **Then** the two keep the order in which they were contributed — the order `Type.GetProperties()` enumerated
+  the properties — rather than an unstable sort's arbitrary order
 
 #### Scenario: Mixing both attribute styles on one index name merges the columns
 
@@ -1130,7 +1318,9 @@ index is already present, and wrap any other execution failure in `IndexManageme
   single producer of index DDL for every provider
 - **And** the emitted statement is
   `CREATE UNIQUE INDEX IF NOT EXISTS "<index>" ON "<table>" (<col> [DESC], ...)` on the default and PostgreSQL
-  dialects — index **columns bare**, index and table names quoted
+  dialects — index **columns bare**, index and table names quoted, the table rendered through
+  `TableIdentifier` (`"<schema>"."<table>"` for a schema-qualified entity, the `schema__` prefix where the
+  provider has no schemas)
 - **And** MySQL's connector override emits the same statement without the `IF NOT EXISTS` clause, which that
   provider rejects outright
 
@@ -1183,9 +1373,9 @@ index and scope.
 - **Given** `DropAsync("IX_A", "Invoice")`
 - **When** the SQL is built
 - **Then** a `Tables.IndexDefinition { Name = "IX_A" }` with no columns is passed to `DropIndexSql`
-  alongside the table name, which the base implementation then ignores — it renders
-  `DROP INDEX IF EXISTS "IX_A"` with no `ON <table>` clause (only `MSSqlConnector` overrides `DropIndexSql`
-  to add one), so the statement is accepted by SQLite and PostgreSQL but rejected by MySQL
+  alongside the table name, which the base implementation uses only for the table's schema — it renders
+  `DROP INDEX IF EXISTS "IX_A"`, or `DROP INDEX IF EXISTS "<schema>"."IX_A"` when the table resolves to a
+  schema, with no `ON <table>` clause; `MSSqlConnector` and `MySQLConnector` override `DropIndexSql` to add one
 
 #### Scenario: Whitespace index name is rejected
 
@@ -1209,8 +1399,9 @@ exception propagate unwrapped.
 ### Requirement: SQL index listing and grouping
 
 The system SHALL run the dialect's `ListIndexesSql`, read each row positionally as
-`(index_name, column_name, is_descending, is_unique, ordinal_position)`, group rows by index name, order each
-group's fields by ordinal, and take `Unique` from the group's **first** row.
+`(index_name, column_name, is_descending, is_unique, ordinal_position)` — the three numeric columns through
+`Convert.ToInt32(reader.GetValue(i))`, so a provider returning them as `tinyint` or `bigint` reads alike — group
+rows by index name, order each group's fields by ordinal, and take `Unique` from the group's **first** row.
 
 #### Scenario: Multi-column index is reassembled
 
@@ -1218,6 +1409,13 @@ group's fields by ordinal, and take `Unique` from the group's **first** row.
 - **When** `ListAsync("Invoice")` runs
 - **Then** one `IndexInfo` named `"IX_TN"` with `Unique == true` and fields `[TenantGuid, Number]` in ordinal
   order is returned
+
+#### Scenario: SQL Server's tinyint ordinal is read
+
+- **Given** MSSQL, whose catalog returns `key_ordinal` as `tinyint`
+- **When** `ListAsync` reads the rows
+- **Then** the value is converted rather than read with `GetInt32`, so the listing succeeds instead of raising
+  `InvalidCastException`
 
 #### Scenario: Uniqueness is assumed uniform across a group
 
@@ -1234,68 +1432,69 @@ group's fields by ordinal, and take `Unique` from the group's **first** row.
 
 ### Requirement: Per-dialect catalog queries diverge
 
-The system SHALL supply dialect-specific existence and listing SQL, and these dialects SHALL differ
-observably: the default/MySQL implementation queries `information_schema.statistics` and **hard-codes
-`is_descending` to 0** with no schema restriction; MSSQL queries `sys.indexes`/`sys.index_columns` reporting
-real descending keys and excluding primary keys, heap rows (`type > 0`) and included columns; PostgreSQL
-queries `pg_class`/`pg_index`/`pg_attribute` reading descending keys from `indoption` subscripted by the
-column's table `attnum` rather than by its position within the index, and excluding primary indexes; and
-SQLite reads `sqlite_master` plus `PRAGMA index_info` excluding `sqlite_autoindex_%`.
+The system SHALL supply dialect-specific existence and listing SQL, each resolving the scope as a **logical**
+table name through the connector (`PhysicalTable` for a stored name, `RelationLiteral` for a relation literal,
+so a declared or connection-default schema is honoured): the default/MySQL implementation queries
+`information_schema.statistics` restricted to `table_schema = DATABASE()`, excludes the `PRIMARY` index and reads
+the direction from `collation = 'D'`; MSSQL queries `sys.indexes`/`sys.index_columns` by `OBJECT_ID` of the
+rendered relation, reporting real descending keys and excluding primary keys, heap rows (`type > 0`) and included
+columns; PostgreSQL queries `pg_class`/`pg_index`/`pg_attribute` for the relation `to_regclass` resolves, reading
+descending keys from `indoption` subscripted by the column's position in `indkey`, and excluding primary indexes;
+and SQLite filters existence by `tbl_name` and lists through the base `ListAsync` from `pragma_index_list` joined
+to `pragma_index_xinfo`, keeping only `CREATE INDEX` indexes (`origin = 'c'`) and their key columns.
 
-#### Scenario: Descending direction is lost on MySQL and SQLite
+#### Scenario: Descending direction is reported on every provider
 
-- **Given** an index created with a descending column
-- **When** `ListAsync` runs on MySQL (base implementation) or SQLite (PRAGMA implementation)
-- **Then** every returned `IndexField.IsDescending` is `false`; MSSQL reports the real direction from
-  `ic.is_descending_key`, while PostgreSQL evaluates `indoption[a.attnum - 1]` — the column's position in the
-  *table*, not in the index — so the flag is read from the wrong slot on a multi-column index and is absent
-  (yielding `false`) whenever `attnum` exceeds the index's column count
+- **Given** an index created with a descending column, not necessarily the first
+- **When** `ListAsync` runs
+- **Then** the column's `IndexField.IsDescending` is `true` on MySQL (`collation = 'D'`), SQLite
+  (`pragma_index_xinfo.desc`), MSSQL (`ic.is_descending_key`) and PostgreSQL
+  (`indoption[array_position(indkey, attnum)]`, the column's position in the index rather than in the table)
 
-#### Scenario: Primary keys appear only on MySQL
+#### Scenario: Primary keys are listed by no provider
 
 - **Given** a table with a primary key and one secondary index
 - **When** `ListAsync` runs
-- **Then** MSSQL (`i.is_primary_key = 0`), PostgreSQL (`NOT pg_index.indisprimary`) and SQLite
-  (`name NOT LIKE 'sqlite_autoindex_%'`) return only the secondary index, while the default/MySQL query
-  applies no such filter and also returns the `PRIMARY` entry
+- **Then** MSSQL (`i.is_primary_key = 0`), PostgreSQL (`NOT pg_index.indisprimary`), SQLite (`origin = 'c'`, which
+  also leaves out the automatic index of an inline `UNIQUE` constraint) and the default/MySQL query
+  (`index_name <> 'PRIMARY'`) return only the secondary index
 
-#### Scenario: Existence check is not schema-qualified
+#### Scenario: Existence and listing are scoped to the connection's own table
 
 - **Given** two databases/schemas reachable from the same connection, each holding a table `Invoice` with an
   index `IX_A`
-- **When** `ExistsAsync("IX_A", "Invoice")` runs on MySQL (`information_schema.statistics` filtered only by
-  `table_name` and `index_name`) or PostgreSQL (`pg_indexes` filtered only by `tablename` and `indexname`)
-- **Then** the count can be satisfied by the *other* schema's index and `true` is returned even when the
-  target schema has none
+- **When** `ExistsAsync("IX_A", "Invoice")` runs on MySQL or PostgreSQL
+- **Then** only the table the connection resolves counts — MySQL's query is restricted to
+  `table_schema = DATABASE()`, PostgreSQL's to the oid `to_regclass` returns for the table's relation (its
+  declared schema, else the search path) — so another schema's index does not answer for it
 
-#### Scenario: SQLite existence ignores the table entirely
+#### Scenario: SQLite existence is filtered by the table
 
 - **Given** index `IX_A` existing on table `Other` and not on table `Invoice`
 - **When** `SqLiteIndexManager.ExistsAsync("IX_A", "Invoice")` runs
-- **Then** the query `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'IX_A'` matches and
-  `true` is returned — the `tableName` argument is accepted but never used
+- **Then** the query also requires `tbl_name = 'Invoice'` and `false` is returned
 
-#### Scenario: SQLite infers uniqueness from the DDL text
+#### Scenario: SQLite reads uniqueness from the index metadata
 
-- **Given** an index whose stored `sql` text contains the word `UNIQUE` anywhere — including inside a column
-  or index identifier such as `IX_UNIQUE_CODE`
-- **When** `SqLiteIndexManager.ListAsync` classifies it via `CASE WHEN sql LIKE '%UNIQUE%' THEN 1 ELSE 0 END`
-- **Then** it is reported as `Unique == true` regardless of whether the index actually enforces uniqueness
+- **Given** a non-unique index named `IX_UNIQUE_CODE`
+- **When** `SqLiteIndexManager.ListAsync` classifies it from `pragma_index_list`'s `unique` column
+- **Then** it is reported as `Unique == false`; the name or DDL text no longer decides it
 
-#### Scenario: SQLite overrides ListAsync rather than shadowing it
+#### Scenario: SQLite lists through the base reader
 
 - **Given** a caller holding the manager as `IIndexManager` or `SqlIndexManager`
 - **When** `ListAsync` is invoked
-- **Then** the SQLite `override` runs (a two-step `sqlite_master` + `PRAGMA index_info` walk), so the
-  inherited `GetInfoAsync` also sees populated columns instead of the base query's empty column names
+- **Then** the inherited `SqlIndexManager.ListAsync` runs SQLite's `ListIndexesSql` override in one query, so
+  the inherited `GetInfoAsync` sees the same populated columns
 
 #### Scenario: MSSQL guards CREATE INDEX with a catalog test, on its connector
 
 - **Given** MSSQL, which has no `CREATE INDEX IF NOT EXISTS`
 - **When** any index statement is built for that dialect
 - **Then** `MSSqlConnector.CreateIndexSql` emits
-  `IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='<ix>' AND object_id=OBJECT_ID('<table>')) CREATE [UNIQUE] INDEX ...`,
-  a synthesised conditional form standing in for the clause the dialect lacks
+  `IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='<ix>' AND object_id=OBJECT_ID('<relation>')) CREATE [UNIQUE] INDEX ...`,
+  a synthesised conditional form standing in for the clause the dialect lacks, where `<relation>` is the table
+  as rendered with its schema, so the guard asks about the table the index goes on
 - **And** `MSSqlIndexManager` declares no `CreateUniqueIndexSql` of its own — that override was deleted as
   byte-equivalent to what the connector already emits once `Unique` survives translation
 - **And** MSSQL alone keeps its index **columns bracket-quoted**, deliberately unlike the base emitter, because
@@ -1408,7 +1607,9 @@ The system SHALL execute every SQL index-management statement on a connection ne
 
 The system SHALL check for existence before creating an ES index and SHALL throw
 `InvalidOperationException("Index '<name>' already exists.")` when it is present; index names SHALL be
-validated non-empty first.
+validated non-empty first. Existence SHALL be decided by the HTTP status alone — `200` exists, `404` does not —
+and any other outcome, a transport failure with no status included, SHALL throw `InvalidOperationException`
+("Failed to check whether index '<name>' exists: …") carrying the original exception.
 
 #### Scenario: Creating an existing index is an error, not a no-op
 
@@ -1423,13 +1624,13 @@ validated non-empty first.
 - **Then** the second create request reaches the server and its failure surfaces through
   `ValidateResponse` as `InvalidOperationException`, not through the pre-check
 
-#### Scenario: The existence check does not validate its own response
+#### Scenario: An unanswered existence check throws
 
 - **Given** an `Indices.Exists` request that fails rather than answering — transport error, auth rejection,
   unreachable node — whose response therefore carries `Exists == false`
-- **When** `IndexExists` / `IndexExistsAsync` returns `response.Exists` with no `ValidateResponse` call
-- **Then** the failure is reported as "the index does not exist", so the already-exists guard is skipped and
-  a caller cannot distinguish an absent index from an unanswered question
+- **When** `IndexExists` / `IndexExistsAsync` inspects its HTTP status
+- **Then** a status other than `200` or `404` (or none) throws `InvalidOperationException`, so neither the
+  already-exists guard nor any other caller reads the failure as "the index does not exist"
 
 #### Scenario: Blank index name is rejected everywhere
 
@@ -1456,13 +1657,12 @@ validate the response otherwise.
 - **When** `DeleteIndexAsync("invoices")` is called
 - **Then** the existence check short-circuits and the method returns with no request and no exception
 
-#### Scenario: A failed existence check also reads as missing
+#### Scenario: A failed existence check fails the deletion
 
-- **Given** an existence request that fails rather than answering, so `exists.Exists` is `false` although the
-  index may well exist
-- **When** `DeleteIndexAsync("invoices")` inspects it
-- **Then** the method short-circuits and returns successfully with no delete request issued — the unvalidated
-  check makes a destructive no-op indistinguishable from a completed deletion
+- **Given** an existence request that fails rather than answering
+- **When** `DeleteIndexAsync("invoices")` runs its existence check
+- **Then** `InvalidOperationException` propagates and no delete request is issued — a failure is not reported
+  as a completed deletion
 
 ### Requirement: ElasticSearch responses are validated uniformly, with 404 tolerated for removals
 
@@ -1490,33 +1690,47 @@ The system SHALL throw
 - **When** the response is inspected
 - **Then** `InvalidOperationException` naming alias and index is thrown
 
-### Requirement: ElasticSearch mapping update ignores the index argument
+### Requirement: ElasticSearch mapping update targets the named index
 
-The system SHALL validate the `indexName` argument of `UpdateMapping`/`UpdateMappingAsync` and then **not
-use it**, issuing `_client.Map(mappingDescriptor)` / `MapAsync` so the target index is determined solely by
-the caller's descriptor or the client's default index.
+The system SHALL validate the `indexName` argument of `UpdateMapping`/`UpdateMappingAsync` and SHALL apply the
+caller's mapping descriptor to a descriptor already pointed at that index (`d.Index(indexName)`), so the mapping
+lands on the named index.
 
-#### Scenario: Mapping lands wherever the descriptor says
+#### Scenario: Mapping lands on the named index
 
 - **Given** `UpdateMappingAsync<Invoice>("invoices_v2", m => m.Properties(...))` where the descriptor names
   no index
 - **When** the call runs
-- **Then** the request goes to the client's default index for `Invoice`, not to `invoices_v2`; the
-  `"invoices_v2"` argument only influences the exception message on failure
+- **Then** the put-mapping request goes to `invoices_v2`, not to the client's default index for `Invoice`
 
 ### Requirement: ElasticSearch index info aggregation
 
 The system SHALL build an ES `IndexInfo` by combining the stats, settings and alias responses — document
 count and primary store size from stats, shard and replica counts and refresh interval from settings, alias
 names from a valid alias response — and SHALL validate the stats and settings responses but not the alias
-response.
+response. Every lookup SHALL use the **concrete** index: the requested name when the stats response holds it,
+else the stats response's only index (a name such as an alias resolving to exactly one), and otherwise
+`InvalidOperationException` naming how many indexes the name resolves to; the info's `Name` is that concrete
+index.
 
-#### Scenario: Missing entries degrade to zero
+#### Scenario: An alias resolves to its one index
 
-- **Given** a stats or settings response that does not contain the requested index key
+- **Given** alias `invoices` pointing at the single index `invoices_v1`
+- **When** `GetIndexInfoAsync("invoices")` runs
+- **Then** the info is named `invoices_v1` and carries that index's counts, settings and aliases, instead of
+  coming back all zeros
+
+#### Scenario: A name resolving to several indexes is refused
+
+- **Given** a stats response holding two indexes, neither named as requested
 - **When** `BuildIndexInfo` runs
-- **Then** `DocumentCount`, `SizeInBytes`, `NumberOfShards` and `NumberOfReplicas` stay `0` and
-  `RefreshInterval` stays `null`
+- **Then** `InvalidOperationException` is thrown listing both and asking for one of them
+
+#### Scenario: Missing settings entries degrade to zero
+
+- **Given** a settings response that does not contain the concrete index key
+- **When** `BuildIndexInfo` runs
+- **Then** `NumberOfShards` and `NumberOfReplicas` stay `0` and `RefreshInterval` stays `null`
 
 #### Scenario: Health and State are never populated
 
@@ -1584,9 +1798,11 @@ target all indices when no index name is supplied.
 ### Requirement: ElasticSearch adapter maps only shard and replica properties
 
 The system SHALL adapt `IndexManager` to `IIndexManager` such that `CreateAsync` reads only
-`Properties["NumberOfShards"]` and `Properties["NumberOfReplicas"]` (each honoured only when the value is an
-`int`) into ES settings, and SHALL **ignore** `IndexDefinition.Fields`, `Unique`, `Sparse` and `ExpireAfter`
-entirely.
+`Properties["NumberOfShards"]` and `Properties["NumberOfReplicas"]` into ES settings — each accepted as an
+`int`, a `long` from 0 to `int.MaxValue`, or a string of decimal digits, and otherwise refused with
+`NotSupportedException` — SHALL refuse any other property key, and `Unique`, `Sparse` and `ExpireAfter`, with
+`NotSupportedException` raised before the index is created and not wrapped, and SHALL **ignore**
+`IndexDefinition.Fields` entirely.
 
 #### Scenario: Fields do not become mappings
 
@@ -1595,18 +1811,20 @@ entirely.
 - **Then** the index is created with no descriptor derived from `Fields` — no explicit field mapping is
   applied and ES dynamic mapping governs the fields
 
-#### Scenario: Non-int shard property is ignored
+#### Scenario: A textual shard count is honoured, a non-number refused
 
 - **Given** `Properties["NumberOfShards"] = "3"` (a string)
 - **When** `CreateAsync` runs
-- **Then** the `s is int` test fails, no settings descriptor is built, and the index is created with ES
-  defaults
+- **Then** it is parsed and the index is created with three shards; a value such as `"three"` or `2.5` throws
+  `NotSupportedException` stating it must be a whole number, and an unknown key throws naming the supported
+  ones
 
 #### Scenario: Uniqueness cannot be expressed
 
-- **Given** a definition with `Unique == true`
+- **Given** a definition with `Unique == true` (or `Sparse`, or an `ExpireAfter`)
 - **When** `CreateAsync` runs against ES
-- **Then** the flag is silently dropped — unlike `SqlIndexManager`, which carries it onto the SQL definition
+- **Then** `NotSupportedException` is thrown and no index is created — an ES index is a container, not a
+  constraint, so a flag it cannot honour is refused rather than dropped
 
 #### Scenario: Native escape hatch is exposed
 
@@ -1633,19 +1851,19 @@ The system SHALL wrap any non-`IndexManagementException` thrown by ES create/dro
 - **When** the `when (ex is not IndexManagementException)` filter is evaluated
 - **Then** the original exception propagates unwrapped
 
-### Requirement: ElasticSearch adapter listing swallows failures
+### Requirement: ElasticSearch adapter listing reports failures
 
 The system SHALL list ES indexes through the `_cat/indices` API, skipping any index whose name starts with
 `"."`, mapping store size through a suffix parser and index status into `State`, exposing docs count, health,
-primary shards and replicas as string entries in `Properties`; and SHALL return an **empty list** when the
-cat response is not valid.
+primary shards and replicas as string entries in `Properties`; and SHALL throw `IndexManagementException` when
+the cat response is not valid.
 
-#### Scenario: A failed cat request is indistinguishable from an empty cluster
+#### Scenario: A failed cat request is an error, not an empty cluster
 
 - **Given** a cluster that rejects the `_cat/indices` request
 - **When** `ListAsync()` runs
-- **Then** `Array.Empty<IndexInfo>()` is returned with no exception and no diagnostic — the caller cannot
-  tell failure from "no indexes"
+- **Then** an `IndexManagementException` whose message begins `"Failed to list ES indexes:"` is thrown, with
+  `IndexName` `"*"`, the given scope, and the response's original exception as `InnerException`
 
 #### Scenario: System indexes are hidden
 
@@ -1667,24 +1885,24 @@ cat response is not valid.
 - **Then** the first three yield `1536`, `2097152` and `512`; `"1.2tb"` matches the `"b"` suffix, leaves
   `"1.2t"` unparseable and yields `-1`; `null` yields `-1`
 
-### Requirement: ElasticSearch adapter info lookup collapses failures to null
+### Requirement: ElasticSearch adapter info lookup answers null only for an absent index
 
-The system SHALL return `null` from `GetInfoAsync` whenever the native `GetIndexInfoAsync` throws
-`InvalidOperationException`, and SHALL otherwise project the ES info into the portable shape with document
-count, shard/replica counts, health and aliases carried in `Properties`.
+The system SHALL return `null` from `GetInfoAsync` only when the native existence check answers that the
+index does not exist, SHALL let every other failure propagate, and SHALL otherwise project the ES info into the
+portable shape with document count, shard/replica counts, health and aliases carried in `Properties`.
 
 #### Scenario: A missing index reads as null
 
-- **Given** an index name that does not exist, so stats validation throws `InvalidOperationException`
+- **Given** an index name that does not exist, so the existence check answers `404`
 - **When** `GetInfoAsync("nope")` runs
-- **Then** `null` is returned
+- **Then** `null` is returned without the stats request being made
 
-#### Scenario: A cluster error also reads as null
+#### Scenario: A cluster error is not read as an absent index
 
-- **Given** a stats or settings request that fails for an unrelated reason (still surfacing as
-  `InvalidOperationException` from `ValidateResponse`)
+- **Given** an existence check, stats or settings request that fails for an unrelated reason
 - **When** `GetInfoAsync` runs
-- **Then** `null` is returned, so "index absent" and "cluster failed" are indistinguishable to the caller
+- **Then** the `InvalidOperationException` propagates, so "index absent" and "cluster failed" stay
+  distinguishable to the caller
 
 #### Scenario: Blank name still throws
 
@@ -1696,7 +1914,11 @@ count, shard/replica counts, health and aliases carried in `Properties`.
 
 The system SHALL perform reindexing through the ES server-side reindex API, validate that source and target
 are non-empty and differ case-insensitively, refresh the target on success, and report *every* other outcome
-— including thrown exceptions — as a `ReindexResult` with `Success == false`.
+— including thrown exceptions — as a `ReindexResult` with `Success == false`. A `Reindex` / `ReindexAsync`
+started with `waitForCompletion: false` SHALL answer `ReindexResult.Started` — `Success == false`,
+`IsPending == true`, the task's `node:id` as `TaskId`, and an `ErrorMessage` telling the caller to follow
+`GET _tasks/{TaskId}` and refresh the target once it completes — without refreshing the target; an invalid
+response, or a valid one carrying no task id, SHALL be a failed result instead.
 
 #### Scenario: Same source and target is rejected up front
 
@@ -1752,6 +1974,14 @@ are non-empty and differ case-insensitively, refresh the target on success, and 
 - **Then** the target index has been refreshed first, so the copied documents are immediately visible to
   search
 
+#### Scenario: A reindex not waited for is pending, not successful
+
+- **Given** `ReindexAsync("invoices_v1", "invoices_v2", waitForCompletion: false)` and ES accepting it as task
+  `node1:42`
+- **When** the result is built
+- **Then** `Success == false`, `IsPending == true`, `TaskId == "node1:42"`, and the target is not refreshed — the
+  copy has not happened yet; had ES answered without a task id, the result would be `Failed` saying so
+
 #### Scenario: Script variant requires a script
 
 - **Given** `ReindexWithScriptAsync(source, target, "  ")`
@@ -1762,8 +1992,10 @@ are non-empty and differ case-insensitively, refresh the target on success, and 
 ### Requirement: Zero-downtime reindex via alias swap
 
 The system SHALL implement `ReindexWithAlias` as: resolve the alias to exactly one index, create the new
-index, reindex (optionally with a script), atomically swap the alias, and optionally delete the old index;
-returning a successful result whose `SourceIndex` is the resolved old index.
+index, reindex (optionally with a script) waiting for completion, atomically swap the alias, and optionally
+delete the old index; returning a successful result whose `SourceIndex` is the resolved old index. A failure to
+delete the old index after a completed swap SHALL NOT fail the result: it SHALL be reported in the successful
+result's `CleanupError`.
 
 #### Scenario: The alias must resolve to exactly one index
 
@@ -1806,6 +2038,15 @@ returning a successful result whose `SourceIndex` is the resolved old index.
 - **When** the swap succeeds
 - **Then** the old index remains, allowing a manual rollback
 
+#### Scenario: A failed cleanup does not undo a completed swap
+
+- **Given** `deleteOldIndex: true`, a completed reindex and swap, and a delete of the old index that throws
+- **When** `ReindexWithAlias` completes
+- **Then** a successful result is returned with the delete's message in `CleanupError`, the alias pointing at the
+  new index and the old index left for manual deletion — except that on the async path an
+  `OperationCanceledException` from the delete is excluded from this handling, reaches the outer catch-all and
+  is reported as a `Failed` result although the swap completed
+
 #### Scenario: Typed overload auto-maps the new index
 
 - **Given** `ReindexWithAlias<Invoice>("invoices", "invoices_v2", numberOfShards: 2)`
@@ -1819,9 +2060,11 @@ The system SHALL require a collection-name scope on every `MongoDBIndexManager` 
 `ArgumentException("Collection name (scope) is required for MongoDB index management.")` otherwise, and on
 `CreateAsync` SHALL require a name and at least one field, build keys per field (`Text`, `Hashed`, `Geo2d`,
 `Geo2dSphere`, else ascending/descending), and pass `Name`, `Background = true`, `Unique`, `Sparse` and
-`ExpireAfter` as native options; `Properties` SHALL be ignored. A create failure SHALL be wrapped in
-`IndexManagementException`; a drop of an absent index (`IndexNotFound`) SHALL succeed silently and other
-drop failures SHALL be wrapped.
+`ExpireAfter` as native options; `Properties` SHALL be ignored. The keys SHALL come from the public static
+`MongoDBIndexManager.KeysFor(fields)`, the one producer the migration schema builder also uses. A create
+failure SHALL be wrapped in `IndexManagementException`; a drop of an absent index (`IndexNotFound`) SHALL succeed
+silently and other drop failures SHALL be wrapped. A text index SHALL be read back from its `weights` document —
+one `Text` field per weighted field — rather than from its internal `_fts` / `_ftsx` key entries.
 
 #### Scenario: Listing reports options and key types
 
@@ -1830,6 +2073,14 @@ drop failures SHALL be wrapped.
 - **Then** each `IndexInfo` reports `Unique`, `Sparse`, `ExpireAfter` from `expireAfterSeconds`, fields with
   `IsDescending` from a negative numeric key and `FieldType` from a string key (`text`, `hashed`, `2d`,
   `2dsphere`), and `State == "ready"`
+
+#### Scenario: A text index reads back as its declared fields
+
+- **Given** a text index created over `Title`, whose stored key is `{ _fts: "text", _ftsx: 1 }` with
+  `weights: { Title: 1 }`
+- **When** it is listed
+- **Then** its fields are exactly `[Title]` with `FieldType == Text`, not `_fts` and `_ftsx`, so drift detection
+  does not report a declared text index as `ColumnsDiffer`
 
 #### Scenario: Size comes from collStats when available
 
@@ -1849,13 +2100,17 @@ drop failures SHALL be wrapped.
 The system SHALL implement `RavenDBIndexManager.CreateAsync` by building a RavenDB index definition named
 after the portable definition whose map is, in order of precedence, `Properties["Map"]` (a string),
 `Properties["Maps"]` (strings), or an auto-generated
-`from doc in docs.{scope ?? "docs"} select new { F = doc.F, … }` interpolating the scope and field names,
+`from doc in docs.{scope ?? "docs"} select new { F = doc.F, … }` whose collection and field names must each be a
+plain identifier (`[A-Za-z_][A-Za-z0-9_]*`, else `ArgumentException` advising to pass the map in `"Map"`),
 with an optional `Properties["Reduce"]`, marking `Text` fields for full-text search, and sending it with
-`PutIndexesOperation`; `Unique`, `Sparse` and `ExpireAfter` SHALL be ignored. Create and drop failures SHALL
-be wrapped in `IndexManagementException`. Existence SHALL be a case-insensitive match over all index names in
-the database; listing and info SHALL come from index statistics, reporting `State` as `"stale"` or the
-lower-cased index state and the type, priority, entry count and map/reduce counters in `Properties`, with no
-`Fields`.
+`PutIndexesOperation`; `Unique`, `Sparse` and `ExpireAfter` SHALL be refused with `NotSupportedException` before
+anything is sent, each naming the RavenDB alternative. Send failures of create and drop SHALL be wrapped in
+`IndexManagementException`. Existence SHALL be a case-insensitive match over all index names in the database;
+listing and info SHALL come from index statistics, reporting `State` as `"stale"` or the lower-cased index
+state and the type, priority, entry count and map/reduce counters in `Properties`. Listing SHALL report no
+`Fields`; `GetInfoAsync` SHALL answer `null` for an index the existence check does not find, and for an index
+whose single map is exactly in the generated form SHALL report that map's fields — `Text` where the field's
+indexing is `Search`, else `Standard` — leaving `Fields` empty for any other map.
 
 #### Scenario: Scope names the collection only in the generated map
 
@@ -1863,39 +2118,78 @@ lower-cased index state and the type, priority, entry count and map/reduce count
 - **When** it runs
 - **Then** the deployed map is `from doc in docs.Invoices select new { Number = doc.Number }`
 
-#### Scenario: A unique flag is silently ignored
+#### Scenario: A name that is not an identifier never reaches the map code
 
-- **Given** a definition with `Unique = true`
+- **Given** a field named `Number } select new { X = 1` or a scope such as `Invoices; x`
+- **When** `CreateAsync` would generate the map
+- **Then** `ArgumentException` is thrown and nothing is sent, because the generated map is code the server
+  compiles
+
+#### Scenario: A unique flag is refused
+
+- **Given** a definition with `Unique = true` (or `Sparse`, or an `ExpireAfter`)
 - **When** `CreateAsync` runs
-- **Then** the index is deployed without any uniqueness enforcement and no error is raised
+- **Then** `NotSupportedException` is thrown — for `Unique` advising compare-exchange values — and no index is
+  deployed
+
+#### Scenario: Info about an absent index is null, a generated map reports its fields
+
+- **Given** no index named `Nope`, and an index deployed by `CreateAsync` over `Number` and a `Text` field `Title`
+- **When** `GetInfoAsync` is called for each
+- **Then** `Nope` answers `null` instead of the statistics call throwing, and the deployed one reports fields
+  `[Number (Standard), Title (Text)]`; an index whose map was passed in `"Map"` reports no fields
 
 ### Requirement: Cosmos DB index manager edits the container's indexing policy
 
 The system SHALL require a container-name scope (`ArgumentException("Scope (container name) is required for
-Cosmos DB.")`) and implement `CosmosDBIndexManager.CreateAsync` by reading the container, adding a
-single-field definition as an included path `/{name}/?` (unless present) or a multi-field definition as a
-composite index with per-field sort order, and replacing the container; the definition's `Name`, `Unique`,
-`Sparse`, `ExpireAfter`, `Properties` and `FieldType` SHALL NOT be stored. `DropAsync` SHALL move a matching
-included path to the excluded paths and replace the container; composite indexes SHALL NOT be dropped.
-Failures other than `ArgumentException` SHALL be wrapped in `IndexManagementException`.
+Cosmos DB.")`) and implement `CosmosDBIndexManager.CreateAsync` by requiring a name and at least one field,
+refusing with `NotSupportedException` a definition that is `Unique` (a unique key holds within a logical
+partition, and the Birko stores partition on `/id`), `Sparse`, has an `ExpireAfter`, carries any `Properties`,
+declares a non-`Standard` field type, or is a single descending field; then adding a single-field definition as
+an included path `/{name}/?` (removing that path from the excluded paths) or a multi-field definition as a
+composite index with per-field sort order, replacing the container only when the policy changed. The
+definition's `Name` SHALL be recorded, with its kind, paths and orders, in one registry document per container
+(id and partition key = the container name) in the container `__birko_indexes`, created on first use and written
+as raw JSON with an ETag precondition, retried up to 8 times on a concurrent write. Re-creating a registered name
+over other paths SHALL throw `IndexManagementException` advising to drop it first. Failures other than
+`ArgumentException`, `NotSupportedException` and `IndexManagementException` SHALL be wrapped in
+`IndexManagementException`. The indexing policy SHALL stay the truth: a registered index exists only while its
+paths are in the policy.
 
-#### Scenario: Listing names indexes by path
-
-- **Given** a policy with included path `/Number/?` and one composite index
-- **When** `ListAsync(container)` runs
-- **Then** it returns `IndexInfo { Name = "/Number/?", State = "active" }` with `Properties` type
-  `IncludedPath` and the indexing mode, and `IndexInfo { Name = "composite_0" }` with the joined paths and
-  orders
-
-#### Scenario: Existence matches a path, not a declared name
+#### Scenario: Existence answers by the declared name
 
 - **Given** an index created from a definition named `IX_Number` over field `Number`
 - **When** `ExistsAsync("IX_Number", container)` is called
-- **Then** it returns `false` — existence matches included paths (`/Number/?`) and composite field paths, so
-  only `ExistsAsync("Number", container)` finds it
+- **Then** it returns `true`, because the registry maps the name to `/Number/?` and that path is in the policy;
+  a name nothing registered is still answered by path, so `ExistsAsync("Number", container)` is also `true`
 
-#### Scenario: Dropping a composite index does nothing
+#### Scenario: Listing names registered indexes, then unclaimed policy entries by path
 
-- **Given** a composite index over `/TenantGuid` and `/Number`
-- **When** `DropAsync("TenantGuid", container)` is called
-- **Then** no included path matches, the policy is replaced unchanged, and the composite index remains
+- **Given** a registered `IX_Number` (included path `/Number/?`), a registered composite `IX_TN`, an included
+  path `/Other/?` and a composite over `/A` and `/B` that nothing registered
+- **When** `ListAsync(container)` runs
+- **Then** it returns `IX_Number` and `IX_TN` (ordinal name order, `State = "active"`, their fields, `Type`
+  `IncludedPath` / `CompositeIndex`, `Paths` and the indexing mode in `Properties`), then `/Other/?` with no
+  fields, then the composite named `(/A ASC, /B ASC)` with its fields and directions; a registered index whose
+  paths left the policy is not listed
+
+#### Scenario: Dropping a registered composite removes exactly its paths
+
+- **Given** a registered composite `IX_TN` over `/TenantGuid` and `/Number`
+- **When** `DropAsync("IX_TN", container)` is called
+- **Then** that composite is removed from the policy, the container replaced and the name removed from the
+  registry — unless another registered name stands for the same paths, in which case the policy keeps them
+
+#### Scenario: Dropping an unregistered name touches only an included path
+
+- **Given** a name nothing registered
+- **When** `DropAsync(name, container)` is called
+- **Then** a matching included path is moved to the excluded paths and the container replaced; a composite is
+  never dropped this way, and when nothing matches the container is not replaced
+
+#### Scenario: Flags the policy cannot express are refused
+
+- **Given** a definition with `Unique`, `Sparse`, an `ExpireAfter`, any `Properties`, a `Geo2dSphere` field, or a
+  single descending field
+- **When** `CreateAsync` runs
+- **Then** `NotSupportedException` is thrown before the container or the registry is read

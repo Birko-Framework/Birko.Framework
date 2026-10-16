@@ -38,7 +38,7 @@ Reach: 23 consumer source files use these attributes; the defect fires only in t
 - [x] Values are read as fields or properties, whichever the attribute declares
 - [x] A test compiles or emits an attribute of a foreign identity and asserts the rebuilt column (length, precision, scale, UTC, unique index)
 - [x] A regression test fails on the current code and passes with the fix
-- [ ] `/specs regen` of the area, with the spec diff reviewed, is the fix's evidence (EPIC-014's standing constraint)
+- [x] `/specs regen` of the area, with the spec diff reviewed, is the fix's evidence (EPIC-014's standing constraint) — done 2026-10-16 (batched regen of 17 areas, diffs reviewed and confirmed)
 
 ## Resolution (2026-10-15)
 

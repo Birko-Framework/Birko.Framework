@@ -1,7 +1,7 @@
 ---
 area: store-lazy-initialization
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
+generated-on: 2026-10-16
 sources:
   - ../Birko.Data.Stores/AbstractAsyncBulkStore.cs
   - ../Birko.Data.Stores/AbstractAsyncStore.cs
@@ -309,6 +309,18 @@ This ordering is deliberate and is the safe one: initialization can have side ef
 index creation, file or collection creation — and performing them on behalf of an operation that is about
 to be refused would be work done for a caller who achieved nothing.
 
+**A `PropertyUpdate<T>` with no assignments returns before the delegated read, so it never initializes
+the store either** (SH-M032, TASK-170). `Update(filter, PropertyUpdate<T>)` / `UpdateAsync(filter,
+PropertyUpdate<T>, ct)` return right after the two filter guards when `updates.Assignments.Count == 0`,
+and `UpdateAll(PropertyUpdate<T>)` / `UpdateAllAsync(PropertyUpdate<T>, ct)` return as their first
+statement — no `Read`, no per-item `Update`, and no `InitCore`.
+
+#### Scenario: An empty PropertyUpdate leaves the store uninitialized
+
+- **Given** a never-initialized `AbstractBulkStore<T>` subclass and a `new PropertyUpdate<T>()` with no `Set` / `Increment`
+- **When** the caller invokes `Update(x => x.Guid == g, updates)`, `UpdateAll(updates)`, or the async counterparts
+- **Then** the call returns (the async ones a completed `Task`) without reaching `Read` / `ReadAsync`, so `InitCore` / `InitCoreAsync` has **not** run and `_initialized` is still `false`; a null or unbounded filter is still refused first by the guards
+
 #### Scenario: Delete by filter on a never-initialized store
 
 - **Given** a never-initialized `AbstractBulkStore<T>` subclass
@@ -325,13 +337,13 @@ to be refused would be work done for a caller who achieved nothing.
 #### Scenario: PropertyUpdate by filter routes through the Action overload
 
 - **Given** a never-initialized `AbstractAsyncBulkStore<T>` subclass
-- **When** the caller awaits `UpdateAsync(filter, propertyUpdate, ct)`
-- **Then** it forwards to `UpdateAsync(filter, entity => updates.ApplyTo(entity), ct)`, which awaits `ReadAsync(filter, null, null, null, ct)` — the operation that actually initializes — and then awaits the single-entity `UpdateAsync(item, ct: ct)` once per matched item
+- **When** the caller awaits `UpdateAsync(filter, propertyUpdate, ct)` with at least one assignment
+- **Then** it forwards to `UpdateAsync(filter, entity => updates.ApplyTo(entity), ct)`, which awaits `ReadAsync(filter, null, null, null, ct)` — the operation that actually initializes — and then awaits the single-entity `UpdateAsync(item, ct: ct)` once per matched item, skipping an item whose update throws `EntityNotFoundException` (a row deleted after the read) and continuing with the rest (SH-M434, TASK-170)
 
 #### Scenario: The PropertyUpdate overload evaluates its filter's collection operand more than once
 
 - **Given** a filter whose collection operand is a *method call* rather than a captured collection
-- **When** `Update(filter, propertyUpdate)` is called
+- **When** `Update(filter, propertyUpdate)` is called with at least one assignment
 - **Then** the operand is evaluated three times, not once — the `PropertyUpdate` wrapper guards, then
   delegates to the `Action` overload which guards again, and the delegated `Read` evaluates it a third
   time. Both guards are kept deliberately, because each covers a distinct partial-override case, so
