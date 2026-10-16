@@ -37,6 +37,9 @@ namespace Birko.Data.ElasticSearch.Tests.IndexManagement
         private const string Cancelled = @"{""took"":900,""timed_out"":false,""total"":3,""created"":1,""updated"":0,""deleted"":0,""batches"":1,
             ""version_conflicts"":0,""noops"":0,""canceled"":""by user request"",""failures"":[]}";
 
+        // waitForCompletion: false — ElasticSearch answers at once with a task id and no counts (TASK-560).
+        private const string Started = @"{""task"":""oTUltX4IQMOUUVeiohTt8A:12345""}";
+
         private const string Complete = @"{""took"":12,""timed_out"":false,""total"":3,""created"":3,""updated"":0,""deleted"":0,""batches"":1,
             ""version_conflicts"":0,""noops"":0,""failures"":[]}";
 
@@ -262,6 +265,61 @@ namespace Birko.Data.ElasticSearch.Tests.IndexManagement
             result.DocumentsProcessed.Should().Be(3);
             cluster.Calls.Should().Contain("POST _aliases");
             cluster.Indices.Should().Contain("new-index").And.NotContain("old-index");
+        }
+
+        /// <summary>
+        /// TASK-560: a reindex that was only started reported <c>Successful</c> with 0 documents, after refreshing a
+        /// target still being written. It is pending, not a success, and carries the task id to follow.
+        /// </summary>
+        [Fact]
+        public void Reindex_without_waiting_is_pending_with_its_task_id()
+        {
+            var (helper, cluster) = Create(Started);
+
+            var result = helper.Reindex("old-index", "new-index", waitForCompletion: false);
+
+            result.Success.Should().BeFalse("nothing has been copied yet");
+            result.IsPending.Should().BeTrue();
+            result.TaskId.Should().Be("oTUltX4IQMOUUVeiohTt8A:12345");
+            result.ErrorMessage.Should().Contain("oTUltX4IQMOUUVeiohTt8A:12345");
+            cluster.Calls.Should().NotContain(c => c.EndsWith("_refresh"), "the target is still being written");
+        }
+
+        [Fact]
+        public async Task ReindexAsync_without_waiting_is_pending_with_its_task_id()
+        {
+            var (helper, cluster) = Create(Started);
+
+            var result = await helper.ReindexAsync("old-index", "new-index", waitForCompletion: false);
+
+            result.Success.Should().BeFalse();
+            result.IsPending.Should().BeTrue();
+            result.TaskId.Should().Be("oTUltX4IQMOUUVeiohTt8A:12345");
+            cluster.Calls.Should().NotContain(c => c.EndsWith("_refresh"));
+        }
+
+        [Fact]
+        public void A_started_reindex_with_no_task_id_is_a_failure_not_pending()
+        {
+            var (helper, _) = Create(@"{}");
+
+            var result = helper.Reindex("old-index", "new-index", waitForCompletion: false);
+
+            result.Success.Should().BeFalse();
+            result.IsPending.Should().BeFalse("there is nothing to follow");
+            result.ErrorMessage.Should().Contain("task id");
+        }
+
+        [Fact]
+        public void A_completed_reindex_is_not_pending()
+        {
+            var (helper, _) = Create(Complete);
+
+            var result = helper.Reindex("old-index", "new-index");
+
+            result.Success.Should().BeTrue();
+            result.IsPending.Should().BeFalse();
+            result.TaskId.Should().BeNull();
         }
     }
 }

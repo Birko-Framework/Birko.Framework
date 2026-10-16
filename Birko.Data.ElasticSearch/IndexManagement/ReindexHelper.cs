@@ -58,6 +58,11 @@ namespace Birko.Data.ElasticSearch.IndexManagement
 
                 sw.Stop();
 
+                if (!waitForCompletion)
+                {
+                    return StartedOrRefused(response, sourceIndex, targetIndex, sw.Elapsed);
+                }
+
                 var refused = Refusal(response, sourceIndex, targetIndex);
                 if (refused != null)
                 {
@@ -92,6 +97,11 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                     .WaitForCompletion(waitForCompletion), ct).ConfigureAwait(false);
 
                 sw.Stop();
+
+                if (!waitForCompletion)
+                {
+                    return StartedOrRefused(response, sourceIndex, targetIndex, sw.Elapsed);
+                }
 
                 var refused = Refusal(response, sourceIndex, targetIndex);
                 if (refused != null)
@@ -469,6 +479,31 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         /// <summary>
         /// The failed result a reindex response describes, or <c>null</c> when the copy completed.
         /// </summary>
+        /// <summary>
+        /// The result of a reindex started without waiting: pending, carrying the task to follow.
+        /// </summary>
+        /// <remarks>
+        /// TASK-560: ElasticSearch answers such a request at once with a task id and no counts. It was refreshed and
+        /// reported <c>Successful</c> with 0 documents, a success for a copy that had not happened. The target is not
+        /// refreshed either: it is still being written.
+        /// </remarks>
+        private static ReindexResult StartedOrRefused(ReindexOnServerResponse response, string sourceIndex, string targetIndex, TimeSpan elapsed)
+        {
+            if (!response.IsValid)
+            {
+                return ReindexResult.Failed(sourceIndex, targetIndex, response.DebugInformation);
+            }
+
+            var taskId = response.Task?.FullyQualifiedId;
+            if (string.IsNullOrEmpty(taskId))
+            {
+                return ReindexResult.Failed(sourceIndex, targetIndex,
+                    $"Reindex from '{sourceIndex}' to '{targetIndex}' was started without waiting, but ElasticSearch answered without a task id to follow.");
+            }
+
+            return ReindexResult.Started(sourceIndex, targetIndex, taskId!, elapsed);
+        }
+
         private static ReindexResult? Refusal(ReindexOnServerResponse response, string sourceIndex, string targetIndex)
         {
             if (!response.IsValid)

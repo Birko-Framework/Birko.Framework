@@ -101,6 +101,18 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         public string? CleanupError { get; set; }
 
         /// <summary>
+        /// True for a reindex started with <c>waitForCompletion: false</c>: ElasticSearch has accepted it as a task and
+        /// is still copying. It is not a <see cref="Success"/>, because nothing has been copied yet (TASK-560); follow
+        /// <see cref="TaskId"/> with <c>GET _tasks/{TaskId}</c>, and refresh the target once it has completed.
+        /// </summary>
+        public bool IsPending { get; set; }
+
+        /// <summary>
+        /// The ElasticSearch task running a pending reindex (<c>node:id</c>), or null when the reindex was waited for.
+        /// </summary>
+        public string? TaskId { get; set; }
+
+        /// <summary>
         /// Creates a successful result.
         /// </summary>
         public static ReindexResult Successful(string source, string target, long documentsProcessed, TimeSpan duration)
@@ -112,6 +124,25 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                 TargetIndex = target,
                 DocumentsProcessed = documentsProcessed,
                 Duration = duration
+            };
+        }
+
+        /// <summary>
+        /// Creates the result of a reindex that ElasticSearch has started as task <paramref name="taskId"/> and not
+        /// finished: pending, not successful.
+        /// </summary>
+        public static ReindexResult Started(string source, string target, string taskId, TimeSpan duration)
+        {
+            return new ReindexResult
+            {
+                Success = false,
+                IsPending = true,
+                TaskId = taskId,
+                SourceIndex = source,
+                TargetIndex = target,
+                Duration = duration,
+                ErrorMessage = $"Reindex from '{source}' to '{target}' was started as task '{taskId}' and is still running; "
+                             + $"follow it with GET _tasks/{taskId} and refresh '{target}' once it completes."
             };
         }
 

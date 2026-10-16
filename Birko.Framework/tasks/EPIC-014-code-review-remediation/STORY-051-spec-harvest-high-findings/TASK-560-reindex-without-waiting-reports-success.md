@@ -2,7 +2,7 @@
 id: TASK-560
 parent: STORY-051
 feature: FEATURE-014
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-10-11
@@ -39,15 +39,33 @@ The task is no longer a decision task: it is runnable by [[fix-next]].
 
 ## Acceptance criteria
 
-- [ ] Decide: drop the parameter (always wait), or make a started reindex visibly not-a-success — e.g. a result that
+- [x] Decide: drop the parameter (always wait), or make a started reindex visibly not-a-success — e.g. a result that
       carries `response.Task` and says it is pending, and no refresh of a target still being written
-- [ ] Tests pin the decision with a canned task-id response (the fake transport in
+- [x] Tests pin the decision with a canned task-id response (the fake transport in
       `ReindexFailureReportingTests` already answers by path)
 - [ ] `/specs regen schema-index-and-ddl`
 
 ## Out of scope
 
 - The timed-out and per-document-failure outcomes — fixed / pinned by [[TASK-319]].
+
+## Resolution (2026-10-16)
+
+**Decision (the user): a started reindex is reported as pending, not as a success; the parameter stays.**
+`Reindex` / `ReindexAsync` with `waitForCompletion: false` return `ReindexResult.Started`: `Success = false`,
+`IsPending = true`, and `TaskId` (`node:id`, from `response.Task.FullyQualifiedId`), with a message naming
+`GET _tasks/{id}`. The target is no longer refreshed while it is being written. A start answered with no task id is a
+failure, not pending. `ReindexWithAlias` is unchanged: it always waits.
+
+**Red-verified:** with the result shape added and the helper unchanged, 3 of the 4 new fake-transport tests failed (the
+4th, a completed reindex is not pending, is a pin). **Live** on ElasticSearch 7.17 (`ReindexStartedLiveTests`): the
+returned task id follows the real task to a completed 3-document copy. **Regression:** the 8 suites importing
+Birko.Data.ElasticSearch (376 tests), live, green; `Racing_dequeuers…` failed once (known flake, no reindex involved)
+and passed 3 of 3 reruns.
+
+Fixed on the way: the README's reindex example printed `result.DocumentsIndexed`, which does not exist.
+
+**Spec regen pending**, batched: `schema-index-and-ddl`.
 
 ## Human test plan
 

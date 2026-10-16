@@ -148,7 +148,11 @@ var reindexHelper = new ReindexHelper(client);
 
 // Basic reindex
 ReindexResult result = await reindexHelper.ReindexAsync("products-v1", "products-v2");
-Console.WriteLine($"Indexed {result.DocumentsIndexed} docs in {result.Duration}");
+Console.WriteLine($"Indexed {result.DocumentsProcessed} docs in {result.Duration}");
+
+// Started without waiting: pending, not a success. Follow the task, then refresh the target.
+ReindexResult started = await reindexHelper.ReindexAsync("products-v1", "products-v2", waitForCompletion: false);
+if (started.IsPending) Console.WriteLine($"Running as task {started.TaskId}");
 
 // Reindex with a Painless script transformation
 ReindexResult scriptResult = await reindexHelper.ReindexWithScriptAsync(

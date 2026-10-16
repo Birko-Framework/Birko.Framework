@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Repositories: no store, no silent success; the locator keeps one store per key
+
+[[TASK-162]]. A repository with no store answered every call as if it had worked. It now throws (plain and ViewModel).
+The locator's default key never matched its `Destroy`, ignored a second store on a cache hit, and destroyed the store
+under a sibling. `AddRepository(store, lifetime)` takes only Singleton. ViewModel paged reads are ordered.
+
 ## 2026-10-15 — Tenant isolation: tenant-scoped bulk writes check the caller's filter; the header guard is enforced
 
 [[TASK-161]]. Through the tenant bulk wrapper, a null filter deleted every row of the tenant. Tenant repository

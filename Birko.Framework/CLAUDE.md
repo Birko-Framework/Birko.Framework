@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### An ElasticSearch reindex started without waiting is pending, not a success (2026-10-16)
+
+[[TASK-560]]. `Reindex(…, waitForCompletion: false)` reported `Successful` with 0 documents for a copy that had only
+started, and refreshed a target still being written. It now returns `IsPending` with the `TaskId` to follow
+(`GET _tasks/{id}`), and `Success` is false. A start answered with no task id is a failure.
 ### Views answer in the view's names on every backend, and count their rows (2026-10-16)
 
 [[TASK-151]]. Measured: RavenDB view indexes read an empty collection, and a join index did not compile. An
@@ -328,11 +333,6 @@ now refuses `IVersioned`. An interface member's `[NamedField]` is honoured in a 
 [[TASK-629]]. Outside a transaction, `Create` / `Update` / `Delete` of a collection committed item by item, so a failure
 at item k left items 0..k-1 written. It is now one transaction, rolled back on any failure or cancellation. Inside an
 existing boundary it joins, as before. A collection update still writes its stored items and reports the missing ones.
-### Repositories: no store, no silent success; the locator keeps one store per key (2026-10-15)
-
-[[TASK-162]]. A repository with no store answered every call as if it had worked. It now throws (plain and ViewModel).
-The locator's default key never matched its `Destroy`, ignored a second store on a cache hit, and destroyed the store
-under a sibling. `AddRepository(store, lifetime)` takes only Singleton. ViewModel paged reads are ordered.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

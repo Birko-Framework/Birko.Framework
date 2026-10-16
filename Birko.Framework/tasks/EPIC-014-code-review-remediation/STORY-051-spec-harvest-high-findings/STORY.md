@@ -38,7 +38,7 @@ work.
 | [[TASK-316]] | `repository-contract` | 2 (`SH-H034`,`035`) | P1 | ✅ **done 2026-09-17** — both confirmed **wider** (`SH-H034`: 4 update paths, not 2, and all 9 live consumer repositories use the 2 the finding did *not* name; `SH-H035`: 96 sites, not 5 backends), both fixed; 11 disjoint mutations, all red; ⚠ the merge gate rewrote the fix (3 real defects, incl. writing to a store-owned object — SH-H016's rule from [[TASK-313]]); spawned [[TASK-451]], [[TASK-452]], [[TASK-453]], [[TASK-454]]
 | [[TASK-317]] | `background-jobs` | 1 (`SH-H001`) — **done**; spawned [[TASK-561]] | P1 |
 | [[TASK-318]] | `event-bus-and-messaging` | 1 (`SH-H020`) — **done** | P1 |
-| [[TASK-319]] | `schema-index-and-ddl` | 1 (`SH-H038`) — **done**; spawned [[TASK-560]] | P1 |
+| [[TASK-319]] | `schema-index-and-ddl` | 1 (`SH-H038`) — **done**; spawned [[TASK-560]] (done 2026-10-16) | P1 |
 | [[TASK-320]] | `specifications-and-paging` | 1 (`SH-H045`) — **done**; spawned [[TASK-558]], [[TASK-559]] | P1 |
 | [[TASK-321]] | `store-crud-contract` | 1 (`SH-H046`) | P1 | ✅ **done 2026-09-17** — confirmed-narrower (the harvest's *no store implements IDisposable* is false) and **widened** to `IBaseRepository`, which carries the identical wording
 | [[TASK-322]] | `views-and-aggregation` | 1 (`SH-H055`) | P1 | ✅ **done 2026-09-16** — confirmed, fixed; spawned [[TASK-447]] (P0 injection sink in the same method)
