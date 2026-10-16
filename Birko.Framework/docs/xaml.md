@@ -136,6 +136,21 @@ The `FormField` schema lives in `Birko.Xaml.Core` (Avalonia-free, reusable by a 
 the control is the Avalonia view. It pairs directly with `CrudViewModelBase.EditingItem` /
 `DetailPageViewModel.Model`.
 
+### Object / JSON viewer
+
+```csharp
+objectTree.HideNullMembers = true;   // hide null properties, dictionary entries and JSON fields
+objectTree.Source = response;        // or objectTree.Json = "{...}"
+```
+
+`ObjectTree` walks `JsonNode`s, dictionaries, enumerables and public properties. `SelectedValue`
+is the graph object behind the selected node (so a host can serialize or copy it) and
+`SelectedPath` its path (`user.roles[0]`). `HideNullMembers` (default `false`) is for a model class
+shared by several sources, where the fields a source does not fill would otherwise show as `null`
+leaves. It hides **named** null members only, and container counts (`{n}`) match what is shown;
+array / enumerable items are always shown, since their `[i]` index is their identity. A null root
+still shows as one `null` leaf.
+
 ## `Birko.Xaml.Core` — Avalonia-free platform core
 
 The thin core has **no Avalonia dependency** (enforced by a test: the assembly references no

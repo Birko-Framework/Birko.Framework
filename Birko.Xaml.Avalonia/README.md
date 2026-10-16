@@ -48,6 +48,21 @@ themes.SetTheme("neon");                             // false if neon wasn't shi
 restart. `Available` is **detected** from the dictionaries you actually merged, so the switcher never
 offers a theme whose tokens are missing; pass `available:` to the constructor to override.
 
+## Object / JSON viewer
+
+`Controls.ObjectTree` renders an object graph (`Source`) or a JSON string (`Json`) as a tree.
+`SelectedValue` is the graph object behind the selected node and `SelectedPath` its dotted path
+(`user.roles[0]`).
+
+```csharp
+tree.HideNullMembers = true;   // leave out null properties / dictionary entries / JSON fields
+tree.Source = response;        // the nodes stay the real objects, so SelectedValue can be serialized
+```
+
+`HideNullMembers` (default `false`) skips **named** members whose value is null, and the header
+counts (`{n}`) count only what is shown. Array and enumerable items are always shown, null ones
+included: their `[i]` index is their identity. A null root still shows as one `null` leaf.
+
 ## How it works
 
 - **`Themes/` is generated** by `Birko.DesignTokens` — never hand-edited. One dictionary per theme

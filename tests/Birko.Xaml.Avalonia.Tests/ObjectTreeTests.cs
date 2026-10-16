@@ -111,6 +111,99 @@ public class ObjectTreeTests
         tree.SelectedValue.Should().BeNull();
     }
 
+    // ── TASK-652: HideNullMembers ──
+
+    [AvaloniaFact]
+    public void A_null_property_is_shown_by_default_and_hidden_with_HideNullMembers()
+    {
+        var shown = Show(new ObjectTree { Source = new Contact { Name = "Grace", Role = null } });
+        Texts(shown).Should().Contain("Role:");
+
+        var hidden = Show(new ObjectTree { HideNullMembers = true, Source = new Contact { Name = "Grace", Role = null } });
+        Texts(hidden).Should().NotContain("Role:");
+        Texts(hidden).Should().Contain("Name:");
+        Texts(hidden).Should().Contain("Active:", "a non-null value type is not a null member");
+    }
+
+    [AvaloniaFact]
+    public void A_null_json_field_is_hidden_and_the_shown_ones_select_as_before()
+    {
+        var tree = Show(new ObjectTree { HideNullMembers = true, Json = "{\"a\":1,\"b\":null}" });
+
+        Texts(tree).Should().NotContain("b:");
+        var a = tree.GetVisualDescendants().OfType<TreeViewItem>().Single(i => HeaderTexts(i).Contains("a:"));
+        a.IsSelected = true;
+        Dispatcher.UIThread.RunJobs();
+
+        tree.SelectedPath.Should().Be("a");
+        tree.SelectedValue?.ToString().Should().Be("1");
+    }
+
+    [AvaloniaFact]
+    public void A_null_dictionary_entry_is_hidden()
+    {
+        var tree = Show(new ObjectTree
+        {
+            HideNullMembers = true,
+            Source = new Dictionary<string, object?> { ["kept"] = "x", ["gone"] = null },
+        });
+
+        Texts(tree).Should().Contain("kept:");
+        Texts(tree).Should().NotContain("gone:");
+    }
+
+    [AvaloniaFact]
+    public void A_container_summary_counts_only_the_shown_members()
+    {
+        const string json = "{\"o\":{\"a\":1,\"b\":null}}";
+        TreeViewItem Header(ObjectTree t) =>
+            t.GetVisualDescendants().OfType<TreeViewItem>().Single(i => HeaderTexts(i).Contains("o:"));
+
+        HeaderTexts(Header(Show(new ObjectTree { Json = json }))).Should().Contain("{2}");
+        HeaderTexts(Header(Show(new ObjectTree { HideNullMembers = true, Json = json }))).Should().Contain("{1}");
+    }
+
+    [AvaloniaFact]
+    public void A_null_array_item_keeps_its_index_with_HideNullMembers()
+    {
+        var tree = Show(new ObjectTree { HideNullMembers = true, Json = "{\"items\":[1,null,3]}" });
+        var items = tree.GetVisualDescendants().OfType<TreeViewItem>().ToList();
+
+        HeaderTexts(items.Single(i => HeaderTexts(i).Contains("items:"))).Should().Contain("[3]");
+        var nullItem = items.Single(i => HeaderTexts(i).Contains("[1]:"));
+        HeaderTexts(nullItem).Should().Contain("null");
+
+        items.Single(i => HeaderTexts(i).Contains("[2]:")).IsSelected = true;
+        Dispatcher.UIThread.RunJobs();
+        tree.SelectedPath.Should().Be("items[2]", "hiding an item would have shifted this path");
+    }
+
+    [AvaloniaFact]
+    public void Toggling_HideNullMembers_rebuilds_a_built_tree()
+    {
+        var tree = Show(new ObjectTree { Source = new Contact { Name = "Grace", Role = null } });
+        Texts(tree).Should().Contain("Role:");
+
+        tree.HideNullMembers = true;
+        Dispatcher.UIThread.RunJobs();
+        Texts(tree).Should().NotContain("Role:");
+
+        tree.HideNullMembers = false;
+        Dispatcher.UIThread.RunJobs();
+        Texts(tree).Should().Contain("Role:");
+    }
+
+    [AvaloniaFact]
+    public void A_null_source_still_shows_the_null_leaf_with_HideNullMembers()
+    {
+        var tree = Show(new ObjectTree { HideNullMembers = true, Source = new Contact { Name = "Grace" } });
+        tree.Source = null;
+        Dispatcher.UIThread.RunJobs();
+
+        var item = tree.GetVisualDescendants().OfType<TreeViewItem>().Should().ContainSingle().Subject;
+        HeaderTexts(item).Should().Equal("null");
+    }
+
     [AvaloniaFact]
     public void Capture_object_tree_screenshot()
     {

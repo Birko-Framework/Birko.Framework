@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### ObjectTree can hide null members (2026-10-16)
+
+[[TASK-652]]. A model class shared by several API products showed the fields a product does not return as `null`
+leaves, which read as if the API had sent them. `ObjectTree.HideNullMembers` (default off) leaves out null object
+properties, dictionary entries and JSON fields; array items stay, since `[i]` is their identity. Header counts match
+what is shown. The nodes stay the real objects, so `SelectedValue` still serializes.
 ### Migrations take a model's property names on PostgreSQL (2026-10-16)
 
 [[TASK-637]]. The data migrator and `RenameField` quoted column names, so on PostgreSQL `"Name"` missed the folded column
@@ -327,13 +333,6 @@ unknown or unreachable field now matches nothing in memory too (`IRuleContext.Ha
 `EnsureColumns`' own ADD for a missing column (its `DEFAULT` fills the existing rows), a rename for a case-only mismatch,
 and every other drift listed with why. `Requirements` says what the connection needs: a SQLite decimal ADD needs
 `SqLiteDecimal.Register` (the `sqlite3` CLI refuses it). Prerequisite of Symbio TASK-932.
-### BREAKING: the tenant sync provider runs the shared sync engine (2026-10-15)
-
-[[TASK-630]]. `TenantSyncProvider` was a 1,107-line copy of the engine that had drifted in eleven ways. It is now
-`TenantSyncProvider<TStore, T, TKnowledge>`: tenant resolution and predicates, over `AsyncSyncProvider`. Each tenant's
-knowledge is kept apart by a tenant-qualified scope, in any knowledge store. The RavenDB and CosmosDB knowledge stores
-now implement the engine's interface (RavenDB verified live); their tenant API and `ISyncKnowledgeStore` are gone.
-
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

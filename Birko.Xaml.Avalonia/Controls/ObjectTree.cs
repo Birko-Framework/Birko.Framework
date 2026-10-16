@@ -22,6 +22,9 @@ public class ObjectTree : ContentControl
     public static readonly StyledProperty<string?> JsonProperty =
         AvaloniaProperty.Register<ObjectTree, string?>(nameof(Json));
 
+    public static readonly StyledProperty<bool> HideNullMembersProperty =
+        AvaloniaProperty.Register<ObjectTree, bool>(nameof(HideNullMembers));
+
     public static readonly DirectProperty<ObjectTree, object?> SelectedValueProperty =
         AvaloniaProperty.RegisterDirect<ObjectTree, object?>(
             nameof(SelectedValue), o => o.SelectedValue);
@@ -34,6 +37,7 @@ public class ObjectTree : ContentControl
     {
         SourceProperty.Changed.AddClassHandler<ObjectTree>((t, _) => t.Rebuild());
         JsonProperty.Changed.AddClassHandler<ObjectTree>((t, _) => t.Rebuild());
+        HideNullMembersProperty.Changed.AddClassHandler<ObjectTree>((t, _) => t.Rebuild());
     }
 
     /// <summary>An object graph to display.</summary>
@@ -41,6 +45,15 @@ public class ObjectTree : ContentControl
 
     /// <summary>A JSON string to parse and display (takes precedence over <see cref="Source"/>).</summary>
     public string? Json { get => GetValue(JsonProperty); set => SetValue(JsonProperty, value); }
+
+    /// <summary>
+    /// Leave out <i>named</i> members whose value is null — object properties, dictionary entries and
+    /// JSON object fields — e.g. when one model class serves several sources and the fields a source
+    /// does not fill would read as if it had sent them. Array / enumerable items are always shown:
+    /// their <c>[i]</c> index is their identity, so hiding one would shift every later path. A null
+    /// root still shows as a single <c>null</c> leaf. Default <c>false</c>.
+    /// </summary>
+    public bool HideNullMembers { get => GetValue(HideNullMembersProperty); set => SetValue(HideNullMembersProperty, value); }
 
     private object? _selectedValue;
     private string? _selectedPath;
@@ -80,7 +93,7 @@ public class ObjectTree : ContentControl
         }
         else if (IsContainer(root))
         {
-            foreach (var (name, value) in Enumerate(root))
+            foreach (var (name, value) in Members(root))
                 tree.Items.Add(BuildNode(name, value, 1, name));
         }
         else
@@ -128,13 +141,15 @@ public class ObjectTree : ContentControl
         if (!IsContainer(value))
             return Leaf(name, value, path);
 
+        // Materialized once so the header counts exactly the children built below.
+        var members = Members(value!).ToList();
         var item = new TreeViewItem
         {
-            Header = Row(name, Summary(value), "BTextMutedBrush"),
+            Header = Row(name, Summary(value, members.Count), "BTextMutedBrush"),
             IsExpanded = depth < 2,
             Tag = new NodeRef(path, value),
         };
-        foreach (var (childName, childValue) in Enumerate(value!))
+        foreach (var (childName, childValue) in members)
             item.Items.Add(BuildNode(childName, childValue, depth + 1, Join(path, childName)));
         return item;
     }
@@ -180,6 +195,25 @@ public class ObjectTree : ContentControl
         && value is not decimal and not DateTime and not Guid and not Enum
         && value.GetType().GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance).Length > 0;
 
+    /// <summary>The members shown for a container: <see cref="Enumerate"/> with the
+    /// <see cref="HideNullMembers"/> filter applied — the one place that filter lives.</summary>
+    private IEnumerable<(string Name, object? Value)> Members(object value)
+    {
+        var members = Enumerate(value);
+        return HideNullMembers && !IsIndexed(value) ? members.Where(m => m.Value is not null) : members;
+    }
+
+    /// <summary>Whether a container's members are positional <c>[i]</c> items rather than named ones.
+    /// Mirrors <see cref="Enumerate"/>'s case order: a <c>JsonObject</c> or dictionary is enumerable too.</summary>
+    private static bool IsIndexed(object value) => value switch
+    {
+        JsonObject => false,
+        JsonArray => true,
+        IDictionary => false,
+        IEnumerable => true,
+        _ => false,
+    };
+
     private static IEnumerable<(string Name, object? Value)> Enumerate(object value)
     {
         switch (value)
@@ -210,13 +244,12 @@ public class ObjectTree : ContentControl
         }
     }
 
-    private static string Summary(object? value) => value switch
+    /// <summary>Header text of a container; <paramref name="shown"/> is the number of members it shows.</summary>
+    private static string Summary(object? value, int shown) => value switch
     {
-        JsonArray ja => $"[{ja.Count}]",
-        IDictionary d => $"{{{d.Count}}}",
-        JsonObject jo => $"{{{jo.Count}}}",
-        ICollection c => $"[{c.Count}]",
-        IEnumerable e => $"[{e.Cast<object?>().Count()}]",
+        JsonArray => $"[{shown}]",
+        IDictionary or JsonObject => $"{{{shown}}}",
+        IEnumerable => $"[{shown}]",
         _ => "{…}",
     };
 

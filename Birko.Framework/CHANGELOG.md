@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — BREAKING: the tenant sync provider runs the shared sync engine
+
+[[TASK-630]]. `TenantSyncProvider` was a 1,107-line copy of the engine that had drifted in eleven ways. It is now
+`TenantSyncProvider<TStore, T, TKnowledge>`: tenant resolution and predicates, over `AsyncSyncProvider`. Each tenant's
+knowledge is kept apart by a tenant-qualified scope, in any knowledge store. The RavenDB and CosmosDB knowledge stores
+now implement the engine's interface (RavenDB verified live); their tenant API and `ISyncKnowledgeStore` are gone.
+
 ## 2026-10-15 — Sync: deletions propagate, unchanged items are skipped; Mongo and ES knowledge work
 
 [[TASK-157]]. Measured: a deletion after a synced round was re-created, and a first-sync local item was deleted by
