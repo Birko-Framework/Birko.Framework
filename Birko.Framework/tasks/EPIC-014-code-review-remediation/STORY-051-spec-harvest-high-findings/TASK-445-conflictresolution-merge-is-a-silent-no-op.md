@@ -3,7 +3,7 @@ id: TASK-445
 parent: STORY-051
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-09-16
@@ -53,18 +53,32 @@ The task is no longer a decision task: it is runnable by [[fix-next]].
 
 ## Acceptance criteria
 
-- [ ] A decision is taken and recorded between: (a) **refuse** — throw or record a `SyncError` naming the
+- [x] A decision is taken and recorded between: (a) **refuse** — throw or record a `SyncError` naming the
       unsupported resolution, on the grounds that a resolver that asked for a merge did not ask for nothing;
       (b) **implement** a merge hook on `SyncOptions` (e.g. `Func<T, T, T>?`) and treat `Merge` with no hook
       as (a); (c) **remove** the enum member, which is a breaking change and needs its own reach measurement.
       State *why* the other two were rejected, not just which was chosen
-- [ ] Whichever is chosen, `Merge` must stop being **indistinguishable from `Skip` with the counter missing**:
+- [x] Whichever is chosen, `Merge` must stop being **indistinguishable from `Skip` with the counter missing**:
       a caller has no way today to tell a merge from a dropped item
-- [ ] ⚠ If (a), check the blast radius first per § SH-H037 — fail-fast is legitimate only where an opt-out
+- [x] ⚠ If (a), check the blast radius first per § SH-H037 — fail-fast is legitimate only where an opt-out
       exists and is checked first. Here the opt-out is "return something other than `Merge`", which is
       trivially available, but the reach measurement above should be re-run rather than cited
-- [ ] Regression test is red-verified, with the split reported as numbers
+- [x] Regression test is red-verified, with the split reported as numbers
 - [ ] `docs/specs/data-sync.md` regenerated; the **"Merge resolution is inert"** scenario must change or go
+
+## Resolution (2026-10-16)
+
+**Already fixed by [[TASK-157]] (SH-M049, 2026-10-15), exactly as decided here: (a) refuse.** Both
+`ApplyConflictResolution` and `ApplyConflictResolutionAsync` throw `NotSupportedException` for `Merge` inside the per-item
+catch, so the item becomes a `SyncError` naming its Guid, the run is not a success, and the conflict is not recorded as
+reconciled (the next run raises it again). The tenant provider runs the same engine since [[TASK-630]].
+
+Verified by reading (`Birko.Data.Sync/SyncProvider.cs`, `AsyncSyncProvider.cs`, the `case ConflictResolution.Merge` arms) and
+by `SyncEngineTriageTests.Merge_is_refused_as_an_error_and_not_recorded`, red-verified at TASK-157. The reach measurement
+the third row asks for was re-run there for the whole engine change. Corrected here: two stale remarks that still said
+`Merge` "falls through to the unchanged pair", and the enum doc's "(if supported)".
+
+**Spec regen pending**, batched: `data-sync` (the "Merge resolution is inert" scenario goes).
 
 ## Out of scope
 

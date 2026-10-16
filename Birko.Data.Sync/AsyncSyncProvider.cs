@@ -428,8 +428,8 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
     /// method already do for the identical state - re-create on the side that lost the row, or honour the
     /// deletion by dropping the surviving side - so a policy and its conflict path cannot disagree about
     /// what "local wins" means.</para>
-    /// <para><c>ConflictResolution.Merge</c> is deliberately not handled here: nothing in the framework
-    /// can merge two entities, so there is no mechanism to call. It falls through to the unchanged pair.</para>
+    /// <para><c>ConflictResolution.Merge</c> is refused: nothing in the framework can merge two entities, so the item
+    /// fails with a <c>SyncError</c> and is not recorded as reconciled (SH-M049, TASK-157; TASK-445's decision).</para>
     /// </remarks>
     private async Task<(T? Local, T? Remote, bool Applied)> ApplyConflictResolutionAsync(
         ConflictResolution resolution,
