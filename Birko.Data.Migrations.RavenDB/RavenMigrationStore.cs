@@ -147,7 +147,7 @@ namespace Birko.Data.Migrations.RavenDB
                 {
                     // Another writer saved first: reload its document and apply the change to that, after a jittered
                     // pause so contending writers stop colliding in lockstep.
-                    System.Threading.Thread.Sleep(Random.Shared.Next(1, 10 * Math.Min(attempt, 10)));
+                    System.Threading.Thread.Sleep(System.Random.Shared.Next(1, 10 * Math.Min(attempt, 10)));
                 }
             }
         }
