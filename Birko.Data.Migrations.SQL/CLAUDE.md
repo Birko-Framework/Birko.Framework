@@ -80,9 +80,14 @@ which holds a non-null connector, and no consumer hand-builds a context or uses 
 Three things carried forward:
 
 - **Those six tests now pass a real connector**, which is what makes them assertions about the shipped path.
-- **`RenameField` is the one operation with no connector equivalent**, so it stays hand-written — and
-  `RENAME COLUMN` is not universal (MySQL needs 8.0+, older versions need `CHANGE`), a latent per-provider gap
-  of the same family, recorded because nothing calls it.
+- **`RenameField` now goes through the connector's `RenameColumnSql(table, from, to, quoteColumns: false)`**
+  (TASK-272, TASK-637), so the table is named in its schema and SQL Server uses `sp_rename`. `RENAME COLUMN` is
+  still not universal (MySQL needs 8.0+, older versions need `CHANGE`).
+- **Columns are emitted BARE by the data migrator and `RenameField` (TASK-637, rule 17).** A name is resolved
+  through `DataBase.MigrationColumn`: the stored column of a loaded entity's property of that name (a
+  `[NamedField]` remap honoured), else a plain identifier validated by `ValidateColumnIdentifier` (rule 33).
+  Quoted, a model's property name missed PostgreSQL's folded column (42703). The flip side: a table created by hand
+  with quoted mixed-case columns on PostgreSQL is not reachable through the migrator; the framework never creates one.
 - **Composite primary keys are not supported through this builder.** The deleted fallback emitted a
   `PRIMARY KEY (a, b)` clause from `_primaryKeyFields` that `AbstractConnector.CreateTable` does not — it
   renders `PRIMARY KEY` per column from each field's flag. Nothing in the tree or any consumer declares one

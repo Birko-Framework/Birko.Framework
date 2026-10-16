@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Migrations take a model's property names on PostgreSQL (2026-10-16)
+
+[[TASK-637]]. The data migrator and `RenameField` quoted column names, so on PostgreSQL `"Name"` missed the folded column
+`name` (42703), and a `[NamedField]` property failed everywhere. Columns are now bare, resolved through the loaded model
+(`DataBase.MigrationColumn`), and a name that is not a plain identifier is refused.
 ### An entity can live in a database schema (2026-10-16)
 
 [[TASK-272]]. `[Table("Events", Schema = "reporting")]` (also DataAnnotations and `ToTable(name, schema)`), and settings
@@ -328,12 +333,6 @@ and every other drift listed with why. `Requirements` says what the connection n
 `TenantSyncProvider<TStore, T, TKnowledge>`: tenant resolution and predicates, over `AsyncSyncProvider`. Each tenant's
 knowledge is kept apart by a tenant-qualified scope, in any knowledge store. The RavenDB and CosmosDB knowledge stores
 now implement the engine's interface (RavenDB verified live); their tenant API and `ISyncKnowledgeStore` are gone.
-### Sync: deletions propagate, unchanged items are skipped; Mongo and ES knowledge work (2026-10-15)
-
-[[TASK-157]]. Measured: a deletion after a synced round was re-created, and a first-sync local item was deleted by
-the second run. The engine now decides on a recorded pair and compares versions. The Mongo knowledge store could not
-run at all (two `_id`s), and over ElasticSearch the engine never found its knowledge. Interface-bound filter members
-now keep their mapping. **Migration:** drop a pre-TASK-219 `MongoSyncKnowledgeItem` collection.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

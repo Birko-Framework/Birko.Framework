@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Sync: deletions propagate, unchanged items are skipped; Mongo and ES knowledge work
+
+[[TASK-157]]. Measured: a deletion after a synced round was re-created, and a first-sync local item was deleted by
+the second run. The engine now decides on a recorded pair and compares versions. The Mongo knowledge store could not
+run at all (two `_id`s), and over ElasticSearch the engine never found its knowledge. Interface-bound filter members
+now keep their mapping. **Migration:** drop a pre-TASK-219 `MongoSyncKnowledgeItem` collection.
+
 ## 2026-10-15 — Store decorators: soft-deleted rows are not found, one default per filtered write
 
 [[TASK-159]]. An update could resurrect a soft-deleted row, and a filtered soft delete checked no filter, so a null

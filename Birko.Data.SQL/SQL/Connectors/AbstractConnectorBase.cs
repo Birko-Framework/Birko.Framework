@@ -562,7 +562,18 @@ namespace Birko.Data.SQL.Connectors
         public virtual string? StatementRequirement(string sql) => null;
 
         public virtual string RenameColumnSql(string table, string from, string to)
-            => "ALTER TABLE " + TableIdentifier(table) + " RENAME COLUMN " + QuoteIdentifier(from) + " TO " + QuoteIdentifier(to);
+            => RenameColumnSql(table, from, to, quoteColumns: true);
+
+        /// <summary>
+        /// <see cref="RenameColumnSql(string, string, string)"/> with the columns quoted (a repair renaming to an exact,
+        /// case-sensitive name) or bare (a migration renaming a model-created column; TASK-637). Bare names must already be
+        /// validated identifiers.
+        /// </summary>
+        public virtual string RenameColumnSql(string table, string from, string to, bool quoteColumns)
+            => "ALTER TABLE " + TableIdentifier(table) + " RENAME COLUMN " + Column(from, quoteColumns) + " TO " + Column(to, quoteColumns);
+
+        /// <summary>A column, quoted or bare.</summary>
+        protected string Column(string name, bool quoted) => quoted ? QuoteIdentifier(name) : name;
 
         /// <summary>
         /// The right-hand side of <c>column = …</c> for a <c>PropertyUpdate</c> increment. By default

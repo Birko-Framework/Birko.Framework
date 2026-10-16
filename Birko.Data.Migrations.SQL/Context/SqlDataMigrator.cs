@@ -35,6 +35,13 @@ namespace Birko.Data.Migrations.SQL.Context
         private string TableIdentifier(string name)
             => _connector.TableIdentifier(name);
 
+        /// <summary>
+        /// A column of <paramref name="collection"/>, bare: the mapped property's stored column, else a validated plain
+        /// identifier (TASK-637). Quoted, a model's property name missed PostgreSQL's folded column.
+        /// </summary>
+        private static Func<string, string> Columns(string collection)
+            => name => Birko.Data.SQL.DataBase.MigrationColumn(collection, name);
+
         public void UpdateDocuments(string collection, string filterJson, IDictionary<string, object> updates)
         {
             if (updates == null || updates.Count == 0) return;
@@ -46,11 +53,11 @@ namespace Birko.Data.Migrations.SQL.Context
             foreach (var kvp in updates)
             {
                 var paramName = $"@p{paramIndex++}";
-                setClauses.Add($"{QuoteIdentifier(kvp.Key)} = {paramName}");
+                setClauses.Add($"{Birko.Data.SQL.DataBase.MigrationColumn(collection, kvp.Key)} = {paramName}");
                 parameters.Add((paramName, kvp.Value));
             }
 
-            var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, QuoteIdentifier);
+            var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, Columns(collection));
             // SH-H032: an empty clause means either "no filter" or "every term was dropped" (e.g.
             // {"status":{}} takes the object branch and the operator loop adds nothing). Only the first is
             // a deliberate match-all; the second used to rewrite every row.
@@ -67,7 +74,7 @@ namespace Birko.Data.Migrations.SQL.Context
         {
             var paramIndex = 0;
             var parameters = new List<(string Name, object? Value)>();
-            var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, QuoteIdentifier);
+            var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, Columns(collection));
             // SH-H032 — see UpdateDocuments. This path used to emit a bare DELETE FROM {table}.
             MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0, "delete", collection,
                 "every row in the table");
@@ -87,7 +94,7 @@ namespace Birko.Data.Migrations.SQL.Context
 
             if (!string.IsNullOrEmpty(filterJson))
             {
-                var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, QuoteIdentifier);
+                var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, Columns(collection));
                 // SH-H032: the read is guarded too, so a count cannot silently answer for the whole table
                 // while the delete built from the same filter is refused (§ TASK-215, § TASK-313).
                 MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0, "count", collection,
@@ -125,7 +132,7 @@ namespace Birko.Data.Migrations.SQL.Context
                 foreach (var kvp in doc)
                 {
                     var paramName = $"@p{paramIndex++}";
-                    columns.Add(QuoteIdentifier(kvp.Key));
+                    columns.Add(Birko.Data.SQL.DataBase.MigrationColumn(collection, kvp.Key));
                     parameters.Add((paramName, kvp.Value));
                 }
 

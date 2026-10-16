@@ -202,6 +202,38 @@ namespace Birko.Data.SQL
         public static string? TableSchema(string tableName)
             => !string.IsNullOrEmpty(tableName) && _tableSchemas.TryGetValue(tableName, out var entry) ? entry.Schema : null;
 
+        /// <summary>
+        /// The loaded table whose LOGICAL name is <paramref name="tableName"/>, or null when no loaded entity has it (TASK-637).
+        /// A migration names its collection by string; this is how it finds the model's metadata for that name.
+        /// </summary>
+        public static Tables.Table? TableNamed(string tableName)
+            => !string.IsNullOrEmpty(tableName) && _tableSchemas.TryGetValue(tableName, out var entry) ? TryLoadTable(entry.Type) : null;
+
+        /// <summary>
+        /// The column a migration's <paramref name="name"/> stands for in <paramref name="tableName"/>: the stored column of
+        /// the mapped property (or column) of that name, else <paramref name="name"/> itself, which must then be a plain
+        /// identifier (TASK-637).
+        /// </summary>
+        /// <remarks>
+        /// Rule 17: columns are emitted bare, which is how CREATE TABLE made them, so PostgreSQL folds both alike; quoted,
+        /// <c>"Name"</c> missed the folded <c>name</c> (42703). Rule 15: a mapped entity's metadata decides the column, so a
+        /// <c>[NamedField]</c> remap is honoured. Rule 33: bare, a caller's name is contained by refusal.
+        /// </remarks>
+        public static string MigrationColumn(string tableName, string name)
+        {
+            var table = TableNamed(tableName);
+            if (table?.Fields != null)
+            {
+                var field = table.Fields.Values.FirstOrDefault(f => string.Equals(f.Property?.Name, name, StringComparison.OrdinalIgnoreCase))
+                    ?? table.Fields.Values.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (field != null)
+                {
+                    return field.Name;
+                }
+            }
+            return ValidateColumnIdentifier(name, nameof(name));
+        }
+
         /// <summary>The prefixed table name a schema-less provider stores <paramref name="schema"/>.<paramref name="name"/> as.</summary>
         public static string PrefixedTableName(string schema, string name) => schema + "__" + name;
 

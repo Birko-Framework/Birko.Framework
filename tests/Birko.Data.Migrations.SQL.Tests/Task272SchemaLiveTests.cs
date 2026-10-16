@@ -262,17 +262,16 @@ public abstract class Task272SchemaLiveTestsBase<DB> : IDisposable where DB : Ab
 
         schema.CollectionExists("T272Evts").Should().BeTrue();
         data.CountDocuments("T272Evts").Should().Be(1);
-        // Lower-case column keys: the migrator quotes column names, which on PostgreSQL then miss the folded columns of a
-        // PascalCase model — a separate defect (TASK-637), not a schema one.
+        // The model's property names (TASK-637 made the migrator take them on PostgreSQL too).
         data.BulkInsert("T272Evts", new[]
         {
-            new System.Collections.Generic.Dictionary<string, object> { ["guid"] = Guid.NewGuid(), ["name"] = "n", ["qty"] = 6 },
+            new System.Collections.Generic.Dictionary<string, object> { ["Guid"] = Guid.NewGuid(), ["Name"] = "n", ["Qty"] = 6 },
         });
         data.CountDocuments("T272Evts").Should().Be(2, "the insert landed in the schema's table");
 
-        schema.RenameField("T272Evts", "qty", "quantity");
-        schema.RenameField("T272Evts", "quantity", "qty");
-        data.DeleteDocuments("T272Evts", "{\"name\":\"n\"}");
+        schema.RenameField("T272Evts", "Qty", "Quantity");
+        schema.RenameField("T272Evts", "Quantity", "Qty");
+        data.DeleteDocuments("T272Evts", "{\"Name\":\"n\"}");
         (await store.CountAsync()).Should().Be(1, "the store and the migrator see one table");
     }
 

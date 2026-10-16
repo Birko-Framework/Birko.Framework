@@ -3,7 +3,7 @@ id: TASK-637
 parent: STORY-053
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-16
@@ -45,11 +45,32 @@ Measure what `RenameColumnSql` must emit on each provider for a model-created co
 
 ## Acceptance criteria
 
-- [ ] A decision recorded, with reasons
-- [ ] `BulkInsert`, `UpdateDocuments`, `DeleteDocuments` and `CountDocuments` with a JSON filter, and `RenameField`, work
+- [x] A decision recorded, with reasons
+- [x] `BulkInsert`, `UpdateDocuments`, `DeleteDocuments` and `CountDocuments` with a JSON filter, and `RenameField`, work
       on PostgreSQL with a PascalCase model's property names; measured live on all four providers
-- [ ] A caller string that is not a plain identifier is refused, not interpolated
-- [ ] Red on the current code; the TASK-272 test switched back to the model's names
+- [x] A caller string that is not a plain identifier is refused, not interpolated
+- [x] Red on the current code; the TASK-272 test switched back to the model's names
+
+## Resolution (2026-10-16)
+
+**Decision: both options, in the order the rulebook gives them; no user decision was needed.** Rule 15 says a name
+reaching SQL is resolved against table metadata, rule 17 says columns are never quoted, and rule 33 says a bare caller
+name is contained by refusal. `DataBase.MigrationColumn(table, name)` returns the stored column of the loaded entity's
+property (or column) of that name, so `[NamedField]` remaps are honoured; otherwise it returns `name` validated by
+`ValidateColumnIdentifier`. Every column is emitted bare: `BulkInsert` column lists, `UpdateDocuments` SET, and the JSON
+filter of update, delete and count (through the existing column delegate). `RenameField` resolves its old name and
+validates its new one, then calls the connector's new `RenameColumnSql(…, quoteColumns: false)` (SQL Server's
+`sp_rename` override takes it too). `PlanRepair` keeps the quoted form for its exact-case renames.
+
+**Measured live on all four providers.** Red on the old code: 9 of 12 failed. On PostgreSQL every operation failed with
+42703. On SQL Server, MySQL and SQLite the `[NamedField]` property failed ("Invalid column name 'Amount'"), and so did the
+refusal. Pins: `RenameField` on the three case-insensitive providers passes either way. TASK-272's migration test is back
+on the model's property names.
+
+**Regression:** the 32 SQL-importer suites (2,756 tests), live. One test was a pin of the old behaviour:
+`Task152SqlLiveTests.Null_and_not_equal…` built its table by hand with quoted columns, which the framework never makes.
+It now creates bare columns, as the framework does. Recorded in `Birko.Data.Migrations.SQL/CLAUDE.md`: a hand-made
+table with quoted mixed-case columns on PostgreSQL is not reachable through the migrator.
 
 ## Human test plan
 

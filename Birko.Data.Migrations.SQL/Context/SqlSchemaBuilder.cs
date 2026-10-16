@@ -154,7 +154,12 @@ namespace Birko.Data.Migrations.SQL.Context
             using var boundary = EnterAmbientBoundary();
             // TASK-272: the connector's statement, so the table is named in its schema (and SQL Server's sp_rename, which
             // has no RENAME COLUMN, is used there instead of an inline ALTER it rejects).
-            Execute(_connector.RenameColumnSql(collectionName, oldName, newName));
+            // TASK-637: the columns bare (rule 17), as CREATE TABLE made them, so PostgreSQL finds the folded column; the old
+            // name resolved through the model's metadata where there is one, the new one a validated plain identifier.
+            Execute(_connector.RenameColumnSql(collectionName,
+                Birko.Data.SQL.DataBase.MigrationColumn(collectionName, oldName),
+                Birko.Data.SQL.DataBase.ValidateColumnIdentifier(newName, nameof(newName)),
+                quoteColumns: false));
         }
 
         /// <summary>

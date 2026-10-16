@@ -91,8 +91,9 @@ public abstract class Task152SqlLiveTestsBase : IDisposable
         if (!RequireServer()) return;
         var connector = Connector();
         using var connection = OpenRaw();
-        Exec(connection, $"CREATE TABLE {Quote(Table)} ({Quote("Id")} INT, {Quote("Kind")} VARCHAR(10) NULL)");
-        Exec(connection, $"INSERT INTO {Quote(Table)} ({Quote("Id")}, {Quote("Kind")}) VALUES (1, 'a'), (2, 'b'), (3, NULL)");
+        // Columns bare, as the framework's CREATE TABLE makes them (rule 17); the migrator emits them bare too (TASK-637).
+        Exec(connection, $"CREATE TABLE {Quote(Table)} (Id INT, Kind VARCHAR(10) NULL)");
+        Exec(connection, $"INSERT INTO {Quote(Table)} (Id, Kind) VALUES (1, 'a'), (2, 'b'), (3, NULL)");
         var data = new SqlDataMigrator(connection, null, connector);
 
         data.CountDocuments(Table, "{\"Kind\":null}").Should().Be(1);
