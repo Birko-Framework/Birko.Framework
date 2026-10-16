@@ -49,16 +49,18 @@ public class ElasticSearchViewManager : IViewManager
             throw new ArgumentNullException(nameof(definition));
         }
 
-        if (definition.QueryMode == ViewQueryMode.OnTheFly)
+        // TASK-151 (SH-M391): only a Persistent view has an index of its own. For an Auto view the resolver names the
+        // SOURCE index, so this created the entity index with dynamic mapping, and DropAsync(name) targeted another.
+        if (definition.QueryMode != ViewQueryMode.Persistent)
         {
             return;
         }
 
-        var indexName = ResolveIndexName(definition);
-        if (string.IsNullOrEmpty(indexName))
+        if (string.IsNullOrEmpty(definition.Name))
         {
             throw new InvalidOperationException("View name is required for persistent views.");
         }
+        var indexName = ResolveIndexName(definition);
 
         var existsResponse = await _connector.Indices.ExistsAsync(indexName, null, ct).ConfigureAwait(false);
         if (existsResponse.Exists)

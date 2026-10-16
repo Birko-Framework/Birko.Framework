@@ -240,6 +240,9 @@ namespace Birko.Data.SQL.Connectors
         protected override Birko.Data.SQL.IndexManagement.SqlIndexManager? CreateIndexManager() => new Birko.Data.SQL.MySQL.IndexManagement.MySqlIndexManager(this);
 
         /// <inheritdoc />
+        protected override string UnboundedLimit => "18446744073709551615";
+
+        /// <inheritdoc />
         public override string? TableExistsSql => "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @tableName";
 
         protected override string? StoredColumnsSql(string tableName)

@@ -13,7 +13,8 @@ finding-ids: SH-M001 … SH-M428
 
 ## Progress
 
-**256 / 428 closed by this story's tasks.** All 33 of `migrations` ([[TASK-152]], done 2026-10-15): all confirmed
+**292 / 428 closed by this story's tasks.** All 36 of `views-and-aggregation` ([[TASK-151]], done 2026-10-16): all
+confirmed (5 wider), 33 fixed there, 3 found fixed earlier. All 33 of `migrations` ([[TASK-152]], done 2026-10-15): all confirmed
 (2 wider, 2 narrower), 25 fixed there, 8 found fixed earlier. All 15 of `security-and-authorization` ([[TASK-165]], done 2026-10-15): 13
 confirmed and 2 narrower, all 15 fixed. All 22 of `validation-and-rules` ([[TASK-156]], done 2026-10-15): 21
 confirmed, 1 refuted by design; 12 fixed there, 6 found fixed earlier, 3 resolved by TASK-144's decisions. [[TASK-630]] (done 2026-10-15) fixed the 18 findings TASK-161 and TASK-157

@@ -18,7 +18,8 @@ var sqlView = translator.Translate(definition);
 
 // Query via IViewStore
 var store = new SqlViewStore<CustomerOrderSummary>(database, definition);
-var results = await store.QueryAsync(v => v.TotalSpent > 1000m, limit: 10);
+// Top ten by an aggregate. A filter may test only group keys: an aggregate would need HAVING.
+var results = await store.QueryAsync(orderBy: OrderBy<CustomerOrderSummary>.ByDescending(v => v.TotalSpent), limit: 10);
 
 // Manage persistent views via IViewManager
 var manager = new SqlViewManager(database);

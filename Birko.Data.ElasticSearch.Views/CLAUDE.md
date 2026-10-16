@@ -4,7 +4,7 @@ ElasticSearch platform implementation for Birko.Data.Views. Translates ViewDefin
 
 ## Components
 
-- **ElasticSearchViewStore\<TView\>** — Implements IViewStore\<TView\> using NEST SearchRequest. Non-aggregate queries use _source filtering with sort/pagination. Aggregate queries use shared `StoreAggregationHelper` for metric creation (`BuildSingleMetricAggregation`), GROUP BY logic (`BuildGroupByAggregation`), and metric extraction (`ExtractMetricValues`). Joins are not supported in ES and are silently ignored.
+- **ElasticSearchViewStore\<TView\>** — Implements IViewStore\<TView\> using NEST SearchRequest. Non-aggregate queries use _source filtering with sort/pagination. Aggregate queries use shared `StoreAggregationHelper` for metric creation (`BuildSingleMetricAggregation`), GROUP BY logic (`BuildGroupByAggregation`), and metric extraction (`ExtractMetricValues`). Joins are refused (`NotSupportedException`) rather than ignored. Filters, sorts and group keys name view properties and are mapped to the source fields they select (TASK-151). A grouping view reads a composite aggregation page by page to the end, then orders, pages and counts its rows in memory; `CountAsync` counts groups. `EnsureAsync` creates only a Persistent view's own index.
 - **ElasticSearchViewManager** — Implements IViewManager. EnsureAsync creates a destination index for persistent views (ES lacks native views; data population requires Transforms or reindex jobs). DropAsync/ExistsAsync/RefreshAsync map to index lifecycle operations.
 
 ## Filter translation

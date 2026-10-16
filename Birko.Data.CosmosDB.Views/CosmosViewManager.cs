@@ -34,9 +34,26 @@ public class CosmosViewManager : IViewManager
     /// </summary>
     public Task EnsureAsync(ViewDefinition definition, CancellationToken ct = default)
     {
+        if (definition == null)
+        {
+            throw new ArgumentNullException(nameof(definition));
+        }
+
         // Cosmos DB has no native view support. Views are computed on-the-fly by CosmosViewStore.
         // A true persistent/materialized view would require Azure Functions or change-feed processors
         // to maintain a denormalized container, which is outside the scope of this project.
+        //
+        // TASK-151 (SH-M407): so a Persistent definition is refused here, as the store refuses to read it; ensuring
+        // it reported success and created nothing. A join is refused for the same reason as in the store.
+        if (definition.QueryMode == ViewQueryMode.Persistent)
+        {
+            throw new NotSupportedException(
+                $"Cosmos DB has no stored views: view '{definition.Name}' cannot be Persistent. Use OnTheFly or Auto.");
+        }
+        if (definition.HasJoins)
+        {
+            throw new NotSupportedException("A Cosmos DB view reads one container and cannot join.");
+        }
         return Task.CompletedTask;
     }
 
@@ -51,16 +68,10 @@ public class CosmosViewManager : IViewManager
             throw new ArgumentException("View name cannot be null or empty.", nameof(viewName));
         }
 
-        var container = _database.GetContainer(viewName);
-        try
-        {
-            await container.DeleteContainerAsync(cancellationToken: ct).ConfigureAwait(false);
-        }
-        catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            // Idempotent teardown: dropping a non-existent view container is a no-op, matching
-            // ExistsAsync's NotFound handling (CR-L109).
-        }
+        // TASK-151 (SH-M408): nothing to drop. This deleted whatever CONTAINER had the name, and no container is ever
+        // a view (EnsureAsync creates none), so the only thing it could delete was data: the name derived for an
+        // unnamed view is the source container's.
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -73,16 +84,9 @@ public class CosmosViewManager : IViewManager
             throw new ArgumentException("View name cannot be null or empty.", nameof(viewName));
         }
 
-        try
-        {
-            var container = _database.GetContainer(viewName);
-            await container.ReadContainerAsync(cancellationToken: ct).ConfigureAwait(false);
-            return true;
-        }
-        catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            return false;
-        }
+        // TASK-151 (SH-M408): no container is a view (see DropAsync), so a data container answered true here.
+        await Task.CompletedTask.ConfigureAwait(false);
+        return false;
     }
 
     /// <summary>

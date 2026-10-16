@@ -46,7 +46,7 @@ public class RavenViewTranslatorTests
 
         var (map, reduce) = RavenViewTranslator.TranslateToMapReduce(def);
 
-        map.Should().Contain("from entity in docs.Sale");
+        map.Should().Contain("from entity in docs.Sales", "the collection a store writes Sale documents to");
         reduce.Should().BeNull();
     }
 
@@ -71,7 +71,7 @@ public class RavenViewTranslatorTests
         reduce.Should().NotBeNull();
         reduce!.Should().Contain("Average_Sum = g.Sum(x => x.Average_Sum)");
         reduce.Should().Contain("Average_Count = g.Sum(x => x.Average_Count)");
-        reduce.Should().Contain("Average = g.Sum(x => x.Average_Sum) / g.Sum(x => x.Average_Count)");
+        reduce.Should().Contain("Average = (double)g.Sum(x => x.Average_Sum) / (double)g.Sum(x => x.Average_Count)");
         reduce.Should().NotContain("g.Sum(x => x.Average)");   // the double-average bug
     }
 

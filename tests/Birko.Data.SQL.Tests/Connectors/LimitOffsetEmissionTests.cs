@@ -36,13 +36,15 @@ namespace Birko.Data.SQL.Tests.Connectors
         }
 
         [Fact]
-        public void The_base_emits_nothing_without_a_limit()
+        public void An_offset_without_a_limit_is_emitted_after_an_unbounded_limit()
         {
+            // TASK-151 (SH-M403), inverted: the offset was dropped, so the read returned page 1. These dialects take
+            // OFFSET only after a LIMIT, so the limit is the dialect's "no limit" (live: JoinRenderingLiveTests).
             var connector = new TestConnector();
             using var command = new NoopCommand();
 
-            connector.LimitOffsetDefinition(command, null, 10).Should().BeNull(
-                "CreateSelectCommand only calls this when a limit is set");
+            connector.LimitOffsetDefinition(command, null, 10).Should().Be(" LIMIT -1 OFFSET @OFFSET");
+            connector.LimitOffsetDefinition(command, null, null).Should().BeNull("no paging asked for");
         }
 
         /// <summary>

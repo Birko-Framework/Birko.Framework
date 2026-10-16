@@ -44,6 +44,33 @@ namespace Birko.Data.SQL
         /// Set by Birko.Data.SQL.View to break the dependency from SQL → View.
         /// </summary>
         public static Func<Type, string, bool, string?>? ResolveFieldSelectName { get; set; }
+
+        private static readonly System.Threading.AsyncLocal<Func<Type, string, bool, string?>?> _scopedFieldResolver = new();
+
+        /// <summary>
+        /// Resolves field names through <paramref name="resolver"/> for the current async flow until the returned scope is
+        /// disposed, ahead of <see cref="ResolveFieldSelectName"/>. Per caller, never process-wide (rule 36): a store that
+        /// knows its own view resolves a filter on it without registering anything global (TASK-151, SH-M405).
+        /// </summary>
+        public static IDisposable ScopeFieldResolver(Func<Type, string, bool, string?> resolver)
+        {
+            var previous = _scopedFieldResolver.Value;
+            _scopedFieldResolver.Value = resolver ?? throw new ArgumentNullException(nameof(resolver));
+            return new ResolverScope(previous);
+        }
+
+        private sealed class ResolverScope : IDisposable
+        {
+            private readonly Func<Type, string, bool, string?>? _previous;
+            private bool _disposed;
+            public ResolverScope(Func<Type, string, bool, string?>? previous) => _previous = previous;
+            public void Dispose()
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _scopedFieldResolver.Value = _previous;
+            }
+        }
         private static readonly HashSet<DbType> _stringTypes = new()
         {
             DbType.Guid,
@@ -1089,6 +1116,9 @@ namespace Birko.Data.SQL
         /// </summary>
         private static string? ResolveColumnName(Type exprType, string propertyName, bool withTableName)
         {
+            var scoped = _scopedFieldResolver.Value?.Invoke(exprType, propertyName, withTableName);
+            if (scoped != null) return scoped;
+
             var table = TryLoadTable(exprType);
             if (table != null)
             {

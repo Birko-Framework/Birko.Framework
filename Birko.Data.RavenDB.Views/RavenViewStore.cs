@@ -8,6 +8,7 @@ using Birko.Data.Stores;
 using Birko.Data.Views;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Linq;
+using Raven.Client.Documents.Operations.Indexes;
 using Raven.Client.Documents.Session;
 
 namespace Birko.Data.RavenDB.Views;
@@ -44,7 +45,7 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
         CancellationToken ct = default)
     {
         using var session = _documentStore.OpenAsyncSession();
-        var query = BuildQuery(session);
+        var query = await BuildQueryAsync(session, ct);
 
         if (filter != null)
         {
@@ -74,7 +75,7 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
                 "RavenViewStore query pipeline produced a non-Raven IQueryable; ToListAsync requires a RavenDB query provider.");
         }
 
-        return await ravenQuery.ToListAsync(ct);
+        return await Project(ravenQuery).ToListAsync(ct);
     }
 
     /// <inheritdoc />
@@ -83,14 +84,14 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
         CancellationToken ct = default)
     {
         using var session = _documentStore.OpenAsyncSession();
-        var query = BuildQuery(session);
+        var query = await BuildQueryAsync(session, ct);
 
         if (filter != null)
         {
             query = query.Where(filter);
         }
 
-        return await query.FirstOrDefaultAsync(ct);
+        return await Project(query).FirstOrDefaultAsync(ct);
     }
 
     /// <inheritdoc />
@@ -99,7 +100,7 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
         CancellationToken ct = default)
     {
         using var session = _documentStore.OpenAsyncSession();
-        var query = BuildQuery(session);
+        var query = await BuildQueryAsync(session, ct);
 
         if (filter != null)
         {
@@ -109,22 +110,35 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
         return await query.CountAsync(ct);
     }
 
-    private IRavenQueryable<TView> BuildQuery(IAsyncDocumentSession session)
+    /// <summary>
+    /// A map-only index answers with source documents; the view is projected from its stored fields (SH-M399). A
+    /// map-reduce index already answers with its reduce results.
+    /// </summary>
+    private IRavenQueryable<TView> Project(IRavenQueryable<TView> query)
+        => _definition.HasAggregates ? query : query.ProjectInto<TView>();
+
+    private async Task<IRavenQueryable<TView>> BuildQueryAsync(IAsyncDocumentSession session, CancellationToken ct)
     {
+        // TASK-151 (SH-M395): OnTheFly queried session.Query<TView>(), the collection named after the VIEW type, so it
+        // ignored the definition and answered empty. RavenDB has no ad-hoc join or map-reduce, so a view is an index.
         if (_definition.QueryMode == ViewQueryMode.OnTheFly)
         {
-            return session.Query<TView>();
+            throw new NotSupportedException(
+                $"A RavenDB view is a static index: OnTheFly cannot evaluate view '{typeof(TView).Name}'. Use Persistent (or Auto) and create the index with IViewManager.EnsureAsync.");
         }
 
         if (_definition.QueryMode == ViewQueryMode.Auto)
         {
-            // Try persistent index first; fall back to dynamic query
-            if (!string.IsNullOrEmpty(_indexName))
+            // TASK-151 (SH-M396): the index was queried with no existence check. With no on-the-fly form to fall
+            // back to (above), a missing index is reported here by name instead of as an index error mid-query.
+            if (string.IsNullOrEmpty(_indexName)
+                || await _documentStore.Maintenance.SendAsync(new GetIndexOperation(_indexName), ct).ConfigureAwait(false) == null)
             {
-                return session.Query<TView>(_indexName);
+                throw new InvalidOperationException(
+                    $"View index '{_indexName}' does not exist, and RavenDB has no on-the-fly view to fall back to. Create it with IViewManager.EnsureAsync.");
             }
 
-            return session.Query<TView>();
+            return session.Query<TView>(_indexName);
         }
 
         // Persistent mode — query the static index

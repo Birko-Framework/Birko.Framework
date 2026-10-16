@@ -3,7 +3,7 @@ id: TASK-151
 parent: STORY-053
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-09
@@ -47,18 +47,18 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 36 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 36 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
 - [ ] Any behavioural fix is followed by `/specs regen views-and-aggregation`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
 
 ## Out of scope
 
@@ -71,13 +71,51 @@ what the code *does*, defects included, which is exactly what let it find them. 
 - Per-sub-repo spec trees, which would make this area's staleness measurable from its own repo — that's
   [[TASK-131]].
 
+## Resolution (2026-10-16)
+
+**36 findings triaged: all confirmed (5 wider); 33 fixed here, 3 found fixed earlier.** Fixed earlier: SH-M400
+([[TASK-129]], [[TASK-207]]), SH-M402 (measured on HEAD: ordering by an aggregate and by a renamed field both
+worked, through the same view-property keys) and SH-M409 ([[TASK-447]]). Wider: M382 and M387 (an ES plain view
+with a sort failed outright, and a grouped view returned no rows, because both named CLR members instead of stored
+fields); M398 (every Raven join index failed to compile on the server); M399 (every Raven view index read an empty
+collection, `docs.Order` instead of `docs.Orders`).
+
+- **LINQ aggregation** (`Birko.Data.Stores`): unresolved names throw (M377); the raw-rows path pages and orders
+  (M383); groups key on a value tuple (M384); every integral type sums and averages, a non-numeric one throws (M385);
+  intervals parse invariantly (M386).
+- **SQL**: a view with no join is queryable (M401); `CreateViewCountCommand` counts the view's own rows (M404); an
+  offset without a limit skips rows on all four providers, framework-wide (M403); `Ensure` recreates a changed view
+  (M406); a view store resolves its own properties in a per-call scope, `DataBase.ScopeFieldResolver`, and refuses
+  a filter on an aggregate (M405).
+- **MongoDB**: a missing Persistent view is an error (M392); `Drop`/`Exists` mean views only (M393); a Cross join is
+  refused (M394); `Ensure` runs `collMod` (M406).
+- **RavenDB**: OnTheFly refused, Auto reports a missing index (M395, M396); Avg as double (M397); joins by document
+  id, Inner honoured (M398); collections by the store's conventions, map-only indexes stored and projected (M399).
+- **Cosmos DB**: plain views are a SQL projection under the view names (M410); grouping views count and read
+  groups on every path (M378, M379); Persistent and joins refused (M407, M411); the manager never deletes a
+  container (M408).
+- **ElasticSearch**: view names map to stored fields for filters, sorts, projection and keys (M382, M387); grouping
+  reads a composite aggregation to its last page, then orders, pages and counts its rows (M380, M381, M389, M390);
+  dates from aggregations convert, and a failed conversion throws (M388); `Ensure` creates only a Persistent view's
+  index (M391); joins refused (M411). The entity store's `StoreAggregationHelper` reports truncated or keyless group
+  responses (M389, M390).
+- **Builder**: a GroupBy field no Select exposes is refused (M412).
+
+**Red-verified, as numbers.** Production files reverted to HEAD with the tests kept: **35 of 35 measured tests failed**
+(aggregation 6, SQL views 5 + 2 live join-rendering cases, MongoDB 4, RavenDB 6, Cosmos 4, ElasticSearch 7, builder 1).
+Not red-verified: the Cosmos aggregate-filter refusal, added after the measurement. The ordering assertions inside
+the SQL grouped-view test are pins (M402, fixed earlier). Rewritten rather than kept: one Raven translator assertion
+(integer division) and the Cosmos count-SQL reflection helpers, which now reach the one statement the count runs.
+
+**Measured live** on SQLite, PostgreSQL, MySQL, SQL Server, MongoDB, RavenDB, ElasticSearch 7.17 and the Cosmos emulator.
+
+**Regression:** the 115 suites importing a changed project (6,604 tests). The first run failed 4 tests, all pins of the old behaviour, now inverted (rule 56): the base and SQL Server LimitOffsetDefinition pins (no offset without a limit; the SQL Server one claimed an OFFSET with no FETCH is Msg 102, which the live test refutes), ViewDdlTests' join requirement (now: a view with no table at all is refused), and the translator's unselected-GroupBy test (the builder refuses first; the translator check is kept for a directly constructed definition). Rerun: the 32 suites importing Birko.Data.SQL.View (2,699 tests), live on every provider above, green.
+
+**Spec regen pending**, batched: `views-and-aggregation`.
+
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A: fully covered by automated tests, asserted live against every backend; a library contract with no UI surface.
 
 ## Implementation plan
 

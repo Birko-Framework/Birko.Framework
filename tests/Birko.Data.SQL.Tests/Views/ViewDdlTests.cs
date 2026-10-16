@@ -165,14 +165,16 @@ namespace Birko.Data.SQL.Tests.Views
         }
 
         [Fact]
-        public void BuildViewSelectSql_NoJoins_ThrowsInvalidOperationException()
+        public void BuildViewSelectSql_NoTables_ThrowsInvalidOperationException()
         {
+            // TASK-151 (SH-M401) inverted the join requirement: a joinless view is a SELECT from its one table
+            // (Task151SqlViewTests). Only a view with no table at all is refused, having no FROM to render.
             var view = new Tables.View();
             var connector = new TestViewConnector(TestSettings);
 
             var act = () => connector.TestBuildViewSelectSql(view);
 
-            act.Should().Throw<InvalidOperationException>().WithMessage("*join*");
+            act.Should().Throw<InvalidOperationException>().WithMessage("*no source table*");
         }
 
         #region Test Connectors

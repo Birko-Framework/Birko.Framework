@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Birko.Data.Stores;
 using Birko.Data.Views;
+using Raven.Client.Documents.Conventions;
 
 namespace Birko.Data.RavenDB.Views;
 
@@ -17,36 +18,79 @@ public static class RavenViewTranslator
     /// Returns a tuple where <c>map</c> is always populated and <c>reduce</c> is null for non-aggregate views.
     /// </summary>
     public static (string map, string? reduce) TranslateToMapReduce(ViewDefinition definition)
+        => TranslateToMapReduce(definition, null);
+
+    /// <summary>
+    /// Translates a view to an index map (and reduce), naming collections with <paramref name="collectionName"/>.
+    /// </summary>
+    /// <param name="collectionName">
+    /// The document store's collection naming (<c>store.Conventions.GetCollectionName</c>); null uses Raven's default
+    /// convention, the one a store built from <c>Settings</c> uses.
+    /// </param>
+    /// <remarks>
+    /// TASK-151 (SH-M399): the map read <c>docs.{TypeName}</c>, but documents are stored under the convention's
+    /// collection name (<c>Order</c> is in <c>Orders</c>), so every view index was over an empty collection.
+    /// </remarks>
+    public static (string map, string? reduce) TranslateToMapReduce(ViewDefinition definition, Func<Type, string>? collectionName)
     {
         if (definition == null)
         {
             throw new ArgumentNullException(nameof(definition));
         }
 
-        var collectionName = definition.PrimarySource.Name;
+        collectionName ??= DocumentConventions.DefaultGetCollectionName;
         var map = BuildMapExpression(definition, collectionName);
         var reduce = definition.HasAggregates ? BuildReduceExpression(definition) : null;
 
         return (map, reduce);
     }
 
-    private static string BuildMapExpression(ViewDefinition definition, string collectionName)
+    private static string Collection(Func<Type, string> collectionName, Type type)
+    {
+        var name = collectionName(type);
+        if (string.IsNullOrEmpty(name) || !(char.IsLetter(name[0]) || name[0] == '_') || !name.All(c => char.IsLetterOrDigit(c) || c == '_'))
+        {
+            throw new NotSupportedException($"Collection '{name}' of '{type.Name}' is not an identifier an index map can name.");
+        }
+        return name;
+    }
+
+    private static string BuildMapExpression(ViewDefinition definition, Func<Type, string> collectionName)
     {
         var sb = new StringBuilder();
+        var primary = Collection(collectionName, definition.PrimarySource);
 
         if (definition.HasJoins)
         {
-            // Use LoadDocument pattern for joins
-            sb.Append($"from entity in docs.{collectionName}");
+            sb.Append($"from entity in docs.{primary}");
             sb.AppendLine();
 
-            // Add LoadDocument lets for each join
+            // TASK-151 (SH-M398): LoadDocument<Right>(entity.Key) did not compile on the server (it knows no CLR model
+            // types, and the string form needs the collection), and it treated the raw key as a document id. A
+            // document's id is "{collection}/{guid}" (RavenDocumentId.For), so a join loads by the right model's
+            // identity only, builds that id, and an Inner join drops the parents that loaded nothing.
             for (int i = 0; i < definition.Joins.Count; i++)
             {
                 var join = definition.Joins[i];
+                if (join.RightProperty != nameof(Birko.Data.Models.AbstractModel.Guid))
+                {
+                    throw new NotSupportedException(
+                        $"A RavenDB view joins '{join.RightType.Name}' only on its identity (Guid): an index loads a related document by id, not by '{join.RightProperty}'.");
+                }
+                if (join.JoinType != JoinType.Inner && join.JoinType != JoinType.LeftOuter)
+                {
+                    throw new NotSupportedException(
+                        $"A {join.JoinType} join of '{join.LeftType.Name}' and '{join.RightType.Name}' cannot be a RavenDB view; use Inner or LeftOuter.");
+                }
+
                 var joinAlias = i == 0 ? "joined" : $"joined{i + 1}";
-                var joinRightName = join.RightType.Name;
-                sb.AppendLine($"let {joinAlias} = LoadDocument<{joinRightName}>(entity.{join.LeftProperty})");
+                var leftAlias = GetSourceAlias(join.LeftType, definition);
+                var right = Collection(collectionName, join.RightType);
+                sb.AppendLine($"let {joinAlias} = LoadDocument(\"{right}/\" + {leftAlias}.{join.LeftProperty}, \"{right}\")");
+                if (join.JoinType == JoinType.Inner)
+                {
+                    sb.AppendLine($"where {joinAlias} != null");
+                }
             }
 
             sb.Append("select new { ");
@@ -56,7 +100,7 @@ public static class RavenViewTranslator
         else
         {
             // Simple map without joins
-            sb.Append($"from entity in docs.{collectionName}");
+            sb.Append($"from entity in docs.{primary}");
             sb.AppendLine();
             sb.Append("select new { ");
             sb.Append(BuildSelectFields(definition));
@@ -216,7 +260,8 @@ public static class RavenViewTranslator
                     // each pass. Summing the already-averaged ViewProperty would double-average.
                     selectParts.Add($"{agg.ViewProperty}_Sum = g.Sum(x => x.{agg.ViewProperty}_Sum)");
                     selectParts.Add($"{agg.ViewProperty}_Count = g.Sum(x => x.{agg.ViewProperty}_Count)");
-                    selectParts.Add($"{agg.ViewProperty} = g.Sum(x => x.{agg.ViewProperty}_Sum) / g.Sum(x => x.{agg.ViewProperty}_Count)");
+                    // TASK-151 (SH-M397): as double, or an integer column averaged 10 and 15 to 12.
+                    selectParts.Add($"{agg.ViewProperty} = (double)g.Sum(x => x.{agg.ViewProperty}_Sum) / (double)g.Sum(x => x.{agg.ViewProperty}_Count)");
                     break;
                 case AggregateFunction.Min:
                     selectParts.Add($"{agg.ViewProperty} = g.Min(x => x.{agg.ViewProperty})");

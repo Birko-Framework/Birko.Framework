@@ -27,11 +27,16 @@ namespace Birko.Data.SQL.Connectors
                 return await SelectCountPersistentViewAsync(view.Name!, conditions, ct).ConfigureAwait(false);
             }
 
-            // Pass only the LEFT tables (the join clause supplies the right tables), mirroring the
-            // view SELECT command builder. Passing every view table AND the join listed the joined
-            // tables twice in FROM, producing a cross join / "ambiguous column" SQL error.
-            var leftTables = view.Join?.Select(x => x.Left).Distinct().Where(x => !string.IsNullOrEmpty(x)).ToList();
-            return await SelectCountAsync(leftTables ?? view.Tables.Select(x => x.Name), view.Join, conditions, ct).ConfigureAwait(false);
+            // TASK-151 (SH-M404): COUNT(*) over the view's own SELECT (see CreateViewCountCommand).
+            long count = 0;
+            await DoCommandAsync(
+                command => { CreateViewCountCommand(command, view, conditions); return Task.CompletedTask; },
+                async command =>
+                {
+                    var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+                    if (result != null && result != DBNull.Value) count = Convert.ToInt64(result);
+                }).ConfigureAwait(false);
+            return count;
         }
 
         private async Task<long> SelectCountPersistentViewAsync(string viewName, IEnumerable<Conditions.Condition>? conditions, CancellationToken ct)

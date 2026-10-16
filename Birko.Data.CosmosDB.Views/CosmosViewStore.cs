@@ -33,7 +33,30 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
     {
         _container = container ?? throw new ArgumentNullException(nameof(container));
         _definition = definition ?? throw new ArgumentNullException(nameof(definition));
+
+        // TASK-151 (SH-M411): joins were accepted and never read, so every joined view property stayed default. A
+        // Cosmos query reads one container, with no cross-document join.
+        if (definition.HasJoins)
+        {
+            throw new NotSupportedException(
+                $"A Cosmos DB view reads one container and cannot join '{definition.Joins[0].RightType.Name}'. Denormalise the joined fields into the source documents.");
+        }
     }
+
+    /// <summary>
+    /// TASK-151 (SH-M407): Cosmos DB has no stored views, so a Persistent definition (which promises one) is refused
+    /// rather than silently computed from the source container; OnTheFly and Auto compute on the fly.
+    /// </summary>
+    private void RequireComputable()
+    {
+        if (_definition.QueryMode == ViewQueryMode.Persistent)
+        {
+            throw new NotSupportedException(
+                $"Cosmos DB has no stored views: view '{_definition.Name ?? typeof(TView).Name}' cannot be Persistent. Use OnTheFly or Auto.");
+        }
+    }
+
+    private bool Grouped => _definition.HasAggregates || _definition.HasGroupBy;
 
     /// <inheritdoc />
     public async Task<IEnumerable<TView>> QueryAsync(
@@ -43,14 +66,16 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         int? offset = null,
         CancellationToken ct = default)
     {
+        RequireComputable();
+
         // Take the SQL path for group-by-only (distinct/grouping) views too, not just aggregate views —
         // otherwise a HasGroupBy && !HasAggregates view would return raw ungrouped docs via LINQ (CR-L110).
-        if (_definition.HasAggregates || _definition.HasGroupBy)
+        if (Grouped)
         {
             return await QueryAggregateAsync(filter, orderBy, limit, offset, ct).ConfigureAwait(false);
         }
 
-        return await QueryLinqAsync(filter, orderBy, limit, offset, ct).ConfigureAwait(false);
+        return await RunAsync<TView>(BuildProjectionSql(filter, orderBy, limit, offset), ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -58,13 +83,16 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         Expression<Func<TView, bool>>? filter = null,
         CancellationToken ct = default)
     {
-        if (_definition.HasAggregates)
+        RequireComputable();
+
+        // TASK-151 (SH-M379): grouped on the same condition as QueryAsync; a group-by-only view answered a raw document.
+        if (Grouped)
         {
             var results = await QueryAggregateAsync(filter, null, 1, null, ct).ConfigureAwait(false);
             return results.FirstOrDefault();
         }
 
-        return await QueryFirstLinqAsync(filter, ct).ConfigureAwait(false);
+        return (await RunAsync<TView>(BuildProjectionSql(filter, null, 1, null), ct).ConfigureAwait(false)).FirstOrDefault();
     }
 
     /// <inheritdoc />
@@ -72,91 +100,76 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         Expression<Func<TView, bool>>? filter = null,
         CancellationToken ct = default)
     {
-        if (_definition.HasAggregates)
+        RequireComputable();
+
+        if (Grouped)
         {
             return await CountAggregateAsync(filter, ct).ConfigureAwait(false);
         }
 
-        return await CountLinqAsync(filter, ct).ConfigureAwait(false);
+        var parameters = new List<KeyValuePair<string, object?>>();
+        var sql = "SELECT VALUE COUNT(1) FROM c" + Where(filter, parameters);
+        return (await RunAsync<long>(Bind(sql, parameters), ct).ConfigureAwait(false)).Sum();
     }
 
-    #region LINQ-based queries (non-aggregate)
+    #region Projection (non-aggregate)
 
-    private async Task<IEnumerable<TView>> QueryLinqAsync(
-        Expression<Func<TView, bool>>? filter,
-        OrderBy<TView>? orderBy,
-        int? limit,
-        int? offset,
-        CancellationToken ct)
+    /// <summary>
+    /// SELECT each view field from its source field, under the view's name.
+    /// </summary>
+    /// <remarks>
+    /// TASK-151 (SH-M410): the LINQ path deserialised the raw documents into the view, so a renamed field stayed
+    /// default, and a filter or order on a view name tested a document field that does not exist.
+    /// </remarks>
+    private QueryDefinition BuildProjectionSql(Expression<Func<TView, bool>>? filter, OrderBy<TView>? orderBy, int? limit, int? offset)
     {
-        IQueryable<TView> query = _container.GetItemLinqQueryable<TView>();
+        var parameters = new List<KeyValuePair<string, object?>>();
+        var sb = new StringBuilder("SELECT ");
+        sb.Append(_definition.Fields.Count == 0
+            ? "VALUE c"
+            : string.Join(", ", _definition.Fields.Select(f => $"{CosmosAggregationHelper.FieldRef(f.SourceProperty)} AS {f.ViewProperty}")));
+        sb.Append(" FROM c").Append(Where(filter, parameters));
+        AppendOrderAndPage(sb, orderBy, limit, offset);
+        return Bind(sb.ToString(), parameters);
+    }
 
-        if (filter != null)
-        {
-            query = query.Where(filter);
-        }
+    private string Where(Expression<Func<TView, bool>>? filter, List<KeyValuePair<string, object?>> parameters)
+    {
+        if (filter == null) return string.Empty;
+        var whereClause = CosmosFilterTranslator.Translate(filter, parameters, MapViewPropertyToSource);
+        return string.IsNullOrEmpty(whereClause) ? string.Empty : " WHERE " + whereClause;
+    }
 
+    private void AppendOrderAndPage(StringBuilder sb, OrderBy<TView>? orderBy, int? limit, int? offset)
+    {
+        // ORDER BY clause — order keys are view property names; map group keys back to their source
+        // field and reference aggregate results by their SELECT alias (CR-H044).
         if (orderBy?.Fields.Count > 0)
         {
-            query = OrderByHelper.ApplyTo(query, orderBy);
+            var orderParts = orderBy.Fields
+                .Select(f => $"{ResolveOrderKey(f.PropertyName)}{(f.Descending ? " DESC" : " ASC")}");
+            sb.Append(" ORDER BY ").Append(string.Join(", ", orderParts));
         }
 
-        if (offset.HasValue && offset.Value > 0)
+        // OFFSET ... LIMIT
+        if (offset.HasValue || limit.HasValue)
         {
-            query = query.Skip(offset.Value);
+            // Not parameterised, deliberately: both are `int?` from this store's own API, so no
+            // caller text reaches the statement and there is nothing to contain.
+            sb.Append($" OFFSET {offset ?? 0} LIMIT {limit ?? int.MaxValue}");
         }
+    }
 
-        if (limit.HasValue && limit.Value > 0)
-        {
-            query = query.Take(limit.Value);
-        }
-
-        var results = new List<TView>();
-        using var iterator = query.ToFeedIterator();
+    private async Task<List<TResult>> RunAsync<TResult>(QueryDefinition query, CancellationToken ct)
+    {
+        var results = new List<TResult>();
+        using var iterator = _container.GetItemQueryIterator<TResult>(query);
         while (iterator.HasMoreResults)
         {
             var response = await iterator.ReadNextAsync(ct).ConfigureAwait(false);
             results.AddRange(response);
         }
-
         return results;
-    }
-
-    private async Task<TView?> QueryFirstLinqAsync(
-        Expression<Func<TView, bool>>? filter,
-        CancellationToken ct)
-    {
-        IQueryable<TView> query = _container.GetItemLinqQueryable<TView>();
-
-        if (filter != null)
-        {
-            query = query.Where(filter);
-        }
-
-        query = query.Take(1);
-
-        using var iterator = query.ToFeedIterator();
-        if (iterator.HasMoreResults)
-        {
-            var response = await iterator.ReadNextAsync(ct).ConfigureAwait(false);
-            return response.FirstOrDefault();
-        }
-
-        return null;
-    }
-
-    private async Task<long> CountLinqAsync(
-        Expression<Func<TView, bool>>? filter,
-        CancellationToken ct)
-    {
-        var queryable = _container.GetItemLinqQueryable<TView>();
-
-        if (filter != null)
-        {
-            return await queryable.Where(filter).CountAsync(ct).ConfigureAwait(false);
-        }
-
-        return await queryable.CountAsync(ct).ConfigureAwait(false);
     }
 
     #endregion
@@ -187,17 +200,11 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         Expression<Func<TView, bool>>? filter,
         CancellationToken ct)
     {
-        var queryDef = BuildCountAggregateSql(filter);
-
-        using var iterator = _container.GetItemQueryIterator<CountResult>(queryDef);
-        if (iterator.HasMoreResults)
-        {
-            var response = await iterator.ReadNextAsync(ct).ConfigureAwait(false);
-            var first = response.FirstOrDefault();
-            return first?.Count ?? 0;
-        }
-
-        return 0;
+        // TASK-151 (SH-M378): the count is the number of groups the view's own query returns. The old statement
+        // nested a GROUP BY under FROM and read a bare COUNT VALUE into an object's Count member, so it answered 0
+        // or the document count. A view's groups are what it returns, so they are read and counted.
+        var groups = await RunAsync<object>(BuildAggregateSql(filter, null, null, null), ct).ConfigureAwait(false);
+        return groups.Count;
     }
 
     private QueryDefinition BuildAggregateSql(
@@ -218,14 +225,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
 
         // WHERE clause (must come before GROUP BY). Translate view property names to source field
         // names — the query runs against the raw documents (FROM c) (CR-H045).
-        if (filter != null)
-        {
-            var whereClause = CosmosFilterTranslator.Translate(filter, parameters, MapViewPropertyToSource);
-            if (!string.IsNullOrEmpty(whereClause))
-            {
-                sb.Append(" WHERE ").Append(whereClause);
-            }
-        }
+        sb.Append(Where(filter, parameters));
 
         // GROUP BY clause
         if (groupBySql != null)
@@ -233,64 +233,11 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
             sb.Append(groupBySql);
         }
 
-        // ORDER BY clause — order keys are view property names; map group keys back to their source
-        // field and reference aggregate results by their SELECT alias (CR-H044).
-        if (orderBy?.Fields.Count > 0)
-        {
-            var orderParts = orderBy.Fields
-                .Select(f => $"{ResolveOrderKey(f.PropertyName)}{(f.Descending ? " DESC" : " ASC")}");
-            sb.Append(" ORDER BY ").Append(string.Join(", ", orderParts));
-        }
-
-        // OFFSET ... LIMIT
-        if (offset.HasValue || limit.HasValue)
-        {
-            // Not parameterised, deliberately: both are `int?` from this store's own API, so no
-            // caller text reaches the statement and there is nothing to contain.
-            sb.Append($" OFFSET {offset ?? 0} LIMIT {limit ?? int.MaxValue}");
-        }
+        AppendOrderAndPage(sb, orderBy, limit, offset);
 
         return Bind(sb.ToString(), parameters);
     }
 
-    private QueryDefinition BuildCountAggregateSql(Expression<Func<TView, bool>>? filter)
-    {
-        var parameters = new List<KeyValuePair<string, object?>>();
-        var sb = new StringBuilder();
-
-        // Wrap the aggregate query in a COUNT: SELECT VALUE COUNT(1) FROM (sub-query)
-        // Cosmos DB doesn't support sub-queries in FROM, so we count the grouped results
-        // by selecting COUNT(1) with the same GROUP BY
-        sb.Append("SELECT VALUE COUNT(1) FROM (SELECT c.id FROM c");
-
-        if (filter != null)
-        {
-            var whereClause = CosmosFilterTranslator.Translate(filter, parameters, MapViewPropertyToSource);
-            if (!string.IsNullOrEmpty(whereClause))
-            {
-                sb.Append(" WHERE ").Append(whereClause);
-            }
-        }
-
-        if (_definition.HasGroupBy)
-        {
-            var groupByParts = _definition.GroupBy
-                .Select(g => $"c.{g.PropertyName}");
-            sb.Append(" GROUP BY ").Append(string.Join(", ", groupByParts));
-        }
-
-        sb.Append(')');
-
-        return Bind(sb.ToString(), parameters);
-    }
-
-    /// <summary>
-    /// Builds the <see cref="QueryDefinition"/> and binds every filter value the translator collected.
-    /// </summary>
-    /// <remarks>
-    /// One producer for the binding, so the two builders cannot drift into different parameter
-    /// conventions -- and so a third builder is correct without being told.
-    /// </remarks>
     private static QueryDefinition Bind(string sql, List<KeyValuePair<string, object?>> parameters)
     {
         var queryDef = new QueryDefinition(sql);
@@ -321,6 +268,13 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
     /// </summary>
     private string MapViewPropertyToSource(string viewProperty)
     {
+        // A WHERE runs before grouping, against the documents: an aggregate exists only after it (HAVING).
+        if (_definition.Aggregates.Any(a => a.ViewProperty == viewProperty))
+        {
+            throw new NotSupportedException(
+                $"A filter on aggregate view property '{typeof(TView).Name}.{viewProperty}' would need HAVING, which view filters do not emit.");
+        }
+
         var field = _definition.Fields.FirstOrDefault(f => f.ViewProperty == viewProperty);
         return field?.SourceProperty ?? viewProperty;
     }
@@ -343,17 +297,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
 
     #endregion
 
-    #region Helpers
 
-    /// <summary>
-    /// Internal result type for COUNT queries.
-    /// </summary>
-    private sealed class CountResult
-    {
-        public long Count { get; set; }
-    }
-
-    #endregion
 }
 
 /// <summary>

@@ -48,9 +48,7 @@ public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
     {
         ct.ThrowIfCancellationRequested();
 
-        var conditions = filter != null
-            ? DataBase.ParseConditionExpression(filter)
-            : null;
+        var conditions = ParseFilter(filter);
 
         var orderFields = TranslateOrderBy(orderBy);
 
@@ -77,9 +75,7 @@ public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
     {
         ct.ThrowIfCancellationRequested();
 
-        var conditions = filter != null
-            ? DataBase.ParseConditionExpression(filter)
-            : null;
+        var conditions = ParseFilter(filter);
 
         if (_connector is AbstractAsyncConnector asyncConnector)
         {
@@ -101,9 +97,7 @@ public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
     {
         ct.ThrowIfCancellationRequested();
 
-        var conditions = filter != null
-            ? DataBase.ParseConditionExpression(filter)
-            : null;
+        var conditions = ParseFilter(filter);
 
         if (_connector is AbstractAsyncConnector asyncConnector)
         {
@@ -111,6 +105,30 @@ public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
         }
 
         return _connector.SelectCount(_sqlView, conditions);
+    }
+
+    /// <summary>
+    /// Parses a filter on <typeparamref name="TView"/>, resolving its properties against this store's own view.
+    /// </summary>
+    /// <remarks>
+    /// TASK-151 (SH-M405): a portable view type has neither <c>[Table]</c> nor <c>[View]</c>, so every property resolved
+    /// to nothing and each filtered query failed ("Condition name cannot be null", or a TableAttributeException,
+    /// depending on unrelated global state). The view is per store, so it is resolved in a scope, not registered.
+    /// </remarks>
+    private IEnumerable<Conditions.Condition>? ParseFilter(Expression<Func<TView, bool>>? filter)
+    {
+        if (filter == null) return null;
+        using var scope = DataBase.ScopeFieldResolver((type, property, withTableName) =>
+        {
+            if (type != typeof(TView)) return null;
+            var field = _sqlView.GetTableFields().FirstOrDefault(f => f.Property?.Name == property);
+            if (field == null) return null;
+            if (field.IsAggregate)
+                throw new NotSupportedException(
+                    $"A filter on aggregate view property '{typeof(TView).Name}.{property}' would need HAVING, which view filters do not emit.");
+            return field.GetSelectName(withTableName);
+        });
+        return DataBase.ParseConditionExpression(filter).ToList();
     }
 
     private Func<IDictionary<int, string>, DbDataReader, object> CreateTransformFunction()

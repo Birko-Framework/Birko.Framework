@@ -4,8 +4,8 @@ RavenDB platform implementation for the [Birko.Data.Views](../Birko.Data.Views/)
 
 ## Components
 
-- **RavenViewTranslator** — Converts `ViewDefinition` into RavenDB Map/Reduce LINQ strings. Map uses `from entity in docs.{Collection} select new { ... }` with `LoadDocument<T>()` for joins. Reduce groups results and applies Sum/Count/Min/Max/Avg aggregates. Non-aggregate views produce Map only (no Reduce).
-- **RavenViewStore\<TView\>** — Implements `IViewStore<TView>`. OnTheFly mode queries the collection directly via `session.Query<TView>()`. Persistent/Auto mode queries a static index via `session.Query<TView>(indexName)`. Uses shared `OrderByHelper.ApplyTo()` for dynamic ordering.
+- **RavenViewTranslator** — Converts `ViewDefinition` into RavenDB Map/Reduce LINQ strings. Map uses `from entity in docs.{Collection} select new { ... }` with `LoadDocument` by the right model's document id for joins (Inner or LeftOuter). Reduce groups results and applies Sum/Count/Min/Max/Avg aggregates. Non-aggregate views produce Map only (no Reduce).
+- **RavenViewStore\<TView\>** — Implements `IViewStore<TView>`. OnTheFly mode is refused: a RavenDB view is a static index. Persistent/Auto mode queries a static index via `session.Query<TView>(indexName)` (Auto reports a missing index); a map-only index is projected from its stored fields. Uses shared `OrderByHelper.ApplyTo()` for dynamic ordering.
 - **RavenViewManager** — Implements `IViewManager`. `EnsureAsync` creates a static index via `PutIndexesOperation`. `DropAsync` removes via `DeleteIndexOperation`. `ExistsAsync` checks via `GetIndexOperation`. `RefreshAsync` is a no-op (RavenDB indexes are auto-maintained).
 
 ## Index Translation
@@ -13,7 +13,7 @@ RavenDB platform implementation for the [Birko.Data.Views](../Birko.Data.Views/)
 | ViewDefinition | RavenDB |
 |---|---|
 | From | `from entity in docs.{Collection}` |
-| Join | `LoadDocument<T>()` |
+| Join | `LoadDocument("{Collection}/" + key, "{Collection}")` on the right `Guid` |
 | GroupBy + Aggregates | Reduce step with grouping |
 | Select | Map projection fields |
 | Persistent | Static index via `PutIndexesOperation` |

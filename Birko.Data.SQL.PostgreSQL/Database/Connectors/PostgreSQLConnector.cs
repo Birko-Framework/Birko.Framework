@@ -244,6 +244,9 @@ namespace Birko.Data.SQL.Connectors
         protected override Birko.Data.SQL.IndexManagement.SqlIndexManager? CreateIndexManager() => new Birko.Data.SQL.PostgreSQL.IndexManagement.PostgreSqlIndexManager(this);
 
         /// <inheritdoc />
+        protected override string UnboundedLimit => "ALL";
+
+        /// <inheritdoc />
         public override string? TableExistsSql => "SELECT COUNT(*) FROM pg_class WHERE oid = to_regclass(quote_ident(CAST(@tableName AS text))) AND relkind IN ('r', 'p')";
 
         protected override string? StoredColumnsSql(string tableName)

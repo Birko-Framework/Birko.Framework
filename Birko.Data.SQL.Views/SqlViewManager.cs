@@ -36,20 +36,25 @@ public class SqlViewManager : IViewManager
             throw new InvalidOperationException("View name is required for persistent views.");
         }
 
+        // TASK-151 (SH-M406): "creates or updates", as IViewManager documents. An existing view was left as it was, so
+        // after the definition changed (a new column, another join) Ensure reported success and every query read the
+        // stale view. It is replaced, as RavenViewManager replaces its index.
         // Use genuine async DDL (threads ct) when the connector supports it (CR-H096).
         if (_connector is AbstractAsyncConnector asyncConnector)
         {
-            if (!await asyncConnector.ViewExistsAsync(viewName!, ct).ConfigureAwait(false))
+            if (await asyncConnector.ViewExistsAsync(viewName!, ct).ConfigureAwait(false))
             {
-                await asyncConnector.CreateViewAsync(sqlView, viewName, ct).ConfigureAwait(false);
+                await asyncConnector.DropViewAsync(viewName!, ct).ConfigureAwait(false);
             }
+            await asyncConnector.CreateViewAsync(sqlView, viewName, ct).ConfigureAwait(false);
             return;
         }
 
-        if (!_connector.ViewExists(viewName!))
+        if (_connector.ViewExists(viewName!))
         {
-            _connector.CreateView(sqlView, viewName);
+            _connector.DropView(viewName!);
         }
+        _connector.CreateView(sqlView, viewName);
     }
 
     public async Task DropAsync(string viewName, CancellationToken ct = default)

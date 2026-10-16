@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Views answer in the view's names on every backend, and count their rows (2026-10-16)
+
+[[TASK-151]]. Measured: RavenDB view indexes read an empty collection, and a join index did not compile. An
+ElasticSearch grouped view returned no rows. Cosmos DB and ElasticSearch left renamed fields null, and grouped counts
+counted documents. Filters, sorts and keys now use view properties everywhere. Refused: RavenDB OnTheFly, Cosmos DB
+Persistent, joins on Cosmos DB and ElasticSearch, and filters on aggregates. A SQL offset without a limit now skips.
 ### A composed store chain keeps aggregation, transactions and settings (2026-10-15)
 
 [[TASK-631]]. A store wrapped by `StoreWrapperBuilder` lost every interface but `IAsyncBulkStore<T>`, and `GetInnerStore()`
@@ -327,12 +333,6 @@ existing boundary it joins, as before. A collection update still writes its stor
 [[TASK-162]]. A repository with no store answered every call as if it had worked. It now throws (plain and ViewModel).
 The locator's default key never matched its `Destroy`, ignored a second store on a cache hit, and destroyed the store
 under a sibling. `AddRepository(store, lifetime)` takes only Singleton. ViewModel paged reads are ordered.
-### Tenant isolation: tenant-scoped bulk writes check the caller's filter; the header guard is enforced (2026-10-15)
-
-[[TASK-161]]. Through the tenant bulk wrapper, a null filter deleted every row of the tenant. Tenant repository
-registration always built the non-bulk wrapper, and its async form accepted no async repository. **BREAKING:**
-`AddBirkoSecurity` now refuses to start without `UseBirkoTenantHeaderGuard()`, unless `RequireTenantHeaderMatchesClaim =
-false`. The tenant sync provider's 11 divergences are [[TASK-630]].
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

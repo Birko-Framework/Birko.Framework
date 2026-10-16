@@ -95,8 +95,14 @@ namespace Birko.Data.SQL.Connectors
                 command.CommandText += " ORDER BY " + string.Join(", ", orderFields.Select(kvp =>
                     string.Format("{0} {1}", kvp.Key, kvp.Value ? "DESC" : "ASC")));
             }
+            else if ((limit != null || offset != null) && RequiresOrderByForPaging)
+            {
+                // TASK-278's rule, which the entity path applies and this path did not: SQL Server pages only after an ORDER BY.
+                command.CommandText += " ORDER BY " + PagingPlaceholderOrderBy;
+            }
 
-            if (limit != null)
+            // TASK-151 (SH-M403): an offset alone pages too.
+            if (limit != null || offset != null)
             {
                 command.CommandText += LimitOffsetDefinition(command, limit, offset) ?? string.Empty;
             }

@@ -46,45 +46,52 @@ namespace Birko.Data.Stores
 
             var list = filtered.ToList();
 
-            // No aggregation requested — return raw rows as results
-            if (query.Aggregates.Count == 0 && query.GroupByFields.Count == 0)
-            {
-                var rawResults = list.Select(item => new AggregateResult(AggregateMath.ToValueDictionary(item))).ToList().AsReadOnly();
-                return Task.FromResult<IReadOnlyList<AggregateResult>>(rawResults);
-            }
-
-            // Build group key
-            var keyProperties = query.GroupByFields
-                .Select(f => typeof(T).GetProperty(f, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase))
-                .Where(p => p != null)
-                .ToArray();
+            // TASK-152 (SH-M377): a name that resolves to no property is refused. It was dropped from the key array,
+            // so the remaining values were labelled with the wrong GroupByFields names; an aggregate over one was
+            // skipped, so its column was simply absent.
+            var keyProperties = query.GroupByFields.Select(f => RequireProperty<T>(f, "group-by field")).ToArray();
 
             // Apply time bucketing to Timestamp property if requested
             PropertyInfo? timeProp = null;
             long bucketTicks = 0;
-            if (!string.IsNullOrEmpty(query.TimeBucketInterval) && !string.IsNullOrEmpty(query.TimeColumn))
+            if (!string.IsNullOrEmpty(query.TimeBucketInterval) || !string.IsNullOrEmpty(query.TimeColumn))
             {
+                // SH-M386: an interval that does not parse, or a time column that does not resolve, used to disable
+                // bucketing silently (the unparsed interval read as TimeSpan.Zero).
+                if (string.IsNullOrEmpty(query.TimeBucketInterval) || string.IsNullOrEmpty(query.TimeColumn))
+                    throw new ArgumentException("Time bucketing needs both TimeBucketInterval and TimeColumn.", nameof(query));
                 bucketTicks = TimeIntervalParser.Parse(query.TimeBucketInterval).Ticks;
-                timeProp = typeof(T).GetProperty(query.TimeColumn, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (bucketTicks <= 0)
+                    throw new ArgumentException($"Time bucket interval '{query.TimeBucketInterval}' is not a positive interval.", nameof(query));
+                timeProp = RequireProperty<T>(query.TimeColumn, "time column");
                 // Do NOT mutate the source entities here (CR-H097): the list holds the caller's own
                 // instances (e.g. an InMemory store's live values). The bucket time is computed
                 // on-the-fly at group/result time from the untouched property below.
             }
 
-            // Group by composite key
+            // No aggregation requested — raw rows, still ordered and paged (SH-M383: they were returned whole).
+            if (query.Aggregates.Count == 0 && query.GroupByFields.Count == 0 && timeProp == null)
+            {
+                var rawResults = list.Select(item => new AggregateResult(AggregateMath.ToValueDictionary(item))).ToList();
+                return Task.FromResult<IReadOnlyList<AggregateResult>>(
+                    ApplyOrderingAndPaging(rawResults, query.OrderBy, query.Offset, query.Limit).AsReadOnly());
+            }
+
+            // Group by the key tuple itself. SH-M384: the key was the values joined with "|", so ("a|b", "c") and
+            // ("a", "b|c"), or null and "", fell into one group.
             var grouped = list.GroupBy(item =>
             {
-                var key = new List<object?>();
-                foreach (var prop in keyProperties)
+                var key = new object?[keyProperties.Length + (timeProp != null ? 1 : 0)];
+                for (var i = 0; i < keyProperties.Length; i++)
                 {
-                    key.Add(prop!.GetValue(item));
+                    key[i] = keyProperties[i].GetValue(item);
                 }
-                if (timeProp != null && bucketTicks > 0)
+                if (timeProp != null)
                 {
-                    key.Add(BucketTimeOf(item, timeProp, bucketTicks));
+                    key[keyProperties.Length] = BucketTimeOf(item, timeProp, bucketTicks);
                 }
-                return string.Join("|", key.Select(k => k?.ToString() ?? ""));
-            });
+                return key;
+            }, KeyTupleComparer.Instance);
 
             // Compute aggregates per group
             var results = new List<AggregateResult>();
@@ -95,10 +102,10 @@ namespace Birko.Data.Stores
                 var first = group.First();
                 for (int i = 0; i < keyProperties.Length; i++)
                 {
-                    row[query.GroupByFields[i]] = keyProperties[i]!.GetValue(first);
+                    row[query.GroupByFields[i]] = keyProperties[i].GetValue(first);
                 }
 
-                if (timeProp != null && bucketTicks > 0)
+                if (timeProp != null)
                 {
                     row["bucket_time"] = BucketTimeOf(first, timeProp, bucketTicks);
                 }
@@ -112,8 +119,7 @@ namespace Birko.Data.Stores
                         continue;
                     }
 
-                    var prop = typeof(T).GetProperty(agg.SourcePropertyName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-                    if (prop == null) continue;
+                    var prop = RequireProperty<T>(agg.SourcePropertyName, "aggregate source");
 
                     var values = group.Select(item => prop.GetValue(item)).ToList();
 
@@ -159,6 +165,34 @@ namespace Birko.Data.Stores
             if (limit.HasValue) results = results.Take(limit.Value).ToList();
 
             return results;
+        }
+
+        private static PropertyInfo RequireProperty<T>(string name, string role)
+            => typeof(T).GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+               ?? throw new ArgumentException($"Aggregate {role} '{name}' is not a property of {typeof(T).Name}.", nameof(name));
+
+        /// <summary>Equality of a group-key tuple by its values, element by element.</summary>
+        private sealed class KeyTupleComparer : IEqualityComparer<object?[]>
+        {
+            public static readonly KeyTupleComparer Instance = new();
+
+            public bool Equals(object?[]? x, object?[]? y)
+            {
+                if (ReferenceEquals(x, y)) return true;
+                if (x == null || y == null || x.Length != y.Length) return false;
+                for (var i = 0; i < x.Length; i++)
+                {
+                    if (!object.Equals(x[i], y[i])) return false;
+                }
+                return true;
+            }
+
+            public int GetHashCode(object?[] key)
+            {
+                var hash = new HashCode();
+                foreach (var part in key) hash.Add(part);
+                return hash.ToHashCode();
+            }
         }
 
         /// <summary>

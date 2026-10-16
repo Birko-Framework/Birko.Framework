@@ -59,7 +59,7 @@ namespace Birko.Data.ElasticSearch.Aggregation
         public static AggregationContainer BuildGroupByAggregation(
             IReadOnlyList<string> groupByFields,
             AggregationDictionary metricAggregations,
-            int size = 10000)
+            int size = DefaultGroupBySize)
         {
             if (groupByFields.Count == 1)
             {
@@ -203,11 +203,12 @@ namespace Birko.Data.ElasticSearch.Aggregation
                 var termsAgg = response.Aggregations.Terms("group_by");
                 if (termsAgg != null)
                 {
+                    RequireOneTermsKey(query.GroupByFields);
+                    ThrowIfTruncated(termsAgg.SumOtherDocCount, termsAgg.Buckets.Count);
                     foreach (var bucket in termsAgg.Buckets)
                     {
                         var row = new Dictionary<string, object?>();
-                        if (query.GroupByFields.Count == 1)
-                            row[query.GroupByFields[0]] = bucket.Key;
+                        row[query.GroupByFields[0]] = bucket.Key;
                         ExtractMetricsFromBucket(bucket, query.Aggregates, row);
                         results.Add(new AggregateResult(row));
                     }
@@ -217,6 +218,7 @@ namespace Birko.Data.ElasticSearch.Aggregation
                     var compositeAgg = response.Aggregations.Composite("group_by");
                     if (compositeAgg != null)
                     {
+                        ThrowIfTruncated(null, compositeAgg.Buckets.Count);
                         foreach (var bucket in compositeAgg.Buckets)
                         {
                             var row = new Dictionary<string, object?>();
@@ -270,11 +272,12 @@ namespace Birko.Data.ElasticSearch.Aggregation
             var termsAgg = parentBucket.Terms("group_by");
             if (termsAgg != null)
             {
+                RequireOneTermsKey(query.GroupByFields);
+                ThrowIfTruncated(termsAgg.SumOtherDocCount, termsAgg.Buckets.Count);
                 foreach (var bucket in termsAgg.Buckets)
                 {
                     var row = new Dictionary<string, object?>();
-                    if (query.GroupByFields.Count == 1)
-                        row[query.GroupByFields[0]] = bucket.Key;
+                    row[query.GroupByFields[0]] = bucket.Key;
                     ExtractMetricsFromBucket(bucket, query.Aggregates, row);
                     results.Add(new AggregateResult(row));
                 }
@@ -284,6 +287,7 @@ namespace Birko.Data.ElasticSearch.Aggregation
             var compositeAgg = parentBucket.Composite("group_by");
             if (compositeAgg != null)
             {
+                ThrowIfTruncated(null, compositeAgg.Buckets.Count);
                 foreach (var bucket in compositeAgg.Buckets)
                 {
                     var row = new Dictionary<string, object?>();
@@ -325,6 +329,43 @@ namespace Birko.Data.ElasticSearch.Aggregation
         /// </summary>
         /// <param name="interval">The interval string to parse.</param>
         /// <returns>A NEST Time object representing the interval.</returns>
+        /// <summary>The bucket cap of <see cref="BuildGroupByAggregation(IReadOnlyList{string}, AggregationDictionary, int)"/>.</summary>
+        public const int DefaultGroupBySize = 10000;
+
+        /// <summary>
+        /// Why a group-by response is not every group, or null when it is.
+        /// </summary>
+        /// <remarks>
+        /// TASK-151 (SH-M390): a terms aggregation returns its largest <c>size</c> buckets and counts the rest in
+        /// <c>sum_other_doc_count</c>; a composite one returns a page of <c>size</c>. Neither was checked, so a high
+        /// cardinality group-by returned a complete-looking subset. A full composite page is reported too: there may
+        /// be a next page, and this parser reads one response.
+        /// </remarks>
+        internal static string? TruncationError(long? sumOtherDocCount, int bucketCount, int size)
+        {
+            if (sumOtherDocCount > 0)
+                return $"The group-by returned its {bucketCount} largest groups and left out groups holding {sumOtherDocCount} documents.";
+            if (bucketCount >= size)
+                return $"The group-by returned a full page of {bucketCount} groups; there may be more.";
+            return null;
+        }
+
+        private static void ThrowIfTruncated(long? sumOtherDocCount, int bucketCount)
+        {
+            var error = TruncationError(sumOtherDocCount, bucketCount, DefaultGroupBySize);
+            if (error != null)
+                throw new InvalidOperationException(error + " Narrow the filter or group by fewer distinct values.");
+        }
+
+        private static void RequireOneTermsKey(IReadOnlyList<string> groupByFields)
+        {
+            // TASK-151 (SH-M389): a terms bucket carries one key; with several group fields every row lost them all.
+            if (groupByFields.Count != 1)
+                throw new InvalidOperationException(
+                    $"A terms group-by carries one key, but the query groups by {groupByFields.Count} fields; its rows could not be told apart.");
+        }
+
+
         public static Nest.Time ParseToTime(string interval)
         {
             var ts = Birko.Data.Stores.TimeIntervalParser.Parse(interval);

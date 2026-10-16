@@ -32,6 +32,15 @@ public static class MongoViewTranslator
             var foreignCollection = GetCollectionName(join.RightType);
             var localField = GetFieldName(join.LeftProperty);
             var foreignField = GetFieldName(join.RightProperty);
+            // TASK-151 (SH-M394): a Cross join was rendered as an equality join, a different row set from SQL's. A
+            // $lookup on keys cannot be a cartesian product, and SQL refuses a cross join that carries keys
+            // (TASK-626), so it is refused here too.
+            if (join.JoinType == JoinType.Cross)
+            {
+                throw new NotSupportedException(
+                    $"A Cross join of '{join.LeftType.Name}' and '{join.RightType.Name}' cannot be a MongoDB view: $lookup joins on keys. Use Inner or LeftOuter.");
+            }
+
             var asField = "_joined_" + foreignCollection;
 
             stages.Add(new BsonDocument("$lookup", new BsonDocument

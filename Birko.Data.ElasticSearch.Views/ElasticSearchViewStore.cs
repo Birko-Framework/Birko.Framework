@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -17,30 +18,52 @@ namespace Birko.Data.ElasticSearch.Views;
 /// Translates <see cref="ViewDefinition"/> into NEST search requests with optional aggregations.
 /// </summary>
 /// <remarks>
-/// ElasticSearch does not support joins natively. If the view definition contains joins,
-/// only primary source fields are queried and join clauses are ignored.
-/// For aggregate queries, NEST TermsAggregation + metric sub-aggregations are used.
-/// For non-aggregate queries, standard SearchRequest with _source filtering is used.
+/// <para>
+/// A view reads documents of one type: the primary source's, or, for a Persistent view, view-shaped documents in the
+/// view's own index. Every name the caller uses is a VIEW property, and is mapped to the stored field of the
+/// property it selects (TASK-151, SH-M382): filters, sorts, group keys and projections alike.
+/// </para>
+/// <para>
+/// ElasticSearch has no joins, so a definition with joins is refused (SH-M411); it used to be read as an unjoined
+/// query whose joined properties were all default.
+/// </para>
+/// <para>
+/// A grouping view is a composite aggregation read page by page to the end (SH-M390), so every group is returned;
+/// its rows are then ordered, paged and counted as the rows they are (SH-M380, SH-M381).
+/// </para>
 /// </remarks>
 public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : class, new()
 {
     private readonly ElasticClient _connector;
     private readonly ViewDefinition _definition;
     private readonly string _indexName;
-    private readonly string[] _sourceFields;
+    private readonly Type _documentType;
+
+    /// <summary>Groups read per composite-aggregation page.</summary>
+    internal int GroupPageSize { get; init; } = 1000;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ElasticSearchViewStore{TView}"/> class.
     /// </summary>
     /// <param name="connector">The NEST ElasticClient instance.</param>
     /// <param name="definition">The view definition describing fields, aggregates, and query mode.</param>
+    /// <exception cref="NotSupportedException">The definition joins another source.</exception>
     public ElasticSearchViewStore(ElasticClient connector, ViewDefinition definition)
     {
         _connector = connector ?? throw new ArgumentNullException(nameof(connector));
         _definition = definition ?? throw new ArgumentNullException(nameof(definition));
-        _indexName = ResolveIndexName();
-        _sourceFields = ResolveSourceFields();
+        if (definition.HasJoins)
+        {
+            throw new NotSupportedException(
+                $"An ElasticSearch view reads one index and cannot join '{definition.Joins[0].RightType.Name}'. Denormalise the joined fields into the source documents.");
+        }
+        _indexName = ElasticSearchViewIndexResolver.Resolve(_definition);
+        _documentType = _definition.QueryMode == ViewQueryMode.Persistent && !string.IsNullOrEmpty(_definition.Name)
+            ? typeof(TView)
+            : _definition.PrimarySource;
     }
+
+    private bool Grouped => _definition.HasAggregates || _definition.HasGroupBy;
 
     /// <inheritdoc />
     public async Task<IEnumerable<TView>> QueryAsync(
@@ -52,9 +75,12 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
     {
         ct.ThrowIfCancellationRequested();
 
-        if (_definition.HasAggregates)
+        if (Grouped)
         {
-            return await ExecuteAggregateQueryAsync(filter, limit, ct).ConfigureAwait(false);
+            IEnumerable<TView> rows = OrderByHelper.ApplyTo(await ReadGroupsAsync(filter, ct).ConfigureAwait(false), orderBy);
+            if (offset.HasValue && offset.Value > 0) rows = rows.Skip(offset.Value);
+            if (limit.HasValue) rows = rows.Take(limit.Value);
+            return rows.ToList();
         }
 
         return await ExecuteSimpleQueryAsync(filter, orderBy, limit, offset, ct).ConfigureAwait(false);
@@ -76,10 +102,15 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
     {
         ct.ThrowIfCancellationRequested();
 
-        var filterQuery = BuildFilterQuery(filter);
+        // SH-M380: a grouping view counts its rows, not the source documents.
+        if (Grouped)
+        {
+            return (await ReadGroupsAsync(filter, ct).ConfigureAwait(false)).Count;
+        }
+
         var countRequest = new CountRequest(_indexName)
         {
-            Query = filterQuery
+            Query = BuildFilterQuery(filter)
         };
 
         var response = await _connector.CountAsync(countRequest, ct).ConfigureAwait(false);
@@ -103,8 +134,6 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
         int? offset,
         CancellationToken ct)
     {
-        var filterQuery = BuildFilterQuery(filter);
-
         var from = offset ?? 0;
         var searchRequest = new SearchRequest(_indexName)
         {
@@ -113,25 +142,45 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
             // ES rejects it. For result sets deeper than the window, use search_after / scroll instead.
             Size = ClampWindowSize(from, limit),
             From = from,
-            Query = filterQuery
+            Query = BuildFilterQuery(filter)
         };
 
-        // Apply _source filtering to return only mapped fields
-        if (_sourceFields.Length > 0)
+        if (_definition.Fields.Count > 0)
         {
             searchRequest.Source = new SourceFilter
             {
-                Includes = _sourceFields
+                Includes = _definition.Fields.Select(f => StoredField(SourceOf(f), exact: false)).ToArray()
             };
         }
 
-        // Apply sorting
         if (orderBy != null && orderBy.Fields.Count > 0)
         {
-            searchRequest.Sort = Birko.Data.ElasticSearch.ElasticSearch.Sorts(orderBy);
+            searchRequest.Sort = orderBy.Fields
+                .Select(f => (ISort)new FieldSort
+                {
+                    Field = StoredField(SourceOfViewProperty(f.PropertyName), exact: true),
+                    Order = f.Descending ? SortOrder.Descending : SortOrder.Ascending
+                })
+                .ToList();
         }
 
-        var response = await _connector.SearchAsync<TView>(searchRequest, ct).ConfigureAwait(false);
+        var documents = await (Task<IReadOnlyCollection<object>>)typeof(ElasticSearchViewStore<TView>)
+            .GetMethod(nameof(SearchDocumentsAsync), BindingFlags.NonPublic | BindingFlags.Instance)!
+            .MakeGenericMethod(_documentType)
+            .Invoke(this, new object[] { searchRequest, ct })!;
+
+        if (_documentType == typeof(TView) && _definition.Fields.Count == 0)
+        {
+            return documents.Cast<TView>().ToList();
+        }
+
+        return documents.Select(Project).ToList();
+    }
+
+    private async Task<IReadOnlyCollection<object>> SearchDocumentsAsync<TDocument>(SearchRequest request, CancellationToken ct)
+        where TDocument : class
+    {
+        var response = await _connector.SearchAsync<TDocument>(request, ct).ConfigureAwait(false);
 
         if (!response.IsValid || response.OriginalException != null)
         {
@@ -140,164 +189,173 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
                 response.OriginalException);
         }
 
-        return response.Documents;
+        return response.Documents.Cast<object>().ToList();
+    }
+
+    /// <summary>A view row from a document: each field read from the property it selects (SH-M382).</summary>
+    private TView Project(object document)
+    {
+        var row = new TView();
+        foreach (var field in _definition.Fields)
+        {
+            var source = _documentType.GetProperty(SourceOf(field), BindingFlags.Public | BindingFlags.Instance)
+                ?? throw new NotSupportedException($"'{_documentType.Name}' has no property '{SourceOf(field)}' for view field '{field.ViewProperty}'.");
+            SetPropertyValue(row, field.ViewProperty, source.GetValue(document));
+        }
+        return row;
     }
 
     #endregion
 
     #region Aggregate Query
 
-    private async Task<IEnumerable<TView>> ExecuteAggregateQueryAsync(
-        Expression<Func<TView, bool>>? filter,
-        int? limit,
-        CancellationToken ct)
+    /// <summary>
+    /// Every row of a grouping view: one per group, read through a composite aggregation page by page, or the one
+    /// row of an aggregate with no grouping.
+    /// </summary>
+    private async Task<List<TView>> ReadGroupsAsync(Expression<Func<TView, bool>>? filter, CancellationToken ct)
     {
         var filterQuery = BuildFilterQuery(filter);
 
-        // Build metric sub-aggregations from the definition
         var metricAggregations = new AggregationDictionary();
-        foreach (var aggregate in _definition.Aggregates)
+        var metricNames = new List<(string Name, AggregateFunction Function)>();
+        for (int i = 0; i < _definition.Aggregates.Count; i++)
         {
-            var aggName = BuildAggregationName(aggregate);
-            var fieldName = aggregate.SourceProperty != null
-                ? aggregate.SourceProperty
-                : null;
-
-            var agg = StoreAggregationHelper.BuildSingleMetricAggregation(aggregate.Function, aggName, fieldName);
-
-            metricAggregations.Add(aggName, agg);
+            var aggregate = _definition.Aggregates[i];
+            // Named by position: two aggregates of one function over one field collided under "{fn}_{field}".
+            var name = "m" + i.ToString(CultureInfo.InvariantCulture);
+            var field = aggregate.SourceProperty != null ? StoredField(aggregate.SourceProperty, exact: true) : null;
+            metricAggregations.Add(name, StoreAggregationHelper.BuildSingleMetricAggregation(aggregate.Function, name, field));
+            metricNames.Add((name, aggregate.Function));
         }
 
-        AggregationDictionary topLevelAggregations;
-
-        if (_definition.HasGroupBy)
+        if (!_definition.HasGroupBy)
         {
-            // Use shared helper for GROUP BY aggregation
-            var groupByFieldNames = _definition.GroupBy.Select(g => g.PropertyName).ToList();
-            topLevelAggregations = new AggregationDictionary
+            var response = await SearchAsync(new SearchRequest(_indexName) { Size = 0, Query = filterQuery, Aggregations = metricAggregations }, ct).ConfigureAwait(false);
+            var row = new TView();
+            SetMetrics(row, StoreAggregationHelper.ExtractMetricValues(response.Aggregations, metricNames));
+            return new List<TView> { row };
+        }
+
+        // SH-M387, SH-M389: one composite source per group key, named by position, whatever the number of keys; a
+        // key is written to the VIEW property that selects it. SH-M390: read to the last page, not the first 10000.
+        var sources = _definition.GroupBy
+            .Select((g, i) => (ICompositeAggregationSource)new TermsCompositeAggregationSource("k" + i.ToString(CultureInfo.InvariantCulture))
             {
-                { "group_by", StoreAggregationHelper.BuildGroupByAggregation(groupByFieldNames, metricAggregations, limit ?? 10000) }
+                Field = StoredField(g.PropertyName, exact: true),
+                MissingBucket = true
+            })
+            .ToList();
+        var keyProperties = _definition.GroupBy.Select(FindViewPropertyForGroupBy).ToList();
+
+        var rows = new List<TView>();
+        CompositeKey? after = null;
+        while (true)
+        {
+            var composite = new CompositeAggregation("group_by")
+            {
+                Size = GroupPageSize,
+                Sources = sources,
+                Aggregations = metricAggregations,
+                After = after
             };
+            var response = await SearchAsync(new SearchRequest(_indexName)
+            {
+                Size = 0,
+                Query = filterQuery,
+                Aggregations = new AggregationDictionary { { "group_by", composite } }
+            }, ct).ConfigureAwait(false);
+
+            var page = response.Aggregations.Composite("group_by")
+                ?? throw new InvalidOperationException($"ElasticSearch returned no group_by aggregation for view '{typeof(TView).Name}'.");
+            var buckets = page.Buckets.ToList();
+            foreach (var bucket in buckets)
+            {
+                var row = new TView();
+                IReadOnlyDictionary<string, object> key = bucket.Key;
+                for (int i = 0; i < keyProperties.Count; i++)
+                {
+                    if (key.TryGetValue("k" + i.ToString(CultureInfo.InvariantCulture), out var value))
+                    {
+                        SetPropertyValue(row, keyProperties[i], value);
+                    }
+                }
+                SetMetrics(row, StoreAggregationHelper.ExtractMetricValues(bucket, metricNames));
+                rows.Add(row);
+            }
+
+            if (buckets.Count < GroupPageSize || page.AfterKey == null)
+            {
+                return rows;
+            }
+            after = page.AfterKey;
         }
-        else
-        {
-            // No GROUP BY — metric aggregations at the top level
-            topLevelAggregations = metricAggregations;
-        }
+    }
 
-        var searchRequest = new SearchRequest(_indexName)
-        {
-            Size = 0,
-            Query = filterQuery,
-            Aggregations = topLevelAggregations
-        };
-
-        var response = await _connector.SearchAsync<TView>(searchRequest, ct).ConfigureAwait(false);
-
+    private async Task<ISearchResponse<object>> SearchAsync(SearchRequest request, CancellationToken ct)
+    {
+        var response = await _connector.SearchAsync<object>(request, ct).ConfigureAwait(false);
         if (!response.IsValid || response.OriginalException != null)
         {
             throw new InvalidOperationException(
                 $"ElasticSearch aggregate view query failed. Index: {_indexName}. DebugInfo: {response.DebugInformation}",
                 response.OriginalException);
         }
-
-        if (_definition.HasGroupBy)
-        {
-            return ParseGroupedAggregateResponse(response);
-        }
-
-        return ParseUngroupedAggregateResponse(response);
+        return response;
     }
 
-    private IEnumerable<TView> ParseGroupedAggregateResponse(ISearchResponse<TView> response)
+    private void SetMetrics(TView row, Dictionary<string, double?> values)
     {
-        var results = new List<TView>();
-        var viewType = typeof(TView);
-
-        // Try composite aggregation first, then terms
-        var compositeBuckets = response.Aggregations.Composite("group_by");
-        if (compositeBuckets?.Buckets != null)
-        {
-            foreach (var bucket in compositeBuckets.Buckets)
-            {
-                var item = new TView();
-
-                // Set group-by field values from composite key
-                foreach (var groupBy in _definition.GroupBy)
-                {
-                    var gbFieldName = groupBy.PropertyName;
-                    if (bucket.Key.TryGetValue(gbFieldName, out string keyValue))
-                    {
-                        SetPropertyValue(item, viewType, groupBy.PropertyName, keyValue);
-                    }
-                }
-
-                // Set aggregate values
-                SetAggregateValues(item, viewType, bucket);
-                results.Add(item);
-            }
-
-            return results;
-        }
-
-        var termsBuckets = response.Aggregations.Terms("group_by");
-        if (termsBuckets?.Buckets == null)
-        {
-            return results;
-        }
-
-        foreach (var bucket in termsBuckets.Buckets)
-        {
-            var item = new TView();
-
-            // Set the group-by field value
-            var groupByProperty = _definition.GroupBy[0].PropertyName;
-            SetPropertyValue(item, viewType, groupByProperty, bucket.Key);
-
-            // Set aggregate values
-            SetAggregateValues(item, viewType, bucket);
-            results.Add(item);
-        }
-
-        return results;
-    }
-
-    private IEnumerable<TView> ParseUngroupedAggregateResponse(ISearchResponse<TView> response)
-    {
-        var item = new TView();
-        var viewType = typeof(TView);
-
-        // Reuse the shared metric extraction logic via a response-level adapter.
-        // response.Aggregations is a BucketBase-compatible aggregate dictionary.
-        var aggNames = _definition.Aggregates.Select(a => (BuildAggregationName(a), a.Function));
-        var values = StoreAggregationHelper.ExtractMetricValues(response.Aggregations, aggNames);
-
-        foreach (var aggregate in _definition.Aggregates)
-        {
-            var aggName = BuildAggregationName(aggregate);
-            if (values.TryGetValue(aggName, out var value) && value.HasValue)
-            {
-                SetPropertyValue(item, viewType, aggregate.ViewProperty, value.Value);
-            }
-        }
-
-        return new[] { item };
-    }
-
-    private void SetAggregateValues(TView item, Type viewType, BucketBase bucket)
-    {
-        var aggNames = _definition.Aggregates.Select(a => (BuildAggregationName(a), a.Function));
-        var values = StoreAggregationHelper.ExtractMetricValues(bucket, aggNames);
-
         for (int i = 0; i < _definition.Aggregates.Count; i++)
         {
-            var aggregate = _definition.Aggregates[i];
-            var aggName = BuildAggregationName(aggregate);
-            if (values.TryGetValue(aggName, out var value) && value.HasValue)
+            if (values.TryGetValue("m" + i.ToString(CultureInfo.InvariantCulture), out var value) && value.HasValue)
             {
-                SetPropertyValue(item, viewType, aggregate.ViewProperty, value.Value);
+                SetPropertyValue(row, _definition.Aggregates[i].ViewProperty, value.Value);
             }
         }
+    }
+
+    private string FindViewPropertyForGroupBy(GroupByClause groupBy)
+    {
+        var field = _definition.Fields.FirstOrDefault(f =>
+            f.SourceType == groupBy.SourceType &&
+            f.SourceProperty == groupBy.PropertyName);
+
+        return field?.ViewProperty ?? groupBy.PropertyName;
+    }
+
+    #endregion
+
+    #region Names
+
+    /// <summary>The document property a view field reads: its source's, or its own in a Persistent view's index.</summary>
+    private string SourceOf(FieldSelector field) => _documentType == typeof(TView) ? field.ViewProperty : field.SourceProperty;
+
+    /// <summary>The document property behind a view property a caller named (in a filter or a sort).</summary>
+    private string SourceOfViewProperty(string viewProperty)
+    {
+        // A WHERE runs on the documents: an aggregate exists only after grouping (HAVING).
+        if (_definition.Aggregates.Any(a => a.ViewProperty == viewProperty))
+        {
+            throw new NotSupportedException(
+                $"A filter on aggregate view property '{typeof(TView).Name}.{viewProperty}' would need HAVING, which view filters do not emit.");
+        }
+
+        var field = _definition.Fields.FirstOrDefault(f => f.ViewProperty == viewProperty);
+        if (field != null) return SourceOf(field);
+        if (_documentType.GetProperty(viewProperty, BindingFlags.Public | BindingFlags.Instance) != null) return viewProperty;
+        throw new NotSupportedException($"View property '{typeof(TView).Name}.{viewProperty}' selects no field of '{_documentType.Name}'.");
+    }
+
+    /// <summary>The stored field of a document property, through the one producer the entity store uses.</summary>
+    private string StoredField(string property, bool exact)
+    {
+        var member = _documentType.GetProperty(property, BindingFlags.Public | BindingFlags.Instance)
+            ?? throw new NotSupportedException($"'{_documentType.Name}' has no property '{property}'.");
+        var name = exact
+            ? Data.ElasticSearch.ElasticSearch.ExactFieldName(member, member.PropertyType, null)
+            : Data.ElasticSearch.ElasticSearch.StoredFieldName(member, null);
+        return name ?? throw new NotSupportedException($"'{_documentType.Name}.{property}' has no stored field.");
     }
 
     #endregion
@@ -311,68 +369,103 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
             return new MatchAllQuery();
         }
 
-        // CR-H047 — a supplied filter that can't be translated must NOT silently widen to match-all: that
-        // turns a filtered/existence/permission query into a false full-result set. This used to be the
-        // ONLY place the invariant was enforced; the main entity stores assigned the parser's result
-        // straight to their requests, so the same null widened reads and, worse, reached
-        // _delete_by_query / _update_by_query unguarded (TASK-268). The logic now lives in one shared
-        // helper that every filter->query conversion routes through, so a new call site cannot forget it.
-        var query = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter);
+        // SH-M382: the filter names VIEW properties; it is rewritten onto the document type, so it tests the
+        // stored field each one selects. Translated through the same parser as the entity store.
+        LambdaExpression documentFilter = filter;
+        if (_documentType != typeof(TView) || _definition.Fields.Count > 0)
+        {
+            var parameter = Expression.Parameter(_documentType, filter.Parameters[0].Name);
+            var body = new ViewToDocument(filter.Parameters[0], parameter, this).Visit(filter.Body);
+            documentFilter = Expression.Lambda(body, parameter);
+        }
 
-        // Unreachable for a non-null filter (the helper throws instead of returning null); kept as a
-        // belt-and-braces assertion of this method's own non-null contract.
+        // CR-H047 — a supplied filter that can't be translated must NOT silently widen to match-all: that
+        // turns a filtered/existence/permission query into a false full-result set (TASK-268).
+        QueryBase? query;
+        try
+        {
+            query = Data.ElasticSearch.ElasticSearch.ParseExpression(documentFilter);
+        }
+        catch (Exception ex) when (ex is not NotSupportedException)
+        {
+            throw new NotSupportedException($"The filter expression could not be translated to an ElasticSearch query: {filter}.", ex);
+        }
+
         return query ?? throw new NotSupportedException(
             $"The filter expression could not be translated to an ElasticSearch query: {filter}.");
+    }
+
+    private sealed class ViewToDocument : ExpressionVisitor
+    {
+        private readonly ParameterExpression _view;
+        private readonly ParameterExpression _document;
+        private readonly ElasticSearchViewStore<TView> _store;
+
+        public ViewToDocument(ParameterExpression view, ParameterExpression document, ElasticSearchViewStore<TView> store)
+        {
+            _view = view;
+            _document = document;
+            _store = store;
+        }
+
+        protected override Expression VisitMember(MemberExpression node)
+        {
+            if (node.Expression != _view)
+            {
+                return base.VisitMember(node);
+            }
+
+            var source = Expression.Property(_document, _store.SourceOfViewProperty(node.Member.Name));
+            return source.Type == node.Type ? source : Expression.Convert(source, node.Type);
+        }
+
+        protected override Expression VisitParameter(ParameterExpression node)
+            => node == _view
+                ? throw new NotSupportedException($"A view filter may only read view properties, not the view row itself.")
+                : base.VisitParameter(node);
     }
 
     #endregion
 
     #region Helpers
 
-    private string ResolveIndexName() => ElasticSearchViewIndexResolver.Resolve(_definition);
-
-    private string[] ResolveSourceFields()
+    /// <summary>
+    /// Sets a view property, converting what ElasticSearch returned. A value that cannot be converted throws: it
+    /// was left at the property's default, so a date minimum read as epoch milliseconds came back as
+    /// <c>DateTime.MinValue</c> (SH-M388).
+    /// </summary>
+    private static void SetPropertyValue(TView instance, string propertyName, object? value)
     {
-        if (_definition.Fields.Count == 0)
+        var property = typeof(TView).GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        if (property == null || !property.CanWrite)
         {
-            return Array.Empty<string>();
+            throw new NotSupportedException($"View '{typeof(TView).Name}' has no writable property '{propertyName}'.");
         }
-
-        return _definition.Fields
-            .Select(f => f.SourceProperty)
-            .ToArray();
-    }
-
-    private static string BuildAggregationName(AggregateClause aggregate)
-    {
-        var functionPrefix = aggregate.Function.ToString().ToLowerInvariant();
-        var fieldSuffix = aggregate.SourceProperty ?? "all";
-        return $"{functionPrefix}_{fieldSuffix}";
-    }
-
-    private static void SetPropertyValue(TView instance, Type viewType, string propertyName, object? value)
-    {
-        var property = viewType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
-        if (property == null || !property.CanWrite || value == null)
+        if (value == null)
         {
             return;
         }
 
-        var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-        // CR-L119: Convert.ChangeType does not handle enum or Guid targets, so those group-by/aggregate
-        // columns were always silently dropped; ConvertValue handles them explicitly. Non-convertible
-        // values are still left at their default (a mismatch between the property type and the value ES
-        // returns), but enum/Guid now round-trip.
-        if (ConvertValue(targetType, value, out var convertedValue))
+        if (property.PropertyType.IsInstanceOfType(value))
         {
-            property.SetValue(instance, convertedValue);
+            property.SetValue(instance, value);
+            return;
         }
+
+        var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        if (!ConvertValue(targetType, value, out var convertedValue))
+        {
+            throw new InvalidOperationException(
+                $"ElasticSearch returned {value.GetType().Name} '{value}' for view property '{typeof(TView).Name}.{propertyName}', which is {targetType.Name}.");
+        }
+        property.SetValue(instance, convertedValue);
     }
 
     /// <summary>
     /// Converts an ElasticSearch-returned value to <paramref name="targetType"/>, handling enum and Guid
-    /// targets that <see cref="Convert.ChangeType(object, Type)"/> cannot. Returns <c>false</c> (and leaves
-    /// <paramref name="converted"/> null) when the value cannot be converted.
+    /// targets that <see cref="Convert.ChangeType(object, Type)"/> cannot, and dates, which ElasticSearch returns
+    /// from an aggregation as epoch milliseconds. Returns <c>false</c> (and leaves <paramref name="converted"/>
+    /// null) when the value cannot be converted.
     /// </summary>
     internal static bool ConvertValue(Type targetType, object value, out object? converted)
     {
@@ -383,7 +476,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
             {
                 converted = value is string enumName
                     ? Enum.Parse(targetType, enumName, ignoreCase: true)
-                    : Enum.ToObject(targetType, Convert.ChangeType(value, Enum.GetUnderlyingType(targetType)));
+                    : Enum.ToObject(targetType, Convert.ChangeType(value, Enum.GetUnderlyingType(targetType), CultureInfo.InvariantCulture));
                 return true;
             }
 
@@ -393,12 +486,24 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
                 return true;
             }
 
-            converted = Convert.ChangeType(value, targetType);
+            if (targetType == typeof(DateTime) || targetType == typeof(DateTimeOffset))
+            {
+                DateTimeOffset instant = value switch
+                {
+                    DateTime dt => new DateTimeOffset(DateTime.SpecifyKind(dt, dt.Kind == DateTimeKind.Unspecified ? DateTimeKind.Utc : dt.Kind)),
+                    DateTimeOffset dto => dto,
+                    string s => DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal),
+                    _ => DateTimeOffset.FromUnixTimeMilliseconds(Convert.ToInt64(value, CultureInfo.InvariantCulture)),
+                };
+                converted = targetType == typeof(DateTime) ? (object)instant.UtcDateTime : instant;
+                return true;
+            }
+
+            converted = Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
             return true;
         }
-        catch
+        catch (Exception ex) when (ex is FormatException || ex is InvalidCastException || ex is OverflowException || ex is ArgumentException)
         {
-            // Value shape does not match the property type — leave the property at its default.
             return false;
         }
     }

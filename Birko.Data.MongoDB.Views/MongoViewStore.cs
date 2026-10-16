@@ -135,9 +135,15 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
                 // the old `catch (MongoCommandException) when (Auto)` fallback never fired — Auto mode
                 // silently returned empty when the view was missing. For Auto, check existence first and
                 // only use the view if it actually exists; for Persistent, use it unconditionally.
-                var useView = _definition.QueryMode == Birko.Data.Views.ViewQueryMode.Persistent
-                    || await ViewExistsAsync(viewName, ct).ConfigureAwait(false);
-                if (useView)
+                // TASK-151 (SH-M392): Persistent also checks, and a missing view is an error. Aggregating over a view
+                // that was never created (or was dropped) answered an empty cursor, indistinguishable from an empty view.
+                var exists = await ViewExistsAsync(viewName, ct).ConfigureAwait(false);
+                if (!exists && _definition.QueryMode == Birko.Data.Views.ViewQueryMode.Persistent)
+                {
+                    throw new InvalidOperationException(
+                        $"Persistent view '{viewName}' does not exist. Create it with IViewManager.EnsureAsync, or use Auto mode.");
+                }
+                if (exists)
                 {
                     var viewCollection = _database.GetCollection<BsonDocument>(viewName);
                     var viewPipeline = PipelineDefinition<BsonDocument, BsonDocument>.Create(stages);
@@ -162,9 +168,8 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
 
     private async Task<bool> ViewExistsAsync(string viewName, CancellationToken ct)
     {
-        // Mirrors MongoViewManager.ExistsAsync: a MongoDB view is a virtual collection, so it shows up
-        // in the collection-name listing filtered by name.
-        var filter = new BsonDocument("name", viewName);
+        // Mirrors MongoViewManager.ExistsAsync: a VIEW of that name (TASK-151: an ordinary collection of the name is not one).
+        var filter = new BsonDocument { { "name", viewName }, { "type", "view" } };
         var collections = await _database.ListCollectionNamesAsync(
             new ListCollectionNamesOptions { Filter = filter }, ct).ConfigureAwait(false);
         return await collections.AnyAsync(ct).ConfigureAwait(false);

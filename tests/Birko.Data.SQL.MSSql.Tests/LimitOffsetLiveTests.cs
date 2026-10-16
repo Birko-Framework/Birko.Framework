@@ -195,13 +195,15 @@ public class LimitOffsetLiveTests : IDisposable
     }
 
     [Fact]
-    public void The_emitted_tail_is_empty_without_a_limit()
+    public void An_offset_without_a_limit_is_an_OFFSET_with_no_FETCH()
     {
+        // TASK-151 (SH-M403), inverted on measurement: the pin said an OFFSET with no FETCH is Msg 102, but after an
+        // ORDER BY it is valid T-SQL and skips the rows (JoinRenderingLiveTests.An_offset_without_a_limit_skips_rows,
+        // live on SQL Server). The offset used to be dropped, returning page 1.
         var connector = new MSSqlConnector(new MSSqlSettings("localhost", "db", "sa", "p"));
         using var command = new SqlCommand();
 
-        connector.LimitOffsetDefinition(command, null, 5).Should().BeEmpty(
-            "CreateSelectCommand only calls this when a limit is set, and an OFFSET with no FETCH is Msg 102 "
-          + "anyway");
+        connector.LimitOffsetDefinition(command, null, 5).Should().Be(" OFFSET @OFFSET ROWS");
+        command.Parameters["@OFFSET"].Value.Should().Be(5);
     }
 }

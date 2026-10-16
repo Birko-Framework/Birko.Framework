@@ -3963,11 +3963,15 @@ The predicate is `value is TProp typed && set.Contains(typed)` (154), so a null 
 
 `../Birko.Data.Stores/AggregateHelper.cs:96`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** An unresolved group-by, aggregate-source or time-column name now throws `ArgumentException` (`AggregateHelper.RequireProperty`) instead of shortening the key array and labelling the next column with it.
+
 keyProperties is built with `.Where(p => p != null)`, so an unresolvable name shortens the array, but the row-labelling loop indexes `query.GroupByFields[i]` by position in the SHORTENED array. With GroupByFields == ["Bogus", "Status"] the Status value is written under the key "Bogus"; every downstream GetValue reads the wrong column and no error is raised.
 
 #### SH-M378 — BuildCountAggregateSql emits SQL Cosmos cannot run and deserializes into the wrong shape
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:262`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** Measured on the emulator: a grouping view over 3 documents in 2 groups counted 3. The count now runs the view's own GROUP BY statement (`BuildAggregateSql`, the one producer) and counts the groups it returns; `BuildCountAggregateSql` and its `CountResult` binding are gone.
 
 It builds `SELECT VALUE COUNT(1) FROM (SELECT c.id FROM c ... GROUP BY c.X)` while its own comment states Cosmos does not support sub-queries in FROM; the inner query also projects non-grouped `c.id` alongside GROUP BY. Even if it executed, `SELECT VALUE COUNT(1)` returns a bare number, not an object with a `Count` member, so the private `CountResult` binding yields 0 — CountAsync would report zero rows for a populated view.
 
@@ -3975,11 +3979,15 @@ It builds `SELECT VALUE COUNT(1) FROM (SELECT c.id FROM c ... GROUP BY c.X)` whi
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:61`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** `QueryFirstAsync` and `CountAsync` branch on `HasAggregates || HasGroupBy`, as `QueryAsync` does (measured: a group-by-only view counted documents).
+
 CR-L110 made QueryAsync take the SQL path for `HasAggregates || HasGroupBy`, but QueryFirstAsync (61) and CountAsync (75) still test HasAggregates alone. For a group-by-only (distinct) view, QueryAsync returns grouped rows while QueryFirstAsync returns a raw ungrouped document and CountAsync returns the raw document count — the same store answers three inconsistent questions about one definition.
 
 #### SH-M380 — ElasticSearchViewStore.CountAsync ignores grouping and aggregation entirely
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:73`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** Measured live: 2 groups over 3 documents counted 3. A grouping view's count is the number of rows it returns.
 
 It issues a plain CountRequest against the resolved index with only the filter. For an aggregate/grouped view it returns the number of source DOCUMENTS, not the number of result rows QueryAsync produces on the same definition: 1,000,000 vs 12 status buckets. Any caller paging on Count/Query pages over a phantom result set.
 
@@ -3987,11 +3995,15 @@ It issues a plain CountRequest against the resolved index with only the filter. 
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:57`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** The grouping path reads every group, then orders (`OrderByHelper` over view properties), skips and takes in memory; `limit` is a page size again, not a bucket cap. Measured live: ordered by `Total` desc, offset 1, limit 1 returns the second group.
+
 QueryAsync forwards only (filter, limit, ct) to ExecuteAggregateQueryAsync. A caller supplying OrderBy or offset for an aggregate view gets unordered, unpaged buckets with no error, and `limit` silently changes meaning from page size to terms-bucket size (line 188), so limit:10 caps the number of GROUPS rather than rows.
 
 #### SH-M382 — ElasticSearchViewStore non-aggregate path never maps SourceProperty to ViewProperty
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:343`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED-WIDER — fixed by [[TASK-151]] (2026-10-16).** Measured live: a sorted plain view query failed outright (400, the sort named a field the index lacks), not just defaulted. Filters are rewritten from view properties onto the document type, sorts and `_source` resolve through `StoredFieldName` / `ExactFieldName` (the entity store's one producer), and each hit is read as the source type and projected into its view properties.
 
 _sourceFields is built from FieldSelector.SourceProperty and used only as a `_source` include filter; the hits are deserialized straight into TView by NEST name mapping. There is no projection/rename step, so `Select(o => o.StatusCode, v => v.Status)` leaves TView.Status at its default. The same names are used for FieldSort (line 136), so ordering by a renamed property targets a field the index does not have.
 
@@ -3999,11 +4011,15 @@ _sourceFields is built from FieldSelector.SourceProperty and used only as a `_so
 
 `../Birko.Data.Stores/AggregateHelper.cs:50`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** The raw-rows shortcut now goes through `ApplyOrderingAndPaging`, and bucketing needs both interval and column (a non-positive interval throws).
+
 When `Aggregates.Count == 0 && GroupByFields.Count == 0` the method returns every filtered row and never reaches ApplyOrderingAndPaging (line 126) or the bucketing code. `new AggregateQuery<Order> { Limit = 10, Offset = 100, OrderBy = ..., TimeBucketInterval = "1 hour", TimeColumn = "Created" }` therefore returns the entire table, unordered and unbucketed, reporting success — a caller paging a large store gets everything.
 
 #### SH-M384 — Composite group key is a "|"-joined ToString(), so distinct key tuples collide into one group
 
 `../Birko.Data.Stores/AggregateHelper.cs:86`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** Groups are keyed by an `object?[]` tuple with `KeyTupleComparer`, so ("a|b","c") and ("a","b|c"), null and "", and equal-`ToString()` values of different types stay apart.
 
 `string.Join("|", key.Select(k => k?.ToString() ?? ""))` is the group key. Values ("a|b", "c") and ("a", "b|c") produce the identical key "a|b|c" and are summed into one row; null and "" also collide, as do any two values with equal ToString() (e.g. two enums of different types). Rows are silently merged and the emitted key columns come from `group.First()`, so one of the real key tuples disappears from the result.
 
@@ -4011,11 +4027,15 @@ When `Aggregates.Count == 0 && GroupByFields.Count == 0` the method returns ever
 
 `../Birko.Data.Stores/AggregateMath.cs:36`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** `AggregateMath` sums and averages short/byte/sbyte/ushort/uint (as long; Avg as double) and ulong (Sum as decimal); a non-numeric type throws `NotSupportedException`, before the empty-list shortcut.
+
 Both methods only branch on decimal/double/float/int/long and fall through to `return null`. A Sum or Avg over a `short`/`byte`/`uint`/`ulong` column silently yields a null cell with no error, while a native backend (SQL SUM, ES SumAggregation) returns a number for the same query — so the LINQ fallback and the server-side path disagree. ViewDefinitionBuilder.ValidateAggregates (line 210) explicitly accepts all of those types as valid Sum/Avg targets.
 
 #### SH-M386 — TimeIntervalParser parses the numeric part with the current culture, so "1.5 hours" fails under a comma-decimal locale
 
 `../Birko.Data.Stores/TimeIntervalParser.cs:29`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** `TimeIntervalParser` parses with the invariant culture.
 
 `double.TryParse(parts[0], out var value)` (and `TimeSpan.TryParse` on line 23) use CurrentCulture. On sk-SK/de-DE, "1.5 hours" fails to parse and Parse returns TimeSpan.Zero, which AggregateHelper reads as "bucketing disabled" (no bucket_time key at all) and StoreAggregationHelper.ParseToTime silently rewrites to "1h". The same query therefore buckets differently depending on the process locale, with no error.
 
@@ -4023,11 +4043,15 @@ Both methods only branch on decimal/double/float/int/long and fall through to `r
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:240`
 
+**Verdict: CONFIRMED-WIDER — fixed by [[TASK-151]] (2026-10-16).** Measured live: the grouped view returned **no rows at all** — it grouped on the CLR name `Region` while the document field is `region`, so the terms aggregation had nothing to bucket. Keys are now composite sources on the stored field, written to the view property that selects them.
+
 Both the composite branch (240) and the terms branch (264) call `SetPropertyValue(item, viewType, groupBy.PropertyName, ...)` with the GroupByClause's SOURCE property name. With `GroupBy<Order>(o => o.StatusCode)` and `Select(o => o.StatusCode, v => v.Status)`, GetProperty("StatusCode") on TView returns null and SetPropertyValue returns silently, so every returned row carries metric values with a default (null/0) group key — the buckets become indistinguishable.
 
 #### SH-M388 — ES metric extraction forces every value to double?, so Min/Max on a date or string field is silently dropped
 
 `../Birko.Data.ElasticSearch/Aggregation/StoreAggregationHelper.cs:120`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** Measured live: `Min(Created)` read back `0001-01-01`. `ConvertValue` turns epoch milliseconds (and ISO strings) into `DateTime` / `DateTimeOffset`, and a value that cannot be converted now throws instead of leaving the default.
 
 ExtractMetricValues returns Dictionary<string,double?>, so a MinAggregation over a date field surfaces as epoch-millis double. ElasticSearchViewStore.SetPropertyValue then calls ConvertValue for a DateTime target, Convert.ChangeType(double, DateTime) throws, the catch returns false and the property is left at default with no error. `Min<Order,DateTime>(o => o.Created, v => v.Earliest)` — which ViewDefinitionBuilder explicitly permits — therefore always yields default(DateTime) on ES while SQL/Mongo/Raven return the real value.
 
@@ -4035,11 +4059,15 @@ ExtractMetricValues returns Dictionary<string,double?>, so a MinAggregation over
 
 `../Birko.Data.ElasticSearch/Aggregation/StoreAggregationHelper.cs:209`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** The view store groups through one composite source per key, whatever their number. `StoreAggregationHelper` (the entity store's path) refuses a terms response for a multi-field group-by instead of emitting keyless rows.
+
 In ParseAggregateResponse (209) and ParseGroupedBuckets (276) the terms branch assigns a key only `if (query.GroupByFields.Count == 1)`. If a response carries a terms `group_by` while the query groups by two or more fields (e.g. a hand-built request, or a cached/older mapping), each row is emitted with metric values and NO key columns at all, so rows are indistinguishable and silently unattributable.
 
 #### SH-M390 — Group-by aggregations default to size 10000 with no bucket-truncation detection
 
 `../Birko.Data.ElasticSearch/Aggregation/StoreAggregationHelper.cs:62`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** The view store reads the composite aggregation page by page to the last page (tested with a page size of 2 over 3 groups). For the entity store's single-response parser, `StoreAggregationHelper.TruncationError` reports `sum_other_doc_count > 0` or a full composite page, and the parse throws.
 
 BuildGroupByAggregation caps both the terms and composite aggregation at `size = 10000` and neither caller inspects `DocCountErrorUpperBound`, `SumOtherDocCount` or the composite `AfterKey`. A view grouping by a high-cardinality field (customer, SKU) silently returns only the 10000 largest buckets — the caller sees a complete-looking result set that omits groups, and ElasticSearchViewStore passes `limit ?? 10000` here so a page size of 10 caps it at ten groups.
 
@@ -4047,11 +4075,15 @@ BuildGroupByAggregation caps both the terms and composite aggregation at `size =
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewManager.cs:57`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** Measured live: ensuring an Auto view created the source index. `EnsureAsync` now creates only a Persistent view's own index.
+
 ResolveIndexName delegates to ElasticSearchViewIndexResolver, which returns `definition.Name` only for Persistent mode; for an `Auto` definition named "order_summary" it returns "order". EnsureAsync then probes and, if missing, CREATEs the source-data index "order" with dynamic mapping — a lifecycle call for a view mutating the entity index. DropAsync("order_summary") afterwards targets a different index, so ensure/drop are not inverses for Auto views.
 
 #### SH-M392 — MongoViewStore Persistent mode queries the named view unconditionally; a missing view returns empty, not an error
 
 `../Birko.Data.MongoDB.Views/MongoViewStore.cs:134`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** A Persistent view that does not exist throws `InvalidOperationException` ("does not exist"); the existence probe filters `type: "view"`.
 
 `useView` is true for Persistent without any existence check, and the CR-M122 comment on the very next lines records that aggregating against a non-existent MongoDB view/collection returns an EMPTY cursor rather than throwing. So a Persistent definition whose view was never created (or was dropped) makes QueryAsync return no rows and CountAsync return 0 — indistinguishable from a genuinely empty view. Auto mode was fixed; Persistent still fails silently.
 
@@ -4059,11 +4091,15 @@ ResolveIndexName delegates to ElasticSearchViewIndexResolver, which returns `def
 
 `../Birko.Data.MongoDB.Views/MongoViewManager.cs:70`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** `DropAsync` refuses a non-view collection and is a no-op when the name is absent; `ExistsAsync` answers for views only. Measured live: the data collection kept its 2 documents.
+
 It calls `_database.DropCollectionAsync(viewName)` with no check that the target is a view (ExistsAsync just above deliberately relies on views appearing in the collection-name listing, so the two are indistinguishable here). `DropAsync("Order")` — the primary-source collection name, which SqlViewTranslator-style name derivation and the ES resolver both produce for unnamed/Auto views — destroys the real collection and every document in it.
 
 #### SH-M394 — MongoViewTranslator translates a Cross join identically to Inner, so no cartesian product is produced
 
 `../Birko.Data.MongoDB.Views/MongoViewTranslator.cs:47`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** A Cross join is refused (`NotSupportedException`), as SQL refuses a cross join carrying keys ([[TASK-626]]).
 
 `preserveNullAndEmptyArrays` is added only for JoinType.LeftOuter, and the $lookup always joins on localField/foreignField. A definition declaring JoinType.Cross therefore produces an equality join, not a cross product — SQL honours Cross via CROSS JOIN (SqlViewTranslator.TranslateJoinType), so the same ViewDefinition returns different row sets on the two backends with no error or warning.
 
@@ -4071,11 +4107,15 @@ It calls `_database.DropCollectionAsync(viewName)` with no check that the target
 
 `../Birko.Data.RavenDB.Views/RavenViewStore.cs:114`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** Refused, not emulated: RavenDB has no ad-hoc join or map-reduce, so OnTheFly throws `NotSupportedException` naming Persistent/Auto and `EnsureAsync`.
+
 For ViewQueryMode.OnTheFly, BuildQuery returns `session.Query<TView>()` — a dynamic query over the collection Raven infers from TView. Fields, Joins, Aggregates and GroupBy are never consulted and RavenViewTranslator is never invoked, so an OnTheFly view over Order projecting into OrderSummary queries an "OrderSummaries" collection and returns an empty list (or unrelated documents) while reporting success. OnTheFly is the builder's default mode.
 
 #### SH-M396 — RavenViewStore Auto mode queries the static index with no existence check, so it cannot fall back
 
 `../Birko.Data.RavenDB.Views/RavenViewStore.cs:119`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** Auto checks the index with `GetIndexOperation`; with no on-the-fly form to fall back to, a missing index is reported by name (`InvalidOperationException`, "EnsureAsync").
 
 Auto is documented as "try persistent, fall back to on-the-fly", but the branch only checks whether `_indexName` is non-empty and then returns `session.Query<TView>(_indexName)`. If the index does not exist, Raven fails the query (IndexDoesNotExistException) instead of degrading to the dynamic query — MongoViewStore performs an explicit existence probe for the identical mode (CR-M122), so Auto means two different things across backends.
 
@@ -4083,11 +4123,15 @@ Auto is documented as "try persistent, fall back to on-the-fly", but the branch 
 
 `../Birko.Data.RavenDB.Views/RavenViewTranslator.cs:219`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** The reduce divides as `(double)`; measured live, an Avg over 10 and 15 is 12.5.
+
 The reduce emits `{View} = g.Sum(x => x.{View}_Sum) / g.Sum(x => x.{View}_Count)`. When the source property is an int/long, both operands are integers and Raven's compiled index performs integer division: an Avg over values 10 and 15 yields 12, not 12.5. AggregateHelper.ComputeAvg returns a double for the same int column, so the Raven view and the LINQ fallback disagree on every non-integral average, silently.
 
 #### SH-M398 — RavenDB join translation ignores RightProperty and JoinType and assumes the left key is a document id
 
 `../Birko.Data.RavenDB.Views/RavenViewTranslator.cs:49`
+
+**Verdict: CONFIRMED-WIDER — fixed by [[TASK-151]] (2026-10-16).** Measured live: every join index **failed to compile on the server** (`LoadDocument<Customer>`: the server knows no model types, and the string form needs a collection), so no Raven join view could be created at all. Joins now load `"{collection}/" + key` (the id `RavenDocumentId.For` writes), only on the right model's `Guid` (otherwise refused), Inner filters `joined != null`, other join types are refused.
 
 The map emits `let joined = LoadDocument<Customer>(entity.CustomerGuid)`. A LeftJoin on `(o => o.CustomerGuid, c => c.Guid)` is thus resolved by treating the raw Guid as a Raven document id: LoadDocument returns null, and the select's `joined.Name` then errors or yields null inside the index. JoinType is discarded too, so an Inner join keeps unmatched parents. The definition builds and the index is put successfully — the wrongness only shows up in the index's output.
 
@@ -4095,11 +4139,15 @@ The map emits `let joined = LoadDocument<Customer>(entity.CustomerGuid)`. A Left
 
 `../Birko.Data.RavenDB.Views/RavenViewTranslator.cs:28`
 
+**Verdict: CONFIRMED-WIDER — fixed by [[TASK-151]] (2026-10-16).** Measured live: the map read `docs.{TypeName}` while documents are stored in the convention's collection (`Order` is in `Orders`), so **every** Raven view index was empty. The map names collections by the store's conventions; a map-only index stores its fields and is read with `ProjectInto<TView>()`.
+
 For a non-aggregate definition the translator returns reduce == null and RavenViewManager puts an IndexDefinition with only `Maps` — no Fields/FieldStorage configuration. RavenViewStore then queries it with `session.Query<TView>(indexName)` and no ProjectInto (RavenViewStore.cs:124/137), so Raven returns the matched SOURCE documents rather than the map's projection; a `Select(o => o.Number, v => v.OrderNumber)` rename never reaches TView.
 
 #### SH-M400 — SqlViewTranslator keys aggregate fields by the SQL function name, so a second SUM on a table is silently dropped
 
 `../Birko.Data.SQL.Views/SqlViewTranslator.cs:150`
+
+**Verdict: CONFIRMED — fixed earlier by [[TASK-129]] and [[TASK-207]].** Aggregates are keyed by their view property (TASK-129) and non-aggregates too (`View.ViewFieldKey`, TASK-207), with a backstop that throws on a colliding key.
 
 FunctionField.Name is the function ("SUM"/"COUNT"/…) and the field is added as `view.AddField(table.Name, table.Type, functionField, functionField.Name)`. View.AddField ignores an add whose key already exists (`if (!table.Fields.ContainsKey(fieldName))`), so `Sum(o.Total → v.Total)` plus `Sum(o.Tax → v.Tax)` keeps only the first: the generated SELECT has one SUM column and TView.Tax stays at its default, with no exception. Non-aggregate fields collide the same way on the source column name (line 99).
 
@@ -4107,11 +4155,15 @@ FunctionField.Name is the function ("SUM"/"COUNT"/…) and the field is added as
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:63`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** A view with no join is a SELECT from its one table (`AbstractConnector.ViewFromTables`); it threw `ArgumentNullException("Join")`.
+
 Translate only calls AddJoin inside the `definition.Joins` loop (SqlViewTranslator.cs:156), so a single-source definition (`From<Order>().Select(...)`, the minimal documented shape) produces a View with Join == null. AbstractConnector.CreateSelectCommand then throws ArgumentNullException("view.Join") on every QueryAsync/QueryFirstAsync, and ViewSelectSqlBuilder throws InvalidOperationException("View must have at least one join definition") from EnsureAsync.
 
 #### SH-M402 — SqlViewStore orders by TView property names, but the SQL exposes source column names and "SUM"/"COUNT" aliases
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:137`
+
+**Verdict: CONFIRMED — fixed earlier, measured (2026-10-16).** Against HEAD before this task, ordering a grouped view by an aggregate (`Total`) and by a renamed field (`PersonName`) both returned the right order: keying fields by their view property ([[TASK-129]], [[TASK-207]]) made the view property the SELECT alias the ORDER BY names. Kept as a test.
 
 TranslateOrderBy copies `field.PropertyName` (the view property) into the order dictionary, and the connector interpolates the key verbatim (AbstractConnectorBase.cs:558; CreatePersistentViewSelectCommand does the same). The on-the-fly SELECT emits `Table.Column` for plain fields and aliases aggregates as the Fields-dictionary key ("SUM"), so ordering by a renamed field or by any aggregate property is invalid SQL — or, if a same-named column exists on another joined table, sorts the wrong column.
 
@@ -4119,11 +4171,15 @@ TranslateOrderBy copies `field.PropertyName` (the view property) into the order 
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:63`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** Framework-wide, not only views: an offset with no limit emits `LIMIT {UnboundedLimit} OFFSET` (MySQL `18446744073709551615`, PostgreSQL `ALL`, SQLite `-1`) and `OFFSET n ROWS` on SQL Server. Live on SQLite, PostgreSQL, MySQL and SQL Server.
+
 Both the on-the-fly and persistent command builders apply paging only inside `if (limit != null)` (AbstractConnectorBase.cs:560, AbstractConnectorBase_View.cs:95), so `QueryAsync(filter, orderBy, limit: null, offset: 20)` silently returns rows from the start of the result set. MongoViewStore emits `$skip` for the same call and CosmosViewStore emits `OFFSET 20 LIMIT 2147483647`, so the same arguments page correctly there and wrongly on SQL.
 
 #### SH-M404 — SqlViewStore.CountAsync counts joined source rows, not view rows, for aggregate/grouped views
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:98`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** `CreateViewCountCommand` counts over the view's own SELECT (`SELECT COUNT(*) FROM (…) birko_view_count`), sync and async. Measured: a 3-group view counted 6.
 
 It calls SelectCount(view, conditions), whose on-the-fly path is `SelectCount(view.Tables…, view.Join, conditions)` — a COUNT over the joined tables with no GROUP BY (AbstractConnector_SelectViewCount.cs:41). For a view grouping 1,000,000 orders into 12 buckets, CountAsync returns 1,000,000 while QueryAsync returns 12 rows. MongoViewStore.CountAsync counts post-$group documents, so the same contract means different things per backend.
 
@@ -4131,11 +4187,15 @@ It calls SelectCount(view, conditions), whose on-the-fly path is `SelectCount(vi
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:51`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** `SqlViewStore` resolves `TView` properties against its own view through `DataBase.ScopeFieldResolver` (AsyncLocal, per caller, never global — rule 36); a filter on an aggregate property is refused (it would need HAVING).
+
 DataBase.ParseConditionExpression resolves a column via ResolveColumnName(TView, prop) → LoadTable(TView), which returns null for a TView with no [Table] attribute, then falls back to the ResolveFieldSelectName hook → LoadView(TView), which throws TableAttributeException("No view attributes in type") for a type with no [View] attribute. If the hook was never registered the name stays empty and AbstractConnectorBase throws "Condition name cannot be null or empty". Either way every filtered query fails, and which exception you get depends on unrelated global state.
 
 #### SH-M406 — SQL and MongoDB EnsureAsync never update an existing view, contradicting the "Creates or updates" contract
 
 `../Birko.Data.SQL.Views/SqlViewManager.cs:42`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** SQL drops and recreates an existing view; MongoDB runs `collMod`. Measured on both: the changed definition is read.
 
 IViewManager.EnsureAsync is documented as "Creates or updates the persistent view", but SqlViewManager returns as soon as ViewExists/ViewExistsAsync is true and MongoViewManager returns as soon as ExistsAsync is true (MongoViewManager.cs:44). After a ViewDefinition changes (a new column, a changed join), Ensure reports success while every subsequent query keeps reading the stale artifact. RavenViewManager, by contrast, always replaces the index.
 
@@ -4143,11 +4203,15 @@ IViewManager.EnsureAsync is documented as "Creates or updates the persistent vie
 
 `../Birko.Data.CosmosDB.Views/CosmosViewManager.cs:35`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** `EnsureAsync` refuses a Persistent definition (Cosmos DB has no stored views) and a join; the store refuses to read a Persistent definition too, rather than computing it silently.
+
 It returns Task.CompletedTask for every mode, including Persistent — no validation of the definition, no name check, no error. A caller that follows the documented lifecycle (EnsureAsync then query) gets a successful ensure and then CosmosViewStore computes everything on the fly against the source container; ExistsAsync(definition.Name) afterwards returns false, so the manager contradicts itself. The other four managers throw InvalidOperationException when a non-OnTheFly definition has no name.
 
 #### SH-M408 — CosmosViewManager.DropAsync deletes a real container with no check that it backs a view
 
 `../Birko.Data.CosmosDB.Views/CosmosViewManager.cs:54`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** `DropAsync` never deletes a container and `ExistsAsync` is always false: no container is ever a view. Measured live: the data container survives `DropAsync("Rows")`.
 
 `_database.GetContainer(viewName).DeleteContainerAsync()` destroys whatever container carries that name, and since Cosmos has no views at all (EnsureAsync is a no-op) no container this class created can ever exist. Passing the primary-source name — e.g. the name derived for an unnamed view — deletes the live data container and all its documents, and the NotFound catch means a wrong-name call is indistinguishable from a successful teardown.
 
@@ -4155,11 +4219,15 @@ It returns Task.CompletedTask for every mode, including Persistent — no valida
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:457`
 
+**Verdict: CONFIRMED — fixed earlier by [[TASK-447]].** Every filter value is bound as a `QueryDefinition` parameter (`@p0`…); no caller text reaches the statement (`CosmosViewFilterInjectionTests`).
+
 `string s => $"'{s.Replace("'", "\\'")}'"` concatenates the value straight into the query; no QueryDefinition parameter is ever created. A value ending in a backslash ("C:\\") renders as 'C:\' — the escape consumes the terminating quote and the rest of the generated SQL (GROUP BY / ORDER BY / OFFSET) is swallowed into the literal, so an attacker-influenced search term can alter or widen the predicate. Non-listed types fall through to `value.ToString()` unquoted (line 470), emitting invalid SQL for char/TimeSpan.
 
 #### SH-M410 — Cosmos non-aggregate views ignore Fields entirely, so no projection or rename is applied
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:92`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** Measured live: renamed fields read back null. Non-aggregate views are a Cosmos SQL projection, `SELECT c["Source"] AS ViewProp`, with WHERE / ORDER BY / OFFSET LIMIT on the source fields.
 
 QueryLinqAsync/QueryFirstLinqAsync/CountLinqAsync use `_container.GetItemLinqQueryable<TView>()` and never consult `_definition.Fields`; the raw documents are deserialized into TView by the Cosmos serializer's own name matching. `Select(o => o.StatusCode, v => v.Status)` therefore leaves Status at its default, and the filter/order expressions the LINQ path sends use TView names (MapViewPropertyToSource is only wired into the aggregate SQL path), so they target non-existent document fields and match nothing.
 
@@ -4167,11 +4235,15 @@ QueryLinqAsync/QueryFirstLinqAsync/CountLinqAsync use `_container.GetItemLinqQue
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:48`
 
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** Both stores refuse a definition with joins in the constructor (`NotSupportedException`), as do the Cosmos manager's `EnsureAsync`.
+
 CosmosViewStore never reads `_definition.Joins` on either path, and ElasticSearchViewStore only documents that it "ignores join clauses" (ElasticSearchViewStore.cs:20). A definition built with `LeftJoin<Order, Customer, Guid>(...)` is accepted by the builder, materialized by these stores as an unjoined single-source query, and returns rows whose joined-source view properties are all default — no NotSupportedException, no warning, and SQL/Mongo/Raven return joined data for the identical definition.
 
 #### SH-M412 — ViewDefinitionBuilder.Build never rejects a GroupBy field that is not also Selected
 
 `../Birko.Data.Views/ViewDefinitionBuilder.cs:175`
+
+**Verdict: CONFIRMED — fixed by [[TASK-151]] (2026-10-16).** `ViewDefinitionBuilder.Build` refuses a GroupBy field no Select exposes, so each row carries its key; the SQL translator's own check (CR-M153) is now unreachable from the builder.
 
 Validation checks selected-implies-grouped but not the converse, so `From<Order>().GroupBy(o => o.Status).Sum(...)` with no Select builds fine and then means five different things: SqlViewTranslator throws NotSupportedException, RavenViewTranslator invents a reduce key the map never emitted, Mongo groups by a field it does not project, Cosmos groups by `c.Status`, and ES groups without ever setting a key on TView. The one portable definition has no portable meaning.
 

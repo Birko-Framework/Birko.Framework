@@ -20,13 +20,16 @@ namespace Birko.Data.Stores
                 return TimeSpan.Zero;
             }
 
-            if (TimeSpan.TryParse(interval, out var ts))
+            // TASK-152 (SH-M386): invariant culture. "1.5 hours" failed under a comma-decimal culture (sk-SK, de-DE) and
+            // came back as TimeSpan.Zero, so the same query bucketed differently by process locale.
+            var invariant = System.Globalization.CultureInfo.InvariantCulture;
+            if (TimeSpan.TryParse(interval, invariant, out var ts))
             {
                 return ts;
             }
 
-            var parts = interval.Trim().Split(' ');
-            if (parts.Length == 2 && double.TryParse(parts[0], out var value))
+            var parts = interval.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 2 && double.TryParse(parts[0], System.Globalization.NumberStyles.Float, invariant, out var value))
             {
                 return parts[1].ToLowerInvariant() switch
                 {

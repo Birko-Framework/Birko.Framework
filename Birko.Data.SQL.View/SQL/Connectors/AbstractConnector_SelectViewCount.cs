@@ -38,7 +38,15 @@ namespace Birko.Data.SQL.Connectors
                 return SelectCountPersistentView(view.Name!, conditions);
             }
 
-            return SelectCount(view.Tables.Select(x => x.Name), view.Join, conditions);
+            long count = 0;
+            DoCommand(
+                command => { CreateViewCountCommand(command, view, conditions); },
+                command =>
+                {
+                    var result = command.ExecuteScalar();
+                    if (result != null && result != DBNull.Value) count = Convert.ToInt64(result);
+                });
+            return count;
         }
 
         private long SelectCountPersistentView(string viewName, IEnumerable<Conditions.Condition>? conditions = null)

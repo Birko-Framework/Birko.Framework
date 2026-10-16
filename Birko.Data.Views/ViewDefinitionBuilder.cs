@@ -187,6 +187,19 @@ public class ViewDefinitionBuilder<TView> where TView : class
             }
         }
 
+        // TASK-151 (SH-M412): the converse. A group key nobody selects has no view property to land in, and each
+        // backend answered differently: SQL refused, Raven reduced by a key its map never emitted, Mongo grouped by
+        // a field it did not project, and Cosmos and ES returned rows with no key. One portable meaning: refused.
+        foreach (var grp in _groupBy)
+        {
+            if (!_fields.Any(f => f.SourceType == grp.SourceType && f.SourceProperty == grp.PropertyName))
+            {
+                throw new InvalidOperationException(
+                    $"GroupBy field '{grp.PropertyName}' on '{grp.SourceType.Name}' is not selected. " +
+                    "Select() it into a view property, so each row carries the key it was grouped by.");
+            }
+        }
+
         ValidateAggregates();
 
         var hints = _hints != null

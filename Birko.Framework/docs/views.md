@@ -56,6 +56,14 @@ A view is a read-only projection over one or more source entities. It can includ
 | `Persistent` | Query runs against a pre-created view (SQL VIEW, MongoDB view, RavenDB static index) |
 | `Auto` | Tries persistent first, falls back to on-the-fly |
 
+Not every backend has both forms (TASK-151). **RavenDB** views are static indexes: `OnTheFly` is refused
+(`NotSupportedException`), and `Auto` reports a missing index by name (`InvalidOperationException`, create it with
+`EnsureAsync`). **Cosmos DB** has no stored views: `Persistent` is refused by both the store and the manager, whose
+`ExistsAsync` is always false and whose `DropAsync` never deletes a container. A **MongoDB** `Persistent` view that
+does not exist is an error, not an empty result. `EnsureAsync` creates *or updates*: SQL drops and recreates an existing
+view, MongoDB runs `collMod`, RavenDB replaces the index; on ElasticSearch it creates only a `Persistent` view's own
+index.
+
 ## Defining Views
 
 ### 1. Create the view result type
@@ -166,7 +174,7 @@ var items = await viewStore.QueryAsync();
 
 // Filter + sort + paginate
 var page = await viewStore.QueryAsync(
-    filter: v => v.TotalSpent > 1000m,
+    filter: v => v.CustomerName != "",   // a group key: an aggregate filter would need HAVING
     orderBy: OrderBy<CustomerOrderSummary>.ByDescending(v => v.TotalSpent),
     limit: 20,
     offset: 0);
@@ -202,6 +210,7 @@ await viewManager.DropAsync("customer_order_summary");
 - `From<T>()` must be called (primary source required)
 - `HasName()` required for Persistent/Auto modes
 - All non-aggregate Select fields must appear in GroupBy when aggregates are present
+- Every GroupBy field must be selected into a view property, so each row carries its key (TASK-151)
 - Sum/Avg target properties must be numeric types
 
 ## Platform Translation
@@ -209,11 +218,15 @@ await viewManager.DropAsync("customer_order_summary");
 | ViewDefinition | SQL | MongoDB | ElasticSearch | RavenDB | Cosmos DB |
 |---|---|---|---|---|---|
 | From | FROM table | collection | index | collection | container |
-| Join | JOIN ON | $lookup + $unwind | nested/parent-child | Include | N/A |
-| Select | SELECT fields | $project | _source filter | Select() | SELECT |
-| GroupBy | GROUP BY | $group | agg buckets | Reduce grouping | GROUP BY |
+| Join | JOIN ON | $lookup + $unwind (Cross refused) | refused | LoadDocument by the right model's `Guid` (Inner/LeftOuter) | refused |
+| Select | SELECT fields | $project | source field → view property | stored index fields, projected | SELECT c["field"] AS Prop |
+| GroupBy | GROUP BY | $group | composite agg, read to the last page | Reduce grouping | GROUP BY |
 | Count/Sum/Avg | SQL functions | $sum/$avg in $group | agg metrics | Reduce functions | aggregate functions |
 | Persistent | CREATE VIEW | db.createView | transform | static index | N/A |
+
+Across backends (TASK-151): filters, sorts and group keys name **view** properties and are mapped to the fields they
+select; a filter on an aggregate property is refused (it would need `HAVING`). `CountAsync` counts the rows `QueryAsync`
+returns (groups, not source rows), and an offset without a limit skips rows on SQL too.
 
 ## Migration from SQL.View Attributes
 

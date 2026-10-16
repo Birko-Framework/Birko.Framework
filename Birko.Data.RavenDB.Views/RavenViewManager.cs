@@ -44,7 +44,7 @@ public class RavenViewManager : IViewManager
             throw new InvalidOperationException("View name is required for persistent views.");
         }
 
-        var (map, reduce) = RavenViewTranslator.TranslateToMapReduce(definition);
+        var (map, reduce) = RavenViewTranslator.TranslateToMapReduce(definition, _documentStore.Conventions.GetCollectionName);
 
         var indexDefinition = new IndexDefinition
         {
@@ -55,6 +55,15 @@ public class RavenViewManager : IViewManager
         if (reduce != null)
         {
             indexDefinition.Reduce = reduce;
+        }
+        else
+        {
+            // TASK-151 (SH-M399): a map-only index answers with the SOURCE documents unless its fields are stored, so
+            // a renamed or joined field never reached the view. Stored, the store projects the view from the index.
+            foreach (var field in definition.Fields)
+            {
+                indexDefinition.Fields[field.ViewProperty] = new IndexFieldOptions { Storage = FieldStorage.Yes };
+            }
         }
 
         await _documentStore.Maintenance.SendAsync(new PutIndexesOperation(indexDefinition), ct);

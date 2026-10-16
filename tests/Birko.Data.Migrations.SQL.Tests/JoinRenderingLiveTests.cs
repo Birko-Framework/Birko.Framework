@@ -1,6 +1,7 @@
 using System;
 using System.Data.Common;
 using System.IO;
+using System.Linq;
 using Birko.Data.Models;
 using Birko.Data.SQL;
 using Birko.Data.SQL.Attributes;
@@ -132,6 +133,19 @@ public abstract class JoinRenderingLiveTestsBase : IDisposable
             .Should().Throw<Exception>().Where(e => e is NotSupportedException || e.InnerException is NotSupportedException);
     }
 
+    /// <summary>TASK-151 (SH-M403): an offset with no limit skips; it was dropped, so the read returned page 1.</summary>
+    [Fact]
+    public void An_offset_without_a_limit_skips_rows()
+    {
+        if (!RequireServer()) return;
+        var connector = Seed();
+
+        var rows = connector.Select(typeof(T626Customer), (System.Collections.Generic.IEnumerable<Condition>?)null,
+            new System.Collections.Generic.Dictionary<string, bool> { ["Name"] = false }, limit: null, offset: 1).Cast<T626Customer>().ToList();
+
+        rows.Select(r => r.Name).Should().Equal("Bob", "Cid");
+    }
+
     [Fact]
     public void An_attribute_view_declared_without_connect_is_an_inner_join()
     {
@@ -144,6 +158,10 @@ public abstract class JoinRenderingLiveTestsBase : IDisposable
         using var command = connection.CreateCommand();
         command.CommandText = $"SELECT COUNT(*) FROM ({sql}) v";
         Convert.ToInt64(command.ExecuteScalar()).Should().Be(2, "a [View] with join keys joins on them, not the product (6)");
+
+        // TASK-151 (SH-M404): the view's count is the count of its rows, through COUNT(*) over its own SELECT; both
+        // joined tables carry a Guid column, which a derived table may not repeat on SQL Server.
+        connector.SelectCount(DataBase.LoadView(typeof(T626CustomerOrderView))).Should().Be(2);
     }
 }
 

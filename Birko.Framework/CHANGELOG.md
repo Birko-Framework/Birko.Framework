@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Tenant isolation: tenant-scoped bulk writes check the caller's filter; the header guard is enforced
+
+[[TASK-161]]. Through the tenant bulk wrapper, a null filter deleted every row of the tenant. Tenant repository
+registration always built the non-bulk wrapper, and its async form accepted no async repository. **BREAKING:**
+`AddBirkoSecurity` now refuses to start without `UseBirkoTenantHeaderGuard()`, unless `RequireTenantHeaderMatchesClaim =
+false`. The tenant sync provider's 11 divergences are [[TASK-630]].
+
 ## 2026-10-15 — Rule specifications agree with the in-memory evaluator; paging orders totally
 
 [[TASK-171]]. A `RuleSpecification` threw for `IsNull` on an `int` or `>` on a string, matched nothing for a Guid or

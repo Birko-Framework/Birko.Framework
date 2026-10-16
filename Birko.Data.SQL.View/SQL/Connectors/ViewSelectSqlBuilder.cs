@@ -43,10 +43,13 @@ namespace Birko.Data.SQL.Connectors
             }
             qualifyTableName ??= quoteIdentifier;
 
-            if (view.Join == null || !view.Join.Any())
+            // TASK-151 (SH-M401): a view with no join is a SELECT from its one table; it was refused. A view with no
+            // table at all still is: it has no FROM to render.
+            if (view.Tables == null || !view.Tables.Any(t => !string.IsNullOrEmpty(t.Name)))
             {
-                throw new InvalidOperationException("View must have at least one join definition.");
+                throw new InvalidOperationException("View has no source table to select from.");
             }
+            var viewJoins = view.Join?.ToList() ?? new List<Conditions.Join>();
 
             // TASK-129: request the projection WITHOUT its aggregate alias, because this method appends its
             // own. Both emitting produced `COUNT(VOrders.PersonId) as COUNT AS "OrderCount"` — two aliases
@@ -92,7 +95,7 @@ namespace Birko.Data.SQL.Connectors
             var joins = new Dictionary<string, List<Conditions.Join>>();
             string? prevleft = null;
             string? prevright = null;
-            foreach (var join in view.Join)
+            foreach (var join in viewJoins)
             {
                 if (!string.IsNullOrEmpty(prevleft) && !string.IsNullOrEmpty(prevright) && !joins.ContainsKey(join.Left) && prevright == join.Left && joins.ContainsKey(prevleft))
                 {
@@ -110,12 +113,7 @@ namespace Birko.Data.SQL.Connectors
                 prevright = join.Right;
             }
 
-            var leftTables = view.Join.Select(x => x.Left).Distinct().Where(x => !string.IsNullOrEmpty(x)).ToList();
-            foreach (var tableName in view.Join.Select(x => x.Right).Distinct().Where(x => !string.IsNullOrEmpty(x)))
-            {
-                leftTables.Remove(tableName);
-            }
-            var tableNames = leftTables.Any() ? (IEnumerable<string>)leftTables : view.Tables.Select(x => x.Name);
+            var tableNames = AbstractConnector.ViewFromTables(view);
 
             int i = 0;
             foreach (var table in tableNames.Distinct())

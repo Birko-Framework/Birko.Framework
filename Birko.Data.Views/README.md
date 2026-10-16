@@ -48,7 +48,9 @@ var registry = new ViewMapRegistry();
 registry.RegisterFromAssembly(typeof(CustomerOrderSummaryMapping).Assembly);
 
 // 4. Query (same API regardless of platform)
-var results = await viewStore.QueryAsync(v => v.TotalSpent > 1000m, limit: 10);
+// Top ten by an aggregate. A portable filter tests group keys only: SQL, Cosmos DB and ElasticSearch refuse a
+// filter on an aggregate (it would need HAVING).
+var results = await viewStore.QueryAsync(orderBy: OrderBy<CustomerOrderSummary>.ByDescending(v => v.TotalSpent), limit: 10);
 ```
 
 ## Platform Translations

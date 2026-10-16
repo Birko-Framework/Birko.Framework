@@ -82,8 +82,8 @@ public class CosmosViewFilterInjectionTests
             "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==;");
         var store = new CosmosViewStore<OrderView>(client.GetContainer("db", "orders"), BuildDefinition());
         var m = typeof(CosmosViewStore<OrderView>)
-            .GetMethod("BuildCountAggregateSql", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        return (QueryDefinition)m.Invoke(store, new object?[] { filter })!;
+            .GetMethod("BuildAggregateSql", BindingFlags.NonPublic | BindingFlags.Instance)!; // TASK-151: the count runs the view's own statement
+        return (QueryDefinition)m.Invoke(store, new object?[] { filter, null, null, null })!;
     }
 
     /// <summary>The four inputs measured against the old renderer, plus two control characters.</summary>
@@ -142,7 +142,7 @@ public class CosmosViewFilterInjectionTests
     [Fact]
     public void Several_values_bind_to_distinct_placeholders_in_order()
     {
-        var q = Aggregate(v => v.CategoryName == "books" && v.Total > 10m);
+        var q = Aggregate(v => v.CategoryName == "books" && v.CategoryName != "music");
 
         q.QueryText.Should().Contain("@p0").And.Contain("@p1");
         var ps = q.GetQueryParameters().ToList();
@@ -150,7 +150,7 @@ public class CosmosViewFilterInjectionTests
         ps[0].Name.Should().Be("@p0");
         ps[0].Value.Should().Be("books");
         ps[1].Name.Should().Be("@p1");
-        ps[1].Value.Should().Be(10m);
+        ps[1].Value.Should().Be("music");
     }
 
     [Fact]

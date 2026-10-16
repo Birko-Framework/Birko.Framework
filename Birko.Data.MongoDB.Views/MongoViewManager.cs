@@ -40,14 +40,21 @@ public class MongoViewManager : IViewManager
             throw new InvalidOperationException("View name is required for persistent views.");
         }
 
-        // Check if view already exists
-        if (await ExistsAsync(viewName, ct).ConfigureAwait(false))
-        {
-            return;
-        }
-
         var sourceCollection = MongoViewTranslator.GetCollectionName(definition.PrimarySource);
         var pipeline = MongoViewTranslator.TranslatePipeline(definition);
+
+        // TASK-151 (SH-M406): "creates or updates". An existing view was left as it was, so a changed definition kept
+        // being read through the stale pipeline. collMod replaces a view's source and pipeline in place.
+        if (await ExistsAsync(viewName, ct).ConfigureAwait(false))
+        {
+            await _database.RunCommandAsync<BsonDocument>(new BsonDocument
+            {
+                { "collMod", viewName },
+                { "viewOn", sourceCollection },
+                { "pipeline", new BsonArray(pipeline) }
+            }, cancellationToken: ct).ConfigureAwait(false);
+            return;
+        }
 
         // MongoDB db.createView(viewName, source, pipeline)
         var command = new BsonDocument
@@ -67,6 +74,20 @@ public class MongoViewManager : IViewManager
             throw new ArgumentException("View name cannot be null or empty.", nameof(viewName));
         }
 
+        // TASK-151 (SH-M393): only a VIEW is dropped. Any collection of that name was, so DropAsync("Order") (the
+        // name derived for an unnamed view is the source collection's) destroyed the data collection.
+        var any = await (await _database.ListCollectionsAsync(
+            new ListCollectionsOptions { Filter = new BsonDocument("name", viewName) }, ct).ConfigureAwait(false))
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (any == null)
+        {
+            return;
+        }
+        if (any.GetValue("type", "collection").AsString != "view")
+        {
+            throw new InvalidOperationException(
+                $"'{viewName}' is a {any.GetValue("type", "collection").AsString}, not a view; DropAsync drops only views.");
+        }
         await _database.DropCollectionAsync(viewName, ct).ConfigureAwait(false);
     }
 
@@ -77,7 +98,8 @@ public class MongoViewManager : IViewManager
             throw new ArgumentException("View name cannot be null or empty.", nameof(viewName));
         }
 
-        var filter = new BsonDocument("name", viewName);
+        // A VIEW of that name (TASK-151, SH-M393): an ordinary collection of the same name is not one.
+        var filter = new BsonDocument { { "name", viewName }, { "type", "view" } };
         var collections = await _database.ListCollectionNamesAsync(
             new ListCollectionNamesOptions { Filter = filter }, ct).ConfigureAwait(false);
         return await collections.AnyAsync(ct).ConfigureAwait(false);

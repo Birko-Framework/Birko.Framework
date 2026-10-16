@@ -117,15 +117,25 @@ public class SqlViewTranslatorTests
     {
         // CR-M153: grouping by a field that is not also selected used to be silently dropped (the
         // connector groups by the SELECTed non-aggregate fields), giving wrong aggregates. Now rejected.
-        var def = new ViewDefinitionBuilder<TransView>()
+        // TASK-151 (SH-M412): the builder refuses it first, for every backend; the translator keeps its own check
+        // for a definition constructed directly.
+        var builder = new ViewDefinitionBuilder<TransView>()
             .HasName("BadGroup")
             .From<TransOrder>()
             .Join<TransOrder, TransPerson, Guid?>(o => o.PersonId, p => p.Guid)
             .Select<TransPerson, string>(p => p.Name!, v => v.PersonName)
             .GroupBy<TransPerson, string>(p => p.Name!)   // selected + grouped — fine
             .GroupBy<TransOrder, decimal>(o => o.Amount)  // grouped but NOT selected — must be rejected
-            .Count<TransOrder>(v => v.OrderCount)
-            .Build();
+            .Count<TransOrder>(v => v.OrderCount);
+        builder.Invoking(b => b.Build()).Should().Throw<InvalidOperationException>().WithMessage("*Amount*");
+
+        var def = new ViewDefinition(
+            "BadGroup", PortableQueryMode.OnTheFly, typeof(TransOrder), typeof(TransView),
+            new System.Collections.Generic.List<FieldSelector> { new(typeof(TransPerson), "Name", "PersonName") },
+            new System.Collections.Generic.List<JoinClause> { new(typeof(TransOrder), typeof(TransPerson), "PersonId", "Guid", JoinType.Inner) },
+            new System.Collections.Generic.List<AggregateClause> { new(Birko.Data.Stores.AggregateFunction.Count, typeof(TransOrder), null, "OrderCount") },
+            new System.Collections.Generic.List<GroupByClause> { new(typeof(TransPerson), "Name"), new(typeof(TransOrder), "Amount") },
+            new System.Collections.Generic.Dictionary<string, object>());
 
         Action act = () => SqlViewTranslator.Translate(def);
         act.Should().Throw<NotSupportedException>().WithMessage("*Amount*");

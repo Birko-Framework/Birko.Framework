@@ -515,7 +515,7 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         public override string LimitOffsetDefinition(DbCommand command, int? limit = null, int? offset = null)
         {
-            if (limit == null)
+            if (limit == null && offset == null)
             {
                 return string.Empty;
             }
@@ -523,6 +523,10 @@ namespace Birko.Data.SQL.Connectors
             var result = new StringBuilder();
             result.Append(" OFFSET @OFFSET ROWS");
             AddParameter(command, "@OFFSET", offset ?? 0);
+            if (limit == null)
+            {
+                return result.ToString(); // TASK-151 (SH-M403): an offset alone; T-SQL allows OFFSET without FETCH.
+            }
             result.Append(" FETCH NEXT @LIMIT ROWS ONLY");
             AddParameter(command, "@LIMIT", limit.Value);
             return result.ToString();

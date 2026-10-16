@@ -25,15 +25,20 @@ namespace Birko.Data.Stores
         /// </summary>
         public static object? ComputeSum(List<object?> values, Type propertyType)
         {
-            if (values.Count == 0) return null;
             var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+            if (!IsNumeric(underlying)) throw new NotSupportedException($"Sum is not defined for {underlying.Name}.");
+            if (values.Count == 0) return null;
 
             if (underlying == typeof(decimal)) return values.Cast<decimal?>().Sum();
             if (underlying == typeof(double)) return values.Cast<double?>().Sum();
             if (underlying == typeof(float)) return values.Cast<float?>().Sum();
             if (underlying == typeof(int)) return values.Cast<int?>().Sum();
             if (underlying == typeof(long)) return values.Cast<long?>().Sum();
-            return null;
+            // TASK-152 (SH-M385): the other integral types answered null, where SQL SUM and ES sum answer a number. They
+            // sum as long (ulong as decimal, which holds any ulong sum); a non-numeric type is refused, never null.
+            if (IsSmallIntegral(underlying)) return values.Sum(v => Convert.ToInt64(v));
+            if (underlying == typeof(ulong)) return values.Sum(v => Convert.ToDecimal(v));
+            throw new NotSupportedException($"Sum is not defined for {underlying.Name}.");
         }
 
         /// <summary>
@@ -42,16 +47,27 @@ namespace Birko.Data.Stores
         /// </summary>
         public static object? ComputeAvg(List<object?> values, Type propertyType)
         {
-            if (values.Count == 0) return null;
             var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+            if (!IsNumeric(underlying)) throw new NotSupportedException($"Avg is not defined for {underlying.Name}.");
+            if (values.Count == 0) return null;
 
             if (underlying == typeof(decimal)) return values.Cast<decimal?>().Average();
             if (underlying == typeof(double)) return values.Cast<double?>().Average();
             if (underlying == typeof(float)) return values.Cast<float?>().Average();
             if (underlying == typeof(int)) return values.Cast<int?>().Average();
             if (underlying == typeof(long)) return values.Cast<long?>().Average();
-            return null;
+            // SH-M385: as ComputeSum; an integral average is a double, as int and long already are.
+            if (IsSmallIntegral(underlying)) return values.Average(v => Convert.ToDouble(v));
+            if (underlying == typeof(ulong)) return values.Average(v => Convert.ToDouble(v));
+            throw new NotSupportedException($"Avg is not defined for {underlying.Name}.");
         }
+
+        private static bool IsNumeric(Type type)
+            => type == typeof(decimal) || type == typeof(double) || type == typeof(float) || type == typeof(int)
+               || type == typeof(long) || type == typeof(ulong) || IsSmallIntegral(type);
+
+        private static bool IsSmallIntegral(Type type)
+            => type == typeof(short) || type == typeof(byte) || type == typeof(sbyte) || type == typeof(ushort) || type == typeof(uint);
 
         /// <summary>
         /// Resolves an aggregate function over a set of boxed values.

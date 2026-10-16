@@ -197,6 +197,20 @@ public class ViewDefinitionBuilderTests
             .WithMessage("*Name*not in GroupBy*");
     }
 
+    /// <summary>TASK-151 (SH-M412): the converse — a group key no Select exposes meant something different per backend.</summary>
+    [Fact]
+    public void Build_GroupByNotSelected_Throws()
+    {
+        var builder = new ViewDefinitionBuilder<CustomerOrderSummary>()
+            .From<Customer>()
+            .GroupBy<Customer, string>(c => c.Name)
+            .Count<Order>(v => v.OrderCount);
+
+        var act = () => builder.Build();
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*GroupBy field 'Name'*not selected*");
+    }
+
     [Fact]
     public void Build_AggregatesWithoutFields_NoGroupByRequired()
     {

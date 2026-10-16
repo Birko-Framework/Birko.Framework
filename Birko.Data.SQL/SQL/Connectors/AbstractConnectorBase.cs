@@ -597,6 +597,12 @@ namespace Birko.Data.SQL.Connectors
         public virtual string? TableExistsSql => null;
 
         /// <summary>
+        /// The LIMIT operand that means "no limit", for an OFFSET with no LIMIT (TASK-151): SQLite's <c>-1</c> by
+        /// default; MySQL and PostgreSQL override it.
+        /// </summary>
+        protected virtual string UnboundedLimit => "-1";
+
+        /// <summary>
         /// Quotes a SQL identifier (table or column name) to prevent reserved word conflicts and injection.
         /// Default uses ANSI SQL double quotes. Override for provider-specific quoting.
         /// </summary>
@@ -1416,13 +1422,22 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         public virtual string? LimitOffsetDefinition(DbCommand command, int? limit = null, int? offset = null)
         {
-            if (limit == null)
+            if (limit == null && offset == null)
             {
                 return null;
             }
             var result = new StringBuilder();
-            result.Append(" LIMIT @LIMIT");
-            AddParameter(command, "@LIMIT", limit.Value);
+            if (limit == null)
+            {
+                // TASK-151 (SH-M403): an offset with no limit was dropped, so the read returned page 1. These dialects
+                // allow OFFSET only after a LIMIT, so the limit is the dialect's "no limit".
+                result.Append(" LIMIT ").Append(UnboundedLimit);
+            }
+            else
+            {
+                result.Append(" LIMIT @LIMIT");
+                AddParameter(command, "@LIMIT", limit.Value);
+            }
             if (offset != null)
             {
                 result.Append(" OFFSET @OFFSET");
@@ -1790,7 +1805,7 @@ namespace Birko.Data.SQL.Connectors
             {
                 command.CommandText += " ORDER BY " + string.Join(", ", orderFields.Select(kvp => string.Format("{0} {1}", kvp.Key, kvp.Value ? "DESC" : "ASC")));
             }
-            else if (limit != null && RequiresOrderByForPaging)
+            else if ((limit != null || offset != null) && RequiresOrderByForPaging)
             {
                 // TASK-278 — SQL Server defines OFFSET/FETCH as part of the sort clause, so a limited read
                 // with no ORDER BY is a syntax error there (Msg 153 / Msg 102, measured). The sort is
@@ -1799,7 +1814,7 @@ namespace Birko.Data.SQL.Connectors
                 // signature would silently orphan any existing override of it.
                 command.CommandText += " ORDER BY " + PagingPlaceholderOrderBy;
             }
-            if (limit != null)
+            if (limit != null || offset != null)
             {
                 command.CommandText += LimitOffsetDefinition(command, limit, offset) ?? string.Empty;
             }

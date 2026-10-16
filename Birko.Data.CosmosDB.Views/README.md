@@ -1,11 +1,11 @@
 # Birko.Data.CosmosDB.Views
 
-Azure Cosmos DB (NoSQL API) platform implementation for the [Birko.Data.Views](../Birko.Data.Views/) fluent view builder. Provides read-only view queries over Cosmos DB containers using LINQ for non-aggregate queries and Cosmos SQL with GROUP BY for aggregate queries.
+Azure Cosmos DB (NoSQL API) platform implementation for the [Birko.Data.Views](../Birko.Data.Views/) fluent view builder. Provides read-only view queries over Cosmos DB containers using a Cosmos SQL projection for non-aggregate queries and Cosmos SQL with GROUP BY for aggregate queries.
 
 ## Components
 
-- **CosmosViewStore\<TView\>** — Implements `IViewStore<TView>`. Non-aggregate views use LINQ via `container.GetItemLinqQueryable<T>()` with Where/OrderBy/Skip/Take. Aggregate views use Cosmos SQL with GROUP BY via `QueryDefinition` and `GetItemQueryIterator<TView>`. Aggregate SQL built via shared `CosmosAggregationHelper`. Uses `OrderByHelper.ApplyTo()` for dynamic ordering. Joins are ignored (Cosmos DB does not support cross-container joins).
-- **CosmosViewManager** — Implements `IViewManager`. `EnsureAsync` is a no-op (Cosmos DB has no native server-side views). `DropAsync` deletes the named container. `ExistsAsync` checks container existence. `RefreshAsync` is a no-op (views are computed on-the-fly).
+- **CosmosViewStore\<TView\>** — Implements `IViewStore<TView>`. Non-aggregate views SELECT each source field under its view property's name, with WHERE/ORDER BY/OFFSET LIMIT mapped to the source fields. Aggregate views use Cosmos SQL with GROUP BY via `QueryDefinition` and `GetItemQueryIterator<TView>`. Aggregate SQL built via shared `CosmosAggregationHelper`. Uses `OrderByHelper.ApplyTo()` for dynamic ordering. Joins and Persistent mode are refused: Cosmos DB has no cross-document joins and no stored views.
+- **CosmosViewManager** — Implements `IViewManager`. `EnsureAsync` refuses a Persistent definition or a join and otherwise creates nothing. `DropAsync` never deletes a container and `ExistsAsync` is always false: no container is a view. `RefreshAsync` is a no-op (views are computed on-the-fly).
 - **CosmosFilterTranslator** — Translates `Expression<Func<T, bool>>` filters into Cosmos SQL WHERE clauses. Supports binary comparisons, logical AND/OR, NOT, and string Contains.
 
 ## Query Translation
@@ -13,19 +13,20 @@ Azure Cosmos DB (NoSQL API) platform implementation for the [Birko.Data.Views](.
 | ViewDefinition | Cosmos DB |
 |---|---|
 | From | Container |
-| Select (no agg) | LINQ `GetItemLinqQueryable` |
+| Select (no agg) | `SELECT c["Source"] AS ViewProp` |
 | GroupBy + Aggregates | Cosmos SQL `GROUP BY` (via CosmosAggregationHelper) |
 | Count/Sum/Avg/Min/Max | Cosmos SQL aggregate functions |
 | OrderBy | `OrderByHelper.ApplyTo()` |
-| Joins | Not supported (silently ignored) |
-| Persistent | No-op (no native server-side views) |
+| Joins | Refused (`NotSupportedException`) |
+| Persistent | Refused (no stored views) |
 
 ## Usage
 
 ```csharp
 // Query via IViewStore
 var store = new CosmosViewStore<CategorySales>(cosmosDatabase, definition);
-var results = await store.QueryAsync(v => v.TotalSales > 1000m, limit: 10);
+// Top ten by an aggregate. A filter may test only group keys: an aggregate would need HAVING.
+var results = await store.QueryAsync(orderBy: OrderBy<CategorySales>.ByDescending(v => v.TotalSales), limit: 10);
 
 // View manager (limited — Cosmos DB lacks native views)
 var manager = new CosmosViewManager(cosmosDatabase);
@@ -34,9 +35,9 @@ var exists = await manager.ExistsAsync("category_sales");
 
 ## Important Notes
 
-- Cosmos DB does not support cross-container joins; join clauses in ViewDefinition are ignored
+- Cosmos DB does not support cross-container joins; join clauses in ViewDefinition are refused
 - Cosmos DB does not support native server-side views; all queries are computed on-the-fly
-- Aggregate queries build raw Cosmos SQL; non-aggregate queries use the LINQ provider
+- Every query is raw, parameterised Cosmos SQL
 - A true materialized view would require change-feed-based pipelines (Azure Functions), which is beyond scope
 
 ## Dependencies
