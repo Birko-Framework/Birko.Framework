@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — A SQL bulk write commits all of its items or none
+
+[[TASK-629]]. Outside a transaction, `Create` / `Update` / `Delete` of a collection committed item by item, so a failure
+at item k left items 0..k-1 written. It is now one transaction, rolled back on any failure or cancellation. Inside an
+existing boundary it joins, as before. A collection update still writes its stored items and reports the missing ones.
+
 ## 2026-10-15 — Repositories: no store, no silent success; the locator keeps one store per key
 
 [[TASK-162]]. A repository with no store answered every call as if it had worked. It now throws (plain and ViewModel).

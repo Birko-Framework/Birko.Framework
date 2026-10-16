@@ -275,7 +275,7 @@ public class RavenTransactionBoundaryLiveTests
             catch (Exception ex) { refused = ex; }
             store.SetTransactionContext(null);
 
-            refused.Should().BeOfType<Birko.Data.Exceptions.StoreException>("a create of a stored id must not commit");
+            refused.Should().BeOfType<Birko.Data.Exceptions.StoreUniqueViolationException>("a create of a stored id must not commit (TASK-632: the StoreException subclass for a unique refusal)");
             (await store.ReadAsync(guid))!.Name.Should().Be("first");
         }
         finally

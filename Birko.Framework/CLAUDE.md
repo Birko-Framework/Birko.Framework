@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Concurrent slug and default writers: the storage refuses, the decorator retries (2026-10-16)
+
+[[TASK-632]]. Measured: two concurrent creates of "widget" ended in an unhandled duplicate, and two promotions left two
+defaults. A unique refusal is now `StoreUniqueViolationException` (a `StoreException`) on create and update, on every
+provider. The slug wrappers retry with the next suffix. A model opting in with `IDefaultMarker` gets one default; the
+last writer wins. Stores without unique indexes stay best effort. MongoDB partial indexes: [[TASK-636]].
 ### An ElasticSearch reindex started without waiting is pending, not a success (2026-10-16)
 
 [[TASK-560]]. `Reindex(…, waitForCompletion: false)` reported `Successful` with 0 documents for a copy that had only
@@ -328,11 +334,6 @@ now keep their mapping. **Migration:** drop a pre-TASK-219 `MongoSyncKnowledgeIt
 soft-deleted every row. A `PropertyUpdate` setting `IsDefault` over N rows left N defaults. The slug probe could keep a
 slug another row held. A versioned update of a missing row was a conflict, not not-found, so `Save` threw. `StoreWrapperBuilder`
 now refuses `IVersioned`. An interface member's `[NamedField]` is honoured in a SQL SET. Races: [[TASK-632]].
-### A SQL bulk write commits all of its items or none (2026-10-15)
-
-[[TASK-629]]. Outside a transaction, `Create` / `Update` / `Delete` of a collection committed item by item, so a failure
-at item k left items 0..k-1 written. It is now one transaction, rolled back on any failure or cancellation. Inside an
-existing boundary it joins, as before. A collection update still writes its stored items and reports the missing ones.
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

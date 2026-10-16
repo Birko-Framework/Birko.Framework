@@ -40,55 +40,130 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
         return _innerStore.ReadAsync(filter, orderBy, limit, offset, ct);
     }
 
-    public async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+    /// <summary>
+    /// Writes tried before a refused promotion surfaces (TASK-632).
+    /// </summary>
+    /// <remarks>
+    /// Unsetting the other defaults and then writing is a read-then-write, so two callers promoting two rows at once could
+    /// both store a default (SH-M328). A model implementing <see cref="Birko.Data.Patterns.Models.IDefaultMarker"/> under a
+    /// unique index makes the store refuse the second (<see cref="Birko.Data.Exceptions.StoreUniqueViolationException"/>);
+    /// the wrapper then unsets the winner and writes again, so the last writer wins. A refusal while no other default is
+    /// stored was for another key and surfaces at once. Without the marker and its index, or on a store that enforces no
+    /// unique index (ElasticSearch, RavenDB, Cosmos DB, JSON, XML, InMemory), the window is narrowed, not closed.
+    /// </remarks>
+    protected const int MaxDefaultAttempts = 5;
+
+    /// <summary>Keeps the marker in step: <c>true</c> on the default, <c>null</c> otherwise, never <c>false</c>.</summary>
+    private static void Mark(T item)
     {
-        if (data.IsDefault)
+        if (item is Birko.Data.Patterns.Models.IDefaultMarker marked)
         {
-            await UnsetOtherDefaultsAsync(data.Guid, ct: ct);
+            marked.DefaultMarker = item.IsDefault ? true : null;
         }
-        return await _innerStore.CreateAsync(data, processDelegate, ct);
     }
+
+    /// <summary>Non-defaults first: a unique index checks each statement, so a demotion must land before the promotion.</summary>
+    private static List<T> DefaultLast(List<T> items) => items.OrderBy(i => i.IsDefault).ToList();
+
+    /// <summary>The batch's single default after trimming: the last item marked default, or null.</summary>
+    private static T? KeepLastDefault(List<T> items)
+    {
+        var defaultItems = items.Where(i => i.IsDefault).ToList();
+        foreach (var item in defaultItems.SkipLast(1))
+        {
+            item.IsDefault = false;
+        }
+        return defaultItems.LastOrDefault();
+    }
+
+    public Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+        => PromoteAsync(data, () => _innerStore.CreateAsync(data, processDelegate, ct), ct);
 
     public async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
         var items = data.ToList();
-        if (items.Any(i => i.IsDefault))
+        var chosen = KeepLastDefault(items);
+        for (var attempt = 1; ; attempt++)
         {
-            await UnsetOtherDefaultsAsync(null, ct: ct);
-            // Ensure only the last item marked as default stays default
-            var defaultItems = items.Where(i => i.IsDefault).ToList();
-            foreach (var item in defaultItems.SkipLast(1))
+            if (chosen != null)
             {
-                item.IsDefault = false;
+                await UnsetOtherDefaultsAsync(null, ct: ct);
+            }
+            items.ForEach(Mark);
+            try
+            {
+                await _innerStore.CreateAsync(items, storeDelegate, ct);
+                return;
+            }
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && chosen != null)
+            {
+                // Retried only while nothing of the batch is stored: a non-atomic collection create may have written a prefix.
+                if (await AnyStoredAsync(items, ct) || !await OtherDefaultStoredAsync(chosen.Guid, ct)) throw;
             }
         }
-        await _innerStore.CreateAsync(items, storeDelegate, ct);
     }
 
-    public async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
-    {
-        if (data.IsDefault)
-        {
-            await UnsetOtherDefaultsAsync(data.Guid, ct: ct);
-        }
-        await _innerStore.UpdateAsync(data, processDelegate, ct);
-    }
+    public Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+        => PromoteAsync(data, async () => { await _innerStore.UpdateAsync(data, processDelegate, ct); return data.Guid ?? Guid.Empty; }, ct);
 
     public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
         var items = data.ToList();
-        if (items.Any(i => i.IsDefault))
+        var chosen = KeepLastDefault(items);
+        var batch = items.Select(i => i.Guid).ToHashSet();
+        for (var attempt = 1; ; attempt++)
         {
-            var defaultItems = items.Where(i => i.IsDefault).ToList();
-            // Keep only the last one as default
-            foreach (var item in defaultItems.SkipLast(1))
+            if (chosen != null)
             {
-                item.IsDefault = false;
+                await UnsetOtherDefaultsAsync(chosen.Guid, batch, ct);
             }
-            var lastDefault = defaultItems.Last();
-            await UnsetOtherDefaultsAsync(lastDefault.Guid, items.Select(i => i.Guid).ToHashSet(), ct);
+            items.ForEach(Mark);
+            try
+            {
+                await _innerStore.UpdateAsync(DefaultLast(items), storeDelegate, ct);
+                return;
+            }
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && chosen != null)
+            {
+                // An update is idempotent, so a partly applied batch is safe to write again.
+                if (!await OtherDefaultStoredAsync(chosen.Guid, ct)) throw;
+            }
         }
-        await _innerStore.UpdateAsync(items, storeDelegate, ct);
+    }
+
+    /// <summary>
+    /// Unsets the other defaults when <paramref name="data"/> is one, writes it, and on a refused promotion does both
+    /// again (TASK-632).
+    /// </summary>
+    private async Task<Guid> PromoteAsync(T data, Func<Task<Guid>> write, CancellationToken ct)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            if (data.IsDefault)
+            {
+                await UnsetOtherDefaultsAsync(data.Guid, ct: ct);
+            }
+            Mark(data);
+            try
+            {
+                return await write();
+            }
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && data.IsDefault)
+            {
+                if (!await OtherDefaultStoredAsync(data.Guid, ct)) throw;
+            }
+        }
+    }
+
+    private async Task<bool> OtherDefaultStoredAsync(Guid? guid, CancellationToken ct)
+        => (guid == null
+            ? await _innerStore.ReadAsync(e => e.IsDefault, null, 1, null, ct)
+            : await _innerStore.ReadAsync(e => e.IsDefault && e.Guid != guid, null, 1, null, ct)).Any();
+
+    private async Task<bool> AnyStoredAsync(List<T> items, CancellationToken ct)
+    {
+        var guids = items.Where(i => i.Guid != null).Select(i => i.Guid).ToList();
+        return guids.Count > 0 && await _innerStore.CountAsync(x => guids.Contains(x.Guid), ct) > 0;
     }
 
     public async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
@@ -101,10 +176,10 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
         {
             updateAction(item);
         }
-        await KeepLastDefaultAsync(items, ct);
         if (items.Count > 0)
         {
-            await _innerStore.UpdateAsync(items, storeDelegate: null, ct);
+            // TASK-632: the collection update keeps one default, unsets the rest, keeps the marker and retries.
+            await UpdateAsync(items, storeDelegate: null, ct);
         }
     }
 
@@ -124,12 +199,8 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
 
     public async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
-        if (data.IsDefault)
-        {
-            await UnsetOtherDefaultsAsync(data.Guid, ct: ct);
-        }
         // TASK-555: the create-or-update decision has one producer; an unstored Guid is created, not lost.
-        return await StoreSave.SaveAsync(data, processDelegate, _innerStore.CreateAsync, _innerStore.UpdateAsync, ct);
+        return await PromoteAsync(data, () => StoreSave.SaveAsync(data, processDelegate, _innerStore.CreateAsync, _innerStore.UpdateAsync, ct), ct);
     }
 
     public Task InitAsync(CancellationToken ct = default) => _innerStore.InitAsync(ct);
@@ -142,20 +213,6 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
     /// <summary>
     /// Of a batch, only the last item marked default stays default; every other stored default is unset.
     /// </summary>
-    private async Task KeepLastDefaultAsync(List<T> items, CancellationToken ct)
-    {
-        var defaultItems = items.Where(i => i.IsDefault).ToList();
-        if (defaultItems.Count == 0)
-        {
-            return;
-        }
-        foreach (var item in defaultItems.SkipLast(1))
-        {
-            item.IsDefault = false;
-        }
-        await UnsetOtherDefaultsAsync(defaultItems.Last().Guid, items.Select(i => i.Guid).ToHashSet(), ct);
-    }
-
     private static void RequireFilter(Expression<Func<T, bool>> filter, string operation)
     {
         if (filter is null)
@@ -185,6 +242,7 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
         foreach (var item in toUpdate)
         {
             item.IsDefault = false;
+            Mark(item);
         }
         await _innerStore.UpdateAsync(toUpdate, storeDelegate: null, ct);
     }

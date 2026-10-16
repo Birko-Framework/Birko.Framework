@@ -64,7 +64,13 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 - `AsyncDefaultStoreWrapper<TStore, T>` - Async variant wrapping `IAsyncBulkStore<T>`, implements `IAsyncBulkStore<T>`
 - Note: Requires bulk store (not plain IStore) because enforcing the constraint requires bulk read + update
 - Filtered updates (an `Action<T>`, or a `PropertyUpdate` that writes `IsDefault`) read, apply, keep the last default and
-  write once, on both paths (TASK-159). Single-caller only: a concurrent race needs storage enforcement (TASK-632)
+  write once, on both paths (TASK-159)
+- Concurrent promotions (TASK-632): a model implementing `IDefaultMarker` (`bool? DefaultMarker`, kept `true`/null, never
+  `false`) under a unique index is refused a second default with `StoreUniqueViolationException`; the wrapper unsets
+  the winner and writes again (last writer wins, `MaxDefaultAttempts` = 5). Batches write demotions before the promotion.
+  Without the marker, or on a store with no unique index, the race is only narrowed
+- Slug wrappers retry the same way on a unique index over the slug (next suffix, `MaxSlugAttempts` = 5); a refusal for
+  another key surfaces; a batch create retries only while none of it is stored
 
 ### Schema (Birko.Data.Patterns.Schema)
 Provider-agnostic field and schema abstractions. Used by both the migration system and the SQL model mapping framework.

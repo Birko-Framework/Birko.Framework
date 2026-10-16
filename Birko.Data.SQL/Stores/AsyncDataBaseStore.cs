@@ -314,6 +314,12 @@ namespace Birko.Data.SQL.Stores
             return default;
         }
 
+        /// <summary>
+        /// TASK-632: the connector's classifier, so an update colliding with a unique index is translated by the public
+        /// update into <see cref="Birko.Data.Exceptions.StoreUniqueViolationException"/>, as a create already is.
+        /// </summary>
+        protected override bool IsDuplicateKeyException(Exception ex) => DuplicateCreate.IsDuplicate(Connector, ex);
+
         protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
             if (Connector == null || data == null) return;

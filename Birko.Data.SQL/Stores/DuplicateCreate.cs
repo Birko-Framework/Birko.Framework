@@ -29,8 +29,6 @@ namespace Birko.Data.SQL.Stores
             => connector?.IsUniqueViolationException(ex) == true;
 
         public static StoreException Refusal(Type type, Exception ex)
-            => new StoreException(
-                $"Create of {type.Name} refused: an entity with the same key is already stored. "
-                + "Create never overwrites; use Update or Save for a stored entity.", ex);
+            => StoreException.DuplicateCreate(type, ex);
     }
 }

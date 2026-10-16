@@ -31,16 +31,49 @@ public class AsyncSluggableStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
     public Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         => _innerStore.CountAsync(filter, ct);
 
+    /// <summary>
+    /// Writes tried before a unique-slug refusal surfaces (TASK-632).
+    /// </summary>
+    /// <remarks>
+    /// The probe reads and then the write writes, so two callers can both find a slug free (SH-M327). Only a unique index
+    /// on the slug column, declared by the model, closes that; the store then refuses the loser with
+    /// <see cref="Birko.Data.Exceptions.StoreUniqueViolationException"/>, and the wrapper probes again and takes the next
+    /// suffix. A refusal for any other key (the slug is free) surfaces at once. A store that enforces no unique index
+    /// (ElasticSearch, RavenDB, Cosmos DB, JSON, XML, InMemory) leaves the window narrowed, not closed.
+    /// </remarks>
+    protected const int MaxSlugAttempts = 5;
+
     public async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
-        await ResolveSlugAsync(data, excludeId: null, ct: ct);
-        return await _innerStore.CreateAsync(data, processDelegate, ct);
+        for (var attempt = 1; ; attempt++)
+        {
+            await ResolveSlugAsync(data, excludeId: null, ct: ct);
+            try
+            {
+                return await _innerStore.CreateAsync(data, processDelegate, ct);
+            }
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts)
+            {
+                if (!await SlugHeldAsync(data.Slug, data.Guid, ct)) throw;
+            }
+        }
     }
 
     public async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
-        await ResolveSlugAsync(data, data.Guid, ct: ct);
-        await _innerStore.UpdateAsync(data, processDelegate, ct);
+        for (var attempt = 1; ; attempt++)
+        {
+            await ResolveSlugAsync(data, data.Guid, ct: ct);
+            try
+            {
+                await _innerStore.UpdateAsync(data, processDelegate, ct);
+                return;
+            }
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts)
+            {
+                if (!await SlugHeldAsync(data.Slug, data.Guid, ct)) throw;
+            }
+        }
     }
 
     public Task DeleteAsync(T data, CancellationToken ct = default)
@@ -83,6 +116,10 @@ public class AsyncSluggableStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
     /// <summary>
     /// Builds an expression filter for matching a specific slug value.
     /// </summary>
+    /// <summary>Whether a row other than <paramref name="excludeId"/> now holds <paramref name="slug"/>.</summary>
+    protected async Task<bool> SlugHeldAsync(string? slug, Guid? excludeId, CancellationToken ct)
+        => !string.IsNullOrEmpty(slug) && await _innerStore.ReadAsync(BuildSlugFilter(slug, excludeId), ct) is not null;
+
     protected static Expression<Func<T, bool>> BuildSlugFilter(string slug, Guid? excludeId = null)
     {
         if (excludeId == null)

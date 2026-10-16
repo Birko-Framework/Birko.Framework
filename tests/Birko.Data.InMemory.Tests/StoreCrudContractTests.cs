@@ -106,7 +106,7 @@ public class StoreCrudContractTests
 
         var act = () => store.Create(new TestModel { Guid = original.Guid, Name = "impostor" });
 
-        act.Should().Throw<StoreException>().WithMessage("*already holds*");
+        act.Should().Throw<StoreUniqueViolationException>().WithMessage("*already holds*");
         store.Read(original.Guid!.Value)!.Name.Should().Be("original");
     }
 
@@ -119,7 +119,7 @@ public class StoreCrudContractTests
 
         var act = () => store.CreateAsync(new TestModel { Guid = original.Guid, Name = "impostor" });
 
-        await act.Should().ThrowAsync<StoreException>();
+        await act.Should().ThrowAsync<StoreUniqueViolationException>();
         (await store.ReadAsync(original.Guid!.Value))!.Name.Should().Be("original");
     }
 
@@ -133,7 +133,7 @@ public class StoreCrudContractTests
 
         var act = () => store.Create(new[] { fresh, new TestModel { Guid = original.Guid, Name = "impostor" } });
 
-        act.Should().Throw<StoreException>();
+        act.Should().Throw<StoreUniqueViolationException>();
         store.Count().Should().Be(1);
         store.Read(original.Guid!.Value)!.Name.Should().Be("original");
     }
@@ -146,7 +146,7 @@ public class StoreCrudContractTests
 
         var act = () => store.CreateAsync(new[] { new TestModel { Guid = guid, Name = "1" }, new TestModel { Guid = guid, Name = "2" } });
 
-        await act.Should().ThrowAsync<StoreException>();
+        await act.Should().ThrowAsync<StoreUniqueViolationException>();
         (await store.CountAsync()).Should().Be(0);
     }
 

@@ -34,55 +34,130 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
         return _innerStore.Read(filter, orderBy, limit, offset);
     }
 
-    public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
+    /// <summary>
+    /// Writes tried before a refused promotion surfaces (TASK-632).
+    /// </summary>
+    /// <remarks>
+    /// Unsetting the other defaults and then writing is a read-then-write, so two callers promoting two rows at once could
+    /// both store a default (SH-M328). A model implementing <see cref="Birko.Data.Patterns.Models.IDefaultMarker"/> under a
+    /// unique index makes the store refuse the second (<see cref="Birko.Data.Exceptions.StoreUniqueViolationException"/>);
+    /// the wrapper then unsets the winner and writes again, so the last writer wins. A refusal while no other default is
+    /// stored was for another key and surfaces at once. Without the marker and its index, or on a store that enforces no
+    /// unique index (ElasticSearch, RavenDB, Cosmos DB, JSON, XML, InMemory), the window is narrowed, not closed.
+    /// </remarks>
+    protected const int MaxDefaultAttempts = 5;
+
+    /// <summary>Keeps the marker in step: <c>true</c> on the default, <c>null</c> otherwise, never <c>false</c>.</summary>
+    private static void Mark(T item)
     {
-        if (data.IsDefault)
+        if (item is Birko.Data.Patterns.Models.IDefaultMarker marked)
         {
-            UnsetOtherDefaults(data.Guid);
+            marked.DefaultMarker = item.IsDefault ? true : null;
         }
-        return _innerStore.Create(data, storeDelegate);
     }
+
+    /// <summary>Non-defaults first: a unique index checks each statement, so a demotion must land before the promotion.</summary>
+    private static List<T> DefaultLast(List<T> items) => items.OrderBy(i => i.IsDefault).ToList();
+
+    /// <summary>The batch's single default after trimming: the last item marked default, or null.</summary>
+    private static T? KeepLastDefault(List<T> items)
+    {
+        var defaultItems = items.Where(i => i.IsDefault).ToList();
+        foreach (var item in defaultItems.SkipLast(1))
+        {
+            item.IsDefault = false;
+        }
+        return defaultItems.LastOrDefault();
+    }
+
+    public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
+        => Promote(data, () => _innerStore.Create(data, storeDelegate));
 
     public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         var items = data.ToList();
-        if (items.Any(i => i.IsDefault))
+        var chosen = KeepLastDefault(items);
+        for (var attempt = 1; ; attempt++)
         {
-            UnsetOtherDefaults(null);
-            // Ensure only the last item marked as default stays default
-            var defaultItems = items.Where(i => i.IsDefault).ToList();
-            foreach (var item in defaultItems.SkipLast(1))
+            if (chosen != null)
             {
-                item.IsDefault = false;
+                UnsetOtherDefaults(null);
+            }
+            items.ForEach(Mark);
+            try
+            {
+                _innerStore.Create(items, storeDelegate);
+                return;
+            }
+            // Retried only while nothing of the batch is stored: a non-atomic collection create may have written a prefix.
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && chosen != null
+                && !AnyStored(items) && OtherDefaultStored(chosen.Guid))
+            {
             }
         }
-        _innerStore.Create(items, storeDelegate);
     }
 
     public void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
-    {
-        if (data.IsDefault)
-        {
-            UnsetOtherDefaults(data.Guid);
-        }
-        _innerStore.Update(data, storeDelegate);
-    }
+        => Promote(data, () => { _innerStore.Update(data, storeDelegate); return data.Guid ?? Guid.Empty; });
 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         var items = data.ToList();
-        if (items.Any(i => i.IsDefault))
+        var chosen = KeepLastDefault(items);
+        var batch = items.Select(i => i.Guid).ToHashSet();
+        for (var attempt = 1; ; attempt++)
         {
-            var defaultItems = items.Where(i => i.IsDefault).ToList();
-            // Keep only the last one as default
-            foreach (var item in defaultItems.SkipLast(1))
+            if (chosen != null)
             {
-                item.IsDefault = false;
+                UnsetOtherDefaults(chosen.Guid, batch);
             }
-            var lastDefault = defaultItems.Last();
-            UnsetOtherDefaults(lastDefault.Guid, items.Select(i => i.Guid).ToHashSet());
+            items.ForEach(Mark);
+            try
+            {
+                _innerStore.Update(DefaultLast(items), storeDelegate);
+                return;
+            }
+            // An update is idempotent, so a partly applied batch is safe to write again.
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && chosen != null
+                && OtherDefaultStored(chosen.Guid))
+            {
+            }
         }
-        _innerStore.Update(items, storeDelegate);
+    }
+
+    /// <summary>
+    /// Unsets the other defaults when <paramref name="data"/> is one, writes it, and on a refused promotion does both
+    /// again (TASK-632).
+    /// </summary>
+    private Guid Promote(T data, Func<Guid> write)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            if (data.IsDefault)
+            {
+                UnsetOtherDefaults(data.Guid);
+            }
+            Mark(data);
+            try
+            {
+                return write();
+            }
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && data.IsDefault
+                && OtherDefaultStored(data.Guid))
+            {
+            }
+        }
+    }
+
+    private bool OtherDefaultStored(Guid? guid)
+        => guid == null
+            ? _innerStore.Read(e => e.IsDefault, null, 1, null).Any()
+            : _innerStore.Read(e => e.IsDefault && e.Guid != guid, null, 1, null).Any();
+
+    private bool AnyStored(List<T> items)
+    {
+        var guids = items.Where(i => i.Guid != null).Select(i => i.Guid).ToList();
+        return guids.Count > 0 && _innerStore.Count(x => guids.Contains(x.Guid)) > 0;
     }
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
@@ -96,10 +171,10 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
         {
             updateAction(item);
         }
-        KeepLastDefault(items);
         if (items.Count > 0)
         {
-            _innerStore.Update(items);
+            // TASK-632: the collection update keeps one default, unsets the rest, keeps the marker and retries.
+            Update(items);
         }
     }
 
@@ -121,12 +196,8 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
 
     public Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        if (data.IsDefault)
-        {
-            UnsetOtherDefaults(data.Guid);
-        }
         // TASK-555: the create-or-update decision has one producer; an unstored Guid is created, not lost.
-        return StoreSave.Save(data, storeDelegate, _innerStore.Create, _innerStore.Update);
+        return Promote(data, () => StoreSave.Save(data, storeDelegate, _innerStore.Create, _innerStore.Update));
     }
 
     public void Init() => _innerStore.Init();
@@ -139,20 +210,6 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
     /// <summary>
     /// Of a batch, only the last item marked default stays default; every other stored default is unset.
     /// </summary>
-    private void KeepLastDefault(List<T> items)
-    {
-        var defaultItems = items.Where(i => i.IsDefault).ToList();
-        if (defaultItems.Count == 0)
-        {
-            return;
-        }
-        foreach (var item in defaultItems.SkipLast(1))
-        {
-            item.IsDefault = false;
-        }
-        UnsetOtherDefaults(defaultItems.Last().Guid, items.Select(i => i.Guid).ToHashSet());
-    }
-
     internal static bool WritesIsDefault(PropertyUpdate<T> updates) =>
         updates.Assignments.Any(a => a.MemberPath == nameof(IDefault.IsDefault));
 
@@ -186,6 +243,7 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
         foreach (var item in toUpdate)
         {
             item.IsDefault = false;
+            Mark(item);
         }
         _innerStore.Update(toUpdate);
     }

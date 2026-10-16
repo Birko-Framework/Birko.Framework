@@ -24,7 +24,7 @@ namespace Birko.Data.Stores
             {
                 CreateCore(data, storeDelegate);
             }
-            catch (Exception ex) when (IsDuplicateKeyException(ex))
+            catch (Exception ex) when (ex is not Birko.Data.Exceptions.StoreUniqueViolationException && IsDuplicateKeyException(ex))
             {
                 throw Birko.Data.Exceptions.StoreException.DuplicateCreate(typeof(T), ex);
             }
@@ -64,7 +64,15 @@ namespace Birko.Data.Stores
         public virtual void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureInitialized();
-            UpdateCore(data, storeDelegate);
+            try
+            {
+                UpdateCore(data, storeDelegate);
+            }
+            catch (Exception ex) when (ex is not Birko.Data.Exceptions.StoreUniqueViolationException && IsDuplicateKeyException(ex))
+            {
+                // TASK-632: an update colliding with a unique index is recognisable on every provider, as a create is.
+                throw Birko.Data.Exceptions.StoreException.UniqueViolation(typeof(T), ex);
+            }
         }
 
         /// <summary>

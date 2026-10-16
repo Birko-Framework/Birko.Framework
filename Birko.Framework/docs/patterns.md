@@ -193,8 +193,32 @@ A filtered update enforces it too: `Update(filter, action)` and a `PropertyUpdat
 matches, keep the last one marked default, unset every other, and write once. A `PropertyUpdate` that does not touch
 `IsDefault` stays a native filtered update (TASK-159).
 
-> ⚠ **Single caller only.** The decorator reads, then writes. Two callers promoting different rows at the same moment
-> can both succeed; closing that race needs storage-level enforcement ([[TASK-632]]). The same holds for unique slugs.
+### Concurrent writers (TASK-632)
+
+The decorator reads, then writes, so on its own two callers promoting different rows at the same moment can both store a
+default. The storage closes that race when the model opts in with `IDefaultMarker`: a `bool? DefaultMarker` that the
+decorator keeps `true` on the default row and `null` on every other (never `false`), under a unique index:
+
+```csharp
+public class Currency : AbstractModel, IDefaultMarker
+{
+    public bool IsDefault { get; set; }
+
+    // SQL Server treats NULLs as equal for uniqueness, hence WhereNotNull; MySQL drops that term (rule 58).
+    // A tenant-scoped model puts its tenant column first, in a [CompositeIndex].
+    [IndexedField("UX_Currency_Default", IsUnique: true, WhereNotNull = new[] { nameof(DefaultMarker) })]
+    public bool? DefaultMarker { get; set; }
+}
+```
+
+The store refuses the second default with `StoreUniqueViolationException` (a `StoreException`). The decorator then unsets
+the winner and writes again, so the last writer wins, up to 5 attempts. Within one batch, demotions are written before the
+promotion they make room for. Measured on SQLite, PostgreSQL, MySQL and SQL Server.
+
+> ⚠ Without `IDefaultMarker` and its index, or on a store that enforces no unique index (ElasticSearch, RavenDB,
+> Cosmos DB, JSON, XML, InMemory), the read-then-write only narrows the window. On MongoDB create the unique index with
+> `partialFilterExpression: { DefaultMarker: true }` directly: a *sparse* one refuses the second non-default, because the
+> null is stored (measured, 11000), and Birko's Mongo index manager has no partial filter to declare yet ([[TASK-636]]).
 
 ### Variants
 
@@ -204,6 +228,13 @@ matches, keep the last one marked default, unset every other, and write once. A 
 ## Sluggable
 
 Auto-generates URL-friendly slugs from entity content and ensures uniqueness.
+
+> **Concurrent writers (TASK-632).** The probe reads before the write, so two callers can both find a slug free. Declare
+> a unique index on the slug column (`[IndexedField("UX_..._Slug", IsUnique: true)]`, with the tenant column first and
+> `WhereNull = DeletedAt` where the model is tenant-scoped or soft-deletable). The store then refuses the loser with
+> `StoreUniqueViolationException`, and the wrapper probes again and takes the next suffix (up to 5 attempts). A refusal
+> for another key surfaces at once. A batch create is retried only while none of it is stored. Stores that enforce no
+> unique index leave the race narrowed, not closed.
 
 ### Interface
 

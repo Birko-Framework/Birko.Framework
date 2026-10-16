@@ -178,7 +178,15 @@ namespace Birko.Data.SQL.Stores
             CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            await AtomicallyAsync(() => UpdateCoreAsync(data, storeDelegate, ct), ct);
+            try
+            {
+                await AtomicallyAsync(() => UpdateCoreAsync(data, storeDelegate, ct), ct);
+            }
+            catch (Exception ex) when (ex is not Birko.Data.Exceptions.StoreUniqueViolationException && IsDuplicateKeyException(ex))
+            {
+                // TASK-632: an update colliding with a unique index is recognisable on every provider, as a create is.
+                throw Birko.Data.Exceptions.StoreException.UniqueViolation(typeof(T), ex);
+            }
         }
 
         /// <summary>

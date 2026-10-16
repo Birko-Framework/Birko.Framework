@@ -209,9 +209,7 @@ public class AsyncRavenDBStore<T>
 
     /// <summary>The <c>StoreException</c> every provider throws for a create of a stored key (TASK-567).</summary>
     private static Birko.Data.Exceptions.StoreException DuplicateCreateRefusal(Exception? ex)
-        => new Birko.Data.Exceptions.StoreException(
-            $"Create of {typeof(T).Name} refused: an entity with the same key is already stored. "
-            + "Create never overwrites; use Update or Save for a stored entity.", ex);
+        => Birko.Data.Exceptions.StoreException.DuplicateCreate(typeof(T), ex); // TASK-632: the one factory, the one subclass
 
     /// <summary>Documents per session in a bulk create; see <c>RavenDBStore.CreateChunkSize</c> (TASK-567).</summary>
     private const int CreateChunkSize = 512;

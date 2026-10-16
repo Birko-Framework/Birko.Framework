@@ -221,6 +221,12 @@ namespace Birko.Data.SQL.Stores
             return Connector?.Select(typeof(T), filter as LambdaExpression, null, 1, null)?.OfType<T>().FirstOrDefault();
         }
 
+        /// <summary>
+        /// TASK-632: the connector's classifier, so an update colliding with a unique index is translated by the public
+        /// update into <see cref="Birko.Data.Exceptions.StoreUniqueViolationException"/>, as a create already is.
+        /// </summary>
+        protected override bool IsDuplicateKeyException(Exception ex) => DuplicateCreate.IsDuplicate(Connector, ex);
+
         protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
             using var _tx = EnterTransactionScope();

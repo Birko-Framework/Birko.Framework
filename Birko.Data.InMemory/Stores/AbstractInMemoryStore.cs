@@ -267,7 +267,7 @@ namespace Birko.Data.InMemory.Stores
                 var key = item.Guid!.Value;
                 if (_items.ContainsKey(key) || !seen.Add(key))
                 {
-                    throw new StoreException($"{GetType().Name} already holds a {typeof(T).Name} with Guid {key}; Create does not replace — use Update.");
+                    throw new StoreUniqueViolationException($"{GetType().Name} already holds a {typeof(T).Name} with Guid {key}; Create does not replace — use Update.", null);
                 }
             }
         }
@@ -280,7 +280,7 @@ namespace Birko.Data.InMemory.Stores
         {
             if (!_items.TryAdd(item.Guid!.Value, Snapshot(item)))
             {
-                throw new StoreException($"{GetType().Name} already holds a {typeof(T).Name} with Guid {item.Guid}; Create does not replace — use Update.");
+                throw new StoreUniqueViolationException($"{GetType().Name} already holds a {typeof(T).Name} with Guid {item.Guid}; Create does not replace — use Update.", null);
             }
         }
 

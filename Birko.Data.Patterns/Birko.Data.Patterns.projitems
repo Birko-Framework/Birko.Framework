@@ -37,6 +37,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Concurrency\AsyncVersionedStoreWrapper.cs" />
     <!-- Models: Sluggable -->
     <Compile Include="$(MSBuildThisFileDirectory)Models\ISluggable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IDefaultMarker.cs" />
     <!-- Decorators: Sluggable -->
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SlugGenerator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SluggableStoreWrapper.cs" />

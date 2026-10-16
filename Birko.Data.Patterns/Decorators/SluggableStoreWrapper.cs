@@ -26,16 +26,47 @@ public class SluggableStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 
     public long Count(Expression<Func<T, bool>>? filter = null) => _innerStore.Count(filter);
 
+    /// <summary>
+    /// Writes tried before a unique-slug refusal surfaces (TASK-632).
+    /// </summary>
+    /// <remarks>
+    /// The probe reads and then the write writes, so two callers can both find a slug free (SH-M327). Only a unique index
+    /// on the slug column, declared by the model, closes that; the store then refuses the loser with
+    /// <see cref="Birko.Data.Exceptions.StoreUniqueViolationException"/>, and the wrapper probes again and takes the next
+    /// suffix. A refusal for any other key (the slug is free) surfaces at once. A store that enforces no unique index
+    /// (ElasticSearch, RavenDB, Cosmos DB, JSON, XML, InMemory) leaves the window narrowed, not closed.
+    /// </remarks>
+    protected const int MaxSlugAttempts = 5;
+
     public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        ResolveSlug(data, excludeId: null);
-        return _innerStore.Create(data, storeDelegate);
+        for (var attempt = 1; ; attempt++)
+        {
+            ResolveSlug(data, excludeId: null);
+            try
+            {
+                return _innerStore.Create(data, storeDelegate);
+            }
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts && SlugHeld(data.Slug, data.Guid))
+            {
+            }
+        }
     }
 
     public void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        ResolveSlug(data, data.Guid);
-        _innerStore.Update(data, storeDelegate);
+        for (var attempt = 1; ; attempt++)
+        {
+            ResolveSlug(data, data.Guid);
+            try
+            {
+                _innerStore.Update(data, storeDelegate);
+                return;
+            }
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts && SlugHeld(data.Slug, data.Guid))
+            {
+            }
+        }
     }
 
     public void Delete(T data) => _innerStore.Delete(data);
@@ -73,6 +104,10 @@ public class SluggableStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
             },
             fallback: "item");
     }
+
+    /// <summary>Whether a row other than <paramref name="excludeId"/> now holds <paramref name="slug"/>.</summary>
+    protected bool SlugHeld(string? slug, Guid? excludeId)
+        => !string.IsNullOrEmpty(slug) && _innerStore.Read(BuildSlugFilter(slug, excludeId)) is not null;
 
     protected static Expression<Func<T, bool>> BuildSlugFilter(string slug, Guid? excludeId = null)
     {

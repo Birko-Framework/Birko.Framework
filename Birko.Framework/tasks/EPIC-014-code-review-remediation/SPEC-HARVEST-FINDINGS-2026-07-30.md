@@ -3507,7 +3507,7 @@ The mutation lambda lives in `data.Select(...)`, so it runs whenever the inner s
 
 `../Birko.Data.Patterns/Decorators/AsyncSluggableStoreWrapper.cs:78`
 
-**Verdict: CONFIRMED by reading, spawned as TASK-632** (TASK-159, measured 2026-10-15). A read-then-write cannot close a race; it needs a storage-level unique index and a retry.
+**Verdict: CONFIRMED by reading, spawned as TASK-632** (TASK-159, measured 2026-10-15). A read-then-write cannot close a race; it needs a storage-level unique index and a retry. **Fixed by [[TASK-632]] (2026-10-16):** measured live (two creates gated so both probe first) on SQLite, PostgreSQL, MySQL and SQL Server, the loser was refused by the slug's unique index; the four slug wrappers now catch `StoreUniqueViolationException`, probe again and take the next suffix (5 attempts), and surface a refusal for any other key.
 
 ResolveSlugAsync probes with `_innerStore.ReadAsync(entity => entity.Slug == slug, ct)` and the caller then writes; nothing holds a lock, opens a transaction or relies on a unique index. Two requests creating entities whose slug source is "widget" both observe the slug free and both persist Slug="widget". The in-batch HashSet closes only the single-call window. Same at SluggableStoreWrapper.cs:72. Neither the decorator nor ISluggable documents that a storage-level unique index is required.
 
@@ -3515,7 +3515,7 @@ ResolveSlugAsync probes with `_innerStore.ReadAsync(entity => entity.Slug == slu
 
 `../Birko.Data.Patterns/Decorators/AsyncDefaultStoreWrapper.cs:140`
 
-**Verdict: CONFIRMED by reading, spawned as TASK-632** (TASK-159, measured 2026-10-15). The same race on the single default; "at most one true" is a partial index over a boolean, which `WhereNull` / `WhereNotNull` (rule 58) cannot declare.
+**Verdict: CONFIRMED by reading, spawned as TASK-632** (TASK-159, measured 2026-10-15). The same race on the single default; "at most one true" is a partial index over a boolean, which `WhereNull` / `WhereNotNull` (rule 58) cannot declare. **Fixed by [[TASK-632]] (2026-10-16):** measured live on the four SQL providers, two gated promotions both stored a default. A model now opts in with `IDefaultMarker` (`bool? DefaultMarker`, true or null) under a unique index (`WhereNotNull`); the default wrappers keep the marker, retry a refused promotion (last writer wins) and write demotions before the promotion in a batch.
 
 `ReadAsync(e => e.IsDefault)` then `UpdateAsync(toUpdate)` then the caller's own create/update: three round trips with no lock, transaction or conditional predicate. Two callers each writing an entity with IsDefault=true interleave so both read the same default set, both clear it, and both persist their own default. The invariant the decorator exists to enforce is violated with no error. Same at DefaultStoreWrapper.cs:136-152, and the builder emits no compensating storage constraint.
 

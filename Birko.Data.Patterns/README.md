@@ -67,6 +67,10 @@ var asyncStore = new AsyncDefaultStoreWrapper<MyAsyncBulkStore, Currency>(innerA
 await asyncStore.CreateAsync(currency);
 ```
 
+Two concurrent promotions can both succeed unless the storage refuses one: implement `IDefaultMarker` and declare a
+unique index on `DefaultMarker` (see [docs/patterns.md](../Birko.Framework/docs/patterns.md#concurrent-writers-task-632)).
+The slug wrappers likewise need a unique index on the slug column (TASK-632).
+
 ### Paging
 
 ```csharp

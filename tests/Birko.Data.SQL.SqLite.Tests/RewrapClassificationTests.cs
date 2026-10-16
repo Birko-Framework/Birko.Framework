@@ -274,7 +274,8 @@ public class RewrapClassificationTests : IDisposable
         // TASK-567: a duplicate CREATE is the shared StoreException every provider throws for it (the user's decision,
         // 2026-10-12). What this test exists for still holds: it is typed, never a bare Exception whose message is the
         // SQL, and the provider's own exception is right underneath with its code and the statement.
-        failure.Should().BeOfType<Birko.Data.Exceptions.StoreException>(
+        // TASK-632: that type is now StoreUniqueViolationException, a StoreException, so existing catches still select it.
+        failure.Should().BeOfType<Birko.Data.Exceptions.StoreUniqueViolationException>(
             "a duplicate create is refused with the same type on every provider");
         var sqlite = failure!.InnerException.Should().BeOfType<SqliteException>(
             "the provider's own exception is kept, so a host can still map it").Which;

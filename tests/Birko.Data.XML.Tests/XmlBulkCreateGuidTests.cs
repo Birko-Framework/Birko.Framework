@@ -64,7 +64,7 @@ public class XmlBulkCreateGuidTests : IDisposable
         // Inverted at TASK-567 (rule 56). CR-L244 made this an indexer upsert so it would not throw ArgumentException;
         // Create now means a new entity on every provider (the user's decision, 2026-10-12): refused, entry kept.
         Action act = () => bulk.Create(new List<TestModel> { new() { Guid = g, Name = "second" } });
-        act.Should().Throw<Birko.Data.Exceptions.StoreException>();
+        act.Should().Throw<Birko.Data.Exceptions.StoreUniqueViolationException>(); // TASK-632
 
         var items = bulk.Read(_ => true).ToList();
         items.Should().ContainSingle();

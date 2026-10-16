@@ -21,9 +21,10 @@ namespace Birko.Data.JSON.Stores
                 var guid = entity.Guid!.Value;
                 if (items.ContainsKey(guid) || !seen.Add(guid))
                 {
-                    throw new StoreException(
+                    // TASK-632: a unique refusal, so a caller that can repair a collision selects it on every provider.
+                    throw new StoreUniqueViolationException(
                         $"Create of {typeof(T).Name} refused: an entity with Guid {guid} is already stored. "
-                        + "Create never overwrites; use Update or Save for a stored entity.");
+                        + "Create never overwrites; use Update or Save for a stored entity.", null);
                 }
             }
             foreach (var entity in pending)

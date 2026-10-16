@@ -145,7 +145,15 @@ namespace Birko.Data.SQL.Stores
         public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureInitialized();
-            Atomically(() => UpdateCore(data, storeDelegate));
+            try
+            {
+                Atomically(() => UpdateCore(data, storeDelegate));
+            }
+            catch (Exception ex) when (ex is not Birko.Data.Exceptions.StoreUniqueViolationException && IsDuplicateKeyException(ex))
+            {
+                // TASK-632: an update colliding with a unique index is recognisable on every provider, as a create is.
+                throw Birko.Data.Exceptions.StoreException.UniqueViolation(typeof(T), ex);
+            }
         }
 
         /// <summary>

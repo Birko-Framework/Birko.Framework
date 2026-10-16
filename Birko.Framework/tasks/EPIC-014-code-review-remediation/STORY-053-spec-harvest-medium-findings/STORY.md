@@ -21,7 +21,7 @@ confirmed, 1 refuted by design; 12 fixed there, 6 found fixed earlier, 3 resolve
 handed it (counted there) by rebuilding the tenant sync provider on the shared engine. All 22 of `data-sync` ([[TASK-157]], done 2026-10-15): 21 confirmed, 1
 narrower; 15 fixed there plus the engine side of SH-M064 (and three unfiled engine defects), the rest handed to [[TASK-630]]. All 21 of `store-decorator-composition` ([[TASK-159]], done 2026-10-15): 20
 confirmed, 1 narrower; 16 fixed there, `SH-M318` found already fixed, `SH-M321` waived, `SH-M327`/`SH-M328` spawned as
-[[TASK-632]], `SH-M336` as [[TASK-631]]. All 16 of `repository-contract` ([[TASK-162]], done 2026-10-15): 16 confirmed;
+[[TASK-632]] (done 2026-10-16), `SH-M336` as [[TASK-631]]. All 16 of `repository-contract` ([[TASK-162]], done 2026-10-15): 16 confirmed;
 13 fixed there, 3 found already fixed. All 18 of `tenant-isolation` ([[TASK-161]], done 2026-10-15): 18 confirmed;
 3 fixed there, 2 found already fixed, `SH-M353` decided by [[TASK-328]], `SH-M338` owned by [[TASK-127]],
 `SH-M342`–`SH-M352` spawned as [[TASK-630]]. All 12 of `specifications-and-paging` ([[TASK-171]], done 2026-10-15): 11

@@ -33,13 +33,41 @@ public class AsyncSluggableBulkStoreWrapper<TStore, T> : AsyncSluggableStoreWrap
         // CR-M124: materialize once — the slug is resolved/mutated in the foreach and the same items
         // must be what's persisted; a lazy source enumerated twice would persist unmutated objects.
         var items = data as IReadOnlyList<T> ?? data.ToList();
-        var batchSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var attempt = 1; ; attempt++)
+        {
+            var batchSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in items)
+            {
+                await ResolveSlugAsync(item, excludeId: null, batchSlugs, ct);
+                batchSlugs.Add(item.Slug!);
+            }
+            try
+            {
+                await _innerStore.CreateAsync(items, storeDelegate, ct);
+                return;
+            }
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts)
+            {
+                // TASK-632: retried only while nothing of the batch is stored (a store whose collection create is not
+                // atomic may have written a prefix, which a retry would create twice) and a slug is what collided.
+                if (await AnyStoredAsync(items, ct) || !await AnySlugHeldAsync(items, ct)) throw;
+            }
+        }
+    }
+
+    private async Task<bool> AnyStoredAsync(IReadOnlyList<T> items, CancellationToken ct)
+    {
+        var guids = items.Where(i => i.Guid != null).Select(i => i.Guid).ToList();
+        return guids.Count > 0 && await _innerStore.CountAsync(x => guids.Contains(x.Guid), ct) > 0;
+    }
+
+    private async Task<bool> AnySlugHeldAsync(IReadOnlyList<T> items, CancellationToken ct)
+    {
         foreach (var item in items)
         {
-            await ResolveSlugAsync(item, excludeId: null, batchSlugs, ct);
-            batchSlugs.Add(item.Slug!);
+            if (await SlugHeldAsync(item.Slug, item.Guid, ct)) return true;
         }
-        await _innerStore.CreateAsync(items, storeDelegate, ct);
+        return false;
     }
 
     public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
@@ -51,13 +79,25 @@ public class AsyncSluggableBulkStoreWrapper<TStore, T> : AsyncSluggableStoreWrap
         // the same slug, and the ContinueWith/Unwrap ran the inner update even if resolution
         // faulted (CR-H075). Materialize once so a lazy source isn't enumerated twice.
         var items = data as IReadOnlyList<T> ?? data.ToList();
-        var batchSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in items)
+        for (var attempt = 1; ; attempt++)
         {
-            await ResolveSlugAsync(item, item.Guid, batchSlugs, ct);
-            batchSlugs.Add(item.Slug!);
+            var batchSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in items)
+            {
+                await ResolveSlugAsync(item, item.Guid, batchSlugs, ct);
+                batchSlugs.Add(item.Slug!);
+            }
+            try
+            {
+                await _innerStore.UpdateAsync(items, storeDelegate, ct);
+                return;
+            }
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts)
+            {
+                // An update is idempotent, so a partly applied batch is safe to write again (TASK-632).
+                if (!await AnySlugHeldAsync(items, ct)) throw;
+            }
         }
-        await _innerStore.UpdateAsync(items, storeDelegate, ct);
     }
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)

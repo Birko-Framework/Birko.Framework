@@ -79,7 +79,7 @@ public class JsonBulkCreateTests : IDisposable
         // shared StoreException, and the stored entry is kept.
         Action act = () => store.Create(new[] { new TestModel { Guid = g, Name = "second" } });
 
-        act.Should().Throw<Birko.Data.Exceptions.StoreException>();
+        act.Should().Throw<Birko.Data.Exceptions.StoreUniqueViolationException>(); // TASK-632
         var items = store.Read().ToList();
         items.Should().ContainSingle();
         items[0].Name.Should().Be("first", "create never overwrites a stored entry");
