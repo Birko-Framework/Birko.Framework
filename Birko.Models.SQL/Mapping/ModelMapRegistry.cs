@@ -95,6 +95,12 @@ namespace Birko.Models.SQL.Mapping
         public void ApplyToDatabase()
         {
             Birko.Data.SQL.DataBase.RegisterTableNames(GetTableNames());
+            foreach (var (type, map) in _maps)
+            {
+                // TASK-272: a schema declared with ToTable(name, schema).
+                if (!string.IsNullOrEmpty(map.TableName) && map.TableSchema != null)
+                    Birko.Data.SQL.DataBase.RegisterTableName(type, map.TableName!, map.TableSchema);
+            }
 
             foreach (var (type, _) in _maps)
             {

@@ -23,7 +23,7 @@ namespace Birko.Data.SQL.SQLite.IndexManagement
             // SH-M225 (TASK-154): the table was accepted and never used, so an index of the same name on another
             // table answered "exists" and a guarded CREATE INDEX was skipped.
             var safeIndex = SqlLiteral.EscapeLiteral(indexName);
-            var safeTable = SqlLiteral.EscapeLiteral(tableName);
+            var safeTable = SqlLiteral.EscapeLiteral(Connector.PhysicalTable(tableName).Name);
             return $"SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = '{safeIndex}' AND tbl_name = '{safeTable}'";
         }
 
@@ -36,7 +36,7 @@ namespace Birko.Data.SQL.SQLite.IndexManagement
         /// </summary>
         protected override string ListIndexesSql(string tableName)
         {
-            var safeTable = SqlLiteral.EscapeLiteral(tableName);
+            var safeTable = SqlLiteral.EscapeLiteral(Connector.PhysicalTable(tableName).Name);
             return $@"SELECT il.name, ii.name, ii.""desc"", il.""unique"", ii.seqno
 FROM pragma_index_list('{safeTable}') AS il
 JOIN pragma_index_xinfo(il.name) AS ii

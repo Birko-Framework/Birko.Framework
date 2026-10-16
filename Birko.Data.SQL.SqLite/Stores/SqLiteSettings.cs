@@ -9,8 +9,15 @@ namespace Birko.Data.SQL.SqLite.Stores
     /// Extends PasswordSettings (not RemoteSettings/SqlSettings) since SQLite is file-based
     /// and doesn't need username, port, or secure connection options.
     /// </summary>
-    public class SqLiteSettings : PasswordSettings, ILoadable<SqLiteSettings>
+    public class SqLiteSettings : PasswordSettings, ILoadable<SqLiteSettings>, Birko.Data.SQL.Stores.ISqlSchemaSettings
     {
+        /// <inheritdoc cref="Birko.Data.SQL.Stores.ISqlSchemaSettings"/>
+        /// <remarks>SQLite has no schemas inside a database: a table is stored as <c>schema__name</c> (TASK-272).</remarks>
+        public string? Schema { get; set; }
+
+        /// <summary>The default schema is part of the identity (TASK-272); absent, the id is unchanged.</summary>
+        public override string GetId() => string.IsNullOrEmpty(Schema) ? base.GetId() : base.GetId() + ":" + Schema;
+
         /// <summary>
         /// Gets or sets the command timeout in seconds. Default is 30.
         /// </summary>
@@ -95,6 +102,7 @@ namespace Birko.Data.SQL.SqLite.Stores
                 base.LoadFrom((PasswordSettings)data);
                 CommandTimeout = data.CommandTimeout;
                 JournalMode = data.JournalMode;
+                Schema = data.Schema;
             }
         }
 

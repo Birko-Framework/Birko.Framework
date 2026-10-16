@@ -239,7 +239,11 @@ namespace Birko.Data.SQL.Connectors
         protected override Birko.Data.SQL.IndexManagement.SqlIndexManager? CreateIndexManager() => new Birko.Data.SQL.MSSql.IndexManagement.MSSqlIndexManager(this);
 
         /// <inheritdoc />
-        public override string? TableExistsSql => "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = SCHEMA_NAME() AND TABLE_NAME = @tableName";
+        // TASK-272: OBJECT_ID over the rendered relation (TableExistsArgument): the declared schema, else the default one.
+        public override string? TableExistsSql => "SELECT CASE WHEN OBJECT_ID(@tableName, N'U') IS NULL THEN 0 ELSE 1 END";
+
+        /// <inheritdoc />
+        public override object TableExistsArgument(string table) => TableIdentifier(table);
 
         protected override string? StoredColumnsSql(string tableName)
             => string.Format(
@@ -249,7 +253,7 @@ namespace Birko.Data.SQL.Connectors
                 "AND ic.column_id = c.column_id) THEN 1 ELSE 0 END AS birko_primary " +
                 "FROM sys.columns c JOIN sys.types t ON c.user_type_id = t.user_type_id " +
                 "WHERE c.object_id = OBJECT_ID('{0}')",
-                SqlLiteral.EscapeLiteral(tableName));
+                RelationLiteral(tableName));
 
         protected override StoredColumn ReadStoredColumn(DbDataReader reader)
             => new StoredColumn(
@@ -447,7 +451,7 @@ namespace Birko.Data.SQL.Connectors
         /// new name as a plain literal (a bracketed one would become part of the name) (TASK-633).
         /// </summary>
         public override string RenameColumnSql(string table, string from, string to)
-            => "EXEC sp_rename N'" + Birko.Data.SQL.SqlLiteral.EscapeLiteral(QuoteIdentifier(table) + "." + QuoteIdentifier(from))
+            => "EXEC sp_rename N'" + Birko.Data.SQL.SqlLiteral.EscapeLiteral(TableIdentifier(table) + "." + QuoteIdentifier(from))
                + "', N'" + Birko.Data.SQL.SqlLiteral.EscapeLiteral(to) + "', N'COLUMN'";
 
         public override string FieldDefinition(AbstractField field)
@@ -490,6 +494,22 @@ namespace Birko.Data.SQL.Connectors
         /// so a limited read with no sort is a syntax error (TASK-278).
         /// </summary>
         public override bool RequiresOrderByForPaging => true;
+
+        /// <inheritdoc />
+        public override bool SupportsSchemas => true;
+
+        /// <summary>
+        /// The <c>OBJECT_ID('…')</c> argument for a logical table: the rendered relation when it has a schema, else the bare
+        /// name exactly as before, so a model without one keeps its byte-identical statements (TASK-272).
+        /// </summary>
+        private string ObjectIdLiteral(string table)
+            => PhysicalTable(table).Schema == null ? SqlLiteral.EscapeLiteral(table) : SqlLiteral.EscapeLiteral(TableIdentifier(table));
+
+        /// <inheritdoc />
+        /// <remarks>CREATE SCHEMA must be the only statement of its batch, hence EXEC (TASK-272).</remarks>
+        protected override string? EnsureSchemaSql(string schema)
+            => "IF SCHEMA_ID(N'" + Birko.Data.SQL.SqlLiteral.EscapeLiteral(schema) + "') IS NULL EXEC(N'CREATE SCHEMA "
+               + Birko.Data.SQL.SqlLiteral.EscapeLiteral(QuoteIdentifier(schema)) + "')";
 
         /// <summary>
         /// T-SQL paging: <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c>, with the <c>OFFSET</c> always present.
@@ -560,9 +580,11 @@ namespace Birko.Data.SQL.Connectors
             DoDdlCommand((command) =>
             {
                 command.CommandText =
-                    "IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='" + SqlLiteral.EscapeLiteral(name) +"') "
+                    // TASK-272: OBJECT_ID over the qualified name. sys.tables by name ignored the schema, so a table of the
+                    // same name in dbo suppressed the create of reporting.evts.
+                    "IF OBJECT_ID(N'" + SqlLiteral.EscapeLiteral(TableIdentifier(name)) + "', N'U') IS NULL "
                     + "CREATE TABLE "
-                    + QuoteIdentifier(name)
+                    + TableIdentifier(name)
                     + " ("
                     + string.Join(", ", fields.Where(x => !string.IsNullOrEmpty(x)))
                     + ")";
@@ -600,13 +622,14 @@ namespace Birko.Data.SQL.Connectors
             // prefixed: both the conditional and the plain form must carry it. Measured on SQL Server 2022:
             // the guarded filtered create runs, and sys.indexes then reports
             // has_filter=True filter=([DeletedAt] IS NULL).
-            var create = $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})"
+            var create = $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {TableIdentifier(tableName)} ({columns})"
                        + IndexPredicateClause(index);
             if (!conditional)
             {
                 return create;
             }
-            return $"IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{SqlLiteral.EscapeLiteral(tableName)}')) "
+            // TASK-272: OBJECT_ID over the qualified relation, so the guard asks about the table the index goes on.
+            return $"IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{ObjectIdLiteral(tableName)}')) "
                  + create;
         }
 
@@ -626,8 +649,8 @@ namespace Birko.Data.SQL.Connectors
         public override string DropIndexSql(string tableName, Tables.IndexDefinition index)
         {
             var indexName = SqlLiteral.EscapeLiteral(index.Name);
-            return $"IF EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{SqlLiteral.EscapeLiteral(tableName)}')) "
-                 + $"DROP INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)}";
+            return $"IF EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{ObjectIdLiteral(tableName)}')) "
+                 + $"DROP INDEX {QuoteIdentifier(index.Name)} ON {TableIdentifier(tableName)}";
         }
 
         #region Native Bulk Operations
@@ -668,7 +691,7 @@ namespace Birko.Data.SQL.Connectors
                 {
                     var options = owned ? SqlBulkCopyOptions.TableLock : SqlBulkCopyOptions.Default;
                     using var bulkCopy = new SqlBulkCopy(connection, options, (SqlTransaction?)dbTransaction);
-                    bulkCopy.DestinationTableName = QuoteIdentifier(table.Name);
+                    bulkCopy.DestinationTableName = TableIdentifier(table.Name);
                     foreach (DataColumn col in dataTable.Columns)
                     {
                         bulkCopy.ColumnMappings.Add(col.ColumnName, col.ColumnName);
@@ -703,7 +726,7 @@ namespace Birko.Data.SQL.Connectors
                 {
                     var options = owned ? SqlBulkCopyOptions.TableLock : SqlBulkCopyOptions.Default;
                     using var bulkCopy = new SqlBulkCopy(connection, options, (SqlTransaction?)dbTransaction);
-                    bulkCopy.DestinationTableName = QuoteIdentifier(table.Name);
+                    bulkCopy.DestinationTableName = TableIdentifier(table.Name);
                     foreach (DataColumn col in dataTable.Columns)
                     {
                         bulkCopy.ColumnMappings.Add(col.ColumnName, col.ColumnName);
@@ -765,7 +788,7 @@ namespace Birko.Data.SQL.Connectors
 
                     var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                    command.CommandText = "UPDATE " + TableIdentifier(table.Name)
                         + " SET " + string.Join(", ", setClauses)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
@@ -853,7 +876,7 @@ namespace Birko.Data.SQL.Connectors
 
                     var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                    command.CommandText = "UPDATE " + TableIdentifier(table.Name)
                         + " SET " + string.Join(", ", setClauses)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
@@ -938,7 +961,7 @@ namespace Birko.Data.SQL.Connectors
                         command.Transaction = transaction;
 
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                    command.CommandText = "DELETE FROM " + TableIdentifier(table.Name)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
@@ -1006,7 +1029,7 @@ namespace Birko.Data.SQL.Connectors
                         command.Transaction = transaction;
 
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                    command.CommandText = "DELETE FROM " + TableIdentifier(table.Name)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 

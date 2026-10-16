@@ -140,6 +140,94 @@ namespace Birko.Data.SQL.Connectors
         public virtual bool FoldsUnquotedIdentifiers => false;
 
         /// <summary>
+        /// Whether a database holds schemas, so an entity's schema is a qualifier (<c>"reporting"."evts"</c>) rather than a
+        /// <c>schema__</c> prefix of the table name (TASK-272). PostgreSQL, TimescaleDB and SQL Server do; MySQL (where a
+        /// schema IS a database) and SQLite do not.
+        /// </summary>
+        public virtual bool SupportsSchemas => false;
+
+        /// <summary>The connection-wide default schema from the settings (<c>ISqlSchemaSettings.Schema</c>), or null.</summary>
+        public string? DefaultSchema { get; }
+
+        /// <summary>
+        /// The physical relation a LOGICAL table name stands for on this connection: its schema (null for the connection's
+        /// own default) and its stored name (TASK-272).
+        /// </summary>
+        /// <remarks>
+        /// The schema is the entity's own (<c>DataBase.TableSchema</c>), else <see cref="DefaultSchema"/>. Where
+        /// <see cref="SupportsSchemas"/> is false it becomes the name's prefix, <c>schema__name</c>, the user's decision:
+        /// a MySQL schema is another database, so honouring it as a qualifier would silently cross databases.
+        /// </remarks>
+        public (string? Schema, string Name) PhysicalTable(string table)
+        {
+            if (string.IsNullOrEmpty(table))
+            {
+                return (null, table);
+            }
+            var schema = DataBase.TableSchema(table) ?? DefaultSchema;
+            if (schema == null)
+            {
+                return (null, table);
+            }
+            return SupportsSchemas ? (schema, table) : (null, DataBase.PrefixedTableName(schema, table));
+        }
+
+        /// <summary>
+        /// The quoted relation for a LOGICAL table name: <c>"evts"</c>, <c>"reporting"."evts"</c> or <c>`reporting__evts`</c>.
+        /// The one producer every statement naming a table goes through (TASK-272). Without a schema it is exactly
+        /// <see cref="QuoteIdentifier"/>, so a model without one renders as it always did.
+        /// </summary>
+        public string TableIdentifier(string table)
+        {
+            var (schema, name) = PhysicalTable(table);
+            return schema == null ? QuoteIdentifier(name) : QuoteIdentifier(schema) + "." + QuoteIdentifier(name);
+        }
+
+        /// <summary>
+        /// The value a <see cref="TableExistsSql"/> query binds as <c>@tableName</c> for a LOGICAL table name: the stored
+        /// name here, and the rendered relation where the query resolves it as one (PostgreSQL, SQL Server) (TASK-272).
+        /// </summary>
+        public virtual object TableExistsArgument(string table) => PhysicalTable(table).Name;
+
+        /// <summary>
+        /// A string literal's content naming the relation for <paramref name="table"/> in a catalogue function
+        /// (<c>::regclass</c>, <c>to_regclass</c>, <c>OBJECT_ID</c>), already escaped for the surrounding quotes (TASK-272).
+        /// </summary>
+        /// <remarks>
+        /// A caller-supplied qualified name (<c>reporting.evts</c>) keeps <see cref="QualifiedIdentifier"/>'s per-part
+        /// quoting (TASK-262); a logical table name renders through <see cref="TableIdentifier"/>, schema included.
+        /// </remarks>
+        public string RelationLiteral(string table)
+            => SqlLiteral.EscapeLiteral(HasUnquotedDot(table) ? QualifiedIdentifier(table) : TableIdentifier(table));
+
+        private bool HasUnquotedDot(string name)
+        {
+            var open = IdentifierQuoteOpen;
+            var close = IdentifierQuoteClose;
+            var quoted = false;
+            foreach (var c in name ?? string.Empty)
+            {
+                if (!quoted && c == open) quoted = true;
+                else if (quoted && c == close) quoted = false;
+                else if (!quoted && c == '.') return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// The statement creating <paramref name="schema"/> if it is missing, or null where a schema is not a container
+        /// this connector creates (TASK-272). Run before a table is created in it.
+        /// </summary>
+        protected virtual string? EnsureSchemaSql(string schema) => null;
+
+        /// <summary>The <see cref="EnsureSchemaSql"/> statement for <paramref name="table"/>'s schema, or null.</summary>
+        protected string? EnsureSchemaSqlFor(string table)
+        {
+            var (schema, _) = PhysicalTable(table);
+            return schema == null ? null : EnsureSchemaSql(schema);
+        }
+
+        /// <summary>
         /// Determines whether an exception is transient and the operation should be retried.
         /// Override in provider-specific connectors to detect provider-specific transient errors
         /// (e.g., SQL Server error 1205 for deadlocks, PostgreSQL 40P01, MySQL 1213).
@@ -370,6 +458,9 @@ namespace Birko.Data.SQL.Connectors
         protected AbstractConnectorBase(PasswordSettings settings)
         {
             _settings = settings;
+            DefaultSchema = settings is Stores.ISqlSchemaSettings { Schema: { Length: > 0 } schema }
+                ? DataBase.ValidateSchemaName(schema)
+                : null;
             InitializeConditionStrategies();
         }
 
@@ -471,7 +562,7 @@ namespace Birko.Data.SQL.Connectors
         public virtual string? StatementRequirement(string sql) => null;
 
         public virtual string RenameColumnSql(string table, string from, string to)
-            => "ALTER TABLE " + QuoteIdentifier(table) + " RENAME COLUMN " + QuoteIdentifier(from) + " TO " + QuoteIdentifier(to);
+            => "ALTER TABLE " + TableIdentifier(table) + " RENAME COLUMN " + QuoteIdentifier(from) + " TO " + QuoteIdentifier(to);
 
         /// <summary>
         /// The right-hand side of <c>column = …</c> for a <c>PropertyUpdate</c> increment. By default
@@ -1139,7 +1230,7 @@ namespace Birko.Data.SQL.Connectors
 
             var unique = index.Unique ? "UNIQUE " : "";
             var ifNotExists = conditional ? "IF NOT EXISTS " : "";
-            return $"CREATE {unique}INDEX {ifNotExists}{QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})"
+            return $"CREATE {unique}INDEX {ifNotExists}{QuoteIdentifier(index.Name)} ON {TableIdentifier(tableName)} ({columns})"
                  + IndexPredicateClause(index);
         }
 
@@ -1383,7 +1474,10 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         public virtual string DropIndexSql(string tableName, Tables.IndexDefinition index)
         {
-            return $"DROP INDEX IF EXISTS {QuoteIdentifier(index.Name)}";
+            // TASK-272: an index lives in its table's schema, which need not be on the search path.
+            var (schema, _) = PhysicalTable(tableName);
+            var name = schema == null ? QuoteIdentifier(index.Name) : QuoteIdentifier(schema) + "." + QuoteIdentifier(index.Name);
+            return $"DROP INDEX IF EXISTS {name}";
         }
 
         /// <summary>
@@ -1733,7 +1827,9 @@ namespace Birko.Data.SQL.Connectors
             // anything else gets the quoted name only. That is what keeps § Conventions' rule that an
             // identifier reaching interpolated SQL is never caller text validated loosely: a name that is
             // not a plain identifier cannot reach the statement unquoted.
-            var quoted = QuoteIdentifier(table);
+            // TASK-272: the RELATION may be schema-qualified or prefixed; the alias stays the bare logical name, which is
+            // what every column qualifier names (rule 18, TASK-211).
+            var quoted = TableIdentifier(table);
             return PlainTableIdentifier.IsMatch(table)
                 ? quoted + " AS " + table
                 : quoted;

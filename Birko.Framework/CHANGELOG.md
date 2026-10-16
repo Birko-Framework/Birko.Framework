@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Store decorators: soft-deleted rows are not found, one default per filtered write
+
+[[TASK-159]]. An update could resurrect a soft-deleted row, and a filtered soft delete checked no filter, so a null
+soft-deleted every row. A `PropertyUpdate` setting `IsDefault` over N rows left N defaults. The slug probe could keep a
+slug another row held. A versioned update of a missing row was a conflict, not not-found, so `Save` threw. `StoreWrapperBuilder`
+now refuses `IVersioned`. An interface member's `[NamedField]` is honoured in a SQL SET. Races: [[TASK-632]].
+
 ## 2026-10-15 — A SQL bulk write commits all of its items or none
 
 [[TASK-629]]. Outside a transaction, `Create` / `Update` / `Delete` of a collection committed item by item, so a failure

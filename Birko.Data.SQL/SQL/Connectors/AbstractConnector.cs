@@ -706,9 +706,15 @@ namespace Birko.Data.SQL.Connectors
             var missing = MissingTableNameChain(ex);
             if (!string.IsNullOrEmpty(missing))
             {
-                return _tablesCreated.TryGetValue(missing!, out var when)
-                    ? new List<KeyValuePair<string, DateTimeOffset>> { new(missing!, when) }
-                    : empty;
+                if (_tablesCreated.TryGetValue(missing!, out var when))
+                {
+                    return new List<KeyValuePair<string, DateTimeOffset>> { new(missing!, when) };
+                }
+                // TASK-272: on MySQL and SQLite the error names the stored table, reporting__evts, which is recorded
+                // under its logical name.
+                return _tablesCreated
+                    .Where(kvp => string.Equals(PhysicalTable(kvp.Key).Name, missing, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
             }
 
             // The fallback, reached only when this provider's wording could not be parsed at all. It is

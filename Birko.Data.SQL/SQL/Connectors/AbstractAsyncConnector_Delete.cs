@@ -42,7 +42,7 @@ namespace Birko.Data.SQL.Connectors
 
             await DoCommandWithTransactionAsync(async (command) =>
             {
-                command.CommandText = "DELETE FROM " + QuoteIdentifier(tableName);
+                command.CommandText = "DELETE FROM " + TableIdentifier(tableName);
                 AddRequiredWhere(conditions, command, "delete", tableName, allowAllRows);
                 await Task.CompletedTask;
             }, async (command) =>

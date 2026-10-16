@@ -88,7 +88,7 @@ namespace Birko.Data.Migrations.SQL.Context
             command.CommandText = sql;
             var param = command.CreateParameter();
             param.ParameterName = "@tableName";
-            param.Value = name;
+            param.Value = _connector.TableExistsArgument(name);
             command.Parameters.Add(param);
             var result = command.ExecuteScalar();
             return Convert.ToInt64(result) > 0;
@@ -152,7 +152,9 @@ namespace Birko.Data.Migrations.SQL.Context
             // Execute() runs on _connection directly, so it needs no boundary; the scope is here because
             // QuoteIdentifier goes through the connector and a future connector-delegating rename would.
             using var boundary = EnterAmbientBoundary();
-            Execute($"ALTER TABLE {QuoteIdentifier(collectionName)} RENAME COLUMN {QuoteIdentifier(oldName)} TO {QuoteIdentifier(newName)}");
+            // TASK-272: the connector's statement, so the table is named in its schema (and SQL Server's sp_rename, which
+            // has no RENAME COLUMN, is used there instead of an inline ALTER it rejects).
+            Execute(_connector.RenameColumnSql(collectionName, oldName, newName));
         }
 
         /// <summary>

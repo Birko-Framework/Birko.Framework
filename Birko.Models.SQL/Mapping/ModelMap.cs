@@ -12,12 +12,15 @@ namespace Birko.Models.SQL.Mapping
     public interface IModelMap
     {
         string? TableName { get; }
+        /// <summary>The schema of <see cref="TableName"/>, or null for the connection's default (TASK-272).</summary>
+        string? TableSchema => null;
         IReadOnlyList<FieldDescriptor> Properties { get; }
     }
 
     public class ModelMap<T> : IModelMap where T : class
     {
         public string? TableName { get; private set; }
+        public string? TableSchema { get; private set; }
         public List<FieldDescriptor> Properties { get; } = new List<FieldDescriptor>();
 
         IReadOnlyList<FieldDescriptor> IModelMap.Properties => Properties;
@@ -25,6 +28,14 @@ namespace Birko.Models.SQL.Mapping
         public ModelMap<T> ToTable(string tableName)
         {
             TableName = tableName;
+            return this;
+        }
+
+        /// <summary>Maps to <paramref name="tableName"/> in <paramref name="schema"/> (TASK-272); see <c>[Table(Schema = …)]</c>.</summary>
+        public ModelMap<T> ToTable(string tableName, string schema)
+        {
+            TableName = tableName;
+            TableSchema = schema;
             return this;
         }
 

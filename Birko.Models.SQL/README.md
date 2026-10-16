@@ -83,6 +83,7 @@ Console.WriteLine(map?.TableName); // "Customers"
 | Old Attribute | New Fluent API |
 |--------------|----------------|
 | `[Table("X")]` | `map.ToTable("X")` |
+| `[Table("X", Schema = "s")]` | `map.ToTable("X", "s")` (TASK-272) |
 | `[UniqueField]` | `.IsUnique()` or `map.HasUnique(x => x.Prop)` |
 | `[PrimaryField]` | `.IsPrimary()` or `map.HasPrimary(x => x.Prop)` |
 | `[PrecisionField(N)]` | `.HasPrecision(N)` |

@@ -29,7 +29,7 @@ namespace Birko.Data.SQL.Connectors
                 {
                     DoDdlCommand((command) => {
                         command.CommandText = "ALTER TABLE "
-                            + QuoteIdentifier(tableName)
+                            + TableIdentifier(tableName)
                             + " DROP COLUMN "
                             + field.Name;
                     }, (command) => {

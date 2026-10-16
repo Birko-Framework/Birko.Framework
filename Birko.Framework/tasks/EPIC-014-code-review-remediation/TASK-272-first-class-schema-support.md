@@ -2,7 +2,7 @@
 id: TASK-272
 parent: EPIC-014
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-21
@@ -86,16 +86,16 @@ with no test noticing — the `FoldsUnquotedIdentifiers` lesson.
 
 ## Acceptance criteria
 
-- [ ] A decision recorded on each of the three questions above, with reasons.
-- [ ] `Schema` declarable per entity and honoured end to end on **PostgreSQL and MSSql**: create, read, write,
+- [x] A decision recorded on each of the three questions above, with reasons.
+- [x] `Schema` declarable per entity and honoured end to end on **PostgreSQL and MSSql**: create, read, write,
       index, and drop an entity in a non-default schema, asserted against the catalogue and against returned
       rows — not against the absence of an exception (TASK-209).
-- [ ] The `false` side of `SupportsSchemas` asserted on MySQL and SQLite, so the capability is not
+- [x] The `false` side of `SupportsSchemas` asserted on MySQL and SQLite, so the capability is not
       indistinguishable from unconditional.
-- [ ] The bare-alias invariant preserved: `SelectTableReference` may qualify the *relation* but the alias must
+- [x] The bare-alias invariant preserved: `SelectTableReference` may qualify the *relation* but the alias must
       stay bare, or every qualifier stops resolving on PostgreSQL (TASK-211).
-- [ ] Every sink from question 3 either honours the schema or is recorded as deliberately not doing so.
-- [ ] Proven able to fail.
+- [x] Every sink from question 3 either honours the schema or is recorded as deliberately not doing so.
+- [x] Proven able to fail.
 
 ## Out of scope
 
@@ -106,7 +106,7 @@ with no test noticing — the `FoldsUnquotedIdentifiers` lesson.
 
 ## Human test plan
 
-- [ ] N/A — mechanical; the proof is an entity's rows and its DDL landing in the declared schema, readable from
+- [x] N/A — mechanical; the proof is an entity's rows and its DDL landing in the declared schema, readable from
       the catalogue.
 
 ## Decisions (2026-10-15, by the user)
@@ -123,6 +123,56 @@ with no test noticing — the `FoldsUnquotedIdentifiers` lesson.
 
 These settle the plan's step 1 grill. Steps 2–5 proceed with them: the prefix is one more case of
 `QualifiedIdentifier(schema, name)` on the connector, which the catalogue lookups must use too.
+
+## Resolution (2026-10-16)
+
+**Built as decided on 2026-10-15** (question 1: a `schema__` prefix on MySQL and SQLite; question 2: a connection-wide
+default ships too). Question 3 was answered by an inventory of every table sink before any change: about 100, listed by
+category in the session, all routed or recorded below.
+
+- **Identity.** `[Table(Name, Schema = …)]`, DataAnnotations' `Schema` (read by nobody before), the cross-assembly
+  rebuild, and `ModelMap.ToTable(name, schema)` → `Tables.Table.Schema`. `Name` stays the logical name and the alias. A
+  name → schema registry (`DataBase.TableSchema`) refuses one logical name in two schemas, two models that would be one
+  `schema__name` table, and a schema that is not a plain identifier.
+- **Default.** `ISqlSchemaSettings.Schema` on `SqlSettings` and `SqLiteSettings`, part of `GetId()` (connectors are cached
+  by it; an id without a schema is unchanged).
+- **Rendering, one producer.** `SupportsSchemas` (PostgreSQL, TimescaleDB, SQL Server true; MySQL, SQLite false),
+  `PhysicalTable`, `TableIdentifier`, `RelationLiteral`, `TableExistsArgument`. Without a schema the output is
+  byte-identical, which the existing SQL-text pins confirm.
+- **Routed:** DML (FROM with the bare alias kept, INSERT, UPDATE, DELETE), bulk paths on all four providers (COPY,
+  SqlBulkCopy, multi-row INSERT, bulk UPDATE/DELETE), CREATE TABLE (schema created first: `CREATE SCHEMA IF NOT EXISTS`, or
+  `SCHEMA_ID`+EXEC on SQL Server; SQL Server's existence guard is now `OBJECT_ID` over the relation, it was `sys.tables` by
+  name in any schema), DROP, ALTER add/drop, rename (incl. `sp_rename`), index DDL (PostgreSQL drops an index by its
+  schema), the four index managers' exists/list, `TableExistsSql`, stored columns for drift and repair, missing-table
+  healing (MySQL and SQLite name the stored table), view DDL (aliased by the quoted logical name; SCHEMABINDING by the
+  table's schema, then the default, then dbo), `create_hypertable`, and the migration schema builder (`RenameField` now
+  uses the connector's statement) and data migrator.
+- **Deliberately not:** a view's own name (views live in the connection's default schema), the migrations history table
+  (its own `SqlMigrationSettings.Schema`), and `ViewSqlGenerator`, which has no connector and now refuses a view over a
+  table with a schema.
+
+**Measured live:** an entity in `t272rep` created, written (single and bulk), read, filtered, updated, deleted, indexed and
+dropped, asserted against the catalogue on PostgreSQL, SQL Server, MySQL and SQLite; the settings default; drift clean,
+index manager, existence query; healing; a join view (on-the-fly on all four, persistent on PostgreSQL, MySQL and SQLite);
+the migration builder and migrator; a hypertable created in its schema on TimescaleDB. SQL Server SCHEMABINDING is asserted
+on the emitted SQL.
+
+**Red-verified, as numbers.** The new tests use the new API, so each check breaks the code while keeping it compiling.
+With schema resolution switched off (`PhysicalTable` ignoring the schema), 8 of 31 store tests fail (every "lives in its
+schema" and settings-default assertion), plus SQL Server views 3 of 3, the SQLite view 1 of 1 and TimescaleDB 1 of 1. The
+other 23 pass, because every sink then agrees on the default schema. To prove those, a second check kept creation in the
+schema and reverted the catalogue, healing, view and migration sinks: drift/index/existence 4 of 4, migrations 4 of 4,
+healing 2 of 2 on MySQL and SQLite, the MySQL view 1 of 1 (plus the 5 view and hypertable tests above).
+
+Pins: healing and the view on PostgreSQL and SQL Server pass either way, because the error names the logical table and
+PostgreSQL resolves `"T272Evts"` against a qualified FROM. The capability test and the load-time refusals cover new code.
+
+**Regression:** the 32 suites importing a changed SQL, migrations, TimescaleDB or Models.SQL project (2,744 tests), live.
+Three SQL Server SQL-text pins failed (`OBJECT_ID('[T]')` instead of `OBJECT_ID('T')`); the guard now keeps the bare name
+when there is no schema, and all 32 pass.
+
+**Found and filed:** [[TASK-637]]. The migration data migrator and `RenameField` quote column names, so on PostgreSQL they
+miss a PascalCase model's folded columns. Measured; it is not a schema defect, and the test here uses folded names.
 
 ## Implementation plan
 

@@ -172,7 +172,20 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         protected string BuildViewSelectSql(Tables.View view)
         {
-            return ViewSelectSqlBuilder.BuildViewSelectSql(view, QuoteIdentifier);
+            return ViewSelectSqlBuilder.BuildViewSelectSql(view, QuoteIdentifier, ViewRelation);
+        }
+
+        /// <summary>
+        /// A view's FROM / JOIN entry for a LOGICAL table name (TASK-272). A table in a schema, or stored under a
+        /// <c>schema__</c> prefix, is rendered as its relation aliased by the QUOTED logical name, because the view's column
+        /// qualifiers are quoted logical names (a bare alias folds on PostgreSQL and stops matching them: 42P01, measured).
+        /// Without one it is the quoted name as before, so an existing view's SQL is unchanged.
+        /// </summary>
+        protected string ViewRelation(string table)
+        {
+            var relation = TableIdentifier(table);
+            var quoted = QuoteIdentifier(table);
+            return relation == quoted ? relation : relation + " AS " + quoted;
         }
     }
 }

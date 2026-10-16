@@ -28,7 +28,7 @@ namespace Birko.Data.SQL.Connectors
                 foreach (var tableName in tables.Where(x => !string.IsNullOrEmpty(x)))
                 {
                     DoDdlCommand((command) => {
-                        command.CommandText = "DROP TABLE IF EXISTS " + QuoteIdentifier(tableName);
+                        command.CommandText = "DROP TABLE IF EXISTS " + TableIdentifier(tableName);
                     }, (command) => {
                         command.ExecuteNonQuery();
                     }, true);

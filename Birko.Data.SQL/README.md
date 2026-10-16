@@ -105,6 +105,34 @@ var store = new MSSqlStore<Customer>();
 store.SetSettings(settings);
 ```
 
+### Schemas (TASK-272)
+
+An entity declares its schema on its table; a connection can set a default for every table that declares none.
+
+```csharp
+[Table("Events", Schema = "reporting")]           // or DataAnnotations [Table("Events", Schema = "reporting")]
+public class Event : AbstractModel { /* ... */ }
+
+map.ToTable("Events", "reporting");                // fluent mapping (Birko.Models.SQL)
+
+var settings = new PostgreSqlSettings(/* ... */) { Schema = "app" };   // the connection's default schema
+```
+
+| Provider | `reporting.Events` is stored as |
+|---|---|
+| PostgreSQL, TimescaleDB, SQL Server | the table `Events` in schema `reporting` (created with the table if missing) |
+| MySQL, SQLite | the table `reporting__Events` in the same database (a MySQL schema is a separate database) |
+
+The entity's schema wins over the settings' default. A schema must be a plain identifier. A model that two providers would
+resolve to one table is refused when it loads: `reporting.Events` beside a table declared as `reporting__Events`, or one
+logical name in two schemas. The table's name stays its alias, so filters and joins are unchanged.
+
+Every statement naming the table honours the schema: DML, bulk copy, `CREATE`/`ALTER`/`DROP TABLE`, index DDL, the index
+managers, drift detection and repair, missing-table healing, view DDL (SQL Server SCHEMABINDING included), hypertables, and
+the migration schema builder and data migrator. Deliberately not: a view's own name (views are created in the connection's
+default schema), the migrations history table (`SqlMigrationSettings.Schema`), and `ViewSqlGenerator`, which has no
+connector and refuses a view over a table with a schema.
+
 ### Index Management
 
 ```csharp

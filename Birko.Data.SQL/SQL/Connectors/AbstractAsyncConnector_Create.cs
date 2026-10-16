@@ -65,10 +65,17 @@ namespace Birko.Data.SQL.Connectors
 
         public virtual async Task CreateTableAsync(string name, IEnumerable<string> fields, CancellationToken ct = default)
         {
+            // TASK-272: the schema first, where the provider has schemas and the table has one.
+            var ensureSchema = EnsureSchemaSqlFor(name);
+            if (ensureSchema != null)
+            {
+                await DoDdlCommandAsync(command => { command.CommandText = ensureSchema; return Task.CompletedTask; },
+                    async command => { await command.ExecuteNonQueryAsync(ct); }, true);
+            }
             await DoDdlCommandAsync(async (command) =>
             {
                 command.CommandText = "CREATE TABLE IF NOT EXISTS "
-                    + QuoteIdentifier(name)
+                    + TableIdentifier(name)
                     + " ("
                     + string.Join(", ", fields.Where(x => !string.IsNullOrEmpty(x)))
                     + ")";

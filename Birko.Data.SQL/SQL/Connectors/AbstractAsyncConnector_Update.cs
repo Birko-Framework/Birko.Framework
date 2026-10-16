@@ -140,7 +140,7 @@ namespace Birko.Data.SQL.Connectors
 
                 await DoCommandWithTransactionAsync(async (command) =>
                 {
-                    command.CommandText = "UPDATE " + QuoteIdentifier(tableName) + " SET ";
+                    command.CommandText = "UPDATE " + TableIdentifier(tableName) + " SET ";
                     if (!isExpressionValues)
                     {
                         command.CommandText += string.Join(", ", fields.Values.Select(x => x + "= " + SetParameterName(x)));

@@ -176,6 +176,7 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         public void CreateTable(string name, IEnumerable<string> fields)
         {
+            EnsureTableSchema(name);
             CreateTableCore(name, fields);
 
             // TASK-286 — recorded AFTER the statement returns, so a create that threw is not recorded.
@@ -193,12 +194,26 @@ namespace Birko.Data.SQL.Connectors
         /// <c>*Core</c> convention — the public wrapper owns the bookkeeping the override must not be able
         /// to skip.
         /// </summary>
+        /// <summary>
+        /// Creates the schema <paramref name="name"/> lives in, where the provider has schemas and it has one (TASK-272).
+        /// In the public wrapper, so no provider's <see cref="CreateTableCore"/> can skip it.
+        /// </summary>
+        private void EnsureTableSchema(string name)
+        {
+            var sql = EnsureSchemaSqlFor(name);
+            if (sql == null)
+            {
+                return;
+            }
+            DoDdlCommand(command => { command.CommandText = sql; }, command => { command.ExecuteNonQuery(); }, true);
+        }
+
         protected virtual void CreateTableCore(string name, IEnumerable<string> fields)
         {
             DoDdlCommand((command) =>
             {
                 command.CommandText = "CREATE TABLE IF NOT EXISTS "
-                    + QuoteIdentifier(name)
+                    + TableIdentifier(name)
                     + " ("
                     + string.Join(", ", fields.Where(x => !string.IsNullOrEmpty(x)))
                     + ")";

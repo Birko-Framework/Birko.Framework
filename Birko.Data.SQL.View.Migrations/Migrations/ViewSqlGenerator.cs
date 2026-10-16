@@ -43,6 +43,20 @@ namespace Birko.Data.SQL.View.Migrations
                 throw new InvalidOperationException("View name cannot be empty. Provide a viewName parameter or set ViewAttribute.Name.");
             }
 
+            // TASK-272: this generator has no connector, so it cannot know how a provider stores a schema (a qualifier or a
+            // schema__ prefix). A view over a table declaring one is refused rather than written against the default schema.
+            // A table can be in the view's joins alone (no field selected from it), so both lists count.
+            var scoped = view.Tables.Select(t => t.Name)
+                .Concat((view.Join ?? Enumerable.Empty<Conditions.Join>()).SelectMany(j => new[] { j.Left, j.Right }))
+                .Where(t => !string.IsNullOrEmpty(t) && DataBase.TableSchema(t) != null)
+                .Distinct()
+                .ToList();
+            if (scoped.Count > 0)
+            {
+                throw new NotSupportedException(
+                    $"View '{name}' reads {string.Join(", ", scoped)}, declared in a schema; this generator has no connector to render "
+                    + "it. Create the view through the connector's CreateView instead.");
+            }
             var selectSql = ViewSelectSqlBuilder.BuildViewSelectSql(view, id => QuoteIdentifier(id, quoteChar));
             return "CREATE OR REPLACE VIEW " + QuoteIdentifier(name!, quoteChar) + " AS " + selectSql;
         }

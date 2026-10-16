@@ -85,7 +85,7 @@ namespace Birko.Data.SQL.Connectors
 
             await DoCommandWithTransactionAsync(async (command) =>
             {
-                command.CommandText = "INSERT INTO " + QuoteIdentifier(tableName)
+                command.CommandText = "INSERT INTO " + TableIdentifier(tableName)
                             + " (" + string.Join(", ", first.Keys) + ")"
                             + " VALUES"
                             + " (" + string.Join(", ", first.Keys.Select(x => "@" + x.Replace(".", string.Empty))) + ")";

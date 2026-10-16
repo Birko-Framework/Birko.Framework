@@ -9,7 +9,7 @@ Fluent SQL mapping framework for Birko domain models. Replaces attribute-based m
 `Birko.Models.SQL/`
 
 ## Components (`Birko.Models.SQL.Mapping`)
-- **ModelMap\<T\>** — Fluent configuration: `ToTable()`, `HasUnique()`, `HasPrimary()`, `Ignore()`, `Property()`
+- **ModelMap\<T\>** — Fluent configuration: `ToTable()` (and `ToTable(name, schema)`, TASK-272), `HasUnique()`, `HasPrimary()`, `Ignore()`, `Property()`
 - **FieldBuilder\<T\>** — Fluent field builder wrapping `FieldDescriptor` from Birko.Data.Patterns: `HasColumnName()`, `HasPrecision()`, `HasScale()`, `IsUnique()`, `IsPrimary()`, `IsAutoIncrement()`, `IsIgnored()`, `HasMaxLength()`, `HasIndex()`, `HasUniqueIndex()`, `And()`
 - **IModelMapping\<T\>** — Implement to define SQL mappings for a model type
 - **ModelMapRegistry** — Central registry with assembly scanning (`RegisterFromAssembly`), `GetMap<T>()`, `GetPropertyMaps()`, `ApplyToDatabase()`

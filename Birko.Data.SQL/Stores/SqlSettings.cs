@@ -8,7 +8,7 @@ namespace Birko.Data.SQL.Stores
     /// SQL-specific settings for database connection.
     /// Extends RemoteSettings with command and connection timeout configuration.
     /// </summary>
-    public class SqlSettings : RemoteSettings, ILoadable<SqlSettings>
+    public class SqlSettings : RemoteSettings, ILoadable<SqlSettings>, ISqlSchemaSettings
     {
         /// <summary>
         /// Gets or sets the command timeout in seconds. Default is 30.
@@ -19,6 +19,9 @@ namespace Birko.Data.SQL.Stores
         /// Gets or sets the connection timeout in seconds. Default is 15.
         /// </summary>
         public int ConnectionTimeout { get; set; } = 15;
+
+        /// <inheritdoc cref="ISqlSchemaSettings"/>
+        public string? Schema { get; set; }
 
         public SqlSettings() : base() { }
 
@@ -40,7 +43,8 @@ namespace Birko.Data.SQL.Stores
 
         public override string GetId()
         {
-            return $"{Location}:{Port}:{Name}:{UserName}";
+            // TASK-272: the default schema is part of the identity (connectors are cached by it); absent, the id is unchanged.
+            return string.IsNullOrEmpty(Schema) ? $"{Location}:{Port}:{Name}:{UserName}" : $"{Location}:{Port}:{Name}:{UserName}:{Schema}";
         }
 
         public void LoadFrom(SqlSettings data)
@@ -50,6 +54,7 @@ namespace Birko.Data.SQL.Stores
                 base.LoadFrom((RemoteSettings)data);
                 CommandTimeout = data.CommandTimeout;
                 ConnectionTimeout = data.ConnectionTimeout;
+                Schema = data.Schema;
             }
         }
 

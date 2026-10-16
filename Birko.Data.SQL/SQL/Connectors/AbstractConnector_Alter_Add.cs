@@ -40,6 +40,6 @@ namespace Birko.Data.SQL.Connectors
         /// The one <c>ALTER TABLE … ADD</c> statement, shared by the sync and async paths (TASK-510).
         /// </summary>
         protected string AddColumnSql(string tableName, Fields.AbstractField field)
-            => "ALTER TABLE " + QuoteIdentifier(tableName) + " " + AddColumnClause + " " + AddColumnDefinition(field);
+            => "ALTER TABLE " + TableIdentifier(tableName) + " " + AddColumnClause + " " + AddColumnDefinition(field);
     }
 }

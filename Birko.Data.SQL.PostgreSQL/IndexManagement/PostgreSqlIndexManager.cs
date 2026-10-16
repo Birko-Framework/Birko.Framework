@@ -17,13 +17,12 @@ namespace Birko.Data.SQL.PostgreSQL.IndexManagement
         protected override string IndexExistsSql(string tableName, string indexName)
         {
             var safeIndex = SqlLiteral.EscapeLiteral(indexName);
-            var safeTable = SqlLiteral.EscapeLiteral(tableName);
             // SH-M227 (TASK-154): pg_indexes spans every schema, so a same-named table elsewhere answered for this one.
-            // The table counted is the one an unqualified name resolves to: visible on the search path.
+            // TASK-272: the table is the relation to_regclass resolves: the declared schema, else the search path.
             return $@"SELECT COUNT(*) FROM pg_index x
 JOIN pg_class t ON t.oid = x.indrelid
 JOIN pg_class i ON i.oid = x.indexrelid
-WHERE t.relname = '{safeTable}' AND pg_table_is_visible(t.oid) AND i.relname = '{safeIndex}'";
+WHERE t.oid = to_regclass('{Connector.RelationLiteral(tableName)}') AND i.relname = '{safeIndex}'";
         }
 
         /// <remarks>
@@ -34,7 +33,7 @@ WHERE t.relname = '{safeTable}' AND pg_table_is_visible(t.oid) AND i.relname = '
         /// </remarks>
         protected override string ListIndexesSql(string tableName)
         {
-            var safeTable = SqlLiteral.EscapeLiteral(tableName);
+            var relation = Connector.RelationLiteral(tableName);
             return $@"SELECT
     i.relname AS index_name,
     a.attname AS column_name,
@@ -45,8 +44,7 @@ FROM pg_class t
 JOIN pg_index ON t.oid = pg_index.indrelid
 JOIN pg_class i ON i.oid = pg_index.indexrelid
 JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(pg_index.indkey)
-WHERE t.relname = '{safeTable}'
-  AND pg_table_is_visible(t.oid)
+WHERE t.oid = to_regclass('{relation}')
   AND NOT pg_index.indisprimary
 ORDER BY i.relname, array_position(pg_index.indkey, a.attnum)";
         }

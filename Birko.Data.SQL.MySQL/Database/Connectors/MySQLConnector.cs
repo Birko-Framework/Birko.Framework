@@ -249,7 +249,7 @@ namespace Birko.Data.SQL.Connectors
             => string.Format(
                 "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE = 'YES' AS birko_nullable, COLUMN_KEY = 'PRI' AS birko_primary FROM information_schema.COLUMNS " +
                 "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{0}'",
-                SqlLiteral.EscapeLiteral(tableName));
+                SqlLiteral.EscapeLiteral(PhysicalTable(tableName).Name));
 
         /// <summary>
         /// Identity: <c>COLUMN_TYPE</c> already matches <see cref="ConvertType"/>'s shape, and the
@@ -462,7 +462,7 @@ namespace Birko.Data.SQL.Connectors
             {
                 command.CommandText =
                     "CREATE TABLE IF NOT EXISTS "
-                    + QuoteIdentifier(name)
+                    + TableIdentifier(name)
                     + " ("
                     + string.Join(", ", fields.Where(x => !string.IsNullOrEmpty(x)))
                     + ")";
@@ -506,7 +506,7 @@ namespace Birko.Data.SQL.Connectors
             // CreateIndexes refuses those cases before reaching this emitter, via the same
             // CanDropIndexPredicate producer; the call is kept so a direct caller cannot get a quietly
             // different statement.
-            return $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})"
+            return $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {TableIdentifier(tableName)} ({columns})"
                  + IndexPredicateClause(index);
         }
 
@@ -544,7 +544,7 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         public override string DropIndexSql(string tableName, Tables.IndexDefinition index)
         {
-            return $"DROP INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)}";
+            return $"DROP INDEX {QuoteIdentifier(index.Name)} ON {TableIdentifier(tableName)}";
         }
 
         /// <summary>
@@ -661,7 +661,7 @@ namespace Birko.Data.SQL.Connectors
 
                         var sb = new StringBuilder();
                         sb.Append("INSERT INTO ");
-                        sb.Append(QuoteIdentifier(table.Name));
+                        sb.Append(TableIdentifier(table.Name));
                         sb.Append(" (");
                         sb.Append(columnNames);
                         sb.Append(") VALUES ");
@@ -743,7 +743,7 @@ namespace Birko.Data.SQL.Connectors
 
                         var sb = new StringBuilder();
                         sb.Append("INSERT INTO ");
-                        sb.Append(QuoteIdentifier(table.Name));
+                        sb.Append(TableIdentifier(table.Name));
                         sb.Append(" (");
                         sb.Append(columnNames);
                         sb.Append(") VALUES ");
@@ -825,7 +825,7 @@ namespace Birko.Data.SQL.Connectors
 
                     var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                    command.CommandText = "UPDATE " + TableIdentifier(table.Name)
                         + " SET " + string.Join(", ", setClauses)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
@@ -902,7 +902,7 @@ namespace Birko.Data.SQL.Connectors
 
                     var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                    command.CommandText = "UPDATE " + TableIdentifier(table.Name)
                         + " SET " + string.Join(", ", setClauses)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
@@ -976,7 +976,7 @@ namespace Birko.Data.SQL.Connectors
                     command.Transaction = transaction;
 
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                    command.CommandText = "DELETE FROM " + TableIdentifier(table.Name)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
@@ -1033,7 +1033,7 @@ namespace Birko.Data.SQL.Connectors
                     command.Transaction = transaction;
 
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                    command.CommandText = "DELETE FROM " + TableIdentifier(table.Name)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 

@@ -43,6 +43,12 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         public override bool FoldsUnquotedIdentifiers => true;
 
+        /// <inheritdoc />
+        public override bool SupportsSchemas => true;
+
+        /// <inheritdoc />
+        protected override string? EnsureSchemaSql(string schema) => "CREATE SCHEMA IF NOT EXISTS " + QuoteIdentifier(schema);
+
         /// <summary>
         /// Detects PostgreSQL transient errors: deadlocks (40P01), serialization failures (40001),
         /// connection exceptions (08xxx), insufficient resources (53xxx), operator intervention (57xxx).
@@ -247,7 +253,11 @@ namespace Birko.Data.SQL.Connectors
         protected override string UnboundedLimit => "ALL";
 
         /// <inheritdoc />
-        public override string? TableExistsSql => "SELECT COUNT(*) FROM pg_class WHERE oid = to_regclass(quote_ident(CAST(@tableName AS text))) AND relkind IN ('r', 'p')";
+        // TASK-272: @tableName is the rendered relation (TableExistsArgument), so a schema-qualified table resolves.
+        public override string? TableExistsSql => "SELECT COUNT(*) FROM pg_class WHERE oid = to_regclass(CAST(@tableName AS text)) AND relkind IN ('r', 'p')";
+
+        /// <inheritdoc />
+        public override object TableExistsArgument(string table) => TableIdentifier(table);
 
         protected override string? StoredColumnsSql(string tableName)
             => string.Format(
@@ -255,7 +265,7 @@ namespace Birko.Data.SQL.Connectors
                 "EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = a.attrelid AND i.indisprimary AND a.attnum = ANY(i.indkey)) AS birko_primary " +
                 "FROM pg_attribute a WHERE a.attrelid = '{0}'::regclass " +
                 "AND a.attnum > 0 AND NOT a.attisdropped",
-                RegclassLiteral(tableName));
+                RelationLiteral(tableName));
 
         /// <summary>
         /// Canonicalises <c>format_type</c>'s spelling into <see cref="ConvertType"/>'s.
@@ -537,7 +547,7 @@ namespace Birko.Data.SQL.Connectors
             {
                 command.CommandText =
                     "CREATE TABLE IF NOT EXISTS "
-                    + QuoteIdentifier(name)
+                    + TableIdentifier(name)
                     + " ("
                     + string.Join(", ", fields.Where(x => !string.IsNullOrEmpty(x)))
                     + ")";
@@ -598,7 +608,7 @@ namespace Birko.Data.SQL.Connectors
             // column names there are case-insensitive, so nothing is broken and changing it is risk for
             // nothing.
             var columnList = string.Join(", ", fields.Select(f => f.Name));
-            var copyCommand = "COPY " + QuoteIdentifier(table.Name)
+            var copyCommand = "COPY " + TableIdentifier(table.Name)
                 + " (" + columnList + ") FROM STDIN (FORMAT BINARY)";
 
             // A bulk write must JOIN an open boundary on this database rather than open a second connection.
@@ -661,7 +671,7 @@ namespace Birko.Data.SQL.Connectors
             // Bare, not quoted — see BulkInsert above: a quoted column cannot resolve against the
             // case-folded identifier the bare DDL created.
             var columnList = string.Join(", ", fields.Select(f => f.Name));
-            var copyCommand = "COPY " + QuoteIdentifier(table.Name)
+            var copyCommand = "COPY " + TableIdentifier(table.Name)
                 + " (" + columnList + ") FROM STDIN (FORMAT BINARY)";
 
             // See BulkInsert above: the COPY joins an open boundary instead of opening a second connection,
@@ -744,7 +754,7 @@ namespace Birko.Data.SQL.Connectors
 
                     var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                    command.CommandText = "UPDATE " + TableIdentifier(table.Name)
                         + " SET " + string.Join(", ", setClauses)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
@@ -821,7 +831,7 @@ namespace Birko.Data.SQL.Connectors
 
                     var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                    command.CommandText = "UPDATE " + TableIdentifier(table.Name)
                         + " SET " + string.Join(", ", setClauses)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
@@ -895,7 +905,7 @@ namespace Birko.Data.SQL.Connectors
                     command.Transaction = transaction;
 
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                    command.CommandText = "DELETE FROM " + TableIdentifier(table.Name)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
@@ -952,7 +962,7 @@ namespace Birko.Data.SQL.Connectors
                     command.Transaction = transaction;
 
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                    command.CommandText = "DELETE FROM " + TableIdentifier(table.Name)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 

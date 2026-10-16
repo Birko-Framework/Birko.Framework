@@ -17,13 +17,13 @@ namespace Birko.Data.SQL.MSSql.IndexManagement
         protected override string IndexExistsSql(string tableName, string indexName)
         {
             var safeIndex = SqlLiteral.EscapeLiteral(indexName);
-            var safeTable = SqlLiteral.EscapeLiteral(tableName);
-            return $"SELECT COUNT(*) FROM sys.indexes WHERE name = '{safeIndex}' AND object_id = OBJECT_ID('{safeTable}')";
+            // TASK-272: OBJECT_ID over the rendered relation, the declared schema included.
+            return $"SELECT COUNT(*) FROM sys.indexes WHERE name = '{safeIndex}' AND object_id = OBJECT_ID('{Connector.RelationLiteral(tableName)}')";
         }
 
         protected override string ListIndexesSql(string tableName)
         {
-            var safeTable = SqlLiteral.EscapeLiteral(tableName);
+            var safeTable = Connector.RelationLiteral(tableName);
             return $@"SELECT
     i.name AS index_name,
     COL_NAME(ic.object_id, ic.column_id) AS column_name,

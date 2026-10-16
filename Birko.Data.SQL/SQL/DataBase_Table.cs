@@ -20,8 +20,21 @@ namespace Birko.Data.SQL
         /// Register a table name for a model type (used by fluent mapping systems).
         /// This takes precedence over attribute-based discovery when no [Table] attribute is present.
         /// </summary>
-        public static void RegisterTableName(Type modelType, string tableName)
+        private static readonly ConcurrentDictionary<Type, string> _tableSchemaOverrides = new();
+
+        public static void RegisterTableName(Type modelType, string tableName) => RegisterTableName(modelType, tableName, null);
+
+        /// <summary>
+        /// Maps <paramref name="modelType"/> to <paramref name="tableName"/> in <paramref name="schema"/> (null: the
+        /// connection's default), as <c>ModelMap.ToTable(name, schema)</c> does (TASK-272).
+        /// </summary>
+        public static void RegisterTableName(Type modelType, string tableName, string? schema)
         {
+            if (schema == null)
+                _tableSchemaOverrides.TryRemove(modelType, out _);
+            else
+                _tableSchemaOverrides[modelType] = ValidateSchemaName(schema, modelType);
+            ForgetTableSchema(modelType);
             _tableNameOverrides[modelType] = tableName;
             // Invalidate cache so LoadTable picks up the override - including a cached "maps to no table" (TASK-154),
             // which would otherwise outlive the registration that gives the type its table.
@@ -107,24 +120,30 @@ namespace Birko.Data.SQL
                 foreach (Attribute attr in attrs)
                 {
                     string? tableName = null;
+                    string? schema = null;
                     if (attr is Birko.Data.SQL.Attributes.Table birkoTable)
                     {
                         tableName = birkoTable.Name;
+                        schema = birkoTable.Schema;
                     }
                     else if (attr is System.ComponentModel.DataAnnotations.Schema.TableAttribute dataTable)
                     {
+                        // TASK-272: its Schema was read by nobody, so [Table("t", Schema = "s")] landed in the default schema.
                         tableName = dataTable.Name;
+                        schema = dataTable.Schema;
                     }
                     else if (attr.GetType().FullName == "Birko.Data.SQL.Attributes.Table")
                     {
-                        // Cross-assembly shared-project attribute — read Name via reflection
+                        // Cross-assembly shared-project attribute — read Name and Schema via reflection
                         tableName = attr.GetType().GetProperty("Name")?.GetValue(attr) as string;
+                        schema = attr.GetType().GetProperty("Schema")?.GetValue(attr) as string;
                     }
                     if (!string.IsNullOrEmpty(tableName))
                     {
                         Tables.Table table = new Tables.Table()
                         {
                             Name = tableName,
+                            Schema = string.IsNullOrEmpty(schema) ? null : ValidateSchemaName(schema, type),
                             Type = type,
                             Fields = LoadFields(type).ToDictionary(x => x.Name),
                         };
@@ -136,6 +155,7 @@ namespace Birko.Data.SQL
                             }
                             table.PromoteGuidToKey();
                             table.Indexes = LoadIndexes(type, table.Fields, table.Name);
+                            RecordTableSchema(table);
                             return table;
                         }
                     }
@@ -148,6 +168,7 @@ namespace Birko.Data.SQL
                 var table = new Tables.Table()
                 {
                     Name = overrideName,
+                    Schema = _tableSchemaOverrides.TryGetValue(type, out var overrideSchema) ? overrideSchema : null,
                     Type = type,
                     Fields = LoadFields(type).ToDictionary(x => x.Name),
                 };
@@ -157,11 +178,95 @@ namespace Birko.Data.SQL
                         field.Value.Table = table;
                     table.PromoteGuidToKey();
                     table.Indexes = LoadIndexes(type, table.Fields, table.Name);
+                    RecordTableSchema(table);
                     return table;
                 }
             }
 
             return null;
+        }
+
+        /// <summary>Logical table name → (schema, the type that declared it). Case-insensitive, as identifiers are.</summary>
+        private static readonly ConcurrentDictionary<string, (string? Schema, Type Type)> _tableSchemas
+            = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly object _tableSchemasLock = new();
+
+        /// <summary>
+        /// The schema a loaded entity declared for <paramref name="tableName"/> (a logical table name), or null when it
+        /// declared none or no loaded entity has that name (TASK-272).
+        /// </summary>
+        /// <remarks>
+        /// A sink that knows only the name (a FROM list, a join, an index or a catalogue lookup) asks here. An entity's
+        /// table is loaded before any statement against it, so its schema is known by then.
+        /// </remarks>
+        public static string? TableSchema(string tableName)
+            => !string.IsNullOrEmpty(tableName) && _tableSchemas.TryGetValue(tableName, out var entry) ? entry.Schema : null;
+
+        /// <summary>The prefixed table name a schema-less provider stores <paramref name="schema"/>.<paramref name="name"/> as.</summary>
+        public static string PrefixedTableName(string schema, string name) => schema + "__" + name;
+
+        private static void ForgetTableSchema(Type type)
+        {
+            lock (_tableSchemasLock)
+            {
+                foreach (var entry in _tableSchemas.Where(e => e.Value.Type == type).ToList())
+                    _tableSchemas.TryRemove(entry.Key, out _);
+            }
+        }
+
+        /// <summary>
+        /// Registers a loaded table's schema, refusing a declaration two providers would resolve to one relation.
+        /// </summary>
+        /// <remarks>
+        /// TASK-272, the user's decision: on MySQL and SQLite <c>reporting.evts</c> is the table <c>reporting__evts</c>, so
+        /// that and a table declared as <c>reporting__evts</c> would be one table there. The same logical name in two
+        /// schemas is refused too: the logical name is the alias every column qualifier names. Checked for every
+        /// provider at once, so a model that loads works on all of them.
+        /// </remarks>
+        private static void RecordTableSchema(Tables.Table table)
+        {
+            lock (_tableSchemasLock)
+            {
+                if (_tableSchemas.TryGetValue(table.Name, out var existing) && existing.Type != table.Type
+                    && !string.Equals(existing.Schema, table.Schema, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new Exceptions.TableAttributeException(
+                        $"Table '{table.Name}' is declared in schema '{existing.Schema ?? "(default)"}' by {existing.Type.Name} "
+                        + $"and in '{table.Schema ?? "(default)"}' by {table.Type.Name}. A table name is the alias its columns are "
+                        + "qualified with, so it can live in one schema only.");
+                }
+
+                var physical = table.Schema == null ? table.Name : PrefixedTableName(table.Schema, table.Name);
+                foreach (var other in _tableSchemas)
+                {
+                    if (other.Value.Type == table.Type) continue;
+                    var otherPhysical = other.Value.Schema == null ? other.Key : PrefixedTableName(other.Value.Schema, other.Key);
+                    if (string.Equals(otherPhysical, physical, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(other.Key, table.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new Exceptions.TableAttributeException(
+                            $"{table.Type.Name} ({table.Schema}.{table.Name}) and {other.Value.Type.Name} ({other.Value.Schema ?? "(default)"}."
+                            + $"{other.Key}) are both the table '{physical}' on MySQL and SQLite, which store a schema as a "
+                            + "'schema__' prefix. Rename one of them.");
+                    }
+                }
+                _tableSchemas[table.Name] = (table.Schema, table.Type);
+            }
+        }
+
+        /// <summary>
+        /// A schema is a plain identifier: it reaches DDL bare inside a quoted part, and on MySQL and SQLite it becomes part of
+        /// a table name, so nothing else is accepted (rule 33: a name with no enclosure is contained by refusal).
+        /// </summary>
+        internal static string ValidateSchemaName(string schema, Type? type = null)
+        {
+            if (string.IsNullOrEmpty(schema) || !(char.IsLetter(schema[0]) || schema[0] == '_')
+                || !schema.All(c => (c < 128 && char.IsLetterOrDigit(c)) || c == '_'))
+            {
+                throw new Exceptions.TableAttributeException(
+                    $"Schema '{schema}'{(type == null ? "" : $" of {type.Name}")} is not a plain identifier (letters, digits, underscores).");
+            }
+            return schema;
         }
 
         /// <param name="tableName">

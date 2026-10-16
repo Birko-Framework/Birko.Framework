@@ -48,7 +48,7 @@ namespace Birko.Data.SQL.Connectors
             }
 
             DoCommandWithTransaction((command) => {
-                command.CommandText = "DELETE FROM " + QuoteIdentifier(tableName);
+                command.CommandText = "DELETE FROM " + TableIdentifier(tableName);
                 AddRequiredWhere(conditions, command, "delete", tableName, allowAllRows);
             }, (command) => {
                 command.ExecuteNonQuery();

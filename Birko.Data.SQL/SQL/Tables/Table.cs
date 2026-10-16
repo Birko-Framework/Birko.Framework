@@ -9,6 +9,13 @@ namespace Birko.Data.SQL.Tables
     public class Table
     {
         public string Name { get; set; } = null!;
+
+        /// <summary>
+        /// The schema the entity declared, or null for the connection's default (TASK-272). <see cref="Name"/> stays the
+        /// LOGICAL name: it is the alias every column qualifier resolves against (rule 18), and the connector renders the
+        /// physical relation from the pair (<c>AbstractConnectorBase.TableIdentifier</c>).
+        /// </summary>
+        public string? Schema { get; set; }
         public Dictionary<string, Fields.AbstractField> Fields { get; set; } = null!;
         public Type Type { get; set; } = null!;
         public Dictionary<string, IndexDefinition>? Indexes { get; set; }

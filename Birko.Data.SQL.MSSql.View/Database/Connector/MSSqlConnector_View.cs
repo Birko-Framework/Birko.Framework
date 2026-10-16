@@ -78,11 +78,11 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         private string BuildSchemaBindingSelectSql(Tables.View view)
         {
-            var schema = GetSchemaName();
+            // SCHEMABINDING needs two-part names. TASK-272: a table's own schema, else this connector's default, else dbo.
             return ViewSelectSqlBuilder.BuildViewSelectSql(
                 view,
                 QuoteIdentifier,
-                table => QuoteIdentifier(schema) + "." + QuoteIdentifier(table));
+                table => QuoteIdentifier(PhysicalTable(table).Schema ?? GetSchemaName()) + "." + QuoteIdentifier(table));
         }
 
         /// <summary>

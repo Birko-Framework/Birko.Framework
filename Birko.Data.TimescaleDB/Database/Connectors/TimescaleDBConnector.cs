@@ -353,7 +353,7 @@ namespace Birko.Data.SQL.Connectors
 
             return string.Format(
                 "SELECT create_hypertable({0}, {1}{2}, if_not_exists => TRUE)",
-                "'" + RegclassLiteral(tableName) + "'",
+                "'" + RelationLiteral(tableName) + "'", // TASK-272: an entity's schema, or a caller's qualified name
                 "'" + CatalogueNameLiteral(timeColumn) + "'",
                 chunkIntervalSql);
         }

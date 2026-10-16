@@ -31,6 +31,10 @@ namespace Birko.Data.Migrations.SQL.Context
         private string QuoteIdentifier(string name)
             => _connector.QuoteIdentifier(name);
 
+        /// <summary>A collection's relation, schema included (TASK-272).</summary>
+        private string TableIdentifier(string name)
+            => _connector.TableIdentifier(name);
+
         public void UpdateDocuments(string collection, string filterJson, IDictionary<string, object> updates)
         {
             if (updates == null || updates.Count == 0) return;
@@ -52,7 +56,7 @@ namespace Birko.Data.Migrations.SQL.Context
             // a deliberate match-all; the second used to rewrite every row.
             MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0, "update", collection,
                 "every row in the table");
-            var sql = $"UPDATE {QuoteIdentifier(collection)} SET {string.Join(", ", setClauses)}";
+            var sql = $"UPDATE {TableIdentifier(collection)} SET {string.Join(", ", setClauses)}";
             if (!string.IsNullOrEmpty(whereClause))
                 sql += $" WHERE {whereClause}";
 
@@ -68,7 +72,7 @@ namespace Birko.Data.Migrations.SQL.Context
             MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0, "delete", collection,
                 "every row in the table");
 
-            var sql = $"DELETE FROM {QuoteIdentifier(collection)}";
+            var sql = $"DELETE FROM {TableIdentifier(collection)}";
             if (!string.IsNullOrEmpty(whereClause))
                 sql += $" WHERE {whereClause}";
 
@@ -79,7 +83,7 @@ namespace Birko.Data.Migrations.SQL.Context
         {
             var paramIndex = 0;
             var parameters = new List<(string Name, object? Value)>();
-            var sql = $"SELECT COUNT(*) FROM {QuoteIdentifier(collection)}";
+            var sql = $"SELECT COUNT(*) FROM {TableIdentifier(collection)}";
 
             if (!string.IsNullOrEmpty(filterJson))
             {
@@ -103,7 +107,7 @@ namespace Birko.Data.Migrations.SQL.Context
         public void CopyData(string sourceCollection, string targetCollection, string? transformJson = null)
         {
             MigrationFilter.RefuseTransform(transformJson, "SQL"); // SH-M196 (TASK-152): it was never read
-            ExecuteCommand($"INSERT INTO {QuoteIdentifier(targetCollection)} SELECT * FROM {QuoteIdentifier(sourceCollection)}");
+            ExecuteCommand($"INSERT INTO {TableIdentifier(targetCollection)} SELECT * FROM {TableIdentifier(sourceCollection)}");
         }
 
         public void BulkInsert(string collection, IEnumerable<IDictionary<string, object>> documents)
@@ -126,7 +130,7 @@ namespace Birko.Data.Migrations.SQL.Context
                 }
 
                 var values = string.Join(", ", parameters.ConvertAll(p => p.Name));
-                var sql = $"INSERT INTO {QuoteIdentifier(collection)} ({string.Join(", ", columns)}) VALUES ({values})";
+                var sql = $"INSERT INTO {TableIdentifier(collection)} ({string.Join(", ", columns)}) VALUES ({values})";
                 ExecuteCommand(sql, parameters);
             }
         }

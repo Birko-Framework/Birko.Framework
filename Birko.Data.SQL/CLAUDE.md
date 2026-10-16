@@ -72,7 +72,7 @@ Standard DataAnnotations attributes are recognized alongside Birko attributes. B
 
 | DataAnnotation | Birko Equivalent | Notes |
 |---|---|---|
-| `[Table("name")]` | `[Table("name")]` | From `Schema` namespace |
+| `[Table("name")]` | `[Table("name")]` | From `Schema` namespace; both honour `Schema = "s"` (TASK-272, see README § Schemas) |
 | `[Column("name")]` | `[NamedField("name")]` | `[NamedField]` takes precedence if both present |
 | `[Key]` | `[PrimaryField]` | |
 | `[Required]` | `[RequiredField]` | |
@@ -699,3 +699,19 @@ Every new public functionality must have corresponding unit tests. When adding n
 - Follow existing test patterns (xUnit + FluentAssertions)
 - Test both success and failure cases
 - Include edge cases and boundary conditions
+
+## Schemas: `TableIdentifier` is the one producer of a table reference (TASK-272)
+
+An entity declares `[Table("name", Schema = "s")]` (or DataAnnotations', or `ModelMap.ToTable(name, schema)`); settings
+implementing `ISqlSchemaSettings` give a connection-wide default. `Tables.Table.Name` stays the LOGICAL name, the alias
+every column qualifier names. The connector turns it into the relation:
+
+- `PhysicalTable(name)` → `(schema, stored name)`: the entity's schema (`DataBase.TableSchema`), else `DefaultSchema`;
+  where `SupportsSchemas` is false (MySQL, SQLite) the schema becomes the prefix `schema__name`.
+- `TableIdentifier(name)` → the quoted relation; identical to `QuoteIdentifier(name)` when there is no schema.
+- `RelationLiteral(name)` → the escaped literal for `::regclass` / `to_regclass` / `OBJECT_ID`; `TableExistsArgument`
+  → what `TableExistsSql` binds.
+
+⚠ **A new statement that names a table goes through these, never `QuoteIdentifier(table)`.** One missed sink reads or
+writes the default schema quietly. The inventory at TASK-272 found about 100. A catalogue query that compares a table
+name as a VALUE uses `PhysicalTable(name).Name` (MySQL, SQLite) or `RelationLiteral` (PostgreSQL, SQL Server).

@@ -271,7 +271,7 @@ namespace Birko.Data.SQL.Connectors
 
         protected override string? StoredColumnsSql(string tableName)
         {
-            var literal = SqlLiteral.EscapeLiteral(tableName);
+            var literal = SqlLiteral.EscapeLiteral(PhysicalTable(tableName).Name);
             return string.Format(
                 "SELECT p.name, p.type, (SELECT m.sql FROM sqlite_master m WHERE m.type = 'table' AND m.name = '{0}' COLLATE NOCASE) "
                 + ", p.\"notnull\" = 0 AS birko_nullable, p.pk > 0 AS birko_primary FROM pragma_table_info('{0}') p", literal);
@@ -523,7 +523,7 @@ namespace Birko.Data.SQL.Connectors
 
                     var columnNames = string.Join(", ", fields.Select(f => f.Name));
                     var paramNames = string.Join(", ", fields.Select(f => "@INS_" + f.Name.Replace(".", "")));
-                    command.CommandText = "INSERT INTO " + QuoteIdentifier(table.Name)
+                    command.CommandText = "INSERT INTO " + TableIdentifier(table.Name)
                         + " (" + columnNames + ") VALUES (" + paramNames + ")";
                     commandText = command.CommandText;
 
@@ -586,7 +586,7 @@ namespace Birko.Data.SQL.Connectors
 
                     var columnNames = string.Join(", ", fields.Select(f => f.Name));
                     var paramNames = string.Join(", ", fields.Select(f => "@INS_" + f.Name.Replace(".", "")));
-                    command.CommandText = "INSERT INTO " + QuoteIdentifier(table.Name)
+                    command.CommandText = "INSERT INTO " + TableIdentifier(table.Name)
                         + " (" + columnNames + ") VALUES (" + paramNames + ")";
                     commandText = command.CommandText;
 
@@ -659,7 +659,7 @@ namespace Birko.Data.SQL.Connectors
 
                     var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                    command.CommandText = "UPDATE " + TableIdentifier(table.Name)
                         + " SET " + string.Join(", ", setClauses)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
@@ -737,7 +737,7 @@ namespace Birko.Data.SQL.Connectors
 
                     var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                    command.CommandText = "UPDATE " + TableIdentifier(table.Name)
                         + " SET " + string.Join(", ", setClauses)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
@@ -812,7 +812,7 @@ namespace Birko.Data.SQL.Connectors
                     command.Transaction = transaction;
 
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                    command.CommandText = "DELETE FROM " + TableIdentifier(table.Name)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
@@ -870,7 +870,7 @@ namespace Birko.Data.SQL.Connectors
                     command.Transaction = transaction;
 
                     var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                    command.CommandText = "DELETE FROM " + TableIdentifier(table.Name)
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 

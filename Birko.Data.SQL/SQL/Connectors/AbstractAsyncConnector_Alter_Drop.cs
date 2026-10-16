@@ -33,7 +33,7 @@ namespace Birko.Data.SQL.Connectors
                     await DoDdlCommandAsync(async (command) =>
                     {
                         command.CommandText = "ALTER TABLE "
-                            + QuoteIdentifier(tableName)
+                            + TableIdentifier(tableName)
                             + " DROP COLUMN "
                             + field.Name;
                         await Task.CompletedTask;

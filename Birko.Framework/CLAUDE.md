@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### An entity can live in a database schema (2026-10-16)
+
+[[TASK-272]]. `[Table("Events", Schema = "reporting")]` (also DataAnnotations and `ToTable(name, schema)`), and settings
+`Schema` as the connection default. PostgreSQL, TimescaleDB and SQL Server store `reporting.Events`; MySQL and SQLite store
+`reporting__Events`. Every statement goes through `TableIdentifier`, the one producer; without a schema the SQL is
+unchanged. View names and the migrations history table stay in the default schema.
 ### Concurrent slug and default writers: the storage refuses, the decorator retries (2026-10-16)
 
 [[TASK-632]]. Measured: two concurrent creates of "widget" ended in an unhandled duplicate, and two promotions left two
@@ -328,12 +334,6 @@ now implement the engine's interface (RavenDB verified live); their tenant API a
 the second run. The engine now decides on a recorded pair and compares versions. The Mongo knowledge store could not
 run at all (two `_id`s), and over ElasticSearch the engine never found its knowledge. Interface-bound filter members
 now keep their mapping. **Migration:** drop a pre-TASK-219 `MongoSyncKnowledgeItem` collection.
-### Store decorators: soft-deleted rows are not found, one default per filtered write (2026-10-15)
-
-[[TASK-159]]. An update could resurrect a soft-deleted row, and a filtered soft delete checked no filter, so a null
-soft-deleted every row. A `PropertyUpdate` setting `IsDefault` over N rows left N defaults. The slug probe could keep a
-slug another row held. A versioned update of a missing row was a conflict, not not-found, so `Save` threw. `StoreWrapperBuilder`
-now refuses `IVersioned`. An interface member's `[NamedField]` is honoured in a SQL SET. Races: [[TASK-632]].
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 

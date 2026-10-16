@@ -32,7 +32,7 @@ namespace Birko.Data.SQL.Connectors
                 {
                     await DoDdlCommandAsync(async (command) =>
                     {
-                        command.CommandText = "DROP TABLE IF EXISTS " + QuoteIdentifier(tableName);
+                        command.CommandText = "DROP TABLE IF EXISTS " + TableIdentifier(tableName);
                         await Task.CompletedTask;
                     }, async (command) =>
                     {
