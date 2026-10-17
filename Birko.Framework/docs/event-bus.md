@@ -111,6 +111,27 @@ public class OrderService(IEventBus eventBus)
 }
 ```
 
+## Live Streams (KeyedEventBroadcaster)
+
+For streaming a run's progress to SSE or WebSocket clients, not for domain events (TASK-533). `Publish` is synchronous
+and never blocks; each subscriber has a bounded buffer that drops its oldest event when full, so a slow client loses
+events instead of stalling the run. Every event carries the key's sequence number, so a client sees what it missed as
+a gap, and `subscription.Dropped` counts it. A subscriber can attach before the first event; `Complete` ends every
+reader of the key. Nothing is stored and nothing is replayed.
+
+```csharp
+var runs = new KeyedEventBroadcaster<Guid, RunEvent>(capacity: 256);
+
+// SSE / WebSocket endpoint: attach (before or during the run), stream until the run ends.
+using var subscription = runs.Subscribe(runId);
+await foreach (var e in subscription.ReadAllAsync(ct))
+    await Send(e.Sequence, e.Event);          // a jump in e.Sequence = events this client missed
+
+// Run: publish never blocks; end the stream when the run ends, failed or not.
+runs.Publish(runId, new RunEvent("step 1 done"));
+runs.Complete(runId, error: null);
+```
+
 ## Pipeline Behaviors
 
 Behaviors wrap event dispatch in a Russian-doll pattern (like middleware):

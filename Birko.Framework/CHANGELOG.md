@@ -68,6 +68,12 @@ written by sync read as changed next run, and the lossy copy overwrote the preci
 back before their version is recorded. Custom is asked about an item with no recorded pair. Every failure reaches
 `result.Errors` and `OnError` once. MySQL / SQL Server precision itself is [[TASK-656]].
 
+## 2026-10-17 — An ElasticSearch reindex reports a cancellation as one
+
+[[TASK-648]]. Measured: NEST answers a cancelled request with an invalid response, so every cancelled reindex came back
+`Failed`. `IndexManager` and the reindex calls now rethrow the cancellation. An alias reindex cancelled before the swap
+removes its new index; one cancelled after it succeeds with a `CleanupError`.
+
 ## 2026-10-17 — Rule `Between` and `In` no longer round a fractional value
 
 [[TASK-645]]. Measured: `Qty Between 10.5..20` selected Qty 10 at the store and `Qty In [10.6]` selected 11, while

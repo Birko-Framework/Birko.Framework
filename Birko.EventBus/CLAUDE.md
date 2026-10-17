@@ -31,6 +31,7 @@ Strongly-typed event bus for modular monolith architectures. In-process pub/sub 
 | Deduplication/IDeduplicationStore.cs | Check/record processed event IDs |
 | Deduplication/InMemoryDeduplicationStore.cs | ConcurrentDictionary with TTL cleanup |
 | Deduplication/DeduplicationBehavior.cs | Pipeline behavior that skips duplicates |
+| Live/KeyedEventBroadcaster.cs | `KeyedEventBroadcaster<TKey, TEvent>` (TASK-533) — live per-key fan-out: non-blocking `Publish`, a bounded drop-oldest buffer per subscriber with `Dropped`, per-key `LiveEvent.Sequence`, `Subscribe` before the first event, `Complete(key, error)` ends the readers |
 | Extensions/EventBusServiceCollectionExtensions.cs | DI: AddEventBus(), AddEventHandler&lt;T,H&gt;(), AddEventPipelineBehavior&lt;T&gt;(), AddEventEnricher&lt;T&gt;(), AddEventDeduplication() |
 
 ## Architecture
@@ -52,6 +53,9 @@ PublishAsync<T>(event)
 - EventContext uses mutable setters for CorrelationGuid/TenantGuid/Metadata so enrichers can modify them
 - EventBase is an abstract record — concrete events should be `sealed record`
 - ITopicConvention is used by Birko.EventBus.MessageQueue (not this project) for distributed routing
+- `KeyedEventBroadcaster` is NOT an `IEventBus`: the bus awaits handlers and routes by type, which would stall a stream.
+  It writes under the key's lock so concurrent publishers cannot reorder a subscriber's sequence (DraCode's version
+  wrote outside it); a key is forgotten when its last subscriber leaves, and an event for an unwatched key is discarded
 
 ## Maintenance
 - When adding new files, update the .projitems file

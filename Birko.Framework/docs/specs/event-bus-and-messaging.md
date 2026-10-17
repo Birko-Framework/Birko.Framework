@@ -34,6 +34,7 @@ sources:
   - ../Birko.EventBus/Enrichment/CorrelationEventEnricher.cs
   - ../Birko.EventBus/Enrichment/IEventEnricher.cs
   - ../Birko.EventBus/Extensions/EventBusServiceCollectionExtensions.cs
+  - ../Birko.EventBus/Live/KeyedEventBroadcaster.cs
   - ../Birko.EventBus/Local/InProcessEventBus.cs
   - ../Birko.EventBus/Local/InProcessEventBusOptions.cs
   - ../Birko.EventBus/Pipeline/EventPipeline.cs
@@ -325,6 +326,29 @@ The system SHALL return an `IEventSubscription` from `Subscribe` that reports it
 - **When** `Dispose()` is called
 - **Then** `_disposed` is set and the subscription dictionary is cleared; the previously returned
   `IEventSubscription` handles still report `IsActive == true`
+
+### Requirement: A keyed live broadcaster never blocks the publisher and keeps each subscriber in order
+
+The system SHALL provide `KeyedEventBroadcaster<TKey, TEvent>` (TASK-533) whose `Publish(key, event)` is synchronous,
+never blocks and never throws, stamps the key's next sequence (from 1) and writes to every current subscriber of the
+key under the key's lock, so concurrent publishers cannot reorder a subscriber's sequence. Each subscriber SHALL have a
+bounded buffer (`capacity`, at least 1) that drops its oldest event when full, counting it in `Dropped`. An event for a
+key with no subscriber SHALL be discarded and `Publish` SHALL return false. `Subscribe` MAY precede the first event;
+`Complete(key, error)` SHALL complete every reader of the key (throwing `error` after the buffered events) and forget
+the key; a key whose last subscriber leaves SHALL be forgotten, so its sequence restarts.
+
+#### Scenario: A slow subscriber
+
+- **Given** two subscribers with capacity 4, one that never reads
+- **When** 1000 events are published
+- **Then** the publisher is not slowed, the reading subscriber gets all 1000 in order, and the other reads sequences
+  997–1000 with `Dropped = 996`
+
+#### Scenario: Concurrent publishers
+
+- **Given** 8 threads publishing 2000 events each to one key
+- **When** a subscriber reads them
+- **Then** its sequences are exactly 1..16000 in order (with the write outside the lock, as DraCode had it, this fails)
 
 ### Requirement: Deduplication is mark-before-handle (at-most-once)
 

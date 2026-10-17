@@ -38,5 +38,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Deduplication\DeduplicationBehavior.cs" />
     <!-- Extensions -->
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\EventBusServiceCollectionExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Live\KeyedEventBroadcaster.cs" />
   </ItemGroup>
 </Project>

@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### KeyedEventBroadcaster: live per-key event streams (2026-10-17)
+[[TASK-533]]. New in Birko.EventBus, for streaming a run's events to SSE and WebSocket clients. `Publish` never blocks.
+Each subscriber has a bounded drop-oldest buffer and counts what it dropped, and every event carries a per-key sequence.
+Measured: DraCode's version could deliver sequence 6 before 5 under concurrent publishers (red 3/3); it now writes
+under the lock.
 ### FieldCipher and InMemorySecretProvider in Birko.Security (2026-10-17)
 [[TASK-532]]. `FieldCipher` encrypts a stored value with an HKDF-derived key. Its envelope names the key id, so masters
 rotate, and it authenticates the caller's associated data, so a value moved to another row does not decrypt. A missing
@@ -315,11 +320,6 @@ name, and a read no longer creates the registry container. The ElasticSearch Ini
 [[TASK-649]]. Measured: `Save` fell through to a create of the same Guid, which InMemory, SQLite and PostgreSQL refused as
 a duplicate key ("use Update or Save"). It now throws `EntitySoftDeletedException`, and `Restore` / `RestoreAsync` on the
 soft-delete wrapper is the explicit way back.
-### An ElasticSearch reindex reports a cancellation as one (2026-10-17)
-
-[[TASK-648]]. Measured: NEST answers a cancelled request with an invalid response, so every cancelled reindex came back
-`Failed`. `IndexManager` and the reindex calls now rethrow the cancellation. An alias reindex cancelled before the swap
-removes its new index; one cancelled after it succeeds with a `CleanupError`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
