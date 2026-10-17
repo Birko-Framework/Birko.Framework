@@ -1521,7 +1521,22 @@ resource type is declared; when `ShareAction` (default `"share"`) is allowed by 
 (default `"owner"`) is undeclared or does not allow the share action. Names compare ordinally. A resource type
 declared without a visibility SHALL be `ResourceVisibility.Granted`. Every later lookup of an undeclared role
 (`ActionsOf`, `RequireRole`), action (`Allows`, `RequireAction`) or resource type (`VisibilityOf`,
-`RequireResourceType`) SHALL throw `GrantConfigurationException` rather than answer "no".
+`RequireResourceType`) SHALL throw `GrantConfigurationException` rather than answer "no". A role or type read back
+from a STORED grant is looked up with the non-throwing `IsRole` / `IsResourceType` instead (TASK-641): a stored grant
+whose role is no longer declared SHALL grant nothing, and `StaleGrantDetector.FindAsync(store, table)` SHALL list every
+stored grant whose role or resource type is undeclared (the reserved admin grant excepted), so the retirement is
+reported rather than thrown at the user it affects.
+
+#### Scenario: A stored grant whose role was retired grants nothing
+
+- **Given** a user holding a grant on `presentation` A whose role has since been removed from the table, a type-wide
+  `viewer` grant, and `owner` on B
+- **When** `CanAsync` asks about A or B, `ListResourcesAsync(user, "presentation", "read")` runs, or an owner of A
+  replaces or revokes the stale grant
+- **Then** nothing throws: the stale grant contributes no actions (A answers from the `viewer` grant alone), the
+  listing leaves it out, and the owner needs only `share` and the new role's actions. `StaleGrantDetector` lists it
+  with `RoleNotDeclared`. Measured before (TASK-641): `CanAsync` on A, every `CanAsync` of the type for a type-wide
+  stale grant, and every listing of the type threw `GrantConfigurationException`
 
 #### Scenario: A typo in an action name fails loudly
 
@@ -1621,7 +1636,9 @@ with `GrantErrorCodes.Escalation` naming the missing ones. `AuthorizeGrantAsync`
 actions; `GrantAsync` SHALL require the union of the new role's actions and, when the user already holds a
 grant with that exact key, the replaced role's; `RevokeAsync` SHALL require the removed role's actions, except
 that a caller removing their own grant needs nothing. An admin passes every rule, and for an admin the
-required set is never resolved, so an admin can still replace or remove a grant whose role was retired.
+required set is never resolved, so an admin can still act on an invitation whose role was retired. A replaced or
+removed STORED role that is no longer declared requires no actions (it grants none, TASK-641), so a non-admin with
+`share` may replace or remove such a grant too; a role the caller passes in is still refused when undeclared.
 `GrantAsync` SHALL create the grant (`GrantedBy` = caller, `CreatedAt` from the clock) or, when the key
 exists with a different role, update `Role` and `GrantedBy` by the key — every row with that key; the same
 role writes nothing. `RevokeAsync` SHALL delete every row with the key and return `false` when none existed.

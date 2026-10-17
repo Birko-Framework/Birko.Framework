@@ -94,13 +94,12 @@ public class CanAsyncTests
     }
 
     [Fact]
-    public async Task StoredGrantWithUndeclaredRole_Refuses()
+    public async Task StoredGrantWithUndeclaredRole_GrantsNothing_AndDoesNotThrow()
     {
+        // TASK-641 inverted this pin: it threw, so one stale row broke the user's checks. StaleGrantDetector reports it.
         await _f.SeedAsync(_user, Presentation, _resource, "retired-role");
 
-        var check = () => _f.Service.CanAsync(_user, Presentation, _resource, "read");
-
-        await check.Should().ThrowAsync<GrantConfigurationException>().WithMessage("*retired-role*");
+        (await _f.Service.CanAsync(_user, Presentation, _resource, "read")).Should().BeFalse();
     }
 
     [Fact]

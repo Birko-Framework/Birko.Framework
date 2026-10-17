@@ -1,13 +1,15 @@
 ---
 id: EPIC-020
 # status — one of: planned, in-progress, done, cancelled
-status: done
+status: in-progress
 created: 2026-10-13
 owner: ai
 affects: [Birko.Security.Grants, Birko.Security.Grants.AspNetCore, Birko.Security.AspNetCore, Birko.Models.Users]
 ---
 
 # Security — access control
+
+> Reopened 2026-10-17 — TASK-654 is now todo (filed by /tasks spawn from TASK-641)
 
 ## Area of concern
 

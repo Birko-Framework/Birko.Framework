@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A grant whose role was retired grants nothing instead of throwing (2026-10-17)
+
+[[TASK-641]]. Measured: one stored grant with a retired role made the user's checks of that resource, every check of
+the type for a type-wide grant, and every listing of the type throw. It now grants nothing (fail closed). Owners may
+replace or remove it. `StaleGrantDetector.FindAsync` lists such grants; a health check over it is [[TASK-654]].
 ### RavenDB migrations cannot rewrite their RQL through a name (2026-10-17)
 
 [[TASK-640]]. Measured live: `DropCollection("Accounts' WHERE Name = 'b")` deleted only `b`, and an update key or
@@ -333,11 +338,6 @@ cannot leave their path; Key Vault lists every page.
 [[TASK-634]]. `store.PlanMappingRepairAsync()` turns mapping drift into requests a host sends: one `PUT _mapping` adding
 the declared fields the index lacks; type changes (a reindex) and undeclared fields are listed. Measured: old documents
 read the new fields as defaults. MongoDB and RavenDB need no plan; an old document reads new properties as defaults.
-### Rules and validation: exact numbers, safe rule reloads, validated filtered updates (2026-10-15)
-
-[[TASK-156]]. In memory, distinct longs and decimals compared equal through double, and "007" equalled "7". Editing a
-`RuleSet` while it was evaluated threw; `Rules` is now a copy-on-write `RuleList`. `Range(-50, 150)` on a double threw,
-a nested `RuleFor` threw on a null parent, and the validating bulk store skipped validation on filtered updates.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

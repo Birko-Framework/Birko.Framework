@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Rules and validation: exact numbers, safe rule reloads, validated filtered updates
+
+[[TASK-156]]. In memory, distinct longs and decimals compared equal through double, and "007" equalled "7". Editing a
+`RuleSet` while it was evaluated threw; `Rules` is now a copy-on-write `RuleList`. `Range(-50, 150)` on a double threw,
+a nested `RuleFor` threw on a null parent, and the validating bulk store skipped validation on filtered updates.
+
 ## 2026-10-15 — One rule-to-LINQ translator
 
 [[TASK-144]]. `RuleSpecification` had its own copy of `RuleExpressionConverter`, and the two drifted both ways. The

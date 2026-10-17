@@ -607,8 +607,11 @@ await grants.GrantAsync(creator, colleague, "presentation", id, "editor");   // 
 bool canEdit = await grants.CanAsync(colleague, "presentation", id, "edit"); // true
 ```
 
-- **Undeclared names refuse.** A role, action or resource type missing from the table throws
+- **Undeclared names refuse.** A role, action or resource type you pass that is missing from the table throws
   `GrantConfigurationException`; it never quietly answers "no".
+- **A stored grant whose role you retired grants nothing**, so it cannot break that user's checks. Run
+  `StaleGrantDetector.FindAsync(store, table)` at start-up (or from a health check) to list such grants and migrate or
+  revoke them; a role renamed in configuration shows up there, not as lost access nobody noticed.
 - **Granting:** an admin, or a holder of the share action whose own actions cover the role granted (and the role
   replaced). Otherwise `GrantRefusedException` with `Grant.NotAuthorized` or `Grant.Escalation`.
 - **A resource never loses its last owner** (`Grant.LastOwner`). Writes on one resource are serialised in-process,

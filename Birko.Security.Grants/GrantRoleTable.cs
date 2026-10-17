@@ -115,6 +115,15 @@ public sealed class GrantRoleTable
             throw new GrantConfigurationException($"Action '{action}' is not declared by any role in the grant role table.");
     }
 
+    /// <summary>
+    /// Whether <paramref name="role"/> is declared. For a role read back from a stored grant, which may have been retired
+    /// since it was written; a role a caller passes in is looked up with <see cref="ActionsOf"/>, which refuses (TASK-641).
+    /// </summary>
+    public bool IsRole(string? role) => role != null && _roles.ContainsKey(role);
+
+    /// <summary>Whether <paramref name="resourceType"/> is declared; the stored-grant twin of <see cref="IsRole"/>.</summary>
+    public bool IsResourceType(string? resourceType) => resourceType != null && _resourceTypes.ContainsKey(resourceType);
+
     /// <exception cref="GrantConfigurationException">The role is not declared.</exception>
     public void RequireRole(string role) => ActionsOf(role);
 

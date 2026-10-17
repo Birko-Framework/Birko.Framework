@@ -53,7 +53,7 @@ public sealed class GrantService : IGrantService
             return new GrantedResources(true, Array.Empty<Guid>());
 
         var grants = (await _store.ListForUserAsync(userGuid, resourceType, tenantGuid, ct).ConfigureAwait(false))
-            .Where(g => _table.Allows(g.Role, action))
+            .Where(g => _table.IsRole(g.Role) && _table.Allows(g.Role, action))
             .ToList();
         var allOfType = grants.Any(g => g.ResourceId == null);
         var ids = grants.Where(g => g.ResourceId != null).Select(g => g.ResourceId!.Value).Distinct().ToList();
@@ -85,7 +85,7 @@ public sealed class GrantService : IGrantService
 
         var existing = await _store.GetExactAsync(userGuid, resourceType, resourceId, tenantGuid, ct).ConfigureAwait(false);
         await AuthorizeAsync(callerGuid, resourceType, resourceId, tenantGuid,
-            () => existing == null ? newActions : newActions.Union(_table.ActionsOf(existing.Role)).ToHashSet(), ct).ConfigureAwait(false);
+            () => existing == null ? newActions : newActions.Union(Held(existing.Role)).ToHashSet(), ct).ConfigureAwait(false);
 
         return await WriteLockedAsync(callerGuid, userGuid, resourceType, resourceId, role, tenantGuid, existing, ct).ConfigureAwait(false);
     }
@@ -103,7 +103,7 @@ public sealed class GrantService : IGrantService
         var existing = await _store.GetExactAsync(userGuid, resourceType, resourceId, tenantGuid, ct).ConfigureAwait(false);
         if (existing != null)
         {
-            var held = _table.ActionsOf(existing.Role);
+            var held = Held(existing.Role);
             if (held.IsSupersetOf(newActions))
                 return existing;
             if (!newActions.IsSupersetOf(held))
@@ -174,7 +174,7 @@ public sealed class GrantService : IGrantService
 
         // Anyone may give up their own access; removing someone else's needs the grant rules.
         if (callerGuid != userGuid)
-            await AuthorizeAsync(callerGuid, resourceType, resourceId, tenantGuid, () => _table.ActionsOf(existing.Role), ct).ConfigureAwait(false);
+            await AuthorizeAsync(callerGuid, resourceType, resourceId, tenantGuid, () => Held(existing.Role), ct).ConfigureAwait(false);
 
         var removesOwner = existing.Role == _table.OwnerRole && resourceId != null;
         if (removesOwner)
@@ -242,13 +242,29 @@ public sealed class GrantService : IGrantService
         {
             if (grant.ResourceId != null && grant.ResourceId != resourceId)
                 continue;
-            actions.UnionWith(_table.ActionsOf(grant.Role));
+            actions.UnionWith(Held(grant.Role));
         }
         return actions;
     }
 
-    /// <param name="required">Resolved only for a non-admin, so an admin can still replace or remove a grant whose role
-    /// was retired from the table (resolving it throws).</param>
+    /// <summary>
+    /// The actions a STORED grant's role allows: none when the role has been retired from the table since the grant was
+    /// written.
+    /// </summary>
+    /// <remarks>
+    /// TASK-641 (user's decision, 2026-10-17). Resolving it threw, so one stale row made every check of that resource,
+    /// every check of the type for a type-wide grant, and every <see cref="ListResourcesAsync"/> of the type throw for
+    /// that user (measured). A retired role grants nothing, which fails closed, so replacing or removing such a grant
+    /// needs nothing beyond the new role and <c>share</c>. The loud half moved to <see cref="StaleGrantDetector"/>, which
+    /// lists these rows so a renamed role is still caught. A role a caller passes in is still refused.
+    /// </remarks>
+    private IReadOnlySet<string> Held(string role)
+        => _table.IsRole(role) ? _table.ActionsOf(role) : NoActions;
+
+    private static readonly IReadOnlySet<string> NoActions = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <param name="required">Resolved only for a non-admin, so an admin can still act on an invitation whose role was
+    /// retired (a role passed in is refused). A stored grant's retired role resolves to no actions (<see cref="Held"/>).</param>
     private async Task AuthorizeAsync(Guid callerGuid, string resourceType, Guid? resourceId, Guid? tenantGuid, Func<IReadOnlySet<string>> required, CancellationToken ct)
     {
         if (await _admins.IsAdminAsync(callerGuid, tenantGuid, ct).ConfigureAwait(false))

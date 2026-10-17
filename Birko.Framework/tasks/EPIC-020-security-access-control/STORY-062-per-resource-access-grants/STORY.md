@@ -2,11 +2,13 @@
 id: STORY-062
 parent: EPIC-020
 # status — one of: planned, in-progress, done, cancelled
-status: done
+status: in-progress
 created: 2026-10-13
 ---
 
 # Per-resource access grants and invitations (Birko.Security.Grants)
+
+> Reopened 2026-10-17 — TASK-654 is now todo (filed by /tasks spawn from TASK-641)
 
 ## User story
 

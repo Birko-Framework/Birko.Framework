@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-17 15:21. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-17 15:43. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -14,15 +14,15 @@ which this regeneration never touches._
 |--------------|-------|---------|-------|
 | planned      | 10    | 26      | —     |
 | todo         | —     | —       | 181   |
-| in-progress  | 8     | 13      | 0     |
+| in-progress  | 9     | 14      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 23      | 322   |
+| done         | 1     | 22      | 323   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 11× P1 · 127× P2 · 43× P3.
+`todo` by priority: 10× P1 · 128× P2 · 43× P3.
 
 ## In progress now
 
@@ -167,7 +167,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (189/268 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (190/268 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -365,7 +365,7 @@ _None._
     - [x] [TASK-575](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-575-two-workers-reclaim-the-same-stale-job.md) Two SQL job workers can both reclaim the same stale Processing job and run it twice (P1) · FEATURE-014
     - [ ] [TASK-576](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-576-async-database-model-repository-rejects-concrete-stores.md) `AsyncDataBaseModelRepository<T>` rejects every store built with a concrete connector (P2) · FEATURE-014
     - [x] [TASK-577](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-577-cross-assembly-field-attributes-lose-values.md) A cross-assembly SQL field attribute is rebuilt without its value: lengths, precision and scale become 0, and `[UtcField]` is dropped (P1) · FEATURE-014
-  - STORY-053 Spec-harvest — medium findings — planned (32/56 done)
+  - STORY-053 Spec-harvest — medium findings — planned (33/56 done)
     - [x] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
     - [x] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
     - [x] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
@@ -410,7 +410,7 @@ _None._
     - [x] [TASK-638](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-638-a-soft-deleted-row-still-holds-the-unique-default-marker-or-slug-so-la.md) A soft-deleted row still holds the unique default marker or slug, so later promotions and slugs are refused (P1) · FEATURE-014
     - [x] [TASK-639](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-639-a-filter-on-a-persistent-or-auto-sql-view-names-the-source-column-whic.md) A filter on a Persistent or Auto SQL view names the source column, which the view does not have (P1) · FEATURE-014
     - [x] [TASK-640](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-640-ravendb-migrations-put-update-keys-the-collection-name-and-renamefield.md) RavenDB migrations put update keys, the collection name and RenameField's fields into RQL unescaped (P1) · FEATURE-014
-    - [ ] [TASK-641](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-641-a-stored-grant-whose-role-was-later-retired-makes-permission-checks-fo.md) A stored grant whose role was later retired makes permission checks for that user and type throw (P1) · FEATURE-014
+    - [x] [TASK-641](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-641-a-stored-grant-whose-role-was-later-retired-makes-permission-checks-fo.md) A stored grant whose role was later retired makes permission checks for that user and type throw (P1) · FEATURE-014
     - [ ] [TASK-642](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-642-influxdb-migration-renamefield-and-dropfield-do-nothing-and-the-migrat.md) InfluxDB migration RenameField and DropField do nothing, and the migration is recorded as applied (P2) · FEATURE-014
     - [ ] [TASK-643](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-643-elasticsearch-migration-schema-builder-reads-a-failed-existence-check.md) ElasticSearch migration schema builder reads a failed existence check as absent and ignores the create response (P2) · FEATURE-014
     - [ ] [TASK-644](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-644-elasticsearch-filter-a-field-compared-with-an-untranslatable-operand-b.md) ElasticSearch filter: a field compared with an untranslatable operand becomes an exists test (P2) · FEATURE-014
@@ -565,6 +565,14 @@ _None._
     - [ ] [TASK-541](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-541-owner-or-admin-access-predicate.md) Birko.Communication.AspNetCore: an owner-or-admin access check usable outside MapOwnedCrud (P3)
     - [x] [TASK-542](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-542-websocket-reverse-proxy-endpoint.md) A WebSocket reverse-proxy endpoint mapper (P3)
     - [ ] [TASK-569](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-569-websocket-proxy-forwards-subprotocols.md) MapWebSocketProxy drops the client's requested sub-protocols, so a client that asks for one fails its handshake (P3)
+- **EPIC-020** Security — access control — in-progress (5/6 tasks done)
+  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — in-progress (5/6 done)
+    - [x] [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1)
+    - [x] [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1)
+    - [x] [TASK-590](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-590-grants-aspnetcore-requiregrant-and-wiring.md) Birko.Security.Grants.AspNetCore — RequireGrant, resolver decorator, DI, end-to-end README (P1)
+    - [x] [TASK-593](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-593-grants-predicates-on-a-sql-backend.md) Grants: run the grant predicates against a SQL backend, not only InMemory (P2)
+    - [x] [TASK-594](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-594-birko-security-grants-sql-mappings.md) Birko.Security.Grants.SQL — fluent SQL mappings for ResourceGrant and Invitation (P2)
+    - [ ] [TASK-654](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-654-stale-grant-health-check.md) A health check reports stored grants whose role or resource type was retired (P2)
 
 ## Loose tasks
 
@@ -630,19 +638,12 @@ _None._
 
 ## Completed
 
-<details><summary>2 closed epic(s)</summary>
+<details><summary>1 closed epic(s)</summary>
 
 - **EPIC-009** Birko.Communication — Remaining protocols — done (2/2 tasks done)
   - STORY-019 gRPC support — done (1/1 done) (done)
     - [x] [TASK-026](EPIC-009-communication-protocols/STORY-019-grpc/TASK-026-grpc-client-server.md) gRPC client + server support (P2) · FEATURE-009
   - STORY-020 OAuth2 authorization server — done (1/1 done) (done)
     - [x] [TASK-027](EPIC-009-communication-protocols/STORY-020-oauth2-server/TASK-027-birko-security-oauth-server.md) Implement Birko.Security.OAuth.Server (P2) · FEATURE-009
-- **EPIC-020** Security — access control — done (5/5 tasks done)
-  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — done (5/5 done) (done)
-    - [x] [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1)
-    - [x] [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1)
-    - [x] [TASK-590](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-590-grants-aspnetcore-requiregrant-and-wiring.md) Birko.Security.Grants.AspNetCore — RequireGrant, resolver decorator, DI, end-to-end README (P1)
-    - [x] [TASK-593](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-593-grants-predicates-on-a-sql-backend.md) Grants: run the grant predicates against a SQL backend, not only InMemory (P2)
-    - [x] [TASK-594](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-594-birko-security-grants-sql-mappings.md) Birko.Security.Grants.SQL — fluent SQL mappings for ResourceGrant and Invitation (P2)
 
 </details>

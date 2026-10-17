@@ -50,9 +50,16 @@ Birko.Security.Grants/
 No NuGet packages, no ASP.NET, no `Birko.Models.Users`: the host maps its login to a user Guid.
 
 ## Rules the code keeps
-- **Undeclared names refuse.** Every lookup of a role, action or resource type missing from the table throws
-  `GrantConfigurationException` — including a stored grant whose role was later removed from the table. Never
-  answer "no" for a typo (rules 41, 55). `"*"` is reserved and refused as any consumer name.
+- **Undeclared names refuse — when a caller passes them.** A role, action or resource type a caller names that is
+  missing from the table throws `GrantConfigurationException`. Never answer "no" for a typo (rules 41, 55). `"*"` is
+  reserved and refused as any consumer name.
+- **A stored grant whose role was retired grants nothing** (TASK-641, user's decision 2026-10-17). `CanAsync`,
+  `ListResourcesAsync` and the share check skip it, so it fails closed. A non-admin with `share` may replace or remove
+  it. It used to throw, so one stale row broke that user's checks of the resource, every check of the type for a
+  type-wide grant, and every listing of the type (measured). The loud half is `StaleGrantDetector.FindAsync(store,
+  table)`: it lists grants whose role or type is undeclared, so a role renamed in configuration is caught at start-up
+  or by a health check rather than quietly removing access. `GrantRoleTable.IsRole` / `IsResourceType` are the
+  non-throwing lookups for stored values only.
 - **Tenant is explicit, from one source** (rules 38/39). Every call takes `Guid? tenantGuid`; the service never
   reads an ambient tenant. In scope: untenanted grants plus the tenant's; with no tenant, untenanted only.
 - **Null is never compared through a variable** (rule 5). `GrantPredicates` branches on null and renders an
