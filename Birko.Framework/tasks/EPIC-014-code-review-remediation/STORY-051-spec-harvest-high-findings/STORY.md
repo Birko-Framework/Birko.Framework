@@ -1,7 +1,7 @@
 ---
 id: STORY-051
 parent: EPIC-014
-status: in-progress
+status: done
 created: 2026-07-30
 source: SPEC-HARVEST-FINDINGS-2026-07-30.md
 severity: high

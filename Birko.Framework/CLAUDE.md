@@ -240,6 +240,10 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### The async SQL model repository takes its connector type (2026-10-17)
+[[TASK-576]]. **Signature change:** `AsyncDataBaseModelRepository<T>` is now `AsyncDataBaseModelRepository<TConnector, T>`,
+as the sync one is. Measured: it checked for `AsyncDataBaseBulkStore<AbstractConnector, T>`, which by generic invariance no
+provider store is, so it refused every store (no caller could have used it). It now exposes `Connector` and the init hooks.
 ### The distributed event bus gives each message its own DI scope (2026-10-17)
 [[TASK-566]]. Measured: a handler with a scoped dependency threw on every delivery under `ValidateScopes`, and at startup
 in `AutoSubscriber`; otherwise every message shared one root-owned dependency that was never disposed. Each delivered
@@ -327,12 +331,6 @@ what is shown. The nodes stay the real objects, so `SelectedValue` still seriali
 [[TASK-637]]. The data migrator and `RenameField` quoted column names, so on PostgreSQL `"Name"` missed the folded column
 `name` (42703), and a `[NamedField]` property failed everywhere. Columns are now bare, resolved through the loaded model
 (`DataBase.MigrationColumn`), and a name that is not a plain identifier is refused.
-### An entity can live in a database schema (2026-10-16)
-
-[[TASK-272]]. `[Table("Events", Schema = "reporting")]` (also DataAnnotations and `ToTable(name, schema)`), and settings
-`Schema` as the connection default. PostgreSQL, TimescaleDB and SQL Server store `reporting.Events`; MySQL and SQLite store
-`reporting__Events`. Every statement goes through `TableIdentifier`, the one producer; without a schema the SQL is
-unchanged. View names and the migrations history table stay in the default schema.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

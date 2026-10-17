@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-16 — An entity can live in a database schema
+
+[[TASK-272]]. `[Table("Events", Schema = "reporting")]` (also DataAnnotations and `ToTable(name, schema)`), and settings
+`Schema` as the connection default. PostgreSQL, TimescaleDB and SQL Server store `reporting.Events`; MySQL and SQLite store
+`reporting__Events`. Every statement goes through `TableIdentifier`, the one producer; without a schema the SQL is
+unchanged. View names and the migrations history table stay in the default schema.
+
 ## 2026-10-16 — Concurrent slug and default writers: the storage refuses, the decorator retries
 
 [[TASK-632]]. Measured: two concurrent creates of "widget" ended in an unhandled duplicate, and two promotions left two

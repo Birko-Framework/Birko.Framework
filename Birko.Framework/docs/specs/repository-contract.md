@@ -995,7 +995,7 @@ The system SHALL provide model and ViewModel repositories per backend — `Mongo
 `MongoDBRepository<TViewModel, TModel>`, `RavenDBModelRepository<T>` / `RavenDBRepository<TViewModel, TModel>`,
 `CosmosDBModelRepository<T>`, `InfluxDBModelRepository<T>` / `InfluxDBRepository<TViewModel, TModel>`, each with
 an `Async…` sibling, plus the SQL model repositories `DataBaseModelRepository<TConnector, T>` and
-`AsyncDataBaseModelRepository<T>` — deriving from the matching abstract bulk repository. Each store-taking
+`AsyncDataBaseModelRepository<TConnector, T>` — deriving from the matching abstract bulk repository. Each store-taking
 constructor SHALL reject a non-null store that fails `IsStoreOfType<T, XStore<T>>` with
 `ArgumentException` (paramName `store`, message `Store must be of type … or a wrapper around it…`), and SHALL
 reach the backend through a property resolved by `GetUnwrappedStore` (`MongoDBStore`, `RavenDBStore`,
@@ -1044,15 +1044,17 @@ repositories SHALL replace a `null` store (and the parameterless constructor) wi
   `null` hook or a missing store is ignored; the parameterless constructor chains to
   `this(new DataBaseBulkStore<TConnector, T>())`
 
-#### Scenario: The async SQL model repository is fixed to the abstract connector type
+#### Scenario: The async SQL model repository takes the store's connector type
 
-- **Given** `AsyncDataBaseModelRepository<T>`, whose type check is
-  `IsStoreOfType<T, AsyncDataBaseBulkStore<AbstractConnector, T>>`
-- **When** it is constructed with a store typed `AsyncDataBaseBulkStore<SqLiteConnector, T>` (or any other
-  concrete connector)
-- **Then** generic invariance makes the check fail and `ArgumentException` is thrown, so only a store
-  closed over `AbstractConnector` itself is accepted; the class has no parameterless constructor and no
-  `TConnector` parameter
+- **Given** `AsyncDataBaseModelRepository<TConnector, T>`, whose type check is
+  `IsStoreOfType<T, AsyncDataBaseBulkStore<TConnector, T>>`
+- **When** it is constructed with an `AsyncDataBaseBulkStore<SqLiteConnector, T>` (or a wrapper around one) as
+  `AsyncDataBaseModelRepository<SqLiteConnector, T>`
+- **Then** the store is accepted; `DataBaseStore` and `Connector` resolve through the wrapper, and `AddOnInit` /
+  `RemoveOnInit` reach the store. A store closed over another connector type is refused with `ArgumentException`.
+  Before TASK-576 the class had no `TConnector` and checked for `AsyncDataBaseBulkStore<AbstractConnector, T>`, so
+  generic invariance refused every provider's store. There is no parameterless constructor, and a `null` store leaves
+  `Store` `null`.
 
 ### Requirement: An ordered single read goes through the decorated store, never through the connector
 
