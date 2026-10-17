@@ -97,6 +97,8 @@ namespace Birko.Data.SQL.Connectors
             // read (both paths, both the string- and expression-keyed entry points) funnels through this
             // method. Resolving makes the ORDER BY clause unreachable from caller-supplied text.
             orderFields = DataBase.ResolveViewOrderFields(view, orderFields, usePersistent);
+            // TASK-639: the WHERE follows the path too; a persistent view has no source columns.
+            conditions = DataBase.ResolveViewConditions(view, conditions, usePersistent);
 
             if (usePersistent)
             {

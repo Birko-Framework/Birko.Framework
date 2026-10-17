@@ -43,6 +43,10 @@ SQL view generation framework for creating database views from entity attributes
 
 ### DataBase
 - `DataBase_View.cs` — View metadata loading and caching
+- `DataBase_ViewOrderBy.cs` / `DataBase_ViewConditions.cs` — `ResolveViewOrderFields` and `ResolveViewConditions`, called
+  in the four view funnels (`Select`/`SelectCount`, sync and async) once `usePersistent` is known. A persistent view's
+  columns are the view properties, so conditions parsed for the on-the-fly SELECT (`Table.Column`) are renamed there;
+  an unqualified source name two fields share is refused (TASK-639)
 
 ### Fields
 - `FunctionField.cs` — Base aggregate function field

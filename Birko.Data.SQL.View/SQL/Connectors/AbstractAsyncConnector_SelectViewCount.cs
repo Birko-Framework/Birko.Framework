@@ -21,6 +21,8 @@ namespace Birko.Data.SQL.Connectors
             }
 
             var usePersistent = ShouldUsePersistentView(view, name => ViewExists(name));
+            // TASK-639: a persistent view's WHERE names its own columns, not the source ones.
+            conditions = DataBase.ResolveViewConditions(view, conditions, usePersistent);
 
             if (usePersistent && !string.IsNullOrEmpty(view.Name))
             {

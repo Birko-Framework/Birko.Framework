@@ -40,5 +40,13 @@
   <Import Project="..\..\Birko.Data.SQL.Views\Birko.Data.SQL.Views.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.SqLite.View\Birko.Data.SQL.SqLite.View.projitems" Label="Shared" />
+  <!-- TASK-639: the view store's filter is live on the three server providers too; a view filter tested on SQLite alone
+       is what let the Persistent path read source columns its view does not have. Gated on BIRKO_*_HOST. -->
+  <Import Project="..\..\Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.PostgreSQL.View\Birko.Data.SQL.PostgreSQL.View.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.MySQL.View\Birko.Data.SQL.MySQL.View.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.MSSql.View\Birko.Data.SQL.MSSql.View.projitems" Label="Shared" />
 
 </Project>

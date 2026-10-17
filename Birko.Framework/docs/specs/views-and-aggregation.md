@@ -544,6 +544,12 @@ before each operation; and SHALL materialize each row by reading reader columns
 - **When** `DataBase.ParseConditionExpression` resolves `Status` against the lambda's parameter type `OrderSummary`
 - **Then** the scoped resolver — consulted ahead of `TryLoadTable(typeof(OrderSummary))` and the process-wide `ResolveFieldSelectName` hook — finds the view field whose `Property.Name` is `Status` and answers `field.GetSelectName(withTableName)`, so a plain portable view POCO with no SQL mapping attributes is filterable. The scope is an `AsyncLocal` disposed when parsing ends (the conditions are materialised inside it), so nothing is registered process-wide. A property no view field carries falls through to the default resolution. Previously every filtered query on a portable view failed with `InvalidOperationException("Condition name cannot be null or empty")`
 
+#### Scenario: A filter on a Persistent or Auto view names the view's own columns
+
+- **Given** a view renaming `Person.Name` to `TView.PersonName`, read Persistent (or Auto once the view exists), single-source or joined and grouped, through `SqlViewStore` or the attribute-declared `SelectView(Type, …)` / `SelectCountView`
+- **When** it is queried or counted with `v => v.PersonName == "p2"`
+- **Then** the conditions, parsed for the on-the-fly SELECT (`Persons.Name`), are resolved by `DataBase.ResolveViewConditions` in the connector's view funnels, beside `ResolveViewOrderFields` once `usePersistent` is known: each source name a view field knows (qualified or not, and the other column of a field-to-field comparison, inside groups too) becomes that field's persistent column, the view property. A name that is already a persistent column, or that no field knows, passes through; an unqualified source name two fields share with different columns is refused with `ArgumentException`; the caller's conditions are not modified; the on-the-fly path is untouched. Measured live on SQLite, PostgreSQL, MySQL and SQL Server (TASK-639): before, every filtered read and count of such a view failed ("no such column: Persons.Name", 42P01, "could not be bound")
+
 #### Scenario: A filter on an aggregate view property is refused
 
 - **Given** a view whose `Sum` of `Order.Total` targets `TView.Total`, and the filter `v => v.Total > 1000m`

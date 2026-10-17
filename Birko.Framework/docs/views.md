@@ -64,6 +64,10 @@ does not exist is an error, not an empty result. `EnsureAsync` creates *or updat
 view, MongoDB runs `collMod`, RavenDB replaces the index; on ElasticSearch it creates only a `Persistent` view's own
 index.
 
+On SQL, a filter and a sort name view properties in every mode. A `Persistent` read (and an `Auto` read once the view
+exists) is filtered on the view's own columns, so `v => v.PersonName == "p2"` works on a view that renames
+`Person.Name` (TASK-639; before, the WHERE named the source column, which the view does not have).
+
 ## Defining Views
 
 ### 1. Create the view result type
