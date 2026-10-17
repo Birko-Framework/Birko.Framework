@@ -67,9 +67,24 @@ namespace Birko.Data.Migrations.RavenDB.Context
             // RavenDB is schema-less — no-op
         }
 
+        /// <summary>
+        /// Removes the field from every document of the collection with a patch-by-query, waited for like
+        /// <see cref="RenameField"/>; the names are held to TASK-640's rules.
+        /// </summary>
+        /// <remarks>
+        /// TASK-655: this was a no-op, so a migration that dropped a field was recorded as applied while every document
+        /// kept it (measured).
+        /// </remarks>
         public void DropField(string collectionName, string fieldName)
         {
-            // RavenDB is schema-less — use PatchByQueryOperation to $unset equivalent via Raw()
+            var collection = RavenDBDataMigrator.RqlCollection(collectionName);
+            var field = RavenDBDataMigrator.RqlField(fieldName);
+            var operation = _store.Operations.Send(new PatchByQueryOperation(
+                new Raven.Client.Documents.Queries.IndexQuery
+                {
+                    Query = $"FROM {collection} UPDATE {{ delete this.{field}; }}"
+                }));
+            operation.WaitForCompletion();
         }
 
         public void RenameField(string collectionName, string oldName, string newName)

@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A migration's DropField drops the field; a DropIndex that cannot drop refuses (2026-10-17)
+[[TASK-655]]. Measured live: on MongoDB, RavenDB, Cosmos DB and ElasticSearch `DropField` left every document carrying the
+field, and ElasticSearch and Cosmos `DropIndex` did nothing, yet the migration was recorded. `DropField` now removes the field
+from every document (on ElasticSearch the mapping keeps it until a reindex). Cosmos `DropIndex` drops by name; ElasticSearch
+and InfluxDB `DropIndex` refuse, as their `CreateIndex` does. Cosmos `RenameField` on a plain client: [[TASK-659]].
 ### SQL connection strings quote their credentials on every provider (2026-10-17)
 [[TASK-653]]. **Security.** Measured live: on SQL Server, MySQL, PostgreSQL and TimescaleDB a password ending `;Server=evil`
 moved the connection to that host, `;Encrypt=False` dropped TLS, and a `;` or quote broke the connection. Every provider
@@ -324,12 +329,6 @@ and a field name must be a plain dotted path, as filter fields already were.
 once it existed, failed. The WHERE named the source column (`Persons.Name`), which the view does not have; the attribute
 `[View]` path too. `DataBase.ResolveViewConditions` now renames conditions to the view's columns in the view funnels,
 beside the sort-key resolution.
-### A soft-deleted row no longer blocks the next default or slug (2026-10-17)
-
-[[TASK-638]]. Measured on all four SQL providers: after a soft delete, the next promotion and the next create of the same
-slug were refused (`StoreUniqueViolationException`), because the deleted row kept its marker and slug while every probe read
-through SoftDelete. A soft delete now retires a default (`IsDefault` false, marker null) on every path. A slug stays
-reserved until hard delete: the probe asks beneath SoftDelete, so the new row gets `widget-2`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

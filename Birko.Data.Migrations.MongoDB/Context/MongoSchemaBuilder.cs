@@ -66,9 +66,21 @@ namespace Birko.Data.Migrations.MongoDB.Context
             // MongoDB is schema-less — no-op
         }
 
+        /// <summary>
+        /// Removes the field from every document that has it (<c>$unset</c>), inside the migration's session when there is
+        /// one, as <see cref="RenameField"/> does.
+        /// </summary>
+        /// <remarks>
+        /// TASK-655: this was a no-op, so a migration that dropped a field was recorded as applied while every document
+        /// kept it (measured). A schema-less store has nothing else to remove.
+        /// </remarks>
         public void DropField(string collectionName, string fieldName)
         {
-            // MongoDB is schema-less — could $unset but typically unnecessary
+            var collection = _database.GetCollection<BsonDocument>(collectionName);
+            var filter = Builders<BsonDocument>.Filter.Exists(fieldName);
+            var update = Builders<BsonDocument>.Update.Unset(fieldName);
+            if (_session != null) collection.UpdateMany(_session, filter, update);
+            else collection.UpdateMany(filter, update);
         }
 
         public void RenameField(string collectionName, string oldName, string newName)

@@ -91,4 +91,13 @@ public sealed class Task642InfluxFieldOpsLiveTests : IDisposable
         schema.Invoking(s => s.RenameField("rows", "temp", "temperature")).Should().Throw<NotSupportedException>().WithMessage("*rename*");
         schema.Invoking(s => s.DropField("rows", "temp")).Should().Throw<NotSupportedException>().WithMessage("*drop*");
     }
+
+    [Fact]
+    public void DropIndex_refuses_as_CreateIndex_does()
+    {
+        // TASK-655: DropIndex was a no-op, so a migration recorded a drop of an index InfluxDB cannot have.
+        var schema = new InfluxDBSchemaBuilder(new InfluxDBClient("http://localhost:1"), Org);
+
+        FluentActions.Invoking(() => schema.DropIndex("rows", "IX_Code")).Should().Throw<NotSupportedException>().WithMessage("InfluxDB*");
+    }
 }

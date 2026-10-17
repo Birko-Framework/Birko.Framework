@@ -72,10 +72,17 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
             return _ledger.Track(new ElasticIndexBuilder(collectionName, indexName, _client), collectionName, indexName);
         }
 
+        /// <summary>
+        /// Refused, as <see cref="CreateIndex"/>'s <c>Build()</c> is (TASK-274): this builder creates no index, so there is
+        /// none for it to drop.
+        /// </summary>
+        /// <remarks>
+        /// TASK-655: this was a no-op, so a migration that dropped an index was recorded as applied with nothing dropped.
+        /// </remarks>
         public void DropIndex(string collectionName, string indexName)
-        {
-            // ElasticSearch indices are managed differently — use Raw() for template/alias manipulation
-        }
+            => throw IndexBuilderSupport.Unsupported("ElasticSearch", $"DropIndex '{indexName}' on '{collectionName}'",
+                "this schema builder creates no index, and an Elasticsearch index is not an object inside an index",
+                "Use Raw() to change a mapping, template or alias.");
 
         public void AddField(string collectionName, FieldDescriptor field)
         {
@@ -83,10 +90,28 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
             // This is a no-op since ES does not require explicit field additions.
         }
 
+        /// <summary>
+        /// Removes the field from the source of every document that has it, with an update-by-query checked like
+        /// <see cref="RenameField"/>'s. The reindexed documents no longer match a query on the field.
+        /// </summary>
+        /// <remarks>
+        /// TASK-655: this was a no-op, so a migration that dropped a field was recorded as applied while every document
+        /// kept it (measured). Elasticsearch cannot remove a field from an existing mapping, so the mapping keeps the
+        /// field's entry until the index is reindexed into a new mapping; no document carries it.
+        /// </remarks>
         public void DropField(string collectionName, string fieldName)
         {
-            // ElasticSearch does not support removing a field from an existing mapping.
-            // This is a no-op; use reindex with a script via Raw() if needed.
+            var response = _client.UpdateByQuery<dynamic>(descriptor => descriptor
+                .Index(collectionName)
+                .Query(q => q.Exists(e => e.Field(fieldName)))
+                .Refresh()
+                .Script(s => s
+                    .Source("ctx._source.remove(params.field)")
+                    .Lang("painless")
+                    .Params(p => p.Add("field", fieldName))
+                )
+            );
+            ElasticSearchDataMigrator.EnsureValid(response, $"DropField '{fieldName}' on index '{collectionName}'");
         }
 
         public void RenameField(string collectionName, string oldName, string newName)

@@ -1128,18 +1128,47 @@ such query (SH-M181, TASK-152).
   `_unique` onto the `Tables.IndexDefinition` it hands the connector; before that copy existed the
   declared constraint was silently absent on every provider
 
-### Requirement: Document backends treat schema operations as no-ops or index-policy edits
+### Requirement: Document backends drop what a migration asks to drop, or refuse
 
-The system SHALL implement `AddField`, `DropField` and `DropIndex` as **no-ops** for MongoDB
-(`AddField`, `DropField`), ElasticSearch (`AddField`, `DropField`, `DropIndex`), RavenDB (`AddField`,
-`DropField`) and InfluxDB (`AddField`, `DropIndex`). InfluxDB `DropField` and `RenameField` SHALL throw
-`NotSupportedException`, so the migration fails and is not recorded (TASK-642: both were no-ops and the runner
-recorded the migration as applied, measured live; whether the other backends' `DropField` / `DropIndex` no-ops may
-stay is [[TASK-655]]). For CosmosDB,
-`AddField` SHALL add `/{field}/?` to the container's indexing-policy included paths and `DropField`
-SHALL add it to the excluded paths, replacing the container only when the path is not already
-present. `DropIndex` SHALL delete the named Raven index (`DeleteIndexOperation`) and SHALL be a
-no-op for CosmosDB.
+The system SHALL implement `AddField` as a **no-op** for MongoDB, ElasticSearch, RavenDB and InfluxDB: on a
+schema-less store a new field can be written at once, so nothing is left undone. For CosmosDB, `AddField` SHALL add
+`/{field}/?` to the container's indexing-policy included paths, replacing the container only when the path is not
+already present.
+
+`DropField` and `DropIndex` SHALL either remove what they name or throw, so a migration never records a drop that did
+not happen (rule 22; TASK-642 for InfluxDB, TASK-655 for the rest: every one below was a no-op, measured live, and
+the runner recorded the migration as applied):
+
+| Backend | `DropField` | `DropIndex` |
+|---|---|---|
+| MongoDB | `UpdateMany` `$unset` over the documents where the field exists, in the migration's session | drops the named index |
+| RavenDB | `PatchByQueryOperation` `FROM '<collection>' UPDATE { delete this.<field>; }`, waited for; names held to `RqlCollection` / `RqlField` (TASK-640) | `DeleteIndexOperation` |
+| CosmosDB | queries the documents where `IS_DEFINED(c["<field>"])` and point-patches each with `Remove /<field>` in its partition; then removes `/{field}/?` from the included and excluded paths | drops the index by its name through `CosmosDBIndexManager`, the door `CreateIndex` creates it through (TASK-628) |
+| ElasticSearch | `_update_by_query` over the documents where the field exists, with `Refresh` and `ctx._source.remove(params.field)`, checked like `RenameField`; the mapping keeps the field's entry until a reindex, since Elasticsearch cannot remove a mapped field | refused with `NotSupportedException`: the builder creates no index (TASK-274), so there is none to drop |
+| InfluxDB | refused with `NotSupportedException` (points are immutable) | refused with `NotSupportedException`, as `CreateIndex` is: InfluxDB has no custom indexes |
+
+#### Scenario: A dropped field is gone from every document
+
+- **Given** documents of which some carry the field, one with a null value, and some do not (measured live on
+  MongoDB, RavenDB, CosmosDB and ElasticSearch)
+- **When** `context.Schema.DropField(collection, field)` runs
+- **Then** no document carries the field afterwards, every other field is unchanged, and on RavenDB another
+  collection's documents keep it. Before TASK-655 every document kept the field and the migration was recorded
+
+#### Scenario: A refused drop fails the migration
+
+- **Given** an ElasticSearch migration whose `Up` calls `DropIndex` (InfluxDB refuses it the same way)
+- **When** the runner migrates
+- **Then** the migration fails with `MigrationException` and `CurrentVersion` stays 0 (before TASK-655 it succeeded
+  and was recorded with nothing dropped)
+
+#### Scenario: CosmosDB reads documents independently of the caller's serializer
+
+- **Given** a `Database` from a `CosmosClient` with the SDK's default (Newtonsoft) serializer
+- **When** `DropField` queries the documents to patch
+- **Then** it reads the query as a stream and parses it with System.Text.Json, so the result does not depend on the
+  serializer (measured: a typed `JsonElement` result through Newtonsoft comes back empty and throws on read).
+  `RenameField` still reads through the client's serializer: [[TASK-659]]
 
 #### Scenario: Renaming a field is emulated per backend
 

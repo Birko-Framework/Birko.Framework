@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-17 — A soft-deleted row no longer blocks the next default or slug
+
+[[TASK-638]]. Measured on all four SQL providers: after a soft delete, the next promotion and the next create of the same
+slug were refused (`StoreUniqueViolationException`), because the deleted row kept its marker and slug while every probe read
+through SoftDelete. A soft delete now retires a default (`IsDefault` false, marker null) on every path. A slug stays
+reserved until hard delete: the probe asks beneath SoftDelete, so the new row gets `widget-2`.
+
 ## 2026-10-16 — ObjectTree can hide null members
 
 [[TASK-652]]. A model class shared by several API products showed the fields a product does not return as `null`

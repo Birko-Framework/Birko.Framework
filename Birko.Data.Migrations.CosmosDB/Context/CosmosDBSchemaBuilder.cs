@@ -56,11 +56,17 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
         return _ledger.Track(new CosmosIndexBuilder(collectionName, indexName, _database), collectionName, indexName);
     }
 
+    /// <summary>
+    /// Drops the index through <see cref="Birko.Data.CosmosDB.IndexManagement.CosmosDBIndexManager"/>, the door
+    /// <see cref="CreateIndex"/>'s <c>Build()</c> creates it through, so a migration's index is dropped by its name.
+    /// </summary>
+    /// <remarks>
+    /// TASK-655: this was a no-op, so a migration that dropped an index was recorded as applied with the index still in
+    /// the indexing policy (measured).
+    /// </remarks>
     public void DropIndex(string collectionName, string indexName)
-    {
-        // Cosmos DB indexes are managed through indexing policy, not individual index objects.
-        // Use Raw() to modify the indexing policy directly if needed.
-    }
+        => new Birko.Data.CosmosDB.IndexManagement.CosmosDBIndexManager(_database)
+            .DropAsync(indexName, collectionName).GetAwaiter().GetResult();
 
     public void AddField(string collectionName, FieldDescriptor field)
     {
@@ -78,20 +84,77 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
         }
     }
 
+    /// <summary>
+    /// Removes the field from every document that has it, with a point patch per document in its own partition, as
+    /// <see cref="RenameField"/> does, and removes the included path <see cref="AddField"/> adds for it.
+    /// </summary>
+    /// <remarks>
+    /// TASK-655: this only excluded the path from indexing, so every document kept the field and the migration was
+    /// recorded as having dropped it (measured). Excluding the path is not a drop, and it left a policy that a later
+    /// <see cref="AddField"/> of the same name would contradict, so the indexing policy now keeps no entry for the field.
+    /// </remarks>
     public void DropField(string collectionName, string fieldName)
     {
-        // Cosmos DB does not support removing fields from existing documents.
-        // Optionally exclude the path from indexing.
         var container = _database.GetContainer(collectionName);
-        var response = container.ReadContainerAsync().GetAwaiter().GetResult();
-        var properties = response.Resource;
+        var properties = container.ReadContainerAsync().GetAwaiter().GetResult().Resource;
+        var pkProperty = (properties.PartitionKeyPath ?? "/id").TrimStart('/').Split('/')[0];
+        if (string.IsNullOrEmpty(pkProperty)) pkProperty = "id";
+
+        var fieldPath = CosmosDBDataMigrator.QuoteFieldPath(fieldName);
+        var projection = new List<string> { "c.id" };
+        if (pkProperty != "id") projection.Add($"c.{pkProperty}");
+        var query = $"SELECT {string.Join(", ", projection)} FROM c WHERE IS_DEFINED({fieldPath})";
+        var pointer = "/" + fieldName.Replace("~", "~0").Replace("/", "~1");
+        foreach (var item in QueryDocuments(container, query))
+        {
+            string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            if (id == null) continue;
+
+            var pk = pkProperty == "id" ? new PartitionKey(id) : CosmosDBDataMigrator.BuildPartitionKey(item, pkProperty);
+            try
+            {
+                container.PatchItemAsync<dynamic>(id, pk, new[] { PatchOperation.Remove(pointer) }).GetAwaiter().GetResult();
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.BadRequest || ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                // As in RenameField (CR-M103): the field or the document went away since the query; nothing to remove.
+            }
+        }
 
         var path = $"/{fieldName}/?";
-        if (!properties.IndexingPolicy.ExcludedPaths.Any(p => p.Path == path))
+        var removed = RemoveWhere(properties.IndexingPolicy.IncludedPaths, p => p.Path == path)
+                    + RemoveWhere(properties.IndexingPolicy.ExcludedPaths, p => p.Path == path);
+        if (removed > 0)
         {
-            properties.IndexingPolicy.ExcludedPaths.Add(new ExcludedPath { Path = path });
             container.ReplaceContainerAsync(properties).GetAwaiter().GetResult();
         }
+    }
+
+    /// <summary>
+    /// The documents a query returns, read as a stream and parsed with System.Text.Json, so the result does not depend on
+    /// the serializer of the client the caller built the <see cref="Database"/> with. Measured on TASK-655: through the
+    /// SDK's default (Newtonsoft) serializer a <see cref="JsonElement"/> result comes back empty, and reading it throws.
+    /// </summary>
+    private static IEnumerable<JsonElement> QueryDocuments(Container container, string query)
+    {
+        using var iterator = container.GetItemQueryStreamIterator(new QueryDefinition(query));
+        while (iterator.HasMoreResults)
+        {
+            using var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
+            response.EnsureSuccessStatusCode();
+            using var page = JsonDocument.Parse(response.Content);
+            foreach (var document in page.RootElement.GetProperty("Documents").EnumerateArray())
+            {
+                yield return document.Clone();
+            }
+        }
+    }
+
+    private static int RemoveWhere<TPath>(System.Collections.ObjectModel.Collection<TPath> paths, Func<TPath, bool> match)
+    {
+        var doomed = paths.Where(match).ToList();
+        foreach (var p in doomed) paths.Remove(p);
+        return doomed.Count;
     }
 
     public void RenameField(string collectionName, string oldName, string newName)

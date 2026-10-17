@@ -57,10 +57,18 @@ namespace Birko.Data.Migrations.InfluxDB.Context
             return _ledger.Track(new InfluxIndexBuilder(collectionName, indexName), collectionName, indexName);
         }
 
+        /// <summary>
+        /// Refused, as <see cref="CreateIndex"/>'s <c>Build()</c> is: InfluxDB has no custom index to drop.
+        /// </summary>
+        /// <remarks>
+        /// TASK-655: this was a no-op, so a migration that dropped an index was recorded as applied with nothing dropped.
+        /// </remarks>
         public void DropIndex(string collectionName, string indexName)
-        {
-            // InfluxDB does not support custom indexes — no-op.
-        }
+            => throw Birko.Data.Patterns.Schema.IndexBuilderSupport.Unsupported(
+                "InfluxDB",
+                $"DropIndex '{indexName}' on '{collectionName}'",
+                "InfluxDB has no custom indexes — the time-series structure is implicit",
+                "Nothing to drop; remove the call from the migration.");
 
         public void AddField(string collectionName, FieldDescriptor field)
         {

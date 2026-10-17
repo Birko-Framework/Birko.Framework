@@ -13,7 +13,7 @@ Cosmos DB migration backend using Database. Implements platform-agnostic IMigrat
 
 ### Context
 - `CosmosDBMigrationContext` — Wraps Database. Schema and Data properties. Raw() exposes Database.
-- `CosmosDBSchemaBuilder` — CreateCollection creates containers. AddField updates indexing policy included paths. DropIndex modifies IndexingPolicy.
+- `CosmosDBSchemaBuilder` — CreateCollection creates containers. AddField updates indexing policy included paths. DropField patches the field out of every document; DropIndex drops by name through CosmosDBIndexManager (TASK-655).
 - `CosmosDBDataMigrator` — UpdateDocuments via GetItemQueryIterator + ReplaceItemAsync, DeleteDocuments via DeleteStreamIterator.
 
 ### Store
