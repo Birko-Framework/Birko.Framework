@@ -103,6 +103,20 @@ public class SpecificationPagingTriageTests
         Agree(new Rules.Rule(nameof(W.Qty), ComparisonOperator.GreaterThan, 10.5), 0);
     }
 
+    /// <summary>
+    /// TASK-645: SH-M294's fix covered the six comparison operators only. Between and In still converted
+    /// with ChangeType, so `Qty Between 10.5..20` selected Qty 10 and `Qty In [10.6]` selected Qty 11.
+    /// </summary>
+    [Fact]
+    public void Between_and_In_do_not_round_a_fractional_value_against_an_integral_member()
+    {
+        Agree(Rules.Rule.Between(nameof(W.Qty), 10.5, 20), 0);
+        Agree(Rules.Rule.Between(nameof(W.Qty), 3, 10.5), 1, 2);
+        Agree(new Rules.Rule(nameof(W.Qty), ComparisonOperator.In, new object[] { 10.6 }));
+        Agree(new Rules.Rule(nameof(W.Qty), ComparisonOperator.In, new object[] { 10.6, 11.0, 3 }), 0, 2);
+        Agree(new Rules.Rule(nameof(W.Qty), ComparisonOperator.NotIn, new object[] { 10.6 }), 0, 1, 2);
+    }
+
     /// <summary>SH-M296: a null needle was "", which every string contains; negated, it inverted again in memory.</summary>
     [Fact]
     public void A_null_needle_matches_nothing_in_either_polarity_on_both_engines()

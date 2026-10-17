@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Rule `Between` and `In` no longer round a fractional value (2026-10-17)
+
+[[TASK-645]]. Measured: `Qty Between 10.5..20` selected Qty 10 at the store and `Qty In [10.6]` selected 11, while
+the in-memory evaluator compared exactly. Each bound and candidate now goes through the comparison TASK-171 fixed,
+so both engines agree.
 ### ElasticSearch refuses a comparison it cannot translate instead of testing existence (2026-10-17)
 
 [[TASK-644]]. Measured: `x.Text == x.Text.Trim()` and `x.Owner.Name == x.Text` ran as "Text is missing", because an
@@ -332,11 +337,6 @@ reads null as MongoDB does. InfluxDB, ES, RavenDB and Cosmos report what they ca
 `Missing`, `ColumnsDiffer`, `UniquenessDiffers`, or not compared. `IndexDeclarationDriftHealthCheck` is in the new
 `Birko.Health.Data.IndexManagement`. Fixed on the way: a MongoDB text index read as fields `_fts`, `_ftsx`, and a RavenDB
 lookup of an absent index threw instead of answering null.
-### Cosmos DB index manager: indexes answer by their name; Unique refused (2026-10-15)
-
-[[TASK-628]]. A Cosmos policy has no index names, so `ExistsAsync("IX_Code")` was false for the index just created, and a
-composite could never be dropped. Names now live in a `__birko_indexes` registry container; the policy stays the truth.
-`Unique` is refused, as are `Sparse` and `ExpireAfter`. Measured: on `/id` partitioning, a unique key rejects nothing.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

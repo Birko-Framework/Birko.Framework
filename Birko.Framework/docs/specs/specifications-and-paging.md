@@ -422,7 +422,8 @@ SH-M293, [[TASK-171]]); and returns false when the conversion raises `InvalidCas
 an **unevaluable** match-none leaf for that leaf rather than throwing — unevaluable rather than merely
 false, so that a negated comparison with a non-convertible value cannot invert into match-all.
 
-For the six comparison operators, a fractional `double` / `float` / `decimal` value against an integral
+For the six comparison operators, and for each bound of `Between` and each candidate of `In` / `NotIn`
+(TASK-645), a fractional `double` / `float` / `decimal` value against an integral
 member SHALL be compared in `double` (the member converted to `double` / `double?`) rather than rounded to
 the member's type (SH-M294), and a comparison the member type has no operator for (`string > string`,
 `bool >= bool`) SHALL be an unevaluable match-none rather than an exception (SH-M291); `Between` SHALL
@@ -463,6 +464,14 @@ degrade the same way when its type has no ordering.
 - **Given** a rule `Qty Equal 10.7` on an `int` property
 - **When** `ToExpression()` is built
 - **Then** the body is `(double)x.Qty == 10.7`, which no integer satisfies — previously `Convert.ChangeType` rounded the value to `11`
+
+#### Scenario: Between and In do not round a fractional value either
+
+- **Given** `Qty Between 10.5 and 20`, or `Qty In [10.6]`, on an `int` property holding 10 and 11
+- **When** `ToExpression()` is built and run, and the same rule is evaluated in memory
+- **Then** both engines select 11 for the `Between` and nothing for the `In`: each bound and candidate is built by
+  the same comparison as `GreaterThanOrEqual` / `LessThanOrEqual` / `Equal`. Measured before TASK-645: the store
+  filter also selected 10 for the `Between` (the bound rounded to 10) and 11 for the `In`
 
 #### Scenario: Ordering a type with no comparison operator
 

@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Cosmos DB index manager: indexes answer by their name; Unique refused
+
+[[TASK-628]]. A Cosmos policy has no index names, so `ExistsAsync("IX_Code")` was false for the index just created, and a
+composite could never be dropped. Names now live in a `__birko_indexes` registry container; the policy stays the truth.
+`Unique` is refused, as are `Sparse` and `ExpireAfter`. Measured: on `/id` partitioning, a unique key rejects nothing.
+
 ## 2026-10-15 — A migration that forgets `Build()` fails instead of being recorded
 
 [[TASK-627]]. `CreateIndex(...).WithField(...)` without `Build()` emitted nothing, and the runner recorded the migration

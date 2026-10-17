@@ -285,18 +285,13 @@ public static class RuleExpressionConverter
 
     private static Leaf BuildBetween(MemberExpression member, object? lower, object? upper)
     {
-        if (!TryConvertConstant(lower, member.Type, out var lowerConst) || !TryConvertConstant(upper, member.Type, out var upperConst))
-            return Leaf.Unevaluable();
-        try
-        {
-            return Leaf.Predicate(Expression.AndAlso(
-                Expression.GreaterThanOrEqual(member, lowerConst),
-                Expression.LessThanOrEqual(member, upperConst)));
-        }
-        catch (InvalidOperationException)
-        {
-            return Leaf.Unevaluable(); // SH-M291: no ordering for this type
-        }
+        // TASK-645: each bound through BuildComparison, the one place a fractional value against an integral member is
+        // compared in double (SH-M294). ChangeType rounded here, so `Qty Between 10.5..20` selected Qty 10.
+        var from = BuildComparison(member, lower, Expression.GreaterThanOrEqual);
+        var to = BuildComparison(member, upper, Expression.LessThanOrEqual);
+        if (from.Degraded || to.Degraded)
+            return Leaf.Unevaluable(); // an unconvertible bound, or SH-M291: no ordering for this type
+        return Leaf.Predicate(Expression.AndAlso(from.Expr, to.Expr));
     }
 
     private static Leaf BuildLike(MemberExpression member, object? value)
@@ -334,10 +329,11 @@ public static class RuleExpressionConverter
         Expression? combined = null;
         foreach (var item in candidates)
         {
-            if (!TryConvertConstant(item, member.Type, out var constant))
+            // TASK-645: through BuildComparison, as Between; ChangeType rounded, so `Qty In [10.6]` selected Qty 11.
+            var eq = BuildComparison(member, item, Expression.Equal);
+            if (eq.Degraded)
                 return Leaf.Unevaluable();
-            var eq = Expression.Equal(member, constant);
-            combined = combined is null ? eq : Expression.OrElse(combined, eq);
+            combined = combined is null ? eq.Expr : Expression.OrElse(combined, eq.Expr);
         }
         // Empty set: a genuine predicate matching nothing, so NotIn over it matches everything. Predicate, not
         // Unevaluable, precisely so Negate CAN invert it.

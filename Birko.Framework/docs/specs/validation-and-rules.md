@@ -636,14 +636,15 @@ corresponding `Expression` binary node — on a `string` property plain `==` / `
 store-translatable form, so string equality is **case-sensitive** at the store (SH-M295, TASK-144) — with
 the member converted to `double` when the value is fractional and the member integral (SH-M294); a
 comparison for which the type defines no operator (`string > string`, `bool >= bool`) as an unevaluable
-leaf (SH-M291); `Between` as `member >= lower && member <= upper`, unevaluable when a bound cannot be
-converted or the type has no ordering; `Contains` / `StartsWith` / `EndsWith` as a null-guarded
+leaf (SH-M291); `Between` as `member >= lower && member <= upper`, each bound built by that same comparison
+(so a fractional bound against an integral member is compared in `double`, TASK-645), unevaluable when a bound
+cannot be converted or the type has no ordering; `Contains` / `StartsWith` / `EndsWith` as a null-guarded
 `string` method call with `OrdinalIgnoreCase`, unevaluable on a non-`string` member or for a `null`
 needle (SH-M296); `NotContains` / `NotIn` as the `Not` of their positive form unless that form is
 unevaluable; `Like` by rewriting a `%` at the start and/or end onto those string methods (no wildcard →
 case-sensitive `==`), unevaluable on a non-`string` member, for a `null` or empty pattern, or for an
-interior `%`; and `In` as an `OrElse` chain of equality tests over the candidates (a non-collection value
-is one candidate), unevaluable for a `null` set or any candidate that cannot be converted. An unevaluable
+interior `%`; and `In` as an `OrElse` chain of the same equality comparison over the candidates (a
+non-collection value is one candidate; a fractional candidate against an integral member compared in `double`), unevaluable for a `null` set or any candidate that cannot be converted. An unevaluable
 leaf is the constant `false` and is **never negated**. An operator with no arm SHALL throw
 `NotSupportedException` naming the operator and the field, rather than becoming a constant (SH-H041).
 Leaf `IsNegated` (combined with an enclosing negated group) SHALL wrap a non-degraded operator body in
