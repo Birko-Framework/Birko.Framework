@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — A migration that forgets `Build()` fails instead of being recorded
+
+[[TASK-627]]. `CreateIndex(...).WithField(...)` without `Build()` emitted nothing, and the runner recorded the migration
+as applied. Every runner now fails it with a `MigrationException` naming each unbuilt chain, before recording. The rule
+holds on all six providers, for collections too, even where `CreateCollection` creates eagerly.
+
 ## 2026-10-15 — Security: forwarding headers from trusted proxies only; `?token=` only where a header cannot be set
 
 [[TASK-165]]. **BREAKING behind a proxy:** a token binding's address came from `X-Forwarded-For` written by anyone; set

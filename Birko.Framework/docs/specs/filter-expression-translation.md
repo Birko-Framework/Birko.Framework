@@ -1840,7 +1840,9 @@ non-null `Field` and the value from whichever yielded a non-null `Value`, and SH
 it could not bound*), emit `TermQuery` for `==`, and a `BoolQuery.MustNot` wrapping a
 `TermQuery` for `!=`. When the field is known and the value is null it SHALL emit
 `BoolQuery.MustNot(ExistsQuery)` for `==` and `ExistsQuery` for `!=`, and `null` for any other
-operator. It SHALL return `null` when either field or value is unavailable, and when BOTH operands yield a
+operator, but only when the non-field operand refers to no parameter (a `null` literal, or a closure or
+expression evaluating to null). An operand that still refers to the parameter did not translate, and SHALL
+yield `null` (TASK-644). It SHALL return `null` when either field or value is unavailable, and when BOTH operands yield a
 field (`x.A == x.B`), since a term or range query compares a field with a value (SH-M126). When the field
 comes from the right operand and the left yielded none, it SHALL mirror an ordering operator (`>` ↔ `<`,
 `>=` ↔ `<=`) before building the query (SH-M124, TASK-153).
@@ -1882,14 +1884,15 @@ comes from the right operand and the left yielded none, it SHALL mirror an order
 - **Then** `null` is returned and `ParseFilterQuery` throws. Before TASK-153 the missing value made it the
   null comparison, `MustNot(exists a)` — an unrelated set of documents
 
-#### Scenario: An untranslatable operand beside a field is still read as a null test
+#### Scenario: An untranslatable operand beside a field is refused, not read as a null test
 
-- **Given** `x => x.Name == x.Sub.Name` or `x => x.Code == x.Name.Substring(1)`, where the second operand
-  translates to `null` (a nested member, an unknown parameter-bound call)
-- **When** `ParseComparison` finds a field on one side and no query at all on the other
-- **Then** the field-and-field refusal does not apply (only one side yielded a field), the value is `null`,
-  and the null-comparison branch emits `BoolQuery { MustNot = [ExistsQuery name.keyword] }` for `==` (an
-  `ExistsQuery` for `!=`) — "no value" and "untranslatable" are not told apart here
+- **Given** `x => x.Text == x.Text.Trim()`, `x => x.Owner.Name == x.Text` or the mirrored forms, where one
+  operand translates to a field and the other to `null` (a nested member, an unknown parameter-bound call)
+- **When** `ParseComparison` reaches the null-comparison branch
+- **Then** the non-field operand still refers to the parameter, so `null` is returned and `ParseFilterQuery`
+  throws `NotSupportedException`; a `null` literal or a closure holding null on either side is still the
+  existence test. Measured before TASK-644: each such comparison ran as `MustNot(exists text)` (or `exists` for
+  `!=`), an unrelated set of documents, which also bypassed the nested-member refusal (SH-M142)
 
 ### Requirement: ElasticSearch field naming
 

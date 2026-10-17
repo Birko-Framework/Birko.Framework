@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### ElasticSearch refuses a comparison it cannot translate instead of testing existence (2026-10-17)
+
+[[TASK-644]]. Measured: `x.Text == x.Text.Trim()` and `x.Owner.Name == x.Text` ran as "Text is missing", because an
+untranslatable operand looked like `null`. Only an operand that refers to no parameter is a null comparison now;
+anything else throws `NotSupportedException`.
 ### InfluxDB field renames and ElasticSearch index checks no longer report false success (2026-10-17)
 
 [[TASK-642]], [[TASK-643]]. Measured: an InfluxDB migration calling `RenameField` or `DropField` was recorded as
@@ -332,11 +337,6 @@ lookup of an absent index threw instead of answering null.
 [[TASK-628]]. A Cosmos policy has no index names, so `ExistsAsync("IX_Code")` was false for the index just created, and a
 composite could never be dropped. Names now live in a `__birko_indexes` registry container; the policy stays the truth.
 `Unique` is refused, as are `Sparse` and `ExpireAfter`. Measured: on `/id` partitioning, a unique key rejects nothing.
-### A migration that forgets `Build()` fails instead of being recorded (2026-10-15)
-
-[[TASK-627]]. `CreateIndex(...).WithField(...)` without `Build()` emitted nothing, and the runner recorded the migration
-as applied. Every runner now fails it with a `MigrationException` naming each unbuilt chain, before recording. The rule
-holds on all six providers, for collections too, even where `CreateCollection` creates eagerly.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

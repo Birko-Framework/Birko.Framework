@@ -316,6 +316,14 @@ namespace Birko.Data.ElasticSearch
             // Handle null comparisons: Equal(member, null) → must_not exists, NotEqual(member, null) → exists
             if (field != null && value == null)
             {
+                // TASK-644: a null value means either "the operand is null" or "the operand did not translate", and
+                // only the first is a null comparison. `x.Text == x.Text.Trim()` and `x.Owner.Name == x.Text` ran as
+                // "Text is missing". An operand that still refers to the parameter cannot be the null constant, so
+                // it is refused (null, which ParseFilterQuery turns into a throw).
+                var valueOperand = left?.Field != null ? binary.Right : binary.Left;
+                if (ContainsParameter(valueOperand))
+                    return null;
+
                 return nodeType switch
                 {
                     ExpressionType.Equal => new BoolQuery
