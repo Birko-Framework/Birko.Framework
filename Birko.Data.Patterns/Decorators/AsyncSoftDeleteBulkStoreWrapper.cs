@@ -75,7 +75,7 @@ public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWr
         var ids = items.Select(i => i.Guid).ToList();
         var already = (await _innerStore.ReadAsync(x => ids.Contains(x.Guid) && x.DeletedAt != null, null, null, null, ct)).Select(x => x.Guid!.Value).ToHashSet();
         var live = items.Where(i => i.Guid == null || !already.Contains(i.Guid.Value)).ToList();
-        foreach (var item in live) item.DeletedAt = now;
+        foreach (var item in live) SoftDeleteFilter.Stamp(item, now);
         if (live.Count > 0)
             await _innerStore.UpdateAsync(live, ct: ct);
     }
@@ -88,8 +88,7 @@ public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWr
         // SH-M332 (TASK-159): a null filter became "soft-delete every active row". SH-M333: one native UPDATE, not a
         // per-row read-modify-write that a failure leaves half-applied.
         RequireCallerFilter(filter, "delete");
-        var deletion = new PropertyUpdate<T>().Set(x => x.DeletedAt, (DateTime?)_clock.UtcNow);
-        return _innerStore.UpdateAsync(SoftDeleteFilter.CombineWithNotDeleted(filter), deletion, ct);
+        return _innerStore.UpdateAsync(SoftDeleteFilter.CombineWithNotDeleted(filter), SoftDeleteFilter.Deletion<T>(_clock.UtcNow), ct);
     }
 
     private static void RequireCallerFilter(Expression<Func<T, bool>> filter, string operation)

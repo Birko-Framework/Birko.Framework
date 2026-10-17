@@ -94,7 +94,8 @@ public static class StoreWrapperBuilder
         }
 
         // Sluggable: normalizes slug and ensures uniqueness (applies to ISluggable entities)
-        // Positioned after SoftDelete so uniqueness checks only consider non-deleted records.
+        // Positioned outside SoftDelete, so its reads hide deleted rows; its slug probe asks beneath SoftDelete, because a
+        // soft-deleted row keeps its slug (TASK-638).
         if (typeof(ISluggable).IsAssignableFrom(typeof(T)))
         {
             store = WrapSingle(typeof(AsyncSluggableBulkStoreWrapper<,>), store);

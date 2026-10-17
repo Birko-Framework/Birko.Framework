@@ -118,7 +118,8 @@ The system SHALL place the uniqueness-enforcing decorators (Default, Sluggable) 
 Tenant decorator, and the Tenant decorator OUTSIDE the enriching decorators (Audit, Timestamp,
 EventSourcing) — so that the probe and corrective queries the outer decorators issue against their own
 inner store pass through the tenant filter and the soft-delete filter, while a tenant guard rejection
-occurs before any event is recorded.
+occurs before any event is recorded. The one exception is the slug probe, which asks beneath the SoftDelete
+decorator directly inside it, though still through Tenant, because a soft-deleted row keeps its slug (TASK-638).
 
 #### Scenario: Single-default uniqueness is scoped per tenant
 
@@ -126,11 +127,11 @@ occurs before any event is recorded.
 - **When** an entity with `IsDefault = true` is created
 - **Then** `AsyncDefaultStoreWrapper.UnsetOtherDefaultsAsync` reads `e => e.IsDefault` through the inner tenant decorator, so only the current tenant's other defaults are cleared and the sibling tenant's default row is left untouched
 
-#### Scenario: Slug uniqueness ignores soft-deleted rows
+#### Scenario: A soft-deleted row keeps its slug
 
 - **Given** a chain built for a `T` implementing `ISluggable` and `ISoftDeletable`, and an existing row with `Slug = "widget"` whose `DeletedAt` is non-null
 - **When** a new entity resolving to base slug `widget` is created
-- **Then** the Sluggable wrapper's `_innerStore.Read(entity => entity.Slug == slug)` passes through the SoftDelete wrapper, which appends `DeletedAt == null`, so the deleted row is not seen and the new entity keeps the slug `widget` with no numeric suffix
+- **Then** the Sluggable wrapper's probe (`SlugProbe`) asks the store beneath the `ISoftDeleteStoreWrapper` directly inside it, so the deleted row is seen and the new entity gets `widget-2`; the wrapper's own reads still pass through SoftDelete and hide the deleted row (TASK-638: through SoftDelete the probe said "free" for a slug the unique index still held, and the store refused the create)
 
 #### Scenario: Corrective default-clearing writes pass through the inner enrichers
 
@@ -457,7 +458,9 @@ read-by-Guid by fetching the entity and returning null when its `DeletedAt` is n
 The system SHALL, on every delete path of the soft-delete decorators, set `DeletedAt` to `_clock.UtcNow` and
 issue an UPDATE against the inner store instead of a delete — using the inner single-entity update for
 `Delete(T)`, the inner bulk update for `Delete(IEnumerable<T>)`, and the inner
-filter-plus-`PropertyUpdate<T>` update (one native `Set(x => x.DeletedAt, now)`) for `Delete(filter)`. A row
+filter-plus-`PropertyUpdate<T>` update (one native `Set(x => x.DeletedAt, now)`) for `Delete(filter)`. Every
+path SHALL also retire a default through `SoftDeleteFilter.Stamp` / `Deletion`: `IsDefault = false` on an
+`IDefault`, and `DefaultMarker = null` on an `IDefaultMarker`, in the same write (TASK-638). A row
 the inner store already holds as soft-deleted SHALL keep its original `DeletedAt`: the entity-based paths read
 the stored state first and skip such rows, and the filter path combines the filter with `DeletedAt == null`.
 `Delete(filter)` SHALL refuse a null filter with `ArgumentNullException` and a filter that reduces to every row
@@ -468,6 +471,12 @@ with `WholeTableWriteException` (via `BoundedFilterGuard`; the explicit `x => tr
 - **Given** an active entity and a clock reading `2026-06-01T00:00:00Z`
 - **When** `SoftDeleteStoreWrapper.Delete(data)` is called
 - **Then** `data.DeletedAt` is `2026-06-01T00:00:00Z` and `_innerStore.Update(data)` is invoked — with no `storeDelegate` forwarded — and no row is physically removed
+
+#### Scenario: Soft-deleting the default retires it
+
+- **Given** an `IDefaultMarker` + `ISoftDeletable` model whose default row holds `DefaultMarker = true` under a unique index
+- **When** it is soft-deleted by entity, by collection or by filter, and another entity is then promoted through the Default decorator
+- **Then** the deleted row is stored with `IsDefault = false` and `DefaultMarker = null`, so the promotion is accepted (measured on SQLite, PostgreSQL, MySQL and SQL Server); before, the store refused it with `StoreUniqueViolationException` and the retry could not help, because the Default decorator's probes cannot see the deleted row
 
 #### Scenario: Deleting an already-deleted entity is a no-op
 

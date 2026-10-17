@@ -97,7 +97,7 @@ public class SluggableStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
                     return true;
                 if (data.IsReservedSlug(slug))
                     return true;
-                var existing = _innerStore.Read(BuildSlugFilter(slug, excludeId));
+                var existing = SlugProbe.Read(BuildSlugFilter(slug, excludeId));
                 // SH-M326 (TASK-159): ANY other row holding the slug, asked in the filter. Reading one row and comparing its
                 // Guid answered "free" whenever the store happened to return this row, so an existing duplicate survived.
                 return existing is not null;
@@ -107,7 +107,14 @@ public class SluggableStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 
     /// <summary>Whether a row other than <paramref name="excludeId"/> now holds <paramref name="slug"/>.</summary>
     protected bool SlugHeld(string? slug, Guid? excludeId)
-        => !string.IsNullOrEmpty(slug) && _innerStore.Read(BuildSlugFilter(slug, excludeId)) is not null;
+        => !string.IsNullOrEmpty(slug) && SlugProbe.Read(BuildSlugFilter(slug, excludeId)) is not null;
+
+    /// <summary>
+    /// Where the slug probe asks: beneath a soft-delete decorator, because a soft-deleted row keeps its slug until it is
+    /// removed for good (TASK-638). Asking through it answered "free" for a slug the unique index still held.
+    /// </summary>
+    protected IStore<T> SlugProbe
+        => _innerStore is ISoftDeleteStoreWrapper softDelete && softDelete.GetInnerStore() is IStore<T> beneath ? beneath : _innerStore;
 
     protected static Expression<Func<T, bool>> BuildSlugFilter(string slug, Guid? excludeId = null)
     {

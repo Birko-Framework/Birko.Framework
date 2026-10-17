@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Schema drift produces its repair SQL
+
+[[TASK-633]]. `connector.PlanRepair(typeof(T))` turns a drift report into statements a host reviews and runs itself:
+`EnsureColumns`' own ADD for a missing column (its `DEFAULT` fills the existing rows), a rename for a case-only mismatch,
+and every other drift listed with why. `Requirements` says what the connection needs: a SQLite decimal ADD needs
+`SqLiteDecimal.Register` (the `sqlite3` CLI refuses it). Prerequisite of Symbio TASK-932.
+
 ## 2026-10-15 — BREAKING: the tenant sync provider runs the shared sync engine
 
 [[TASK-630]]. `TenantSyncProvider` was a 1,107-line copy of the engine that had drifted in eleven ways. It is now

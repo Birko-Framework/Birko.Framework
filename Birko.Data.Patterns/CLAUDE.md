@@ -25,6 +25,10 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 - A soft-deleted row is NOT FOUND by an update (`EntityNotFoundException`; bulk writes the live items first), an
   already-deleted row keeps its `DeletedAt`, and a filtered write checks the caller's filter (null / reducing-to-all
   refused) before the not-deleted clause is added (TASK-159)
+- Every delete path retires a default in the same write (`SoftDeleteFilter.Stamp` / `Deletion`): `IsDefault = false`,
+  `DefaultMarker = null`. A kept marker refused every later promotion under the unique index (TASK-638)
+- `ISoftDeleteStoreWrapper` marks the four wrappers; the Sluggable probe asks beneath one directly inside it, because a
+  soft-deleted row keeps its slug until it is removed for good (TASK-638)
 
 ### Audit
 - `IAuditable` - Interface with `CreatedBy`, `UpdatedBy` properties (Guid?)
@@ -52,7 +56,7 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 
 ### Sluggable
 - `ISluggable` - Interface with `Slug` property (string?), `GetSlugSource()` method and `IsReservedSlug(slug)` (default `false`; a reserved slug is de-duplicated like a taken one — e.g. a literal route segment beside `{slug}`, TASK-505)
-- `SlugGenerator` - Static utility for slug normalization (lowercase, diacritics removal, hyphen delimiters) and uniqueness checking with numeric suffixes (-1, -2, etc.)
+- `SlugGenerator` - Static utility for slug normalization (lowercase, diacritics removal, hyphen delimiters) and uniqueness checking with numeric suffixes (-2, -3, etc.)
 - `SluggableStoreWrapper<T>` - Wraps `IStore<T>`, auto-generates slug from `GetSlugSource()` on create/update, ensures uniqueness
 - `SluggableBulkStoreWrapper<T>` - Bulk store variant with internal collision tracking within batch creates
 - `AsyncSluggableStoreWrapper<T>` - Async store variant

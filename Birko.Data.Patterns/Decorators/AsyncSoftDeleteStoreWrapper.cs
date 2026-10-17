@@ -12,7 +12,7 @@ namespace Birko.Data.Patterns.Decorators;
 /// <summary>
 /// Async store wrapper that adds soft-delete behavior.
 /// </summary>
-public class AsyncSoftDeleteStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<T>
+public class AsyncSoftDeleteStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<T>, ISoftDeleteStoreWrapper
     where TStore : IAsyncStore<T>
     where T : Data.Models.AbstractModel, ISoftDeletable
 {
@@ -63,7 +63,7 @@ public class AsyncSoftDeleteStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrap
         // SH-M325 (TASK-159): an already-deleted row keeps its original deletion instant.
         if (data.Guid != null && (await _innerStore.ReadAsync(data.Guid.Value, ct))?.DeletedAt != null)
             return;
-        data.DeletedAt = _clock.UtcNow;
+        SoftDeleteFilter.Stamp(data, _clock.UtcNow);
         await _innerStore.UpdateAsync(data, ct: ct);
     }
 

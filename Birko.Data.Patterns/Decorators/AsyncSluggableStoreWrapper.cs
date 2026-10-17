@@ -105,7 +105,7 @@ public class AsyncSluggableStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
                     return true;
                 if (data.IsReservedSlug(slug))
                     return true;
-                var existing = await _innerStore.ReadAsync(BuildSlugFilter(slug, excludeId), ct);
+                var existing = await SlugProbe.ReadAsync(BuildSlugFilter(slug, excludeId), ct);
                 // SH-M326 (TASK-159): ANY other row holding the slug, asked in the filter. Reading one row and comparing its
                 // Guid answered "free" whenever the store happened to return this row, so an existing duplicate survived.
                 return existing is not null;
@@ -113,12 +113,20 @@ public class AsyncSluggableStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
             fallback: "item");
     }
 
+    /// <summary>Whether a row other than <paramref name="excludeId"/> now holds <paramref name="slug"/>.</summary>
+    protected async Task<bool> SlugHeldAsync(string? slug, Guid? excludeId, CancellationToken ct)
+        => !string.IsNullOrEmpty(slug) && await SlugProbe.ReadAsync(BuildSlugFilter(slug, excludeId), ct) is not null;
+
+    /// <summary>
+    /// Where the slug probe asks: beneath a soft-delete decorator, because a soft-deleted row keeps its slug until it is
+    /// removed for good (TASK-638). Asking through it answered "free" for a slug the unique index still held.
+    /// </summary>
+    protected IAsyncStore<T> SlugProbe
+        => _innerStore is ISoftDeleteStoreWrapper softDelete && softDelete.GetInnerStore() is IAsyncStore<T> beneath ? beneath : _innerStore;
+
     /// <summary>
     /// Builds an expression filter for matching a specific slug value.
     /// </summary>
-    /// <summary>Whether a row other than <paramref name="excludeId"/> now holds <paramref name="slug"/>.</summary>
-    protected async Task<bool> SlugHeldAsync(string? slug, Guid? excludeId, CancellationToken ct)
-        => !string.IsNullOrEmpty(slug) && await _innerStore.ReadAsync(BuildSlugFilter(slug, excludeId), ct) is not null;
 
     protected static Expression<Func<T, bool>> BuildSlugFilter(string slug, Guid? excludeId = null)
     {

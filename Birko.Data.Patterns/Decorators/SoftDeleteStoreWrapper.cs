@@ -12,7 +12,7 @@ namespace Birko.Data.Patterns.Decorators;
 /// Read/Count operations auto-filter out deleted entities.
 /// Delete operations set DeletedAt instead of removing.
 /// </summary>
-public class SoftDeleteStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
+public class SoftDeleteStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>, ISoftDeleteStoreWrapper
     where TStore : IStore<T>
     where T : Data.Models.AbstractModel, ISoftDeletable
 {
@@ -63,7 +63,7 @@ public class SoftDeleteStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
         // SH-M325 (TASK-159): an already-deleted row keeps its original deletion instant.
         if (data.Guid != null && _innerStore.Read(data.Guid.Value)?.DeletedAt != null)
             return;
-        data.DeletedAt = _clock.UtcNow;
+        SoftDeleteFilter.Stamp(data, _clock.UtcNow);
         _innerStore.Update(data);
     }
 

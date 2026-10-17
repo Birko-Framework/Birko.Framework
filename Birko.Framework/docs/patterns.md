@@ -66,7 +66,9 @@ await softStore.DeleteAsync(x => x.IsExpired);                  // Soft-deletes 
 
 A soft-deleted row is invisible to updates as it is to reads: `Update` of one throws `EntityNotFoundException` (a bulk
 update writes its live items, then reports the deleted Guids), so a stale copy cannot resurrect it. Deleting a row that
-is already deleted keeps its original `DeletedAt`. A filtered `Update` / `Delete` checks **your** filter before adding
+is already deleted keeps its original `DeletedAt`. A soft delete also retires a default: `IsDefault` becomes `false` and
+an `IDefaultMarker`'s marker `null`, on every delete path (TASK-638). The row is invisible, so it cannot be the default,
+and a marker it kept would hold the unique index against every later promotion. A filtered `Update` / `Delete` checks **your** filter before adding
 the not-deleted clause: a null filter throws `ArgumentNullException`, and one that reduces to every row throws
 `WholeTableWriteException` (TASK-159).
 
@@ -230,8 +232,8 @@ promotion they make room for. Measured on SQLite, PostgreSQL, MySQL and SQL Serv
 Auto-generates URL-friendly slugs from entity content and ensures uniqueness.
 
 > **Concurrent writers (TASK-632).** The probe reads before the write, so two callers can both find a slug free. Declare
-> a unique index on the slug column (`[IndexedField("UX_..._Slug", IsUnique: true)]`, with the tenant column first and
-> `WhereNull = DeletedAt` where the model is tenant-scoped or soft-deletable). The store then refuses the loser with
+> a unique index on the slug column (`[IndexedField("UX_..._Slug", IsUnique: true)]`, in a `[CompositeIndex]` with the
+> tenant column first where the model is tenant-scoped). The store then refuses the loser with
 > `StoreUniqueViolationException`, and the wrapper probes again and takes the next suffix (up to 5 attempts). A refusal
 > for another key surfaces at once. A batch create is retried only while none of it is stored. Stores that enforce no
 > unique index leave the race narrowed, not closed.
@@ -250,7 +252,7 @@ public interface ISluggable
 
 Static utility for slug processing:
 - `Normalize(string)` — converts to lowercase, removes diacritics, replaces whitespace/delimiters with hyphens, strips non-alphanumeric characters
-- `EnsureUnique` / `EnsureUniqueAsync` — appends numeric suffixes (-1, -2, etc.) when a duplicate slug exists in the store
+- `EnsureUnique` / `EnsureUniqueAsync` — appends numeric suffixes (-2, -3, etc.) when a duplicate slug exists in the store
 
 ### Usage
 
@@ -271,10 +273,14 @@ await store.CreateAsync(product); // product.Slug == "my-product"
 
 // Duplicate names get numeric suffixes:
 var product2 = new Product { Name = "My Product" };
-await store.CreateAsync(product2); // product2.Slug == "my-product-1"
+await store.CreateAsync(product2); // product2.Slug == "my-product-2"
 ```
 
-> **Note:** Positioned after SoftDelete in the decorator chain so uniqueness checks only consider non-deleted records.
+> **Soft delete (TASK-638).** A soft-deleted row keeps its slug until it is removed for good, so a new "My Product" after
+> a soft delete gets `my-product-2`, and an old URL never starts pointing at a different item. The wrapper sits outside
+> SoftDelete in the chain, so its reads hide deleted rows, but its slug probe asks the store beneath a SoftDelete wrapper
+> (`ISoftDeleteStoreWrapper`) directly inside it. The unique index needs no `WhereNull = DeletedAt` scope; a scope would
+> only let the store accept a duplicate the probe never offers.
 
 ### Variants
 

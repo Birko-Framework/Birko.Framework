@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A soft-deleted row no longer blocks the next default or slug (2026-10-17)
+
+[[TASK-638]]. Measured on all four SQL providers: after a soft delete, the next promotion and the next create of the same
+slug were refused (`StoreUniqueViolationException`), because the deleted row kept its marker and slug while every probe read
+through SoftDelete. A soft delete now retires a default (`IsDefault` false, marker null) on every path. A slug stays
+reserved until hard delete: the probe asks beneath SoftDelete, so the new row gets `widget-2`.
 ### ObjectTree can hide null members (2026-10-16)
 
 [[TASK-652]]. A model class shared by several API products showed the fields a product does not return as `null`
@@ -327,12 +333,6 @@ a nested `RuleFor` threw on a null parent, and the validating bulk store skipped
 converter is now the only one, with the specification's safety rules and its own nested fields. String `Equal` is plain
 `==` (what stores translate), so it is case-sensitive at the store and case-insensitive in memory. A typed entity's
 unknown or unreachable field now matches nothing in memory too (`IRuleContext.HasFixedFields`).
-### Schema drift produces its repair SQL (2026-10-15)
-
-[[TASK-633]]. `connector.PlanRepair(typeof(T))` turns a drift report into statements a host reviews and runs itself:
-`EnsureColumns`' own ADD for a missing column (its `DEFAULT` fills the existing rows), a rename for a case-only mismatch,
-and every other drift listed with why. `Requirements` says what the connection needs: a SQLite decimal ADD needs
-`SqLiteDecimal.Register` (the `sqlite3` CLI refuses it). Prerequisite of Symbio TASK-932.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
