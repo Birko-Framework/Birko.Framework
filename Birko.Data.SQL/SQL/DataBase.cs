@@ -1498,7 +1498,7 @@ namespace Birko.Data.SQL
         /// Renders a value-expression subtree — column references, Add/Subtract/Multiply/Divide/Modulo
         /// arithmetic, <c>COALESCE</c>, a value-position ternary (<c>CASE WHEN … END</c>), nullable
         /// <c>.Value</c> unwrap, and constants — into a raw SQL fragment such as <c>(Table.A + Table.B)</c>
-        /// or <c>CASE WHEN (Table.Vip &lt;&gt; 0) THEN Table.Premium ELSE Table.Score END</c>. Because the
+        /// or <c>CASE WHEN (Table.Vip = '1') THEN Table.Premium ELSE Table.Score END</c> (a bool column test is <see cref="BoolColumnTest"/>). Because the
         /// WHERE builder binds parameters only later (via the condition strategies), constants inside a
         /// fragment cannot be parameterised and are instead inlined as portable SQL literals
         /// (see <see cref="InlineConstant"/>). Throws <see cref="NotSupportedException"/> for anything it

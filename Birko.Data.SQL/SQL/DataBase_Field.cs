@@ -27,6 +27,16 @@ namespace Birko.Data.SQL
             });
         }
 
+        private static bool IsForeignFieldAttribute(Type type)
+        {
+            for (var t = type; t != null && t != typeof(object); t = t.BaseType)
+            {
+                if (t.FullName == "Birko.Data.SQL.Attributes.Field")
+                    return true;
+            }
+            return false;
+        }
+
         public static IEnumerable<AbstractField> LoadField(PropertyInfo field)
         {
             // Direct cast works when attribute type identity matches (same compilation unit).
@@ -41,9 +51,11 @@ namespace Birko.Data.SQL
             {
                 // Cross-assembly shared-project fallback: attribute compiled into a different assembly
                 // has a different CLR type identity. Reconstruct equivalent local attributes via reflection.
+                // TASK-651: only a foreign FIELD attribute (one whose type derives, by name, from Attributes.Field). The
+                // namespace test also caught [ViewField] / [AggregateField], which live there without being fields, and
+                // a property carrying only one of those threw "comes from another assembly".
                 var crossAttrs = field.GetCustomAttributes(true)
-                    .Where(a => a.GetType().FullName?.StartsWith("Birko.Data.SQL.Attributes.") == true
-                             && !(a is Birko.Data.SQL.Attributes.Field))
+                    .Where(a => !(a is Birko.Data.SQL.Attributes.Field) && IsForeignFieldAttribute(a.GetType()))
                     .ToList();
 
                 if (crossAttrs.Count == 0)

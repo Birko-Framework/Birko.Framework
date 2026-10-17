@@ -59,9 +59,6 @@ namespace Birko.Data.Stores
             return orderBy;
         }
 
-        /// <summary>
-        /// Adds an ascending secondary sort.
-        /// </summary>
         /// <summary>Adds a sort key by property name, as <see cref="ByName"/> starts one (TASK-171).</summary>
         public OrderBy<T> ThenByName(string propertyName, bool descending = false)
         {
@@ -69,6 +66,9 @@ namespace Birko.Data.Stores
             return this;
         }
 
+        /// <summary>
+        /// Adds an ascending secondary sort.
+        /// </summary>
         public OrderBy<T> ThenBy<TProperty>(Expression<Func<T, TProperty>> property)
         {
             _fields.Add(new OrderByField(GetPropertyName(property), false));

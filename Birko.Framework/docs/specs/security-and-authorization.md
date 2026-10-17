@@ -877,8 +877,10 @@ The system SHALL implement `IDisposable` on `AuthenticationService`, disposing t
 (`fallbackIp`, unchanged) whenever `trustedProxies` is null or empty, or `fallbackIp` is not one of them —
 the forwarding headers are then not read at all. Only when the peer is trusted SHALL it consult, in order:
 `X-Forwarded-For`, walked from the **right**, returning the first hop that is not itself a trusted proxy (or
-the leftmost hop when every hop is trusted); then `X-Real-IP`, trimmed; then `CF-Connecting-IP`, trimmed;
-and finally `fallbackIp`. A trusted-proxy entry is either an address, compared after mapping IPv4-mapped IPv6
+the leftmost hop when every hop is trusted); then `X-Real-IP`; then `CF-Connecting-IP`; and finally `fallbackIp`.
+Only an address is an answer (TASK-651): a returned value is the parsed address, without a port and with an
+IPv4-mapped address unwrapped; a hop that is not an address ends the walk with `fallbackIp`, and a single-address
+header that is not one is skipped (an `X-Forwarded-For: 1.2.3.4, unknown` returned `"unknown"`). A trusted-proxy entry is either an address, compared after mapping IPv4-mapped IPv6
 to IPv4, or a CIDR range (it contains `/`), matched against the address and its IPv4-mapped form; an address
 given with a port (`10.0.0.5:51234`, `[::1]:51234`) is parsed to its address; an unparseable address is never
 trusted. The instance method `ResolveClientIp(getHeaderValue, connectionIp)` SHALL apply the configuration's

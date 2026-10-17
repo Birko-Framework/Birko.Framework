@@ -178,10 +178,14 @@ namespace Birko.Data.ElasticSearch.IndexManagement
             }
         }
 
+        // TASK-651: one rule whatever the numeric type: a whole number from 0 up. A negative int passed through to the
+        // index settings while a negative long or string was refused, and short / byte were refused outright.
         private static int AsInt(string key, object? value) => value switch
         {
-            int i => i,
+            int i when i >= 0 => i,
             long l when l is >= 0 and <= int.MaxValue => (int)l,
+            short s when s >= 0 => s,
+            byte b => b,
             string text when int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed) => parsed,
             _ => throw new NotSupportedException($"ElasticSearch index property '{key}' must be a whole number, not '{value}'."),
         };

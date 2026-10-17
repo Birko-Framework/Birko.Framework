@@ -4,6 +4,19 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-16 — An ElasticSearch reindex started without waiting is pending, not a success
+
+[[TASK-560]]. `Reindex(…, waitForCompletion: false)` reported `Successful` with 0 documents for a copy that had only
+started, and refreshed a target still being written. It now returns `IsPending` with the `TaskId` to follow
+(`GET _tasks/{id}`), and `Success` is false. A start answered with no task id is a failure.
+
+## 2026-10-16 — Views answer in the view's names on every backend, and count their rows
+
+[[TASK-151]]. Measured: RavenDB view indexes read an empty collection, and a join index did not compile. An
+ElasticSearch grouped view returned no rows. Cosmos DB and ElasticSearch left renamed fields null, and grouped counts
+counted documents. Filters, sorts and keys now use view properties everywhere. Refused: RavenDB OnTheFly, Cosmos DB
+Persistent, joins on Cosmos DB and ElasticSearch, and filters on aggregates. A SQL offset without a limit now skips.
+
 ## 2026-10-15 — A composed store chain keeps aggregation, transactions and settings
 
 [[TASK-631]]. A store wrapped by `StoreWrapperBuilder` lost every interface but `IAsyncBulkStore<T>`, and `GetInnerStore()`

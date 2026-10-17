@@ -191,11 +191,24 @@ namespace Birko.Data.Patterns.IndexManagement
             return new IndexDeclarationReport(scope, definitions.Count, drifts, unverified);
         }
 
+        /// <remarks>
+        /// TASK-651: the text fields of an index are compared as a set. A MongoDB text index stores them as one weights
+        /// document, which the server returns in its own order rather than the declared one, and their order means nothing
+        /// to the index. Every other field is compared in order, as the index uses it.
+        /// </remarks>
         private static bool SameFields(IReadOnlyList<IndexField> declared, IReadOnlyList<IndexField> stored)
-            => declared.Count == stored.Count
-               && declared.Zip(stored, (d, s) => string.Equals(d.Name, s.Name, StringComparison.Ordinal)
-                                                 && d.IsDescending == s.IsDescending
-                                                 && d.FieldType == s.FieldType).All(x => x);
+        {
+            static bool IsText(IndexField f) => f.FieldType == IndexFieldType.Text;
+            var declaredOrdered = declared.Where(f => !IsText(f)).ToList();
+            var storedOrdered = stored.Where(f => !IsText(f)).ToList();
+            return declared.Count == stored.Count
+                && declaredOrdered.Count == storedOrdered.Count
+                && declaredOrdered.Zip(storedOrdered, (d, s) => string.Equals(d.Name, s.Name, StringComparison.Ordinal)
+                                                                && d.IsDescending == s.IsDescending
+                                                                && d.FieldType == s.FieldType).All(x => x)
+                && new HashSet<string>(declared.Where(IsText).Select(f => f.Name), StringComparer.Ordinal)
+                    .SetEquals(stored.Where(IsText).Select(f => f.Name));
+        }
 
         private static bool SameSet(IReadOnlyList<string> declared, IReadOnlyList<string> stored)
             => new HashSet<string>(declared, StringComparer.Ordinal).SetEquals(stored);

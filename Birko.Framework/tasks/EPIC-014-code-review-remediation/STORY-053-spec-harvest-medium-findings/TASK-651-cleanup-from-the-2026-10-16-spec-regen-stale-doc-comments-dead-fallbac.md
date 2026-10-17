@@ -3,7 +3,7 @@ id: TASK-651
 parent: STORY-053
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-10-16
@@ -42,9 +42,9 @@ Small items found by the regen, none a behaviour defect on its own:
 
 ## Acceptance criteria
 
-- [ ] Reproduced (or refuted, with the measurement)
-- [ ] Each item fixed or recorded as accepted, one line each
-- [ ] Red on the current code; the spec `docs/specs/store-crud-contract.md` updated if behaviour changes
+- [x] Reproduced (or refuted, with the measurement)
+- [x] Each item fixed or recorded as accepted, one line each
+- [x] Red on the current code; the spec `docs/specs/store-crud-contract.md` updated if behaviour changes
 
 ## Human test plan
 
@@ -53,3 +53,37 @@ N/A: a library contract, asserted by tests.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-651` — leave empty until then._
+
+## Resolution (2026-10-17)
+
+Reproduced by tests on HEAD in a clean worktree: **12 red**: Rules 3, Patterns 2, Security 3, Migrations.ES 1, ES 2,
+Views 1. One line per item:
+
+- **Doc comments, fixed:** `DuplicateCreate` (same *type* on every provider, message per provider), `IsDuplicateKeyException`
+  (create → DuplicateCreate, update → UniqueViolation), the stray `<summary>` blocks in `MigrationFilter`, `OrderBy.ThenBy`,
+  `StoreAggregationHelper.ParseToTime` and `AbstractAsyncBulkViewModelRepository.BulkStore`, and the `DataBase.cs` CASE example.
+- **`RuleSet.Rules` remark, fixed in code:** the setter now copies (`new RuleList(value)`), so the remark is true.
+- **`Connector == null` after `InitCore`, accepted:** these checks are not rule-53 fallbacks. They narrow the nullable flow
+  for the compiler and guard a subclass that skips `InitCore`. Removing them gains nothing.
+- **`RuleGroup.Rules = null`, fixed:** throws `ArgumentNullException` at assignment, not NullReferenceException at evaluation.
+- **`DictionaryRuleContext`, fixed:** two keys equal only ignoring case make the lookup throw `InvalidOperationException`
+  naming both. Before, the answer depended on enumeration order.
+- **ES `CopyData` with `"{}"`, fixed:** it uses `MigrationFilter.IsExplicitMatchAll`, like every other backend.
+- **`PagingOrder` Guid key, fixed:** OrdinalIgnoreCase. `ByName("guid")` appended Guid twice. A Count==0 guard was tried
+  and dropped: `OrderBy`'s constructor is private, so it was unreachable (rule 53).
+- **`ThrowIfTruncated` and a smaller caller size, accepted:** remarked on `BuildGroupByAggregation`. A caller's smaller
+  size is a requested cap, not a truncation.
+- **ES adapter `AsInt`, fixed:** non-negative int, long, short and byte, or a digit string. A negative int was accepted.
+- **X-Forwarded-For with a non-address hop, fixed:** answers `fallbackIp`. X-Real-IP and CF-Connecting-IP count only
+  when they parse. The returned value is the normalised address.
+- **JWT Issuer/Audience at issue, accepted:** TASK-165 pinned `A_provider_without_an_issuer_can_still_generate`, and
+  the regression run caught the conflict. Issuing without them is a kept contract, because a token can be minted for a
+  validator other than this provider (NFC and the OAuth server call `GenerateToken`). Changing it is a decision for the
+  owner, not a cleanup.
+- **MongoDB text-index field order, measured:** a `{title, body}` declaration reads back as weights `{body, title}`.
+  The drift detector now compares text fields as a set. Before, this was false `ColumnsDiffer`.
+- **Cross-assembly `[ViewField]`, fixed:** `IsForeignFieldAttribute` walks base types, so `[ViewField]` and
+  `[AggregateField]` from another assembly copy of the attribute types are no longer read as columns.
+
+Specs updated: validation-and-rules, migrations, specifications-and-paging, schema-index-and-ddl and
+security-and-authorization (client address only). store-crud-contract only had doc-comment changes. Regression: 131 importer suites live, 7289 passed; the one failure was the TASK-165 pin above, and with the issue-side change reverted the JWT suite is 48/48.

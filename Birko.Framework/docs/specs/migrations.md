@@ -1451,7 +1451,7 @@ The system SHALL implement `CopyData(source, target, transformJson)` as follows.
 build an aggregation pipeline of the caller's transform stage(s) followed by `$merge` into the target,
 accepting either a single stage object or a JSON array of stages and treating null/empty/`"{}"` as a
 straight copy. **ElasticSearch** SHALL throw `NotSupportedException` when `transformJson` is
-non-empty, and otherwise `ReindexOnServer` with `WaitForCompletion(true)` followed by a refresh of
+anything but null, blank or `"{}"` (`MigrationFilter.IsExplicitMatchAll`, as for every other backend; TASK-651), and otherwise `ReindexOnServer` with `WaitForCompletion(true)` followed by a refresh of
 the target, failing the step when the reindex response is invalid **or incomplete** — timed out or cancelled, judged by
 `ReindexHelper.IncompleteReason` (a partial copy that `IsValid` passes — SH-H038, [[TASK-319]]). **RavenDB** SHALL **always** throw `NotSupportedException` — the operation is
 unimplemented. **SQL**, **CosmosDB** and **InfluxDB** SHALL refuse a transform through

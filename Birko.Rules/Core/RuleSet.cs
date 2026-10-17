@@ -19,7 +19,8 @@ public class RuleSet
     public RuleList Rules
     {
         get => _rules;
-        set => _rules = value ?? throw new ArgumentNullException(nameof(value));
+        // TASK-651: the remark promised a copy and the setter stored the caller's list, so its later edits changed the set.
+        set => _rules = new RuleList(value ?? throw new ArgumentNullException(nameof(value)));
     }
 
     private RuleList _rules = new();

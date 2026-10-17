@@ -19,19 +19,27 @@ public class DictionaryRuleContext : IRuleContext
     /// <remarks>
     /// SH-M369 (TASK-156): a field resolves case-insensitively, as on <see cref="ObjectRuleContext{T}"/> and in the
     /// translator. The caller's dictionary keeps its own comparer; an exact miss falls back to a case-insensitive key.
+    /// TASK-651: when two keys differ only in case ("Name" and "name") and neither matches exactly, the fallback is
+    /// ambiguous and is refused: it answered with whichever the dictionary enumerated first, which is not guaranteed.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">More than one key matches <paramref name="field"/> ignoring case.</exception>
     public bool TryGetValue(string field, out object? value)
     {
         if (_values.TryGetValue(field, out value))
             return true;
+        string? found = null;
         foreach (var pair in _values)
         {
-            if (string.Equals(pair.Key, field, StringComparison.OrdinalIgnoreCase))
-            {
-                value = pair.Value;
-                return true;
-            }
+            if (!string.Equals(pair.Key, field, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (found != null)
+                throw new InvalidOperationException(
+                    $"Field '{field}' matches both '{found}' and '{pair.Key}' ignoring case; use the exact key.");
+            found = pair.Key;
+            value = pair.Value;
         }
+        if (found != null)
+            return true;
         value = null;
         return false;
     }

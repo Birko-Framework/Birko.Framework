@@ -21,9 +21,6 @@ namespace Birko.Data.Repositories
         #region Properties
 
         /// <summary>
-        /// Gets the async bulk store for bulk operations.
-        /// </summary>
-        /// <summary>
         /// SH-M209 (TASK-162): a store that is not a bulk store made every bulk call yield nothing or do nothing, where
         /// the sync twin throws. Now this one throws too.
         /// </summary>
@@ -34,6 +31,9 @@ namespace Birko.Data.Repositories
         protected static Stores.OrderBy<TModel>? PageOrder(int? limit, int? offset)
             => limit != null || offset != null ? Stores.OrderBy<TModel>.By(x => x.Guid) : null;
 
+        /// <summary>
+        /// Gets the async bulk store for bulk operations.
+        /// </summary>
         protected Stores.IAsyncBulkStore<TModel>? BulkStore
         {
             get

@@ -55,6 +55,8 @@ namespace Birko.Data.ElasticSearch.Aggregation
         /// <param name="groupByFields">The field names to group by.</param>
         /// <param name="metricAggregations">The metric aggregations to nest inside the group-by aggregation.</param>
         /// <param name="size">Maximum number of buckets to return. Default is 10000.</param>
+        /// <remarks>TASK-651, accepted: the truncation check of the response parsers assumes <see cref="DefaultGroupBySize"/>, which
+        /// every store passes; a caller choosing a smaller <paramref name="size"/> must check a full page itself.</remarks>
         /// <returns>An aggregation container for grouping.</returns>
         public static AggregationContainer BuildGroupByAggregation(
             IReadOnlyList<string> groupByFields,
@@ -322,13 +324,6 @@ namespace Birko.Data.ElasticSearch.Aggregation
             }
         }
 
-        /// <summary>
-        /// Parses a human-readable time interval string into a NEST <see cref="Time"/> object.
-        /// Supports TimeSpan format (e.g., "01:00:00") and "value unit" format (e.g., "5 minutes", "1 h").
-        /// Defaults to "1h" if the interval cannot be parsed.
-        /// </summary>
-        /// <param name="interval">The interval string to parse.</param>
-        /// <returns>A NEST Time object representing the interval.</returns>
         /// <summary>The bucket cap of <see cref="BuildGroupByAggregation(IReadOnlyList{string}, AggregationDictionary, int)"/>.</summary>
         public const int DefaultGroupBySize = 10000;
 
@@ -366,6 +361,13 @@ namespace Birko.Data.ElasticSearch.Aggregation
         }
 
 
+        /// <summary>
+        /// Parses a human-readable time interval string into a NEST <see cref="Time"/> object.
+        /// Supports TimeSpan format (e.g., "01:00:00") and "value unit" format (e.g., "5 minutes", "1 h").
+        /// Defaults to "1h" if the interval cannot be parsed.
+        /// </summary>
+        /// <param name="interval">The interval string to parse.</param>
+        /// <returns>A NEST Time object representing the interval.</returns>
         public static Nest.Time ParseToTime(string interval)
         {
             var ts = Birko.Data.Stores.TimeIntervalParser.Parse(interval);

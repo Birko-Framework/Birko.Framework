@@ -182,9 +182,10 @@ namespace Birko.Data.Stores
         }
 
         /// <summary>
-        /// Whether <paramref name="ex"/> is the provider refusing a create because the key is already stored. A provider
-        /// whose driver signals that with its own exception overrides this, and the public create methods turn exactly
-        /// that case into <see cref="Birko.Data.Exceptions.StoreException.DuplicateCreate"/> (TASK-625).
+        /// Whether <paramref name="ex"/> is the provider refusing a write because a unique key or index already holds the
+        /// value. A provider whose driver signals that with its own exception overrides this; the public create methods turn
+        /// exactly that case into <see cref="Birko.Data.Exceptions.StoreException.DuplicateCreate"/> (TASK-625), and the
+        /// update methods into <see cref="Birko.Data.Exceptions.StoreException.UniqueViolation"/> (TASK-632).
         /// </summary>
         protected virtual bool IsDuplicateKeyException(Exception ex) => false;
 

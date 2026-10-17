@@ -39,11 +39,6 @@ namespace Birko.Data.Migrations.Context
     public static class MigrationFilter
     {
         /// <summary>
-        /// The deliberate match-everything door: no filter supplied at all. Every migrator already spelled
-        /// this test inline and identically; it is stated once here so the guard and the callers cannot
-        /// drift about which inputs are intentional.
-        /// </summary>
-        /// <summary>
         /// Refuses a <c>CopyData</c> transform on a backend that cannot apply one (SH-M196, TASK-152). SQL, Cosmos DB and
         /// InfluxDB accepted <c>transformJson</c> and never read it: the copy ran untransformed and the migration was
         /// recorded, while MongoDB applied it and ElasticSearch and RavenDB threw. No transform (null, blank or
@@ -57,6 +52,11 @@ namespace Birko.Data.Migrations.Context
                 + "then update the target, or use Raw().");
         }
 
+        /// <summary>
+        /// The deliberate match-everything door: no filter supplied at all. Every migrator already spelled
+        /// this test inline and identically; it is stated once here so the guard and the callers cannot
+        /// drift about which inputs are intentional.
+        /// </summary>
         public static bool IsExplicitMatchAll(string? filterJson)
             => string.IsNullOrWhiteSpace(filterJson) || filterJson!.Trim() == "{}";
 

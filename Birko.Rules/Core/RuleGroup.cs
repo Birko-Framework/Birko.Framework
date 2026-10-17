@@ -9,8 +9,17 @@ namespace Birko.Rules;
 public class RuleGroup : IRule
 {
     public LogicOperator Logic { get; set; }
-    /// <remarks>SH-M370 (TASK-156): a <see cref="RuleList"/>, safe to edit while the group is evaluated.</remarks>
-    public RuleList Rules { get; set; }
+    /// <remarks>
+    /// SH-M370 (TASK-156): a <see cref="RuleList"/>, safe to edit while the group is evaluated. Never null (TASK-651): a null
+    /// list was accepted here and threw NullReferenceException at evaluation; it is refused as on <see cref="RuleSet"/>.
+    /// </remarks>
+    public RuleList Rules
+    {
+        get => _rules;
+        set => _rules = value ?? throw new System.ArgumentNullException(nameof(value));
+    }
+
+    private RuleList _rules = new();
 
     // ── IRule ──
     public string? Name { get; set; }

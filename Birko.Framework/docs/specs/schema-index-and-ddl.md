@@ -339,7 +339,8 @@ that is null or has a blank name SHALL throw `ArgumentException("Every declared 
 declared index it SHALL record: `Missing` when the lookup answers null; `Unverified` ("the lookup failed: …") when
 the lookup throws anything but `OperationCanceledException`, which propagates; `Unverified` ("the store reports no
 fields for it") when the stored index has no fields; `ColumnsDiffer` when the field lists differ in count or, by
-position, in ordinal name, direction or `FieldType`; and, independently of the field comparison, `UniquenessDiffers`
+position, in ordinal name, direction or `FieldType`, the text fields being compared as a set (TASK-651: MongoDB
+returns a text index's fields in its own order, measured `{ title, body }` back as `{ body, title }`); and, independently of the field comparison, `UniquenessDiffers`
 when `Unique` disagrees. `IsClean` SHALL be true only when there are neither drifts nor unverified entries. Each
 shape SHALL be described as `[UNIQUE ](Name[ DESC][ <FieldType>], …)`, with the field type shown only when not
 `Standard`.
@@ -1809,7 +1810,8 @@ target all indices when no index name is supplied.
 
 The system SHALL adapt `IndexManager` to `IIndexManager` such that `CreateAsync` reads only
 `Properties["NumberOfShards"]` and `Properties["NumberOfReplicas"]` into ES settings — each accepted as an
-`int`, a `long` from 0 to `int.MaxValue`, or a string of decimal digits, and otherwise refused with
+`int`, `short`, `byte` or `long` from 0 to `int.MaxValue`, or a string of decimal digits, and otherwise (a negative
+`int` included, TASK-651) refused with
 `NotSupportedException` — SHALL refuse any other property key, and `Unique`, `Sparse` and `ExpireAfter`, with
 `NotSupportedException` raised before the index is created and not wrapped, and SHALL **ignore**
 `IndexDefinition.Fields` entirely.

@@ -106,8 +106,9 @@ indexer setter) copies the current array under a lock and publishes the new arra
 (`Count`, the indexer, `Contains`, `IndexOf`, `CopyTo`, enumeration, `Snapshot()`) take no lock and see the
 array current when they started. `RuleEvaluator` and `RuleExpressionConverter` SHALL evaluate a set's or a
 group's rules from such a snapshot. The constructors copy the supplied sequence (`RuleList(null)` throws
-`ArgumentNullException`), and assigning `RuleSet.Rules = null` SHALL throw `ArgumentNullException`
-(SH-M370, TASK-156).
+`ArgumentNullException`), assigning `RuleSet.Rules` SHALL copy the assigned list, and assigning `RuleSet.Rules =
+null` or `RuleGroup.Rules = null` SHALL throw `ArgumentNullException` (SH-M370, TASK-156; TASK-651: the set kept the
+caller's list, and a null group list threw NullReferenceException at evaluation).
 
 #### Scenario: A reload edits the rule set while it is evaluated
 
@@ -132,8 +133,10 @@ group's rules from such a snapshot. The constructors copy the supplied sequence 
 The system SHALL provide `DictionaryRuleContext`, which resolves fields against the
 `Dictionary<string, object?>` handed to its constructor — retaining that instance by reference
 (no copy) — first by an exact lookup with **that dictionary's own key comparer** and, on a miss, by a
-scan for the first key equal to the field under `OrdinalIgnoreCase`, so field lookup is
-case-insensitive whatever comparer the caller's dictionary uses (SH-M369, TASK-156); `From(...)` builds
+scan for the key equal to the field under `OrdinalIgnoreCase`, so field lookup is
+case-insensitive whatever comparer the caller's dictionary uses (SH-M369, TASK-156). Two keys that match only ignoring
+case SHALL make that lookup throw `InvalidOperationException` rather than answer with whichever enumerates first
+(TASK-651); `From(...)` builds
 its dictionary with `StringComparer.OrdinalIgnoreCase`. It SHALL throw `ArgumentNullException` if the
 dictionary is `null`, and it is an open context (`HasFixedFields` is `false`).
 

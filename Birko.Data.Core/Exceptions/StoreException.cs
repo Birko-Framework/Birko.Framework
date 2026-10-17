@@ -10,8 +10,10 @@ namespace Birko.Data.Exceptions
         public StoreException(string message, Exception? innerException) : base(message, innerException) { }
 
         /// <summary>
-        /// The refusal of a create whose key is already stored: the same type and message on every provider (TASK-567,
-        /// TASK-625), with the provider's own exception as <see cref="Exception.InnerException"/> when there is one.
+        /// The refusal of a create whose key is already stored: the same type, <see cref="StoreUniqueViolationException"/>, on
+        /// every provider (TASK-567, TASK-625), with the provider's own exception as <see cref="Exception.InnerException"/> when
+        /// there is one. The database-backed stores use this message; the in-memory, JSON and XML stores word their own and
+        /// name the Guid (TASK-651: this used to promise one message everywhere).
         /// </summary>
         public static StoreException DuplicateCreate(Type entityType, Exception? innerException = null)
             => new StoreUniqueViolationException(

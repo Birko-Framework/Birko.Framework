@@ -747,7 +747,8 @@ SHALL NOT read, and SHALL return an empty `Items` list with `TotalCount` from `C
 
 The system SHALL, in both wrappers, replace the caller's `orderBy` with a total order before reading, via
 `PagingOrder.Total`: a null `orderBy` becomes ascending by `Guid`; an `orderBy` that already has a field
-whose `PropertyName` is exactly `"Guid"` (ordinal) is used as given; any other `orderBy` is copied field by
+whose `PropertyName` is `"Guid"` ignoring case (TASK-651: `ByName("guid")` was ordinal-missed and Guid appended
+twice) is used as given; any other `orderBy` is copied field by
 field, with names and directions preserved, into a new `OrderBy<T>` with ascending `Guid` appended as the
 last key. The caller's `OrderBy<T>` instance SHALL NOT be modified (SH-M301, [[TASK-171]]).
 

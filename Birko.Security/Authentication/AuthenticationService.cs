@@ -267,25 +267,29 @@ namespace Birko.Security.Authentication
                 var hops = forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 for (int i = hops.Length - 1; i >= 0; i--)
                 {
+                    // TASK-651: only an address is an answer. A hop that is not one ("unknown", a host name) was returned
+                    // verbatim, and one with a port kept it; nothing beyond it can be attributed, so the peer's own
+                    // address answers instead.
+                    var hop = ParseAddress(hops[i]);
+                    if (hop == null)
+                    {
+                        return fallbackIp;
+                    }
                     if (i == 0 || !IsTrusted(hops[i], trustedProxies))
                     {
-                        return hops[i];
+                        return Normalize(hop).ToString();
                     }
                 }
             }
 
-            // Check for X-Real-IP header (nginx)
-            var realIp = getHeaderValue("X-Real-IP");
-            if (!string.IsNullOrWhiteSpace(realIp))
+            // Check for X-Real-IP header (nginx), then CF-Connecting-IP (Cloudflare): an address, or nothing.
+            foreach (var header in new[] { "X-Real-IP", "CF-Connecting-IP" })
             {
-                return realIp.Trim();
-            }
-
-            // Check for CF-Connecting-IP header (Cloudflare)
-            var cfIp = getHeaderValue("CF-Connecting-IP");
-            if (!string.IsNullOrWhiteSpace(cfIp))
-            {
-                return cfIp.Trim();
+                var single = ParseAddress(getHeaderValue(header));
+                if (single != null)
+                {
+                    return Normalize(single).ToString();
+                }
             }
 
             return fallbackIp;

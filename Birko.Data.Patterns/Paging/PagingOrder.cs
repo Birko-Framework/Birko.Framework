@@ -12,9 +12,11 @@ internal static class PagingOrder
 {
     public static OrderBy<T> Total<T>(OrderBy<T>? orderBy) where T : Data.Models.AbstractModel
     {
+        // TASK-651: the Guid key is found ignoring case, as a field name resolves everywhere else, so ByName("guid") is not
+        // appended a second time. (An OrderBy always has a field: its constructor is private and every factory adds one.)
         if (orderBy == null)
             return OrderBy<T>.By(x => x.Guid);
-        if (orderBy.Fields.Any(f => f.PropertyName == nameof(Data.Models.AbstractModel.Guid)))
+        if (orderBy.Fields.Any(f => string.Equals(f.PropertyName, nameof(Data.Models.AbstractModel.Guid), System.StringComparison.OrdinalIgnoreCase)))
             return orderBy;
 
         var first = orderBy.Fields[0];

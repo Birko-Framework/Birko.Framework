@@ -240,6 +240,9 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Spec-regen cleanup: ambiguous fields, address headers, index settings (2026-10-17)
+[[TASK-651]]. Fixed from the 2026-10-16 spec regeneration. A `DictionaryRuleContext` field matching two keys only ignoring case now throws instead of taking the first. `RuleSet.Rules` copies the list it is given, and `RuleGroup.Rules = null` is refused. `GetClientIpAddress` returns only a parsed address: `unknown` in X-Forwarded-For had been returned as the IP. An ES `CopyData` with `{}` is a plain copy. `ByName("guid")` is the Guid key. ES index settings refuse negative numbers. Mongo text-index fields compare as a set. `[ViewField]` is not a column on a mapped model.
+
 ### A partial index is declared through IndexDefinition (2026-10-17)
 
 [[TASK-636]]. `IndexDefinition.WhereNotNull` / `WhereNull` declare a partial index. MongoDB creates it, reads it back
@@ -331,17 +334,6 @@ unchanged. View names and the migrations history table stay in the default schem
 defaults. A unique refusal is now `StoreUniqueViolationException` (a `StoreException`) on create and update, on every
 provider. The slug wrappers retry with the next suffix. A model opting in with `IDefaultMarker` gets one default; the
 last writer wins. Stores without unique indexes stay best effort. MongoDB partial indexes: [[TASK-636]].
-### An ElasticSearch reindex started without waiting is pending, not a success (2026-10-16)
-
-[[TASK-560]]. `Reindex(…, waitForCompletion: false)` reported `Successful` with 0 documents for a copy that had only
-started, and refreshed a target still being written. It now returns `IsPending` with the `TaskId` to follow
-(`GET _tasks/{id}`), and `Success` is false. A start answered with no task id is a failure.
-### Views answer in the view's names on every backend, and count their rows (2026-10-16)
-
-[[TASK-151]]. Measured: RavenDB view indexes read an empty collection, and a join index did not compile. An
-ElasticSearch grouped view returned no rows. Cosmos DB and ElasticSearch left renamed fields null, and grouped counts
-counted documents. Filters, sorts and keys now use view properties everywhere. Refused: RavenDB OnTheFly, Cosmos DB
-Persistent, joins on Cosmos DB and ElasticSearch, and filters on aggregates. A SQL offset without a limit now skips.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

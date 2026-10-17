@@ -79,7 +79,8 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
             // CR-L144: the ElasticSearch reindex path does not apply a document transform. Rather than
             // silently producing untransformed data, reject a transform request so the caller learns it
             // is unimplemented for this backend.
-            if (!string.IsNullOrWhiteSpace(transformJson))
+            // TASK-651: "{}" is no transform, as MigrationFilter.RefuseTransform reads it for every other backend.
+            if (!Birko.Data.Migrations.Context.MigrationFilter.IsExplicitMatchAll(transformJson))
             {
                 throw new NotSupportedException(
                     "ElasticSearchDataMigrator.CopyData does not support transformJson; the server-side " +
