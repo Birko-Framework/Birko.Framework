@@ -67,15 +67,15 @@ namespace Birko.Data.Migrations.InfluxDB.Context
             // InfluxDB is schema-less — fields and tags are defined at write time. No-op.
         }
 
+        // TASK-642 (rule 22): both were silent no-ops, so the runner recorded a migration that changed nothing as applied
+        // (measured live). InfluxDB can do neither, so each refuses, as UpdateDocuments does.
         public void DropField(string collectionName, string fieldName)
-        {
-            // InfluxDB does not support dropping fields. Use delete with predicate via Raw() if needed.
-        }
+            => throw new NotSupportedException(
+                $"InfluxDB cannot drop field '{fieldName}' from '{collectionName}': a delete predicate cannot name a field, so points keep it. Rewrite the series without it, or use Raw().");
 
         public void RenameField(string collectionName, string oldName, string newName)
-        {
-            // InfluxDB does not support field renaming. Data must be rewritten.
-        }
+            => throw new NotSupportedException(
+                $"InfluxDB cannot rename field '{oldName}' to '{newName}' in '{collectionName}': points are immutable. Rewrite the series under the new name, or use Raw().");
 
         private class InfluxCollectionBuilder : ICollectionBuilder
         {

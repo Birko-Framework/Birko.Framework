@@ -24,14 +24,14 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 
         public ICollectionBuilder CreateCollection(string name)
         {
-            if (!_client.Indices.Exists(name).Exists)
+            if (!IndexExists(name))
             {
-                _client.Indices.Create(name, c => c
+                ElasticSearchDataMigrator.EnsureValid(_client.Indices.Create(name, c => c
                     .Settings(s => s
                         .NumberOfShards(1)
                         .NumberOfReplicas(0)
                     )
-                );
+                ), $"Create index '{name}'");
             }
 
             return _ledger.Track(new ElasticCollectionBuilder(name, _client), name);
@@ -39,15 +39,32 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 
         public void DropCollection(string name)
         {
-            if (_client.Indices.Exists(name).Exists)
+            if (IndexExists(name))
             {
-                _client.Indices.Delete(name);
+                ElasticSearchDataMigrator.EnsureValid(_client.Indices.Delete(name), $"Delete index '{name}'");
             }
         }
 
-        public bool CollectionExists(string name)
+        public bool CollectionExists(string name) => IndexExists(name);
+
+        /// <summary>
+        /// Whether the index exists; a check that got no answer throws.
+        /// </summary>
+        /// <remarks>
+        /// TASK-643, the SH-M202 rule (TASK-152) the migration store already keeps. NEST's <c>Exists</c> is "status 200", so an
+        /// unreachable or unauthorized cluster read as "absent": a create was attempted and not checked, a drop did
+        /// nothing, and the migration was recorded. Only a 404 means absent.
+        /// </remarks>
+        private bool IndexExists(string name)
         {
-            return _client.Indices.Exists(name).Exists;
+            var exists = _client.Indices.Exists(name);
+            if (!exists.IsValid && exists.ApiCall?.HttpStatusCode != 404)
+            {
+                throw new InvalidOperationException(
+                    $"ElasticSearch migration step failed: the existence check for index '{name}' got no answer. {exists.DebugInformation}",
+                    exists.OriginalException);
+            }
+            return exists.Exists;
         }
 
         public IIndexBuilder CreateIndex(string collectionName, string indexName)

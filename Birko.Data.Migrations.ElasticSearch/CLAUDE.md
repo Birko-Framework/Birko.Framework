@@ -14,6 +14,9 @@ ElasticSearch migration backend using ElasticClient (NEST). Implements platform-
 ### Context
 - `ElasticSearchMigrationContext` — Wraps ElasticClient. Schema and Data properties. Raw() exposes ElasticClient.
 - `ElasticSearchSchemaBuilder` — CreateCollection creates index with mapping. AddField updates mapping via PUT. DropField is no-op (ES can't remove fields). CreateIndex creates aliases.
+  The existence check behind CreateCollection, DropCollection and CollectionExists reads only a 404 as "absent" and
+  throws on any other failed answer. Create and delete responses go through `ElasticSearchDataMigrator.EnsureValid`
+  (TASK-643, the SH-M202 rule the migration store keeps).
 - `ElasticSearchDataMigrator` — UpdateDocuments via _update_by_query, DeleteDocuments via _delete_by_query, CopyData via _reindex.
 
 ### Store

@@ -1132,7 +1132,10 @@ such query (SH-M181, TASK-152).
 
 The system SHALL implement `AddField`, `DropField` and `DropIndex` as **no-ops** for MongoDB
 (`AddField`, `DropField`), ElasticSearch (`AddField`, `DropField`, `DropIndex`), RavenDB (`AddField`,
-`DropField`) and InfluxDB (`AddField`, `DropField`, `DropIndex`, `RenameField`). For CosmosDB,
+`DropField`) and InfluxDB (`AddField`, `DropIndex`). InfluxDB `DropField` and `RenameField` SHALL throw
+`NotSupportedException`, so the migration fails and is not recorded (TASK-642: both were no-ops and the runner
+recorded the migration as applied, measured live; whether the other backends' `DropField` / `DropIndex` no-ops may
+stay is [[TASK-655]]). For CosmosDB,
 `AddField` SHALL add `/{field}/?` to the container's indexing-policy included paths and `DropField`
 SHALL add it to the excluded paths, replacing the container only when the path is not already
 present. `DropIndex` SHALL delete the named Raven index (`DeleteIndexOperation`) and SHALL be a
@@ -1149,8 +1152,8 @@ no-op for CosmosDB.
   `ctx._source[params.newName] = ctx._source.remove(params.oldName)` and both names as script params; RavenDB issues a `PatchByQueryOperation` with `FROM
   'things' UPDATE { this.new = this.old; delete this.old; }`, the collection an escaped literal and both names held to
   `RqlField` (TASK-640); CosmosDB queries every document where
-  `IS_DEFINED(c["old"])` and point-patches each with `Set /new` + `Remove /old`; InfluxDB does
-  nothing at all
+  `IS_DEFINED(c["old"])` and point-patches each with `Set /new` + `Remove /old`; InfluxDB refuses with
+  `NotSupportedException` (points are immutable)
 
 #### Scenario: CosmosDB rename tolerates only absent-field and absent-document errors
 
@@ -1182,7 +1185,11 @@ returns a builder that emits `CREATE TABLE` on `Build()`; `DropCollection` calls
 `connector.DropTable`. MongoDB: `CreateCollection`
 eagerly calls `database.CreateCollection` before returning the builder; `DropCollection` drops the
 collection. ElasticSearch: `CreateCollection` creates the index with 1 shard / 0 replicas when
-absent; `DropCollection` deletes it when present. RavenDB: `CreateCollection` creates nothing (Raven
+absent; `DropCollection` deletes it when present. The existence check SHALL read only a 404 as absent and
+SHALL throw `InvalidOperationException` for any other failed answer, in `CreateCollection`, `DropCollection` and
+`CollectionExists`, and the create and delete responses SHALL go through `ElasticSearchDataMigrator.EnsureValid`
+(TASK-643, the SH-M202 rule the migration store keeps: an unreachable or read-only cluster created nothing, dropped
+nothing, and the migration was recorded). RavenDB: `CreateCollection` creates nothing (Raven
 collections are implicit) and `DropCollection` issues a `DeleteByQueryOperation` for `FROM
 '{name}'`, waiting for completion. CosmosDB: `CreateCollection` creates nothing until `Build()`,
 which calls `CreateContainerIfNotExistsAsync` with the partition-key path `"/id"` (SH-M174, TASK-152);

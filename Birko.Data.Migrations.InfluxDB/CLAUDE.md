@@ -13,7 +13,10 @@ InfluxDB migration backend using InfluxDBClient. Implements platform-agnostic IM
 
 ### Context
 - `InfluxMigrationContext` — Wraps InfluxDBClient + organization. Schema and Data properties. Raw() exposes InfluxDBClient.
-- `InfluxSchemaBuilder` — CreateCollection creates buckets. AddField/DropField/CreateIndex are no-op (time-series).
+- `InfluxSchemaBuilder` — CreateCollection creates buckets. AddField and DropIndex are no-ops (schema-less, no
+  indexes), and CreateIndex refuses on Build. DropField and RenameField throw `NotSupportedException`, because points
+  are immutable and a delete predicate cannot name a field. They were silent no-ops, and the migration was recorded
+  (TASK-642).
 - **Every bucket lookup and creation goes through `Context/InfluxBucketLookup`** (TASK-612). Bucket names are
   case-sensitive, so the match is exact. The lookup is filtered server-side by organization and name, because an
   unlimited listing is one page of 20 (measured). The `organization` these components take is a **name**, resolved

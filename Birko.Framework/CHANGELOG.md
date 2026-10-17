@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Security: forwarding headers from trusted proxies only; `?token=` only where a header cannot be set
+
+[[TASK-165]]. **BREAKING behind a proxy:** a token binding's address came from `X-Forwarded-For` written by anyone; set
+`TrustedProxies`. `?token=` was read on every request; it is now WebSocket, `text/event-stream` and
+`QueryTokenPathPrefixes`. JWT validation always checks iss/aud and accepts repeated claims. Vault and Key Vault keys
+cannot leave their path; Key Vault lists every page.
+
 ## 2026-10-15 — ElasticSearch mapping drift produces its repair
 
 [[TASK-634]]. `store.PlanMappingRepairAsync()` turns mapping drift into requests a host sends: one `PUT _mapping` adding

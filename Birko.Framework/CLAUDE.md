@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### InfluxDB field renames and ElasticSearch index checks no longer report false success (2026-10-17)
+
+[[TASK-642]], [[TASK-643]]. Measured: an InfluxDB migration calling `RenameField` or `DropField` was recorded as
+applied having changed nothing; both now refuse. The ElasticSearch schema builder read an unreachable cluster as
+"index absent" and never checked its create or delete; it now throws. Other backends' `DropField` is [[TASK-655]].
 ### Repository gaps TASK-162 left (2026-10-17)
 
 [[TASK-646]]. Measured: an async repository's `UpdateAsync` / `DeleteAsync` with no store reported success, while
@@ -332,12 +337,6 @@ composite could never be dropped. Names now live in a `__birko_indexes` registry
 [[TASK-627]]. `CreateIndex(...).WithField(...)` without `Build()` emitted nothing, and the runner recorded the migration
 as applied. Every runner now fails it with a `MigrationException` naming each unbuilt chain, before recording. The rule
 holds on all six providers, for collections too, even where `CreateCollection` creates eagerly.
-### Security: forwarding headers from trusted proxies only; `?token=` only where a header cannot be set (2026-10-15)
-
-[[TASK-165]]. **BREAKING behind a proxy:** a token binding's address came from `X-Forwarded-For` written by anyone; set
-`TrustedProxies`. `?token=` was read on every request; it is now WebSocket, `text/event-stream` and
-`QueryTokenPathPrefixes`. JWT validation always checks iss/aud and accepts repeated claims. Vault and Key Vault keys
-cannot leave their path; Key Vault lists every page.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
