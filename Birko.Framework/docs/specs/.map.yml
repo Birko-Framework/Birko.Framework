@@ -382,6 +382,7 @@ areas:
       - ../Birko.BackgroundJobs.XML/**/*.cs
       - ../Birko.BackgroundJobs.Redis/**/*.cs
       - ../Birko.BackgroundJobs.CosmosDB/**/*.cs
+      - ../Birko.BackgroundJobs.Hosting/**/*.cs
       - ../Birko.Contracts/Retry/RetryPolicy.cs
 
   - name: workflow-state-machine

@@ -9,6 +9,8 @@ sources:
   - ../Birko.BackgroundJobs.ElasticSearch/ElasticSearchJobQueue.cs
   - ../Birko.BackgroundJobs.ElasticSearch/ElasticSearchJobQueueSchema.cs
   - ../Birko.BackgroundJobs.ElasticSearch/Models/ElasticJobDescriptorModel.cs
+  - ../Birko.BackgroundJobs.Hosting/BackgroundJobsHostingExtensions.cs
+  - ../Birko.BackgroundJobs.Hosting/HostedServices.cs
   - ../Birko.BackgroundJobs.JSON/JsonJobQueue.cs
   - ../Birko.BackgroundJobs.JSON/JsonJobQueueSchema.cs
   - ../Birko.BackgroundJobs.JSON/Models/JsonJobDescriptorModel.cs
@@ -1208,3 +1210,34 @@ otherwise created by the underlying store's lazy initialization on first CRUD.
 - **Given** the Redis backend
 - **When** the shipped file set is inspected
 - **Then** there is no `RedisJobQueueSchema` — keys are created on demand by `EnqueueAsync` — and instead a `RedisJobLockProvider` ships alongside the queue
+
+### Requirement: The hosting bridges register once, reach the running scheduler, and run on every node
+
+The system SHALL provide `AddBackgroundJobs(configure)` (Birko.BackgroundJobs.Hosting, TASK-538), registering the clock,
+an in-memory queue, an executor that resolves each job from its own DI scope (`ScopedJobExecutor`), the dispatcher, the
+processor, the recurring scheduler (with the registered `IJobLockProvider`, `RecurringLockName` and
+`LeadershipRetryInterval`), and two hosted services. A service registered before the call is kept. A second call
+SHALL add nothing: the guard keys on `BackgroundJobProcessor`, never on `IJobQueue` (Symbio TASK-383), because a host
+registers its durable queue first. `AddRecurringJob<TJob>(name, interval, queueName)` SHALL register the job and a
+`RecurringJobRegistration`, applied to the running scheduler when the hosted service starts, whatever the call order
+(Symbio TASK-457). The scheduler's hosted service SHALL always start the loop, follower or not; leadership belongs to
+the scheduler. `StopAsync` SHALL stop the loop and wait for it only until the host's shutdown token fires, disposing its
+token source only after the loop ends.
+
+#### Scenario: Durable queue registered first
+
+- **Given** an `IJobQueue` registered before two `AddBackgroundJobs` calls
+- **When** the provider is built
+- **Then** that queue is used, and there is one processor and two hosted services
+
+#### Scenario: A follower takes over
+
+- **Given** a lock provider that refuses the lock, then grants it
+- **When** the hosted services have started
+- **Then** nothing is enqueued while the node follows, and the recurring job runs once it leads
+
+#### Scenario: A job that ignores cancellation at shutdown
+
+- **Given** a running job that ignores its token, and a shutdown token that fires after 300 ms
+- **When** the hosted services stop
+- **Then** `StopAsync` returns within the shutdown timeout instead of waiting for the job

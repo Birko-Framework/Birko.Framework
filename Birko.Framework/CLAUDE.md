@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Birko.BackgroundJobs.Hosting: AddBackgroundJobs and the hosted services (2026-10-18)
+[[TASK-538]]. New project, from Symbio's version. `AddBackgroundJobs` is idempotent and keyed on the processor, so a
+durable queue registered first is kept. `AddRecurringJob<TJob>` reaches the scheduler that runs. A follower node still
+runs its loop and takes over. Each job resolves from its own DI scope, and shutdown waits only as long as the host
+allows. Symbio's three lessons are tests.
 ### LLM provider and agent low-finding triage (2026-10-18)
 [[TASK-173]]. 31 low findings: 27 confirmed, 4 refuted; 22 fixed, 3 already fixed, 1 spawned ([[TASK-660]]: telling a
 run's outcomes apart).
@@ -315,10 +320,6 @@ now composes through its driver's builder, with one producer shared by the setti
 `InvalidOperationException` and a throwing one stayed active, and a failed InfluxDB write kept its points for a retry to
 re-send. Each now releases what it holds, a refused Cosmos batch is a `UnitOfWorkException`, and the rollback after a
 failed commit is a no-op, as on SQL and Elasticsearch. RavenDB: [[TASK-658]].
-### The async SQL model repository takes its connector type (2026-10-17)
-[[TASK-576]]. **Signature change:** `AsyncDataBaseModelRepository<T>` is now `AsyncDataBaseModelRepository<TConnector, T>`,
-as the sync one is. Measured: it checked for `AsyncDataBaseBulkStore<AbstractConnector, T>`, which by generic invariance no
-provider store is, so it refused every store (no caller could have used it). It now exposes `Connector` and the init hooks.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

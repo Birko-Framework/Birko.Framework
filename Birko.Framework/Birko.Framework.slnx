@@ -1,6 +1,7 @@
 ﻿<Solution>
   <Folder Name="/BackgroundJobs/">
     <Project Path="../Birko.BackgroundJobs/Birko.BackgroundJobs.shproj" />
+    <Project Path="../Birko.BackgroundJobs.Hosting/Birko.BackgroundJobs.Hosting.shproj" />
     <Project Path="../Birko.BackgroundJobs.SQL/Birko.BackgroundJobs.SQL.shproj" />
     <Project Path="../Birko.BackgroundJobs.ElasticSearch/Birko.BackgroundJobs.ElasticSearch.shproj" />
     <Project Path="../Birko.BackgroundJobs.MongoDB/Birko.BackgroundJobs.MongoDB.shproj" />
@@ -213,6 +214,7 @@
     <Project Path="../tests/Birko.VersionControl.Git.Tests/Birko.VersionControl.Git.Tests.csproj" />
     <Project Path="../tests/Birko.Structures.Tests/Birko.Structures.Tests.csproj" />
     <Project Path="../tests/Birko.BackgroundJobs.Tests/Birko.BackgroundJobs.Tests.csproj" />
+    <Project Path="../tests/Birko.BackgroundJobs.Hosting.Tests/Birko.BackgroundJobs.Hosting.Tests.csproj" />
     <Project Path="../tests/Birko.MessageQueue.Tests/Birko.MessageQueue.Tests.csproj" />
     <Project Path="../tests/Birko.MessageQueue.InMemory.Tests/Birko.MessageQueue.InMemory.Tests.csproj" />
     <Project Path="../tests/Birko.MessageQueue.MQTT.Tests/Birko.MessageQueue.MQTT.Tests.csproj" />

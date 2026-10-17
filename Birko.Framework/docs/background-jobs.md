@@ -126,30 +126,52 @@ var options = new JobQueueOptions
 };
 
 var executor = new JobExecutor(type => serviceProvider.GetRequiredService(type));
-var processor = new BackgroundJobProcessor(queue, executor, serializer, options);
+var processor = new BackgroundJobProcessor(queue, executor, options);
 
-// Start processing (runs until cancelled)
+// Run until cancelled (or processor.Stop()); in-flight jobs are awaited before RunAsync returns
 var cts = new CancellationTokenSource();
-await processor.StartAsync(cts.Token);
+var run = processor.RunAsync(cts.Token);
 
-// Stop gracefully
 cts.Cancel();
+await run;
 ```
+
+In a .NET host use **Birko.BackgroundJobs.Hosting** instead (below), which also resolves each job from its own DI scope.
 
 `BackgroundJobProcessor` uses semaphore-based concurrency control and polls the queue at the configured interval.
 
 ## Recurring Jobs
 
 ```csharp
-var scheduler = new RecurringJobScheduler(dispatcher);
+var scheduler = new RecurringJobScheduler(queue, clock, lockProvider: null);
 
-// Register recurring jobs
 scheduler.Register<CleanupJob>("cleanup", TimeSpan.FromHours(1));
 scheduler.Register<HealthCheckJob>("healthcheck", TimeSpan.FromMinutes(5));
 
-// Start scheduler
-await scheduler.StartAsync(cts.Token);
+await scheduler.RunAsync(cts.Token);   // with an IJobLockProvider, only the leader enqueues; followers keep re-trying
 ```
+
+## Hosting (Birko.BackgroundJobs.Hosting)
+
+`AddBackgroundJobs` registers the queue (in-memory unless one is already registered), the clock, an executor that
+resolves each job from its own DI scope, the dispatcher, the processor and the scheduler, plus the two hosted services
+that run them (TASK-538). It is idempotent, keyed on the processor, so a host can register a durable queue first and
+several modules can call it. `AddRecurringJob<TJob>` declares a schedule that is applied to the running scheduler when
+the host starts, in any order relative to `AddBackgroundJobs`.
+
+```csharp
+builder.Services.AddSingleton<IJobQueue>(durableQueue);          // optional, before or after
+builder.Services.AddSingleton<IJobLockProvider>(lockProvider);    // for more than one node
+builder.Services.AddBackgroundJobs(o =>
+{
+    o.Queue = new JobQueueOptions { MaxConcurrency = 4 };
+    o.RecurringLockName = "myapp:recurring";                        // the same on every node, in every version
+});
+builder.Services.AddRecurringJob<CleanupJob>("cleanup", TimeSpan.FromHours(1));
+```
+
+The scheduler's loop runs on every node; a follower enqueues nothing and takes over when the lock frees. On shutdown
+the processor stops and running jobs get their cancellation; the host waits for them up to its shutdown timeout.
 
 ## Retry Policy
 

@@ -2,7 +2,7 @@
 id: TASK-538
 parent: STORY-061
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-08
@@ -32,13 +32,45 @@ Adopted in the consumer by DraCode TASK-136 (`Consumers/DraCode/tasks/EPIC-018-a
 
 ## Acceptance criteria
 
-- [ ] Hosted services for the processor and the recurring scheduler (a `Hosting/` folder, or `Birko.BackgroundJobs.Hosting` if the dependency graph wants the split)
-- [ ] `AddBackgroundJobs(...)` / `AddRecurringJob<TJob>(...)`, idempotent, with Symbio's three lessons as tests
-- [ ] Graceful stop honours the host's shutdown token
-- [ ] Start from Symbio's version (it carries the fixes), check it against DraCode's wiring
+- [x] Hosted services for the processor and the recurring scheduler (a `Hosting/` folder, or `Birko.BackgroundJobs.Hosting` if the dependency graph wants the split)
+- [x] `AddBackgroundJobs(...)` / `AddRecurringJob<TJob>(...)`, idempotent, with Symbio's three lessons as tests
+- [x] Graceful stop honours the host's shutdown token
+- [x] Start from Symbio's version (it carries the fixes), check it against DraCode's wiring
 
 ## Human test plan
 
 N/A — covered by tests.
 
-## Implementation plan
+## Resolution (2026-10-18)
+
+**New `Birko.BackgroundJobs.Hosting`** (its own project: `Birko.BackgroundJobs` stays free of hosting packages, and
+BardStudio imports the core). Started from Symbio's version and checked against DraCode's wiring.
+- `AddBackgroundJobs(configure)`: clock, in-memory queue, `ScopedJobExecutor`, dispatcher, processor and recurring
+  scheduler, each kept when already registered, plus the two hosted services. Idempotent, keyed on the processor.
+- `AddRecurringJob<TJob>(name, interval, queueName)`: a `RecurringJobRegistration`, applied to the running scheduler
+  at startup.
+- `LoopHostedService` base, `BackgroundJobProcessorHostedService`, `RecurringJobSchedulerHostedService`.
+- Options: `Queue` (`JobQueueOptions`), `RecurringLockName` (Symbio passes `symbio:recurring-scheduler`),
+  `LeadershipRetryInterval`.
+
+**Symbio's three lessons are tests, each mutation-checked against its defect:**
+1. The guard keys on the processor (TASK-383). Mutated to key on `IJobQueue`: red.
+2. A recurring job reaches the running scheduler in either order (TASK-457). Tested both ways, with a real tick.
+3. A follower runs its loop and takes over (TASK-457). Mutated with Symbio's old start-time gate: red.
+
+**Beyond Symbio's version:**
+- Each job resolves from its own DI scope (`ScopedJobExecutor`). DraCode resolved from the root provider, so a scoped
+  dependency failed under `ValidateScopes`; with DraCode's executor as a mutation, the test is red.
+- `StopAsync` waits only until the host's shutdown token fires. A mutation awaiting the loop unbounded was red (34 s).
+- The token source is disposed only after the loop ends; Symbio disposed it while the loop could still be using it.
+- A faulted loop is logged.
+
+Not ported: Symbio's `RecurringJobSlotGuard` (its own executor decorator, which it registers before calling).
+
+Note for the processor triage ([[TASK-158]]): `BackgroundJobProcessor.Stop()` cancels the token its running jobs were
+given, so a stop is never purely graceful. That behaviour is documented here and left to the triage.
+
+**Tests:** `BackgroundJobsHostingTests`, 9 tests against a real `ServiceProvider` (`ValidateScopes`), all green. The
+Sandbox aggregator builds. Docs: the stale processor and scheduler snippets in `docs/background-jobs.md` were fixed
+(`StartAsync` does not exist, and the constructors were wrong), and a Hosting section was added. The spec
+`background-jobs` gained the requirement.

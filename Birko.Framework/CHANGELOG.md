@@ -61,6 +61,12 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
 
+## 2026-10-17 — The async SQL model repository takes its connector type
+
+[[TASK-576]]. **Signature change:** `AsyncDataBaseModelRepository<T>` is now `AsyncDataBaseModelRepository<TConnector, T>`,
+as the sync one is. Measured: it checked for `AsyncDataBaseBulkStore<AbstractConnector, T>`, which by generic invariance no
+provider store is, so it refused every store (no caller could have used it). It now exposes `Connector` and the init hooks.
+
 ## 2026-10-17 — The distributed event bus gives each message its own DI scope
 
 [[TASK-566]]. Measured: a handler with a scoped dependency threw on every delivery under `ValidateScopes`, and at startup

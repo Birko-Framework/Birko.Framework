@@ -333,6 +333,7 @@ Only 4 projitems-level import chains exist:
 | Project | Dependencies |
 |---------|-------------|
 | **Birko.BackgroundJobs** | Birko.Contracts |
+| **Birko.BackgroundJobs.Hosting** | Birko.BackgroundJobs, Birko.Time.Abstractions, Microsoft.Extensions.DependencyInjection.Abstractions, Microsoft.Extensions.Hosting.Abstractions, Microsoft.Extensions.Logging.Abstractions |
 | **Birko.BackgroundJobs.SQL** | Birko.BackgroundJobs, Birko.Data.Core, Birko.Data.SQL, Birko.Data.Stores |
 | **Birko.BackgroundJobs.ElasticSearch** | Birko.BackgroundJobs, Birko.Data.Core, Birko.Data.ElasticSearch, Birko.Data.Stores |
 | **Birko.BackgroundJobs.MongoDB** | Birko.BackgroundJobs, Birko.Data.Core, Birko.Data.MongoDB, Birko.Data.Stores |

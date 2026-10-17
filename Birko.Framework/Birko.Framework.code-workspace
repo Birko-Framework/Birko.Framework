@@ -41,6 +41,10 @@
 			"path": "../Birko.BackgroundJobs.ElasticSearch"
 		},
 		{
+			"name": "BackgroundJobs / Birko.BackgroundJobs.Hosting",
+			"path": "../Birko.BackgroundJobs.Hosting"
+		},
+		{
 			"name": "BackgroundJobs / Birko.BackgroundJobs.JSON",
 			"path": "../Birko.BackgroundJobs.JSON"
 		},
@@ -679,6 +683,10 @@
 		{
 			"name": "Tests / AuditCommon.Tests",
 			"path": "../tests/AuditCommon.Tests"
+		},
+		{
+			"name": "Tests / Birko.BackgroundJobs.Hosting.Tests",
+			"path": "../tests/Birko.BackgroundJobs.Hosting.Tests"
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.SQL.Tests",

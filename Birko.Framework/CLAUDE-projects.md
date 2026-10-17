@@ -78,6 +78,8 @@ Birko.Communication.gRPC (GrpcSettings, GrpcChannelPool, GrpcClientFactory, Grpc
 
 Birko.BackgroundJobs (IJobQueue, JobDescriptor, RetryPolicy, JobProcessor, JobScheduler)
   -> 8 backends: .SQL, .ElasticSearch, .MongoDB, .RavenDB, .JSON, .XML, .Redis, .CosmosDB
+  -> Birko.BackgroundJobs.Hosting (AddBackgroundJobs, AddRecurringJob, hosted services) + DI / Hosting abstractions
+     (its own project so the core stays free of hosting packages; BardStudio imports the core)
 
 Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
   -> 7 backends: .SQL, .ElasticSearch, .MongoDB, .RavenDB, .JSON, .XML, .CosmosDB
@@ -201,6 +203,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 
 ## Background Jobs & Message Queue
 - **Birko.BackgroundJobs** - Job interfaces, in-memory queue, processor, dispatcher, scheduler
+- **Birko.BackgroundJobs.Hosting** - `AddBackgroundJobs` / `AddRecurringJob<TJob>` and the hosted services that run the processor and the recurring scheduler; jobs resolved per DI scope
 - **Birko.BackgroundJobs.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.JSON** / **.XML** / **.Redis** / **.CosmosDB**
 - **Birko.MessageQueue** - Core interfaces (IMessageQueue, IMessageProducer, IMessageConsumer), Pub/Sub, P2P
 - **Birko.MessageQueue.InMemory** / **.MQTT** / **.Redis**
@@ -261,7 +264,7 @@ First real, buildable `.csproj` assemblies in the `Birko\Framework` bucket (ever
 All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its own CLAUDE.md.
 - Birko.Data.Tests, Birko.Data.SQL.Tests, Birko.Data.ElasticSearch.Tests
 - Birko.Helpers.Tests, Birko.Structures.Tests, Birko.VersionControl.Git.Tests
-- Birko.BackgroundJobs.Tests, Birko.MessageQueue.Tests, Birko.MessageQueue.Redis.Tests
+- Birko.BackgroundJobs.Tests, Birko.BackgroundJobs.Hosting.Tests, Birko.MessageQueue.Tests, Birko.MessageQueue.Redis.Tests
 - Birko.EventBus.Tests, Birko.CQRS.Tests, Birko.Workflow.Tests
 - Birko.Security.AspNetCore.Tests, Birko.Security.BCrypt.Tests, Birko.Security.Vault.Tests, Birko.Security.AzureKeyVault.Tests, Birko.Security.NFC.Tests, Birko.Security.OAuth.Server.Tests, Birko.Security.Grants.Tests, Birko.Security.Grants.SQL.Tests (Vault.Tests also covers Vault.Configuration)
 - Birko.Storage.Tests, Birko.Storage.AzureBlob.Tests

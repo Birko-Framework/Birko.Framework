@@ -278,6 +278,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.Grants.AspNetCore | ASP.NET Core for grants: `RequireGrant` endpoint filter (404 vs 403 by visibility), grant-aware permission resolver, `AddBirkoGrants` DI |
 | Birko.Security.Grants.SQL | SQL schema for grants: fluent mappings, a store pair for any SQL provider, the lookup indexes |
 | Birko.BackgroundJobs | Background job processing framework |
+| Birko.BackgroundJobs.Hosting | DI registration and hosted services for the processor and recurring scheduler |
 | Birko.BackgroundJobs.SQL | SQL-based persistent job queue |
 | Birko.BackgroundJobs.ElasticSearch | Elasticsearch-based persistent job queue |
 | Birko.BackgroundJobs.MongoDB | MongoDB-based persistent job queue |
@@ -330,6 +331,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.VersionControl.Git.Tests | Git service and tools against temporary repositories |
 | Birko.Structures.Tests | Tree data structure tests |
 | Birko.BackgroundJobs.Tests | Background job processing tests |
+| Birko.BackgroundJobs.Hosting.Tests | Hosting: idempotent registration, recurring jobs, leadership, shutdown |
 | Birko.Communication.GraphQL.Tests | GraphQL client tests (queries, mutations, subscriptions, request builder) |
 | Birko.Communication.gRPC.Tests | gRPC client tests (settings, channel pool, auth interceptor, client factory, exception) |
 | Birko.Communication.gRPC.Server.Tests | gRPC server tests (settings, AddBirkoGrpc DI, server auth interceptor) |
