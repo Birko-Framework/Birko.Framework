@@ -33,6 +33,29 @@ public abstract class SyncProviderBase<T, TKnowledge>
     }
 
     /// <summary>
+    /// Reports a failure: once into <paramref name="errors"/> (which reaches <see cref="SyncResult.Errors"/>) and once to
+    /// <see cref="SyncOptions.OnError"/>.
+    /// </summary>
+    /// <remarks>
+    /// TASK-647. <c>OnError</c> ("called when an error occurs") fired only for a failed conflict resolution, which then
+    /// rethrew into the per-item handler and was recorded again, while every other failed item never reached
+    /// <c>OnError</c>. This is the one place both channels are written. A throwing handler is swallowed (rule 25): the
+    /// error is already recorded, and the handler's own failure must not replace it.
+    /// </remarks>
+    protected static void ReportError(List<SyncError> errors, SyncOptions options, SyncError error)
+    {
+        errors.Add(error);
+        try
+        {
+            options.OnError?.Invoke(error);
+        }
+        catch (Exception)
+        {
+            // Rule 25: a diagnostic channel survives its own subscriber.
+        }
+    }
+
+    /// <summary>
     /// The knowledge row that records "this scope has been synced", so a run that reconciled nothing still ends the
     /// initial sync (SH-M067, TASK-157). No entity can carry it: <see cref="BuildEntityDictionary"/> refuses an empty
     /// Guid, so the marker never matches an item.
@@ -224,6 +247,21 @@ public abstract class SyncProviderBase<T, TKnowledge>
                     LocalItem = localItem,
                     RemoteItem = remoteItem,
                     Reason = "Modified on both sides"
+                });
+            }
+            // TASK-647: no recorded pair (knowledge lost, or a legacy row), both sides hold it. Custom fell to GetWinner's
+            // default "local", so the resolver and OnConflict were never asked. It is asked now, unless the two copies
+            // carry the same version and there is nothing to decide.
+            if (options.ConflictPolicy == ConflictResolutionPolicy.Custom)
+            {
+                if (GetVersionHash(localItem) == GetVersionHash(remoteItem))
+                    return (SyncAction.Skip, null, null, null);
+                return (SyncAction.Conflict, null, null, new ConflictInfo
+                {
+                    Guid = guid,
+                    LocalItem = localItem,
+                    RemoteItem = remoteItem,
+                    Reason = "Present on both sides with no recorded pair"
                 });
             }
             return (SyncAction.Update, GetWinner(localItem!, remoteItem!, options.ConflictPolicy), null, null);

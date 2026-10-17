@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Sync versions a written side as stored, asks Custom without a pair, reports a failure once (2026-10-17)
+
+[[TASK-647]]. Measured: every SQL provider and MongoDB read `UpdatedAt` back with another precision or Kind, so an item
+written by sync read as changed next run, and the lossy copy overwrote the precise source. Written sides are now read
+back before their version is recorded. Custom is asked about an item with no recorded pair. Every failure reaches
+`result.Errors` and `OnError` once. MySQL / SQL Server precision itself is [[TASK-656]].
 ### Rule `Between` and `In` no longer round a fractional value (2026-10-17)
 
 [[TASK-645]]. Measured: `Qty Between 10.5..20` selected Qty 10 at the store and `Qty In [10.6]` selected 11, while
@@ -331,12 +337,6 @@ conditions is now Inner by default; Cross with conditions, and Inner/Left withou
 [[TASK-152]]. A migration added below the current version never ran; a rollback ran `Down` for unapplied ones. `$in` was
 equality and null matched nothing on SQL. Every backend now shares one filter reader, refuses unknown operators, and
 reads null as MongoDB does. InfluxDB, ES, RavenDB and Cosmos report what they cannot do. RavenDB/Cosmos indexes are built.
-### Index drift on MongoDB, RavenDB and Cosmos DB, and a health check for it (2026-10-15)
-
-[[TASK-635]]. `IndexDeclarationDriftDetector` compares the `IndexDefinition`s a host declares with a store's index manager:
-`Missing`, `ColumnsDiffer`, `UniquenessDiffers`, or not compared. `IndexDeclarationDriftHealthCheck` is in the new
-`Birko.Health.Data.IndexManagement`. Fixed on the way: a MongoDB text index read as fields `_fts`, `_ftsx`, and a RavenDB
-lookup of an absent index threw instead of answering null.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

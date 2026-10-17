@@ -242,12 +242,15 @@ The system SHALL, when `Direction` is `Bidirectional` and the entity exists on b
 return `SyncAction.Update` with that side as the winner regardless of policy; SHALL, when both sides
 changed (or there is no known pair), return `Update` with winner `"local"` under `LocalWins` and `"remote"`
 under `RemoteWins`; SHALL, for any other policy with a known pair and both sides changed, return
-`SyncAction.Conflict` carrying both items and the reason `"Modified on both sides"`; and SHALL, with no known
-pair under any other policy, return `Update` with the winner chosen by `GetWinner(local, remote,
-options.ConflictPolicy)`, invoking neither `OnConflict` nor `CustomConflictResolver`.
+`SyncAction.Conflict` carrying both items and the reason `"Modified on both sides"`; SHALL, with no known
+pair under `Custom`, return `SyncAction.Skip` when both copies carry the same version and otherwise a
+`SyncAction.Conflict` with the reason `"Present on both sides with no recorded pair"`, so `OnConflict` and
+`CustomConflictResolver` are asked (TASK-647: it fell to `GetWinner`'s default `"local"` and the resolver was never
+asked); and SHALL, with no known pair under `NewestWins`, return `Update` with the winner chosen by
+`GetWinner(local, remote, options.ConflictPolicy)`.
 
 `GetWinner` maps `LocalWins → "local"`, `RemoteWins → "remote"`, `NewestWins → GetNewest(...)`, and every
-other value — including `ConflictResolutionPolicy.Custom` — to the default arm `_ => "local"`.
+other value to the default arm `_ => "local"`, which `Custom` no longer reaches.
 
 #### Scenario: A both-sides edit is a conflict that reaches the custom resolver
 
@@ -393,8 +396,8 @@ write. The `Merge` case throws `NotSupportedException`.
 
 - **Given** `ConflictPolicy = Custom` with a resolver returning `ConflictResolution.Merge`
 - **When** a `Conflict` action is applied
-- **Then** `NotSupportedException` reading `ConflictResolution.Merge is not supported for <T> <guid>: no merge exists. Resolve with UseLocal, UseRemote or Skip.` is reported through `options.OnError` and rethrown
-- **And** the per-item handler records a `SyncError` for the item, no store write occurs, no knowledge row is emitted, and `result.Success` is false
+- **Then** `NotSupportedException` reading `ConflictResolution.Merge is not supported for <T> <guid>: no merge exists. Resolve with UseLocal, UseRemote or Skip.` propagates to the per-item handler
+- **And** that handler reports one `SyncError` for the item (to `result.Errors` and `options.OnError`, once each), no store write occurs, no knowledge row is emitted, and `result.Success` is false
 
 #### Scenario: Skip resolution counts as a skip
 
@@ -485,7 +488,12 @@ derived as `string.IsNullOrEmpty(hash)`, this is what keeps a row written after 
 known pair for the next run.
 
 `ProcessBatch`/`ProcessBatchAsync` track an `effectiveLocal` / `effectiveRemote` pair through the switch and
-pass those to `CreateKnowledgeItem`.
+pass those to `CreateKnowledgeItem`. A side this item was WRITTEN to (its effective entity is not the one read at the
+start of the run) SHALL be read back from its store by Guid first, so its version is what that store holds (TASK-647,
+rule 63). Measured: SQLite, PostgreSQL, MySQL and SQL Server read `UpdatedAt` back with `Kind = Unspecified` and
+less precision (MySQL to the second), MongoDB to the millisecond. A version taken from the object written read as
+changed on the next run, and the lossy copy then overwrote the precise source. A side whose read-back finds nothing
+keeps the object written.
 
 #### Scenario: Knowledge after an upload does not mark the remote deleted
 
@@ -568,8 +576,9 @@ the block reason.
 
 - **Given** `OnSaveFilterBlock = ThrowException` and a `Conflict` whose resolution attempts a blocked save
 - **When** `ApplyConflictResolution` runs
-- **Then** the exception is reported through `options.OnError` with `Operation = "ConflictResolution"` and rethrown
-- **And** the per-item handler adds a `SyncError` with `Operation = "Conflict"` to `result.Errors`, so `result.Success` is false
+- **Then** the exception propagates to the per-item handler, which reports one `SyncError` with
+  `Operation = "Conflict"` to `result.Errors` and `options.OnError`, so `result.Success` is false (TASK-647: it was
+  reported to `OnError` by the conflict path and again by the handler)
 
 ### Requirement: Batching, item capping and cancellation
 
@@ -719,7 +728,9 @@ The system SHALL invoke `options.OnProgress` with a newly constructed `SyncProgr
 The system SHALL wrap each item's action application in a try/catch, SHALL record a `SyncError` carrying the
 item Guid, the action name as `Operation`, the message `Failed to sync item <guid>`, the exception message
 as `Details` and the exception itself, SHALL increment `progress.Errors`, and SHALL continue with the next
-item. On a caught failure the item's knowledge row SHALL NOT be emitted.
+item. Every reported failure, per item or of the whole run, SHALL go through `ReportError`: once into the result's
+errors and once to `options.OnError`, a throwing handler being swallowed so the item's own error stands (TASK-647,
+rule 25; before, only a failed conflict resolution reached `OnError`, and it was reported twice). On a caught failure the item's knowledge row SHALL NOT be emitted.
 
 #### Scenario: A failing store write does not stop the batch
 

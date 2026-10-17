@@ -60,10 +60,14 @@ rests on:
 | On both sides, neither changed since the record | Skip |
 | On both sides, one side changed | That side wins, whatever the policy |
 | On both sides, both changed | The policy: LocalWins / RemoteWins directly, NewestWins / Custom through a conflict carrying both items |
+| On both sides, never recorded (lost or legacy knowledge) | LocalWins / RemoteWins / NewestWins pick a winner; Custom asks your resolver unless both copies carry the same version |
 | On one side, never recorded on both | A new item: created on the other side |
 | On one side, recorded on both | A deletion on the other side: propagated if the survivor did not change, otherwise the policy |
 
-A model without `UpdatedAt` has no version, so it is always treated as changed.
+An entity's version is its `UpdatedAt` (`ToString("O")`), or a hash of its serialized content when it has none. A side
+the run wrote to is versioned as that side **stored** it, read back after the write: most backends do not keep a
+`DateTime` exactly (measured: the SQL providers return another `Kind` and less precision, MySQL to the second; MongoDB
+keeps milliseconds), and a version taken from the object written would read as changed on every later run.
 
 Knowledge is written only for a reconciled state. An item that could not be reconciled (a save filter blocked the
 write, a conflict resolved as `Skip`) leaves the previous record in place and is retried by the next run. Each run also
@@ -74,6 +78,9 @@ writes a scope marker row (an entry for `Guid.Empty`), so a run that reconciled 
 `ResolveConflict` turns a conflict into `UseLocal`, `UseRemote` or `Skip`. With `ConflictPolicy.Custom`, your
 `CustomConflictResolver` decides. `ConflictResolution.Merge` is **refused**: nothing in the framework can merge two
 entities, so the item is reported in `result.Errors` instead of being silently left unresolved.
+
+Every failed item, and a failed run, is reported once in `result.Errors` and once to `OnError`. A handler that throws
+does not change the result.
 
 ## Save filters
 

@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Index drift on MongoDB, RavenDB and Cosmos DB, and a health check for it
+
+[[TASK-635]]. `IndexDeclarationDriftDetector` compares the `IndexDefinition`s a host declares with a store's index manager:
+`Missing`, `ColumnsDiffer`, `UniquenessDiffers`, or not compared. `IndexDeclarationDriftHealthCheck` is in the new
+`Birko.Health.Data.IndexManagement`. Fixed on the way: a MongoDB text index read as fields `_fts`, `_ftsx`, and a RavenDB
+lookup of an absent index threw instead of answering null.
+
 ## 2026-10-15 — Cosmos DB index manager: indexes answer by their name; Unique refused
 
 [[TASK-628]]. A Cosmos policy has no index names, so `ExistsAsync("IX_Code")` was false for the index just created, and a

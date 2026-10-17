@@ -211,7 +211,7 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
         }
         catch (Exception ex)
         {
-            result.Errors.Add(new SyncError
+            ReportError(result.Errors, options, new SyncError
             {
                 Message = "Sync failed",
                 Details = ex.Message,
@@ -384,12 +384,18 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                 // missing side on the next run.
                 if (reconciled && IsReconciled(effectiveLocal, effectiveRemote))
                 {
+                    // TASK-647: a side this item was written to is versioned as that side STORED it (rule 63); see the async twin.
+                    if (effectiveLocal != null && !ReferenceEquals(effectiveLocal, localItem))
+                        effectiveLocal = _localStore.Read(guid) ?? effectiveLocal;
+                    if (effectiveRemote != null && !ReferenceEquals(effectiveRemote, remoteItem))
+                        effectiveRemote = _remoteStore.Read(guid) ?? effectiveRemote;
                     knowledgeUpdates.Add(_knowledgeStore.CreateKnowledgeItem(guid, GetVersionHash(effectiveLocal), GetVersionHash(effectiveRemote), options));
                 }
             }
             catch (Exception ex)
             {
-                result.Errors.Add(new SyncError
+                // A failed conflict resolution arrives here too, reported once (TASK-647).
+                ReportError(result.Errors, options, new SyncError
                 {
                     ItemGuid = guid,
                     Operation = action.Action.ToString(),
@@ -432,96 +438,79 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
         SyncFilterOptions<T>? filterOptions,
         SyncProgress progress)
     {
-        try
+        switch (resolution)
         {
-            switch (resolution)
-            {
-                case ConflictResolution.UseLocal when localItem != null && remoteItem != null:
-                    if (CanSaveToRemote(localItem, filterOptions, options))
-                    {
-                        _remoteStore.Update(localItem, null);
-                        progress.UpdatedItems++;
-                        return (localItem, localItem, true);
-                    }
-                    break;
+            case ConflictResolution.UseLocal when localItem != null && remoteItem != null:
+                if (CanSaveToRemote(localItem, filterOptions, options))
+                {
+                    _remoteStore.Update(localItem, null);
+                    progress.UpdatedItems++;
+                    return (localItem, localItem, true);
+                }
+                break;
 
-                case ConflictResolution.UseLocal when localItem != null:
-                    // Modified locally, deleted remotely, local wins: re-create on the remote. Mirrors
-                    // DetermineSyncAction's LocalWins shortcut for this state, which returns Create.
-                    if (CanSaveToRemote(localItem, filterOptions, options))
-                    {
-                        _remoteStore.Create(localItem, null);
-                        progress.CreatedItems++;
-                        return (localItem, localItem, true);
-                    }
-                    break;
+            case ConflictResolution.UseLocal when localItem != null:
+                // Modified locally, deleted remotely, local wins: re-create on the remote. Mirrors
+                // DetermineSyncAction's LocalWins shortcut for this state, which returns Create.
+                if (CanSaveToRemote(localItem, filterOptions, options))
+                {
+                    _remoteStore.Create(localItem, null);
+                    progress.CreatedItems++;
+                    return (localItem, localItem, true);
+                }
+                break;
 
-                case ConflictResolution.UseLocal when remoteItem != null:
-                    // Deleted locally, modified remotely, local wins: the local deletion wins, so the
-                    // remote row goes. Mirrors the LocalWins shortcut, which returns Delete on "remote".
-                    if (CanSaveToRemote(remoteItem, filterOptions, options))
-                    {
-                        _remoteStore.Delete(remoteItem);
-                        progress.DeletedItems++;
-                        return (null, null, true);
-                    }
-                    break;
+            case ConflictResolution.UseLocal when remoteItem != null:
+                // Deleted locally, modified remotely, local wins: the local deletion wins, so the
+                // remote row goes. Mirrors the LocalWins shortcut, which returns Delete on "remote".
+                if (CanSaveToRemote(remoteItem, filterOptions, options))
+                {
+                    _remoteStore.Delete(remoteItem);
+                    progress.DeletedItems++;
+                    return (null, null, true);
+                }
+                break;
 
-                case ConflictResolution.UseRemote when remoteItem != null && localItem != null:
-                    if (CanSaveToLocal(remoteItem, filterOptions, options))
-                    {
-                        _localStore.Update(remoteItem, null);
-                        progress.UpdatedItems++;
-                        return (remoteItem, remoteItem, true);
-                    }
-                    break;
+            case ConflictResolution.UseRemote when remoteItem != null && localItem != null:
+                if (CanSaveToLocal(remoteItem, filterOptions, options))
+                {
+                    _localStore.Update(remoteItem, null);
+                    progress.UpdatedItems++;
+                    return (remoteItem, remoteItem, true);
+                }
+                break;
 
-                case ConflictResolution.UseRemote when remoteItem != null:
-                    // Deleted locally, modified remotely, remote wins: re-create locally. Mirrors
-                    // DetermineSyncAction's RemoteWins shortcut for this state, which returns Create.
-                    if (CanSaveToLocal(remoteItem, filterOptions, options))
-                    {
-                        _localStore.Create(remoteItem, null);
-                        progress.CreatedItems++;
-                        return (remoteItem, remoteItem, true);
-                    }
-                    break;
+            case ConflictResolution.UseRemote when remoteItem != null:
+                // Deleted locally, modified remotely, remote wins: re-create locally. Mirrors
+                // DetermineSyncAction's RemoteWins shortcut for this state, which returns Create.
+                if (CanSaveToLocal(remoteItem, filterOptions, options))
+                {
+                    _localStore.Create(remoteItem, null);
+                    progress.CreatedItems++;
+                    return (remoteItem, remoteItem, true);
+                }
+                break;
 
-                case ConflictResolution.UseRemote when localItem != null:
-                    // Modified locally, deleted remotely, remote wins: the remote deletion wins, so the
-                    // local row goes. Mirrors the RemoteWins shortcut, which returns Delete on "local".
-                    if (CanSaveToLocal(localItem, filterOptions, options))
-                    {
-                        _localStore.Delete(localItem);
-                        progress.DeletedItems++;
-                        return (null, null, true);
-                    }
-                    break;
+            case ConflictResolution.UseRemote when localItem != null:
+                // Modified locally, deleted remotely, remote wins: the remote deletion wins, so the
+                // local row goes. Mirrors the RemoteWins shortcut, which returns Delete on "local".
+                if (CanSaveToLocal(localItem, filterOptions, options))
+                {
+                    _localStore.Delete(localItem);
+                    progress.DeletedItems++;
+                    return (null, null, true);
+                }
+                break;
 
-                case ConflictResolution.Merge:
-                    // SH-M049 (TASK-157): nothing in the framework can merge two entities, so Merge was silently inert:
-                    // no write, no skip, and the item recorded as reconciled. It is refused per item instead.
-                    throw new NotSupportedException(
-                        $"ConflictResolution.Merge is not supported for {typeof(T).Name} {guid}: no merge exists. "
-                        + "Resolve with UseLocal, UseRemote or Skip.");
+            case ConflictResolution.Merge:
+                // SH-M049 (TASK-157): nothing in the framework can merge two entities, so Merge was silently inert:
+                // no write, no skip, and the item recorded as reconciled. It is refused per item instead.
+                throw new NotSupportedException(
+                    $"ConflictResolution.Merge is not supported for {typeof(T).Name} {guid}: no merge exists. "
+                    + "Resolve with UseLocal, UseRemote or Skip.");
 
-                case ConflictResolution.Skip:
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            options.OnError?.Invoke(new SyncError
-            {
-                ItemGuid = guid,
-                Operation = "ConflictResolution",
-                Message = "Failed to apply conflict resolution",
-                Details = ex.Message,
-                Exception = ex
-            });
-            // SH-M058 (TASK-157): rethrown, so the item's error reaches result.Errors and Success is false. Reported only
-            // through OnError, a failed resolution left a run reporting complete success.
-            throw;
+            case ConflictResolution.Skip:
+                break;
         }
 
         // Nothing was written (a save filter blocked it, or Skip): the conflict stays unresolved and is not recorded.
