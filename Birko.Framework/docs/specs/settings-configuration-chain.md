@@ -734,6 +734,14 @@ caught it was environment-gated *and* could not have passed if ungated.
 - **When** the inherited properties are read
 - **Then** `Location` is the endpoint, `Name` is the database, `Password` is the account key, `UserName` is the container name, `Port` is `0` and `UseSecure` is `true`
 
+#### Scenario: An empty PartitionKeyPath is the default, everywhere
+
+- **Given** `PartitionKeyPath` null, `""` or `"/id"`
+- **When** validation runs and a container is created
+- **Then** validation accepts it and the container is partitioned on `/id`: `EffectivePartitionKeyPath` is the one
+  producer for both. Before TASK-650 validation accepted `""` while creation fell back only on null, and Cosmos DB
+  refuses a container on an empty path (measured)
+
 #### Scenario: PartitionKeyPath defaults to /id
 
 - **Given** a default-constructed `CosmosDB.Stores.Settings`

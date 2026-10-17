@@ -43,8 +43,12 @@ public class CosmosDBIndexManagerPathTests
         CosmosDBIndexManager.PolicyContainsIndex(policy, "Missing").Should().BeFalse();
     }
 
+    /// <summary>
+    /// Inverted by TASK-650 (rule 56): a composite ELEMENT is not an index on its own; an unregistered name answers a
+    /// single-field path only, as GetInfoAsync and DropAsync do. Composites are named through the registry (TASK-628).
+    /// </summary>
     [Fact]
-    public void PolicyContainsIndex_finds_a_composite_index_element_by_name()
+    public void PolicyContainsIndex_does_not_answer_for_a_composite_index_element()
     {
         var policy = new IndexingPolicy();
         policy.CompositeIndexes.Add(new Collection<CompositePath>
@@ -53,8 +57,8 @@ public class CosmosDBIndexManagerPathTests
             new CompositePath { Path = "/B" },
         });
 
-        CosmosDBIndexManager.PolicyContainsIndex(policy, "A").Should().BeTrue();
-        CosmosDBIndexManager.PolicyContainsIndex(policy, "/B").Should().BeTrue();
+        CosmosDBIndexManager.PolicyContainsIndex(policy, "A").Should().BeFalse();
+        CosmosDBIndexManager.PolicyContainsIndex(policy, "/B").Should().BeFalse();
         CosmosDBIndexManager.PolicyContainsIndex(policy, "C").Should().BeFalse();
     }
 

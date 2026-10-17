@@ -577,7 +577,7 @@ public class AsyncCosmosDBStore<T>
 
         var containerResponse = await _database.CreateContainerIfNotExistsAsync(
             _containerName ?? typeof(T).Name,
-            _settings?.PartitionKeyPath ?? "/id",
+            _settings?.EffectivePartitionKeyPath ?? "/id",
             cancellationToken: ct
         );
         _container = containerResponse.Container;

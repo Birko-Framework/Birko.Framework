@@ -268,7 +268,9 @@ public class CosmosDBIndexManager : IIndexManager
     // consumer configured on the client (Birko configures CosmosGuidIdSerializer).
     private async Task<Registry> ReadRegistryAsync(string scope, CancellationToken ct)
     {
-        var registry = await RegistryContainerAsync(ct).ConfigureAwait(false);
+        // TASK-650: a read does not create the registry container (ExistsAsync did); an absent container answers 404 like an
+        // absent document. UpdateRegistryAsync creates it on the first write.
+        var registry = _database.GetContainer(RegistryContainerName);
         using var response = await registry.ReadItemStreamAsync(scope, new PartitionKey(scope), cancellationToken: ct).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
@@ -478,12 +480,17 @@ public class CosmosDBIndexManager : IIndexManager
         => storedPath == indexName || storedPath == NormalizeFieldPath(indexName);
 
     /// <summary>
-    /// True when the policy contains an index matching <paramref name="indexName"/> as either a
-    /// single-field included path or a composite-index element. Answers a name nothing registered.
+    /// True when the policy holds a single-field included path matching <paramref name="indexName"/>: how a name nothing
+    /// registered is answered.
     /// </summary>
+    /// <remarks>
+    /// TASK-650. It also matched a composite-index ELEMENT, so <c>ExistsAsync("A")</c> was true for one field of a
+    /// multi-field index while <see cref="GetInfoAsync"/> found no index of that name and <see cref="DropAsync"/> removed
+    /// nothing (measured live). A composite is named only through the registry (TASK-628); an unregistered name means a
+    /// single-field path on all three verbs.
+    /// </remarks>
     internal static bool PolicyContainsIndex(IndexingPolicy policy, string indexName)
-        => policy.IncludedPaths.Any(p => IncludedPathMatches(p.Path, indexName))
-        || policy.CompositeIndexes.Any(ci => ci.Any(e => FieldPathMatches(e.Path, indexName)));
+        => policy.IncludedPaths.Any(p => IncludedPathMatches(p.Path, indexName));
 
     /// <summary>
     /// Removes the single-field included path matching <paramref name="indexName"/> and mirrors the

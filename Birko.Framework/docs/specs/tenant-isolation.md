@@ -1379,7 +1379,9 @@ The system SHALL, in `ApplyTenantFiltering`, conjoin a `TenantGuid`-equality pre
 `CanSaveToLocal` and `CanSaveToRemote` with a reflection-based `BelongsToTenant` check, whenever the
 run resolved a tenant and the entity type declares a `TenantGuid` property. `BuildTenantPredicate`
 SHALL emit an unlifted equality for a `Guid` or `Guid?` property and return null for any other
-property type. The shared engine SHALL additionally enforce the fetch predicate in process on the
+property type, in which case `ApplyTenantFiltering` SHALL refuse the scoped run with `NotSupportedException`
+naming the type; an explicit all-tenants run is unaffected (TASK-650: with no predicate, a run scoped to one
+tenant fetched, compared and recorded every tenant's rows, only its writes being blocked). The shared engine SHALL additionally enforce the fetch predicate in process on the
 materialized rows, so the tenant guarantee does not depend on the backend honouring the predicate.
 `ApplyTenantFiltering` SHALL return a new `SyncFilterOptions<T>` and never write to the caller's
 instance.
@@ -1431,6 +1433,13 @@ instance.
 - **Given** a model without a `TenantGuid` property
 - **When** `ApplyTenantFiltering` runs
 - **Then** the fetch and save predicates are left as supplied, and `BelongsToTenant` (if reached) returns true
+
+#### Scenario: A scoped run over a TenantGuid that is not a Guid is refused
+
+- **Given** a model whose `TenantGuid` is a `string`, and resolved tenant `t`
+- **When** `PreviewAsync` or `SyncAsync` runs
+- **Then** `NotSupportedException` is thrown before anything is fetched; inside `WithAllTenantsAsync` the same run
+  previews every row as before
 
 #### Scenario: A TenantGuid that is not a Guid excludes the item
 

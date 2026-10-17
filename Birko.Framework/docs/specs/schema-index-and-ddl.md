@@ -2162,7 +2162,8 @@ declares a non-`Standard` field type, or is a single descending field; then addi
 an included path `/{name}/?` (removing that path from the excluded paths) or a multi-field definition as a
 composite index with per-field sort order, replacing the container only when the policy changed. The
 definition's `Name` SHALL be recorded, with its kind, paths and orders, in one registry document per container
-(id and partition key = the container name) in the container `__birko_indexes`, created on first use and written
+(id and partition key = the container name) in the container `__birko_indexes`, created on the first write (a read,
+`ExistsAsync` included, never creates it, and an absent container reads as an empty registry, TASK-650) and written
 as raw JSON with an ETag precondition, retried up to 8 times on a concurrent write. Re-creating a registered name
 over other paths SHALL throw `IndexManagementException` advising to drop it first. Failures other than
 `ArgumentException`, `NotSupportedException` and `IndexManagementException` SHALL be wrapped in
@@ -2174,7 +2175,10 @@ paths are in the policy.
 - **Given** an index created from a definition named `IX_Number` over field `Number`
 - **When** `ExistsAsync("IX_Number", container)` is called
 - **Then** it returns `true`, because the registry maps the name to `/Number/?` and that path is in the policy;
-  a name nothing registered is still answered by path, so `ExistsAsync("Number", container)` is also `true`
+  a name nothing registered is still answered by a single-field included path, so `ExistsAsync("Number", container)`
+  is also `true`. A composite-index ELEMENT is not an index of its own: for an unregistered name `ExistsAsync`,
+  `GetInfoAsync` and `DropAsync` all answer by included paths only (TASK-650: `ExistsAsync("A")` was true for the
+  first field of a composite while `GetInfoAsync` found nothing and `DropAsync` removed nothing)
 
 #### Scenario: Listing names registered indexes, then unclaimed policy entries by path
 

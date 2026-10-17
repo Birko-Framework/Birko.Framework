@@ -222,14 +222,14 @@ public class TenantSyncProvider<TStore, T, TKnowledge> : ISyncProvider
         var scopedTenantGuid = tenantGuid.Value;
 
         // Narrow what is FETCHED, so no foreign entity ever reaches the compare/delete/knowledge paths.
-        var tenantPredicate = BuildTenantPredicate(scopedTenantGuid);
-        if (tenantPredicate != null)
-        {
-            scoped.LocalFetchPredicate =
-                ExpressionParameterReplacer.AndAlso(scoped.LocalFetchPredicate, tenantPredicate);
-            scoped.RemoteFetchPredicate =
-                ExpressionParameterReplacer.AndAlso(scoped.RemoteFetchPredicate, tenantPredicate);
-        }
+        // TASK-650: a TenantGuid nothing can compare (neither Guid nor Guid?) is refused for a scoped run. With no fetch
+        // predicate every tenant's rows entered the preview, the comparison and the knowledge; only writes were blocked.
+        var tenantPredicate = BuildTenantPredicate(scopedTenantGuid)
+            ?? throw new NotSupportedException(
+                $"Cannot scope a sync of {typeof(T).Name} to a tenant: its TenantGuid is {_tenantGuidProperty.PropertyType.Name}, "
+                + "and only Guid or Guid? can be compared. Make it a Guid, or run inside an explicit all-tenants scope.");
+        scoped.LocalFetchPredicate = ExpressionParameterReplacer.AndAlso(scoped.LocalFetchPredicate, tenantPredicate);
+        scoped.RemoteFetchPredicate = ExpressionParameterReplacer.AndAlso(scoped.RemoteFetchPredicate, tenantPredicate);
 
         // Wrap existing save predicates with tenant check
         var canSaveLocal = scoped.CanSaveToLocal;
@@ -251,10 +251,9 @@ public class TenantSyncProvider<TStore, T, TKnowledge> : ISyncProvider
     /// same shape <c>ModelByTenant</c> emits so every backend's filter translator already handles it.
     /// </summary>
     /// <remarks>
-    /// Returns <c>null</c> when the property is not a <see cref="Guid"/> or <see cref="Nullable{Guid}"/> —
-    /// nothing can be expressed about it, and <see cref="BelongsToTenant"/> already excludes every such row
-    /// from the save paths, so the engine, which enforces the fetch predicate in process too, keeps the
-    /// run fail-closed rather than widening it.
+    /// Returns <c>null</c> when the property is not a <see cref="Guid"/> or <see cref="Nullable{Guid}"/>: nothing can be
+    /// expressed about it, so <see cref="ApplyTenantFiltering"/> refuses the scoped run (TASK-650). The remark this replaced
+    /// said the run stayed fail-closed; with no predicate there was nothing for the engine to enforce.
     /// </remarks>
     private Expression<Func<T, bool>>? BuildTenantPredicate(Guid tenantGuid)
     {

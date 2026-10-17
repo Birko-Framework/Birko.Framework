@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Tenant sync refuses an unscopable TenantGuid; Cosmos partition path and index verbs agree (2026-10-17)
+
+[[TASK-650]]. Measured: a run scoped to one tenant read every tenant's rows when `TenantGuid` was not a `Guid`; it now
+refuses. Cosmos treats an empty `PartitionKeyPath` as `/id` at creation too. Its index verbs agree on an unregistered
+name, and a read no longer creates the registry container. The ElasticSearch Init NRE was refuted (unreachable).
 ### Save of a soft-deleted entity is refused; Restore brings it back (2026-10-17)
 
 [[TASK-649]]. Measured: `Save` fell through to a create of the same Guid, which InMemory, SQLite and PostgreSQL refused as
@@ -337,11 +342,6 @@ Persistent, joins on Cosmos DB and ElasticSearch, and filters on aggregates. A S
 [[TASK-631]]. A store wrapped by `StoreWrapperBuilder` lost every interface but `IAsyncBulkStore<T>`, and `GetInnerStore()`
 skipped soft-delete and tenant scope. Every decorator now forwards aggregates with its own scope. A transaction context
 and settings reach the raw store through `StoreChain.SetTransactionContext` / `SetSettings`.
-### SQL joins: a condition is never dropped, a `[View]` without `connect:` is an inner join (2026-10-15)
-
-[[TASK-626]]. A CROSS join's ON was not rendered, and Cross was the default, so `Join.Create(a, b, cond)` and every
-`[View]` declared without `connect:` returned the cartesian product. A conditionless join was skipped. A join given
-conditions is now Inner by default; Cross with conditions, and Inner/Left without, are refused.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — SQL joins: a condition is never dropped, a `[View]` without `connect:` is an inner join
+
+[[TASK-626]]. A CROSS join's ON was not rendered, and Cross was the default, so `Join.Create(a, b, cond)` and every
+`[View]` declared without `connect:` returned the cartesian product. A conditionless join was skipped. A join given
+conditions is now Inner by default; Cross with conditions, and Inner/Left without, are refused.
+
 ## 2026-10-15 — Migrations: back-dated migrations run, filters refuse what they cannot express, nothing reports false success
 
 [[TASK-152]]. A migration added below the current version never ran; a rollback ran `Down` for unapplied ones. `$in` was

@@ -42,6 +42,13 @@ namespace Birko.Data.CosmosDB.Stores
         }
 
         /// <summary>
+        /// The path a container is created on: <c>/id</c> whenever <see cref="RequireAddressablePartitionKeyPath"/> accepts the
+        /// setting. One producer for both (TASK-650): validation accepted <c>""</c> as "the default" while container creation
+        /// fell back only on <c>null</c>, so an empty setting reached Cosmos DB as an empty path.
+        /// </summary>
+        internal string EffectivePartitionKeyPath => string.IsNullOrEmpty(PartitionKeyPath) ? "/id" : PartitionKeyPath;
+
+        /// <summary>
         /// Gets or sets the request timeout for Cosmos DB operations. Default is 30 seconds.
         /// </summary>
         public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);

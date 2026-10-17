@@ -443,7 +443,7 @@ public class CosmosDBStore<T>
 
         _container = _database.CreateContainerIfNotExistsAsync(
             _containerName ?? typeof(T).Name,
-            _settings?.PartitionKeyPath ?? "/id"
+            _settings?.EffectivePartitionKeyPath ?? "/id"
         ).GetAwaiter().GetResult().Container;
     }
 
