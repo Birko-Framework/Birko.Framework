@@ -291,6 +291,18 @@ ORDER BY index_name, seq_in_index";
                     RequireNull = false,
                 });
             }
+            // TASK-636: the portable predicates are TASK-273's own, carried as they are; the connector refuses what it cannot
+            // express (MySQL), as for a [IndexedField(WhereNull = …)].
+            definition.RequireCoherentPredicates();
+            foreach (var (fieldName, requireNull) in definition.WhereNotNull.Select(f => (f, false)).Concat(definition.WhereNull.Select(f => (f, true))))
+            {
+                if (sqlDef.Predicates.Any(p => p.ColumnName == fieldName && p.RequireNull == requireNull)) continue;
+                sqlDef.Predicates.Add(new Tables.IndexPredicate
+                {
+                    ColumnName = DataBase.ValidateIndexFieldIdentifier(fieldName),
+                    RequireNull = requireNull,
+                });
+            }
             int order = 0;
             foreach (var field in definition.Fields)
             {

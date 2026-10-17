@@ -220,9 +220,22 @@ the winner and writes again, so the last writer wins, up to 5 attempts. Within o
 promotion they make room for. Measured on SQLite, PostgreSQL, MySQL and SQL Server.
 
 > ⚠ Without `IDefaultMarker` and its index, or on a store that enforces no unique index (ElasticSearch, RavenDB,
-> Cosmos DB, JSON, XML, InMemory), the read-then-write only narrows the window. On MongoDB create the unique index with
-> `partialFilterExpression: { DefaultMarker: true }` directly: a *sparse* one refuses the second non-default, because the
-> null is stored (measured, 11000), and Birko's Mongo index manager has no partial filter to declare yet ([[TASK-636]]).
+> Cosmos DB, JSON, XML, InMemory), the read-then-write only narrows the window. On MongoDB declare the index through the
+> index manager as a partial one (TASK-636); a *sparse* one would refuse the second non-default, because Birko stores
+> the null (measured, E11000):
+>
+> ```csharp
+> await new MongoDBIndexManager(client).CreateAsync(new IndexDefinition
+> {
+>     Name = "UX_Currency_Default",
+>     Fields = new[] { IndexField.Ascending(nameof(Currency.DefaultMarker)) },
+>     Unique = true,
+>     WhereNotNull = new[] { nameof(Currency.DefaultMarker) },
+> }, "Currencies");
+> ```
+>
+> `WhereNotNull` / `WhereNull` are the same two polarities SQL declares. MongoDB renders them as a `$type` filter and as
+> `{ f: null }`; RavenDB, Cosmos DB and ElasticSearch have no partial index and refuse them.
 
 ### Variants
 

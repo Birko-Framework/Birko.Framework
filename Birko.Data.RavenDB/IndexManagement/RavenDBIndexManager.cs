@@ -54,6 +54,7 @@ namespace Birko.Data.RavenDB.IndexManagement
                 throw new NotSupportedException($"RavenDB indexes are not unique constraints; '{definition.Name}' cannot be created Unique. Use compare-exchange values for uniqueness.");
             if (definition.Sparse)
                 throw new NotSupportedException($"RavenDB has no sparse index; '{definition.Name}' cannot be created Sparse.");
+            definition.RefusePredicates("RavenDB"); // TASK-636
             if (definition.ExpireAfter.HasValue)
                 throw new NotSupportedException($"A RavenDB index does not expire documents; '{definition.Name}' cannot take ExpireAfter. Use the @expires metadata with document expiration enabled.");
 

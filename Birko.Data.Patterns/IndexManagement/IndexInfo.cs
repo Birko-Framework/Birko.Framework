@@ -47,5 +47,17 @@ namespace Birko.Data.Patterns.IndexManagement
         /// Gets or sets provider-specific properties.
         /// </summary>
         public IDictionary<string, object> Properties { get; set; } = new Dictionary<string, object>();
+
+        /// <summary>
+        /// The fields the stored index requires to hold a value, or <c>null</c> when this manager does not report predicates
+        /// (TASK-636). Empty means the index is known to have none.
+        /// </summary>
+        public IReadOnlyList<string>? WhereNotNull { get; set; }
+
+        /// <summary>The fields the stored index requires to be null, or <c>null</c> when not reported (TASK-636).</summary>
+        public IReadOnlyList<string>? WhereNull { get; set; }
+
+        /// <summary>A stored predicate the manager could not read as WhereNotNull / WhereNull, verbatim, or <c>null</c>.</summary>
+        public string? UnrecognizedPredicate { get; set; }
     }
 }

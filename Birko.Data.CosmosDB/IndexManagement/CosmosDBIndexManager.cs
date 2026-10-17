@@ -341,6 +341,7 @@ public class CosmosDBIndexManager : IIndexManager
                 + "key rejects nothing. Enforce uniqueness in the application (a reservation document whose id is the value).");
         if (definition.Sparse)
             throw new NotSupportedException($"Cosmos DB has no sparse index; '{definition.Name}' cannot be created Sparse.");
+        definition.RefusePredicates("Cosmos DB"); // TASK-636
         if (definition.ExpireAfter.HasValue)
             throw new NotSupportedException(
                 $"A Cosmos DB index does not expire documents; '{definition.Name}' cannot take ExpireAfter. Time to live is the "

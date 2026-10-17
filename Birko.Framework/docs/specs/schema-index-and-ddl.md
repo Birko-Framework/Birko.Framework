@@ -242,8 +242,17 @@ Both return the exception for the caller to throw.
 ### Requirement: Portable index definition and field factories
 
 The system SHALL describe an index portably as `IndexDefinition` with `Name`, an `IReadOnlyList<IndexField>`
-defaulting to an **empty array**, the flags `Unique` and `Sparse`, an optional `ExpireAfter` TTL, and an
-optional provider-specific `Properties` dictionary; and SHALL provide the static `IndexField` factories
+defaulting to an **empty array**, the flags `Unique` and `Sparse`, an optional `ExpireAfter` TTL, an
+optional provider-specific `Properties` dictionary, and the two closed predicate lists `WhereNotNull` / `WhereNull`
+(field names, empty by default; a partial index, TASK-636), refused by `RequireCoherentPredicates` when a field is
+empty or in both lists. MongoDB SHALL render them as a `partialFilterExpression`: `{ f: { $type: <every non-null BSON
+type> } }` per `WhereNotNull` field (Birko stores nulls explicitly, and a partial filter takes no `$ne` or `$not`,
+measured), `{ f: null }` per `WhereNull` field, under one `$and` when there are several, refusing `Sparse` with them; and
+SHALL read them back on `GetInfoAsync` / `ListAsync`, reporting any other filter verbatim as `UnrecognizedPredicate`.
+RavenDB, Cosmos DB and ElasticSearch SHALL refuse them (`RefusePredicates`). `IndexInfo.WhereNotNull` / `WhereNull` are
+`null` when a manager does not report predicates; `IndexDeclarationDriftDetector` SHALL then list a declared predicate
+as unverified, and otherwise report `PredicateDiffers` when the sets differ. Measured live on MongoDB: two null markers
+were accepted and a second `true` refused; a deleted duplicate slug was accepted and a second live one refused; and SHALL provide the static `IndexField` factories
 `Ascending`, `Descending`, `Text`, `Hashed` and `Geo2dSphere`.
 
 #### Scenario: Fields default to empty, not null
@@ -1266,7 +1275,8 @@ ordinary index.
 The system SHALL, on `SqlIndexManager.CreateAsync`, validate that a scope, a non-empty definition name and
 at least one field are present, translate the portable definition to a `Tables.IndexDefinition` preserving
 field order, descending flags **and the `Unique` flag**, validate each field name as a plain unqualified
-identifier, carry `Sparse` on a single-field definition as a `WhereNotNull` predicate over that field and
+identifier, carry `Sparse` on a single-field definition as a `WhereNotNull` predicate over that field, carry the
+definition's `WhereNotNull` / `WhereNull` lists as predicates (validated identifiers, TASK-636), and
 refuse every portable flag the SQL emitter cannot express (`ExpireAfter`, non-empty `Properties`, `Sparse` on
 a multi-field definition) with `NotSupportedException` from `IndexBuilderSupport.Unsupported`, refuse a
 predicate the connector can neither express nor drop through `RequireExpressiblePredicates` before building

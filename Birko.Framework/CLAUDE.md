@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A partial index is declared through IndexDefinition (2026-10-17)
+
+[[TASK-636]]. `IndexDefinition.WhereNotNull` / `WhereNull` declare a partial index. MongoDB creates it, reads it back
+and compares it for drift; on MongoDB, `IDefaultMarker`'s unique index no longer has to be created by hand. SQL carries
+the predicates; RavenDB, Cosmos DB and ElasticSearch refuse them. Drift reports `PredicateDiffers`.
 ### Tenant sync refuses an unscopable TenantGuid; Cosmos partition path and index verbs agree (2026-10-17)
 
 [[TASK-650]]. Measured: a run scoped to one tenant read every tenant's rows when `TenantGuid` was not a `Guid`; it now
@@ -337,11 +342,6 @@ started, and refreshed a target still being written. It now returns `IsPending` 
 ElasticSearch grouped view returned no rows. Cosmos DB and ElasticSearch left renamed fields null, and grouped counts
 counted documents. Filters, sorts and keys now use view properties everywhere. Refused: RavenDB OnTheFly, Cosmos DB
 Persistent, joins on Cosmos DB and ElasticSearch, and filters on aggregates. A SQL offset without a limit now skips.
-### A composed store chain keeps aggregation, transactions and settings (2026-10-15)
-
-[[TASK-631]]. A store wrapped by `StoreWrapperBuilder` lost every interface but `IAsyncBulkStore<T>`, and `GetInnerStore()`
-skipped soft-delete and tenant scope. Every decorator now forwards aggregates with its own scope. A transaction context
-and settings reach the raw store through `StoreChain.SetTransactionContext` / `SetSettings`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

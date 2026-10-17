@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Birko.Data.Patterns.IndexManagement
 {
@@ -39,6 +40,48 @@ namespace Birko.Data.Patterns.IndexManagement
         /// Gets or sets provider-specific properties (e.g., ES analyzer, Raven map expression).
         /// </summary>
         public IDictionary<string, object>? Properties { get; set; }
+
+        /// <summary>
+        /// Fields that must hold a value for a document to be indexed: a partial index (TASK-636).
+        /// </summary>
+        /// <remarks>
+        /// The two closed polarities SQL's <c>[IndexedField(WhereNotNull = …, WhereNull = …)]</c> declares (rule 58), never a
+        /// filter document, which would be caller text reaching the server (rule 45). <c>IDefaultMarker</c>'s "at most one
+        /// default" is <c>Unique</c> over <c>DefaultMarker</c> with <c>WhereNotNull = { "DefaultMarker" }</c>. MongoDB renders
+        /// it as a <c>$type</c> over every non-null type, because Birko stores nulls explicitly and a partial filter takes no
+        /// <c>$ne</c>; SQL as <c>WHERE … IS NOT NULL</c>. RavenDB, Cosmos DB and ElasticSearch have no partial index and refuse it.
+        /// </remarks>
+        public IReadOnlyList<string> WhereNotNull { get; set; } = Array.Empty<string>();
+
+        /// <summary>Fields that must be null (or absent) for a document to be indexed, e.g. <c>DeletedAt</c> (TASK-636).</summary>
+        public IReadOnlyList<string> WhereNull { get; set; } = Array.Empty<string>();
+
+        /// <summary>Whether the definition is a partial index.</summary>
+        public bool HasPredicates => WhereNotNull.Count > 0 || WhereNull.Count > 0;
+
+        /// <summary>
+        /// Refuses a predicate that cannot mean anything: an empty field name, or one field required both null and not null.
+        /// </summary>
+        /// <exception cref="ArgumentException">The predicate lists contradict themselves.</exception>
+        public void RequireCoherentPredicates()
+        {
+            if (WhereNotNull.Concat(WhereNull).Any(string.IsNullOrWhiteSpace))
+                throw new ArgumentException($"Index '{Name}' names an empty field in WhereNotNull or WhereNull.");
+            var both = WhereNotNull.Intersect(WhereNull, StringComparer.Ordinal).FirstOrDefault();
+            if (both != null)
+                throw new ArgumentException($"Index '{Name}': '{both}' is in both WhereNotNull and WhereNull, so no document is indexed.");
+        }
+
+        /// <summary>
+        /// Refuses a partial index on a provider that has none (rule 41), naming the provider.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The definition declares a predicate.</exception>
+        public void RefusePredicates(string provider)
+        {
+            if (HasPredicates)
+                throw new NotSupportedException(
+                    $"{provider} has no partial index; '{Name}' cannot be created with WhereNotNull or WhereNull. Enforce the rule in the application, or keep this index off {provider}.");
+        }
     }
 
     /// <summary>

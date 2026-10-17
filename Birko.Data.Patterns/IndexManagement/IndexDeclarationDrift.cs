@@ -17,6 +17,12 @@ namespace Birko.Data.Patterns.IndexManagement
 
         /// <summary>Declared unique and stored plain, or the reverse. A plain one admits the duplicates the model forbids.</summary>
         UniquenessDiffers = 2,
+
+        /// <summary>
+        /// Declared partial and stored full, or over other predicates (TASK-636). A full unique index refuses rows the
+        /// declaration allows; a partial one where a full one was declared admits the duplicates it forbids.
+        /// </summary>
+        PredicateDiffers = 3,
     }
 
     /// <summary>One declared index's disagreement with the store (TASK-635).</summary>
@@ -143,14 +149,14 @@ namespace Birko.Data.Patterns.IndexManagement
                     continue;
                 }
 
-                var shape = Describe(definition.Unique, definition.Fields);
+                var shape = Describe(definition.Unique, definition.Fields, definition.WhereNotNull, definition.WhereNull);
                 if (stored == null)
                 {
                     drifts.Add(new IndexDeclarationDrift(scope, definition.Name, IndexDeclarationDriftKind.Missing, shape, null));
                     continue;
                 }
 
-                var storedShape = Describe(stored.Unique, stored.Fields);
+                var storedShape = Describe(stored.Unique, stored.Fields, stored.WhereNotNull, stored.WhereNull);
                 if (stored.Fields.Count == 0)
                 {
                     unverified.Add(new IndexDeclarationUnverified(scope, definition.Name, "the store reports no fields for it"));
@@ -164,6 +170,22 @@ namespace Birko.Data.Patterns.IndexManagement
                 {
                     drifts.Add(new IndexDeclarationDrift(scope, definition.Name, IndexDeclarationDriftKind.UniquenessDiffers, shape, storedShape));
                 }
+
+                // TASK-636: the predicate is part of the index. A manager that does not report predicates cannot confirm a
+                // declared one (never read as "none"); a predicate it could not parse is not compared either.
+                if (stored.UnrecognizedPredicate != null)
+                {
+                    unverified.Add(new IndexDeclarationUnverified(scope, definition.Name, "the stored predicate is not WhereNotNull / WhereNull: " + stored.UnrecognizedPredicate));
+                }
+                else if (stored.WhereNotNull == null || stored.WhereNull == null)
+                {
+                    if (definition.HasPredicates)
+                        unverified.Add(new IndexDeclarationUnverified(scope, definition.Name, "the store does not report index predicates"));
+                }
+                else if (!SameSet(definition.WhereNotNull, stored.WhereNotNull) || !SameSet(definition.WhereNull, stored.WhereNull))
+                {
+                    drifts.Add(new IndexDeclarationDrift(scope, definition.Name, IndexDeclarationDriftKind.PredicateDiffers, shape, storedShape));
+                }
             }
 
             return new IndexDeclarationReport(scope, definitions.Count, drifts, unverified);
@@ -175,8 +197,17 @@ namespace Birko.Data.Patterns.IndexManagement
                                                  && d.IsDescending == s.IsDescending
                                                  && d.FieldType == s.FieldType).All(x => x);
 
-        internal static string Describe(bool unique, IReadOnlyList<IndexField> fields)
-            => (unique ? "UNIQUE " : "") + "(" + string.Join(", ", fields.Select(f =>
-                   f.Name + (f.IsDescending ? " DESC" : "") + (f.FieldType != IndexFieldType.Standard ? " " + f.FieldType : ""))) + ")";
+        private static bool SameSet(IReadOnlyList<string> declared, IReadOnlyList<string> stored)
+            => new HashSet<string>(declared, StringComparer.Ordinal).SetEquals(stored);
+
+        internal static string Describe(bool unique, IReadOnlyList<IndexField> fields,
+            IReadOnlyList<string>? whereNotNull = null, IReadOnlyList<string>? whereNull = null)
+        {
+            var shape = (unique ? "UNIQUE " : "") + "(" + string.Join(", ", fields.Select(f =>
+                f.Name + (f.IsDescending ? " DESC" : "") + (f.FieldType != IndexFieldType.Standard ? " " + f.FieldType : ""))) + ")";
+            var terms = (whereNotNull ?? Array.Empty<string>()).Select(f => f + " IS NOT NULL")
+                .Concat((whereNull ?? Array.Empty<string>()).Select(f => f + " IS NULL")).ToList();
+            return terms.Count == 0 ? shape : shape + " WHERE " + string.Join(" AND ", terms);
+        }
     }
 }

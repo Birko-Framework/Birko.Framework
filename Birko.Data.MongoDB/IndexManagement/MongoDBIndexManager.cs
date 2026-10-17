@@ -41,16 +41,25 @@ namespace Birko.Data.MongoDB.IndexManagement
             if (string.IsNullOrWhiteSpace(definition.Name)) throw new ArgumentException("Index name is required.", nameof(definition));
             if (definition.Fields == null || definition.Fields.Count == 0) throw new ArgumentException("At least one field is required.", nameof(definition));
 
+            definition.RequireCoherentPredicates();
+            if (definition.HasPredicates && definition.Sparse)
+                throw new NotSupportedException(
+                    $"Index '{definition.Name}' cannot be both Sparse and partial on MongoDB, which refuses the combination; declare WhereNotNull instead of Sparse.");
+
             var collection = _client.Database.GetCollection<BsonDocument>(scope!);
 
             var keys = KeysFor(definition.Fields);
-            var options = new CreateIndexOptions
+            var options = new CreateIndexOptions<BsonDocument>
             {
                 Name = definition.Name,
                 Background = true,
                 Unique = definition.Unique,
                 Sparse = definition.Sparse
             };
+            if (definition.HasPredicates)
+            {
+                options.PartialFilterExpression = new BsonDocumentFilterDefinition<BsonDocument>(PartialFilter(definition));
+            }
 
             if (definition.ExpireAfter.HasValue)
             {
@@ -226,6 +235,63 @@ namespace Birko.Data.MongoDB.IndexManagement
                 throw new ArgumentException("Collection name (scope) is required for MongoDB index management.", nameof(scope));
         }
 
+        /// <summary>
+        /// Every BSON type but null and undefined: a partial filter takes no <c>$ne: null</c> and no <c>$not</c> (measured,
+        /// MongoDB 7), and Birko stores nulls explicitly, so <c>$exists: true</c> would index them. TASK-636.
+        /// </summary>
+        internal static readonly string[] NonNullTypes =
+        {
+            "double", "string", "object", "array", "binData", "objectId", "bool", "date", "regex", "javascript",
+            "int", "timestamp", "long", "decimal", "minKey", "maxKey",
+        };
+
+        /// <summary>
+        /// The <c>partialFilterExpression</c> of <paramref name="definition"/>: <c>{ f: { $type: NonNullTypes } }</c> per
+        /// WhereNotNull field, <c>{ f: null }</c> per WhereNull field (which also matches an absent field), under one
+        /// <c>$and</c> when there are several. Measured live: two null markers indexed nothing, and a second <c>true</c> was
+        /// refused with E11000.
+        /// </summary>
+        internal static BsonDocument PartialFilter(IndexDefinition definition)
+        {
+            var terms = definition.WhereNotNull
+                .Select(f => new BsonDocument(f, new BsonDocument("$type", new BsonArray(NonNullTypes))))
+                .Concat(definition.WhereNull.Select(f => new BsonDocument(f, BsonNull.Value)))
+                .ToList();
+            return terms.Count == 1 ? terms[0] : new BsonDocument("$and", new BsonArray(terms));
+        }
+
+        /// <summary>Reads a stored partial filter back into WhereNotNull / WhereNull, or reports it as unrecognized.</summary>
+        private static void ReadPartialFilter(BsonDocument? filter, Patterns.IndexManagement.IndexInfo info)
+        {
+            var notNull = new List<string>();
+            var isNull = new List<string>();
+            info.WhereNotNull = notNull;
+            info.WhereNull = isNull;
+            if (filter == null) return;
+
+            var terms = filter.ElementCount == 1 && filter.GetElement(0).Name == "$and" && filter[0].IsBsonArray
+                ? filter[0].AsBsonArray.Where(t => t.IsBsonDocument).SelectMany(t => t.AsBsonDocument.Elements).ToList()
+                : filter.Elements.ToList();
+            foreach (var term in terms)
+            {
+                if (term.Value.IsBsonNull)
+                {
+                    isNull.Add(term.Name);
+                }
+                else if (term.Value.IsBsonDocument && term.Value.AsBsonDocument.ElementCount == 1
+                    && term.Value.AsBsonDocument.Contains("$type") && term.Value["$type"].IsBsonArray
+                    && term.Value["$type"].AsBsonArray.Select(t => t.ToString()).ToHashSet().SetEquals(NonNullTypes))
+                {
+                    notNull.Add(term.Name);
+                }
+                else
+                {
+                    info.UnrecognizedPredicate = filter.ToJson();
+                    return;
+                }
+            }
+        }
+
         private static Patterns.IndexManagement.IndexInfo ParseIndexDocument(BsonDocument idx)
         {
             var info = new Patterns.IndexManagement.IndexInfo
@@ -235,6 +301,9 @@ namespace Birko.Data.MongoDB.IndexManagement
                 Sparse = idx.Contains("sparse") && idx["sparse"].AsBoolean,
                 State = "ready"
             };
+
+            ReadPartialFilter(idx.Contains("partialFilterExpression") && idx["partialFilterExpression"].IsBsonDocument
+                ? idx["partialFilterExpression"].AsBsonDocument : null, info);
 
             if (idx.Contains("expireAfterSeconds"))
             {

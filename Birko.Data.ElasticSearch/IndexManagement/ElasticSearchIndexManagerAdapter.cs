@@ -63,6 +63,7 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                 throw new NotSupportedException($"ElasticSearch has no unique index; '{definition.Name}' cannot be created Unique.");
             if (definition.Sparse)
                 throw new NotSupportedException($"ElasticSearch has no sparse index; '{definition.Name}' cannot be created Sparse.");
+            definition.RefusePredicates("ElasticSearch"); // TASK-636
             if (definition.ExpireAfter.HasValue)
                 throw new NotSupportedException($"ElasticSearch has no TTL index; '{definition.Name}' cannot expire documents. Delete them on a schedule.");
 

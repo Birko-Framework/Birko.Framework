@@ -91,7 +91,10 @@ Provider-agnostic field and schema abstractions. Used by both the migration syst
 
 ### Index management (Birko.Data.Patterns.IndexManagement)
 - `IIndexManager`, `IndexDefinition`, `IndexInfo`, `IndexManagementException` - the provider-neutral index API
-- `IndexDeclarationDriftDetector.DetectAsync(manager, declared, scope)` - compares declared `IndexDefinition`s with the manager's `GetInfoAsync`: `Missing`, `ColumnsDiffer`, `UniquenessDiffers`, and `Unverified` for an index it could not compare (never counted clean). The declared side for document stores, which declare no indexes on the model (TASK-635); SQL has its own model-derived check (TASK-622)
+- `IndexDefinition.WhereNotNull` / `WhereNull` - a partial index, the two closed polarities SQL declares (TASK-636):
+  MongoDB renders and reads them back, SQL carries them as predicates, RavenDB / Cosmos DB / ElasticSearch refuse them
+  (`RefusePredicates`). `IndexInfo`'s lists are `null` when a manager does not report predicates
+- `IndexDeclarationDriftDetector.DetectAsync(manager, declared, scope)` - compares declared `IndexDefinition`s with the manager's `GetInfoAsync`: `Missing`, `ColumnsDiffer`, `UniquenessDiffers`, `PredicateDiffers`, and `Unverified` for an index it could not compare (never counted clean). The declared side for document stores, which declare no indexes on the model (TASK-635); SQL has its own model-derived check (TASK-622)
 
 ### Specification
 - `ISpecification<T>` - Interface with `IsSatisfiedBy(entity)` and `ToExpression()` for store filtering

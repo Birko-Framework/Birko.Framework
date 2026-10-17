@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — A composed store chain keeps aggregation, transactions and settings
+
+[[TASK-631]]. A store wrapped by `StoreWrapperBuilder` lost every interface but `IAsyncBulkStore<T>`, and `GetInnerStore()`
+skipped soft-delete and tenant scope. Every decorator now forwards aggregates with its own scope. A transaction context
+and settings reach the raw store through `StoreChain.SetTransactionContext` / `SetSettings`.
+
 ## 2026-10-15 — SQL joins: a condition is never dropped, a `[View]` without `connect:` is an inner join
 
 [[TASK-626]]. A CROSS join's ON was not rendered, and Cross was the default, so `Join.Create(a, b, cond)` and every
