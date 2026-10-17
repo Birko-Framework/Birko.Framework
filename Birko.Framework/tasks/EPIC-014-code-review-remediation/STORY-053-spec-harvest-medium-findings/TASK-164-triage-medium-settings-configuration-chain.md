@@ -30,6 +30,10 @@ that fall in the `settings-configuration-chain` area.
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md) § Medium severity →
 `### area: settings-configuration-chain`, lines 2124–2215.
 
+**SH-M279 and SH-M280 moved to [[TASK-653]] (2026-10-17)**, ahead of this triage, because Symbio TASK-928 needs them
+before go-live. That task also covers the sinks the harvest did not raise: the PostgreSQL and MySQL connectors'
+`RemoteSettings` fallback and SQLite's `Password`. Triage the other 13 here.
+
 **The contract under review** is specced in [`docs/specs/settings-configuration-chain.md`](../../../docs/specs/settings-configuration-chain.md), harvested from
 13 source globs — `../Birko.Configuration/Settings.cs`, `../Birko.Data.SQL/Stores/SqlSettings.cs`, `../Birko.Data.SQL.MSSql/Stores/MSSqlSettings.cs`, and 10 more. Every one of
 them points into a **sibling repo**, so a fix here normally lands as three commits in three repos (production,
