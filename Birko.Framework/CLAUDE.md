@@ -240,6 +240,10 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A failed RavenDB commit ends the unit of work (2026-10-17)
+[[TASK-658]]. Measured live: after a cluster-wide conflict the unit of work stayed active and every retry hit the same
+conflict, and after a cancelled commit a retry wrote the changes late. A failed commit now releases the session, and the
+rollback after it is a no-op, as on every other backend (TASK-325, TASK-578). To retry, begin again.
 ### Birko.Health.Security.Grants: a health check for grants that grant nothing (2026-10-17)
 [[TASK-654]]. New project. `StaleGrantHealthCheck(store, table)` reports the stored grants whose role or resource type the
 `GrantRoleTable` no longer declares. Since TASK-641 they grant nothing, so a role renamed in configuration quietly removed

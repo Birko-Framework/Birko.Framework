@@ -2,7 +2,7 @@
 id: TASK-658
 parent: STORY-053
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-17
@@ -31,12 +31,12 @@ or whether only the lifecycle is inconsistent (rule 54).
 
 ## Acceptance criteria
 
-- [ ] Measured live (RavenDB container): what a failed `SaveChangesAsync` leaves on the server, and what a retry does
-- [ ] `CommitAsync` releases the session on failure and the first `RollbackAsync` after it is a no-op, as on the other
+- [x] Measured live (RavenDB container): what a failed `SaveChangesAsync` leaves on the server, and what a retry does
+- [x] `CommitAsync` releases the session on failure and the first `RollbackAsync` after it is a no-op, as on the other
       backends. Or, if the measurement shows a retry is safe and useful, the divergence is kept and stated in the spec
       as a decision.
-- [ ] A regression test fails on the current code and passes with the fix
-- [ ] The RavenDB requirement in `unit-of-work-and-transactions.md` is updated to match
+- [x] A regression test fails on the current code and passes with the fix
+- [x] The RavenDB requirement in `unit-of-work-and-transactions.md` is updated to match
 
 ## Out of scope
 
@@ -45,3 +45,28 @@ or whether only the lifecycle is inconsistent (rule 54).
 ## Human test plan
 
 N/A — a library contract, asserted by tests.
+
+## Resolution (2026-10-17)
+
+**Measured live first** (RavenDB container, a probe and then `Task658RavenUnitOfWorkLiveTests`):
+
+| Failure | On the server | The unit of work after it (HEAD) | A retry (HEAD) |
+|---|---|---|---|
+| Conflict: another cluster-wide session wrote `rows/1` first | nothing applied (`rows/1` kept the other session's value) | active | `ClusterTransactionConcurrencyException` again, forever |
+| `SaveChangesAsync` with a cancelled token | nothing applied | active | **succeeds and writes the changes late** |
+
+A retry cannot apply twice: the cluster-wide compare-exchange guards would refuse it. But it was useless after a
+conflict, and after a cancellation a silent late write. That justifies no divergence, so **aligned**, not kept:
+- `CommitAsync` takes the session, saves, and disposes it in a `finally`.
+- A failure sets `_endedByFailedCommit`. The first `RollbackAsync` after it is a no-op, a second throws
+  `NoActiveTransactionException`, and so does a retried `CommitAsync`.
+- The driver's exception propagates unchanged.
+
+To try again a caller begins anew and re-applies its changes, which a concurrency conflict needs anyway.
+
+Red 2/2 on HEAD (`IsActive` stayed true on both). The RavenDB suite passes 116/116.
+
+**Docs:** the spec's "A failed SaveChanges leaves the unit of work active" is inverted to "… ends the unit of work"
+(rule 56), and the requirement text is updated. Noted in `Birko.Data.RavenDB/CLAUDE.md`.
+
+Regression: all 7 importers of `Birko.Data.RavenDB.projitems` pass live, 191 tests.

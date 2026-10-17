@@ -305,6 +305,10 @@ exceptions at `SaveChanges`. Which mode you get is stated on `Capabilities`, not
 Writes and rollback are sound: a Raven session sends nothing until `SaveChanges`, so a discarded session
 leaves no trace.
 
+A failed `SaveChanges` ends the boundary (TASK-658), as on every other backend: the session is released, the exception
+propagates unchanged, and the `RollbackAsync` that follows is a no-op. Measured: a retry after a conflict hit the same
+conflict forever, and a retry after a cancellation wrote late. To try again, begin anew and re-apply the changes.
+
 - **Reads SPLIT, and the capability declaration is deliberately conservative.** Measured against RavenDB
   7.2, not assumed. `ReadAsync(Guid)` -- Load-by-id -- *does* see the session's unsaved writes, since
   TASK-241 aligned the document id with the entity `Guid` and Raven's identity map can therefore find it.

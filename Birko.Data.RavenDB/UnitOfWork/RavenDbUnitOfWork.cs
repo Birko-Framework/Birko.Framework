@@ -15,6 +15,7 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
 {
     private readonly IDocumentStore _documentStore;
     private IAsyncDocumentSession? _session;
+    private bool _endedByFailedCommit;
     private bool _disposed;
 
     public bool IsActive => _session is not null;
@@ -77,25 +78,53 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
         {
             TransactionMode = TransactionMode.ClusterWide
         });
+        _endedByFailedCommit = false;
         return Task.CompletedTask;
     }
 
+    /// <remarks>
+    /// TASK-658: the session is released whatever the outcome, and a failed commit ends the boundary, as on every other
+    /// backend (TASK-325, TASK-578). Measured: after a conflict the unit of work stayed active and every retry hit the
+    /// same conflict; after a cancelled commit a retry wrote the changes late. The driver's exception propagates unchanged
+    /// and the <see cref="RollbackAsync"/> that follows is a no-op. A caller that wants to try again begins anew and
+    /// re-applies its changes, which is what a concurrency conflict needs anyway.
+    /// </remarks>
     public async Task CommitAsync(CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
             throw new NoActiveTransactionException();
 
-        await _session!.SaveChangesAsync(ct);
-        _session.Dispose();
+        var session = _session!;
         _session = null;
+        try
+        {
+            await session.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            _endedByFailedCommit = true;
+            throw;
+        }
+        finally
+        {
+            session.Dispose();
+        }
     }
 
     public Task RollbackAsync(CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
+        {
+            if (_endedByFailedCommit)
+            {
+                // Nothing left to discard: the failed commit already released the session.
+                _endedByFailedCommit = false;
+                return Task.CompletedTask;
+            }
             throw new NoActiveTransactionException();
+        }
 
         // RavenDB sessions are transactional — unsaved changes are discarded on dispose.
         _session!.Dispose();

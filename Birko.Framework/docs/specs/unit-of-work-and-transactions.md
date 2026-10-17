@@ -733,8 +733,10 @@ an `IDocumentStore` (null → `ArgumentNullException`), with `FromStore<T>(Async
 `InvalidOperationException("Store DocumentStore is not initialized. Call SetSettings() first.")` when the
 store has no document store. `BeginAsync` SHALL open an async session with
 `TransactionMode = TransactionMode.ClusterWide` without contacting the server; `IsActive` SHALL be
-whether a session is held; `CommitAsync` SHALL await `SaveChangesAsync(ct)` and then dispose and drop the
-session; `RollbackAsync` SHALL dispose and drop the session without saving.
+whether a session is held; `CommitAsync` SHALL await `SaveChangesAsync(ct)` and dispose and drop the session
+whatever the outcome; a failed commit SHALL propagate the driver's exception unchanged and make the first
+`RollbackAsync` that follows a no-op, as on every other backend (TASK-658). `RollbackAsync` SHALL dispose and drop the
+session without saving.
 
 #### Scenario: Rollback discards unsaved changes
 
@@ -743,13 +745,15 @@ session; `RollbackAsync` SHALL dispose and drop the session without saving.
 - **Then** the session is disposed without `SaveChangesAsync`, nothing reaches the server, and `IsActive`
   becomes `false`
 
-#### Scenario: A failed SaveChanges leaves the unit of work active
+#### Scenario: A failed SaveChanges ends the unit of work
 
-- **Given** an active `RavenDbUnitOfWork` whose `SaveChangesAsync` throws (for example a concurrency
-  conflict)
+- **Given** an active `RavenDbUnitOfWork` whose `SaveChangesAsync` throws: a concurrency conflict
+  (`ClusterTransactionConcurrencyException`) or a cancelled token (measured live)
 - **When** `CommitAsync()` is called
-- **Then** the exception propagates unchanged and the session is still held, so `IsActive` is `true`
-  and `RollbackAsync()` can discard it
+- **Then** the exception propagates unchanged, `IsActive` is `false` and `Context` is `null`, the first
+  `RollbackAsync()` returns without effect, and a second `CommitAsync()` throws `NoActiveTransactionException`.
+  Nothing was applied. Before TASK-658 the session stayed held: every retry after a conflict hit the same conflict,
+  and a retry after a cancellation wrote the changes late
 
 ### Requirement: Cosmos DB unit of work wraps a single-partition transactional batch
 
