@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — ElasticSearch mapping drift produces its repair
+
+[[TASK-634]]. `store.PlanMappingRepairAsync()` turns mapping drift into requests a host sends: one `PUT _mapping` adding
+the declared fields the index lacks; type changes (a reindex) and undeclared fields are listed. Measured: old documents
+read the new fields as defaults. MongoDB and RavenDB need no plan; an old document reads new properties as defaults.
+
 ## 2026-10-15 — Rules and validation: exact numbers, safe rule reloads, validated filtered updates
 
 [[TASK-156]]. In memory, distinct longs and decimals compared equal through double, and "007" equalled "7". Editing a

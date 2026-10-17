@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Repository gaps TASK-162 left (2026-10-17)
+
+[[TASK-646]]. Measured: an async repository's `UpdateAsync` / `DeleteAsync` with no store reported success, while
+every other call refuses. `AddRepository<TRepository>(store)` threw unless given a lifetime, because its default was
+`Scoped`, which it refuses; the default is now `Singleton`. The sync bulk ViewModel delete now prunes its hashes.
 ### A grant whose role was retired grants nothing instead of throwing (2026-10-17)
 
 [[TASK-641]]. Measured: one stored grant with a retired role made the user's checks of that resource, every check of
@@ -333,11 +338,6 @@ holds on all six providers, for collections too, even where `CreateCollection` c
 `TrustedProxies`. `?token=` was read on every request; it is now WebSocket, `text/event-stream` and
 `QueryTokenPathPrefixes`. JWT validation always checks iss/aud and accepts repeated claims. Vault and Key Vault keys
 cannot leave their path; Key Vault lists every page.
-### ElasticSearch mapping drift produces its repair (2026-10-15)
-
-[[TASK-634]]. `store.PlanMappingRepairAsync()` turns mapping drift into requests a host sends: one `PUT _mapping` adding
-the declared fields the index lacks; type changes (a reindex) and undeclared fields are listed. Measured: old documents
-read the new fields as defaults. MongoDB and RavenDB need no plan; an old document reads new properties as defaults.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

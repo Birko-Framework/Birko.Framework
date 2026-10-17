@@ -69,6 +69,21 @@ public class ViewModelRepositoryTriageTests
         repo.Tracked.Should().Be(0);
     }
 
+    /// <summary>TASK-646: the sync bulk delete pruned nothing, unlike its async twin and the single delete.</summary>
+    [Fact]
+    public void Deleting_a_batch_of_view_models_stops_tracking_them()
+    {
+        var repo = new Repo(new InMemoryStore<Model>());
+        repo.Create(new Vm { Name = "a" });
+        repo.Create(new Vm { Name = "b" });
+        var read = repo.Read().ToList();
+        repo.Tracked.Should().Be(2);
+
+        repo.Delete(read);
+
+        repo.Tracked.Should().Be(0);
+    }
+
     /// <summary>SH-M206 (pin): one repository serves concurrent readers; the hash table must survive them.</summary>
     [Fact]
     public void Concurrent_reads_on_one_repository_track_every_row_once()

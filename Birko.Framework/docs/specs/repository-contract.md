@@ -119,11 +119,11 @@ The system SHALL forward every `AbstractRepository<T>` / `AbstractAsyncRepositor
 injected store, and when the store is `null` SHALL throw the `InvalidOperationException` built by the
 protected `NoStore()` helper (message `{GetType().Name} has no store; construct it with one (or let its
 default constructor provide it).`) from every data operation — `Read`, `Create`, `Update`, `Delete`,
-`Count` and `Save` on the sync repository; `ReadAsync`, `CreateAsync`, `CountAsync` and `SaveAsync` on
-the async one — instead of answering `default`/`null`, `Guid.Empty` or `0`. `Destroy` / `DestroyAsync`
+`Count` and `Save` on the sync repository; `ReadAsync`, `CreateAsync`, `UpdateAsync`, `DeleteAsync`,
+`CountAsync` and `SaveAsync` on the async one — instead of answering `default`/`null`, `Guid.Empty` or `0`. `Destroy` / `DestroyAsync`
 SHALL remain a silent no-op (there is nothing to destroy) and `CreateInstance()` SHALL keep its
-`Activator` fallback. The async `UpdateAsync` and `DeleteAsync` SHALL still return silently when `Store`
-is `null`, unlike their sync twins.
+`Activator` fallback. (TASK-646: the async `UpdateAsync` and `DeleteAsync` returned silently with no store,
+the one gap TASK-162's fix left; measured, both now refuse like their sync twins.)
 
 #### Scenario: Read forwards to the store
 
@@ -449,9 +449,9 @@ throwing `InvalidOperationException($"Failed to create instance of {name}")` whe
 `TRepository` yields `null`; SHALL default the lifetime to `ServiceLifetime.Scoped`; and SHALL expose
 `AddRepositorySingleton`/`AddRepositoryScoped`/`AddRepositoryTransient` as lifetime-fixed aliases plus
 overloads taking a pre-built store instance or a `Func<IServiceProvider, IBaseStore>` factory. The
-pre-built-store overload SHALL accept only `ServiceLifetime.Singleton` and SHALL throw
-`ArgumentException` (paramName `lifetime`) for any other lifetime — including its own default,
-`ServiceLifetime.Scoped`.
+pre-built-store overload SHALL accept only `ServiceLifetime.Singleton`, which is also its default, and SHALL
+throw `ArgumentException` (paramName `lifetime`) for any other lifetime. (TASK-646: its default stayed `Scoped`
+after it began refusing `Scoped`, so a call without a lifetime always threw.)
 
 #### Scenario: Store and repository are both registered
 
@@ -469,12 +469,12 @@ pre-built-store overload SHALL accept only `ServiceLifetime.Singleton` and SHALL
 
 #### Scenario: A shared store instance can only be registered as a singleton
 
-- **Given** `services.AddRepository<MyRepository>(storeInstance, ServiceLifetime.Transient)` (or
-  `Scoped`, or the lifetime omitted, which defaults to `Scoped`)
+- **Given** `services.AddRepository<MyRepository>(storeInstance, ServiceLifetime.Transient)` (or `Scoped`)
 - **When** the call runs
 - **Then** `ArgumentException` is thrown naming the lifetime and pointing at
   `AddRepository<TStore, TRepository>` for a per-scope store, and nothing is registered; with
-  `ServiceLifetime.Singleton` the repository is registered around the captured `storeInstance`
+  `ServiceLifetime.Singleton`, or with the lifetime omitted, the repository is registered as a singleton around the
+  captured `storeInstance`
 
 #### Scenario: Repeated registration duplicates descriptors
 
@@ -652,10 +652,9 @@ domain event. Whether to make that change is deferred.
 #### Scenario: A deleted model is no longer tracked
 
 - **Given** a model whose hash was recorded by a read
-- **When** it is deleted through the single-item `Delete(vm)` / `DeleteAsync(vm)` or the async bulk
-  `DeleteAsync(IEnumerable<TViewModel>)`, and the store call returns
-- **Then** `RemoveHash` drops its entry from `_modelHash`; the sync bulk `Delete(IEnumerable<TViewModel>)`
-  calls no `RemoveHash`, so its deleted models stay in the table
+- **When** it is deleted through the single-item `Delete(vm)` / `DeleteAsync(vm)` or the bulk
+  `Delete(IEnumerable<TViewModel>)` / `DeleteAsync(IEnumerable<TViewModel>)`, and the store call returns
+- **Then** `RemoveHash` drops its entry from `_modelHash` (the sync bulk delete did not until TASK-646)
 
 #### Scenario: Concurrent reads share the hash table safely
 

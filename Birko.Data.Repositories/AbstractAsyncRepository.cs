@@ -67,7 +67,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task UpdateAsync(T data, CancellationToken ct = default)
         {
-            if (Store == null) return;
+            if (Store == null) throw NoStore(); // TASK-646: the one gap SH-M219 left; the sync twin throws
             await Store.UpdateAsync(data, ct: ct);
         }
 
@@ -78,7 +78,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task DeleteAsync(T data, CancellationToken ct = default)
         {
-            if (Store == null) return;
+            if (Store == null) throw NoStore(); // TASK-646
             await Store.DeleteAsync(data, ct);
         }
 

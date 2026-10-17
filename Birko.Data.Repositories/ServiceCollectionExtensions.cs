@@ -44,12 +44,13 @@ namespace Birko.Data.Repositories
         /// <typeparam name="TRepository">The type of repository to register.</typeparam>
         /// <param name="services">The service collection.</param>
         /// <param name="store">The store instance to use.</param>
-        /// <param name="lifetime">The service lifetime (defaults to Scoped).</param>
+        /// <param name="lifetime">The service lifetime: Singleton, the only one this overload accepts (and its default).</param>
         /// <returns>The service collection for chaining.</returns>
         public static IServiceCollection AddRepository<TRepository>(
             this IServiceCollection services,
             Stores.IBaseStore store,
-            ServiceLifetime lifetime = ServiceLifetime.Scoped)
+            // TASK-646: the default stayed Scoped after SH-M218 refused it, so a call without a lifetime always threw.
+            ServiceLifetime lifetime = ServiceLifetime.Singleton)
             where TRepository : class, IBaseRepository
         {
             // SH-M218 (TASK-162): the one instance passed here was handed to every resolution, so a Scoped or Transient

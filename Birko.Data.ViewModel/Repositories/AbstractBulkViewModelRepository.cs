@@ -147,11 +147,13 @@ namespace Birko.Data.Repositories
         {
             if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
             if (data == null) return; // SH-M216 (TASK-162): as the async twins do
-            if (Store is not IBulkStore<TModel>)
+            if (Store is not IBulkStore<TModel> bulkStore)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
             }
-            (Store as IBulkStore<TModel>)?.Delete(data.Select(LoadModelInstance));
+            var models = data.Select(LoadModelInstance).ToList();
+            bulkStore.Delete(models);
+            foreach (var model in models) RemoveHash(model); // TASK-646: as the async twin and the single delete do
         }
 
         #endregion
