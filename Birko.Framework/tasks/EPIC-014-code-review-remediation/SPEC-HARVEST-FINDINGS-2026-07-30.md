@@ -2179,11 +2179,15 @@ The recursion covers only Lambda/Parameter/Member/MethodCall/Unary/Binary/Condit
 
 `../Birko.AI/Agents/Agent.cs:178`
 
+**Verdict: CONFIRMED, already fixed** (TASK-544, re-checked by TASK-160 on 2026-10-18). `Agent.GetStreamingResponseOrFallbackAsync` (Agent.cs) now wraps only the streaming request of the first iteration and retries that one model call synchronously; nothing re-runs the run, so no tool executes twice. TASK-544's tests pin it.
+
 The catch-when wraps the ENTIRE streaming loop, but only iteration 1 streams — iterations 2..N call SendMessageAsync. So any later failure (provider HttpRequestException on iteration 5, or a custom tool throwing) is caught, the conversation is rewound to the pre-streaming snapshot and RunWithHistorySyncAsync re-runs the task from the original prompt. The snapshot restores only the message list; files already written by write_file/edit_file and commands already run by run_command are executed a second time with no record that the first pass happened.
 
 #### SH-M153 — Tool failure counter only matches "Error:", so every exception-path tool failure counts as success
 
 `../Birko.AI/Agents/Agent.cs:338`
+
+**Verdict: CONFIRMED, fixed** (TASK-160, measured 2026-10-18). `Agent.HandleToolUse` counts `result.StartsWith("Error:")`; the exception paths of eight built-in tools returned `"Error reading file: …"`, `"Error writing file: …"` and so on (plus `display_text`), so `ToolCallFinished.IsError` was false and the all-failed warning never fired. Every built-in tool now returns `"Error: <verb> failed: …"`. Red: `SH_M153_every_built_in_tool_reports_a_failure…` failed on HEAD.
 
 errorCount increments only when the result starts with "Error:". Every built-in tool's exception path returns a different prefix — "Error reading file:", "Error writing file:", "Error editing file:", "Error appending to file:", "Error listing files:", "Error searching code:", "Error running command:", "Error getting user input:" — none of which match. A batch where all three tools threw is therefore treated as fully successful, the "All tool executions failed" guard never fires, and the loop burns iterations retrying against silent failures.
 
@@ -2191,11 +2195,15 @@ errorCount increments only when the result starts with "Error:". Every built-in 
 
 `../Birko.AI/Agents/Agent.cs:352`
 
+**Verdict: CONFIRMED, fixed** (TASK-160). `HandleToolUse` appended `new Message { Role = "user", Content = toolResults }` with an empty list when a `tool_use` stop carried no tool_use block. It now emits a warning and the text as `assistant_final` and ends the run. Red on HEAD (two provider calls, an empty user turn).
+
 conversation.Add(new Message { Role = "user", Content = toolResults }) runs unconditionally, even when the filtered tool_use loop produced nothing. BuildOpenAiStyleMessages then hits `m.Content is IEnumerable<object> objs && objs.Any()` == false, falls through every branch and emits `{role:"user", content:[]}`. OpenAI-shaped and Anthropic-shaped endpoints both reject an empty content array on a user turn, so the next iteration fails on a message the agent itself fabricated.
 
 #### SH-M155 — Agent constructor unconditionally overwrites the shared provider's MessageCallback
 
 `../Birko.AI/Agents/Agent.cs:22`
+
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-160). The constructor assigned `_llmProvider.MessageCallback = messageCallback` even when it was null, wiping a shared provider's sink; that is fixed (assigned only when non-null). Re-pointing a shared provider to a second agent's non-null callback is inherent to a provider with one callback property and is kept (pinned by `SH_M155_an_agent_with_a_callback…`). Red on HEAD: 1.
 
 `_llmProvider.MessageCallback = messageCallback;` runs with no null check and no save/restore. Providers are created once via LlmProviderFactory and commonly shared across agents: constructing a second Agent over the same provider silently re-points every provider-level retry warning and API-error message at the second agent's callback, and constructing one with messageCallback = null discards the previously configured sink entirely, so retry/error telemetry disappears.
 
@@ -2203,11 +2211,15 @@ conversation.Add(new Message { Role = "user", Content = toolResults }) runs unco
 
 `../Birko.AI/Factories/AgentFactory.cs:13`
 
+**Verdict: CONFIRMED, fixed** (TASK-160). `AgentFactory._factories` / `_aliases` were plain `Dictionary` instances, and `GetRegisteredAgentTypes()` / `GetRegisteredAliases()` returned them live. They are now `ConcurrentDictionary` and the accessors return snapshots. Red on HEAD: 8 threads registering, creating and enumerating threw.
+
 _factories and _aliases are plain Dictionary instances mutated by Register/RegisterAlias and read by Create/IsRegistered with no synchronization — the exact hazard LlmProviderFactory was deliberately converted to ConcurrentDictionary to remove (CR-L006 comment, LlmProviderFactory.cs:12). A Register racing a Create can corrupt the buckets or spin forever. GetRegisteredAgentTypes()/GetRegisteredAliases() also return the live collections, so enumerating them while another thread registers throws InvalidOperationException.
 
 #### SH-M157 — A JSON-null `error` property turns every valid completion into an error response
 
 `../Birko.AI/Providers/LlmProviderBase.cs:397`
+
+**Verdict: CONFIRMED, fixed** (TASK-160). `ParseOpenAiStyleResponse` entered the error branch on `"error": null` and `error.TryGetProperty` threw on a Null element; the outer catch discarded the completion. The branch now requires an Object or String. Red on HEAD.
 
 `result.TryGetProperty("error", out var error)` returns true for `"error": null` (the property exists), then `error.TryGetProperty("message", ...)` throws InvalidOperationException because the element is Null, not Object. The outer catch converts the whole thing into LlmResponse.Error("Error parsing OpenAI-style response: …"). Any OpenAI-compatible gateway that always includes `"error": null` alongside a good `choices` array has 100% of its responses discarded. ExtractErrorFromResponseBody guards the same probe with a ValueKind check; this path does not.
 
@@ -2215,11 +2227,15 @@ _factories and _aliases are plain Dictionary instances mutated by Register/Regis
 
 `../Birko.AI/Providers/LlmProviderBase.cs:411`
 
+**Verdict: CONFIRMED, fixed** (TASK-160). `toolCalls.GetArrayLength()` on `"tool_calls": null` threw; tool calls now require an Array. Red on HEAD.
+
 `toolCalls.GetArrayLength()` requires ValueKind == Array; providers that emit `"tool_calls": null` on plain text turns make TryGetProperty succeed and GetArrayLength throw InvalidOperationException. The outer catch turns a perfectly good text answer into StopReason "error", which the agent reports as "LLM request failed" and stops on. Every other property probe in this method is shape-guarded except this one.
 
 #### SH-M159 — Unguarded usage GetInt32 discards an otherwise valid response when a token count is null or fractional
 
 `../Birko.AI/Providers/LlmProviderBase.cs:439`
+
+**Verdict: CONFIRMED, fixed** (TASK-160). `pt.GetInt32()` threw on a null, string or fractional count. Counts are now read by `ReadTokenCount`: a whole number, a whole-valued fraction rounded, anything else 0. Red on HEAD: 3 cases.
 
 `pt.GetInt32()` / `ct.GetInt32()` are only guarded for property presence, not ValueKind. `"usage": {"prompt_tokens": null}` throws InvalidOperationException and a fractional count throws FormatException; either way the outer catch replaces the already-parsed content and tool calls with LlmResponse.Error. Telemetry that could not be parsed destroys the payload the caller actually needed.
 
@@ -2227,11 +2243,15 @@ _factories and _aliases are plain Dictionary instances mutated by Register/Regis
 
 `../Birko.AI/Providers/LlmProviderBase.cs:430`
 
+**Verdict: CONFIRMED, fixed** (TASK-160). The sync parser never read `finish_reason`. `MapFinishReason` (shared with streaming) maps `length` to `max_tokens` and keeps `content_filter`; a call cut off by the limit is not returned. Red on HEAD: 3 of 4 cases, and the `stop` → `end_turn` case is a pin.
+
 ParseOpenAiStyleResponse derives StopReason purely from the presence of tool_calls; `choices[0].finish_reason` is never read (grep confirms the only finish_reason read is line 643, in the streaming parser). A response cut off by max_tokens (`finish_reason: "length"`) or blocked (`content_filter`) therefore arrives as "end_turn", the agent emits it as assistant_final and stops as if the task completed. The streaming parser surfaces the raw finish_reason, so the two paths disagree on the same server response.
 
 #### SH-M161 — Streaming forces StopReason "tool_use" even when finish_reason is "length", executing truncated tool arguments
 
 `../Birko.AI/Providers/LlmProviderBase.cs:713`
+
+**Verdict: CONFIRMED, fixed** (TASK-160). The streaming parser set `tool_use` before looking at `finish_reason`, so a stream cut off mid-arguments ran the tool with `{"_raw": …}`. The stop reason is now decided first, and a `length` stop returns no tool call. Red on HEAD.
 
 `if (toolCalls.Count > 0) stopReason = "tool_use";` is checked before finishReason, so a stream truncated mid-arguments still reports a tool call. The accumulated fragment fails to deserialize and becomes `Input = {"_raw": "…"}` (line 700), and the agent executes the tool with that dictionary. Tools with all-optional inputs then run on defaults — list_files with no `directory` lists the workspace root and returns a normal listing — so a corrupted, truncated tool call is reported to the model as a successful execution.
 
@@ -2239,11 +2259,15 @@ ParseOpenAiStyleResponse derives StopReason purely from the presence of tool_cal
 
 `../Birko.AI/Providers/LlmProviderBase.cs:632`
 
+**Verdict: CONFIRMED, fixed** (TASK-160). The unguarded `GetInt32` in the streaming usage read threw out of the enumerator; it now goes through `ReadTokenCount`. Red on HEAD.
+
 The try/catch at line 625 guards only JsonSerializer.Deserialize; `pt.GetInt32()` at 632-633 sits outside it. A usage chunk carrying a null or fractional token count throws InvalidOperationException/FormatException out of the async enumerator, which surfaces in Agent's `await foreach` (Agent.cs:219). With StreamingFallbackToSync on (the default) that triggers the full re-run at Agent.cs:178 — a second billed request plus repeated tool side effects, all because a usage field had an unexpected shape.
 
 #### SH-M163 — ParseOpenAiStreamChunks throws KeyNotFoundException on a chunk whose choice has no `delta`
 
 `../Birko.AI/Providers/LlmProviderBase.cs:595`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-160). `ParseOpenAiStreamChunks` called `choices[0].GetProperty("delta")` and threw `KeyNotFoundException` on a finish-only chunk; it is now `TryGetProperty` with an Object check, and a null `choices` / `tool_calls` is skipped in both parsers. Red on HEAD.
 
 `choices[0].GetProperty("delta")` is outside the try/catch (which guards only deserialization), so a final usage/finish-only chunk — a shape the sibling ParseOpenAiStreamChunksWithToolCapture explicitly guards with TryGetProperty at line 646 — throws out of the async enumerator mid-stream, aborting the response after partial text was already yielded to the caller.
 
@@ -2251,11 +2275,15 @@ The try/catch at line 625 guards only JsonSerializer.Deserialize; `pt.GetInt32()
 
 `../Birko.AI/Providers/LlmProviderBase.cs:473`
 
+**Verdict: CONFIRMED, fixed** (TASK-160). `ConnectStreamingAsync` (formerly `SendStreamingWithRetryAsync`) created `var request = requestFactory();` without disposing it; it is now `using var`. Red on HEAD: the request content was not disposed on success or on a non-retryable status.
+
 `var request = requestFactory();` with no `using`, whereas SendWithRetryAsync at line 61 uses `using var request`. Every attempt — up to MaxRetries + 1 per streaming call — leaks the request and its HttpContent (the serialized prompt body, which for a long conversation is large) until GC; the terminal non-retryable and exhausted-retry paths dispose the response but never the request. Same helper family, opposite disposal discipline.
 
 #### SH-M165 — BuildOpenAiStyleMessages drops all but the first text block on an assistant tool_use turn
 
 `../Birko.AI/Providers/LlmProviderBase.cs:238`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-160). The tool-call branch of `BuildOpenAiStyleMessages` carried only `textBlocks[0].Text`; it now joins every text block with a newline, as the non-tool branch does. Red on HEAD.
 
 In the tool_calls branch only textBlocks[0].Text is carried into `content`. An assistant turn whose content is [text "plan…", text "note…", tool_use] silently loses "note…" when replayed, so part of the model's own reasoning disappears from the history on every subsequent turn — while the non-tool branch at line 259 newline-joins all text blocks.
 
@@ -2263,11 +2291,15 @@ In the tool_calls branch only textBlocks[0].Text is carried into `content`. An a
 
 `../Birko.AI/Providers/LlmProviderBase.cs:281`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-160). Tool-result items were read by reflection only, so a `Dictionary` item produced nothing and the message vanished. `ReadMember` now reads anonymous objects, dictionaries and `JsonElement`s alike, and an item that is not a tool result is refused with `NotSupportedException` (rule 41). Red on HEAD: 2.
+
 Once the first element of an IEnumerable<object> content exposes a `type` property the branch is entered and ends with `continue`. If no element carries BOTH tool_use_id and content (e.g. results supplied as Dictionary<string,object> instead of anonymous objects, where GetProperty returns null), nothing is appended and the message vanishes from the request — leaving the preceding assistant tool_use unanswered, which providers reject.
 
 #### SH-M167 — search_code ignores Options.AllowedExternalPaths, unlike every other file tool
 
 `../Birko.AI/Tools/SearchCodeTool.cs:41`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-160). `SearchCodeTool` called the two-argument `PathHelper.IsPathSafe`; it now passes `Options?.AllowedExternalPaths`, as the other file tools do. Red on HEAD; refusing an ungranted path is a pin.
 
 It calls the two-argument PathHelper.IsPathSafe(targetDir, workingDirectory) while read/write/edit/append/list all pass Options?.AllowedExternalPaths. An agent explicitly granted an external path can read and even write files there but cannot search them, and the error text ("Directory must be in {workingDirectory}") contradicts the granted configuration.
 
@@ -2275,11 +2307,15 @@ It calls the two-argument PathHelper.IsPathSafe(targetDir, workingDirectory) whi
 
 `../Birko.AI/Tools/SearchCodeTool.cs:52`
 
+**Verdict: CONFIRMED, fixed** (TASK-160). The `Regex` had no match timeout and the token was never checked: on HEAD `(a+)+$` over a 41-character line hung the test host until it was killed. The regex now has `MatchTimeout` (2 s per line), which yields an `Error:` string, and the token is checked per file. Red on HEAD: the hang, and the cancellation test.
+
 `new Regex(query, …)` is constructed without a matchTimeout, and rx.IsMatch is then applied to every line of every file (lines 64-75) with no cancellationToken check anywhere in the tool. A catastrophically backtracking pattern the model invented (e.g. `(a+)+$` against a long line) pins a CPU indefinitely, and because the token is ignored neither the agent's cancellation nor the caller's can stop it — the whole RunAsync hangs.
 
 #### SH-M169 — run_command reports caller cancellation as "Error: Process timed out" and never inspects the exit code
 
 `../Birko.AI/Tools/RunCommandTool.cs:65`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED; the cancellation half already fixed by TASK-534, the exit-code half fixed by TASK-160.** `RunCommandTool` now runs on `ProcessRunner`, and the caller's cancellation propagates (TASK-534). It now also returns `"Error: the command exited with code N."` plus any output for a non-zero exit, where it used to return "". Red on HEAD (exit 3 returned "").
 
 The linked CTS conflates the caller's cancellation with the timeout, so a cancelled agent run yields a misleading timeout string and the OperationCanceledException is swallowed instead of propagating. Separately (line 74) the exit code is never read: a command failing with empty stderr and empty stdout returns the empty string, which does not start with "Error:", so the agent's failure counter is not incremented and the model is told nothing went wrong.
 
@@ -2287,11 +2323,15 @@ The linked CTS conflates the caller's cancellation with the timeout, so a cancel
 
 `../Birko.AI/Tools/AskUserTool.cs:53`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-160). When `Task.Delay(timeout, ct)` won the race because it was cancelled, `AskUserTool` returned "Prompt timed out"; it now throws `OperationCanceledException`, and the abandoned prompt's fault is observed. Red on HEAD.
+
 Task.Delay is created with the cancellationToken, so on cancellation the delay task wins the WhenAny race and the code returns "Error: Prompt timed out after N seconds." instead of surfacing cancellation. The abandoned promptTask is never awaited, so a later fault on it becomes an unobserved task exception.
 
 #### SH-M171 — AgentOptions.Merge resets scalar settings to the other instance's defaults
 
 `../Birko.AI.Contracts/AgentOptions.cs:101`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-160). `AgentOptions.Merge` copied every scalar unconditionally, and `WorkingDirectory` whenever it was non-empty, so the default `"./"` overwrote too. A field is now copied only when `other` set it (it differs from the default). `Merge` therefore cannot reset a field to its default, which is documented. No production caller. Red on HEAD: 1, and the case where a set scalar still wins is a pin.
 
 Reference/collection fields are guarded (copy only if non-empty/non-null) but every value-typed field is copied unconditionally. Merging a partially populated AgentOptions (e.g. one that only sets WorkingDirectory) silently resets MaxIterations to 10, Verbose to true, Interactive to true and PromptTimeout to 300 on the target — the opposite of the merge semantics the guarded fields imply.
 

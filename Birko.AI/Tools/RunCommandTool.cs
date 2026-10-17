@@ -47,6 +47,13 @@ namespace Birko.AI.Tools
                 if (result.TimedOut)
                     return "Error: Process timed out";
 
+                // SH-M169: a failing command with no output used to read as success ("").
+                if (result.ExitCode != 0)
+                {
+                    var output = string.Join("\n", new[] { result.StandardOutput, result.StandardError }.Where(s => s.Length > 0));
+                    return $"Error: the command exited with code {result.ExitCode}." + (output.Length > 0 ? "\n" + output : "");
+                }
+
                 if (!string.IsNullOrEmpty(result.StandardError))
                     return result.StandardOutput.Length > 0 ? result.StandardOutput + "\n" + result.StandardError : result.StandardError;
 
@@ -54,7 +61,7 @@ namespace Birko.AI.Tools
             }
             catch (Exception ex) when (!(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
             {
-                return $"Error running command: {ex.Message}";
+                return $"Error: running command failed: {ex.Message}";
             }
         }
     }

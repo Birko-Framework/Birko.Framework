@@ -93,20 +93,25 @@ namespace Birko.AI
         {
             if (other == null) return;
 
-            Interactive = other.Interactive;
-            MaxIterations = other.MaxIterations;
-            MaxIterationsPerStep = other.MaxIterationsPerStep;
-            Verbose = other.Verbose;
-            if (!string.IsNullOrEmpty(other.WorkingDirectory))
+            // SH-M171: a value the other instance left at its default is "not set" and does not override, like the
+            // guarded reference fields; scalars used to be copied unconditionally, so merging options that set only a
+            // working directory reset MaxIterations, Verbose, Interactive and PromptTimeout to their defaults. The cost:
+            // Merge cannot set a field back to its default value — assign it directly for that.
+            var defaults = new AgentOptions();
+            if (other.Interactive != defaults.Interactive) Interactive = other.Interactive;
+            if (other.MaxIterations != defaults.MaxIterations) MaxIterations = other.MaxIterations;
+            if (other.MaxIterationsPerStep != defaults.MaxIterationsPerStep) MaxIterationsPerStep = other.MaxIterationsPerStep;
+            if (other.Verbose != defaults.Verbose) Verbose = other.Verbose;
+            if (!string.IsNullOrEmpty(other.WorkingDirectory) && other.WorkingDirectory != defaults.WorkingDirectory)
                 WorkingDirectory = other.WorkingDirectory;
-            PromptTimeout = other.PromptTimeout;
+            if (other.PromptTimeout != defaults.PromptTimeout) PromptTimeout = other.PromptTimeout;
             if (other.DefaultPromptResponse != null)
                 DefaultPromptResponse = other.DefaultPromptResponse;
-            ModelDepth = other.ModelDepth;
+            if (other.ModelDepth != defaults.ModelDepth) ModelDepth = other.ModelDepth;
             if (other.AllowedExternalPaths.Count > 0)
                 AllowedExternalPaths = new List<string>(other.AllowedExternalPaths);
-            EnableStreaming = other.EnableStreaming;
-            StreamingFallbackToSync = other.StreamingFallbackToSync;
+            if (other.EnableStreaming != defaults.EnableStreaming) EnableStreaming = other.EnableStreaming;
+            if (other.StreamingFallbackToSync != defaults.StreamingFallbackToSync) StreamingFallbackToSync = other.StreamingFallbackToSync;
             if (other.OnLlmResponseReceived != null)
                 OnLlmResponseReceived = other.OnLlmResponseReceived;
         }

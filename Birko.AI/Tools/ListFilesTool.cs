@@ -66,7 +66,7 @@ namespace Birko.AI.Tools
             }
             catch (Exception ex)
             {
-                return Task.FromResult($"Error listing files: {ex.Message}");
+                return Task.FromResult($"Error: listing files failed: {ex.Message}");
             }
         }
     }

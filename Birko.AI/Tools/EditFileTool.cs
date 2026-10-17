@@ -59,7 +59,7 @@ namespace Birko.AI.Tools
             }
             catch (Exception ex)
             {
-                return Task.FromResult($"Error editing file: {ex.Message}");
+                return Task.FromResult($"Error: editing file failed: {ex.Message}");
             }
         }
 

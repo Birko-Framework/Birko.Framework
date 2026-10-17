@@ -240,6 +240,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### LLM provider and agent triage: robust parsers, honest tool failures (2026-10-18)
+[[TASK-160]]. 20 medium findings: 19 confirmed and 1 narrower. Each was reproduced red, and 18 are fixed here.
+- OpenAI-style parsers survive `null` error, tool-call and usage fields, and read `finish_reason`. A `length` stop is
+  `max_tokens` and does not run a truncated tool call.
+- Every built-in tool's failure starts with `Error:`. `run_command` reports a non-zero exit, `search_code` honours
+  allowed paths and times out a runaway regex, and `ask_user` lets cancellation through.
+- `AgentFactory` is thread-safe. `AgentOptions.Merge` copies only what the other instance set.
 ### Conversation checkpoints restore what the agent built; a trim keeps tool pairs (2026-10-18)
 [[TASK-535]]. `ConversationCheckpoint` saves a conversation and restores it in the agent's in-memory shapes, so
 `ResumeAsync` sends it as it would a live one. `ConversationTrimmer` keeps the first user message and never orphans a
@@ -311,9 +318,6 @@ provider store is, so it refused every store (no caller could have used it). It 
 in `AutoSubscriber`; otherwise every message shared one root-owned dependency that was never disposed. Each delivered
 message now resolves its handlers from its own scope, disposed after dispatch, as `InProcessEventBus` does (TASK-565).
 Discovery asks `IServiceProviderIsService` and builds no handler.
-### Spec-regen cleanup: ambiguous fields, address headers, index settings (2026-10-17)
-[[TASK-651]]. Fixed from the 2026-10-16 spec regeneration. A `DictionaryRuleContext` field matching two keys only ignoring case now throws instead of taking the first. `RuleSet.Rules` copies the list it is given, and `RuleGroup.Rules = null` is refused. `GetClientIpAddress` returns only a parsed address: `unknown` in X-Forwarded-For had been returned as the IP. An ES `CopyData` with `{}` is a plain copy. `ByName("guid")` is the Guid key. ES index settings refuse negative numbers. Mongo text-index fields compare as a set. `[ViewField]` is not a column on a mapped model.
-
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

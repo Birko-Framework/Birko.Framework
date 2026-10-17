@@ -235,9 +235,9 @@ namespace Birko.AI.Providers
 
                     if (m.Role == "assistant" && toolUseBlocks.Any())
                     {
-                        var textContent = textBlocks.Any() && !string.IsNullOrEmpty(textBlocks[0].Text)
-                            ? textBlocks[0].Text
-                            : null;
+                        // SH-M165: every text block, joined as the non-tool branch joins them; only the first was kept.
+                        var joined = string.Join("\n", textBlocks.Select(b => b.Text).Where(t => !string.IsNullOrEmpty(t)));
+                        var textContent = joined.Length > 0 ? joined : null;
 
                         var toolCalls = toolUseBlocks.Select(b => new
                         {
@@ -270,21 +270,16 @@ namespace Birko.AI.Providers
                     var firstObj = objsList.First();
                     var firstObjType = firstObj.GetType();
 
-                    if (firstObjType.GetProperty("type") != null)
+                    if (ReadMember(firstObj, "type") != null)
                     {
                         foreach (var obj in objsList)
                         {
-                            var objType = obj.GetType();
-                            var toolCallIdProp = objType.GetProperty("tool_use_id");
-                            var contentProp = objType.GetProperty("content");
-
-                            if (toolCallIdProp != null && contentProp != null)
-                            {
-                                var toolCallId = toolCallIdProp.GetValue(obj)?.ToString();
-                                var toolContent = contentProp.GetValue(obj)?.ToString() ?? "";
-
-                                list.Add(new { role = "tool", tool_call_id = toolCallId, content = toolContent });
-                            }
+                            // SH-M166: read from an anonymous object, a dictionary or a JsonElement alike; an item that is not a
+                            // tool result is refused (rule 41) — the whole message used to vanish, leaving its tool_use unanswered.
+                            if (ReadMember(obj, "tool_use_id") is not { } toolCallId)
+                                throw new NotSupportedException(
+                                    $"A {m.Role} message item of type '{ReadMember(obj, "type")}' cannot be sent to an OpenAI-style API; only tool_result items are.");
+                            list.Add(new { role = "tool", tool_call_id = toolCallId, content = ReadMember(obj, "content") ?? "" });
                         }
                         continue;
                     }
@@ -302,6 +297,18 @@ namespace Birko.AI.Providers
             }
             return list;
         }
+
+        // A named member of a content item: an anonymous object's property, a dictionary entry or a JsonElement property.
+        private static string? ReadMember(object? item, string name) => item switch
+        {
+            null => null,
+            IDictionary<string, object?> dictionary => dictionary.TryGetValue(name, out var v) ? v?.ToString() : null,
+            JsonElement { ValueKind: JsonValueKind.Object } json => json.TryGetProperty(name, out var v)
+                ? (v.ValueKind == JsonValueKind.String ? v.GetString() : v.GetRawText())
+                : null,
+            JsonElement => null,
+            _ => item.GetType().GetProperty(name)?.GetValue(item)?.ToString(),
+        };
 
         private static bool ConvertJsonElementMessage(List<object> list, string role, JsonElement jsonContent)
         {
@@ -394,51 +401,57 @@ namespace Birko.AI.Providers
             {
                 var result = JsonSerializer.Deserialize<JsonElement>(responseJson);
 
-                if (result.TryGetProperty("error", out var error))
+                // SH-M157: a gateway that always sends "error": null is not reporting an error.
+                if (result.TryGetProperty("error", out var error) && error.ValueKind is JsonValueKind.Object or JsonValueKind.String)
                 {
-                    var errorMessage = error.TryGetProperty("message", out var msg) ? msg.GetString() : "Unknown error";
-                    var errorType = error.TryGetProperty("type", out var type) ? type.GetString() : "unknown";
+                    var errorMessage = error.ValueKind == JsonValueKind.String ? error.GetString() : ReadString(error, "message") ?? "Unknown error";
+                    var errorType = error.ValueKind == JsonValueKind.Object ? ReadString(error, "type") ?? "unknown" : "unknown";
                     var errorMsg = $"API returned error: {errorType} - {errorMessage}";
                     messageCallback?.Invoke("error", errorMsg);
                     return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
                 }
 
-                var choice = result.GetProperty("choices")[0];
+                if (!result.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0)
+                    throw new JsonException("The response has no choices.");
+                var choice = choices[0];
                 var message = choice.GetProperty("message");
+                var finishReason = ReadString(choice, "finish_reason");
 
                 var llmResponse = new LlmResponse { Content = [] };
+                if (message.TryGetProperty("content", out var textContent) && textContent.ValueKind == JsonValueKind.String)
+                    llmResponse.Content.Add(new ContentBlock { Type = "text", Text = textContent.GetString() });
 
-                if (message.TryGetProperty("tool_calls", out var toolCalls) && toolCalls.GetArrayLength() > 0)
+                // SH-M158: "tool_calls": null on a text turn is no tool call.
+                var hasToolCalls = message.TryGetProperty("tool_calls", out var toolCalls)
+                    && toolCalls.ValueKind == JsonValueKind.Array && toolCalls.GetArrayLength() > 0;
+                llmResponse.StopReason = MapFinishReason(finishReason, hasToolCalls);
+
+                // SH-M160: a call cut off by the length limit has arguments that cannot be trusted, so it is not returned.
+                if (hasToolCalls && llmResponse.StopReason == "tool_use")
                 {
-                    llmResponse.StopReason = "tool_use";
+                    // A text block before tool calls is kept, as Claude's content keeps it.
                     foreach (var toolCall in toolCalls.EnumerateArray())
                     {
                         var function = toolCall.GetProperty("function");
-                        var argumentsJson = function.GetProperty("arguments").GetString();
-                        var args = argumentsJson is not null ? JsonSerializer.Deserialize<Dictionary<string, object>>(argumentsJson) : [];
+                        var argumentsJson = ReadString(function, "arguments");
+                        var args = !string.IsNullOrEmpty(argumentsJson) ? JsonSerializer.Deserialize<Dictionary<string, object>>(argumentsJson) : [];
                         llmResponse.Content.Add(new ContentBlock
                         {
                             Type = "tool_use",
-                            Id = toolCall.GetProperty("id").GetString(),
-                            Name = function.GetProperty("name").GetString(),
+                            Id = ReadString(toolCall, "id"),
+                            Name = ReadString(function, "name"),
                             Input = args
                         });
                     }
                 }
-                else
-                {
-                    llmResponse.StopReason = "end_turn";
-                    if (message.TryGetProperty("content", out var textContent))
-                        llmResponse.Content.Add(new ContentBlock { Type = "text", Text = textContent.GetString() });
-                }
 
-                if (result.TryGetProperty("usage", out var usage))
+                if (result.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object)
                 {
                     llmResponse.Usage = new TokenUsage
                     {
-                        PromptTokens = usage.TryGetProperty("prompt_tokens", out var pt) ? pt.GetInt32() : 0,
-                        CompletionTokens = usage.TryGetProperty("completion_tokens", out var ct) ? ct.GetInt32() : 0,
-                        Model = result.TryGetProperty("model", out var mdl) ? mdl.GetString() : null
+                        PromptTokens = ReadTokenCount(usage, "prompt_tokens"),
+                        CompletionTokens = ReadTokenCount(usage, "completion_tokens"),
+                        Model = ReadString(result, "model")
                     };
                 }
 
@@ -451,6 +464,34 @@ namespace Birko.AI.Providers
                 return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
             }
         }
+
+        /// <summary>
+        /// The stop reason for an OpenAI-style <c>finish_reason</c> (TASK-160, SH-M160 / M161), the one mapping the sync and
+        /// streaming parsers share: <c>length</c> is <c>max_tokens</c> and <c>content_filter</c> stays itself, even when the
+        /// response carries tool calls (a cut-off call is not run); otherwise tool calls make it <c>tool_use</c>; <c>stop</c>,
+        /// none, or a tool-call reason with no call is <c>end_turn</c>.
+        /// </summary>
+        protected static string MapFinishReason(string? finishReason, bool hasToolCalls) => finishReason switch
+        {
+            "length" => "max_tokens",
+            "content_filter" => "content_filter",
+            _ when hasToolCalls => "tool_use",
+            null or "stop" or "tool_calls" or "function_call" => "end_turn",
+            _ => finishReason,
+        };
+
+        /// <summary>A token count as the API sent it: a whole number, a whole-valued fraction, or 0 for anything else (SH-M159 / M162).</summary>
+        protected static int ReadTokenCount(JsonElement usage, string name)
+        {
+            if (!usage.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Number) return 0;
+            if (value.TryGetInt32(out var whole)) return whole;
+            return value.TryGetDouble(out var d) && d >= 0 && d <= int.MaxValue ? (int)Math.Round(d) : 0;
+        }
+
+        private static string? ReadString(JsonElement element, string name)
+            => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
 
         protected static LlmResponse NotConfigured() => new()
         {
@@ -559,7 +600,9 @@ namespace Birko.AI.Providers
             {
                 try
                 {
-                    var request = requestFactory();
+                    // SH-M164: the request (and its serialized prompt) is disposed on every attempt; the response, read with
+                    // ResponseHeadersRead, does not need it once the headers are in.
+                    using var request = requestFactory();
                     var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
                     if (response.IsSuccessStatusCode)
@@ -680,10 +723,12 @@ namespace Birko.AI.Providers
                 try { json = JsonSerializer.Deserialize<JsonElement>(chunk); }
                 catch { continue; }
 
-                if (!json.TryGetProperty("choices", out var choices) || choices.GetArrayLength() == 0)
+                if (!json.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0)
                     continue;
 
-                var delta = choices[0].GetProperty("delta");
+                // SH-M163: a finish-only or usage-only chunk has no delta.
+                if (!choices[0].TryGetProperty("delta", out var delta) || delta.ValueKind != JsonValueKind.Object)
+                    continue;
 
                 if (delta.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String)
                 {
@@ -720,13 +765,13 @@ namespace Birko.AI.Providers
                 {
                     tokenUsage = new TokenUsage
                     {
-                        PromptTokens = usageEl.TryGetProperty("prompt_tokens", out var pt) ? pt.GetInt32() : 0,
-                        CompletionTokens = usageEl.TryGetProperty("completion_tokens", out var ct) ? ct.GetInt32() : 0,
-                        Model = json.TryGetProperty("model", out var mdl) ? mdl.GetString() : null
+                        PromptTokens = ReadTokenCount(usageEl, "prompt_tokens"),
+                        CompletionTokens = ReadTokenCount(usageEl, "completion_tokens"),
+                        Model = ReadString(json, "model")
                     };
                 }
 
-                if (!json.TryGetProperty("choices", out var choices) || choices.GetArrayLength() == 0)
+                if (!json.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0)
                     continue;
 
                 var choice = choices[0];
@@ -734,7 +779,7 @@ namespace Birko.AI.Providers
                 if (choice.TryGetProperty("finish_reason", out var fr) && fr.ValueKind == JsonValueKind.String)
                     finishReason = fr.GetString();
 
-                if (!choice.TryGetProperty("delta", out var delta))
+                if (!choice.TryGetProperty("delta", out var delta) || delta.ValueKind != JsonValueKind.Object)
                     continue;
 
                 if (delta.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String)
@@ -747,24 +792,24 @@ namespace Birko.AI.Providers
                     }
                 }
 
-                if (delta.TryGetProperty("tool_calls", out var toolCallsDelta))
+                if (delta.TryGetProperty("tool_calls", out var toolCallsDelta) && toolCallsDelta.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var toolCallDelta in toolCallsDelta.EnumerateArray())
                     {
-                        var index = toolCallDelta.GetProperty("index").GetInt32();
+                        var index = toolCallDelta.TryGetProperty("index", out var indexEl) && indexEl.TryGetInt32(out var i) ? i : 0;
 
                         if (!toolCalls.ContainsKey(index))
                             toolCalls[index] = (null, null, new System.Text.StringBuilder());
 
                         var entry = toolCalls[index];
 
-                        if (toolCallDelta.TryGetProperty("id", out var id))
-                            entry.Id = id.GetString();
+                        if (ReadString(toolCallDelta, "id") is { } id)
+                            entry.Id = id;
 
-                        if (toolCallDelta.TryGetProperty("function", out var function))
+                        if (toolCallDelta.TryGetProperty("function", out var function) && function.ValueKind == JsonValueKind.Object)
                         {
-                            if (function.TryGetProperty("name", out var name))
-                                entry.Name = name.GetString();
+                            if (ReadString(function, "name") is { } name)
+                                entry.Name = name;
                             if (function.TryGetProperty("arguments", out var args) && args.ValueKind == JsonValueKind.String)
                                 entry.Arguments.Append(args.GetString());
                         }
@@ -780,7 +825,11 @@ namespace Birko.AI.Providers
             if (!string.IsNullOrEmpty(accumulatedText))
                 finalContent.Add(new ContentBlock { Type = "text", Text = accumulatedText });
 
-            foreach (var (index, (id, name, arguments)) in toolCalls.OrderBy(kv => kv.Key))
+            // SH-M161: decided before the tool calls are built — a stream cut off by the length limit has truncated arguments,
+            // and running them would report a corrupted call as executed.
+            var stopReason = MapFinishReason(finishReason, toolCalls.Count > 0);
+
+            foreach (var (index, (id, name, arguments)) in stopReason == "tool_use" ? toolCalls.OrderBy(kv => kv.Key) : Enumerable.Empty<KeyValuePair<int, (string? Id, string? Name, System.Text.StringBuilder Arguments)>>())
             {
                 var argsJson = arguments.ToString();
                 Dictionary<string, object>? inputDict = null;
@@ -799,14 +848,6 @@ namespace Birko.AI.Providers
                     Input = inputDict ?? new Dictionary<string, object>()
                 });
             }
-
-            string stopReason;
-            if (toolCalls.Count > 0)
-                stopReason = "tool_use";
-            else if (finishReason == "stop" || finishReason == null)
-                stopReason = "end_turn";
-            else
-                stopReason = finishReason;
 
             streamingResponse.FinalResponse = new LlmResponse
             {

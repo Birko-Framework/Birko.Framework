@@ -46,7 +46,7 @@ namespace Birko.AI.Tools
             }
             catch (Exception ex)
             {
-                return Task.FromResult($"Error appending to file: {ex.Message}");
+                return Task.FromResult($"Error: appending to file failed: {ex.Message}");
             }
         }
     }

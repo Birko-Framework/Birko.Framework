@@ -2,7 +2,7 @@
 id: TASK-160
 parent: STORY-053
 feature: FEATURE-014
-# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+# status: done | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 status: todo
 priority: P2
 assignee: ai
@@ -47,18 +47,18 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 20 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 20 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
-- [ ] Any behavioural fix is followed by `/specs regen llm-provider-and-agents`, with the spec diff reviewed as the change's
+- [x] Any behavioural fix is followed by `/specs regen llm-provider-and-agents`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
 
 ## Out of scope
 
@@ -73,12 +73,39 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A — fully covered by automated tests: a library contract (parsers, message building, the agent loop, tools) with
+no UI surface; every fix has a red-verified test.
 
-## Implementation plan
+## Resolution (2026-10-18)
 
-_Populated by `/tasks plan TASK-160` — leave empty until then._
+All 20 were reproduced against the current code (after TASK-530–535, which rebuilt part of this area). Verdicts with
+the traced code are in the findings doc. **19 confirmed, 1 narrower (SH-M155); 18 fixed here, SH-M152 found fixed by
+TASK-544, SH-M169's cancellation half fixed by TASK-534.** None was spawned or waived.
+
+Fixed in groups by root cause:
+- **OpenAI-style parsers** (SH-M157..M163, `LlmProviderBase`): every probe is shape-guarded (`"error": null`,
+  `"tool_calls": null`, a null `choices`, a missing `delta`). Token counts go through `ReadTokenCount`. One
+  `MapFinishReason` serves sync and streaming: `length` is `max_tokens` with no truncated tool call, and
+  `content_filter` stays itself.
+- **Request and message building** (SH-M164..M166): the streaming request is disposed per attempt; every text block of
+  an assistant tool turn is kept; tool results are read from anonymous objects, dictionaries or JsonElements, and
+  anything else is refused (rule 41).
+- **Agent loop** (SH-M153..M155): every built-in tool's failure starts `Error:`; a tool_use stop with no call ends the
+  run; a null callback no longer wipes a shared provider's.
+- **Tools and options** (SH-M156, M167..M171): `AgentFactory` is concurrent and returns snapshots. `search_code`
+  honours `AllowedExternalPaths`, has a 2-second match timeout, and observes cancellation. `run_command` reports a
+  non-zero exit; `ask_user` propagates cancellation; `Merge` copies only what the other instance set.
+
+**Red / pin split:**
+- 34 new tests: providers 18, tools/options 9, agent 5, plus the factory and Merge tests counted there.
+- 26 + the SH-M168 hang failed on HEAD. On HEAD, `(a+)+$` over a 41-character line hung the test host until it was
+  killed by PID.
+- 4 pass either way and are contract pins: `stop` maps to `end_turn`; an ungranted path is still refused; a set scalar
+  still wins in `Merge`; an explicit callback is still routed to the provider.
+
+Regression: every importer of AI.Contracts / AI / AI.Providers (AI 65, Agents 63, Providers 238, Orchestration 42,
+Resilience 13, Resilience.Data 24, VersionControl.Git 29).
+
+The spec `llm-provider-and-agents` was updated by hand, not by a full `/specs regen`, at each requirement that described
+a fixed defect as shipped behaviour: parsers, streaming, message building, the agent loop, the factory, `Merge`,
+`search_code`, `run_command`, `ask_user`, and the tools' `Error:` contract.

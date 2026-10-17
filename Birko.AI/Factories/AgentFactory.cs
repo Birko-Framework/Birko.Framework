@@ -10,8 +10,9 @@ namespace Birko.AI.Factories
     /// </summary>
     public static class AgentFactory
     {
-        private static readonly Dictionary<string, Func<ILlmProvider, AgentOptions, Agent>> _factories = new(StringComparer.OrdinalIgnoreCase);
-        private static readonly Dictionary<string, string> _aliases = new(StringComparer.OrdinalIgnoreCase);
+        // SH-M156: concurrent, like LlmProviderFactory (CR-L006) — registration may race creation at startup.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Func<ILlmProvider, AgentOptions, Agent>> _factories = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _aliases = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Register an agent factory delegate.
@@ -97,15 +98,16 @@ namespace Birko.AI.Factories
         /// </summary>
         public static IEnumerable<string> GetRegisteredAgentTypes()
         {
-            return _factories.Keys;
+            return _factories.Keys.ToList();
         }
 
         /// <summary>
         /// Get all registered aliases.
         /// </summary>
+        /// <remarks>A snapshot: a later registration does not change it, and enumerating it never races one.</remarks>
         public static IReadOnlyDictionary<string, string> GetRegisteredAliases()
         {
-            return _aliases;
+            return new Dictionary<string, string>(_aliases, StringComparer.OrdinalIgnoreCase);
         }
     }
 }

@@ -70,12 +70,12 @@ a settable `MessageCallback` of shape `Action<string, string>` (type, content), 
 - **Then** it calls `SendMessageAsync` or `SendMessageStreamingAsync` with the conversation, the
   agent's tool list and `SystemPrompt`, and never depends on the concrete provider type
 
-#### Scenario: Provider message callback is redirected by the agent
+#### Scenario: An agent without a callback leaves the provider's callback alone
 
 - **Given** a provider whose `MessageCallback` is already set
 - **When** an `Agent` is constructed over it with `messageCallback` of `null`
-- **Then** `Agent`'s constructor assigns `_llmProvider.MessageCallback = null`, discarding the
-  previously assigned callback
+- **Then** the provider keeps its callback (TASK-160, SH-M155; the constructor used to assign `null`). An agent
+  constructed with a callback still points the provider at it — a provider has one callback.
 
 ### Requirement: Streaming is optional and degrades through an error field
 
@@ -323,7 +323,8 @@ becomes the empty string; and any other content is passed through as-is.
 
 - **Given** content `[text "first", text "second", tool_use …]` on an `assistant` turn
 - **When** the tool-call branch is taken
-- **Then** only `textBlocks[0].Text` (`"first"`) is carried as `content` and `"second"` is dropped
+- **Then** `content` is `"first\nsecond"`, joined as the non-tool branch joins them (TASK-160, SH-M165; only the
+  first was carried)
 
 #### Scenario: Tool-result turn expressed as anonymous objects
 
@@ -333,11 +334,18 @@ becomes the empty string; and any other content is passed through as-is.
 - **Then** one `{role="tool", tool_call_id, content}` entry is emitted per object and the
   original message contributes no other entry
 
+#### Scenario: Tool results given as dictionaries or JsonElements
+
+- **Given** tool-result items that are `Dictionary<string, object?>` or `JsonElement` objects instead of anonymous objects
+- **When** `BuildOpenAiStyleMessages` runs
+- **Then** they are read like the anonymous ones (TASK-160, SH-M166; they produced no entry)
+
 #### Scenario: Object list whose first item has `type` but no tool-result pair
 
-- **Given** a list of anonymous objects carrying `type` but neither `tool_use_id` nor `content`
+- **Given** a list of objects carrying `type` but no `tool_use_id`
 - **When** the branch is entered
-- **Then** no entry is added for any element and the loop `continue`s, dropping the message entirely
+- **Then** `NotSupportedException` is thrown (rule 41): the message used to be dropped silently, leaving its
+  tool_use unanswered
 
 #### Scenario: Object list whose first item lacks `type`
 
@@ -389,9 +397,13 @@ parameters}}` where `parameters` is the tool's `InputSchema` object verbatim.
 ### Requirement: OpenAI-style responses are parsed into a canonical LlmResponse
 
 The system SHALL parse, in `ParseOpenAiStyleResponse`, a chat-completion body into an
-`LlmResponse` whose `StopReason` is `"tool_use"` when `choices[0].message.tool_calls` is
-non-empty (one `tool_use` `ContentBlock` per call) and `"end_turn"` otherwise (a single `text`
-block from `message.content`). A top-level `error` property SHALL yield
+`LlmResponse` (a `text` block from a string `message.content`, then one `tool_use` block per call) whose
+`StopReason` comes from `MapFinishReason(choices[0].finish_reason, hasToolCalls)`, shared with the streaming parser:
+`length` is `"max_tokens"` and `content_filter` stays itself (a call cut off by the limit is not returned), otherwise
+tool calls make it `"tool_use"`, and `stop`, none or a tool-call reason without a call is `"end_turn"` (TASK-160,
+SH-M160: `finish_reason` was never read). Every probe is shape-guarded (SH-M157..M159): `"error": null`,
+`"tool_calls": null` and a null, string or fractional token count do not discard the completion; a token count is
+read by `ReadTokenCount` (a whole-valued fraction rounds, anything else is 0). An `error` object or string SHALL yield
 `LlmResponse.Error($"API returned error: {type} - {message}")`, and any thrown exception during
 parsing SHALL yield `LlmResponse.Error($"Error parsing OpenAI-style response: {ex.Message}")`.
 Both error paths SHALL also invoke the supplied message callback with type `"error"`.
@@ -485,8 +497,10 @@ keyed by their `index` (id, name and appended `arguments`), capture `usage` and 
 from any chunk, and on completion populate the `LlmStreamingResponse` with `FinalResponse`
 (a text block first when text was accumulated, then one `tool_use` block per captured index in
 ascending index order), `StopReason`, `AccumulatedText`, `Usage` and `IsComplete = true`.
-The derived stop reason SHALL be `"tool_use"` when any tool call was captured, `"end_turn"` when
-`finish_reason` is `"stop"` or absent, and otherwise the raw `finish_reason` string.
+The derived stop reason SHALL be `MapFinishReason(finish_reason, anyToolCall)` (above), decided before the tool calls
+are built, so a stream cut off by the length limit returns no truncated call (TASK-160, SH-M161: it was `tool_use`
+and the call ran with `{"_raw": …}`). A chunk with no `delta`, a null `choices` or `tool_calls`, or an odd usage count
+SHALL be skipped or read as 0, never thrown mid-stream (SH-M162, SH-M163).
 
 #### Scenario: Fragmented tool arguments are reassembled
 
@@ -503,9 +517,9 @@ The derived stop reason SHALL be `"tool_use"` when any tool call was captured, `
 
 #### Scenario: Truncated completion surfaces its finish reason verbatim
 
-- **Given** a stream whose final `finish_reason` is `"length"` with no tool calls
+- **Given** a stream whose final `finish_reason` is `"length"`, with or without tool calls
 - **When** the stream completes
-- **Then** `StopReason` is `"length"`, which the agent's stop-reason switch treats as an
+- **Then** `StopReason` is `"max_tokens"` and no tool call is returned; the agent's stop-reason switch treats it as an
   unexpected reason and stops the loop
 
 #### Scenario: Unparseable chunk is skipped
@@ -577,17 +591,18 @@ assistant turn, so no tool_result is kept without its tool_use and no two user t
 - **When** it is trimmed to each limit from 2 to 23
 - **Then** the first user message and the last message are kept and every kept tool_result follows an assistant turn
 
-### Requirement: Agent options carry defaults, clone deeply and merge scalar-last-wins
+### Requirement: Agent options carry defaults, clone deeply and merge only what the other set
 
 The system SHALL default `AgentOptions` to `Interactive = true`, `MaxIterations = 10`,
 `MaxIterationsPerStep = 10`, `Verbose = true`, `WorkingDirectory = "./"`,
 `PromptTimeout = 300`, `ModelDepth = 5`, `EnableStreaming = false`,
 `StreamingFallbackToSync = true`, an empty `AllowedExternalPaths`
 and a null `DefaultPromptResponse`. `Clone()` SHALL copy every field and allocate a new
-`AllowedExternalPaths` list. `Merge(other)` SHALL return immediately on a null `other`, copy
-every value-typed field unconditionally, and copy `WorkingDirectory`, `DefaultPromptResponse`,
-`AllowedExternalPaths` and `OnLlmResponseReceived` only when the incoming value is
-non-empty/non-null.
+`AllowedExternalPaths` list. `Merge(other)` SHALL return immediately on a null `other` and copy a field only when
+`other` set it: a value-typed field or `WorkingDirectory` only when it differs from the default, and
+`DefaultPromptResponse`, `AllowedExternalPaths` and `OnLlmResponseReceived` only when non-empty/non-null (TASK-160,
+SH-M171: scalars were copied unconditionally, so merging options that set only a working directory reset
+`MaxIterations`, `Verbose`, `Interactive` and `PromptTimeout`). `Merge` therefore cannot set a field back to its default.
 
 #### Scenario: Clone isolates the path list
 
@@ -888,7 +903,8 @@ current iteration has reached the maximum.
 
 - **Given** a response with `StopReason = "tool_use"` whose `Content` holds only text blocks
 - **When** the handler runs
-- **Then** an empty result list is still appended as a `user` message and the loop continues
+- **Then** a `"warning"` is emitted, the text blocks are emitted as `"assistant_final"` and the run ends (TASK-160,
+  SH-M154: an empty tool_result turn was appended, which providers reject on the next call)
 
 #### Scenario: Tool exceptions are not caught by the agent
 
@@ -1036,7 +1052,8 @@ registered providers when `Create` is asked for an unregistered name.
 ### Requirement: Agents are created through a registration-based factory with aliases
 
 The system SHALL keep agent factory delegates and alias mappings in two case-insensitive
-plain `Dictionary` instances inside `AgentFactory`, SHALL resolve an agent type through a
+`ConcurrentDictionary` instances inside `AgentFactory` (TASK-160, SH-M156), return snapshots from
+`GetRegisteredAgentTypes` / `GetRegisteredAliases`, SHALL resolve an agent type through a
 single alias hop (`ResolveAgentType` returns its input when no alias matches), SHALL default
 `Create`'s `agentType` to `"coding"`, SHALL substitute a fresh `AgentOptions` when none is
 given, and SHALL throw `ArgumentNullException` for a null provider or `ArgumentException` naming
@@ -1061,19 +1078,20 @@ the registered types for an unresolvable agent type.
 - **When** `Create(provider, null, "docs")` is called
 - **Then** the `ArgumentException` message names `"docs"` (the requested type), not `"writer"`
 
-#### Scenario: Registry is not thread-safe
+#### Scenario: Registration racing creation and enumeration
 
-- **Given** two threads calling `Register` concurrently
-- **When** both mutate the plain `Dictionary`
-- **Then** behaviour is undefined, unlike `LlmProviderFactory`, which uses a
-  `ConcurrentDictionary` for the same purpose
+- **Given** eight threads registering types and aliases while creating agents and enumerating the registry
+- **When** they run together
+- **Then** nothing throws, as in `LlmProviderFactory`
 
 ### Requirement: Tools declare a name, description and JSON input schema
 
 The system SHALL require every `Tool` to expose `Name`, `Description` and `InputSchema`, to
 implement `ExecuteAsync(workingDirectory, input, cancellationToken)` returning a string, and
 SHALL give each tool an optional `MessageCallback` (raised via the protected `SendMessage`) and
-an optional `AgentOptions` reference used for path allow-listing and interactivity.
+an optional `AgentOptions` reference used for path allow-listing and interactivity. Every built-in tool SHALL report a failure as a string beginning `"Error:"`, the prefix the agent counts as a failed
+tool execution (TASK-160, SH-M153: eight tools' exception paths began `"Error reading file:"` and the like, so a
+batch in which every tool threw counted as success).
 
 #### Scenario: Tool result string is the only channel back to the model
 
@@ -1086,12 +1104,9 @@ an optional `AgentOptions` reference used for path allow-listing and interactivi
 
 The system SHALL check every file path against `PathHelper.IsPathSafe(fullPath,
 workingDirectory, Options?.AllowedExternalPaths)` before touching the filesystem in
-`read_file`, `write_file`, `edit_file`, `append_to_file` and `list_files`, and SHALL return
-`"Error: Access denied. Path must be in workspace or an allowed external path."` when the check
-fails. `search_code` SHALL instead call the two-argument
-`PathHelper.IsPathSafe(targetDir, workingDirectory)` overload, ignoring
-`AllowedExternalPaths`, and SHALL return `"Error: Access denied. Directory must be in
-{workingDirectory}"`.
+`read_file`, `write_file`, `edit_file`, `append_to_file`, `list_files` and `search_code` (TASK-160, SH-M167: it used the
+two-argument overload and ignored `AllowedExternalPaths`), and SHALL return an `"Error: Access denied. …"` string when
+the check fails.
 
 #### Scenario: Traversal outside the workspace is denied
 
@@ -1105,12 +1120,11 @@ fails. `search_code` SHALL instead call the two-argument
 - **When** `read_file` executes
 - **Then** the safety check passes and the file content is returned
 
-#### Scenario: search_code cannot reach an allow-listed path
+#### Scenario: search_code reaches an allow-listed path
 
 - **Given** the same allow-listed `C:\shared` and `directory` pointing at it
 - **When** `search_code` executes
-- **Then** the two-argument overload rejects it and the access-denied error is returned, diverging
-  from every other file tool
+- **Then** the directory is searched, as every other file tool would read it
 
 #### Scenario: Absolute-looking path handling differs between tools
 
@@ -1125,19 +1139,19 @@ fails. `search_code` SHALL instead call the two-argument
 The system SHALL require a non-empty `file_path`, normalise the workspace with
 `Path.GetFullPath`, strip a single leading `/`, resolve the full path, apply the safety check and
 return the file's entire text; any exception SHALL be returned as
-`"Error reading file: {message}"`.
+`"Error: reading file failed: {message}"`.
 
 #### Scenario: Missing file
 
 - **Given** a safe path that does not exist
 - **When** `read_file` executes
-- **Then** the `FileNotFoundException` is caught and `"Error reading file: …"` is returned
+- **Then** the `FileNotFoundException` is caught and `"Error: reading file failed: …"` is returned
 
 #### Scenario: Missing file_path key
 
 - **Given** an input dictionary without `file_path`
 - **When** `input["file_path"]` throws `KeyNotFoundException`
-- **Then** the catch block returns `"Error reading file: …"`
+- **Then** the catch block returns `"Error: reading file failed: …"`
 
 ### Requirement: list_files enumerates workspace-relative paths
 
@@ -1219,7 +1233,7 @@ occurrence and return `"OK"`.
 
 - **Given** `old_text = ""`
 - **When** the guard throws `ArgumentException`
-- **Then** `"Error editing file: old_text is required"` is returned
+- **Then** `"Error: editing file failed: old_text is required"` is returned
 
 #### Scenario: Missing file
 
@@ -1232,7 +1246,7 @@ occurrence and return `"OK"`.
 The system SHALL append `content` to the target with `File.AppendAllText` — creating the file
 when absent — after requiring `file_path`, defaulting `content` to the empty string, defaulting
 `create_directories` to `true`, and applying the path safety check; it SHALL return `"OK"` on
-success and `"Error appending to file: {message}"` on any exception.
+success and `"Error: appending to file failed: {message}"` on any exception.
 
 #### Scenario: Append to a non-existent file
 
@@ -1247,7 +1261,9 @@ The system SHALL require a non-empty `query`, default `pattern` to `"*"`, defaul
 to `true` (any unparseable value also yielding `true`), default `regex` and `case_sensitive` to
 `false`, skip files with extensions `.png .jpg .jpeg .gif .bmp .pdf .zip`, skip files it cannot
 read, and return one `"{relativePath}:{lineNumber}: {line}"` entry per match joined by
-`Environment.NewLine`.
+`Environment.NewLine`. A regex query SHALL be compiled with `MatchTimeout` (2 s per line), a timed-out match SHALL
+return an `"Error: the regex timed out …"` string, and the caller's cancellation SHALL be observed between files
+(TASK-160, SH-M168: a catastrophic model-supplied pattern pinned a CPU and ignored cancellation).
 
 #### Scenario: Case-insensitive substring search
 
@@ -1265,7 +1281,7 @@ read, and return one `"{relativePath}:{lineNumber}: {line}"` entry per match joi
 
 - **Given** `regex = true` and `query = "["`
 - **When** the `Regex` constructor throws
-- **Then** `"Error searching code: …"` is returned
+- **Then** `"Error: searching code failed: …"` is returned
 
 #### Scenario: Unreadable file is skipped
 
@@ -1306,18 +1322,18 @@ cancellation propagate as `OperationCanceledException`.
 - **Then** the process tree is killed and `OperationCanceledException` propagates (before TASK-534 the tool returned
   `"Error: Process timed out"` and swallowed the cancellation)
 
-#### Scenario: Failing command with silent stderr looks successful
+#### Scenario: A non-zero exit code is an error
 
-- **Given** a command exiting with a non-zero code, empty stderr and empty stdout
+- **Given** a command exiting with code 3 and no output
 - **When** `run_command` returns
-- **Then** the empty string is returned; the exit code is never inspected and the result does not
-  begin with `"Error:"`, so the agent's failure counter is not incremented
+- **Then** `"Error: the command exited with code 3."` is returned (followed by any output), so the agent counts the
+  failure (TASK-160, SH-M169: the empty string was returned)
 
 #### Scenario: Invalid working directory
 
 - **Given** a `workingDirectory` that does not exist
 - **When** `run_command` executes
-- **Then** the `ArgumentException` guard produces `"Error running command: Invalid working directory"`
+- **Then** the `ArgumentException` guard produces `"Error: running command failed: Invalid working directory"`
 
 ### Requirement: display_text surfaces text through the message callback
 
@@ -1365,15 +1381,14 @@ it SHALL emit `"prompt_console"` and return
 
 - **Given** a `PromptCallback` that never completes and `PromptTimeout = 30`
 - **When** the delay wins the race
-- **Then** `"Error: Prompt timed out after 30 seconds."` is returned and the abandoned prompt task
-  is never awaited
+- **Then** `"Error: Prompt timed out after 30 seconds."` is returned and the abandoned prompt task's fault, if any,
+  is observed (TASK-160, SH-M170)
 
-#### Scenario: Cancellation is reported as a timeout
+#### Scenario: Cancellation propagates
 
-- **Given** a cancelled `cancellationToken`
-- **When** `Task.Delay(..., cancellationToken)` completes first because it was cancelled
-- **Then** the timeout branch is taken and the prompt-timeout error is returned instead of an
-  `OperationCanceledException`
+- **Given** a `cancellationToken` cancelled while the prompt is pending
+- **When** the cancelled delay completes first
+- **Then** `OperationCanceledException` propagates (TASK-160, SH-M170: the prompt-timeout error was returned)
 
 #### Scenario: Context is prepended to the question
 

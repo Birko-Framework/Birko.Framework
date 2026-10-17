@@ -32,7 +32,7 @@ namespace Birko.AI.Tools
             }
             catch (Exception ex)
             {
-                return Task.FromResult($"Error displaying text: {ex.Message}");
+                return Task.FromResult($"Error: displaying text failed: {ex.Message}");
             }
         }
     }

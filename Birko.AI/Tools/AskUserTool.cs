@@ -55,7 +55,13 @@ namespace Birko.AI.Tools
                     var completedTask = await Task.WhenAny(promptTask, timeoutTask);
 
                     if (completedTask == timeoutTask)
+                    {
+                        // SH-M170: the abandoned prompt is observed, so its later fault is not an unobserved exception, and a
+                        // cancellation is a cancellation — it used to read as "timed out".
+                        _ = promptTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                        cancellationToken.ThrowIfCancellationRequested();
                         return $"Error: Prompt timed out after {timeout} seconds.";
+                    }
 
                     return await promptTask;
                 }
@@ -68,9 +74,9 @@ namespace Birko.AI.Tools
 
                 return "Error: Console input not available in library mode. Use PromptCallback for interactive prompts.";
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
             {
-                return $"Error getting user input: {ex.Message}";
+                return $"Error: getting user input failed: {ex.Message}";
             }
         }
     }

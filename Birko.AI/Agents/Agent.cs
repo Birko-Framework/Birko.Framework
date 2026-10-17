@@ -22,7 +22,10 @@ namespace Birko.AI.Agents
             _tools = CreateTools();
             _messageCallback = messageCallback;
 
-            _llmProvider.MessageCallback = messageCallback;
+            // SH-M155: a provider may be shared by several agents; one constructed without a callback must not wipe the
+            // sink another configured. With a callback the provider's messages go to it (a provider has one callback).
+            if (messageCallback != null)
+                _llmProvider.MessageCallback = messageCallback;
 
             foreach (var tool in _tools)
             {
@@ -373,7 +376,18 @@ Reasoning approach: Balanced
             var toolResults = new List<object>();
             var errorCount = 0;
 
-            foreach (var block in (response.Content ?? Enumerable.Empty<ContentBlock>()).Where(b => b.Type == "tool_use"))
+            // SH-M154: a tool_use stop with no tool_use block has nothing to answer. Appending its (empty) tool_result turn
+            // produced a user message with an empty content array, which providers reject on the next call.
+            var toolUses = (response.Content ?? Enumerable.Empty<ContentBlock>()).Where(b => b.Type == "tool_use").ToList();
+            if (toolUses.Count == 0)
+            {
+                SendMessage("warning", "The model stopped for a tool call but sent none; ending the run.");
+                foreach (var text in (response.Content ?? []).Where(b => b.Type == "text"))
+                    SendMessage("assistant_final", text.Text ?? "");
+                return true;
+            }
+
+            foreach (var block in toolUses)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 

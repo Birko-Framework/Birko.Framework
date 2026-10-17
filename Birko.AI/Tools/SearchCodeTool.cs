@@ -5,6 +5,9 @@ namespace Birko.AI.Tools
 {
     public class SearchCodeTool : Tool
     {
+        /// <summary>How long one line may take to match a regex query (TASK-160, SH-M168).</summary>
+        public static readonly TimeSpan MatchTimeout = TimeSpan.FromSeconds(2);
+
         public override string Name => "search_code";
         public override string Description => "Search text in files within the workspace and return matching lines with file paths and line numbers.";
         public override object? InputSchema => new
@@ -38,8 +41,9 @@ namespace Birko.AI.Tools
 
                 var targetDir = string.IsNullOrWhiteSpace(relDir) ? workingDirectory : Path.Combine(workingDirectory, relDir!);
 
-                if (!PathHelper.IsPathSafe(targetDir, workingDirectory))
-                    return Task.FromResult($"Error: Access denied. Directory must be in {workingDirectory}");
+                // SH-M167: the same allow-list every other file tool honours.
+                if (!PathHelper.IsPathSafe(targetDir, workingDirectory, Options?.AllowedExternalPaths))
+                    return Task.FromResult($"Error: Access denied. Directory must be in {workingDirectory} or an allowed external path");
 
                 if (!Directory.Exists(targetDir))
                     return Task.FromResult($"Error: Directory not found: {relDir ?? "."}");
@@ -49,10 +53,12 @@ namespace Birko.AI.Tools
 
                 Regex? rx = null;
                 if (useRegex)
-                    rx = new Regex(query, caseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase);
+                    // SH-M168: the pattern comes from the model; a catastrophic one must not pin a CPU for good.
+                    rx = new Regex(query, caseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase, MatchTimeout);
 
                 foreach (var file in files)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var ext = Path.GetExtension(file).ToLowerInvariant();
                     if (ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".pdf" or ".zip")
                         continue;
@@ -77,9 +83,13 @@ namespace Birko.AI.Tools
 
                 return Task.FromResult(string.Join(Environment.NewLine, results));
             }
-            catch (Exception ex)
+            catch (RegexMatchTimeoutException)
             {
-                return Task.FromResult($"Error searching code: {ex.Message}");
+                return Task.FromResult($"Error: the regex timed out after {MatchTimeout.TotalSeconds:0} seconds on one line; simplify the pattern.");
+            }
+            catch (Exception ex) when (!(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
+            {
+                return Task.FromResult($"Error: searching code failed: {ex.Message}");
             }
         }
     }

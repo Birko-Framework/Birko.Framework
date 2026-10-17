@@ -39,7 +39,7 @@ namespace Birko.AI.Tools
             }
             catch (Exception ex)
             {
-                return Task.FromResult($"Error reading file: {ex.Message}");
+                return Task.FromResult($"Error: reading file failed: {ex.Message}");
             }
         }
     }

@@ -13,7 +13,8 @@ finding-ids: SH-M001 … SH-M428
 
 ## Progress
 
-**292 / 428 closed by this story's tasks.** All 36 of `views-and-aggregation` ([[TASK-151]], done 2026-10-16): all
+**312 / 428 closed by this story's tasks.** All 20 of `llm-provider-and-agents` ([[TASK-160]], done 2026-10-18): 19 confirmed,
+1 narrower (`SH-M155`); 18 fixed there, `SH-M152` found fixed by [[TASK-544]], `SH-M169` half fixed by [[TASK-534]]. All 36 of `views-and-aggregation` ([[TASK-151]], done 2026-10-16): all
 confirmed (5 wider), 33 fixed there, 3 found fixed earlier. All 33 of `migrations` ([[TASK-152]], done 2026-10-15): all confirmed
 (2 wider, 2 narrower), 25 fixed there, 8 found fixed earlier. All 15 of `security-and-authorization` ([[TASK-165]], done 2026-10-15): 13
 confirmed and 2 narrower, all 15 fixed. All 22 of `validation-and-rules` ([[TASK-156]], done 2026-10-15): 21
