@@ -85,7 +85,7 @@ Common MySQL to .NET type mappings:
 - `INT` → `int`
 - `BIGINT` → `long`
 - `DECIMAL(p,s)` → `decimal`
-- `DATETIME` → `DateTime`
+- `DATETIME(6)` → `DateTime` (microseconds; a bare `DATETIME` kept whole seconds, TASK-656)
 - `TIMESTAMP` → `DateTime`
 - `TINYINT(1)` → `bool`
 - `JSON` → `string` (or mapped object)
@@ -95,7 +95,7 @@ Common MySQL to .NET type mappings:
 column is a **wall clock** — the value's components as supplied, `Kind` not persisted, reads back
 `Unspecified`. Marking the property `[UtcField]` makes it an **instant**: `DbType.DateTimeOffset`, and it reads
 back `Kind=Utc` on every provider. Both coexist per property on one entity.
-MySQL has no timezone-aware type this framework maps to, so it **falls back** to plain `DATETIME`: the
+MySQL has no timezone-aware type this framework maps to, so it **falls back** to plain `DATETIME(6)`: the
 offset is dropped and the UTC wall clock stored. The instant is still exact, recoverable because both
 sides agree the column holds UTC — which is what the attribute declares. Measured: a non-UTC session does
 not shift it, unlike PostgreSQL's `timestamptz`.

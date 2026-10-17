@@ -42,8 +42,8 @@ public class MySQLConnectorTests
     }
 
     [Theory]
-    [InlineData(DbType.DateTime, "DATETIME")]
-    [InlineData(DbType.DateTime2, "DATETIME")]
+    [InlineData(DbType.DateTime, "DATETIME(6)")] // TASK-656: microseconds, was DATETIME
+    [InlineData(DbType.DateTime2, "DATETIME(6)")]
     [InlineData(DbType.Date, "DATE")]
     [InlineData(DbType.Time, "TIME")]
     [InlineData(DbType.Single, "FLOAT")]

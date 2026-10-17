@@ -881,6 +881,38 @@ ignored.
 - **Then** a `BinaryField` with `MaxLength == 16` is produced; without a positive `[MaxLengthField]` or
   `[PrecisionField]` its `MaxLength` is `null`
 
+### Requirement: A DateTime keeps its sub-second digits on every SQL provider
+
+The system SHALL store a `DateTime` at the finest precision each provider's type offers, and SHALL bind it so the
+parameter does not round it first (TASK-656, FIELD-047). MySQL SHALL declare `DbType.DateTime`, `DateTime2` and
+`DateTimeOffset` columns `DATETIME(6)` (microseconds). A bare `DATETIME` has no fractional digits. SQL Server SHALL bind a
+`DateTime` parameter as `SqlDbType.DateTime2`. Its columns were already `DATETIME2` (CR-H086), but SqlClient infers
+`SqlDbType.DateTime` for a `DateTime` value and rounds it to about 3.33 ms before it reaches the column (rule 28).
+PostgreSQL keeps microseconds and SQLite every tick, both unchanged. `DateTime.Kind` on read is the `[UtcField]`
+contract's (TASK-263).
+
+#### Scenario: A DateTime round-trips and is found by its exact value
+
+- **Given** `…12:34:56.1234560` on MySQL, or `…12:34:56.1234567` on SQL Server, written through a store (measured live)
+- **When** it is read back by Guid, and read with a filter on the exact value
+- **Then** every digit the type keeps is returned, and the filter matches the row. Before TASK-656 MySQL returned
+  `…56.0000000`, SQL Server `…56.1233333` (stored so in a `datetime2(7)` column), and neither filter matched
+
+#### Scenario: Two writes within a second stay ordered
+
+- **Given** two rows 0.4 ms apart
+- **When** they are read ordered by the timestamp
+- **Then** they come back in write order with distinct values (before TASK-656 they were equal on both providers)
+
+#### Scenario: A MySQL column created before the change is drift for the operator
+
+- **Given** a MySQL table whose `DateTime` column was created as `DATETIME`
+- **When** `DetectDrift` and `PlanRepair` run
+- **Then** the column is a `TypeMismatch` (`declared DATETIME(6), stored datetime`), and `PlanRepair` lists it as not
+  actioned, as every type change since TASK-633. The widening is lossless, and the operator runs
+  `ALTER TABLE … MODIFY <column> DATETIME(6)` (with `NOT NULL` where the column has it). An existing SQL Server column
+  needs nothing: the fix is the parameter.
+
 ### Requirement: Reader materialisation per field type
 
 The system SHALL materialise a column into its property through a type-specific `Read` override —

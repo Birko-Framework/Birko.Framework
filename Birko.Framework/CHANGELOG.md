@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-17 — A filter on a Persistent or Auto SQL view works
+
+[[TASK-639]]. Measured on all four SQL providers: every filtered read and count of a Persistent view, and of an Auto view
+once it existed, failed. The WHERE named the source column (`Persons.Name`), which the view does not have; the attribute
+`[View]` path too. `DataBase.ResolveViewConditions` now renames conditions to the view's columns in the view funnels,
+beside the sort-key resolution.
+
 ## 2026-10-17 — A soft-deleted row no longer blocks the next default or slug
 
 [[TASK-638]]. Measured on all four SQL providers: after a soft delete, the next promotion and the next create of the same

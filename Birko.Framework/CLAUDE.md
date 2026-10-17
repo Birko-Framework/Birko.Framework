@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A DateTime keeps its sub-second digits on MySQL and SQL Server (2026-10-17)
+[[TASK-656]]. Measured live: MySQL stored a `DateTime` to the second (`DATETIME`), and SQL Server rounded it to ~3.33 ms
+because SqlClient infers a `datetime` parameter, though the column was `DATETIME2`. Exact-value filters matched nothing and
+writes within a second tied. MySQL columns are now `DATETIME(6)`, and SQL Server binds `DATETIME2`. An existing MySQL
+`DATETIME` column is reported as drift; widening it with `ALTER … MODIFY … DATETIME(6)` is the operator's step.
 ### A migration's DropField drops the field; a DropIndex that cannot drop refuses (2026-10-17)
 [[TASK-655]]. Measured live: on MongoDB, RavenDB, Cosmos DB and ElasticSearch `DropField` left every document carrying the
 field, and ElasticSearch and Cosmos `DropIndex` did nothing, yet the migration was recorded. `DropField` now removes the field
@@ -323,12 +328,6 @@ replace or remove it. `StaleGrantDetector.FindAsync` lists such grants; a health
 [[TASK-640]]. Measured live: `DropCollection("Accounts' WHERE Name = 'b")` deleted only `b`, and an update key or
 `RenameField` name could write another field. A collection now reaches RQL as one escaped literal, so `O'Brien` works,
 and a field name must be a plain dotted path, as filter fields already were.
-### A filter on a Persistent or Auto SQL view works (2026-10-17)
-
-[[TASK-639]]. Measured on all four SQL providers: every filtered read and count of a Persistent view, and of an Auto view
-once it existed, failed. The WHERE named the source column (`Persons.Name`), which the view does not have; the attribute
-`[View]` path too. `DataBase.ResolveViewConditions` now renames conditions to the view's columns in the view funnels,
-beside the sort-key resolution.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

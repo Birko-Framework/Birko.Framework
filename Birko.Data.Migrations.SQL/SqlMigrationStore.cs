@@ -319,7 +319,9 @@ namespace Birko.Data.Migrations.SQL
         /// <para>
         /// <c>DEFAULT CURRENT_TIMESTAMP</c> is measured on all four providers rather than assumed: accepted by
         /// SQLite, PostgreSQL 16.15, MySQL 8.4.11 (on <c>DATETIME</c>) and SQL Server 2022 (on
-        /// <c>DATETIME2</c>), so it needs no provider capability of its own.
+        /// <c>DATETIME2</c>). Since TASK-656 the MySQL column is <c>DATETIME(6)</c>, which refuses that default
+        /// ("Invalid default value for 'AppliedAt'", measured), so the expression comes from
+        /// <c>AbstractConnectorBase.CurrentTimestampDefault</c>: <c>CURRENT_TIMESTAMP(6)</c> there.
         /// </para>
         /// <para>
         /// <c>internal</c> rather than <c>private</c> so the statement can be pinned per dialect without a
@@ -336,7 +338,7 @@ namespace Birko.Data.Migrations.SQL
                 ColumnDefinition("Name", FieldType.String, required: true, maxLength: 255),
                 ColumnDefinition("Description", FieldType.String),
                 ColumnDefinition("CreatedAt", FieldType.DateTime, required: true),
-                ColumnDefinition("AppliedAt", FieldType.DateTime, required: true, defaultExpression: "CURRENT_TIMESTAMP"),
+                ColumnDefinition("AppliedAt", FieldType.DateTime, required: true, defaultExpression: _connector.CurrentTimestampDefault),
             };
 
             return $"CREATE TABLE {TableReference} ({string.Join(", ", columns)});";

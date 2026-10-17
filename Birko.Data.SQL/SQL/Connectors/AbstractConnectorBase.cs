@@ -708,6 +708,13 @@ namespace Birko.Data.SQL.Connectors
         /// Quotes a SQL identifier (table or column name) to prevent reserved word conflicts and injection.
         /// Default uses ANSI SQL double quotes. Override for provider-specific quoting.
         /// </summary>
+        /// <summary>
+        /// The current-time expression for a <c>DEFAULT</c> on a column <see cref="ConvertType"/> types as a date-time.
+        /// It is a connector member because the expression must match the column's precision: MySQL refuses
+        /// <c>DEFAULT CURRENT_TIMESTAMP</c> on a <c>DATETIME(6)</c> column ("Invalid default value", measured on TASK-656).
+        /// </summary>
+        public virtual string CurrentTimestampDefault => "CURRENT_TIMESTAMP";
+
         public virtual string QuoteIdentifier(string identifier)
         {
             return "\"" + identifier.Replace("\"", "\"\"") + "\"";

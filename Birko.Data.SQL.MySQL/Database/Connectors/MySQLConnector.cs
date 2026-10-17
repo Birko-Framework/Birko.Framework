@@ -275,9 +275,11 @@ namespace Birko.Data.SQL.Connectors
                     return "DATE";
                 case DbType.DateTime:
                 case DbType.DateTime2:
-                    return "DATETIME";
                 case DbType.DateTimeOffset:
-                    return "DATETIME";
+                    // TASK-656: a bare DATETIME has no fractional digits, so every sub-second digit was lost (measured:
+                    // ...56.1234560 read back ...56.0000000) and two writes within a second compared equal. DATETIME(6)
+                    // keeps microseconds, MySQL's finest.
+                    return "DATETIME(6)";
                 case DbType.Int16:
                     return "SMALLINT";
                 case DbType.UInt16:
@@ -425,6 +427,10 @@ namespace Birko.Data.SQL.Connectors
             }
             return result.ToString();
         }
+
+        /// <inheritdoc />
+        /// <remarks>TASK-656: date-time columns are <c>DATETIME(6)</c>, and MySQL requires the default's precision to match.</remarks>
+        public override string CurrentTimestampDefault => "CURRENT_TIMESTAMP(6)";
 
         /// <inheritdoc />
         public override DbCommand AddParameter(DbCommand command, string name, object? value)

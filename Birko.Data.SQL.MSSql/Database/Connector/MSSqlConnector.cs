@@ -563,7 +563,15 @@ namespace Birko.Data.SQL.Connectors
             }
             else
             {
-                ((SqlCommand)command).Parameters.AddWithValue(name, value ?? DBNull.Value);
+                var parameter = ((SqlCommand)command).Parameters.AddWithValue(name, value ?? DBNull.Value);
+                // TASK-656 (rule 28): SqlClient infers SqlDbType.DateTime for a DateTime, and a datetime parameter is
+                // rounded to ~3.33 ms before it reaches the DATETIME2 column (measured: ...56.1234567 stored as
+                // ...56.1233333, and a filter on the exact value matched nothing). DATETIME2 carries every tick; against a
+                // legacy datetime column the server converts it as before.
+                if (value is DateTime)
+                {
+                    parameter.SqlDbType = System.Data.SqlDbType.DateTime2;
+                }
             }
             return command;
         }
