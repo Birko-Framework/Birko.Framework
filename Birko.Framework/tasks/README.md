@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-13. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-17 14:59. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -12,21 +12,28 @@ which this regeneration never touches._
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
-| planned      | 10    | 27      | —     |
-| todo         | —     | —       | 193   |
-| in-progress  | 8     | 11      | 0     |
-| verify       | —     | —       | 0     |
+| planned      | 10    | 26      | —     |
+| todo         | —     | —       | 183   |
+| in-progress  | 8     | 13      | 0     |
+| verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 24      | 261   |
-| cancelled    | 0     | 0       | 5     |
+| done         | 2     | 23      | 320   |
+| cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 25× P1 · 120× P2 · 48× P3.
+`todo` by priority: 13× P1 · 127× P2 · 43× P3.
 
 ## In progress now
 
 _None._
+
+## Awaiting verification
+
+- [TASK-130](_loose/TASK-130-theme-contrast-scanner-gate.md) — Scan every shipped theme for colour contrast, and gate it like the drift check (P1, ai)
+- [TASK-545](EPIC-001-web-components-ui-polish/TASK-545-undo-instead-of-confirm-for-reversible-deletes.md) — A reversible delete can offer Undo instead of a confirm dialog — toast action + base-page opt-in (P3, ai)
+- [TASK-552](EPIC-001-web-components-ui-polish/TASK-552-b-editable-table-shows-stale-typed-values-after-setdata.md) — b-editable-table shows stale typed values after setData or a row removal (P2, ai)
+- [TASK-599](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-599-semantic-text-colours-sub-aa.md) — Every semantic colour-on-tint pairing is below the AA contrast floor, in both themes (P1, ai)
 
 ## Blocked
 
@@ -34,7 +41,7 @@ _None._
 
 ## Tree
 
-- **EPIC-001** Birko.Web.Components — UI polish — in-progress (34/45 tasks done)
+- **EPIC-001** Birko.Web.Components — UI polish — in-progress (38/47 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3) · FEATURE-001
   - [x] [TASK-486](EPIC-001-web-components-ui-polish/TASK-486-select-all-header-rendered-as-literal-html.md) The select-all header rendered as literal HTML, so "select all" was unusable (P2) · FEATURE-001
   - [x] [TASK-488](EPIC-001-web-components-ui-polish/TASK-488-b-select-ignores-creatable.md) `b-select` ignored `creatable`, so a `b-form` single select could not take a new value (P1) · FEATURE-001
@@ -47,12 +54,12 @@ _None._
   - [x] [TASK-496](EPIC-001-web-components-ui-polish/TASK-496-picker-triggers-announce-no-popup-and-clear-button-unnamed.md) Picker inputs don't announce their popup, and `b-select`'s clear button has no name (P2) · FEATURE-001
   - [x] [TASK-497](EPIC-001-web-components-ui-polish/TASK-497-b-range-dual-thumbs-sit-below-the-track.md) `b-range` in range mode draws its thumbs below the track (P2) · FEATURE-001
   - [x] [TASK-543](EPIC-001-web-components-ui-polish/TASK-543-b-code-block-ignores-content-changes.md) b-code-block does not re-render when its text content changes (P2)
-  - [ ] [TASK-545](EPIC-001-web-components-ui-polish/TASK-545-undo-instead-of-confirm-for-reversible-deletes.md) A reversible delete can offer Undo instead of a confirm dialog — toast action + base-page opt-in (P3)
+  - [ ] [TASK-545](EPIC-001-web-components-ui-polish/TASK-545-undo-instead-of-confirm-for-reversible-deletes.md) A reversible delete can offer Undo instead of a confirm dialog — toast action + base-page opt-in (P3) 🔍 verify
   - [x] [TASK-548](EPIC-001-web-components-ui-polish/TASK-548-b-qty-stepper.md) b-qty-stepper — a form-associated quantity stepper with decimal step, min, max and a unit label (P1)
   - [x] [TASK-549](EPIC-001-web-components-ui-polish/TASK-549-b-carousel.md) b-carousel — slotted, server-rendered slides with arrows, dots, swipe and an autoplay that yields (P1)
   - [x] [TASK-550](EPIC-001-web-components-ui-polish/TASK-550-b-gallery.md) b-gallery — product image gallery with thumbnails, swipe and an accessible zoom (P1)
   - [x] [TASK-551](EPIC-001-web-components-ui-polish/TASK-551-i18n-t-interpolates-one-placeholder-at-a-time.md) I18n.t() fills placeholders one after another, so a value holding "{other}" is rewritten by the next one (P3)
-  - [ ] [TASK-552](EPIC-001-web-components-ui-polish/TASK-552-b-editable-table-shows-stale-typed-values-after-setdata.md) b-editable-table shows stale typed values after setData or a row removal (P2)
+  - [ ] [TASK-552](EPIC-001-web-components-ui-polish/TASK-552-b-editable-table-shows-stale-typed-values-after-setdata.md) b-editable-table shows stale typed values after setData or a row removal (P2) 🔍 verify
   - [x] [TASK-554](EPIC-001-web-components-ui-polish/TASK-554-validation-refusals-never-reach-the-screen.md) A validator's refusal never reaches the screen — problem+json was read as text, and its entries printed as [object Object] (P1)
   - [x] [TASK-562](EPIC-001-web-components-ui-polish/TASK-562-muted-text-and-dark-primary-below-aa.md) `--b-text-muted` and the dark primary button fall below WCAG AA in light and dark (P2)
   - [x] [TASK-563](EPIC-001-web-components-ui-polish/TASK-563-primary-fill-text-in-six-more-components.md) Six more components put white text on a primary fill — below AA in dark (P2)
@@ -60,12 +67,14 @@ _None._
   - [x] [TASK-568](EPIC-001-web-components-ui-polish/TASK-568-modal-focus-trap-ignores-slotted-content.md) b-modal's focus trap ignores slotted content, so Tab is stuck on Close (P1)
   - [x] [TASK-573](EPIC-001-web-components-ui-polish/TASK-573-modal-open-refocuses-when-already-open.md) b-modal's open() on an already-open modal steals focus and forgets the opener (P1)
   - [x] [TASK-579](EPIC-001-web-components-ui-polish/TASK-579-b-rating.md) `b-rating` — a form-associated star-rating input (P2) · FEATURE-001
+  - [x] [TASK-580](EPIC-001-web-components-ui-polish/TASK-580-b-modal-title-as-heading.md) `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading (P3) · FEATURE-001
+  - [x] [TASK-582](EPIC-001-web-components-ui-polish/TASK-582-page-tour-button-beside-the-title.md) `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group (P3) · FEATURE-001
+  - [x] [TASK-583](EPIC-001-web-components-ui-polish/TASK-583-base-list-page-live-refresh-on-entity-changed.md) `base-list-page` cannot refresh when another user changes its entities (P3) · FEATURE-001
+  - [x] [TASK-584](EPIC-001-web-components-ui-polish/TASK-584-input-adornment-smoke-races-the-resize-observer.md) `input-adornment-smoke` sleeps 60 ms and hopes `b-input`'s ResizeObserver has fired (P3) · FEATURE-001
   - [ ] [TASK-591](EPIC-001-web-components-ui-polish/TASK-591-playground-aliases-per-component-paths.md) The Playground cannot import a component by its own path: its alias map predates TASK-564 (P3) · FEATURE-001
   - [x] [TASK-592](EPIC-001-web-components-ui-polish/TASK-592-b-rating-icon-slot.md) `b-rating` draws only a star: let a consumer supply the icon through a slot (P3) · FEATURE-001
-  - [ ] [TASK-580](EPIC-001-web-components-ui-polish/TASK-580-b-modal-title-as-heading.md) `b-modal` renders its title as a `<span>`, so headings inside a dialog follow no heading (P3) · FEATURE-001
-  - [x] [TASK-582](EPIC-001-web-components-ui-polish/TASK-582-page-tour-button-beside-the-title.md) `BasePage` has no home for a page's guided tour, so consumers put the `?` in the action group (P3) · FEATURE-001
-  - [ ] [TASK-583](EPIC-001-web-components-ui-polish/TASK-583-base-list-page-live-refresh-on-entity-changed.md) `base-list-page` cannot refresh when another user changes its entities (P3) · FEATURE-001
-  - [x] [TASK-584](EPIC-001-web-components-ui-polish/TASK-584-input-adornment-smoke-races-the-resize-observer.md) `input-adornment-smoke` sleeps 60 ms and hopes `b-input`'s ResizeObserver has fired (P3) · FEATURE-001
+  - [x] [TASK-597](EPIC-001-web-components-ui-polish/TASK-597-b-toast-renders-its-message-as-html.md) b-toast renders its message (and icon) as HTML, and server error text is passed to it (P2)
+  - [x] [TASK-609](EPIC-001-web-components-ui-polish/TASK-609-b-drawer-title-heading-and-text.md) `b-drawer` renders its title as unescaped HTML in a `<span>`, and the dialog has no accessible name (P2) · FEATURE-001
   - STORY-001 bare attribute for inline form usage — in-progress (1/1 done)
     - [x] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2) · FEATURE-001
   - STORY-002 b-editable-table migration to bare components — in-progress (1/1 done)
@@ -158,10 +167,10 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (137/228 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (187/268 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
-  - [ ] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
+  - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
   - [ ] [TASK-146](EPIC-014-code-review-remediation/TASK-146-async-ordered-readone-parity.md) Nothing pins that the async repository has no connector-bypassing read (P3) · FEATURE-014
   - [ ] [TASK-150](EPIC-014-code-review-remediation/TASK-150-char-nullable-and-the-remaining-unmapped-types.md) `char?`, `TimeSpan` and `DateTimeOffset` have no column mapping — they now fail loudly instead of quietly (P2) · FEATURE-014
   - [x] [TASK-196](EPIC-014-code-review-remediation/TASK-196-date-truncated-comparison-matched-zero-rows.md) `x.Col.Date == value` matched zero rows on every input, every column, every day (P0) · FEATURE-014
@@ -217,7 +226,7 @@ _None._
   - [x] [TASK-269](EPIC-014-code-review-remediation/TASK-269-nothing-reports-a-stale-declared-column-type.md) Nothing reports a column whose stored type no longer matches what the model declares (P2) · FEATURE-014
   - [x] [TASK-270](EPIC-014-code-review-remediation/TASK-270-connector-cache-invites-per-caller-state.md) `DataBase.GetConnector` shares one connector process-wide, and three separate features have put per-caller state on it (P2) · FEATURE-014
   - [ ] [TASK-271](EPIC-014-code-review-remediation/TASK-271-timescaledb-emitters-can-now-use-the-connector.md) The TimescaleDB migration emitters bypass the connector for a reason that no longer exists (P3) · FEATURE-014
-  - [ ] [TASK-272](EPIC-014-code-review-remediation/TASK-272-first-class-schema-support.md) An entity cannot say which schema it lives in (P2) · FEATURE-014
+  - [x] [TASK-272](EPIC-014-code-review-remediation/TASK-272-first-class-schema-support.md) An entity cannot say which schema it lives in (P2) · FEATURE-014
   - [x] [TASK-273](EPIC-014-code-review-remediation/TASK-273-compositeindex-cannot-express-a-filter-predicate.md) `CompositeIndex` cannot express a filter predicate, so a unique index over a NULLABLE column is unusable on MSSql (P1) · FEATURE-014
   - [x] [TASK-274](EPIC-014-code-review-remediation/TASK-274-second-index-lane-drops-sparse.md) The second index lane dropped `Sparse` in all six builders — and three of them created no index at all (P2) · FEATURE-014
   - [x] [TASK-275](EPIC-014-code-review-remediation/TASK-275-uniquefield-inline-constraint-nullable-column.md) `[UniqueField]` on a nullable column is an inline constraint, so on MSSql it rejects the second ordinary row — and no predicate can be attached to it (P1) · FEATURE-014
@@ -251,7 +260,7 @@ _None._
   - [ ] [TASK-304](EPIC-014-code-review-remediation/TASK-304-abstractdatabasemodel-forbids-a-composite-key.md) `AbstractDatabaseModel`'s `[UniqueField]` on `Guid` forbids the composite key TASK-303 just enabled (P2) · FEATURE-014
   - [ ] [TASK-305](EPIC-014-code-review-remediation/TASK-305-default-retrypolicy-is-none-so-every-retry-path-is-inert.md) The default `RetryPolicy` is `None`, so every retry path in the SQL layer is inert — decide whether it should be (P2) · FEATURE-014
   - [ ] [TASK-306](EPIC-014-code-review-remediation/TASK-306-live-provider-suites-share-one-database-across-parallel-classes.md) Every live provider suite runs ~19 parallel classes against ONE database, and two different failures follow (P2) · FEATURE-014
-  - [ ] [TASK-328](EPIC-014-code-review-remediation/TASK-328-should-the-event-tenant-bridge-refuse-to-widen.md) Decide: should the event↔tenant bridge REFUSE to widen when it cannot establish a tenant? (P1) · FEATURE-014
+  - [x] [TASK-328](EPIC-014-code-review-remediation/TASK-328-should-the-event-tenant-bridge-refuse-to-widen.md) Decide: should the event↔tenant bridge REFUSE to widen when it cannot establish a tenant? (P1) · FEATURE-014
   - [x] [TASK-329](EPIC-014-code-review-remediation/TASK-329-sql-bulk-stores-never-apply-the-bounded-filter-guard.md) The SQL bulk stores never apply `RequireBoundedFilter`, so a filter that reduces to every row rewrites the table (P0) · FEATURE-014
   - [ ] [TASK-330](EPIC-014-code-review-remediation/TASK-330-the-action-overloads-all-rows-door-is-a-different-shape.md) Decide whether the `Action<T>` destructive overloads need an all-rows door of their own shape (P3) · FEATURE-014
   - [x] [TASK-331](EPIC-014-code-review-remediation/TASK-331-an-expression-set-that-binds-no-parameter-is-a-silent-no-op.md) An expression-valued UPDATE that binds no parameter issues no statement at all, silently (P1) · FEATURE-014
@@ -272,16 +281,35 @@ _None._
   - [x] [TASK-477](EPIC-014-code-review-remediation/TASK-477-the-probe-generator-never-produced-one-of-its-two-outputs.md) The cold-table probe generator did not run on Linux, and never produced one of its two outputs (P2) · FEATURE-014
   - [ ] [TASK-478](EPIC-014-code-review-remediation/TASK-478-wire-the-generated-file-drift-check-into-ci.md) Decide whether the generated-file drift check belongs in CI (P3) · FEATURE-014
   - [ ] [TASK-500](EPIC-014-code-review-remediation/TASK-500-timestamp-audit-decorators-mutate-the-callers-propertyupdate.md) The Timestamp and Audit bulk decorators write into the caller's `PropertyUpdate` (P3)
-  - [ ] [TASK-501](EPIC-014-code-review-remediation/TASK-501-elasticsearch-update-script-writes-null-as-empty-string.md) Elasticsearch's native `PropertyUpdate` writes a null Set as `""` (P2)
-  - [ ] [TASK-502](EPIC-014-code-review-remediation/TASK-502-elasticsearch-update-by-query-discards-conflicts.md) Elasticsearch's native `PropertyUpdate` discards the UpdateByQuery response, so a version conflict is silent (P2)
+  - [x] [TASK-501](EPIC-014-code-review-remediation/TASK-501-elasticsearch-update-script-writes-null-as-empty-string.md) Elasticsearch's native `PropertyUpdate` writes a null Set as `""` (P2)
+  - [x] [TASK-502](EPIC-014-code-review-remediation/TASK-502-elasticsearch-update-by-query-discards-conflicts.md) Elasticsearch's native `PropertyUpdate` discards the UpdateByQuery response, so a version conflict is silent (P2)
   - [ ] [TASK-503](EPIC-014-code-review-remediation/TASK-503-mongodb-native-update-ignores-bson-element-names.md) MongoDB's native `PropertyUpdate` writes under the C# name, ignoring `[BsonElement]` / `_id` mapping (P2)
+  - [x] [TASK-610](EPIC-014-code-review-remediation/TASK-610-schema-drift-ignores-column-case-on-postgresql.md) On PostgreSQL, DetectDrift / EnsureColumns accept a column that differs only in case, which no query can reach (P2)
+  - [x] [TASK-611](EPIC-014-code-review-remediation/TASK-611-schema-drift-ignores-column-case-on-case-sensitive-mssql.md) On a case-sensitive MSSQL database, DetectDrift / EnsureColumns accept a column that differs only in case (P3)
+  - [x] [TASK-612](EPIC-014-code-review-remediation/TASK-612-influxdb-migrations-match-bucket-names-case-insensitively.md) InfluxDB migrations match bucket names case-insensitively; DropCollection may delete a different bucket (P2)
+  - [x] [TASK-613](EPIC-014-code-review-remediation/TASK-613-elasticsearch-keyword-suffix-on-keyword-mapped-fields.md) ElasticSearch filter translator queries `<field>.keyword` on fields that are mapped as `keyword` themselves (P2)
+  - [x] [TASK-614](EPIC-014-code-review-remediation/TASK-614-cosmosdb-store-ignores-partitionkeypath-when-addressing-documents.md) The CosmosDB store creates its container on `PartitionKeyPath` but always addresses documents by Guid (P2)
+  - [x] [TASK-615](EPIC-014-code-review-remediation/TASK-615-elasticsearch-sorts-on-the-clr-property-name.md) ElasticSearch stores sort on the CLR property name, so every `orderBy` fails with 400 (P1)
+  - [x] [TASK-616](EPIC-014-code-review-remediation/TASK-616-elasticsearch-job-dequeue-strands-the-jobs-it-claims.md) ElasticSearch job dequeue claims jobs, re-reads them stale, and returns none (P1)
+  - [x] [TASK-617](EPIC-014-code-review-remediation/TASK-617-influxdb-migration-bucket-name-is-reserved.md) The InfluxDB migration store's `_migrations` bucket is a name InfluxDB 2 refuses (P1)
+  - [x] [TASK-618](EPIC-014-code-review-remediation/TASK-618-influxdb-removemigration-never-removes.md) InfluxDB `RemoveMigration` never removes anything: `name` is a keyword in the delete predicate (P1)
+  - [x] [TASK-619](EPIC-014-code-review-remediation/TASK-619-influxdb-deletedocuments-never-awaits-its-delete.md) InfluxDB `DeleteDocuments` discards the delete's Task: failures vanish and the delete races the next step (P2)
+  - [x] [TASK-620](EPIC-014-code-review-remediation/TASK-620-schema-drift-ignores-nullability-defaults-and-constraints.md) Schema drift compares column types only: nullability, defaults and key constraints that disagree read clean (P2)
+  - [x] [TASK-621](EPIC-014-code-review-remediation/TASK-621-elasticsearch-has-no-mapping-drift-check.md) ElasticSearch has no mapping drift check, so an index mapped differently from the model is invisible (P2)
+  - [x] [TASK-622](EPIC-014-code-review-remediation/TASK-622-schema-drift-does-not-report-missing-indexes.md) Schema drift does not report a declared index that the table lacks (P3)
+  - ~~[TASK-623](EPIC-014-code-review-remediation/TASK-623-mysql-catalogue-lookups-and-table-name-case.md) MySQL catalogue lookups match the table name with a plain `=`, whose case behaviour has not been measured~~ (P3)
+  - [x] [TASK-624](EPIC-014-code-review-remediation/TASK-624-elasticsearch-mapping-drift-health-check.md) Elasticsearch mapping drift is reported on demand only: wire it into a health check (P3)
+  - [x] [TASK-625](EPIC-014-code-review-remediation/TASK-625-duplicate-create-exception-types-differ-across-providers.md) A duplicate create is refused with five different exception types across the providers (P3)
+  - [x] [TASK-633](EPIC-014-code-review-remediation/TASK-633-schema-drift-produces-the-repair-sql.md) Schema drift produces the repair SQL — the ADD with its backfill, and the RENAME on a wrong case — not only the report (P2)
+  - [x] [TASK-634](EPIC-014-code-review-remediation/TASK-634-elasticsearch-mapping-drift-produces-its-repair.md) ElasticSearch mapping drift produces its repair, not only the report (P2)
+  - [x] [TASK-635](EPIC-014-code-review-remediation/TASK-635-index-drift-for-mongodb-ravendb-cosmosdb.md) Index drift is detected for SQL only: MongoDB, RavenDB and CosmosDB have none (P3)
   - STORY-024 Critical findings — done (0/0 done) (done)
   - STORY-025 High findings — done (0/0 done) (done)
   - STORY-026 Medium findings — in-progress (0/0 done)
   - STORY-027 Low findings — done (0/0 done) (done)
   - STORY-042 Integration-test tier — the Docker-gated remediation findings — planned (0/0 done)
   - STORY-043 Workflow backends — unify the serialization seam (ISerializer everywhere) — done (0/0 done) (done)
-  - STORY-051 Spec-harvest — high findings — in-progress (49/55 done)
+  - STORY-051 Spec-harvest — high findings — in-progress (54/55 done)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0) · FEATURE-014
     - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0) · FEATURE-014
@@ -328,37 +356,37 @@ _None._
     - [x] [TASK-320](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-320-triage-high-specifications-and-paging.md) Triage the 1 remaining high spec-harvest finding in `specifications-and-paging` (P1) · FEATURE-014
     - [x] [TASK-321](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-321-triage-high-store-crud-contract.md) Triage the 1 remaining high spec-harvest finding in `store-crud-contract` (P1) · FEATURE-014
     - [x] [TASK-322](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-322-triage-high-views-and-aggregation.md) Triage the 1 remaining high spec-harvest finding in `views-and-aggregation` (P1) · FEATURE-014
-    - [ ] [TASK-445](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-445-conflictresolution-merge-is-a-silent-no-op.md) `ConflictResolution.Merge` is a silent no-op, and the enum advertises it as supported (P3) · FEATURE-014
+    - [x] [TASK-445](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-445-conflictresolution-merge-is-a-silent-no-op.md) `ConflictResolution.Merge` is a silent no-op, and the enum advertises it as supported (P3) · FEATURE-014
     - [x] [TASK-558](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-558-rule-expression-converter-drops-an-unresolved-child.md) `RuleExpressionConverter` drops a child it cannot resolve, so an AND group widens — and a negated group around it widens again (P2) · FEATURE-014
     - [x] [TASK-559](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-559-sql-rule-converter-empty-group-is-every-row.md) The SQL `RuleConditionConverter` turns a disabled rule or an empty group into no condition — every row — where the other engines match nothing (P2) · FEATURE-014
-    - [ ] [TASK-560](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-560-reindex-without-waiting-reports-success.md) `ReindexHelper.Reindex(…, waitForCompletion: false)` reports `Successful` for a reindex that has only started (P3) · FEATURE-014
+    - [x] [TASK-560](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-560-reindex-without-waiting-reports-success.md) `ReindexHelper.Reindex(…, waitForCompletion: false)` reports `Successful` for a reindex that has only started (P3) · FEATURE-014
     - [x] [TASK-561](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-561-redis-unnamed-jobs-only-on-literal-default-queue.md) Redis serves an unnamed job only to a queue literally named `"default"` (P2) · FEATURE-014
-    - [ ] [TASK-574](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-574-date-column-vs-column-renders-equals-null.md) `x.A.Date == x.B.Date` renders `DATE(B) = NULL` and matches no row (P1)
-    - [ ] [TASK-575](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-575-two-workers-reclaim-the-same-stale-job.md) Two SQL job workers can both reclaim the same stale Processing job and run it twice (P1)
-    - [ ] [TASK-576](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-576-async-database-model-repository-rejects-concrete-stores.md) `AsyncDataBaseModelRepository<T>` rejects every store built with a concrete connector (P2)
-    - [ ] [TASK-577](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-577-cross-assembly-field-attributes-lose-values.md) A cross-assembly SQL field attribute is rebuilt without its value: lengths, precision and scale become 0, and `[UtcField]` is dropped (P1)
-  - STORY-053 Spec-harvest — medium findings — planned (8/32 done)
-    - [ ] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
-    - [ ] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
-    - [ ] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
-    - [ ] [TASK-154](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-154-triage-medium-schema-index-and-ddl.md) Triage the 27 medium spec-harvest findings in `schema-index-and-ddl` (P1) · FEATURE-014
+    - [x] [TASK-574](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-574-date-column-vs-column-renders-equals-null.md) `x.A.Date == x.B.Date` renders `DATE(B) = NULL` and matches no row (P1) · FEATURE-014
+    - [x] [TASK-575](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-575-two-workers-reclaim-the-same-stale-job.md) Two SQL job workers can both reclaim the same stale Processing job and run it twice (P1) · FEATURE-014
+    - [ ] [TASK-576](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-576-async-database-model-repository-rejects-concrete-stores.md) `AsyncDataBaseModelRepository<T>` rejects every store built with a concrete connector (P2) · FEATURE-014
+    - [x] [TASK-577](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-577-cross-assembly-field-attributes-lose-values.md) A cross-assembly SQL field attribute is rebuilt without its value: lengths, precision and scale become 0, and `[UtcField]` is dropped (P1) · FEATURE-014
+  - STORY-053 Spec-harvest — medium findings — planned (30/56 done)
+    - [x] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
+    - [x] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
+    - [x] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
+    - [x] [TASK-154](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-154-triage-medium-schema-index-and-ddl.md) Triage the 27 medium spec-harvest findings in `schema-index-and-ddl` (P1) · FEATURE-014
     - [ ] [TASK-155](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-155-triage-medium-event-bus-and-messaging.md) Triage the 24 medium spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014
-    - [ ] [TASK-156](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-156-triage-medium-validation-and-rules.md) Triage the 22 medium spec-harvest findings in `validation-and-rules` (P1) · FEATURE-014
-    - [ ] [TASK-157](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-157-triage-medium-data-sync.md) Triage the 22 medium spec-harvest findings in `data-sync` (P1) · FEATURE-014
+    - [x] [TASK-156](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-156-triage-medium-validation-and-rules.md) Triage the 22 medium spec-harvest findings in `validation-and-rules` (P1) · FEATURE-014
+    - [x] [TASK-157](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-157-triage-medium-data-sync.md) Triage the 22 medium spec-harvest findings in `data-sync` (P1) · FEATURE-014
     - [ ] [TASK-158](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-158-triage-medium-background-jobs.md) Triage the 21 medium spec-harvest findings in `background-jobs` (P2) · FEATURE-014
-    - [ ] [TASK-159](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-159-triage-medium-store-decorator-composition.md) Triage the 21 medium spec-harvest findings in `store-decorator-composition` (P1) · FEATURE-014
+    - [x] [TASK-159](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-159-triage-medium-store-decorator-composition.md) Triage the 21 medium spec-harvest findings in `store-decorator-composition` (P1) · FEATURE-014
     - [ ] [TASK-160](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-160-triage-medium-llm-provider-and-agents.md) Triage the 20 medium spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
-    - [ ] [TASK-161](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-161-triage-medium-tenant-isolation.md) Triage the 18 medium spec-harvest findings in `tenant-isolation` (P1) · FEATURE-014
-    - [ ] [TASK-162](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-162-triage-medium-repository-contract.md) Triage the 16 medium spec-harvest findings in `repository-contract` (P1) · FEATURE-014
+    - [x] [TASK-161](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-161-triage-medium-tenant-isolation.md) Triage the 18 medium spec-harvest findings in `tenant-isolation` (P1) · FEATURE-014
+    - [x] [TASK-162](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-162-triage-medium-repository-contract.md) Triage the 16 medium spec-harvest findings in `repository-contract` (P1) · FEATURE-014
     - [x] [TASK-163](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-163-triage-medium-store-crud-contract.md) Triage the 15 medium spec-harvest findings in `store-crud-contract` (P1) · FEATURE-014
     - [ ] [TASK-164](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-164-triage-medium-settings-configuration-chain.md) Triage the 15 medium spec-harvest findings in `settings-configuration-chain` (P2) · FEATURE-014
-    - [ ] [TASK-165](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-165-triage-medium-security-and-authorization.md) Triage the 15 medium spec-harvest findings in `security-and-authorization` (P1) · FEATURE-014
+    - [x] [TASK-165](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-165-triage-medium-security-and-authorization.md) Triage the 15 medium spec-harvest findings in `security-and-authorization` (P1) · FEATURE-014
     - [ ] [TASK-166](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-166-triage-medium-entity-tagging.md) Triage the 15 medium spec-harvest findings in `entity-tagging` (P2) · FEATURE-014
     - [ ] [TASK-167](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-167-triage-medium-serialization.md) Triage the 14 medium spec-harvest findings in `serialization` (P2) · FEATURE-014
     - [ ] [TASK-168](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-168-triage-medium-entity-localization.md) Triage the 14 medium spec-harvest findings in `entity-localization` (P2) · FEATURE-014
     - [ ] [TASK-169](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-169-triage-medium-caching.md) Triage the 14 medium spec-harvest findings in `caching` (P2) · FEATURE-014
-    - [ ] [TASK-170](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-170-triage-medium-bulk-filter-operations.md) Triage the 14 medium spec-harvest findings in `bulk-filter-operations` (P1) · FEATURE-014
-    - [ ] [TASK-171](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-171-triage-medium-specifications-and-paging.md) Triage the 12 medium spec-harvest findings in `specifications-and-paging` (P1) · FEATURE-014
+    - [x] [TASK-170](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-170-triage-medium-bulk-filter-operations.md) Triage the 14 medium spec-harvest findings in `bulk-filter-operations` (P1) · FEATURE-014
+    - [x] [TASK-171](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-171-triage-medium-specifications-and-paging.md) Triage the 12 medium spec-harvest findings in `specifications-and-paging` (P1) · FEATURE-014
     - [ ] [TASK-172](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-172-triage-medium-workflow-state-machine.md) Triage the 9 medium spec-harvest findings in `workflow-state-machine` (P2) · FEATURE-014
     - [x] [TASK-323](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-323-fix-medium-core-model-contracts.md) Fix the 3 verified medium findings in `core-model-contracts` (P2) · FEATURE-014
     - [x] [TASK-324](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-324-fix-medium-store-lazy-initialization.md) Fix the 1 verified medium finding in `store-lazy-initialization` (P1) · FEATURE-014
@@ -368,8 +396,32 @@ _None._
     - [x] [TASK-557](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-557-store-delegate-return-value-and-in-memory-snapshots.md) The store delegate's return value is discarded everywhere, and the in-memory store keeps the caller's live object (P2) · FEATURE-014
     - [x] [TASK-565](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-565-in-process-bus-resolves-handlers-from-the-root-provider.md) The in-process bus resolves event handlers from the root provider — scoped handler dependencies throw or are shared forever (P1) · FEATURE-014
     - [ ] [TASK-566](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-566-distributed-bus-resolves-handlers-from-the-root-provider.md) The distributed bus resolves event handlers from the root provider too — the same defect as TASK-565 on the message-queue path (P2) · FEATURE-014
-    - [ ] [TASK-567](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-567-sql-table-without-declared-key-accepts-duplicate-guids.md) A SQL table for a model with no declared key accepts a second row with the same Guid — create never refuses it (P2) · FEATURE-014
-    - [ ] [TASK-578](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-578-non-sql-units-of-work-leave-state-after-commit.md) The MongoDB, Cosmos DB and InfluxDB units of work leave state behind after a commit or a failed commit (P2)
+    - [x] [TASK-567](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-567-sql-table-without-declared-key-accepts-duplicate-guids.md) A SQL table for a model with no declared key accepts a second row with the same Guid — create never refuses it (P2) · FEATURE-014
+    - [ ] [TASK-578](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-578-non-sql-units-of-work-leave-state-after-commit.md) The MongoDB, Cosmos DB and InfluxDB units of work leave state behind after a commit or a failed commit (P2) · FEATURE-014
+    - [x] [TASK-626](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-626-join-groups-drop-on-clause-and-conditionless-joins.md) A CROSS join with conditions loses its ON clause, and a join with no conditions disappears (P2) · FEATURE-014
+    - [x] [TASK-627](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-627-unterminated-schema-builder-chain-is-recorded-applied.md) A migration that forgets `Build()` performs no DDL and is recorded as applied (P2) · FEATURE-014
+    - [x] [TASK-628](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-628-cosmos-index-manager-has-no-index-names.md) The Cosmos DB index manager cannot find, by name, an index it created (P2) · FEATURE-014
+    - [x] [TASK-629](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-629-sql-bulk-collection-writes-commit-per-item.md) A SQL bulk collection write outside a boundary commits item by item, so a mid-batch failure leaves a partial batch (P2) · FEATURE-014
+    - [x] [TASK-630](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-630-rebuild-tenant-sync-provider-on-the-shared-engine.md) `TenantSyncProvider` is a second sync engine, and it has drifted from the first in eleven ways (P2) · FEATURE-014
+    - [x] [TASK-631](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-631-composed-chains-drop-capability-interfaces.md) A composed decorator chain drops every capability outside `IAsyncBulkStore<T>` (P2) · FEATURE-014
+    - [x] [TASK-632](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-632-slug-and-default-races-need-storage-enforcement.md) Concurrent writers defeat the unique-slug and single-default decorators, which only read then write (P2) · FEATURE-014
+    - [ ] [TASK-636](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-636-mongo-index-cannot-declare-a-partial-filter.md) A MongoDB index cannot be declared partial, so `IDefaultMarker`'s unique index must be created by hand (P3) · FEATURE-014
+    - [x] [TASK-637](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-637-migration-data-migrator-quotes-column-names.md) The migration data migrator and `RenameField` quote column names, so on PostgreSQL they miss a PascalCase model's columns (P2) · FEATURE-014
+    - [x] [TASK-638](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-638-a-soft-deleted-row-still-holds-the-unique-default-marker-or-slug-so-la.md) A soft-deleted row still holds the unique default marker or slug, so later promotions and slugs are refused (P1) · FEATURE-014
+    - [ ] [TASK-639](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-639-a-filter-on-a-persistent-or-auto-sql-view-names-the-source-column-whic.md) A filter on a Persistent or Auto SQL view names the source column, which the view does not have (P1) · FEATURE-014
+    - [ ] [TASK-640](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-640-ravendb-migrations-put-update-keys-the-collection-name-and-renamefield.md) RavenDB migrations put update keys, the collection name and RenameField's fields into RQL unescaped (P1) · FEATURE-014
+    - [ ] [TASK-641](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-641-a-stored-grant-whose-role-was-later-retired-makes-permission-checks-fo.md) A stored grant whose role was later retired makes permission checks for that user and type throw (P1) · FEATURE-014
+    - [ ] [TASK-642](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-642-influxdb-migration-renamefield-and-dropfield-do-nothing-and-the-migrat.md) InfluxDB migration RenameField and DropField do nothing, and the migration is recorded as applied (P2) · FEATURE-014
+    - [ ] [TASK-643](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-643-elasticsearch-migration-schema-builder-reads-a-failed-existence-check.md) ElasticSearch migration schema builder reads a failed existence check as absent and ignores the create response (P2) · FEATURE-014
+    - [ ] [TASK-644](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-644-elasticsearch-filter-a-field-compared-with-an-untranslatable-operand-b.md) ElasticSearch filter: a field compared with an untranslatable operand becomes an exists test (P2) · FEATURE-014
+    - [ ] [TASK-645](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-645-rule-translation-rounds-a-fractional-value-in-between-and-in-unlike-th.md) Rule translation rounds a fractional value in Between and In, unlike the in-memory evaluator (P2) · FEATURE-014
+    - [ ] [TASK-646](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-646-async-repository-updateasync-and-deleteasync-with-no-store-still-retur.md) Async repository UpdateAsync and DeleteAsync with no store still return silently (P2) · FEATURE-014
+    - [ ] [TASK-647](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-647-data-sync-the-custom-policy-is-skipped-silently-without-a-known-pair-c.md) Data sync: the Custom policy is skipped silently without a known pair; check timestamp round-trip (P2) · FEATURE-014
+    - [ ] [TASK-648](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-648-async-alias-reindex-reports-failed-after-a-completed-swap-when-the-old.md) Async alias reindex reports Failed after a completed swap when the old-index delete is cancelled (P2) · FEATURE-014
+    - [ ] [TASK-649](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-649-softdelete-save-of-a-soft-deleted-entity-creates-it-again-under-the-sa.md) SoftDelete Save of a soft-deleted entity creates it again under the same Guid (P2) · FEATURE-014
+    - [ ] [TASK-650](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-650-edge-cases-tenant-sync-without-a-guid-tenant-cosmos-empty-partition-pa.md) Edge cases: tenant sync without a Guid tenant, Cosmos empty partition path, Cosmos index verbs disagree, sync ES init NRE (P2) · FEATURE-014
+    - [ ] [TASK-651](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-651-cleanup-from-the-2026-10-16-spec-regen-stale-doc-comments-dead-fallbac.md) Cleanup from the 2026-10-16 spec regen: stale doc comments, dead fallbacks, minor inconsistencies (P3) · FEATURE-014
+    - [ ] [TASK-653](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-653-connection-strings-escape-credentials-on-every-sql-provider.md) Connection strings escape credentials on every SQL provider (P1)
   - STORY-054 Spec-harvest — low findings — planned (0/24 done)
     - [ ] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
     - [ ] [TASK-174](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-174-triage-low-event-bus-and-messaging.md) Triage the 29 low spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014
@@ -397,7 +449,7 @@ _None._
     - [ ] [TASK-327](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-327-fix-low-unit-of-work-and-transactions.md) Fix the 3 verified low findings in `unit-of-work-and-transactions` (P2) · FEATURE-014
   - STORY-055 Spec-harvest — the three unrated areas — done (1/1 done) (done)
     - [x] [TASK-195](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/TASK-195-rate-id-and-fold-the-16-recovered-findings.md) Rate, ID and fold the 16 recovered findings into the severity backlog (P1) · FEATURE-014
-- **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (13/25 tasks done)
+- **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (14/26 tasks done)
   - [x] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Xaml restyled Slider (Tier-1 gap) + `Range` Form field type (P3) · FEATURE-015
   - [x] [TASK-055](EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md) Xaml Form field-type parity with b-form (wire existing controls + FormField props) (P2) · FEATURE-015
   - [x] [TASK-056](EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md) Xaml date & time picker controls + field types (P2) · FEATURE-015
@@ -408,6 +460,7 @@ _None._
   - [x] [TASK-570](EPIC-015-birko-xaml-ui-framework/TASK-570-avalonia-tree-chevron-header-hover.md) The restyled TreeViewItem cannot be expanded or collapsed by the user (P2) · FEATURE-015
   - [x] [TASK-571](EPIC-015-birko-xaml-ui-framework/TASK-571-avalonia-ribbon-item-alignment-and-row-height.md) Avalonia ribbon items are staggered, off-centre and taller than b-ribbon's (P2) · FEATURE-015
   - [x] [TASK-572](EPIC-015-birko-xaml-ui-framework/TASK-572-avalonia-ribbon-tab-strip-slots.md) Let an app fold its title bar into the ribbon's tab row (P3) · FEATURE-015
+  - [x] [TASK-652](EPIC-015-birko-xaml-ui-framework/TASK-652-objecttree-hide-null-members.md) ObjectTree option to hide null members (P2)
   - STORY-029 Tier 0 — single-source design tokens + multi-target generator — done (0/0 done) (done)
   - STORY-030 Tier 0 — Avalonia theme system + runtime ThemeVariant swap — done (0/0 done) (done)
   - STORY-031 Tier 0 validation — Avalonia gallery app + first restyled controls — done (0/0 done) (done)
@@ -434,9 +487,16 @@ _None._
     - [ ] [TASK-122](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-122-render-mixed-columns-both-skins.md) Render mixed columns — the CSS grid and the Avalonia panel (P2) · FEATURE-015
     - [ ] [TASK-123](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-123-panel-height-under-mixed-sizes.md) Panel height under mixed sizes, and extending the clipping guard (P2) · FEATURE-015
     - [ ] [TASK-124](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-124-stale-ribbongroupsize-parity-comment.md) The `RibbonGroupSize` doc comment describes a parity gap that no longer exists (P3) · FEATURE-015
-- **EPIC-016** Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) — in-progress (14/14 tasks done)
+- **EPIC-016** Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) — in-progress (14/21 tasks done)
   - STORY-037 Backend / SQL framework backports (shipped) — done (0/0 done) (done)
-  - STORY-038 Frontend Birko.Web backports (shipped) — done (0/0 done) (done)
+  - STORY-038 Frontend Birko.Web backports (shipped) — in-progress (0/7 done)
+    - [ ] [TASK-599](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-599-semantic-text-colours-sub-aa.md) Every semantic colour-on-tint pairing is below the AA contrast floor, in both themes (P1) 🔍 verify
+    - [ ] [TASK-600](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-600-shell-height-goes-stale-after-resume.md) The installed app's bottom nav vanishes after a resume — Chrome leaves the shell's `dvh` height stale (P1)
+    - [ ] [TASK-601](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-601-touch-target-token-defeated-by-the-reset.md) The framework's touch-target token is defeated by the framework's own reset (P2)
+    - [ ] [TASK-602](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-602-no-edit-form-guards-unsaved-changes.md) No edit form guards unsaved changes, so any navigation silently discards typed input (P2)
+    - [ ] [TASK-603](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-603-basepage-percentage-height-cannot-resolve.md) `BasePage`'s `:host { height: 100% }` cannot resolve in the shell's own recommended structure (P2)
+    - [ ] [TASK-604](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-604-wake-lock-outcome-is-unobservable.md) Nothing reports whether the screen wake lock was ever held, so "the screen went dark" cannot be diagnosed (P2)
+    - [ ] [TASK-605](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-605-supersede-and-enqueue-in-one-transaction.md) `ActionQueue` cannot supersede a queued write atomically, so a collapse can always miss one in flight (P2)
   - STORY-039 Cross-provider SQL store-factory + DI backport — in-progress (2/2 done)
     - [x] [TASK-042](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-042-store-factory-di-mssql-mysql-postgres.md) Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL (P2) · FEATURE-016
     - [x] [TASK-051](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-051-fix-mssqlstore-setsettings-lossy.md) FIX: MSSqlStore.SetSettings drops connection fields (lossy) (P2) · FEATURE-016
@@ -460,7 +520,7 @@ _None._
   - STORY-045 Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped — done (0/0 done) (done)
   - STORY-046 Restore ambient (tenant) scope for background event dispatch — in-progress (0/1 done)
     - [ ] [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3) ⚠ blocked: on an external condition, not on another task · FEATURE-017
-- **EPIC-018** Birko.Web.Core — the browser-side runtime — in-progress (7/8 tasks done)
+- **EPIC-018** Birko.Web.Core — the browser-side runtime — in-progress (9/9 tasks done)
   - [x] [TASK-198](EPIC-018-birko-web-core-runtime/TASK-198-fetch-has-no-timeout-so-a-dead-connection-hangs-forever.md) `fetch` has no timeout, so a dead connection hung the app forever — and a stalled body reported success (P0) · FEATURE-018
   - [x] [TASK-199](EPIC-018-birko-web-core-runtime/TASK-199-syncmanager-misreads-a-write-that-already-landed.md) `SyncManager` had no name for a write that had already landed (P1) · FEATURE-018
   - [x] [TASK-202](EPIC-018-birko-web-core-runtime/TASK-202-apiclient-get-corrupted-an-inline-query-string.md) `ApiClient.get` corrupted any endpoint that already carried a query string (P1) · FEATURE-018
@@ -468,8 +528,9 @@ _None._
   - [x] [TASK-493](EPIC-018-birko-web-core-runtime/TASK-493-apiclient-getheaders-and-patch.md) `ApiClient` had no generic request-header hook and no `patch()` (P1) · FEATURE-018
   - [x] [TASK-508](EPIC-018-birko-web-core-runtime/TASK-508-apiclient-postform-multipart-upload.md) `ApiClient` cannot send a multipart upload (P1) · FEATURE-018
   - [x] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P1)
-  - [ ] [TASK-581](EPIC-018-birko-web-core-runtime/TASK-581-syncmanager-backoff-cap-dead-letter.md) `SyncManager` retries a failing write every cycle forever: no backoff, no cap, no dead letter (P2) · FEATURE-018
-- **EPIC-019** Birko framework backports from DraCode — in-progress (9/30 tasks done)
+  - [x] [TASK-581](EPIC-018-birko-web-core-runtime/TASK-581-syncmanager-backoff-cap-dead-letter.md) `SyncManager` retries a failing write every cycle forever: no backoff, no cap, no dead letter (P2) · FEATURE-018
+  - [x] [TASK-598](EPIC-018-birko-web-core-runtime/TASK-598-an-action-interrupted-mid-sync-stays-syncing-forever.md) A queued write interrupted mid-sync stays `syncing` forever, invisible to every list and count (P2)
+- **EPIC-019** Birko framework backports from DraCode — in-progress (11/30 tasks done)
   - STORY-058 Security / OAuth backports from DraCode — planned (0/6 done)
     - [ ] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
     - [ ] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)
@@ -477,11 +538,11 @@ _None._
     - [ ] [TASK-520](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-520-client-credentials-claims-hook-and-space-delimited-scope.md) client_credentials: let the app shape the token; read space-delimited scopes as permissions (P3)
     - [ ] [TASK-521](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-521-web-sign-in-helpers-for-oauth-providers.md) Web (authorization-code) sign-in helpers for external OAuth providers, GitHub first (P3)
     - [ ] [TASK-522](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-522-loopback-only-auth-bypass-option.md) Optional "no token needed when listening on loopback only" for Birko.Security.AspNetCore (P3)
-  - STORY-059 Web backports from DraCode — planned (0/4 done)
-    - [ ] [TASK-523](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-523-wsclient-request-response.md) WsClient: request/response with id correlation and timeout (P2)
+  - STORY-059 Web backports from DraCode — in-progress (2/4 done)
+    - [x] [TASK-523](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-523-wsclient-request-response.md) WsClient: request/response with id correlation and timeout (P2)
     - [ ] [TASK-524](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-524-shell-oauth-sign-in-helpers.md) Birko.Web.Shell auth: OAuth redirect parsing, token expiry and scheduled refresh (P2)
     - [ ] [TASK-525](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-525-reorderable-tabs-and-persisted-split-sizes.md) b-tabs drag-and-drop reorder; b-split-panel size persistence; a layout serialize/restore hook (P3)
-    - [ ] [TASK-526](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-526-layered-runtime-config-loader.md) Birko.Web.Core: layered runtime configuration (defaults < server endpoint < local overrides) (P3)
+    - [x] [TASK-526](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-526-layered-runtime-config-loader.md) Birko.Web.Core: layered runtime configuration (defaults < server endpoint < local overrides) (P3)
   - STORY-060 KoboldLair agent-runtime and data backports from DraCode — in-progress (6/12 done)
     - [x] [TASK-527](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-527-agent-loop-hooks.md) Agent loop: per-iteration and tool-call hooks, a readable system prompt, resume from a conversation (P1)
     - [x] [TASK-528](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-528-orchestration-plan-model-and-step-validators.md) Birko.AI.Orchestration: a plan model with behaviour, step validators, and a pinned enum encoding (P1)
@@ -505,21 +566,13 @@ _None._
     - [x] [TASK-542](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-542-websocket-reverse-proxy-endpoint.md) A WebSocket reverse-proxy endpoint mapper (P3)
     - [ ] [TASK-569](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-569-websocket-proxy-forwards-subprotocols.md) MapWebSocketProxy drops the client's requested sub-protocols, so a client that asks for one fails its handshake (P3)
 
-- **EPIC-020** Security — access control — done (5/5 tasks done)
-  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — done (5/5 done)
-    - [x] [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1)
-    - [x] [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1)
-    - [x] [TASK-590](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-590-grants-aspnetcore-requiregrant-and-wiring.md) Birko.Security.Grants.AspNetCore — RequireGrant, resolver decorator, DI, end-to-end README (P1)
-    - [x] [TASK-593](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-593-grants-predicates-on-a-sql-backend.md) Grants: run the grant predicates against a SQL backend, not only InMemory (P2)
-    - [x] [TASK-594](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-594-birko-security-grants-sql-mappings.md) Birko.Security.Grants.SQL — fluent SQL mappings for ResourceGrant and Invitation (P2)
-
 ## Loose tasks
 
 - [x] [TASK-036](_loose/TASK-036-workspace-reorg-birko-framework-consumers-buckets.md) Reorganize C:\Source into Birko/{Framework,Framework.Tests,Consumers} + aicode bucket (P1)
 - [ ] [TASK-059](_loose/TASK-059-nested-projitems-import-convention-decision.md) Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3)
 - [ ] [TASK-106](_loose/TASK-106-css-part-as-a-catalogue-convention-decision.md) Decide whether `::part` is a catalogue convention or stays a one-off (P3)
 - [ ] [TASK-127](_loose/TASK-127-all-tenants-scope-and-ambient-tenant-decision.md) Decide what `WithAllTenants` means when a tenant is also in scope (P2)
-- [ ] [TASK-130](_loose/TASK-130-theme-contrast-scanner-gate.md) Scan every shipped theme for colour contrast, and gate it like the drift check (P1)
+- [ ] [TASK-130](_loose/TASK-130-theme-contrast-scanner-gate.md) Scan every shipped theme for colour contrast, and gate it like the drift check (P1) 🔍 verify
 - [ ] [TASK-138](_loose/TASK-138-readasync-zero-arg-overload-ambiguity.md) `ReadAsync()` with no arguments does not compile — CS0121 between the read-all and filtered overloads (P2)
 - [ ] [TASK-139](_loose/TASK-139-coarse-pointer-policy-vs-knob-in-the-component-catalogue.md) Decide whether a `pointer: coarse` rule inside a `b-*` component is policy or a knob (P2)
 - [x] [TASK-140](_loose/TASK-140-resolve-module-from-hash-ignores-the-route-table.md) `resolveModuleFromHash` derives the module positionally and never consults the route table (P1)
@@ -528,7 +581,7 @@ _None._
 - [ ] [TASK-145](_loose/TASK-145-document-the-decorator-stripping-escape-hatch.md) Nothing at the `GetUnwrappedStore` call sites says they strip every decorator (P2)
 - [ ] [TASK-147](_loose/TASK-147-attachtag-does-not-validate-tag-ownership.md) `AttachTagAsync` validates neither a tag's existence nor its ownership (P2)
 - [ ] [TASK-149](_loose/TASK-149-story-level-tracking-is-invisible-to-every-scheduler.md) A story that tracks work without task files is invisible to every scheduler (P2)
-- ~~[TASK-200](_loose/TASK-200-symbio-outbox-replay-duplicates-a-create.md) Symbio: an outbox replay duplicates a create, and TASK-151 scoped the cause out of itself~~ (P1) → moved to Symbio TASK-894
+- ~~[TASK-200](_loose/TASK-200-symbio-outbox-replay-duplicates-a-create.md) Symbio: an outbox replay duplicates a create, and TASK-151 scoped the cause out of itself~~ (P1)
 - [x] [TASK-201](_loose/TASK-201-reps-declare-idpinned-on-client-minted-creates.md) Reps: declare `idPinned` on the client-minted creates — and not on the one that must not have it (P2)
 - [ ] [TASK-206](_loose/TASK-206-hybrid-l2-fallback-cannot-tell-misconfiguration-from-outage.md) `HybridCache`'s L2 fallback filter cannot tell a misconfiguration from an outage (P2)
 - ~~[TASK-235](_loose/TASK-235-fisdata-angular-will-hit-netsdk1087-on-migration.md) `FisData.Stock.Angular.Server` will fail `NETSDK1087` when its net10 migration lands~~ (P3)
@@ -572,17 +625,24 @@ _None._
 - [x] [TASK-595](_loose/TASK-595-fluent-hasindex-is-applied-by-nothing.md) Fluent `HasIndex` is applied by nothing, so `Birko.Models.Users.SQL`'s lookup indexes likely exist on no database (P2)
 - [x] [TASK-596](_loose/TASK-596-propertyupdate-set-skips-field-storage-conversion.md) A filtered `PropertyUpdate.Set` on SQL binds the raw value, skipping the field's storage conversion (P2)
 - [x] [TASK-606](_loose/TASK-606-in-list-on-a-converted-column-binds-raw-values.md) An `IN` list (`values.Contains(x.Col)`) on a converted SQL column may still bind raw values (P3)
-- [x] [TASK-607](_loose/TASK-607-ci-test-loop-runs-dotnet-test-on-shared-sources.md) build-and-test runs `dotnet test` on `tests/Shared`, which has no project (P2)
+- [x] [TASK-607](_loose/TASK-607-ci-test-loop-runs-dotnet-test-on-shared-sources.md) build-and-test runs `dotnet test` on `tests/Shared`, which has no project, so the job is red with every suite green (P2)
 - [x] [TASK-608](_loose/TASK-608-finstat-rating-color-hand-edited-into-generated-css.md) `--b-rating-color` was hand-edited into the generated `finstat.css`, so token parity is red (P2)
 
 ## Completed
 
-<details><summary>1 closed epic(s)</summary>
+<details><summary>2 closed epic(s)</summary>
 
 - **EPIC-009** Birko.Communication — Remaining protocols — done (2/2 tasks done)
   - STORY-019 gRPC support — done (1/1 done) (done)
     - [x] [TASK-026](EPIC-009-communication-protocols/STORY-019-grpc/TASK-026-grpc-client-server.md) gRPC client + server support (P2) · FEATURE-009
   - STORY-020 OAuth2 authorization server — done (1/1 done) (done)
     - [x] [TASK-027](EPIC-009-communication-protocols/STORY-020-oauth2-server/TASK-027-birko-security-oauth-server.md) Implement Birko.Security.OAuth.Server (P2) · FEATURE-009
+- **EPIC-020** Security — access control — done (5/5 tasks done)
+  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — done (5/5 done) (done)
+    - [x] [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1)
+    - [x] [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1)
+    - [x] [TASK-590](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-590-grants-aspnetcore-requiregrant-and-wiring.md) Birko.Security.Grants.AspNetCore — RequireGrant, resolver decorator, DI, end-to-end README (P1)
+    - [x] [TASK-593](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-593-grants-predicates-on-a-sql-backend.md) Grants: run the grant predicates against a SQL backend, not only InMemory (P2)
+    - [x] [TASK-594](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-594-birko-security-grants-sql-mappings.md) Birko.Security.Grants.SQL — fluent SQL mappings for ResourceGrant and Invitation (P2)
 
 </details>
