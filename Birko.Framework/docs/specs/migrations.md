@@ -1162,13 +1162,16 @@ the runner recorded the migration as applied):
 - **Then** the migration fails with `MigrationException` and `CurrentVersion` stays 0 (before TASK-655 it succeeded
   and was recorded with nothing dropped)
 
-#### Scenario: CosmosDB reads documents independently of the caller's serializer
+#### Scenario: CosmosDB migration steps do not depend on the caller's serializer
 
-- **Given** a `Database` from a `CosmosClient` with the SDK's default (Newtonsoft) serializer
-- **When** `DropField` queries the documents to patch
-- **Then** it reads the query as a stream and parses it with System.Text.Json, so the result does not depend on the
-  serializer (measured: a typed `JsonElement` result through Newtonsoft comes back empty and throws on read).
-  `RenameField` still reads through the client's serializer: [[TASK-659]]
+- **Given** a `Database` from a `CosmosClient` with the SDK's default (Newtonsoft) serializer, or with Birko's
+  `CosmosGuidIdSerializer` (System.Text.Json), and documents carrying a nested object, an array and a decimal
+- **When** `DropField`, `RenameField`, `UpdateDocuments`, `DeleteDocuments` or `CopyData` runs (measured live with both)
+- **Then** each acts on exactly the matching documents, `RenameField` moves the nested value unchanged, and `CopyData`
+  writes byte-for-byte the source's JSON. They read through `CosmosDBDataMigrator.QueryDocuments`, a stream parsed by
+  System.Text.Json. `CopyData` upserts each document's raw JSON as a stream and refuses on a non-success status.
+  `RenameField` patches the value as plain values (`ToPlain`), which both serializers write identically. Before
+  TASK-659 every one of them typed its results `JsonElement`, and on a Newtonsoft client the first read threw
 
 #### Scenario: Renaming a field is emulated per backend
 

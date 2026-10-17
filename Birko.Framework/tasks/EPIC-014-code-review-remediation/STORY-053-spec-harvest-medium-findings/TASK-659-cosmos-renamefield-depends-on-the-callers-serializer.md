@@ -2,7 +2,7 @@
 id: TASK-659
 parent: STORY-053
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-17
@@ -36,12 +36,12 @@ the patch value has to serialize the same way through either serializer. `Cosmos
 
 ## Acceptance criteria
 
-- [ ] Measured: `RenameField` on a plain-client `Database` (fails today), and what value the patch writes for a string,
+- [x] Measured: `RenameField` on a plain-client `Database` (fails today), and what value the patch writes for a string,
       a number, a nested object and an array once the read works
-- [ ] `RenameField` reads through `QueryDocuments` and writes a value both serializers produce identically; the
+- [x] `RenameField` reads through `QueryDocuments` and writes a value both serializers produce identically; the
       document's value round-trips exactly, through both clients
-- [ ] The data migrator's queries checked for the same dependency (fixed or recorded)
-- [ ] A regression test fails on the current code; the CosmosDB rename scenario in `migrations.md` updated
+- [x] The data migrator's queries checked for the same dependency (fixed or recorded)
+- [x] A regression test fails on the current code; the CosmosDB rename scenario in `migrations.md` updated
 
 ## Out of scope
 
@@ -50,3 +50,32 @@ the patch value has to serialize the same way through either serializer. `Cosmos
 ## Human test plan
 
 N/A — a library contract, asserted by live tests.
+
+## Resolution (2026-10-17)
+
+**Measured live first** (`Task659SerializerIndependenceLiveTests`). Each test runs on a fresh database, once with a
+plain `CosmosClient` (Newtonsoft) and once with Birko's `CosmosGuidIdSerializer`, over documents carrying a nested
+object, an array and a decimal:
+
+| Step | Newtonsoft client (HEAD) | System.Text.Json client (HEAD) |
+|---|---|---|
+| `RenameField` (a nested value) | throws `InvalidOperationException` | moved exactly |
+| `UpdateDocuments` / `DeleteDocuments` | throw | correct |
+| `CopyData` | throws | exact copy |
+
+**3 red, all on the Newtonsoft client, and all loud:** the typed `JsonElement` read failed before anything was written,
+so nothing was corrupted. The data migrator had the dependency too (the "check" criterion): UpdateDocuments,
+DeleteDocuments and CopyData typed their reads `JsonElement`. `CopyData` also upserted the `JsonElement` itself, and
+Newtonsoft does not write that as JSON.
+
+**Fix:**
+- Every Cosmos migration read goes through `CosmosDBDataMigrator.QueryDocuments`: a stream query parsed by
+  System.Text.Json, moved there from TASK-655's `DropField`.
+- `CopyData` upserts each document's raw JSON with `UpsertItemStreamAsync`, so it is exact by construction. A stream
+  call answers instead of throwing, so a non-success status now throws, naming the document (rule 22).
+- `RenameField` patches `ToPlain(oldValue)`: dictionaries, lists and primitives (`long`, else `decimal`, else
+  `double`), which both serializers write identically. `ExtractValue`, which turned an object into its text, is not
+  used on this path.
+
+6/6 green on both serializers. Suite 41/41, the only importer of `Birko.Data.Migrations.CosmosDB.projitems`. Spec: the
+TASK-655 scenario that pointed here is rewritten to cover all five steps on both serializers.

@@ -4,6 +4,18 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-17 — InfluxDB field renames and ElasticSearch index checks no longer report false success
+
+[[TASK-642]], [[TASK-643]]. Measured: an InfluxDB migration calling `RenameField` or `DropField` was recorded as
+applied having changed nothing; both now refuse. The ElasticSearch schema builder read an unreachable cluster as
+"index absent" and never checked its create or delete; it now throws. Other backends' `DropField` is [[TASK-655]].
+
+## 2026-10-17 — Repository gaps TASK-162 left
+
+[[TASK-646]]. Measured: an async repository's `UpdateAsync` / `DeleteAsync` with no store reported success, while
+every other call refuses. `AddRepository<TRepository>(store)` threw unless given a lifetime, because its default was
+`Scoped`, which it refuses; the default is now `Singleton`. The sync bulk ViewModel delete now prunes its hashes.
+
 ## 2026-10-17 — A grant whose role was retired grants nothing instead of throwing
 
 [[TASK-641]]. Measured: one stored grant with a retired role made the user's checks of that resource, every check of

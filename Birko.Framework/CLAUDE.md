@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Cosmos migrations work on any client serializer (2026-10-17)
+[[TASK-659]]. Measured live: on a plain `CosmosClient` (the SDK's Newtonsoft serializer), `RenameField`, `UpdateDocuments`,
+`DeleteDocuments` and `CopyData` threw on their first read, because they typed results as `JsonElement`. Reads now stream and
+parse with System.Text.Json. `CopyData` upserts each document's raw JSON (exact, and checked), and a renamed value is
+written as plain values. Birko's own client was unaffected.
 ### A failed RavenDB commit ends the unit of work (2026-10-17)
 [[TASK-658]]. Measured live: after a cluster-wide conflict the unit of work stayed active and every retry hit the same
 conflict, and after a cancelled commit a retry wrote the changes late. A failed commit now releases the session, and the
@@ -317,16 +322,6 @@ so both engines agree.
 [[TASK-644]]. Measured: `x.Text == x.Text.Trim()` and `x.Owner.Name == x.Text` ran as "Text is missing", because an
 untranslatable operand looked like `null`. Only an operand that refers to no parameter is a null comparison now;
 anything else throws `NotSupportedException`.
-### InfluxDB field renames and ElasticSearch index checks no longer report false success (2026-10-17)
-
-[[TASK-642]], [[TASK-643]]. Measured: an InfluxDB migration calling `RenameField` or `DropField` was recorded as
-applied having changed nothing; both now refuse. The ElasticSearch schema builder read an unreachable cluster as
-"index absent" and never checked its create or delete; it now throws. Other backends' `DropField` is [[TASK-655]].
-### Repository gaps TASK-162 left (2026-10-17)
-
-[[TASK-646]]. Measured: an async repository's `UpdateAsync` / `DeleteAsync` with no store reported success, while
-every other call refuses. `AddRepository<TRepository>(store)` threw unless given a lifetime, because its default was
-`Scoped`, which it refuses; the default is now `Singleton`. The sync bulk ViewModel delete now prunes its hashes.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

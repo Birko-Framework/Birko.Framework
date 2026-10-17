@@ -93,19 +93,13 @@ public class CosmosDBDataMigrator : IDataMigrator
             ? $"SELECT {projection} FROM c"
             : $"SELECT {projection} FROM c WHERE {whereClause}";
 
-        var iterator = container.GetItemQueryIterator<JsonElement>(Bind(query, parameters));
-
-        while (iterator.HasMoreResults)
+        foreach (var item in QueryDocuments(container, Bind(query, parameters)))
         {
-            var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
-            foreach (var item in response)
+            string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            if (id != null)
             {
-                string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
-                if (id != null)
-                {
-                    container.PatchItemAsync<dynamic>(id, ResolvePartitionKey(container, collection, id, item), patchOperations)
-                        .GetAwaiter().GetResult();
-                }
+                container.PatchItemAsync<dynamic>(id, ResolvePartitionKey(container, collection, id, item), patchOperations)
+                    .GetAwaiter().GetResult();
             }
         }
     }
@@ -125,19 +119,13 @@ public class CosmosDBDataMigrator : IDataMigrator
             ? $"SELECT {projection} FROM c"
             : $"SELECT {projection} FROM c WHERE {whereClause}";
 
-        var iterator = container.GetItemQueryIterator<JsonElement>(Bind(query, parameters));
-
-        while (iterator.HasMoreResults)
+        foreach (var item in QueryDocuments(container, Bind(query, parameters)))
         {
-            var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
-            foreach (var item in response)
+            string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            if (id != null)
             {
-                string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
-                if (id != null)
-                {
-                    container.DeleteItemAsync<dynamic>(id, ResolvePartitionKey(container, collection, id, item))
-                        .GetAwaiter().GetResult();
-                }
+                container.DeleteItemAsync<dynamic>(id, ResolvePartitionKey(container, collection, id, item))
+                    .GetAwaiter().GetResult();
             }
         }
     }
@@ -173,22 +161,62 @@ public class CosmosDBDataMigrator : IDataMigrator
         var sourceContainer = _database.GetContainer(sourceCollection);
         var targetContainer = _database.GetContainer(targetCollection);
 
-        var iterator = sourceContainer.GetItemQueryIterator<JsonElement>(new QueryDefinition("SELECT * FROM c"));
+        foreach (var item in QueryDocuments(sourceContainer, new QueryDefinition("SELECT * FROM c")))
+        {
+            string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            if (id == null) continue;
 
+            // TASK-659: the document's own JSON, written as a stream, so the copy is exact whichever serializer the
+            // caller's client uses (a JsonElement through the SDK's default Newtonsoft serializer is not JSON). A stream
+            // call answers instead of throwing, so the status is checked (rule 22).
+            using var body = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(item.GetRawText()));
+            using var response = targetContainer.UpsertItemStreamAsync(body, ResolvePartitionKey(targetContainer, targetCollection, id, item))
+                .GetAwaiter().GetResult();
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException(
+                    $"CosmosDB CopyData '{sourceCollection}' -> '{targetCollection}': document '{id}' was refused ({(int)response.StatusCode} {response.StatusCode}). {response.ErrorMessage}");
+        }
+    }
+
+    /// <summary>
+    /// The documents a query returns, read as a stream and parsed with System.Text.Json, so the result does not depend
+    /// on the serializer of the client the caller built the <see cref="Database"/> with.
+    /// </summary>
+    /// <remarks>
+    /// TASK-659 (and TASK-655 for <c>DropField</c>): every migration step typed its results as <see cref="JsonElement"/>,
+    /// which only a System.Text.Json serializer produces. Measured: through the SDK's default (Newtonsoft) serializer the
+    /// elements came back empty and the first read threw, so UpdateDocuments, DeleteDocuments, CopyData and RenameField
+    /// failed on a plain <c>new CosmosClient(conn)</c>.
+    /// </remarks>
+    internal static IEnumerable<JsonElement> QueryDocuments(Container container, QueryDefinition query)
+    {
+        using var iterator = container.GetItemQueryStreamIterator(query);
         while (iterator.HasMoreResults)
         {
-            var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
-            foreach (var item in response)
+            using var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
+            response.EnsureSuccessStatusCode();
+            using var page = JsonDocument.Parse(response.Content);
+            foreach (var document in page.RootElement.GetProperty("Documents").EnumerateArray())
             {
-                string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
-                if (id != null)
-                {
-                    targetContainer.UpsertItemAsync(item, ResolvePartitionKey(targetContainer, targetCollection, id, item))
-                        .GetAwaiter().GetResult();
-                }
+                yield return document.Clone();
             }
         }
     }
+
+    /// <summary>
+    /// A JSON value as plain CLR values (dictionaries, lists, strings, numbers, booleans, null), which every serializer
+    /// writes back as the same JSON. A <see cref="JsonElement"/> is not one of them (TASK-659).
+    /// </summary>
+    internal static object? ToPlain(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => element.EnumerateObject().ToDictionary(p => p.Name, p => ToPlain(p.Value)),
+        JsonValueKind.Array => element.EnumerateArray().Select(ToPlain).ToList(),
+        JsonValueKind.String => element.GetString(),
+        JsonValueKind.Number => element.TryGetInt64(out var l) ? l : element.TryGetDecimal(out var d) ? d : element.GetDouble(),
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        _ => null,
+    };
 
     public void BulkInsert(string collection, IEnumerable<IDictionary<string, object>> documents)
     {

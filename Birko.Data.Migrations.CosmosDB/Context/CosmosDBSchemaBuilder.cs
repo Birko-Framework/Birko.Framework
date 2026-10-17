@@ -105,7 +105,7 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
         if (pkProperty != "id") projection.Add($"c.{pkProperty}");
         var query = $"SELECT {string.Join(", ", projection)} FROM c WHERE IS_DEFINED({fieldPath})";
         var pointer = "/" + fieldName.Replace("~", "~0").Replace("/", "~1");
-        foreach (var item in QueryDocuments(container, query))
+        foreach (var item in CosmosDBDataMigrator.QueryDocuments(container, new QueryDefinition(query)))
         {
             string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
             if (id == null) continue;
@@ -127,26 +127,6 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
         if (removed > 0)
         {
             container.ReplaceContainerAsync(properties).GetAwaiter().GetResult();
-        }
-    }
-
-    /// <summary>
-    /// The documents a query returns, read as a stream and parsed with System.Text.Json, so the result does not depend on
-    /// the serializer of the client the caller built the <see cref="Database"/> with. Measured on TASK-655: through the
-    /// SDK's default (Newtonsoft) serializer a <see cref="JsonElement"/> result comes back empty, and reading it throws.
-    /// </summary>
-    private static IEnumerable<JsonElement> QueryDocuments(Container container, string query)
-    {
-        using var iterator = container.GetItemQueryStreamIterator(new QueryDefinition(query));
-        while (iterator.HasMoreResults)
-        {
-            using var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
-            response.EnsureSuccessStatusCode();
-            using var page = JsonDocument.Parse(response.Content);
-            foreach (var document in page.RootElement.GetProperty("Documents").EnumerateArray())
-            {
-                yield return document.Clone();
-            }
         }
     }
 
@@ -176,40 +156,35 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
         var projection = new List<string> { "c.id", $"{oldPath} AS oldValue" };
         if (pkProperty != "id") projection.Add($"c.{pkProperty}");
         var query = $"SELECT {string.Join(", ", projection)} FROM c WHERE IS_DEFINED({oldPath})";
-        var iterator = container.GetItemQueryIterator<JsonElement>(new QueryDefinition(query));
-
-        while (iterator.HasMoreResults)
+        // TASK-659: read independently of the caller's serializer, and the value written as plain values (below).
+        foreach (var item in CosmosDBDataMigrator.QueryDocuments(container, new QueryDefinition(query)))
         {
-            var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
-            foreach (var item in response)
-            {
-                string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
-                if (id == null) continue;
+            string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            if (id == null) continue;
 
-                var oldValue = item.TryGetProperty("oldValue", out var v) ? v : default;
-                var pk = pkProperty == "id"
-                    ? new PartitionKey(id)
-                    : CosmosDBDataMigrator.BuildPartitionKey(item, pkProperty);
-                try
-                {
-                    container.PatchItemAsync<dynamic>(
-                        id,
-                        pk,
-                        new[]
-                        {
-                            PatchOperation.Set($"/{newName}", oldValue),
-                            PatchOperation.Remove($"/{oldName}")
-                        }
-                    ).GetAwaiter().GetResult();
-                }
-                catch (CosmosException ex) when (
-                    ex.StatusCode == HttpStatusCode.BadRequest || ex.StatusCode == HttpStatusCode.NotFound)
-                {
-                    // CR-M103: only swallow the "field/document absent" cases (removing a missing path
-                    // yields BadRequest; a missing document yields NotFound) so the rename stays
-                    // idempotent. Throttling (429), auth (401/403) and service errors (503) now
-                    // propagate instead of silently corrupting a subset of documents.
-                }
+            var oldValue = item.TryGetProperty("oldValue", out var v) ? v : default;
+            var pk = pkProperty == "id"
+                ? new PartitionKey(id)
+                : CosmosDBDataMigrator.BuildPartitionKey(item, pkProperty);
+            try
+            {
+                container.PatchItemAsync<dynamic>(
+                    id,
+                    pk,
+                    new[]
+                    {
+                        PatchOperation.Set($"/{newName}", CosmosDBDataMigrator.ToPlain(oldValue)),
+                        PatchOperation.Remove($"/{oldName}")
+                    }
+                ).GetAwaiter().GetResult();
+            }
+            catch (CosmosException ex) when (
+                ex.StatusCode == HttpStatusCode.BadRequest || ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                // CR-M103: only swallow the "field/document absent" cases (removing a missing path
+                // yields BadRequest; a missing document yields NotFound) so the rename stays
+                // idempotent. Throttling (429), auth (401/403) and service errors (503) now
+                // propagate instead of silently corrupting a subset of documents.
             }
         }
     }
