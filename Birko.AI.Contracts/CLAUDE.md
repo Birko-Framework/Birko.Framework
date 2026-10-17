@@ -27,6 +27,14 @@ Zero-dependency shared project with LLM provider interface, message models, tool
 - `LlmResponse` — Complete LLM response with message, usage, stop reason. A failed one carries `Failure`
   (`LlmFailure`), with `IsTransient`, `StatusCode` and `RetryAfter` read through it (TASK-531)
 
+### Models/ConversationCheckpoint.cs
+- `ConversationCheckpoint.Serialize` / `Deserialize` (TASK-535): versioned JSON that restores the agent's in-memory
+  shapes (string, `List<ContentBlock>`, the anonymous tool_result objects), so `Agent.ResumeAsync` takes a restored
+  conversation and every provider sends it unchanged. `ContentFromJson(JsonElement)` converts one content.
+- `ConversationTrimmer.Trim(messages, max)`: keeps the first user message and a tail starting at an assistant turn, so
+  a tool_result never loses its tool_use and two user turns never meet.
+- `MessageText.From` also reads a `JsonElement` content (what a plain `JsonSerializer` round trip leaves).
+
 ### Models/LlmFailure.cs
 - `LlmFailure(Kind, StatusCode, RetryAfter)` — why a call failed; `IsTransient` (RateLimited, ServerError, Timeout,
   Network) and `Category`. `FromStatusCode(int, retryAfter)` maps a status. Classified by `LlmProviderBase`, never

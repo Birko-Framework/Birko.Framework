@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-18 00:00. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-18 00:17. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 26      | —     |
-| todo         | —     | —       | 160   |
-| in-progress  | 8     | 12      | 0     |
+| todo         | —     | —       | 159   |
+| in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 24      | 349   |
+| done         | 2     | 25      | 350   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 110× P2 · 41× P3.
+`todo` by priority: 9× P1 · 109× P2 · 41× P3.
 
 ## In progress now
 
@@ -535,7 +535,7 @@ _None._
   - [x] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P1)
   - [x] [TASK-581](EPIC-018-birko-web-core-runtime/TASK-581-syncmanager-backoff-cap-dead-letter.md) `SyncManager` retries a failing write every cycle forever: no backoff, no cap, no dead letter (P2) · FEATURE-018
   - [x] [TASK-598](EPIC-018-birko-web-core-runtime/TASK-598-an-action-interrupted-mid-sync-stays-syncing-forever.md) A queued write interrupted mid-sync stays `syncing` forever, invisible to every list and count (P2)
-- **EPIC-019** Birko framework backports from DraCode — in-progress (16/30 tasks done)
+- **EPIC-019** Birko framework backports from DraCode — in-progress (17/30 tasks done)
   - STORY-058 Security / OAuth backports from DraCode — planned (0/6 done)
     - [ ] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
     - [ ] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)
@@ -548,7 +548,7 @@ _None._
     - [ ] [TASK-524](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-524-shell-oauth-sign-in-helpers.md) Birko.Web.Shell auth: OAuth redirect parsing, token expiry and scheduled refresh (P2)
     - [ ] [TASK-525](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-525-reorderable-tabs-and-persisted-split-sizes.md) b-tabs drag-and-drop reorder; b-split-panel size persistence; a layout serialize/restore hook (P3)
     - [x] [TASK-526](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-526-layered-runtime-config-loader.md) Birko.Web.Core: layered runtime configuration (defaults < server endpoint < local overrides) (P3)
-  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — in-progress (11/12 done)
+  - STORY-060 KoboldLair agent-runtime and data backports from DraCode — done (12/12 done)
     - [x] [TASK-527](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-527-agent-loop-hooks.md) Agent loop: per-iteration and tool-call hooks, a readable system prompt, resume from a conversation (P1)
     - [x] [TASK-528](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-528-orchestration-plan-model-and-step-validators.md) Birko.AI.Orchestration: a plan model with behaviour, step validators, and a pinned enum encoding (P1)
     - [x] [TASK-529](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-529-sql-event-store.md) Ship a SQL IAsyncEventStore (P1)
@@ -557,7 +557,7 @@ _None._
     - [x] [TASK-532](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-532-config-secret-provider-and-field-cipher.md) Birko.Security: a configuration ISecretProvider and a field cipher keyed from a secret (P2)
     - [x] [TASK-533](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-533-keyed-live-event-broadcaster.md) A keyed live-event broadcaster: non-blocking publish, drop-oldest per subscriber, per-key sequence (P2)
     - [x] [TASK-534](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-534-process-runner-and-git-tools.md) One process runner in Birko.Helpers; a git service and agent git tools on top of it (P2)
-    - [ ] [TASK-535](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-535-conversation-checkpoints-and-safe-trim.md) Conversation checkpoints: serialize / restore, and a trim that keeps tool_use and tool_result together (P2)
+    - [x] [TASK-535](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-535-conversation-checkpoints-and-safe-trim.md) Conversation checkpoints: serialize / restore, and a trim that keeps tool_use and tool_result together (P2)
     - [x] [TASK-544](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-544-streaming-fallback-reruns-executed-tools.md) The streaming fallback re-runs tools that already executed (P1)
     - [x] [TASK-546](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-546-consecutive-user-turns-from-hook-injection.md) A hook-injected message after a tool-result turn makes two consecutive user turns (P2)
     - [x] [TASK-554](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-554-gemini-function-response-carries-a-guid-not-the-function-name.md) GeminiProvider sends a GUID as functionResponse.name, not the function's name (P2)

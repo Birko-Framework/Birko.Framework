@@ -61,6 +61,12 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
 
+## 2026-10-17 — A partial index is declared through IndexDefinition
+
+[[TASK-636]]. `IndexDefinition.WhereNotNull` / `WhereNull` declare a partial index. MongoDB creates it, reads it back
+and compares it for drift; on MongoDB, `IDefaultMarker`'s unique index no longer has to be created by hand. SQL carries
+the predicates; RavenDB, Cosmos DB and ElasticSearch refuse them. Drift reports `PredicateDiffers`.
+
 ## 2026-10-17 — Tenant sync refuses an unscopable TenantGuid; Cosmos partition path and index verbs agree
 
 [[TASK-650]]. Measured: a run scoped to one tenant read every tenant's rows when `TenantGuid` was not a `Guid`; it now

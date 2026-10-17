@@ -240,6 +240,10 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Conversation checkpoints restore what the agent built; a trim keeps tool pairs (2026-10-18)
+[[TASK-535]]. `ConversationCheckpoint` saves a conversation and restores it in the agent's in-memory shapes, so
+`ResumeAsync` sends it as it would a live one. `ConversationTrimmer` keeps the first user message and never orphans a
+tool_result. Measured: `MessageText.From` read a `JsonElement` content (a plain deserializer's output) as ""; it reads it now.
 ### One process runner; Birko.VersionControl.Git with agent git tools (2026-10-17)
 [[TASK-534]]. `Birko.Helpers.ProcessRunner` drains stdout and stderr together and kills the process tree on a timeout.
 The caller's cancellation throws. `RunCommandTool` uses it, and a cancelled command no longer reports "timed out". New
@@ -310,11 +314,6 @@ Discovery asks `IServiceProviderIsService` and builds no handler.
 ### Spec-regen cleanup: ambiguous fields, address headers, index settings (2026-10-17)
 [[TASK-651]]. Fixed from the 2026-10-16 spec regeneration. A `DictionaryRuleContext` field matching two keys only ignoring case now throws instead of taking the first. `RuleSet.Rules` copies the list it is given, and `RuleGroup.Rules = null` is refused. `GetClientIpAddress` returns only a parsed address: `unknown` in X-Forwarded-For had been returned as the IP. An ES `CopyData` with `{}` is a plain copy. `ByName("guid")` is the Guid key. ES index settings refuse negative numbers. Mongo text-index fields compare as a set. `[ViewField]` is not a column on a mapped model.
 
-### A partial index is declared through IndexDefinition (2026-10-17)
-
-[[TASK-636]]. `IndexDefinition.WhereNotNull` / `WhereNull` declare a partial index. MongoDB creates it, reads it back
-and compares it for drift; on MongoDB, `IDefaultMarker`'s unique index no longer has to be created by hand. SQL carries
-the predicates; RavenDB, Cosmos DB and ElasticSearch refuse them. Drift reports `PredicateDiffers`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

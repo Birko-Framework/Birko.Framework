@@ -6,6 +6,7 @@ sources:
   - ../Birko.AI.Contracts/AgentOptions.cs
   - ../Birko.AI.Contracts/LlmProviderFactory.cs
   - ../Birko.AI.Contracts/Models/ContentBlock.cs
+  - ../Birko.AI.Contracts/Models/ConversationCheckpoint.cs
   - ../Birko.AI.Contracts/Models/LlmFailure.cs
   - ../Birko.AI.Contracts/Models/LlmResponse.cs
   - ../Birko.AI.Contracts/Models/LlmStreamingResponse.cs
@@ -526,8 +527,8 @@ The derived stop reason SHALL be `"tool_use"` when any tool call was captured, `
 The system SHALL expose `MessageText.From(object?)` (and `Message.GetText()`) as the canonical
 way to read a message's plain text: a `string` content returns itself; a single `ContentBlock`
 returns its `Text` only when `Type == "text"`; an `IEnumerable<ContentBlock>` returns the
-concatenation of every non-null `text` block's `Text`; and `null` or any unrecognised shape
-returns `string.Empty`.
+concatenation of every non-null `text` block's `Text`; a `JsonElement` (TASK-535) is read as the string or
+block array it holds; and `null` or any unrecognised shape returns `string.Empty`.
 
 #### Scenario: Assistant block list
 
@@ -546,6 +547,35 @@ returns `string.Empty`.
 - **Given** content that is a `List<object>` of anonymous tool-result objects
 - **When** `GetText()` is called
 - **Then** the `default` branch returns `string.Empty`
+
+#### Scenario: Content deserialized as a JsonElement
+
+- **Given** a `Message` read by `JsonSerializer`, whose `Content` is a `JsonElement` string or block array
+- **When** `GetText()` is called
+- **Then** it returns the text (before TASK-535 it returned `string.Empty`)
+
+### Requirement: A conversation is checkpointed in its in-memory shapes and trimmed without splitting tool pairs
+
+The system SHALL provide `ConversationCheckpoint.Serialize` / `Deserialize` (TASK-535), a versioned JSON
+(`{"version":1,"messages":[…]}`) that restores a string content as a string, text and tool_use blocks as
+`List<ContentBlock>` (tool input values as `JsonElement`), and tool_result blocks as the agent's anonymous
+`{ type, tool_use_id, content }` objects, so a restored conversation resumes through `Agent.ResumeAsync` and every
+provider sends it as it would a live one. A checkpoint of another version SHALL be refused with `JsonException`.
+`ConversationTrimmer.Trim(messages, max)` (max ≥ 2) SHALL keep the first user message and a tail that starts at an
+assistant turn, so no tool_result is kept without its tool_use and no two user turns become adjacent.
+
+#### Scenario: Resume a restored conversation
+
+- **Given** a checkpoint of `user, assistant tool_use t1, user tool_result t1`, restored
+- **When** an agent resumes it on an OpenAI-compatible provider and on Claude
+- **Then** the request carries `tool_calls[t1]` then a `tool` message for `t1` (OpenAI), or the `tool_use` and
+  `tool_result` blocks for `t1` (Claude)
+
+#### Scenario: Trim at every size
+
+- **Given** a 22-message conversation of ten tool rounds
+- **When** it is trimmed to each limit from 2 to 23
+- **Then** the first user message and the last message are kept and every kept tool_result follows an assistant turn
 
 ### Requirement: Agent options carry defaults, clone deeply and merge scalar-last-wins
 

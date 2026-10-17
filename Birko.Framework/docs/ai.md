@@ -43,6 +43,9 @@ Core interfaces, models, and provider factory with zero dependencies:
 - **ContentBlock** — Content types: text, tool_use (with Id, Name, Input)
 - **TokenUsage** — PromptTokens, CompletionTokens, TotalTokens
 - **LlmResponse** — StopReason, Content blocks, Usage, ErrorMessage, and `Failure` when the call failed
+- **ConversationCheckpoint** — save a conversation (`Serialize`) and restore it (`Deserialize`) in the shapes the
+  agent builds, then `agent.ResumeAsync(restored)`; **ConversationTrimmer.Trim(messages, max)** shortens one without
+  splitting a tool_use from its tool_result
 - **LlmFailure** — why it failed: `Kind` (RateLimited, ServerError, Timeout, Network are transient; BadRequest,
   Unauthorized, Billing, Forbidden, NotFound, NotConfigured, InvalidResponse, Unknown are not), `StatusCode`,
   `RetryAfter`, `IsTransient`, `Category`. Classified by the provider base from the status and exception, so retry on

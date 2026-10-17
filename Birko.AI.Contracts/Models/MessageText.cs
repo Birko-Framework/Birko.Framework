@@ -16,7 +16,8 @@ namespace Birko.AI.Models
         /// <summary>
         /// Returns the text of a message content value: the string itself for string content, or the
         /// concatenated <see cref="ContentBlock.Text"/> of every <c>type == "text"</c> block for a
-        /// block list (or a single block). Null/empty/unrecognized content yields
+        /// block list (or a single block), also when the content is a <see cref="System.Text.Json.JsonElement"/> of either
+        /// shape. Null/empty/unrecognized content yields
         /// <see cref="string.Empty"/>.
         /// </summary>
         public static string From(object? content)
@@ -27,6 +28,9 @@ namespace Birko.AI.Models
                     return string.Empty;
                 case string s:
                     return s;
+                case System.Text.Json.JsonElement json:
+                    // TASK-535: content deserialized as a JsonElement (a checkpoint restored by a plain serializer) read as ""
+                    return From(ConversationCheckpoint.ContentFromJson(json));
                 case ContentBlock block:
                     return block.Type == "text" ? (block.Text ?? string.Empty) : string.Empty;
                 case IEnumerable<ContentBlock> blocks:
