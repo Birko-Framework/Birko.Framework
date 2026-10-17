@@ -58,7 +58,7 @@ public class ProviderStoreFactoryTests
         factory.Settings.Name.Should().Be("AppDb");
         factory.Settings.MultipleActiveResultSets.Should().BeTrue();
         var cs = factory.Settings.GetConnectionString();
-        cs.Should().Contain("db.example.net").And.Contain("Initial Catalog=AppDb").And.Contain("MultipleActiveResultSets=True");
+        cs.Should().Contain("db.example.net").And.Contain("Initial Catalog=AppDb").And.Contain("Multiple Active Result Sets=True");
         factory.GetAsyncStore<Widget>().Should().NotBeNull();
         factory.GetConnector().Should().NotBeNull();
     }
@@ -80,7 +80,7 @@ public class ProviderStoreFactoryTests
         settings.Should().NotBeNull("the store must retain the full MSSqlSettings, not a narrowed PasswordSettings");
         var cs = settings!.GetConnectionString();
         cs.Should().Contain("User ID=regruser", "UserName must survive SetSettings");
-        cs.Should().Contain("MultipleActiveResultSets=True", "SQL Server flags must survive SetSettings");
+        cs.Should().Contain("Multiple Active Result Sets=True", "SQL Server flags must survive SetSettings");
     }
 
     [Fact]

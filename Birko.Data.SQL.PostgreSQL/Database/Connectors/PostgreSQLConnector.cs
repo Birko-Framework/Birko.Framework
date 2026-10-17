@@ -204,18 +204,17 @@ namespace Birko.Data.SQL.Connectors
 
             if (settings is RemoteSettings remoteSettings)
             {
-                var port = remoteSettings.Port > 0 ? remoteSettings.Port : 5432;
-                var connectionString = string.Format("Host={0};Port={1};Username={2};Password={3};Database={4}",
+                // TASK-653: the same producer as PostgreSqlSettings. This path interpolated the credentials raw, and it
+                // is the one a host registering plain RemoteSettings runs. No timeouts, as before.
+                return new NpgsqlConnection(PostgreSqlSettings.ComposeConnectionString(
                     remoteSettings.Location,
-                    port,
+                    remoteSettings.Port > 0 ? remoteSettings.Port : 5432,
                     remoteSettings.UserName,
                     remoteSettings.Password,
-                    remoteSettings.Name);
-                if (remoteSettings.UseSecure)
-                {
-                    connectionString += ";SSL Mode=Require";
-                }
-                return new NpgsqlConnection(connectionString);
+                    remoteSettings.Name,
+                    timeout: null,
+                    commandTimeout: null,
+                    remoteSettings.UseSecure));
             }
 
             throw new Exception("Invalid settings provided for PostgreSQL connection");

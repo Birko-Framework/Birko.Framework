@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### SQL connection strings quote their credentials on every provider (2026-10-17)
+[[TASK-653]]. **Security.** Measured live: on SQL Server, MySQL, PostgreSQL and TimescaleDB a password ending `;Server=evil`
+moved the connection to that host, `;Encrypt=False` dropped TLS, and a `;` or quote broke the connection. Every provider
+now composes through its driver's builder, with one producer shared by the settings type and the connector's
+`RemoteSettings` path. Key spellings follow the builders (`Data Source`, `Connect Timeout`, MySQL `SSL Mode`).
 ### MongoDB, Cosmos DB and InfluxDB units of work end the boundary on every outcome (2026-10-17)
 [[TASK-578]]. Measured live: MongoDB never disposed its session after a commit or rollback, a refused Cosmos batch threw
 `InvalidOperationException` and a throwing one stayed active, and a failed InfluxDB write kept its points for a retry to
@@ -325,12 +330,6 @@ beside the sort-key resolution.
 slug were refused (`StoreUniqueViolationException`), because the deleted row kept its marker and slug while every probe read
 through SoftDelete. A soft delete now retires a default (`IsDefault` false, marker null) on every path. A slug stays
 reserved until hard delete: the probe asks beneath SoftDelete, so the new row gets `widget-2`.
-### ObjectTree can hide null members (2026-10-16)
-
-[[TASK-652]]. A model class shared by several API products showed the fields a product does not return as `null`
-leaves, which read as if the API had sent them. `ObjectTree.HideNullMembers` (default off) leaves out null object
-properties, dictionary entries and JSON fields; array items stay, since `[i]` is their identity. Header counts match
-what is shown. The nodes stay the real objects, so `SelectedValue` still serializes.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

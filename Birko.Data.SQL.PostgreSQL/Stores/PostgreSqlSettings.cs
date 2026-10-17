@@ -22,22 +22,39 @@ namespace Birko.Data.SQL.PostgreSQL.Stores
             : base(location, name, username, password, port, useSecure) { }
 
         public override string GetConnectionString()
+            => ComposeConnectionString(Location, Port, UserName, Password, Name, ConnectionTimeout, CommandTimeout, UseSecure);
+
+        /// <summary>
+        /// The one producer of a PostgreSQL connection string (TASK-653): <see cref="GetConnectionString"/>, the
+        /// connector's plain-<see cref="RemoteSettings"/> path and TimescaleDB all compose through it.
+        /// </summary>
+        /// <remarks>
+        /// Composed with <see cref="Npgsql.NpgsqlConnectionStringBuilder"/>, which quotes a value containing <c>;</c>,
+        /// <c>=</c> or a quote, so a credential stays a value (CR-L189). Interpolated, a password ending
+        /// <c>;Host=evil</c> moved the connection to another host and <c>;SSL Mode=Disable</c> dropped TLS (measured).
+        /// A null timeout leaves its key out. Measured on TASK-653: the builder emits Port, Timeout and Command Timeout
+        /// even at the Npgsql default, which CR-L189's note said it omitted.
+        /// </remarks>
+        public static string ComposeConnectionString(string? host, int port, string? userName, string? password, string? database,
+            int? timeout, int? commandTimeout, bool useSecure)
         {
-            // Compose via NpgsqlConnectionStringBuilder so values (Host/Username/Password/Database)
-            // containing ';' or '=' are quoted/escaped correctly rather than breaking the key=value
-            // parsing or injecting extra keywords (CR-L189). Note: the builder omits keys whose value
-            // equals the Npgsql default (e.g. Port 5432, Timeout 15).
             var builder = new Npgsql.NpgsqlConnectionStringBuilder
             {
-                Host = Location,
-                Port = Port,
-                Username = UserName,
-                Password = Password,
-                Database = Name,
-                Timeout = ConnectionTimeout,
-                CommandTimeout = CommandTimeout,
+                Host = host,
+                Port = port,
+                Username = userName,
+                Password = password,
+                Database = database,
             };
-            if (UseSecure)
+            if (timeout.HasValue)
+            {
+                builder.Timeout = timeout.Value;
+            }
+            if (commandTimeout.HasValue)
+            {
+                builder.CommandTimeout = commandTimeout.Value;
+            }
+            if (useSecure)
             {
                 builder.SslMode = Npgsql.SslMode.Require;
             }

@@ -204,18 +204,16 @@ namespace Birko.Data.SQL.Connectors
 
             if (settings is RemoteSettings remoteSettings)
             {
-                var port = remoteSettings.Port > 0 ? remoteSettings.Port : 3306;
-                var connectionString = string.Format("Server={0};Port={1};User ID={2};Password={3};Database={4}",
+                // TASK-653: the same producer as MySqlSettings. This path interpolated the credentials raw, and it is the
+                // one a host registering plain RemoteSettings runs. No timeout, as before.
+                return new MySqlConnection(Birko.Data.SQL.MySQL.Stores.MySqlSettings.ComposeConnectionString(
                     remoteSettings.Location,
-                    port,
+                    remoteSettings.Port > 0 ? remoteSettings.Port : 3306,
                     remoteSettings.UserName,
                     remoteSettings.Password,
-                    remoteSettings.Name);
-                if (remoteSettings.UseSecure)
-                {
-                    connectionString += ";SslMode=Required";
-                }
-                return new MySqlConnection(connectionString);
+                    remoteSettings.Name,
+                    connectionTimeout: null,
+                    remoteSettings.UseSecure));
             }
 
             throw new Exception("Invalid settings provided for MySQL connection");

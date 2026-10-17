@@ -44,13 +44,13 @@ public class MSSqlSettingsAndQuotingTests
 
         var cs = settings.GetConnectionString();
 
-        cs.Should().Contain("Server=tcp:srv,1433");
+        cs.Should().Contain("Data Source=tcp:srv,1433");
         cs.Should().Contain("Initial Catalog=mydb");
         cs.Should().Contain("User ID=sa");
         cs.Should().Contain("Password=secret");
-        cs.Should().Contain("MultipleActiveResultSets=True");
+        cs.Should().Contain("Multiple Active Result Sets=True");
         cs.Should().Contain("Encrypt=True");
-        cs.Should().Contain("TrustServerCertificate=True");
+        cs.Should().Contain("Trust Server Certificate=True");
     }
 
     [Fact]
@@ -64,11 +64,11 @@ public class MSSqlSettingsAndQuotingTests
 
         var cs = connector.CreateConnection(remote).ConnectionString;
 
-        cs.Should().Contain("Server=tcp:srv,1433");
+        cs.Should().Contain("Data Source=tcp:srv,1433");
         cs.Should().Contain("Initial Catalog=mydb");
         cs.Should().Contain("Encrypt=True");
-        cs.Should().Contain("TrustServerCertificate=False");
-        cs.Should().Contain("Connection Timeout=15");
+        cs.Should().Contain("Trust Server Certificate=False");
+        cs.Should().Contain("Connect Timeout=15");
         // Matches exactly what an equivalent MSSqlSettings would produce.
         var equivalent = new MSSqlSettings("srv", "mydb", "sa", "secret", 1433, useSecure: true).GetConnectionString();
         cs.Should().Be(equivalent);

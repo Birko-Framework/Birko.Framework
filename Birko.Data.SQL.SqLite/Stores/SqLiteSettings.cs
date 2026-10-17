@@ -84,16 +84,12 @@ namespace Birko.Data.SQL.SqLite.Stores
         /// <summary>
         /// Gets the SQLite connection string from the current settings.
         /// </summary>
+        /// <remarks>
+        /// TASK-653: composed by <see cref="Birko.Data.SQL.Connectors.SqLiteConnector.ComposeConnectionString"/>, so a path
+        /// or password containing <c>;</c> stays a value.
+        /// </remarks>
         public virtual string GetConnectionString()
-        {
-            var cs = $"Data Source={Path}";
-            if (!string.IsNullOrEmpty(Password))
-            {
-                cs += $";Password={Password}";
-            }
-            cs += $";Default Timeout={CommandTimeout}";
-            return cs;
-        }
+            => Birko.Data.SQL.Connectors.SqLiteConnector.ComposeConnectionString(Path, Password, CommandTimeout);
 
         public void LoadFrom(SqLiteSettings data)
         {

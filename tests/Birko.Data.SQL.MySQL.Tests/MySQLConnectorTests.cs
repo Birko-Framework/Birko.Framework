@@ -75,7 +75,7 @@ public class MySQLConnectorTests
         cs.Should().Contain("User ID=u");
         cs.Should().Contain("Password=p");
         cs.Should().Contain("Database=mydb");
-        cs.Should().Contain("SslMode=Required");
+        cs.Should().Contain("SSL Mode=Required");
     }
 
     // ------------------------------------------------------------------ TASK-245: index DDL

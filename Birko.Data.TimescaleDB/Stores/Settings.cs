@@ -49,15 +49,13 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
             ChunkTimeInterval = chunkTimeInterval;
         }
 
+        /// <remarks>
+        /// TASK-653 (SH-M279): composed by PostgreSQL's one producer (the same driver), which quotes a credential instead
+        /// of interpolating it.
+        /// </remarks>
         public override string GetConnectionString()
-        {
-            var cs = $"Host={Location};Port={Port};Username={UserName};Password={Password};Database={Name};Timeout={ConnectionTimeout};Command Timeout={CommandTimeout};";
-            if (UseSecure)
-            {
-                cs += "SSL Mode=Require;";
-            }
-            return cs;
-        }
+            => Birko.Data.SQL.PostgreSQL.Stores.PostgreSqlSettings.ComposeConnectionString(
+                Location, Port, UserName, Password, Name, ConnectionTimeout, CommandTimeout, UseSecure);
 
         #endregion
 

@@ -221,9 +221,7 @@ namespace Birko.Data.SQL.Connectors
             }
             else
             {
-                connectionString = $"Data Source={Path}";
-                if (!string.IsNullOrEmpty(settings.Password))
-                    connectionString += $";Password={settings.Password}";
+                connectionString = ComposeConnectionString(Path, settings.Password, defaultTimeout: null);
             }
 
             var connection = NewConnection(connectionString);
@@ -232,6 +230,25 @@ namespace Birko.Data.SQL.Connectors
                 DoInit();
             }
             return connection;
+        }
+
+        /// <summary>
+        /// The one producer of a SQLite connection string (TASK-653): <see cref="SqLiteSettings.GetConnectionString"/> and
+        /// this connector's plain-settings path compose through it.
+        /// </summary>
+        /// <remarks>
+        /// Composed with <see cref="Microsoft.Data.Sqlite.SqliteConnectionStringBuilder"/>, which quotes a value
+        /// containing <c>;</c>, <c>=</c> or a quote. Interpolated, a path containing <c>;Mode=Memory</c> opened an
+        /// in-memory database and a password ending <c>;Data Source=…</c> replaced the file (read back through the
+        /// builder). An empty password and a null timeout leave their keys out, as before.
+        /// </remarks>
+        public static string ComposeConnectionString(string? path, string? password, int? defaultTimeout)
+        {
+            var builder = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder();
+            if (path != null) builder.DataSource = path;
+            if (!string.IsNullOrEmpty(password)) builder.Password = password;
+            if (defaultTimeout.HasValue) builder.DefaultTimeout = defaultTimeout.Value;
+            return builder.ConnectionString;
         }
 
         /// <summary>

@@ -348,118 +348,69 @@ connection-string method at all.
 - **When** its members are enumerated
 - **Then** it exposes only the inherited `Location` / `Name` plus an `IndexSettings` collection — no connection-string method, no `GetId` override, no `LoadFrom` override
 
-### Requirement: MSSqlSettings composes a SQL Server connection string by raw interpolation
+### Requirement: Every SQL connection string is composed by its driver's builder, with one producer per provider
 
-The system SHALL build the MSSql connection string as
-`Server=tcp:{Location},{Port};Initial Catalog={Name};Persist Security Info=False;User ID={UserName};Password={Password};MultipleActiveResultSets={True|False};Encrypt={UseSecure};TrustServerCertificate={True|False};Connection Timeout={ConnectionTimeout};`,
-mapping `UseSecure` onto `Encrypt` and using `ConnectionTimeout` but **not** `CommandTimeout`.
+The system SHALL compose each SQL provider's connection string with the driver's own connection-string builder,
+so a value containing `;`, `=`, `'` or `"` is quoted and stays a value (TASK-653, SH-M279, SH-M280). Each provider
+SHALL have one producer, used by its settings type **and** by its connector's plain-`RemoteSettings` path:
 
-#### Scenario: Default MSSql connection string
+| Provider | Producer | Builder |
+|---|---|---|
+| SQL Server | `MSSqlSettings.GetConnectionString()`; `MSSqlConnector` derives an `MSSqlSettings` from `RemoteSettings` (CR-M136) | `SqlConnectionStringBuilder` |
+| MySQL | `MySqlSettings.ComposeConnectionString(...)` | `MySqlConnectionStringBuilder` |
+| PostgreSQL, TimescaleDB | `PostgreSqlSettings.ComposeConnectionString(...)`, also used by `TimescaleDBSettings` | `NpgsqlConnectionStringBuilder` |
+| SQLite | `SqLiteConnector.ComposeConnectionString(path, password, defaultTimeout)` | `SqliteConnectionStringBuilder` |
+
+The `RemoteSettings` paths SHALL keep their key set: no timeouts, the provider's default port when `Port <= 0`,
+and the secure mode when `UseSecure`. `Settings.GetId()`, the connector cache key, is not affected.
+
+#### Scenario: A credential with separators and quotes reaches the server unchanged
+
+- **Given** a user name, password and database name each containing `;`, `=`, `'` and `"` (measured live on SQL
+  Server, MySQL, PostgreSQL and TimescaleDB)
+- **When** a connection is opened through the provider settings, and through the connector given plain
+  `RemoteSettings`
+- **Then** the server reports that user and that database on both paths. Before TASK-653 every interpolating sink
+  failed to parse (`Format of the initialization string does not conform to specification`)
+
+#### Scenario: A keyword inside a credential has no effect
+
+- **Given** a password such as `x;Encrypt=False;TrustServerCertificate=True;Server=evil` (SQL Server),
+  `x;SslMode=None;Server=evil` (MySQL) or `x;SSL Mode=Disable;Host=evil` (PostgreSQL, TimescaleDB), with `UseSecure`
+- **When** the composed string is read back through the driver's builder
+- **Then** the host, the encryption mode and the password are the ones the settings set. Before TASK-653 the
+  interpolated string **moved the connection to the host named in the password** and dropped TLS
+
+#### Scenario: Default SQL Server connection string
 
 - **Given** `new MSSqlSettings("srv", "db", "sa", "pw")`, which defaults `port = 1433` and `useSecure = true`
 - **When** `GetConnectionString()` is called
-- **Then** it returns `Server=tcp:srv,1433;Initial Catalog=db;Persist Security Info=False;User ID=sa;Password=pw;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=15;`
+- **Then** it returns `Data Source=tcp:srv,1433;Initial Catalog=db;Persist Security Info=False;User ID=sa;Password=pw;Multiple Active Result Sets=False;Connect Timeout=15;Encrypt=True;Trust Server Certificate=False`.
+  These are the builder's spellings of the keys the interpolated string set; `CommandTimeout` is applied by the
+  connector, not the connection string
 
-#### Scenario: CommandTimeout is not represented in the MSSql connection string
-
-- **Given** an `MSSqlSettings` with `CommandTimeout = 300`
-- **When** `GetConnectionString()` is called
-- **Then** the returned string contains `Connection Timeout=15` and no command-timeout keyword — the value must be applied by the connector, not the connection string
-
-#### Scenario: A password containing a separator is emitted unescaped
-
-- **Given** an `MSSqlSettings` with `Password = "pa;ss"`
-- **When** `GetConnectionString()` is called
-- **Then** the raw `Password=pa;ss;` fragment is emitted, terminating the value early and leaving `ss` to be parsed as a further keyword
-
-### Requirement: MySqlSettings composes a MySQL connection string by raw interpolation and appends SslMode only when secure
-
-The system SHALL build the MySQL connection string as
-`Server={Location};Port={Port};User ID={UserName};Password={Password};Database={Name};Connection Timeout={ConnectionTimeout};`
-and SHALL append `SslMode=Required;` when `UseSecure` is true.
-
-#### Scenario: Default MySQL connection string
+#### Scenario: Default and secure MySQL connection strings
 
 - **Given** `new MySqlSettings("srv", "db", "root", "pw")`, which defaults `port = 3306` and `useSecure = false`
+- **When** `GetConnectionString()` is called, then again with `UseSecure = true`
+- **Then** it returns `Server=srv;Port=3306;User ID=root;Password=pw;Database=db;Connection Timeout=15`, and with
+  `UseSecure` the builder adds `SSL Mode=Required`. `BulkInsertBatchSize` (default 1000) never reaches the string
+
+#### Scenario: PostgreSQL and TimescaleDB connection strings
+
+- **Given** `new PostgreSqlSettings("srv", "db", "u", "p")` or `new TimescaleDBSettings("srv", "db", "u", "p", 5432)`
 - **When** `GetConnectionString()` is called
-- **Then** it returns `Server=srv;Port=3306;User ID=root;Password=pw;Database=db;Connection Timeout=15;` with no SSL fragment
-
-#### Scenario: Secure MySQL connection string
-
-- **Given** the same settings with `UseSecure = true`
-- **When** `GetConnectionString()` is called
-- **Then** the returned string ends with `SslMode=Required;`
-
-#### Scenario: BulkInsertBatchSize defaults to 1000 and is not part of the connection string
-
-- **Given** a default-constructed `MySqlSettings`
-- **When** `BulkInsertBatchSize` is read and `GetConnectionString()` is called
-- **Then** `BulkInsertBatchSize == 1000` and the connection string contains no batch-size keyword
-
-### Requirement: PostgreSqlSettings composes its connection string through NpgsqlConnectionStringBuilder
-
-The system SHALL build the PostgreSQL connection string with a
-`Npgsql.NpgsqlConnectionStringBuilder`, assigning `Host = Location`, `Port`, `Username = UserName`,
-`Password`, `Database = Name`, `Timeout = ConnectionTimeout` and `CommandTimeout = CommandTimeout`,
-setting `SslMode = Npgsql.SslMode.Require` when `UseSecure` is true, and returning
-`builder.ConnectionString` — so values containing `;` or `=` are quoted by the builder and keys whose
-value equals the Npgsql default are omitted from the output.
-
-#### Scenario: A password containing a separator is quoted rather than breaking the string
-
-- **Given** a `PostgreSqlSettings` with `Password = "pa;ss"`
-- **When** `GetConnectionString()` is called
-- **Then** the builder emits the password as a quoted value, so parsing the result yields `pa;ss` as a single password and no injected keyword
-
-#### Scenario: Default-valued keys are absent from the output
-
-- **Given** `new PostgreSqlSettings("localhost", "db", "u", "p")`, which defaults `port = 5432`, `ConnectionTimeout = 15` and `CommandTimeout = 30` — all equal to the Npgsql defaults
-- **When** `GetConnectionString()` is called
-- **Then** the returned string carries `Host`, `Username`, `Password` and `Database` but no `Port`, `Timeout` or `Command Timeout` keyword
-
-#### Scenario: UseSecure maps onto SslMode.Require
-
-- **Given** a `PostgreSqlSettings` with `UseSecure = true`
-- **When** `GetConnectionString()` is called
-- **Then** the returned string includes `SSL Mode=Require`
-
-#### Scenario: UseBinaryImport defaults to true and does not reach the connection string
-
-- **Given** a default-constructed `PostgreSqlSettings`
-- **When** `UseBinaryImport` is read
-- **Then** it is `true`, and the connection string contains no corresponding keyword — it is a bulk-path switch, not a driver option
-
-### Requirement: TimescaleDBSettings composes a PostgreSQL connection string by raw interpolation
-
-The system SHALL build the TimescaleDB connection string as
-`Host={Location};Port={Port};Username={UserName};Password={Password};Database={Name};Timeout={ConnectionTimeout};Command Timeout={CommandTimeout};`,
-appending `SSL Mode=Require;` when `UseSecure` is true — without using
-`NpgsqlConnectionStringBuilder`, despite targeting the same wire protocol as `PostgreSqlSettings`.
-
-#### Scenario: Default TimescaleDB connection string
-
-- **Given** `new TimescaleDBSettings("srv", "db", "u", "p", 5432)`
-- **When** `GetConnectionString()` is called
-- **Then** it returns `Host=srv;Port=5432;Username=u;Password=p;Database=db;Timeout=15;Command Timeout=30;`
-
-#### Scenario: TimescaleDB does not escape separator characters
-
-- **Given** a `TimescaleDBSettings` with `Password = "pa;ss"`
-- **When** `GetConnectionString()` is called
-- **Then** the raw `Password=pa;ss;` fragment is emitted, in contrast to `PostgreSqlSettings` which quotes it
-
-#### Scenario: Hypertable defaults
-
-- **Given** a default-constructed `TimescaleDBSettings`
-- **When** `TimeColumn` and `ChunkTimeInterval` are read
-- **Then** they are `"timestamp"` and `"7 days"` respectively, and neither appears in the connection string
+- **Then** it returns `Host=srv;Port=5432;Username=u;Password=p;Database=db;Timeout=15;Command Timeout=30`, and
+  `SSL Mode=Require` with `UseSecure`. The builder emits these keys at their Npgsql defaults too, measured on
+  TASK-653 (an earlier note said they were omitted). `UseBinaryImport`, `TimeColumn` and `ChunkTimeInterval` never
+  reach the string
 
 ### Requirement: SqLiteSettings derives its file path from Location and Name and yields null when either is missing
 
 The system SHALL expose `SqLiteSettings.Path` as a computed property returning
 `System.IO.Path.Combine(Location, Name)` when both `Location` and `Name` are non-empty, and `null`
-otherwise. `GetConnectionString()` SHALL return `Data Source={Path}`, append `;Password={Password}`
-only when `Password` is non-empty, and always append `;Default Timeout={CommandTimeout}`.
+otherwise. `GetConnectionString()` SHALL compose `Data Source = Path` (when not null), `Password` (only when
+non-empty) and `Default Timeout = CommandTimeout` through `SqLiteConnector.ComposeConnectionString`.
 
 #### Scenario: Path and connection string for a fully configured SQLite settings
 
@@ -473,11 +424,19 @@ only when `Password` is non-empty, and always append `;Default Timeout={CommandT
 - **When** `GetConnectionString()` is called
 - **Then** it returns `Data Source=C:\data\app.db;Password=secret;Default Timeout=30`
 
-#### Scenario: A missing Location produces a connection string with an empty data source
+#### Scenario: A path or password containing a separator stays a value
+
+- **Given** a `Name` of `a;Mode=Memory;b.db` and a password `x;Data Source=other.db;'"`
+- **When** the connection string is read back through `SqliteConnectionStringBuilder`
+- **Then** `DataSource` is the whole path, `Mode` is the default `ReadWriteCreate`, and the password is exact.
+  Before TASK-653 the interpolated string did not parse (`keyword 'b.db;password' is not supported`)
+
+#### Scenario: A missing Location produces a connection string with no data source
 
 - **Given** a `SqLiteSettings` with `Location = ""` and `Name = "app.db"`
 - **When** `Path` and `GetConnectionString()` are read
-- **Then** `Path` is `null` and the connection string is `Data Source=;Default Timeout=30` — no exception is thrown and the misconfiguration only surfaces when the driver opens the connection
+- **Then** `Path` is `null` and the connection string is `Default Timeout=30`: no exception is thrown, and the
+  misconfiguration only surfaces when the driver opens the connection
 
 #### Scenario: SQLite carries no connection timeout
 

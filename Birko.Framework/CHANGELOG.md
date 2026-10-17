@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-16 — ObjectTree can hide null members
+
+[[TASK-652]]. A model class shared by several API products showed the fields a product does not return as `null`
+leaves, which read as if the API had sent them. `ObjectTree.HideNullMembers` (default off) leaves out null object
+properties, dictionary entries and JSON fields; array items stay, since `[i]` is their identity. Header counts match
+what is shown. The nodes stay the real objects, so `SelectedValue` still serializes.
+
 ## 2026-10-16 — Migrations take a model's property names on PostgreSQL
 
 [[TASK-637]]. The data migrator and `RenameField` quoted column names, so on PostgreSQL `"Name"` missed the folded column
