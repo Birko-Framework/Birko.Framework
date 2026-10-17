@@ -88,22 +88,22 @@ namespace Birko.AI.Agents
         public string ProviderName => _llmProvider.Name;
         public AgentOptions Options => _options;
 
+        // SH-L158: copy-on-write. The tool list is handed to the provider and scanned during a run; mutating it in place
+        // changed or broke a call in flight. A change applies from the next model call.
         public void AddTool(Tool tool)
         {
+            ArgumentNullException.ThrowIfNull(tool);
             tool.MessageCallback = _messageCallback;
             tool.Options = _options;
-            _tools.Add(tool);
+            _tools = [.. _tools, tool];
         }
 
         public bool RemoveTool(string toolName)
         {
             var tool = _tools.FirstOrDefault(t => t.Name == toolName);
-            if (tool != null)
-            {
-                _tools.Remove(tool);
-                return true;
-            }
-            return false;
+            if (tool == null) return false;
+            _tools = _tools.Where(t => !ReferenceEquals(t, tool)).ToList();
+            return true;
         }
 
         public string WorkingDirectory => _options.WorkingDirectory;
@@ -210,6 +210,9 @@ Reasoning approach: Balanced
         private async Task<List<Message>> RunLoopAsync(List<Message> conversation, bool streaming, IAgentHooks? hooks, int? maxIterations, CancellationToken cancellationToken)
         {
             var maxIter = maxIterations ?? _options.MaxIterations;
+            // SH-L160: zero or fewer iterations returned the seed conversation with no model call and no signal.
+            if (maxIter < 1)
+                throw new ArgumentOutOfRangeException(nameof(maxIterations), maxIter, "A run needs at least one iteration.");
 
             for (var iteration = 1; iteration <= maxIter; iteration++)
             {
@@ -293,7 +296,6 @@ Reasoning approach: Balanced
             // connection (LlmStreamingResponse.Resource) — even if enumeration is abandoned
             // early by an exception or cancellation (CR-M003).
             await using var streamingResponse = await _llmProvider.SendMessageStreamingAsync(conversation, _tools, systemPrompt, cancellationToken);
-            _options.OnLlmResponseReceived?.Invoke();
 
             if (!string.IsNullOrEmpty(streamingResponse.Error))
             {
@@ -309,6 +311,10 @@ Reasoning approach: Balanced
                 fullText.Append(chunk);
                 SendMessage("assistant_stream", chunk);
             }
+
+            // SH-L156: a response is "received" once the stream completed. It was raised before any token, also for a stream
+            // that failed, and then again by the sync fallback for the same turn.
+            _options.OnLlmResponseReceived?.Invoke();
 
             return streamingResponse.FinalResponse ?? new LlmResponse
             {

@@ -20,6 +20,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Tools\AppendToFileTool.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tools\SearchCodeTool.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tools\RunCommandTool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tools\WorkspacePath.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tools\DisplayTextTool.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tools\AskUserTool.cs" />
   </ItemGroup>

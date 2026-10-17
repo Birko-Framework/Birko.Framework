@@ -50,9 +50,12 @@ namespace Birko.AI.Tools
 
                     var timeout = Options?.PromptTimeout ?? 300;
                     var promptTask = PromptCallback(question ?? "", context ?? "");
-                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeout), cancellationToken);
+                    // SH-L169: the timer is cancelled once the prompt answers; it stayed armed for the rest of PromptTimeout.
+                    using var timer = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeout), timer.Token);
 
                     var completedTask = await Task.WhenAny(promptTask, timeoutTask);
+                    if (completedTask == promptTask) timer.Cancel();
 
                     if (completedTask == timeoutTask)
                     {

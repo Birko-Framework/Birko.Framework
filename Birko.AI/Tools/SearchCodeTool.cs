@@ -48,7 +48,8 @@ namespace Birko.AI.Tools
                 if (!Directory.Exists(targetDir))
                     return Task.FromResult($"Error: Directory not found: {relDir ?? "."}");
 
-                var files = Directory.EnumerateFiles(targetDir, filePattern, recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly).ToList();
+                // SH-L172: an unreadable subdirectory is skipped; it aborted the whole search.
+                var files = Directory.EnumerateFiles(targetDir, filePattern, new EnumerationOptions { RecurseSubdirectories = recursive, IgnoreInaccessible = true }).ToList();
                 var results = new List<string>();
 
                 Regex? rx = null;
@@ -81,6 +82,9 @@ namespace Birko.AI.Tools
                     }
                 }
 
+                // SH-L173: "" meant "no match" and "nothing was searched" alike.
+                if (results.Count == 0)
+                    return Task.FromResult($"No matches for '{query}' in {files.Count} file{(files.Count == 1 ? "" : "s")} searched ({filePattern}).");
                 return Task.FromResult(string.Join(Environment.NewLine, results));
             }
             catch (RegexMatchTimeoutException)

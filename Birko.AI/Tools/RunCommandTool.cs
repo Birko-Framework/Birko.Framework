@@ -11,7 +11,8 @@ namespace Birko.AI.Tools
             type = "object",
             properties = new
             {
-                command = new { type = "string", description = "Executable or shell command to run" },
+                // SH-L168: no shell runs it — builtins, pipes and redirection need an explicit shell.
+                command = new { type = "string", description = "Executable to run (no shell: for builtins, pipes or redirection run a shell, e.g. 'cmd' with '/c …' or 'sh' with '-c \"…\"')" },
                 arguments = new { type = "string", description = "Optional arguments string" },
                 timeout_seconds = new { type = "number", description = "Optional timeout in seconds", @default = 120 }
             },
@@ -44,8 +45,12 @@ namespace Birko.AI.Tools
                     Timeout = TimeSpan.FromSeconds(timeoutSeconds),
                 }, cancellationToken);
 
+                // SH-L166: what the process printed before the timeout is the useful part; it was thrown away.
                 if (result.TimedOut)
-                    return "Error: Process timed out";
+                {
+                    var printed = string.Join("\n", new[] { result.StandardOutput, result.StandardError }.Where(s => s.Length > 0));
+                    return "Error: Process timed out" + (printed.Length > 0 ? "\n" + printed : "");
+                }
 
                 // SH-M169: a failing command with no output used to read as success ("").
                 if (result.ExitCode != 0)

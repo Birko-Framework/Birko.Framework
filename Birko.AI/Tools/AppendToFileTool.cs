@@ -29,9 +29,9 @@ namespace Birko.AI.Tools
                 if (string.IsNullOrWhiteSpace(filePath))
                     throw new ArgumentException("file_path is required");
 
-                var fullPath = Path.Combine(workingDirectory, filePath);
+                var (root, fullPath) = WorkspacePath.Resolve(workingDirectory, filePath.Trim());
 
-                if (!PathHelper.IsPathSafe(fullPath, workingDirectory, Options?.AllowedExternalPaths))
+                if (!PathHelper.IsPathSafe(fullPath, root, Options?.AllowedExternalPaths))
                     return Task.FromResult("Error: Access denied. Path must be in workspace or an allowed external path.");
 
                 var dir = Path.GetDirectoryName(fullPath);

@@ -20,8 +20,8 @@ namespace Birko.AI.Tools
         {
             try
             {
-                var relDir = input != null && input.TryGetValue("directory", out var dirVal) ? dirVal?.ToString()?.Trim() : null;
-                var recursive = input != null && input.TryGetValue("recursive", out var recVal) && bool.TryParse(recVal?.ToString(), out var recParsed) && recParsed;
+                var relDir = input.TryGetValue("directory", out var dirVal) ? dirVal?.ToString()?.Trim() : null;
+                var recursive = input.TryGetValue("recursive", out var recVal) && bool.TryParse(recVal?.ToString(), out var recParsed) && recParsed;
 
                 var normalizedWorkingDir = Path.GetFullPath(workingDirectory);
 
@@ -44,7 +44,7 @@ namespace Birko.AI.Tools
                 if (!Directory.Exists(targetDir))
                     return Task.FromResult($"Error: Directory not found: {relDir ?? "."}");
 
-                var files = Directory.EnumerateFiles(targetDir, "*", recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+                var files = Directory.EnumerateFiles(targetDir, "*", new EnumerationOptions { RecurseSubdirectories = recursive, IgnoreInaccessible = true })
                     .Select(p => Path.GetRelativePath(normalizedWorkingDir, p))
                     .OrderBy(p => p)
                     .ToList();

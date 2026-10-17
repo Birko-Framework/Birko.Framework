@@ -5233,11 +5233,15 @@ The only call site passes `isOr: false` (line 24), so `if (isOr) return new Cond
 
 `../Birko.AI.Contracts/AgentOptions.cs:70`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, already fixed** (re-checked by TASK-173 on 2026-10-18): `AgentOptions.CheckpointInterval` was removed on 2026-10-09 (CHANGELOG, TASK-527); no reference remains.
+
 The XML doc states it is the interval between self-reflection checkpoints and that 0 disables checkpoint prompts, and it round-trips through Clone/Merge/FromDictionary/ToDictionary — but a grep of Birko.AI finds no reference to it, so no checkpoint is ever injected at any value. Consumers configuring it get a silent no-op.
 
 #### SH-L145 — Unguarded GetArrayLength/GetProperty on `choices` and `tool_calls[].index` in both stream parsers
 
 `../Birko.AI/Providers/LlmProviderBase.cs:663`
+
+**Verdict: CONFIRMED, already fixed by TASK-160** (SH-M163): both stream parsers check `choices` for an Array, `delta` and `tool_calls` with `TryGetProperty`, and a missing `index` reads as 0.
 
 `toolCallDelta.GetProperty("index").GetInt32()` is the only unguarded probe in the otherwise TryGetProperty-disciplined tool-capture parser; an OpenAI-compatible server that omits `index` on a single tool call throws KeyNotFoundException out of the enumerator. Likewise `choices.GetArrayLength()` at lines 592 and 638 throws InvalidOperationException for `"choices": null`. All three sit outside the deserialize-only try/catch, so the stream dies mid-response.
 
@@ -5245,11 +5249,15 @@ The XML doc states it is the interval between self-reflection checkpoints and th
 
 `../Birko.AI/Providers/LlmProviderBase.cs:479`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). `ConnectStreamingAsync` read the error body and then reported only the status; both terminal messages now go through `ErrorMessage(…)`, which runs `ExtractErrorFromResponseBody` as the non-streaming path does. Red on HEAD.
+
 `var responseBody = await response.Content.ReadAsStringAsync(...)` is assigned and then never used: the non-retryable and exhausted-retry messages are `"{provider} API Error: {status}"` with no detail, while SendWithRetryAsync runs the same body through ExtractErrorFromResponseBody and includes the provider's message. A streaming 400 (bad model name, context overflow) therefore surfaces as a bare status code even though the explanation was fetched and thrown away.
 
 #### SH-L147 — `throw lastException` rethrows a captured exception, destroying its original stack trace
 
 `../Birko.AI/Providers/LlmProviderBase.cs:139`
+
+**Verdict: CONFIRMED, fixed** (TASK-173). The `throw lastException` tail of `SendWithRetryAsync` was unreachable for MaxRetries >= 0 (every last attempt returns or `throw;`s in place) and lost the stack when reached. It is removed; the tail throws `InvalidOperationException` as an unreachable marker.
 
 The stored exception is rethrown with `throw ex` semantics rather than ExceptionDispatchInfo.Capture(...).Throw(), so the caller sees a stack rooted at SendWithRetryAsync instead of the failing SendAsync. The line is also effectively unreachable for MaxRetries >= 0 (both catch blocks throw at the last attempt), so the dead-ish code hides rather than helps.
 
@@ -5257,11 +5265,15 @@ The stored exception is rethrown with `throw ex` semantics rather than Exception
 
 `../Birko.AI/Providers/LlmProviderBase.cs:142`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). With `MaxRetries < 0`, both retry loops skipped their body and returned (null, null) without sending anything. They now run `Math.Max(0, MaxRetries)` retries. Red on HEAD: 2 (sync, streaming).
+
 A RetryPolicy with MaxRetries = -1 skips the while body entirely and returns (null, null) with no message emitted. Callers that follow the normal pattern (`if (!response.IsSuccessStatusCode)`) NullReference, and the ones that null-check cannot distinguish "nothing was sent" from "the provider returned nothing". There is no validation of MaxRetries anywhere.
 
 #### SH-L149 — SendWithRetryAsync returns an already-disposed HttpResponseMessage on every path
 
 `../Birko.AI/Providers/LlmProviderBase.cs:71`
+
+**Verdict: CONFIRMED-NARROWER, by design** (TASK-173). `SendWithRetryAsync` returns the response disposed, deliberately (CR-M010; the body is already buffered), and the spec states it. The finding's claim that reading Headers throws is wrong: `HttpResponseMessage.Dispose` disposes only the Content, and TASK-531 reads Retry-After from these headers. Waived.
 
 `response.Dispose(); return (response, responseBody);` hands back a disposed object, so a caller reading Headers (rate-limit headers, request-id) or Content gets ObjectDisposedException — only StatusCode/IsSuccessStatusCode survive. The sibling SendStreamingWithRetryAsync returns a live response, so the two protected helpers in the same base class have opposite ownership contracts with nothing in the signature to distinguish them.
 
@@ -5269,11 +5281,15 @@ A RetryPolicy with MaxRetries = -1 skips the while body entirely and returns (nu
 
 `../Birko.AI/Providers/LlmProviderBase.cs:563`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). `ParseSseStream` required `"data: "` (culture-sensitive `StartsWith`); `data:` with the optional space omitted is now read, ordinally. Red on HEAD.
+
 `line.StartsWith("data: ")` (also culture-sensitive — no StringComparison) skips any `data:{...}` line, which the SSE grammar explicitly permits since the space is optional. Against such a provider the enumeration yields zero chunks, no error is raised, and Agent.cs:225 synthesises a response with StopReason "end_turn" and empty text — a silent empty success rather than a failure.
 
 #### SH-L151 — Dead `[DONE]` check on the flushed SSE buffer can never match
 
 `../Birko.AI/Providers/LlmProviderBase.cs:555`
+
+**Verdict: CONFIRMED, fixed** (TASK-173). The buffer was built with `AppendLine`, so the flushed `[DONE]` check could never match and every payload had a trailing newline. Data lines are now joined with `\n` per the SSE grammar, and `[DONE]` ends the stream however it is framed. Red on HEAD: 2.
 
 The buffer is filled with `buffer.AppendLine(data)` (line 570), so its ToString() always ends with a newline and `data == "[DONE]"` at line 555 is never true. Only the pre-buffer check at 567 works. Consequently a `[DONE]` frame followed by a blank line — or a residual `[DONE]` buffer at line 574 — is yielded to the chunk parser as data instead of terminating the stream.
 
@@ -5281,11 +5297,15 @@ The buffer is filled with `buffer.AppendLine(data)` (line 570), so its ToString(
 
 `../Birko.AI/Providers/LlmProviderBase.cs:42`
 
+**Verdict: REFUTED** (TASK-173). Every concrete provider checks `IsConfigured()` at the top of `SendMessageAsync` and `SendMessageStreamingAsync`: the seven HTTP providers in their own code, and the eight OpenAI-compatible ones through `OpenAiCompatibleProviderBase`. So an unconfigured provider returns `NotConfigured` and sends no request. The abstract method is the template hook those checks call; the base's HTTP helpers are not where it belongs.
+
 Every provider is forced to implement `protected abstract bool IsConfigured()`, yet a grep of Birko.AI shows no call site: neither SendWithRetryAsync nor SendStreamingWithRetryAsync checks it, and NotConfigured() is only reachable if a derived provider remembers to call both itself. An unconfigured provider therefore issues a real HTTP request with a missing API key and surfaces a 401 instead of the "NotConfigured" stop reason the agent has a dedicated branch for.
 
 #### SH-L153 — Request builder matches block types case-insensitively while the agent dispatches case-sensitively
 
 `../Birko.AI/Providers/LlmProviderBase.cs:233`
+
+**Verdict: CONFIRMED, fixed** (TASK-173). `BuildOpenAiStyleMessages` matched `Type?.ToLowerInvariant()` while `Agent` dispatches ordinally, so a `Tool_Use` block was sent as a call the agent never ran. The builder now matches ordinally, as the agent and the Claude builder do. Red on HEAD.
 
 BuildOpenAiStyleMessages compares `b.Type?.ToLowerInvariant()` against "text"/"tool_use", but Agent.HandleToolUse (Agent.cs:326) and the end_turn branch (Agent.cs:299) use ordinal `b.Type == "tool_use"` / `== "text"`. A block typed "Tool_Use" is serialized into the request as a tool call yet never executed by the agent, so the model sees its call echoed back with no result.
 
@@ -5293,11 +5313,15 @@ BuildOpenAiStyleMessages compares `b.Type?.ToLowerInvariant()` against "text"/"t
 
 `../Birko.AI/Providers/LlmProviderBase.cs:301`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). A message without a role was sent as `"role": null`, and the API refused the whole request. `BuildOpenAiStyleMessages` now throws `InvalidOperationException` naming the message's position. Red on HEAD.
+
 `list.Add(new { role = m.Role, content })` passes `string?` straight through with no default, so a Message constructed without Role (the property is nullable and has no default) serializes as `"role": null` and the provider rejects the whole request with a 400 that names no offending turn. Content is defaulted (`m.Content ?? ""` at line 228) but Role is not.
 
 #### SH-L155 — Cancellation mid-tool-batch discards completed tool results and leaves a dangling tool_use turn
 
 `../Birko.AI/Agents/Agent.cs:328`
+
+**Verdict: REFUTED as described** (TASK-173). The conversation of a cancelled run never reaches the caller: `RunAsync` builds its own list, and `ContinueAsync` / `ResumeAsync` copy theirs, so no caller holds a list ending in an unanswered tool_use. A completed tool's work is recorded where it can be: `ToolCallFinished` reaches the hooks before the next tool starts.
 
 ThrowIfCancellationRequested at the top of the per-block loop throws after earlier tools in the same batch already ran (files written, commands executed) but before line 352 appends their results. The conversation returned to the caller — or reused via ContinueAsync — ends with an assistant turn carrying tool_use blocks and no matching tool_result, which providers reject, and the completed work is not recorded anywhere.
 
@@ -5305,11 +5329,15 @@ ThrowIfCancellationRequested at the top of the per-block loop throws after earli
 
 `../Birko.AI/Agents/Agent.cs:208`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). `OnLlmResponseReceived` was raised as soon as `SendMessageStreamingAsync` returned: before any token, for a stream that failed, and again by the sync fallback. It is now raised after the stream completes. Red on HEAD: a failed stream with a sync fallback counted 2.
+
 Its XML doc (AgentOptions.cs:73) says "invoked after each successful LLM response", but in the streaming loop it is invoked immediately after SendMessageStreamingAsync returns — before GetStreamAsync is even called and before the `streamingResponse.Error` check at line 210, so it fires for a provider that does not support streaming at all. The sync fallback then fires it again for the same logical turn, double-counting for any cost/usage tracker hung off it.
 
 #### SH-L157 — No per-tool try/catch: one throwing tool aborts the entire agent run
 
 `../Birko.AI/Agents/Agent.cs:335`
+
+**Verdict: REFUTED, by design** (TASK-527, re-read by TASK-173). The spec requires a tool's exception to propagate out of the run, after `OnToolCallFinishedAsync` has observed it when hooks are set. A failure a tool wants the model to see is returned as an `Error:` string, which TASK-160 made uniform.
 
 `await tool.ExecuteAsync(...)` is unguarded, so a custom tool added via AddTool that throws (the built-ins all catch internally, which is convention only — Tool declares no such contract) propagates out of RunAsync, discarding the whole conversation and any results collected in the current batch. The framework's own error channel (a string starting with "Error") is never reached.
 
@@ -5317,11 +5345,15 @@ Its XML doc (AgentOptions.cs:73) says "invoked after each successful LLM respons
 
 `../Birko.AI/Agents/Agent.cs:85`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). `AddTool` dereferenced a null tool, and `AddTool` / `RemoveTool` mutated the list that a call in flight had been given. Both now refuse null and are copy-on-write, so a change applies from the next model call. Red on HEAD: 2.
+
 AddTool dereferences `tool` before any null check (NullReferenceException on tool.MessageCallback rather than ArgumentNullException), and both AddTool and RemoveTool mutate the same List<Tool> that an in-flight RunAsync passes to the provider and enumerates at line 333 — a mutation during a run throws InvalidOperationException out of the LINQ scan or changes the advertised tool set mid-conversation.
 
 #### SH-L159 — RunAsync returns the same List<Message> shape for success, LLM error, not-configured and exhaustion
 
 `../Birko.AI/Agents/Agent.cs:262`
+
+**Verdict: CONFIRMED, spawned as [[TASK-660]]** (TASK-173). Telling the outcomes apart changes the public shape of `RunAsync`; the options are listed there. TASK-531's `LlmResponse.Failure` already holds the cause where the run ends.
 
 Every terminal path in HandleResponse returns true and RunWithHistorySyncAsync returns `conversation`; there is no status, exception or flag. A caller cannot distinguish a completed task from "provider not configured", "LLM request failed" or "max iterations reached" except by string-matching the injected "Error: …" text or counting messages — and the unknown-stop-reason branch (line 314) injects nothing at all when Verbose is false.
 
@@ -5329,11 +5361,15 @@ Every terminal path in HandleResponse returns true and RunWithHistorySyncAsync r
 
 `../Birko.AI.Contracts/AgentOptions.cs:16`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). With `MaxIterations <= 0` the run returned the seed conversation with no model call and no signal. `RunLoopAsync` now throws `ArgumentOutOfRangeException`. Red on HEAD: 2.
+
 Nothing validates MaxIterations, and FromDictionary happily parses "0" or "-1". The for loop at Agent.cs:262 then never executes: RunAsync returns the seed conversation, having made no LLM call, and the only signal is a "Maximum iterations (0) reached" message that is suppressed when Verbose is false. To the caller this is indistinguishable from a task that produced no output.
 
 #### SH-L161 — Merge's parameter is non-nullable yet the body null-checks it (banned-warning annotation gap)
 
 `../Birko.AI.Contracts/AgentOptions.cs:97`
+
+**Verdict: CONFIRMED, fixed** (TASK-173): `Merge(AgentOptions? other)`, matching its null check. An annotation only; no test.
 
 `public void Merge(AgentOptions other)` is declared non-nullable but line 99 is `if (other == null) return;`, so the method is runtime-null-tolerant while the signature tells callers null is illegal. Under the project's no-nullable-warnings rule the parameter should be `AgentOptions?`. Callers passing a `AgentOptions?` get a CS8604 they will suppress with `!`.
 
@@ -5341,11 +5377,15 @@ Nothing validates MaxIterations, and FromDictionary happily parses "0" or "-1". 
 
 `../Birko.AI.Contracts/AgentOptions.cs:135`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). `FromDictionary` copied an empty `workingDirectory` over the `"./"` default, and dereferenced a null `config`. It now skips a blank value and throws `ArgumentNullException`. Red on HEAD.
+
 workingDirectory is the one field copied with no validation (`if (config.TryGetValue("workingDirectory", out var workingDirectory)) options.WorkingDirectory = workingDirectory;`), so `{"workingDirectory":""}` overwrites the "./" default with "". Every tool then calls Path.GetFullPath("") or Path.Combine("", …) and returns "Error reading file: The path is empty." for every operation — while Merge (line 105) guards the identical assignment with IsNullOrEmpty. There is also no null guard on `config` itself.
 
 #### SH-L163 — LlmStreamingResponse has no disposal guard or finalizer, and SuppressFinalize is a no-op
 
 `../Birko.AI.Contracts/Models/LlmStreamingResponse.cs:57`
+
+**Verdict: REFUTED** (TASK-173). `GC.SuppressFinalize` in `Dispose` is the recommended pattern (CA1816) whether or not the type has a finalizer, so a derived type that adds one is covered. The leak path cited (the agent's early return on `Error`) runs inside the agent's `await using`. No defect.
 
 Dispose() relies on nulling Resource for idempotence (fine) but the type declares no finalizer, so GC.SuppressFinalize is dead, and a response that is never disposed — any provider path that returns before the agent's `await using`, e.g. the Error-set early return at Agent.cs:213 constructed outside a using — leaks the HTTP connection until the HttpResponseMessage itself is finalized. There is also no ObjectDisposedException on later GetStreamAsync use.
 
@@ -5353,11 +5393,15 @@ Dispose() relies on nulling Resource for idempotence (fine) but the type declare
 
 `../Birko.AI/Factories/AgentFactory.cs:45`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). When an alias's target was missing, `Create`'s message named only the alias. It now names the alias and its target. A single alias hop is the documented contract and is kept. Red on HEAD.
+
 RegisterAlias accepts any primaryType without checking _factories, and ResolveAgentType does a single lookup. So RegisterAlias("docs","writer") with no "writer" factory registers cleanly and fails only at Create, with a message naming "docs" (line 78) rather than the missing "writer" — pointing the operator at the wrong name. IsRegistered("docs") also returns false with no hint that the alias itself exists.
 
 #### SH-L165 — ResolveAgentType throws ArgumentNullException from a Dictionary lookup on a null agentType
 
 `../Birko.AI/Factories/AgentFactory.cs:54`
+
+**Verdict: CONFIRMED, fixed** (TASK-173). `Create(…, null)` threw `ArgumentNullException("key")` from the alias lookup. It now throws `ArgumentException` naming `agentType`, and `ResolveAgentType` guards its argument. Red on HEAD.
 
 `_aliases.TryGetValue(agentType, …)` throws ArgumentNullException("key") when agentType is null, so Create(provider, options, null!) surfaces an exception naming "key" instead of the ArgumentException naming the registered types that the guarded paths produce. Register/RegisterAlias/IsRegistered all guard with IsNullOrWhiteSpace; Create and ResolveAgentType do not.
 
@@ -5365,11 +5409,15 @@ RegisterAlias accepts any primaryType without checking _factories, and ResolveAg
 
 `../Birko.AI/Tools/RunCommandTool.cs:64`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). On a timeout, `run_command` returned only "Process timed out". `ProcessRunner` (TASK-534) drains what the process printed, and that output is now appended. Red on HEAD.
+
 The timeout catch kills the tree and returns "Error: Process timed out" without awaiting stdoutTask/stderrTask, so everything the process printed before the timeout — usually the most diagnostic part (a build log up to the hang) — is thrown away, and the two abandoned ReadToEndAsync tasks can fault after the fact as unobserved task exceptions.
 
 #### SH-L167 — A negative timeout_seconds throws after the process starts, orphaning the child
 
 `../Birko.AI/Tools/RunCommandTool.cs:57`
+
+**Verdict: CONFIRMED, already fixed by TASK-534**: `RunCommandTool` refuses a non-positive `timeout_seconds` before anything starts. TASK-173 adds the tests (pins: the marker file is never written).
 
 `cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds))` throws ArgumentOutOfRangeException for a negative value (and 0 cancels instantly). The throw happens after Process.Start, and the outer catch returns "Error running command: …" without killing the process — `using var proc` disposes the wrapper, not the child — so a model-supplied `timeout_seconds: -1` leaves a detached process running for the lifetime of the host.
 
@@ -5377,11 +5425,15 @@ The timeout catch kills the tree and returns "Error: Process timed out" without 
 
 `../Birko.AI/Tools/RunCommandTool.cs:14`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). The schema said "shell command" but nothing runs a shell. The description now says so and shows how to run one. A text change only; no test.
+
 The schema description says "Executable or shell command to run" while FileName is set to the raw `command` with UseShellExecute = false, so shell builtins, pipes and redirection (`dir`, `cd x && y`, `a | b`) fail with a Win32Exception surfaced as "Error running command: The system cannot find the file specified." The model is told a capability the tool does not have and burns iterations rediscovering it.
 
 #### SH-L169 — ask_user leaves the timeout Task.Delay running for its full duration when the prompt wins
 
 `../Birko.AI/Tools/AskUserTool.cs:53`
+
+**Verdict: CONFIRMED, fixed** (TASK-173). When the prompt won, the timeout `Task.Delay` stayed armed for the rest of `PromptTimeout`. It now runs on a linked token that is cancelled once the prompt answers. No observable output to assert; fixed by inspection.
 
 timeoutTask is created directly from Task.Delay with no CancellationTokenSource, so when promptTask wins the race the timer stays armed for the remaining PromptTimeout (300s by default). Every ask_user call leaves a live timer plus its captured continuation until it fires — unbounded for an interactive agent that asks repeatedly.
 
@@ -5389,11 +5441,15 @@ timeoutTask is created directly from Task.Delay with no CancellationTokenSource,
 
 `../Birko.AI/Tools/DisplayTextTool.cs:31`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). `display_text` said "Text displayed successfully" when no callback was attached; it now returns an `Error:` string. With a callback it still succeeds (pin). Red on HEAD.
+
 SendMessage is a no-op when MessageCallback is null (Tool.cs:19), yet the tool unconditionally returns "Text displayed successfully". An agent constructed with messageCallback: null therefore tells the model its output reached the user when it went nowhere — the same silent-sink problem applies to ask_user's "prompt_console" emission at AskUserTool.cs:67.
 
 #### SH-L171 — write_file/edit_file/append_to_file skip the leading-'/' normalization read_file and list_files apply
 
 `../Birko.AI/Tools/WriteFileTool.cs:34`
+
+**Verdict: CONFIRMED, fixed** (TASK-173). Write, edit and append used a bare `Path.Combine`, so `/src/x.cs` was denied while read_file read it. One producer, `WorkspacePath.Resolve`, now serves read, write, edit and append. Red on HEAD.
 
 These three do a bare `Path.Combine(workingDirectory, filePath)` with no GetFullPath and no leading-slash strip, whereas ReadFileTool.cs:29 and ListFilesTool.cs:35 strip a single '/' and treat the path as workspace-relative. So `file_path: "/src/x.cs"` is read successfully by read_file but denied by write_file (Combine discards the workspace for a rooted path, and IsPathSafe then rejects it) — identical model intent, opposite outcome, with an access-denied message that misdescribes the cause.
 
@@ -5401,17 +5457,23 @@ These three do a bare `Path.Combine(workingDirectory, filePath)` with no GetFull
 
 `../Birko.AI/Tools/SearchCodeTool.cs:47`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). An unreadable subdirectory aborted `search_code` (and `list_files`) and discarded the matches found. Both now enumerate with `IgnoreInaccessible`. The test sets a Unix mode, so it runs on CI's Linux and returns early on Windows.
+
 Directory.EnumerateFiles with AllDirectories throws when it hits an unreadable subdirectory. The per-file guard only wraps File.ReadAllLines (line 61), so the enumeration throw escapes to the outer catch and the tool returns "Error searching code: Access to the path … is denied" with every match already collected in `results` thrown away. ListFilesTool.cs:47 has the same unprotected enumeration.
 
 #### SH-L173 — search_code returns the empty string for both "no matches" and a scan that examined nothing
 
 `../Birko.AI/Tools/SearchCodeTool.cs:78`
 
+**Verdict: CONFIRMED, fixed** (TASK-173). "" meant both "no match" and "nothing searched". It is now `No matches for '…' in N file(s) searched (pattern).` Red on HEAD: 2.
+
 `string.Join(NewLine, results)` on an empty list yields "" with no explanatory text, so the model cannot distinguish "the query genuinely does not occur" from "the glob matched no files" (a `pattern` of "*.cs" in a directory with none) or "every file was skipped as binary". Every sibling tool has an explicit empty case — list_files returns "No files found in: …".
 
 #### SH-L174 — list_files null-checks a non-nullable input parameter, diverging from every other tool
 
 `../Birko.AI/Tools/ListFilesTool.cs:23`
+
+**Verdict: CONFIRMED, fixed** (TASK-173): `list_files` no longer null-checks its non-nullable `input`, like every other tool. No test.
 
 `input != null && input.TryGetValue(...)` guards a parameter declared `Dictionary<string, object> input` on Tool.ExecuteAsync, so the signature and the body disagree (the annotation gap the project's no-CS86xx rule targets). It is also the only tool that tolerates a null dictionary — the other eight dereference it immediately — so the same caller mistake is silently absorbed by one tool and thrown by the rest.
 

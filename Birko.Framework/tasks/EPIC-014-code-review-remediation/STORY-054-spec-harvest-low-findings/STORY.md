@@ -13,7 +13,9 @@ finding-ids: SH-L001 … SH-L391
 
 ## Progress
 
-**0 / 391 closed.** All are unverified harvester claims. Per-finding detail is in
+**31 / 391 closed by this story's tasks.** All 31 of `llm-provider-and-agents` ([[TASK-173]], done 2026-10-18):
+27 confirmed (1 narrower, `SH-L149`, waived by design), 4 refuted (`SH-L152`, `SH-L155`, `SH-L157`, `SH-L163`); 22 fixed there,
+`SH-L144` / `SH-L145` / `SH-L167` found fixed earlier, `SH-L159` spawned as [[TASK-660]]. The rest are unverified harvester claims. Per-finding detail is in
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md) § Low severity.
 
 ## User story

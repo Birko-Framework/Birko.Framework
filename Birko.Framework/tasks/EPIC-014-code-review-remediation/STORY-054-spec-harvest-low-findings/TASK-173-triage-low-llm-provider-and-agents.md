@@ -2,7 +2,7 @@
 id: TASK-173
 parent: STORY-054
 feature: FEATURE-014
-# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+# status: done | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 status: todo
 priority: P2
 assignee: ai
@@ -47,18 +47,18 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 31 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 31 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
-- [ ] Any behavioural fix is followed by `/specs regen llm-provider-and-agents`, with the spec diff reviewed as the change's
+- [x] Any behavioural fix is followed by `/specs regen llm-provider-and-agents`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
 
 ## Out of scope
 
@@ -73,12 +73,44 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A — fully covered by automated tests: a library contract (provider base, agent loop, factory, tools) with no UI
+surface; every behavioural fix has a red-verified test.
 
-## Implementation plan
+## Resolution (2026-10-18)
 
-_Populated by `/tasks plan TASK-173` — leave empty until then._
+All 31 were checked against the current code (after TASK-530–535 and TASK-160). Verdicts with the traced code are in
+the findings doc.
+
+**Outcome:** 27 confirmed (1 narrower), 4 refuted (`SH-L152`, `SH-L155`, `SH-L157` by design, `SH-L163`).
+- **22 fixed here.**
+- 3 found fixed earlier: `SH-L144` (TASK-527), `SH-L145` (TASK-160), `SH-L167` (TASK-534).
+- `SH-L149` waived by design: the response is disposed on purpose, and its headers stay readable.
+- `SH-L159` spawned as [[TASK-660]]: telling a run's outcomes apart changes `RunAsync`'s public shape.
+
+Fixed in groups:
+- **Provider base** (L146–L148, L150, L151, L153, L154): a negative `MaxRetries` still sends once, and the unreachable
+  `throw lastException` is gone. A streaming failure's message carries the provider's explanation. SSE parsing
+  follows the grammar (`data:` without the space, data lines joined with `
+`, `[DONE]` however framed). Block types
+  are matched exactly, as the agent matches them. A message with no role is refused, naming its position.
+- **Agent and factory** (L156, L158, L160, L164, L165): `OnLlmResponseReceived` fires once per completed response.
+  `AddTool` / `RemoveTool` refuse null and are copy-on-write. Fewer than one iteration is refused. A missing alias
+  target is named, and a null type is an `ArgumentException`.
+- **Options and tools** (L161, L162, L166, L168–L174):
+  - `Merge(AgentOptions?)`; `FromDictionary` skips a blank working directory and refuses a null config.
+  - A timed-out command returns what it printed; `run_command`'s description says no shell runs it.
+  - The ask_user timer is cancelled once the prompt answers.
+  - display_text without a callback says so.
+  - One `WorkspacePath.Resolve` serves the four file tools.
+  - search_code and list_files skip inaccessible directories, and "no matches" is said with a file count.
+  - `list_files` no longer null-checks its input.
+
+**Red / pin split:** 25 new tests.
+- 21 failed on HEAD: tools/options 6, agent 7, provider base 8.
+- 4 pass either way and are pins: `SH-L167` ×2 (already fixed), display_text with a callback, and `SH-L172`, which
+  returns early on Windows and runs on CI's Linux.
+- No test covers L161, L168, L169 or L174 (an annotation, a text, a timer, a null check); each is fixed by inspection.
+
+Regression: every importer of AI.Contracts / AI / AI.Providers (AI 75, Agents 70, Providers 246, plus Orchestration,
+Resilience, Resilience.Data and VersionControl.Git; see the commit). The spec was updated by hand at each affected
+requirement, including a new one for path resolution.

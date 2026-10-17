@@ -25,6 +25,10 @@ namespace Birko.AI.Tools
                 if (string.IsNullOrWhiteSpace(text))
                     return Task.FromResult("Error: text parameter is required");
 
+                // SH-L170: with no callback the text goes nowhere, and saying it was displayed misinforms the model.
+                if (MessageCallback == null)
+                    return Task.FromResult("Error: no output is attached, so the text was not displayed.");
+
                 var displayMsg = string.IsNullOrWhiteSpace(title) ? text : $"{title}\n{text}";
                 SendMessage("display", displayMsg ?? "");
 

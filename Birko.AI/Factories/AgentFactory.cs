@@ -52,6 +52,7 @@ namespace Birko.AI.Factories
         /// </summary>
         public static string ResolveAgentType(string agentType)
         {
+            ArgumentNullException.ThrowIfNull(agentType);
             if (_aliases.TryGetValue(agentType, out var primaryType))
                 return primaryType;
             return agentType;
@@ -71,12 +72,19 @@ namespace Birko.AI.Factories
         {
             if (llmProvider == null)
                 throw new ArgumentNullException(nameof(llmProvider));
+            // SH-L165: a null type threw ArgumentNullException("key") from the alias lookup.
+            if (string.IsNullOrWhiteSpace(agentType))
+                throw new ArgumentException("Agent type cannot be empty", nameof(agentType));
 
             options ??= new AgentOptions();
             var resolved = ResolveAgentType(agentType);
 
             if (!_factories.TryGetValue(resolved, out var factory))
-                throw new ArgumentException($"Agent type '{agentType}' is not registered. Available: {string.Join(", ", _factories.Keys)}");
+            {
+                // SH-L164: an alias whose target is missing named only the alias, pointing at the wrong name.
+                var name = resolved == agentType ? $"'{agentType}'" : $"'{agentType}' (an alias of '{resolved}')";
+                throw new ArgumentException($"Agent type {name} is not registered. Available: {string.Join(", ", _factories.Keys)}", nameof(agentType));
+            }
 
             return factory(llmProvider, options);
         }

@@ -89,7 +89,7 @@ namespace Birko.AI
             };
         }
 
-        public void Merge(AgentOptions other)
+        public void Merge(AgentOptions? other)
         {
             if (other == null) return;
 
@@ -118,6 +118,7 @@ namespace Birko.AI
 
         public static AgentOptions FromDictionary(Dictionary<string, string> config)
         {
+            ArgumentNullException.ThrowIfNull(config);
             var options = new AgentOptions();
 
             // Use TryParse throughout so a malformed config value (e.g. maxIterations="ten")
@@ -131,7 +132,8 @@ namespace Birko.AI
                 options.MaxIterationsPerStep = maxIterationsPerStepVal;
             if (config.TryGetValue("verbose", out var verbose) && bool.TryParse(verbose, out var verboseVal))
                 options.Verbose = verboseVal;
-            if (config.TryGetValue("workingDirectory", out var workingDirectory))
+            // SH-L162: an empty value replaced the "./" default with "", and every file tool then failed.
+            if (config.TryGetValue("workingDirectory", out var workingDirectory) && !string.IsNullOrWhiteSpace(workingDirectory))
                 options.WorkingDirectory = workingDirectory;
             if (config.TryGetValue("promptTimeout", out var promptTimeout) && int.TryParse(promptTimeout, out var promptTimeoutVal))
                 options.PromptTimeout = promptTimeoutVal;

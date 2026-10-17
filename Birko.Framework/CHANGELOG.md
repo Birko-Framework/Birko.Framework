@@ -61,6 +61,13 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
 
+## 2026-10-17 — The distributed event bus gives each message its own DI scope
+
+[[TASK-566]]. Measured: a handler with a scoped dependency threw on every delivery under `ValidateScopes`, and at startup
+in `AutoSubscriber`; otherwise every message shared one root-owned dependency that was never disposed. Each delivered
+message now resolves its handlers from its own scope, disposed after dispatch, as `InProcessEventBus` does (TASK-565).
+Discovery asks `IServiceProviderIsService` and builds no handler.
+
 ## 2026-10-17 — Spec-regen cleanup: ambiguous fields, address headers, index settings
 
 [[TASK-651]]. Fixed from the 2026-10-16 spec regeneration. A `DictionaryRuleContext` field matching two keys only ignoring case now throws instead of taking the first. `RuleSet.Rules` copies the list it is given, and `RuleGroup.Rules = null` is refused. `GetClientIpAddress` returns only a parsed address: `unknown` in X-Forwarded-For had been returned as the IP. An ES `CopyData` with `{}` is a plain copy. `ByName("guid")` is the Guid key. ES index settings refuse negative numbers. Mongo text-index fields compare as a set. `[ViewField]` is not a column on a mapped model.

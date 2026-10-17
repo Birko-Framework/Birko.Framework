@@ -51,10 +51,11 @@ namespace Birko.AI.Providers
             CancellationToken cancellationToken = default)
         {
             var policy = RetryPolicy;
+            // SH-L148: a negative MaxRetries skipped the loop and returned (null, null) with nothing sent.
+            var maxRetries = Math.Max(0, policy.MaxRetries);
             var attempt = 0;
-            Exception? lastException = null;
 
-            while (attempt <= policy.MaxRetries)
+            while (attempt <= maxRetries)
             {
                 try
                 {
@@ -83,7 +84,7 @@ namespace Birko.AI.Providers
                         return (response, responseBody);
                     }
 
-                    if (attempt >= policy.MaxRetries)
+                    if (attempt >= maxRetries)
                     {
                         var errorDetail = ExtractErrorFromResponseBody(responseBody);
                         var errorMsg = errorDetail != null
@@ -98,7 +99,7 @@ namespace Birko.AI.Providers
                     var retryAfter = GetRetryAfterDelay(response);
                     var delay = retryAfter ?? policy.GetDelay(attempt + 1);
 
-                    SendMessage("warning", $"{providerName}: {response.StatusCode}, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1})");
+                    SendMessage("warning", $"{providerName}: {response.StatusCode}, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{maxRetries + 1})");
 
                     response.Dispose();
                     await Task.Delay(delay, cancellationToken);
@@ -106,40 +107,36 @@ namespace Birko.AI.Providers
                 }
                 catch (HttpRequestException ex)
                 {
-                    lastException = ex;
-                    if (attempt >= policy.MaxRetries)
+                    if (attempt >= maxRetries)
                     {
                         SendMessage("error", $"{providerName}: Network error after {attempt + 1} attempts: {ex.Message}");
                         throw;
                     }
 
                     var delay = policy.GetDelay(attempt + 1);
-                    SendMessage("warning", $"{providerName}: Network error, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1}): {ex.Message}");
+                    SendMessage("warning", $"{providerName}: Network error, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{maxRetries + 1}): {ex.Message}");
 
                     await Task.Delay(delay, cancellationToken);
                     attempt++;
                 }
                 catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
                 {
-                    lastException = ex;
-                    if (attempt >= policy.MaxRetries)
+                    if (attempt >= maxRetries)
                     {
                         SendMessage("error", $"{providerName}: Timeout after {attempt + 1} attempts");
                         throw;
                     }
 
                     var delay = policy.GetDelay(attempt + 1);
-                    SendMessage("warning", $"{providerName}: Timeout, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1})");
+                    SendMessage("warning", $"{providerName}: Timeout, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{maxRetries + 1})");
 
                     await Task.Delay(delay, cancellationToken);
                     attempt++;
                 }
             }
 
-            if (lastException != null)
-                throw lastException;
-
-            return (null, null);
+            // SH-L147: every last attempt returns or rethrows in place (`throw;`), so the loop cannot fall through.
+            throw new InvalidOperationException("SendWithRetryAsync ended without a result.");
         }
 
         private static bool IsRetryableStatusCode(HttpStatusCode statusCode)
@@ -223,15 +220,21 @@ namespace Birko.AI.Providers
         protected static List<object> BuildOpenAiStyleMessages(IEnumerable<Message> messages, string systemPrompt)
         {
             var list = new List<object> { new { role = "system", content = systemPrompt } };
+            var position = -1;
             foreach (var m in messages)
             {
+                position++;
+                // SH-L154: a turn with no role went out as "role": null and the API refused the whole request, naming no turn.
+                if (string.IsNullOrEmpty(m.Role))
+                    throw new InvalidOperationException($"Message {position} has no role.");
                 object? content = m.Content ?? "";
 
                 if (m.Content is IEnumerable<ContentBlock> blocks)
                 {
                     var blocksList = blocks.ToList();
-                    var textBlocks = blocksList.Where(b => b.Type?.ToLowerInvariant() == "text").ToList();
-                    var toolUseBlocks = blocksList.Where(b => b.Type?.ToLowerInvariant() == "tool_use").ToList();
+                    // SH-L153: matched exactly, as Agent dispatches them; a "Tool_Use" block was sent as a call the agent never ran.
+                    var textBlocks = blocksList.Where(b => b.Type == "text").ToList();
+                    var toolUseBlocks = blocksList.Where(b => b.Type == "tool_use").ToList();
 
                     if (m.Role == "assistant" && toolUseBlocks.Any())
                     {
@@ -561,6 +564,14 @@ namespace Birko.AI.Providers
             return false;
         }
 
+        // SH-L146: a failed streaming request's message carries the provider's explanation, as the non-streaming one does.
+        private static string ErrorMessage(string providerName, HttpStatusCode status, string? body, int? attempts)
+        {
+            var detail = ExtractErrorFromResponseBody(body);
+            var after = attempts is { } n ? $" after {n} attempts" : "";
+            return detail != null ? $"{providerName} API Error{after} ({status}): {detail}" : $"{providerName} API Error{after}: {status}";
+        }
+
         /// <summary>A streaming response for a request that failed before any stream existed.</summary>
         protected static LlmStreamingResponse StreamingFailure(string message, LlmFailure failure) => new()
         {
@@ -594,9 +605,10 @@ namespace Birko.AI.Providers
             CancellationToken cancellationToken = default)
         {
             var policy = RetryPolicy;
+            var maxRetries = Math.Max(0, policy.MaxRetries);
             var attempt = 0;
 
-            while (attempt <= policy.MaxRetries)
+            while (attempt <= maxRetries)
             {
                 try
                 {
@@ -612,15 +624,15 @@ namespace Birko.AI.Providers
 
                     if (!IsRetryableStatusCode(response.StatusCode))
                     {
-                        SendMessage("error", $"{providerName} API Error: {response.StatusCode}");
+                        SendMessage("error", ErrorMessage(providerName, response.StatusCode, responseBody, null));
                         var failure = ClassifyResponse(response, responseBody);
                         response.Dispose();
                         return new StreamingConnection(null, failure);
                     }
 
-                    if (attempt >= policy.MaxRetries)
+                    if (attempt >= maxRetries)
                     {
-                        SendMessage("error", $"{providerName} API Error after {attempt + 1} attempts: {response.StatusCode}");
+                        SendMessage("error", ErrorMessage(providerName, response.StatusCode, responseBody, attempt + 1));
                         var failure = ClassifyResponse(response, responseBody);
                         response.Dispose();
                         return new StreamingConnection(null, failure);
@@ -629,7 +641,7 @@ namespace Birko.AI.Providers
                     var retryAfter = GetRetryAfterDelay(response);
                     var delay = retryAfter ?? policy.GetDelay(attempt + 1);
 
-                    SendMessage("warning", $"{providerName}: {response.StatusCode}, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1})");
+                    SendMessage("warning", $"{providerName}: {response.StatusCode}, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{maxRetries + 1})");
 
                     response.Dispose();
                     await Task.Delay(delay, cancellationToken);
@@ -637,28 +649,28 @@ namespace Birko.AI.Providers
                 }
                 catch (HttpRequestException ex)
                 {
-                    if (attempt >= policy.MaxRetries)
+                    if (attempt >= maxRetries)
                     {
                         SendMessage("error", $"{providerName}: Network error after {attempt + 1} attempts: {ex.Message}");
                         return new StreamingConnection(null, ClassifyException(ex));
                     }
 
                     var delay = policy.GetDelay(attempt + 1);
-                    SendMessage("warning", $"{providerName}: Network error, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1}): {ex.Message}");
+                    SendMessage("warning", $"{providerName}: Network error, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{maxRetries + 1}): {ex.Message}");
 
                     await Task.Delay(delay, cancellationToken);
                     attempt++;
                 }
                 catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
                 {
-                    if (attempt >= policy.MaxRetries)
+                    if (attempt >= maxRetries)
                     {
                         SendMessage("error", $"{providerName}: Timeout after {attempt + 1} attempts");
                         return new StreamingConnection(null, new LlmFailure(LlmFailureKind.Timeout));
                     }
 
                     var delay = policy.GetDelay(attempt + 1);
-                    SendMessage("warning", $"{providerName}: Timeout, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1})");
+                    SendMessage("warning", $"{providerName}: Timeout, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{maxRetries + 1})");
 
                     await Task.Delay(delay, cancellationToken);
                     attempt++;
@@ -673,40 +685,36 @@ namespace Birko.AI.Providers
         /// </summary>
         protected static async IAsyncEnumerable<string> ParseSseStream(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            // An event's data lines are joined with "\n" and the event ends at a blank line (SSE). SH-L150: the space after
+            // "data:" is optional; frames without it were dropped. SH-L151: the buffer was built with AppendLine, so the
+            // "[DONE]" check on a flushed event could never match.
             using var reader = new StreamReader(stream);
-            var buffer = new System.Text.StringBuilder();
+            var data = new List<string>();
 
             string? line;
             while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
             {
-                if (string.IsNullOrEmpty(line))
+                if (line.Length == 0)
                 {
-                    if (buffer.Length > 0)
-                    {
-                        var data = buffer.ToString();
-                        buffer.Clear();
-
-                        if (data == "[DONE]")
-                            yield break;
-
-                        yield return data;
-                    }
+                    if (data.Count == 0) continue;
+                    var payload = string.Join("\n", data);
+                    data.Clear();
+                    if (payload == "[DONE]") yield break;
+                    yield return payload;
                     continue;
                 }
 
-                if (line.StartsWith("data: "))
-                {
-                    var data = line.Substring(6);
-
-                    if (data == "[DONE]")
-                        yield break;
-
-                    buffer.AppendLine(data);
-                }
+                if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
+                var value = line.Length > 5 && line[5] == ' ' ? line[6..] : line[5..];
+                if (data.Count == 0 && value == "[DONE]") yield break;
+                data.Add(value);
             }
 
-            if (buffer.Length > 0)
-                yield return buffer.ToString();
+            if (data.Count > 0)
+            {
+                var last = string.Join("\n", data);
+                if (last != "[DONE]") yield return last;
+            }
         }
 
         /// <summary>

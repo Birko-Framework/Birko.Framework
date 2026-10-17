@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-18 00:38. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-18 00:46. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -17,12 +17,12 @@ which this regeneration never touches._
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 25      | 351   |
+| done         | 2     | 25      | 352   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 108× P2 · 41× P3.
+`todo` by priority: 9× P1 · 107× P2 · 42× P3.
 
 ## In progress now
 
@@ -168,7 +168,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (210/272 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (211/273 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -427,8 +427,8 @@ _None._
     - [x] [TASK-656](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-656-mysql-and-sql-server-drop-datetime-precision.md) MySQL stores a DateTime to the second, and SQL Server to about 3 ms (P2) · FEATURE-014
     - [x] [TASK-658](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-658-ravendb-unit-of-work-stays-active-after-a-failed-savechanges.md) The RavenDB unit of work stays active after a failed `SaveChanges`, unlike every other backend (P2) · FEATURE-014
     - [x] [TASK-659](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-659-cosmos-renamefield-depends-on-the-callers-serializer.md) Cosmos `RenameField` fails on a `Database` whose client uses the SDK's default serializer (P2) · FEATURE-014
-  - STORY-054 Spec-harvest — low findings — planned (0/24 done)
-    - [ ] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
+  - STORY-054 Spec-harvest — low findings — planned (1/25 done)
+    - [x] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
     - [ ] [TASK-174](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-174-triage-low-event-bus-and-messaging.md) Triage the 29 low spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014
     - [ ] [TASK-175](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-175-triage-low-background-jobs.md) Triage the 24 low spec-harvest findings in `background-jobs` (P2) · FEATURE-014
     - [ ] [TASK-176](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-176-triage-low-security-and-authorization.md) Triage the 23 low spec-harvest findings in `security-and-authorization` (P2) · FEATURE-014
@@ -452,6 +452,7 @@ _None._
     - [ ] [TASK-194](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-194-triage-low-entity-localization.md) Triage the 10 low spec-harvest findings in `entity-localization` (P2) · FEATURE-014
     - [ ] [TASK-326](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-326-fix-low-core-model-contracts.md) Fix the 1 verified low finding in `core-model-contracts` (P2) · FEATURE-014
     - [ ] [TASK-327](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-327-fix-low-unit-of-work-and-transactions.md) Fix the 3 verified low findings in `unit-of-work-and-transactions` (P2) · FEATURE-014
+    - [ ] [TASK-660](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-660-agent-run-outcome-is-indistinguishable.md) A run's outcome cannot be told apart: success, LLM failure, not configured and exhaustion all return a conversation (P3) · FEATURE-014
   - STORY-055 Spec-harvest — the three unrated areas — done (1/1 done) (done)
     - [x] [TASK-195](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/TASK-195-rate-id-and-fold-the-16-recovered-findings.md) Rate, ID and fold the 16 recovered findings into the severity backlog (P1) · FEATURE-014
 - **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (14/26 tasks done)

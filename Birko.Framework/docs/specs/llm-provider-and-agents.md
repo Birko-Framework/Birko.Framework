@@ -27,6 +27,7 @@ sources:
   - ../Birko.AI/Tools/ReadFileTool.cs
   - ../Birko.AI/Tools/RunCommandTool.cs
   - ../Birko.AI/Tools/SearchCodeTool.cs
+  - ../Birko.AI/Tools/WorkspacePath.cs
   - ../Birko.AI/Tools/WriteFileTool.cs
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
 # repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
@@ -466,16 +467,23 @@ derived providers implement.
 
 ### Requirement: SSE frames are decoded into data chunks
 
-The system SHALL decode a Server-Sent-Events stream in `ParseSseStream` by accumulating every
-`data: ` line into a buffer, flushing the buffer as one chunk on a blank line, terminating the
-enumeration on a `data:` payload equal to `[DONE]`, and flushing any residual buffer when the
-underlying reader ends.
+The system SHALL decode a Server-Sent-Events stream in `ParseSseStream` per the SSE grammar (TASK-173): every
+`data:` line (the space after the colon optional, matched ordinally — SH-L150) adds a line to the event, an event's
+lines are joined with `\n` and yielded on a blank line, a `[DONE]` event ends the enumeration however it is framed
+(SH-L151: the old buffer ended in a newline, so the flushed check never matched), and a residual event is yielded when
+the reader ends.
 
 #### Scenario: Single-line frame
 
 - **Given** the stream `data: {"a":1}\n\n`
 - **When** it is parsed
-- **Then** one chunk containing `{"a":1}` followed by a newline (from `AppendLine`) is yielded
+- **Then** one chunk `{"a":1}` is yielded, with no trailing newline
+
+#### Scenario: Data line without the optional space
+
+- **Given** the stream `data:{"a":1}\n\n`
+- **When** it is parsed
+- **Then** the chunk `{"a":1}` is yielded (it used to be dropped)
 
 #### Scenario: Sentinel terminates the stream
 
@@ -661,9 +669,11 @@ including `checkpointInterval`, whose option was removed — SHALL be ignored.
 The system SHALL throw `ArgumentNullException` from the `Agent` constructor when
 `llmProvider` is null, SHALL substitute a fresh `AgentOptions` when `options` is null, SHALL
 build the tool list via the overridable `CreateTools()` and SHALL assign the agent's message
-callback and options to every tool. `AddTool` SHALL apply the same wiring to a late-added tool;
+callback and options to every tool. `AddTool` SHALL refuse null and apply the same wiring to a late-added tool;
 `RebuildTools()` SHALL rediscover the tool list and re-wire it; `RemoveTool(name)` SHALL remove
-the first tool whose `Name` matches exactly and return whether one was removed.
+the first tool whose `Name` matches exactly and return whether one was removed. Both SHALL replace the list rather
+than mutate it (TASK-173, SH-L158), so a change applies from the next model call and never alters the list a call in
+flight was given.
 
 #### Scenario: Default tool catalogue
 
@@ -712,10 +722,12 @@ thorough" text, and every other value yields the "Balanced" text. Derived agents
 
 ### Requirement: Agent runs a bounded call-and-tool loop
 
-The system SHALL iterate from 1 to `maxIterations ?? Options.MaxIterations` in one loop shared
+The system SHALL refuse a run of fewer than one iteration with `ArgumentOutOfRangeException` (TASK-173, SH-L160: it
+returned the seed conversation with no model call), and SHALL iterate from 1 to `maxIterations ?? Options.MaxIterations` in one loop shared
 by the streaming and non-streaming paths, firing the iteration hook (when `Hooks` is set) and
 then checking cancellation at the top of every iteration, sending the whole conversation plus
-tools plus `SystemPrompt` to the provider, invoking `Options.OnLlmResponseReceived` after each response,
+tools plus `SystemPrompt` to the provider, invoking `Options.OnLlmResponseReceived` once per completed response — for
+streaming after the stream has been read, never for a stream that failed (TASK-173, SH-L156) —
 appending the assistant turn to the conversation, then dispatching on the stop reason. When the
 loop finishes without a terminal stop reason it SHALL emit a `"warning"` (when `Verbose`) stating
 the maximum was reached and return the conversation.
@@ -1072,11 +1084,12 @@ the registered types for an unresolvable agent type.
 - **Then** it returns `"b"`, and `Create(provider, null, "a")` throws `ArgumentException`
   because `"b"` is not a registered factory
 
-#### Scenario: Unregistered type message uses the requested name
+#### Scenario: An alias whose target is missing names both
 
 - **Given** `RegisterAlias("docs", "writer")` with no `"writer"` factory
 - **When** `Create(provider, null, "docs")` is called
-- **Then** the `ArgumentException` message names `"docs"` (the requested type), not `"writer"`
+- **Then** the `ArgumentException` (parameter `agentType`) names `"docs"` and the missing `"writer"` (TASK-173,
+  SH-L164); a null or blank type is an `ArgumentException` too (SH-L165)
 
 #### Scenario: Registration racing creation and enumeration
 
@@ -1179,6 +1192,13 @@ lexicographically, and render them as a header line, the indented paths and a
 - **When** `list_files` executes
 - **Then** only the top-level directory is enumerated
 
+### Requirement: Every file tool resolves a path the same way
+
+The system SHALL resolve a model-supplied path through `WorkspacePath.Resolve` in `read_file`, `write_file`,
+`edit_file` and `append_to_file` (TASK-173, SH-L171): a single leading `/` is workspace-relative, and the result is
+a full path checked against the workspace and the allow-list. `write_file` and the other two used a bare
+`Path.Combine`, so `/src/x.cs` was read but denied for writing.
+
 ### Requirement: write_file refuses to clobber by default
 
 The system SHALL require `file_path`, default `content` to the empty string when the key is
@@ -1275,7 +1295,8 @@ return an `"Error: the regex timed out …"` string, and the caller's cancellati
 
 - **Given** a query occurring nowhere
 - **When** `search_code` completes
-- **Then** the empty string is returned — there is no explicit "no matches" message
+- **Then** `No matches for '{query}' in N file(s) searched ({pattern}).` is returned (TASK-173, SH-L173: the empty
+  string, which also meant "nothing was searched"); an inaccessible subdirectory is skipped, not fatal (SH-L172)
 
 #### Scenario: Invalid regular expression
 
@@ -1339,7 +1360,8 @@ cancellation propagate as `OperationCanceledException`.
 
 The system SHALL require a non-empty `text`, prepend `title` followed by a newline when a
 non-blank title is supplied, emit the composed string as a `"display"` message and return
-`"Text displayed successfully"`.
+`"Text displayed successfully"`, and SHALL return an `Error:` string when no message callback is attached, since the
+text then goes nowhere (TASK-173, SH-L170).
 
 #### Scenario: Title and body
 

@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### LLM provider and agent low-finding triage (2026-10-18)
+[[TASK-173]]. 31 low findings: 27 confirmed, 4 refuted; 22 fixed, 3 already fixed, 1 spawned ([[TASK-660]]: telling a
+run's outcomes apart).
+- SSE parsing follows the grammar, and a negative retry count still sends once.
+- The agent refuses zero iterations and counts a response once.
+- Tools resolve paths one way, report no matches explicitly, and keep a timed-out command's output.
 ### LLM provider and agent triage: robust parsers, honest tool failures (2026-10-18)
 [[TASK-160]]. 20 medium findings: 19 confirmed and 1 narrower. Each was reproduced red, and 18 are fixed here.
 - OpenAI-style parsers survive `null` error, tool-call and usage fields, and read `finish_reason`. A `length` stop is
@@ -313,11 +319,6 @@ failed commit is a no-op, as on SQL and Elasticsearch. RavenDB: [[TASK-658]].
 [[TASK-576]]. **Signature change:** `AsyncDataBaseModelRepository<T>` is now `AsyncDataBaseModelRepository<TConnector, T>`,
 as the sync one is. Measured: it checked for `AsyncDataBaseBulkStore<AbstractConnector, T>`, which by generic invariance no
 provider store is, so it refused every store (no caller could have used it). It now exposes `Connector` and the init hooks.
-### The distributed event bus gives each message its own DI scope (2026-10-17)
-[[TASK-566]]. Measured: a handler with a scoped dependency threw on every delivery under `ValidateScopes`, and at startup
-in `AutoSubscriber`; otherwise every message shared one root-owned dependency that was never disposed. Each delivered
-message now resolves its handlers from its own scope, disposed after dispatch, as `InProcessEventBus` does (TASK-565).
-Discovery asks `IServiceProviderIsService` and builds no handler.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
