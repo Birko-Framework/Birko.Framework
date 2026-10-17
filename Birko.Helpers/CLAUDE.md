@@ -18,6 +18,13 @@ General-purpose utility classes for the Birko Framework — string manipulation,
   - `DiffByKey<T>(current, desired, keySelector, filter?)` — O(n) HashSet-based diff returning `DiffResult<T>` (Added, Removed, Unchanged)
   - `Diff<T>` — [Obsolete] Old tuple-based diff with custom equality function, replaced by `DiffByKey`
 - **DiffResult.cs** — Generic `DiffResult<T>` with `Added`, `Removed`, `Unchanged` as `IReadOnlyList<T>`
+- **Process/ProcessRunner.cs** — `ProcessRunner.RunAsync(ProcessRunRequest)` → `ProcessRunResult(ExitCode, StandardOutput,
+  StandardError, TimedOut, Duration)`, the ONE process runner (TASK-534; `RunCommandTool` and `GitService` use it).
+  - Arguments go through `ArgumentList`, with no shell. `RawArguments` exists for a caller that holds one command string.
+  - stdout and stderr are drained concurrently from the start, so a child cannot deadlock on a full pipe.
+  - A timeout kills the process tree and is reported (`TimedOut`). The caller's cancellation kills the tree and throws.
+  - `Environment` and `StandardInput` are optional; a program that cannot start throws `Win32Exception`.
+  - In the `Birko.Helpers` namespace: a `Birko.Helpers.Process` namespace would shadow `System.Diagnostics.Process`.
 
 ## Dependencies
 - None (standalone utility project)

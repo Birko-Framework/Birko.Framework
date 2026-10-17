@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using Birko.Helpers;
 
 namespace Birko.AI.Tools
 {
@@ -18,6 +18,8 @@ namespace Birko.AI.Tools
             required = new[] { "command" }
         };
 
+        // Runs on ProcessRunner (TASK-534), the one process runner: both pipes drained concurrently, the tree killed on
+        // timeout. The caller's cancellation propagates; it used to come back as "Error: Process timed out".
         public override async Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input, CancellationToken cancellationToken = default)
         {
             try
@@ -32,48 +34,25 @@ namespace Birko.AI.Tools
                 if (string.IsNullOrWhiteSpace(workingDirectory) || !Directory.Exists(workingDirectory))
                     throw new ArgumentException("Invalid working directory");
 
-                var psi = new ProcessStartInfo
+                if (timeoutSeconds <= 0)
+                    throw new ArgumentException("timeout_seconds must be positive");
+
+                var result = await ProcessRunner.RunAsync(new ProcessRunRequest(command, [])
                 {
-                    FileName = command,
-                    Arguments = arguments,
+                    RawArguments = arguments,
                     WorkingDirectory = workingDirectory,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
+                    Timeout = TimeSpan.FromSeconds(timeoutSeconds),
+                }, cancellationToken);
 
-                using var proc = Process.Start(psi);
-                if (proc == null)
-                    return "Error: Failed to start process";
-
-                // Start draining both pipes BEFORE waiting for exit. Reading synchronously after
-                // WaitForExit deadlocks when a child fills the OS pipe buffer for either stream
-                // (the child blocks on write, never exits, WaitForExit hits the timeout).
-                var stdoutTask = proc.StandardOutput.ReadToEndAsync();
-                var stderrTask = proc.StandardError.ReadToEndAsync();
-
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-                try
-                {
-                    await proc.WaitForExitAsync(cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    try { proc.Kill(true); } catch { }
+                if (result.TimedOut)
                     return "Error: Process timed out";
-                }
 
-                var stdout = await stdoutTask;
-                var stderr = await stderrTask;
+                if (!string.IsNullOrEmpty(result.StandardError))
+                    return result.StandardOutput.Length > 0 ? result.StandardOutput + "\n" + result.StandardError : result.StandardError;
 
-                if (!string.IsNullOrEmpty(stderr))
-                    return stdout.Length > 0 ? stdout + "\n" + stderr : stderr;
-
-                return stdout;
+                return result.StandardOutput;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
             {
                 return $"Error running command: {ex.Message}";
             }

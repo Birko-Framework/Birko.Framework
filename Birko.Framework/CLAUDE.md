@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### One process runner; Birko.VersionControl.Git with agent git tools (2026-10-17)
+[[TASK-534]]. `Birko.Helpers.ProcessRunner` drains stdout and stderr together and kills the process tree on a timeout.
+The caller's cancellation throws. `RunCommandTool` uses it, and a cancelled command no longer reports "timed out". New
+`Birko.VersionControl.Git`: `GitService` and the git agent tools. Its merge check (`git merge-tree`, git 2.38+) never
+touches the working tree, as DraCode's trial merge did.
 ### KeyedEventBroadcaster: live per-key event streams (2026-10-17)
 [[TASK-533]]. New in Birko.EventBus, for streaming a run's events to SSE and WebSocket clients. `Publish` never blocks.
 Each subscriber has a bounded drop-oldest buffer and counts what it dropped, and every event carries a per-key sequence.
@@ -310,16 +315,6 @@ Discovery asks `IServiceProviderIsService` and builds no handler.
 [[TASK-636]]. `IndexDefinition.WhereNotNull` / `WhereNull` declare a partial index. MongoDB creates it, reads it back
 and compares it for drift; on MongoDB, `IDefaultMarker`'s unique index no longer has to be created by hand. SQL carries
 the predicates; RavenDB, Cosmos DB and ElasticSearch refuse them. Drift reports `PredicateDiffers`.
-### Tenant sync refuses an unscopable TenantGuid; Cosmos partition path and index verbs agree (2026-10-17)
-
-[[TASK-650]]. Measured: a run scoped to one tenant read every tenant's rows when `TenantGuid` was not a `Guid`; it now
-refuses. Cosmos treats an empty `PartitionKeyPath` as `/id` at creation too. Its index verbs agree on an unregistered
-name, and a read no longer creates the registry container. The ElasticSearch Init NRE was refuted (unreachable).
-### Save of a soft-deleted entity is refused; Restore brings it back (2026-10-17)
-
-[[TASK-649]]. Measured: `Save` fell through to a create of the same Guid, which InMemory, SQLite and PostgreSQL refused as
-a duplicate key ("use Update or Save"). It now throws `EntitySoftDeletedException`, and `Restore` / `RestoreAsync` on the
-soft-delete wrapper is the explicit way back.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

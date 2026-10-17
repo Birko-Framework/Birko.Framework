@@ -41,6 +41,8 @@ Birko.Data.Patterns (FieldType, FieldDescriptor, ISchemaBuilder, ICollectionBuil
   -> Birko.Data.Migrations (IMigrationContext, IDataMigrator, IContextualMigration, IMigration, IMigrationRunner, IMigrationStore, MigrationFilter)
     -> Birko.Data.Migrations.SQL (SqlMigrationContext — reuses AbstractConnector), .MongoDB, .ElasticSearch, .RavenDB, .CosmosDB, .InfluxDB, .TimescaleDB
 
+Birko.VersionControl.Git (GitService, git agent tools) <- Birko.Helpers (ProcessRunner) + Birko.AI.Contracts (Tool, for the tools)
+
 Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentOptions, LlmProviderFactory)
   -> Birko.AI (LlmProviderBase, Agent base, AgentFactory (registration-based), default tools)
     -> Birko.AI.Providers (Claude, OpenAI, Gemini, Ollama, AzureOpenAI, etc. + ProviderRegistration)
@@ -131,7 +133,8 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Data.Processors** - Stream processors (XML, CSV, HTTP, ZIP) with decorator composition
 - **Birko.Structures** - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
 - **Birko.Random** - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix, TestRandom), distributions, sequences (GuidV4/V7, NanoId, Snowflake, tokens), noise (Perlin, Simplex)
-- **Birko.Helpers** - Data helper utilities (slug generation moved to Birko.Data.Patterns SlugGenerator)
+- **Birko.Helpers** - Data helper utilities (slug generation moved to Birko.Data.Patterns SlugGenerator); `ProcessRunner`, the one process runner (TASK-534)
+- **Birko.VersionControl.Git** - `GitService` (git on `ProcessRunner`: branches, commits, status, diff/log, `merge-tree` merge check, merge, worktrees) and the `git_status` / `git_diff` / `git_commit` / `git_merge` agent tools
 
 ## Communication
 - **Birko.Communication** - Base interfaces
@@ -257,7 +260,7 @@ First real, buildable `.csproj` assemblies in the `Birko\Framework` bucket (ever
 ## Tests
 All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its own CLAUDE.md.
 - Birko.Data.Tests, Birko.Data.SQL.Tests, Birko.Data.ElasticSearch.Tests
-- Birko.Helpers.Tests, Birko.Structures.Tests
+- Birko.Helpers.Tests, Birko.Structures.Tests, Birko.VersionControl.Git.Tests
 - Birko.BackgroundJobs.Tests, Birko.MessageQueue.Tests, Birko.MessageQueue.Redis.Tests
 - Birko.EventBus.Tests, Birko.CQRS.Tests, Birko.Workflow.Tests
 - Birko.Security.AspNetCore.Tests, Birko.Security.BCrypt.Tests, Birko.Security.Vault.Tests, Birko.Security.AzureKeyVault.Tests, Birko.Security.NFC.Tests, Birko.Security.OAuth.Server.Tests, Birko.Security.Grants.Tests, Birko.Security.Grants.SQL.Tests (Vault.Tests also covers Vault.Configuration)

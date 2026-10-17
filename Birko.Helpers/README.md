@@ -9,6 +9,18 @@ General-purpose helper utilities and extensions for the Birko Framework.
 - Guid and DateTime helpers
 - Path validation
 - HTML helpers
+- Process runner (`ProcessRunner`): concurrent stdout/stderr, timeout, cancellation
+
+## Process runner
+
+```csharp
+var result = await ProcessRunner.RunAsync(new ProcessRunRequest("git", ["status", "--short"])
+{
+    WorkingDirectory = repo,
+    Timeout = TimeSpan.FromMinutes(1),
+}, ct);
+if (result.Succeeded) Console.Write(result.StandardOutput);
+```
 
 ## Installation
 

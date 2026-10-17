@@ -57,7 +57,7 @@ Core AI agent framework with LLM provider base class, agent run loop, factories,
 - `SearchCodeTool` — Search code with pattern matching
 
 ### Tools/RunCommandTool.cs
-- `RunCommandTool` — Execute shell commands
+- `RunCommandTool` — Execute shell commands, on `Birko.Helpers.ProcessRunner` (TASK-534): timeout kills the tree, the caller's cancellation propagates
 
 ### Tools/DisplayTextTool.cs
 - `DisplayTextTool` — Display text output to the user

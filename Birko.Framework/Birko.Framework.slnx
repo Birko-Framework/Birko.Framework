@@ -210,6 +210,7 @@
     <Project Path="../tests/Birko.Communication.AspNetCore.Tests/Birko.Communication.AspNetCore.Tests.csproj" />
     <Project Path="../tests/Birko.Data.Tests/Birko.Data.Tests.csproj" />
     <Project Path="../tests/Birko.Helpers.Tests/Birko.Helpers.Tests.csproj" />
+    <Project Path="../tests/Birko.VersionControl.Git.Tests/Birko.VersionControl.Git.Tests.csproj" />
     <Project Path="../tests/Birko.Structures.Tests/Birko.Structures.Tests.csproj" />
     <Project Path="../tests/Birko.BackgroundJobs.Tests/Birko.BackgroundJobs.Tests.csproj" />
     <Project Path="../tests/Birko.MessageQueue.Tests/Birko.MessageQueue.Tests.csproj" />
@@ -386,6 +387,9 @@
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />
+  </Folder>
+  <Folder Name="/VersionControl/">
+    <Project Path="../Birko.VersionControl.Git/Birko.VersionControl.Git.shproj" />
   </Folder>
   <Folder Name="/CQRS/">
     <Project Path="../Birko.CQRS/Birko.CQRS.shproj" />

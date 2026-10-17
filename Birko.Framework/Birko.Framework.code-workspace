@@ -1301,6 +1301,10 @@
 			"path": "../tests/Birko.Validation.Tests"
 		},
 		{
+			"name": "Tests / Birko.VersionControl.Git.Tests",
+			"path": "../tests/Birko.VersionControl.Git.Tests"
+		},
+		{
 			"name": "Tests / Birko.Workflow.SQL.Tests",
 			"path": "../tests/Birko.Workflow.SQL.Tests"
 		},
@@ -1343,6 +1347,10 @@
 		{
 			"name": "Validation / Birko.Validation",
 			"path": "../Birko.Validation"
+		},
+		{
+			"name": "VersionControl / Birko.VersionControl.Git",
+			"path": "../Birko.VersionControl.Git"
 		},
 		{
 			"name": "Web / Birko.Web.Components",

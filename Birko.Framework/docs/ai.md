@@ -120,6 +120,12 @@ await breaker.LoadPersistedStateAsync(ct);
 var costs = new CostTrackingService(config, logger, new StoreUsageRepository(usageStore));
 ```
 
+### Birko.VersionControl.Git (git agent tools)
+
+`GitStatusTool`, `GitDiffTool`, `GitCommitTool` and `GitMergeTool` over `GitService` (TASK-534). Give them a
+`Func<string, string?>` that maps `project_name` to a repository path, or none to use the agent's working directory.
+The merge check uses `git merge-tree` and never touches the working tree; a merge that would conflict changes nothing.
+
 ### Birko.AI.Orchestration
 
 Multi-agent task orchestration abstractions:

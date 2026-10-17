@@ -363,6 +363,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.AI.Providers** | Birko.AI, Birko.AI.Contracts, Birko.Communication.OAuth |
 | **Birko.AI.Agents** | Birko.AI, Birko.AI.Contracts |
 | **Birko.AI.Resilience** | Birko.AI.Contracts |
+| **Birko.VersionControl.Git** | Birko.Helpers, Birko.AI.Contracts |
 | **Birko.AI.Resilience.Data** | Birko.AI.Resilience, Birko.AI.Contracts, Birko.Data.Core, Birko.Data.Stores |
 | **Birko.AI.Orchestration** | Birko.AI.Contracts |
 

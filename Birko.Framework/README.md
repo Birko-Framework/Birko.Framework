@@ -316,7 +316,8 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Data.Localization | Entity-level localization (ILocalizable, store decorator wrappers) |
 | Birko.Random | Pluggable RNG, distributions, sequences (GuidV4/V7, NanoId, Snowflake), noise (Perlin, Simplex) |
 | Birko.Structures | Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, deque) |
-| Birko.Helpers | Utility and extension methods, CsvParser |
+| Birko.Helpers | Utility and extension methods, CsvParser, ProcessRunner |
+| Birko.VersionControl.Git | GitService and git agent tools (status, diff, commit, merge) |
 
 ### Tests
 
@@ -326,6 +327,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Data.SQL.Tests | SQL connector, strategy, and expression tests |
 | Birko.Data.ElasticSearch.Tests | Elasticsearch expression tests |
 | Birko.Helpers.Tests | Helper utility tests |
+| Birko.VersionControl.Git.Tests | Git service and tools against temporary repositories |
 | Birko.Structures.Tests | Tree data structure tests |
 | Birko.BackgroundJobs.Tests | Background job processing tests |
 | Birko.Communication.GraphQL.Tests | GraphQL client tests (queries, mutations, subscriptions, request builder) |

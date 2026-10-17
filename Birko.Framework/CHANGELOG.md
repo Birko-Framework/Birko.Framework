@@ -61,18 +61,30 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
 
-## 2026-10-17 — Sync versions a written side as stored, asks Custom without a pair, reports a failure once
+## 2026-10-17 — Tenant sync refuses an unscopable TenantGuid; Cosmos partition path and index verbs agree
 
-[[TASK-647]]. Measured: every SQL provider and MongoDB read `UpdatedAt` back with another precision or Kind, so an item
-written by sync read as changed next run, and the lossy copy overwrote the precise source. Written sides are now read
-back before their version is recorded. Custom is asked about an item with no recorded pair. Every failure reaches
-`result.Errors` and `OnError` once. MySQL / SQL Server precision itself is [[TASK-656]].
+[[TASK-650]]. Measured: a run scoped to one tenant read every tenant's rows when `TenantGuid` was not a `Guid`; it now
+refuses. Cosmos treats an empty `PartitionKeyPath` as `/id` at creation too. Its index verbs agree on an unregistered
+name, and a read no longer creates the registry container. The ElasticSearch Init NRE was refuted (unreachable).
+
+## 2026-10-17 — Save of a soft-deleted entity is refused; Restore brings it back
+
+[[TASK-649]]. Measured: `Save` fell through to a create of the same Guid, which InMemory, SQLite and PostgreSQL refused as
+a duplicate key ("use Update or Save"). It now throws `EntitySoftDeletedException`, and `Restore` / `RestoreAsync` on the
+soft-delete wrapper is the explicit way back.
 
 ## 2026-10-17 — An ElasticSearch reindex reports a cancellation as one
 
 [[TASK-648]]. Measured: NEST answers a cancelled request with an invalid response, so every cancelled reindex came back
 `Failed`. `IndexManager` and the reindex calls now rethrow the cancellation. An alias reindex cancelled before the swap
 removes its new index; one cancelled after it succeeds with a `CleanupError`.
+
+## 2026-10-17 — Sync versions a written side as stored, asks Custom without a pair, reports a failure once
+
+[[TASK-647]]. Measured: every SQL provider and MongoDB read `UpdatedAt` back with another precision or Kind, so an item
+written by sync read as changed next run, and the lossy copy overwrote the precise source. Written sides are now read
+back before their version is recorded. Custom is asked about an item with no recorded pair. Every failure reaches
+`result.Errors` and `OnError` once. MySQL / SQL Server precision itself is [[TASK-656]].
 
 ## 2026-10-17 — Rule `Between` and `In` no longer round a fractional value
 

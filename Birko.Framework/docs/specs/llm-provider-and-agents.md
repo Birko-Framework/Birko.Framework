@@ -1245,11 +1245,11 @@ read, and return one `"{relativePath}:{lineNumber}: {line}"` entry per match joi
 
 ### Requirement: run_command executes a process and returns its combined output
 
-The system SHALL require a non-empty `command` and an existing `workingDirectory`, start the
-process with `UseShellExecute = false`, `CreateNoWindow = true` and both standard streams
-redirected, begin draining stdout and stderr before awaiting exit, enforce a timeout of
-`timeout_seconds` (default 120) through a token linked to the caller's, kill the process tree on
-timeout, and return stderr appended to stdout when stderr is non-empty or stdout alone otherwise.
+The system SHALL require a non-empty `command`, an existing `workingDirectory` and a positive
+`timeout_seconds` (default 120), and run the process through `Birko.Helpers.ProcessRunner` (TASK-534, the one
+runner): both standard streams drained concurrently from the start, the process tree killed on timeout. It SHALL
+return stderr appended to stdout when stderr is non-empty or stdout alone otherwise, and SHALL let the caller's
+cancellation propagate as `OperationCanceledException`.
 
 #### Scenario: Successful command
 
@@ -1266,15 +1266,15 @@ timeout, and return stderr appended to stdout when stderr is non-empty or stdout
 #### Scenario: Timeout kills the process tree
 
 - **Given** `timeout_seconds = 1` and a process that runs longer
-- **When** the linked token fires
-- **Then** `proc.Kill(true)` is attempted (failures swallowed) and `"Error: Process timed out"` is returned
+- **When** the timeout elapses
+- **Then** `ProcessRunner` kills the tree and reports `TimedOut`, and `"Error: Process timed out"` is returned
 
-#### Scenario: Caller cancellation is reported as a timeout
+#### Scenario: Caller cancellation propagates
 
 - **Given** the agent's `cancellationToken` is cancelled while the process runs
-- **When** `WaitForExitAsync` throws `OperationCanceledException`
-- **Then** the same catch block kills the process and returns `"Error: Process timed out"`,
-  swallowing the cancellation rather than propagating it
+- **When** `ProcessRunner` observes it
+- **Then** the process tree is killed and `OperationCanceledException` propagates (before TASK-534 the tool returned
+  `"Error: Process timed out"` and swallowed the cancellation)
 
 #### Scenario: Failing command with silent stderr looks successful
 
