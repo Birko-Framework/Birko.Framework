@@ -31,7 +31,7 @@ namespace Birko.AI.Resilience.Services
             }
         }
 
-        public async Task RecordUsageAsync(UsageRecord record)
+        public async Task RecordUsageAsync(UsageRecord record, CancellationToken ct = default)
         {
             if (!_config.Enabled) return;
 
@@ -59,7 +59,7 @@ namespace Birko.AI.Resilience.Services
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                await _repository.RecordUsageAsync(entity);
+                await _repository.RecordUsageAsync(entity, ct);
             }
         }
 
@@ -73,7 +73,7 @@ namespace Birko.AI.Resilience.Services
             return inputCost + outputCost;
         }
 
-        public async Task<BudgetStatus> CheckBudgetAsync(string? projectId = null)
+        public async Task<BudgetStatus> CheckBudgetAsync(string? projectId = null, CancellationToken ct = default)
         {
             // When cost tracking is disabled, budget enforcement must not run either —
             // otherwise CheckBudgetAsync could still return "Budget exceeded" and block calls,
@@ -88,7 +88,7 @@ namespace Birko.AI.Resilience.Services
             if (budget.DailyBudgetUsd > 0)
             {
                 var today = DateTime.UtcNow.Date;
-                var dailySpend = await _repository.GetTotalSpendAsync(today, today.AddDays(1));
+                var dailySpend = await _repository.GetTotalSpendAsync(today, today.AddDays(1), ct: ct);
                 var threshold = budget.DailyBudgetUsd * (budget.WarningThresholdPercent / 100.0);
 
                 if (dailySpend >= budget.DailyBudgetUsd)
@@ -101,7 +101,7 @@ namespace Birko.AI.Resilience.Services
             {
                 var monthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
                 var monthEnd = monthStart.AddMonths(1);
-                var monthlySpend = await _repository.GetTotalSpendAsync(monthStart, monthEnd);
+                var monthlySpend = await _repository.GetTotalSpendAsync(monthStart, monthEnd, ct: ct);
                 var threshold = budget.MonthlyBudgetUsd * (budget.WarningThresholdPercent / 100.0);
 
                 if (monthlySpend >= budget.MonthlyBudgetUsd)
@@ -112,7 +112,7 @@ namespace Birko.AI.Resilience.Services
 
             if (budget.ProjectBudgetUsd > 0 && !string.IsNullOrEmpty(projectId))
             {
-                var projectSpend = await _repository.GetProjectSpendAsync(projectId);
+                var projectSpend = await _repository.GetProjectSpendAsync(projectId, ct);
                 var threshold = budget.ProjectBudgetUsd * (budget.WarningThresholdPercent / 100.0);
 
                 if (projectSpend >= budget.ProjectBudgetUsd)
@@ -124,16 +124,16 @@ namespace Birko.AI.Resilience.Services
             return new BudgetStatus(true, false, 0, 0, "none");
         }
 
-        public async Task<List<ProviderUsageSummary>> GetUsageSummaryAsync(DateTime from, DateTime to)
+        public async Task<List<ProviderUsageSummary>> GetUsageSummaryAsync(DateTime from, DateTime to, CancellationToken ct = default)
         {
             if (_repository == null) return new();
-            return await _repository.GetUsageByProviderAsync(from, to);
+            return await _repository.GetUsageByProviderAsync(from, to, ct);
         }
 
-        public async Task<ProjectUsageSummary?> GetProjectUsageAsync(string projectId, DateTime from, DateTime to)
+        public async Task<ProjectUsageSummary?> GetProjectUsageAsync(string projectId, DateTime from, DateTime to, CancellationToken ct = default)
         {
             if (_repository == null) return null;
-            return await _repository.GetUsageByProjectAsync(projectId, from, to);
+            return await _repository.GetUsageByProjectAsync(projectId, from, to, ct);
         }
 
         private ProviderPricing? FindPricing(string provider, string model)

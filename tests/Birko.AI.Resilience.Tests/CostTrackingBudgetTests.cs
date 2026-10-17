@@ -17,12 +17,12 @@ public class CostTrackingBudgetTests
 {
     private sealed class OverBudgetRepository : IUsageRepository
     {
-        public Task RecordUsageAsync(UsageRecordEntity entity) => Task.CompletedTask;
+        public Task RecordUsageAsync(UsageRecordEntity entity, CancellationToken ct = default) => Task.CompletedTask;
         // Report spend far above any budget so the guard is the only thing that can keep us within budget.
-        public Task<double> GetTotalSpendAsync(DateTime from, DateTime to) => Task.FromResult(1_000_000d);
-        public Task<double> GetProjectSpendAsync(string projectId) => Task.FromResult(1_000_000d);
-        public Task<List<ProviderUsageSummary>> GetUsageByProviderAsync(DateTime from, DateTime to) => Task.FromResult(new List<ProviderUsageSummary>());
-        public Task<ProjectUsageSummary?> GetUsageByProjectAsync(string projectId, DateTime from, DateTime to) => Task.FromResult<ProjectUsageSummary?>(null);
+        public Task<double> GetTotalSpendAsync(DateTime from, DateTime to, string? provider = null, CancellationToken ct = default) => Task.FromResult(1_000_000d);
+        public Task<double> GetProjectSpendAsync(string projectId, CancellationToken ct = default) => Task.FromResult(1_000_000d);
+        public Task<List<ProviderUsageSummary>> GetUsageByProviderAsync(DateTime from, DateTime to, CancellationToken ct = default) => Task.FromResult(new List<ProviderUsageSummary>());
+        public Task<ProjectUsageSummary?> GetUsageByProjectAsync(string projectId, DateTime from, DateTime to, CancellationToken ct = default) => Task.FromResult<ProjectUsageSummary?>(null);
     }
 
     private static CostTrackingConfiguration Config(bool enabled) => new()

@@ -22,11 +22,11 @@ public class CostTrackingModelTests
     private sealed class CapturingRepository : IUsageRepository
     {
         public readonly List<UsageRecordEntity> Records = new();
-        public Task RecordUsageAsync(UsageRecordEntity entity) { Records.Add(entity); return Task.CompletedTask; }
-        public Task<double> GetTotalSpendAsync(DateTime from, DateTime to) => Task.FromResult(0d);
-        public Task<double> GetProjectSpendAsync(string projectId) => Task.FromResult(0d);
-        public Task<List<ProviderUsageSummary>> GetUsageByProviderAsync(DateTime from, DateTime to) => Task.FromResult(new List<ProviderUsageSummary>());
-        public Task<ProjectUsageSummary?> GetUsageByProjectAsync(string projectId, DateTime from, DateTime to) => Task.FromResult<ProjectUsageSummary?>(null);
+        public Task RecordUsageAsync(UsageRecordEntity entity, CancellationToken ct = default) { Records.Add(entity); return Task.CompletedTask; }
+        public Task<double> GetTotalSpendAsync(DateTime from, DateTime to, string? provider = null, CancellationToken ct = default) => Task.FromResult(0d);
+        public Task<double> GetProjectSpendAsync(string projectId, CancellationToken ct = default) => Task.FromResult(0d);
+        public Task<List<ProviderUsageSummary>> GetUsageByProviderAsync(DateTime from, DateTime to, CancellationToken ct = default) => Task.FromResult(new List<ProviderUsageSummary>());
+        public Task<ProjectUsageSummary?> GetUsageByProjectAsync(string projectId, DateTime from, DateTime to, CancellationToken ct = default) => Task.FromResult<ProjectUsageSummary?>(null);
     }
 
     private sealed class FakeProvider : ILlmProvider

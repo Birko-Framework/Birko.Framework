@@ -300,6 +300,7 @@
     <Project Path="../tests/Birko.AI.Agents.Tests/Birko.AI.Agents.Tests.csproj" />
     <Project Path="../tests/Birko.AI.Orchestration.Tests/Birko.AI.Orchestration.Tests.csproj" />
     <Project Path="../tests/Birko.AI.Resilience.Tests/Birko.AI.Resilience.Tests.csproj" />
+    <Project Path="../tests/Birko.AI.Resilience.Data.Tests/Birko.AI.Resilience.Data.Tests.csproj" />
     <Project Path="../tests/Birko.BackgroundJobs.CosmosDB.Tests/Birko.BackgroundJobs.CosmosDB.Tests.csproj" />
     <Project Path="../tests/Birko.BackgroundJobs.XML.Tests/Birko.BackgroundJobs.XML.Tests.csproj" />
     <Project Path="../tests/Birko.BackgroundJobs.JSON.Tests/Birko.BackgroundJobs.JSON.Tests.csproj" />
@@ -420,6 +421,7 @@
     <Project Path="../Birko.AI.Providers/Birko.AI.Providers.shproj" />
     <Project Path="../Birko.AI.Agents/Birko.AI.Agents.shproj" />
     <Project Path="../Birko.AI.Resilience/Birko.AI.Resilience.shproj" />
+    <Project Path="../Birko.AI.Resilience.Data/Birko.AI.Resilience.Data.shproj" />
     <Project Path="../Birko.AI.Orchestration/Birko.AI.Orchestration.shproj" />
   </Folder>
   <!-- The compile-gate aggregator now lives in the Birko.Sandbox consumer (TASK-037);

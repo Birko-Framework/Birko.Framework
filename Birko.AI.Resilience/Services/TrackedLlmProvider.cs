@@ -93,7 +93,7 @@ namespace Birko.AI.Resilience.Services
 
             if (_costTracker != null)
             {
-                var budgetStatus = await _costTracker.CheckBudgetAsync(ProjectId);
+                var budgetStatus = await _costTracker.CheckBudgetAsync(ProjectId, cancellationToken);
                 if (!budgetStatus.IsWithinBudget)
                 {
                     var msg = $"Budget exceeded ({budgetStatus.BudgetType}): ${budgetStatus.CurrentSpend:F2} / ${budgetStatus.BudgetLimit:F2}";
@@ -123,7 +123,7 @@ namespace Birko.AI.Resilience.Services
 
             if (_costTracker != null)
             {
-                var budgetStatus = await _costTracker.CheckBudgetAsync(ProjectId);
+                var budgetStatus = await _costTracker.CheckBudgetAsync(ProjectId, cancellationToken);
                 if (!budgetStatus.IsWithinBudget)
                 {
                     var msg = $"Budget exceeded ({budgetStatus.BudgetType}): ${budgetStatus.CurrentSpend:F2} / ${budgetStatus.BudgetLimit:F2}";
@@ -174,6 +174,7 @@ namespace Birko.AI.Resilience.Services
             {
                 try
                 {
+                    // No token: the call has been made, so its spend is recorded even if the caller cancels now.
                     await _costTracker.RecordUsageAsync(new UsageRecord(
                         Provider: Name,
                         Model: usage.Model ?? "",

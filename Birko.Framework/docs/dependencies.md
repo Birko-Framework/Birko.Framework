@@ -81,6 +81,7 @@ Only 4 projitems-level import chains exist:
            ├──► AI.Providers (← AI, AI.Contracts, Communication.OAuth)
            ├──► AI.Agents (← AI, AI.Contracts)
            ├──► AI.Resilience (← AI.Contracts)
+           │      └──► AI.Resilience.Data (← AI.Resilience, Data.Core, Data.Stores)
            └──► AI.Orchestration (← AI.Contracts)
 
 ───────────────────── Security Subtree ──────────────────────────
@@ -362,6 +363,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.AI.Providers** | Birko.AI, Birko.AI.Contracts, Birko.Communication.OAuth |
 | **Birko.AI.Agents** | Birko.AI, Birko.AI.Contracts |
 | **Birko.AI.Resilience** | Birko.AI.Contracts |
+| **Birko.AI.Resilience.Data** | Birko.AI.Resilience, Birko.AI.Contracts, Birko.Data.Core, Birko.Data.Stores |
 | **Birko.AI.Orchestration** | Birko.AI.Contracts |
 
 ---

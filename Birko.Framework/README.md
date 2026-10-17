@@ -210,6 +210,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.AI.Providers | 11 providers: Claude, OpenAI, AzureOpenAI, Gemini, Ollama, LlamaCpp, Vllm, Sglang, GitHubCopilot, ZAi + ProviderRegistration |
 | Birko.AI.Agents | CodingAgent, 10 language agents, 4 task agents, media agents, OrchestratorAgent + AgentRegistration |
 | Birko.AI.Resilience | ProviderRateLimiter, ProviderCircuitBreaker, CostTrackingService, TrackedLlmProvider |
+| Birko.AI.Resilience.Data | StoreCircuitBreakerStore, StoreUsageRepository — breaker state and usage on any Birko store |
 | Birko.AI.Orchestration | ITaskDispatcher, ImplementationPlan, StepDependencyAnalyzer, EscalationAlert |
 
 ### Web

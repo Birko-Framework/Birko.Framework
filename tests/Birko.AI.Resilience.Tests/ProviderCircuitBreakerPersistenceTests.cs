@@ -18,9 +18,9 @@ public class ProviderCircuitBreakerPersistenceTests
         private readonly object _lock = new();
         public readonly List<CircuitBreakerState> Saved = new();
 
-        public Task<List<CircuitBreakerState>> LoadAllAsync() => Task.FromResult(new List<CircuitBreakerState>());
+        public Task<List<CircuitBreakerState>> LoadAllAsync(CancellationToken ct = default) => Task.FromResult(new List<CircuitBreakerState>());
 
-        public async Task SaveAsync(CircuitBreakerState state)
+        public async Task SaveAsync(CircuitBreakerState state, CancellationToken ct = default)
         {
             // Make the earlier (Open) write slower than the later (Closed) write. If writes were not
             // serialized, the stale Open would be recorded last; serialization keeps submission order.

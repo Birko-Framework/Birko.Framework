@@ -4,6 +4,38 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-17 — Birko.AI.Resilience.Data: circuit breaker state and usage persist on any store
+
+[[TASK-530]]. New project. `StoreCircuitBreakerStore` and `StoreUsageRepository` implement `ICircuitBreakerStore` and
+`IUsageRepository` over any `IAsyncBulkStore<T>`; nothing implemented either before, so DraCode's breaker ran with no
+store and every restart closed an open circuit. Usage totals are one `AggregateAsync` each, and a store that does not
+aggregate is refused at construction. `ProviderCircuitBreaker.Reset` / `ResetAll` now persist (measured: with a store,
+a reset circuit came back Open on the next `LoadPersistedStateAsync`).
+
+**Breaking — `ICircuitBreakerStore` and `IUsageRepository` (Birko.AI.Resilience) take a `CancellationToken`.**
+
+| Member | Old | New |
+|--------|-----|-----|
+| `ICircuitBreakerStore.LoadAllAsync` | `()` | `(CancellationToken ct = default)` |
+| `ICircuitBreakerStore.SaveAsync` | `(CircuitBreakerState state)` | `(CircuitBreakerState state, CancellationToken ct = default)` |
+| `IUsageRepository.RecordUsageAsync` | `(UsageRecordEntity entity)` | `(UsageRecordEntity entity, CancellationToken ct = default)` |
+| `IUsageRepository.GetTotalSpendAsync` | `(DateTime from, DateTime to)` | `(DateTime from, DateTime to, string? provider = null, CancellationToken ct = default)` |
+| `IUsageRepository.GetProjectSpendAsync` | `(string projectId)` | `(string projectId, CancellationToken ct = default)` |
+| `IUsageRepository.GetUsageByProviderAsync` | `(DateTime from, DateTime to)` | `(DateTime from, DateTime to, CancellationToken ct = default)` |
+| `IUsageRepository.GetUsageByProjectAsync` | `(string projectId, DateTime from, DateTime to)` | `(..., CancellationToken ct = default)` |
+
+Migration: an implementer adds the parameters; the compiler points at every implementation (CS0535, or CS0539 for an
+explicit one such as DraCode's `SqlUsageRepository`), or the implementation is replaced by `StoreUsageRepository`
+(DraCode TASK-128). Callers compile unchanged. `ProviderCircuitBreaker.LoadPersistedStateAsync` and
+`CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
+optional `CancellationToken` (source-compatible).
+
+## 2026-10-17 — ElasticSearch refuses a comparison it cannot translate instead of testing existence
+
+[[TASK-644]]. Measured: `x.Text == x.Text.Trim()` and `x.Owner.Name == x.Text` ran as "Text is missing", because an
+untranslatable operand looked like `null`. Only an operand that refers to no parameter is a null comparison now;
+anything else throws `NotSupportedException`.
+
 ## 2026-10-17 — InfluxDB field renames and ElasticSearch index checks no longer report false success
 
 [[TASK-642]], [[TASK-643]]. Measured: an InfluxDB migration calling `RenameField` or `DropField` was recorded as

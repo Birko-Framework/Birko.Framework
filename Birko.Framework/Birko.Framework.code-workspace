@@ -25,6 +25,10 @@
 			"path": "../Birko.AI.Resilience"
 		},
 		{
+			"name": "AI / Birko.AI.Resilience.Data",
+			"path": "../Birko.AI.Resilience.Data"
+		},
+		{
 			"name": "BackgroundJobs / Birko.BackgroundJobs",
 			"path": "../Birko.BackgroundJobs"
 		},
@@ -791,6 +795,10 @@
 		{
 			"name": "Tests / Birko.AI.Orchestration.Tests",
 			"path": "../tests/Birko.AI.Orchestration.Tests"
+		},
+		{
+			"name": "Tests / Birko.AI.Resilience.Data.Tests",
+			"path": "../tests/Birko.AI.Resilience.Data.Tests"
 		},
 		{
 			"name": "Tests / Birko.AI.Resilience.Tests",

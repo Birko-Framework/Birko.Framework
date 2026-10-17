@@ -21,6 +21,7 @@ Birko.AI (base classes, tools)
 Birko.AI.Orchestration (task dispatch, plans, dependency analysis)
   ↓
 Birko.AI.Resilience (rate limiting, circuit breaker, cost tracking)
+  -> Birko.AI.Resilience.Data (the persistence interfaces over any Birko store)
 ```
 
 **Dependency Flow:**
@@ -96,6 +97,24 @@ Production-grade resilience for LLM API calls:
 - **ProviderCircuitBreaker** — Closed/Open/HalfOpen states, configurable threshold, optional persistence via `ICircuitBreakerStore`
 - **CostTrackingService** — Token cost calculation, daily/monthly/project budget enforcement, usage persistence via `IUsageRepository`
 - **TrackedLlmProvider** — Decorator wrapping any ILlmProvider with rate limiting + cost tracking
+
+Both persistence interfaces take a `CancellationToken`, and `IUsageRepository.GetTotalSpendAsync(from, to, provider)`
+filters by provider (TASK-530). A manual `Reset` / `ResetAll` of the breaker is persisted like any other change.
+
+### Birko.AI.Resilience.Data
+
+The two persistence interfaces over any `IAsyncBulkStore<T>` (TASK-530):
+
+- **StoreCircuitBreakerStore** — one row per provider (table `AiCircuitBreakerStates`, keyed by a name-based Guid), so
+  an open circuit stays open across a restart: call `breaker.LoadPersistedStateAsync()` at startup
+- **StoreUsageRepository** — one row per call (table `AiUsageRecords`); every total is one `AggregateAsync`, so a store
+  that does not aggregate is refused at construction. Windows are half-open (`from` included, `to` not)
+
+```csharp
+var breaker = new ProviderCircuitBreaker(store: new StoreCircuitBreakerStore(breakerStore));
+await breaker.LoadPersistedStateAsync(ct);
+var costs = new CostTrackingService(config, logger, new StoreUsageRepository(usageStore));
+```
 
 ### Birko.AI.Orchestration
 

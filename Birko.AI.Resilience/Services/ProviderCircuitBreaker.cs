@@ -54,11 +54,11 @@ namespace Birko.AI.Resilience.Services
         /// <summary>
         /// Loads persisted state from the store. Call once at startup.
         /// </summary>
-        public async Task LoadPersistedStateAsync()
+        public async Task LoadPersistedStateAsync(CancellationToken ct = default)
         {
             if (_store == null) return;
 
-            var states = await _store.LoadAllAsync();
+            var states = await _store.LoadAllAsync(ct);
             foreach (var s in states)
             {
                 var circuit = _circuits.GetOrAdd(s.Provider, _ => new ProviderCircuit());
@@ -177,21 +177,34 @@ namespace Birko.AI.Resilience.Services
         {
             if (string.IsNullOrWhiteSpace(provider)) return;
 
-            if (_circuits.TryGetValue(provider.ToLowerInvariant(), out var circuit))
+            var key = provider.ToLowerInvariant();
+            if (_circuits.TryGetValue(key, out var circuit))
             {
-                lock (circuit)
-                {
-                    circuit.State = CircuitState.Closed;
-                    circuit.ConsecutiveFailures = 0;
-                    circuit.OpenedAt = null;
-                    circuit.LastFailureAt = null;
-                }
+                ResetCircuit(key, circuit);
             }
         }
 
         public void ResetAll()
         {
-            _circuits.Clear();
+            // TASK-530: a reset is persisted like any other change. It cleared memory only, so with a store the next
+            // LoadPersistedStateAsync brought every reset circuit back Open.
+            foreach (var kvp in _circuits)
+            {
+                ResetCircuit(kvp.Key, kvp.Value);
+            }
+        }
+
+        private void ResetCircuit(string key, ProviderCircuit circuit)
+        {
+            lock (circuit)
+            {
+                circuit.State = CircuitState.Closed;
+                circuit.ConsecutiveFailures = 0;
+                circuit.OpenedAt = null;
+                circuit.LastFailureAt = null;
+            }
+
+            PersistState(key, circuit);
         }
 
         private void PersistState(string provider, ProviderCircuit circuit)

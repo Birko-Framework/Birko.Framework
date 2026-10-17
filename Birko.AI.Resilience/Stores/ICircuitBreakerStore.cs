@@ -1,12 +1,17 @@
 namespace Birko.AI.Resilience.Stores
 {
     /// <summary>
-    /// Abstraction for persisting circuit breaker state. Implement per platform if persistence is needed.
+    /// Abstraction for persisting circuit breaker state. <c>Birko.AI.Resilience.Data</c> implements it over any
+    /// <c>IAsyncBulkStore</c> (TASK-530).
     /// </summary>
+    /// <remarks>
+    /// <see cref="SaveAsync"/> keeps one state per <see cref="CircuitBreakerState.Provider"/>: a second save for the same
+    /// provider replaces the first.
+    /// </remarks>
     public interface ICircuitBreakerStore
     {
-        Task<List<CircuitBreakerState>> LoadAllAsync();
-        Task SaveAsync(CircuitBreakerState state);
+        Task<List<CircuitBreakerState>> LoadAllAsync(CancellationToken ct = default);
+        Task SaveAsync(CircuitBreakerState state, CancellationToken ct = default);
     }
 
     public class CircuitBreakerState

@@ -47,6 +47,8 @@ Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentO
     -> Birko.AI.Agents (CodingAgent, language agents, media agents + AgentRegistration)
     -> Birko.AI.Orchestration (ITaskDispatcher, ImplementationPlan, StepDependencyAnalyzer)
   -> Birko.AI.Resilience (ProviderRateLimiter, ProviderCircuitBreaker, CostTrackingService, TrackedLlmProvider)
+    -> Birko.AI.Resilience.Data (StoreCircuitBreakerStore, StoreUsageRepository) + Birko.Data.Core, Birko.Data.Stores
+       (its own project so Birko.AI.Resilience stays free of any data-store dependency)
 
 Birko.Health (IHealthCheck, HealthCheckResult, HealthCheckRunner — zero deps)
   -> Birko.Health.Data (SQL, Mongo, Raven, SMTP, MQTT, TCP … — still zero Birko deps, BCL + delegates only)
@@ -236,6 +238,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.AI.Providers** - 11 LLM provider implementations: ClaudeProvider, OpenAiProvider, AzureOpenAiProvider, GeminiProvider, OllamaProvider, OpenAiCompatibleProviderBase, LlamaCppProvider, VllmProvider, SglangProvider, GitHubCopilotProvider (uses IOAuthClient), ZAiProvider + ProviderRegistration (registers all providers with LlmProviderFactory)
 - **Birko.AI.Agents** - CodingAgent base, 10 language-specific agents (CSharp, Python, JS/TS, Cpp, React, Angular, CSS, HTML, PHP, Assembler), 4 task agents (Debug, Refactor, Test, Documentation), DiagrammingAgent, MediaAgent + 3 media agents (Image, Svg, Bitmap), OrchestratorAgent base + AgentRegistration (registers all agents with AgentFactory, convenience Create)
 - **Birko.AI.Resilience** - ProviderRateLimiter (sliding window per-minute/per-day), ProviderCircuitBreaker (Closed/Open/HalfOpen with ICircuitBreakerStore), CostTrackingService (pricing, budget enforcement with IUsageRepository), TrackedLlmProvider (decorator combining rate limiting + cost tracking)
+- **Birko.AI.Resilience.Data** - `StoreCircuitBreakerStore` / `StoreUsageRepository`: the two resilience interfaces over any `IAsyncBulkStore<T>`; usage totals by the store's `AggregateAsync`
 - **Birko.AI.Orchestration** - ITaskDispatcher + DirectTaskDispatcher, AgentTaskRecord (status, dependencies, retry tracking), ImplementationPlan/ImplementationStep (lifecycle, retry decision, current step, per-worker assignment, metrics, execution log; status enums pinned), StepDependencyAnalyzer (parallel groups, topological sort, ordering validation, reorder), Validation (IStepValidator: files created / modified, ExpectedContent present), EscalationAlert (worker id, escalation types, reflection entries)
 - **Birko.Communication.OAuth.Providers** - GitHubOAuthProvider (pre-configured OAuthSettings factory for GitHub Device Code flow, uses Birko.Communication.OAuth)
 

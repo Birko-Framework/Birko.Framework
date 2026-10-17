@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Birko.AI.Resilience.Data: breaker state and LLM usage persist on any store (2026-10-17)
+[[TASK-530]]. New project. `StoreCircuitBreakerStore` and `StoreUsageRepository` implement the two resilience interfaces
+over any `IAsyncBulkStore<T>`. Nothing implemented them before, so every restart closed an open circuit. Usage totals are
+computed by `AggregateAsync`, and a store that cannot aggregate is refused. A breaker `Reset` now persists. **Breaking:**
+both interfaces take a `CancellationToken`, and `GetTotalSpendAsync` adds a provider filter (CHANGELOG lists the signatures).
 ### Cosmos migrations work on any client serializer (2026-10-17)
 [[TASK-659]]. Measured live: on a plain `CosmosClient` (the SDK's Newtonsoft serializer), `RenameField`, `UpdateDocuments`,
 `DeleteDocuments` and `CopyData` threw on their first read, because they typed results as `JsonElement`. Reads now stream and
@@ -317,11 +322,6 @@ back before their version is recorded. Custom is asked about an item with no rec
 [[TASK-645]]. Measured: `Qty Between 10.5..20` selected Qty 10 at the store and `Qty In [10.6]` selected 11, while
 the in-memory evaluator compared exactly. Each bound and candidate now goes through the comparison TASK-171 fixed,
 so both engines agree.
-### ElasticSearch refuses a comparison it cannot translate instead of testing existence (2026-10-17)
-
-[[TASK-644]]. Measured: `x.Text == x.Text.Trim()` and `x.Owner.Name == x.Text` ran as "Text is missing", because an
-untranslatable operand looked like `null`. Only an operand that refers to no parameter is a null comparison now;
-anything else throws `NotSupportedException`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
