@@ -15,6 +15,7 @@ namespace Birko.Telemetry.Tests;
 /// WithAsyncInstrumentation / WithAsyncBulkInstrumentation) — the primary public entry points — had no
 /// tests. Each must return the matching wrapper type wrapping the supplied store.
 /// </summary>
+[Collection(StoreMeterCollection.Name)]
 public class StoreInstrumentationExtensionsTests
 {
     public sealed class TestModel : Data.Models.AbstractModel { }

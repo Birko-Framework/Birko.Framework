@@ -11,6 +11,7 @@ namespace Birko.Telemetry.Tests;
 /// CR-L379: the DI/middleware registration extensions (AddBirkoTelemetry / UseBirkoCorrelationId) had no
 /// tests. They are the primary way consumers wire telemetry into an app.
 /// </summary>
+[Collection(StoreMeterCollection.Name)]
 public class TelemetryServiceExtensionsTests
 {
     [Fact]

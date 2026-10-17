@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-17 22:25. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-17 22:32. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 26      | —     |
-| todo         | —     | —       | 169   |
+| todo         | —     | —       | 168   |
 | in-progress  | 9     | 13      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 340   |
+| done         | 1     | 23      | 341   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 119× P2 · 41× P3.
+`todo` by priority: 9× P1 · 118× P2 · 41× P3.
 
 ## In progress now
 
@@ -145,13 +145,13 @@ _None._
     - [ ] [TASK-025](EPIC-008-health-mq-cloud-checks/STORY-018-cloud-health-checks/TASK-025-aws-sqs-health-check.md) AwsSqsHealthCheck (P2) · FEATURE-008
 - **EPIC-010** Birko.Data.RavenDB — Index ergonomics — planned (0/1 tasks done)
   - [ ] [TASK-028](EPIC-010-ravendb-index-ergonomics/TASK-028-attribute-driven-raven-indexes.md) Attribute-driven RavenDB index definitions (Option B) (P2) · FEATURE-010
-- **EPIC-011** Birko.Framework — Test coverage gaps — planned (4/12 tasks done)
+- **EPIC-011** Birko.Framework — Test coverage gaps — planned (5/12 tasks done)
   - [ ] [TASK-052](EPIC-011-test-coverage-gaps/TASK-052-birko-web-unit-test-runner.md) Adopt a web unit-test runner for Birko.Web.* (migrate backport-smoke) (P2) · FEATURE-011
   - [x] [TASK-479](EPIC-011-test-coverage-gaps/TASK-479-live-gates-honour-require-live.md) 19 live gates return silently instead of honouring BIRKO_REQUIRE_LIVE (P2)
   - [x] [TASK-480](EPIC-011-test-coverage-gaps/TASK-480-cosmosdb-live-tests-never-run.md) CosmosDB live tests have never run in CI — there is no Cosmos job (P2)
   - [x] [TASK-481](EPIC-011-test-coverage-gaps/TASK-481-run-the-helper-scripts-on-linux-in-ci.md) Run the five helper scripts on Linux in CI, so their sign-off stops needing a human with a Linux box (P2)
   - [x] [TASK-482](EPIC-011-test-coverage-gaps/TASK-482-audit-declarations-reports-no-scanned-count.md) audit-declarations cannot tell a clean sweep from a sweep of nothing (P2)
-  - [ ] [TASK-657](EPIC-011-test-coverage-gaps/TASK-657-telemetry-store-instrumentation-test-flakes-in-ci.md) `StoreInstrumentationTests.ExecuteAsync_OnException_RecordsErrorAndRethrows` flaked in CI (P2)
+  - [x] [TASK-657](EPIC-011-test-coverage-gaps/TASK-657-telemetry-store-instrumentation-test-flakes-in-ci.md) `StoreInstrumentationTests.ExecuteAsync_OnException_RecordsErrorAndRethrows` flaked in CI (P2)
   - STORY-021 Redis-dependent tests — planned (0/2 done)
     - [ ] [TASK-029](EPIC-011-test-coverage-gaps/STORY-021-redis-dependent-tests/TASK-029-backgroundjobs-redis-tests.md) Birko.BackgroundJobs.Redis.Tests (P2) · FEATURE-011
     - [ ] [TASK-030](EPIC-011-test-coverage-gaps/STORY-021-redis-dependent-tests/TASK-030-caching-redis-tests.md) Birko.Caching.Redis.Tests (P2) · FEATURE-011

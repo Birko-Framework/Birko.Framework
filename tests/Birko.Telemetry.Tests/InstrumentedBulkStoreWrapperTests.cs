@@ -13,6 +13,7 @@ namespace Birko.Telemetry.Tests;
 /// IBulkStore default ran and bypassed the inner store's native single-row path. These assert the bulk
 /// overloads delegate to the inner store, and specifically that ReadFirst reaches the inner ReadFirst.
 /// </summary>
+[Collection(StoreMeterCollection.Name)]
 public class InstrumentedBulkStoreWrapperTests
 {
     public class TestModel : Data.Models.AbstractModel { }

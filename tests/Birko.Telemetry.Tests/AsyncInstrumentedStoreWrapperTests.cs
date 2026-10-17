@@ -3,6 +3,7 @@ using Birko.Configuration;
 using Birko.Telemetry;
 using FluentAssertions;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using System.Linq.Expressions;
@@ -12,12 +13,13 @@ using Xunit;
 
 namespace Birko.Telemetry.Tests;
 
+[Collection(StoreMeterCollection.Name)]
 public class AsyncInstrumentedStoreWrapperTests : IDisposable
 {
     private readonly MockAsyncStore _mockStore;
     private readonly AsyncInstrumentedStoreWrapper<MockAsyncStore, TestModel> _wrapper;
     private readonly MeterListener _listener;
-    private readonly List<string> _recordedMetrics = new();
+    private readonly ConcurrentQueue<string> _recordedMetrics = new(); // TASK-657: thread-safe
 
     public AsyncInstrumentedStoreWrapperTests()
     {
@@ -30,8 +32,8 @@ public class AsyncInstrumentedStoreWrapperTests : IDisposable
             if (instrument.Meter.Name == BirkoTelemetryConventions.MeterName)
                 listener.EnableMeasurementEvents(instrument);
         };
-        _listener.SetMeasurementEventCallback<double>((instrument, _, _, _) => _recordedMetrics.Add(instrument.Name));
-        _listener.SetMeasurementEventCallback<long>((instrument, _, _, _) => _recordedMetrics.Add(instrument.Name));
+        _listener.SetMeasurementEventCallback<double>((instrument, _, _, _) => _recordedMetrics.Enqueue(instrument.Name));
+        _listener.SetMeasurementEventCallback<long>((instrument, _, _, _) => _recordedMetrics.Enqueue(instrument.Name));
         _listener.Start();
     }
 

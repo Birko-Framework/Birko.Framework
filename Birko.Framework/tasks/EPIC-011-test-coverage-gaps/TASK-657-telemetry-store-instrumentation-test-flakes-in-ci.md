@@ -3,7 +3,7 @@ id: TASK-657
 parent: EPIC-011
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-17
@@ -34,11 +34,11 @@ process-wide state, the victim not the file that caused it.
 
 ## Acceptance criteria
 
-- [ ] Reproduced (for example, a stress loop running the three classes in parallel with extra measurements), or the
+- [x] Reproduced (for example, a stress loop running the three classes in parallel with extra measurements), or the
       hypothesis falsified and another cause found
-- [ ] The listeners record thread-safely, and/or the three classes share an xUnit collection; each test asserts only
+- [x] The listeners record thread-safely, and/or the three classes share an xUnit collection; each test asserts only
       measurements it caused (tag or entity name), so a sibling's measurements cannot satisfy it either
-- [ ] The suite passes a stress run that failed before
+- [x] The suite passes a stress run that failed before
 
 ## Out of scope
 
@@ -51,3 +51,31 @@ N/A — covered by automated tests.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-657` — leave empty until then._
+
+## Resolution (2026-10-17)
+
+**Hypothesis measured and confirmed** (rule 54: no longer only recorded).
+
+- **The failure itself.** The run's artifact holds attempt 1's trx, with the failure message. The failing listener's
+  `_recordedCounters` held **six** `birko.store.operation.count` entries and no `operation.errors`. The test causes
+  one count and one error, so five of those counts were siblings' measurements arriving in this listener. The test's
+  own error entry was lost.
+- **The mechanism, reproduced.** A throwaway stress probe ran a listener shaped like the old one, `List.Add` in the
+  callback, while 8 threads × 5000 `StoreInstrumentation.Execute` calls each recorded an error. Over 5 rounds it kept
+  38307-38712 of 40 000 error entries, losing 3-4%, **with no exception**. Concurrent `List.Add`s overwrite each other.
+- **Ruled out.** The instruments are `static readonly` fields, so no lazily created instrument races with a listener.
+
+**Fix (test-only; production code is not implicated):**
+- The six classes that publish to or listen on the meter share `[Collection(StoreMeterCollection.Name)]`, so no
+  sibling measures during a test.
+- The three listeners record into `ConcurrentQueue`.
+- `StoreInstrumentationTests` uses a unique entity per instance and records only measurements carrying that entity
+  tag, so another test's measurements cannot satisfy its assertions either.
+- New `Every_measurement_is_recorded_while_other_threads_publish`: 8 threads × 2000 errors, every one counted.
+  **Red 3/3 with the plain `List`**, green with the queue.
+
+**Stress:** the full suite passed 40/40. 40 runs also passed before the fix (the flake was rare), so the deterministic
+test above is the evidence, not the loop.
+
+Documented in `tests/Birko.Telemetry.Tests/CLAUDE.md`. Suite 62/62. The suite is the only importer touched: test files
+only.
