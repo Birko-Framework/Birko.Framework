@@ -971,11 +971,22 @@ update that missed and the create that follows it.
 - **When** `VersionedStoreWrapper.Save(data)` or `AsyncVersionedStoreWrapper.SaveAsync(data)` is called
 - **Then** the versioned update throws `EntityNotFoundException` naming that Guid, `StoreSave` catches it and runs the versioned create, so the entity is created under that Guid with `Version = 1` and the create's Guid is returned
 
-#### Scenario: Save of a soft-deleted entity falls through to create
+#### Scenario: Save of a soft-deleted entity is refused; Restore brings it back
 
 - **Given** an entity with a non-empty `Guid` whose stored row is soft-deleted
 - **When** `SoftDeleteStoreWrapper.Save(data)` or `AsyncSoftDeleteStoreWrapper.SaveAsync(data)` is called
-- **Then** the decorator's update throws `EntityNotFoundException` naming that Guid, so `StoreSave` runs the decorator's create under the same Guid (with `DeletedAt` reset to null) against an inner store that still holds the row — the outcome is whatever the inner store does with a create of an existing Guid
+- **Then** `EntitySoftDeletedException` (a `StoreException`, not an `EntityNotFoundException`, which `StoreSave` would
+  read as "create it") is thrown naming the Guid, and nothing is written. `Restore(data)` / `RestoreAsync(data)` clears
+  `DeletedAt` and writes the entity as it stands; it throws `EntityNotFoundException` when no row holds the Guid and
+  simply writes a live one (TASK-649, user's decision 2026-10-17). Measured before: `StoreSave` fell through to a
+  create of the same Guid, refused on InMemory, SQLite and PostgreSQL as a duplicate key ("use Update or Save")
+
+#### Scenario: A bulk update names its soft-deleted and its missing items together
+
+- **Given** a soft-delete bulk update of one soft-deleted entity and one the store never held
+- **When** the inner bulk update reports the missing one with `EntityNotFoundException`
+- **Then** the decorator rethrows one `EntityNotFoundException` naming both Guids; before TASK-649 the soft-deleted one
+  was lost
 
 #### Scenario: Default decorator's Save bypasses its own Create/Update
 

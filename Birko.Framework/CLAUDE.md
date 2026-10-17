@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Save of a soft-deleted entity is refused; Restore brings it back (2026-10-17)
+
+[[TASK-649]]. Measured: `Save` fell through to a create of the same Guid, which InMemory, SQLite and PostgreSQL refused as
+a duplicate key ("use Update or Save"). It now throws `EntitySoftDeletedException`, and `Restore` / `RestoreAsync` on the
+soft-delete wrapper is the explicit way back.
 ### An ElasticSearch reindex reports a cancellation as one (2026-10-17)
 
 [[TASK-648]]. Measured: NEST answers a cancelled request with an invalid response, so every cancelled reindex came back

@@ -69,8 +69,26 @@ public class AsyncSoftDeleteStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrap
 
     public async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
+        // TASK-649: a soft-deleted entity is refused, not created again under its Guid; RestoreAsync brings it back.
+        if (data?.Guid is Guid guid && guid != Guid.Empty && (await _innerStore.ReadAsync(guid, ct))?.DeletedAt != null)
+            throw new EntitySoftDeletedException(typeof(T), guid);
         // TASK-555: the create-or-update decision has one producer; an unstored Guid is created, not lost.
         return await StoreSave.SaveAsync(data, processDelegate, CreateAsync, UpdateAsync, ct);
+    }
+
+    /// <summary>
+    /// Brings a soft-deleted entity back: clears <c>DeletedAt</c> and writes <paramref name="data"/> as it now stands (TASK-649).
+    /// A live entity is simply written.
+    /// </summary>
+    /// <exception cref="Birko.Data.Exceptions.EntityNotFoundException">No row is stored under the entity's Guid.</exception>
+    public async Task RestoreAsync(T data, CancellationToken ct = default)
+    {
+        if (data?.Guid is not Guid guid || guid == Guid.Empty)
+            throw new ArgumentException("Restore needs the Guid of a stored entity.", nameof(data));
+        if (await _innerStore.ReadAsync(guid, ct) == null)
+            throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), guid);
+        data.DeletedAt = null;
+        await _innerStore.UpdateAsync(data, ct: ct);
     }
 
     public Task InitAsync(CancellationToken ct = default) => _innerStore.InitAsync(ct);

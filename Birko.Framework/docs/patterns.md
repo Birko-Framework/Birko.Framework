@@ -68,7 +68,9 @@ A soft-deleted row is invisible to updates as it is to reads: `Update` of one th
 update writes its live items, then reports the deleted Guids), so a stale copy cannot resurrect it. Deleting a row that
 is already deleted keeps its original `DeletedAt`. A soft delete also retires a default: `IsDefault` becomes `false` and
 an `IDefaultMarker`'s marker `null`, on every delete path (TASK-638). The row is invisible, so it cannot be the default,
-and a marker it kept would hold the unique index against every later promotion. A filtered `Update` / `Delete` checks **your** filter before adding
+and a marker it kept would hold the unique index against every later promotion. `Save` of a soft-deleted entity throws
+`EntitySoftDeletedException`; bring it back with `Restore(entity)` / `RestoreAsync(entity)` on the soft-delete wrapper,
+which clears `DeletedAt` and writes it (TASK-649). A filtered `Update` / `Delete` checks **your** filter before adding
 the not-deleted clause: a null filter throws `ArgumentNullException`, and one that reduces to every row throws
 `WholeTableWriteException` (TASK-159).
 

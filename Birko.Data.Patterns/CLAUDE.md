@@ -27,6 +27,10 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
   refused) before the not-deleted clause is added (TASK-159)
 - Every delete path retires a default in the same write (`SoftDeleteFilter.Stamp` / `Deletion`): `IsDefault = false`,
   `DefaultMarker = null`. A kept marker refused every later promotion under the unique index (TASK-638)
+- `Save` of a soft-deleted entity throws `EntitySoftDeletedException` (a `StoreException`, never an
+  `EntityNotFoundException`, which `StoreSave` would turn into a create); `Restore` / `RestoreAsync` clears `DeletedAt`
+  and writes the entity. A bulk update names its soft-deleted and its missing items in one `EntityNotFoundException`
+  (TASK-649)
 - `ISoftDeleteStoreWrapper` marks the four wrappers; the Sluggable probe asks beneath one directly inside it, because a
   soft-deleted row keeps its slug until it is removed for good (TASK-638)
 

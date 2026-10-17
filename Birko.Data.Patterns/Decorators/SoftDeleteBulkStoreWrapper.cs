@@ -41,7 +41,15 @@ public class SoftDeleteBulkStoreWrapper<TStore, T> : SoftDeleteStoreWrapper<TSto
         var items = data.ToList();
         var ids = items.Select(i => i.Guid).ToList();
         var deleted = _innerStore.Read(x => ids.Contains(x.Guid) && x.DeletedAt != null, null, null, null).Select(x => x.Guid!.Value).ToHashSet();
-        _innerStore.Update(items.Where(i => i.Guid == null || !deleted.Contains(i.Guid.Value)).ToList(), storeDelegate);
+        try
+        {
+            _innerStore.Update(items.Where(i => i.Guid == null || !deleted.Contains(i.Guid.Value)).ToList(), storeDelegate);
+        }
+        catch (Birko.Data.Exceptions.EntityNotFoundException missing) when (deleted.Count > 0)
+        {
+            // TASK-649: the inner store reports the items it never held; the soft-deleted ones are named with them.
+            throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), missing.Guids.Concat(deleted));
+        }
         if (deleted.Count > 0)
             throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), deleted);
     }

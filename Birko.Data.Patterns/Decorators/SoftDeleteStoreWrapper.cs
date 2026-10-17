@@ -69,8 +69,26 @@ public class SoftDeleteStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>, IS
 
     public Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
+        // TASK-649: a soft-deleted entity is refused, not created again under its Guid; Restore brings it back.
+        if (data?.Guid is Guid guid && guid != Guid.Empty && _innerStore.Read(guid)?.DeletedAt != null)
+            throw new EntitySoftDeletedException(typeof(T), guid);
         // TASK-555: the create-or-update decision has one producer; an unstored Guid is created, not lost.
         return StoreSave.Save(data, storeDelegate, Create, Update);
+    }
+
+    /// <summary>
+    /// Brings a soft-deleted entity back: clears <c>DeletedAt</c> and writes <paramref name="data"/> as it now stands (TASK-649).
+    /// A live entity is simply written.
+    /// </summary>
+    /// <exception cref="Birko.Data.Exceptions.EntityNotFoundException">No row is stored under the entity's Guid.</exception>
+    public void Restore(T data)
+    {
+        if (data?.Guid is not Guid guid || guid == Guid.Empty)
+            throw new ArgumentException("Restore needs the Guid of a stored entity.", nameof(data));
+        if (_innerStore.Read(guid) == null)
+            throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), guid);
+        data.DeletedAt = null;
+        _innerStore.Update(data);
     }
 
     public void Init() => _innerStore.Init();

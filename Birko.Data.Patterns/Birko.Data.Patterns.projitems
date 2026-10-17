@@ -45,6 +45,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncSluggableStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncSluggableBulkStoreWrapper.cs" />
     <!-- Decorators: SoftDelete -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\EntitySoftDeletedException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteBulkStoreWrapper.cs" />
