@@ -701,7 +701,9 @@ an `IMongoClient` or a Birko `MongoDBClient` (null → `ArgumentNullException`),
 has no client. `BeginAsync` SHALL start a session with `StartSessionAsync(ct)` and call
 `StartTransaction()`; `IsActive` SHALL be `_session?.IsInTransaction ?? false`; `CommitAsync` and
 `RollbackAsync` SHALL call `CommitTransactionAsync(ct)` / `AbortTransactionAsync(ct)` on the session and
-SHALL NOT dispose it — only `Dispose` / `DisposeAsync` dispose the session.
+SHALL then dispose and drop it, whether the call succeeded or threw (TASK-578, SH-M429). A failed commit
+SHALL propagate the driver's exception unchanged, leave the unit of work inactive, and make the first
+`RollbackAsync` that follows a no-op, as on SQL and Elasticsearch (TASK-325).
 
 #### Scenario: Begin against a standalone server
 
@@ -709,12 +711,20 @@ SHALL NOT dispose it — only `Dispose` / `DisposeAsync` dispose the session.
 - **When** `BeginAsync()` is awaited
 - **Then** it succeeds; the transaction fails only at the first write, as `Capabilities.Limitations` states
 
-#### Scenario: Commit then begin again keeps the old session undisposed
+#### Scenario: Commit or rollback releases the session
 
-- **Given** a `MongoDbUnitOfWork` that has begun and committed
-- **When** `BeginAsync()` is called again
-- **Then** `IsActive` was `false` (the session is no longer in a transaction), so a new session is started
-  and assigned over the old one, which is never disposed
+- **Given** a `MongoDbUnitOfWork` that has begun and committed (or rolled back)
+- **When** the call returns
+- **Then** `IsActive` is `false`, `Context` is `null` and the session is disposed, so a following
+  `BeginAsync()` starts a fresh session (before TASK-578 the old one stayed held and undisposed)
+
+#### Scenario: A failed commit ends the boundary
+
+- **Given** an active `MongoDbUnitOfWork` whose `CommitTransactionAsync` throws (measured live with a
+  cancelled token)
+- **When** `CommitAsync()` is called
+- **Then** the exception propagates unchanged, the session is disposed, which aborts the transaction on the
+  server (the same row is written outside it at once), and `RollbackAsync()` returns without effect
 
 ### Requirement: RavenDB unit of work wraps a cluster-wide session
 
@@ -748,22 +758,27 @@ The system SHALL implement `CosmosDbUnitOfWork` as `IUnitOfWork<TransactionalBat
 `FromStore<T>(AsyncCosmosDBStore<T>, PartitionKey)` throwing
 `InvalidOperationException("Store Container is not initialized. Call SetSettings() and InitAsync() first.")`
 when the store has no container. `BeginAsync` SHALL create a `TransactionalBatch` for that partition key
-without I/O; `CommitAsync` SHALL await `ExecuteAsync(ct)`, drop the batch, and throw
-`InvalidOperationException("Cosmos DB transactional batch failed with status {StatusCode}.")` when the
-response is not a success status; `RollbackAsync` and disposal SHALL drop the batch without sending it.
+without I/O; `CommitAsync` SHALL drop the batch before awaiting `ExecuteAsync(ct)`, so it is spent
+whatever the outcome, SHALL throw
+`UnitOfWorkException("Cosmos DB transactional batch failed with status {StatusCode}.")` when the response
+is not a success status, and SHALL propagate an exception `ExecuteAsync` throws unchanged; after either
+failure the first `RollbackAsync` SHALL be a no-op (TASK-578, SH-M430). `RollbackAsync` and disposal SHALL
+drop the batch without sending it.
 
 #### Scenario: A refused batch is reported with its status
 
-- **Given** an active `CosmosDbUnitOfWork` whose batch execution returns a non-success status
+- **Given** an active `CosmosDbUnitOfWork` whose batch execution returns a non-success status (measured
+  live: a create of an existing id, `Conflict`)
 - **When** `CommitAsync()` is called
-- **Then** an `InvalidOperationException` — not a `UnitOfWorkException` — is thrown naming the status,
-  and the unit of work is inactive
+- **Then** a `UnitOfWorkException` naming the status is thrown (it was an `InvalidOperationException`
+  before TASK-578), the unit of work is inactive, and `RollbackAsync()` returns without effect
 
-#### Scenario: A throwing execute leaves the batch in place
+#### Scenario: A throwing execute ends the boundary
 
-- **Given** an active `CosmosDbUnitOfWork` whose `ExecuteAsync` throws
+- **Given** an active `CosmosDbUnitOfWork` whose `ExecuteAsync` throws (measured with a cancelled token)
 - **When** `CommitAsync()` is called
-- **Then** the exception propagates before the batch is dropped, so `IsActive` remains `true`
+- **Then** the exception propagates unchanged and `IsActive` is `false`, so a retry cannot re-send the
+  batch (before TASK-578 it stayed active)
 
 ### Requirement: InfluxDB unit of work buffers points for one write
 
@@ -772,9 +787,11 @@ The system SHALL implement `InfluxDbUnitOfWork` as `IUnitOfWork<BatchPointContex
 `FromStore<T>(AsyncInfluxDBStore<T>)` reading the store's client and public `Settings` (bucket,
 organization) and throwing `InvalidOperationException` when either is missing. `BeginAsync` SHALL
 allocate a `BatchPointContext` (exposing `Bucket`, `Organization`, `AddPoint`, `AddPoints`) without I/O;
-`CommitAsync` SHALL write all buffered points in one `WritePointsAsync(points, bucket, organization, ct)`
-call when there is at least one, and only then drop the context; `RollbackAsync` and disposal SHALL drop
-the context without writing.
+`CommitAsync` SHALL drop the context and then write all buffered points in one
+`WritePointsAsync(points, bucket, organization, ct)` call when there is at least one, so the points are
+spent whatever the outcome; a failed write SHALL propagate the client's exception unchanged and make the
+first `RollbackAsync` that follows a no-op (TASK-578, SH-M431). `RollbackAsync` and disposal SHALL drop the
+context without writing.
 
 #### Scenario: Empty commit writes nothing
 
@@ -782,12 +799,14 @@ the context without writing.
 - **When** `CommitAsync()` is called
 - **Then** no write API call is made and the unit of work becomes inactive
 
-#### Scenario: A failed write leaves the points queued
+#### Scenario: A failed write ends the boundary
 
-- **Given** an active `InfluxDbUnitOfWork` with buffered points whose write throws
+- **Given** an active `InfluxDbUnitOfWork` with buffered points whose write throws (measured live: a
+  bucket that does not exist)
 - **When** `CommitAsync()` is called
-- **Then** the exception propagates and the context is not dropped, so the unit of work stays active
-  with the same points — unlike `ElasticSearchUnitOfWork`, a retried commit re-sends every point
+- **Then** the exception propagates, `IsActive` is `false` and `Context` is `null`, as on
+  `ElasticSearchUnitOfWork`, so a retry cannot re-send every point (before TASK-578 they stayed queued);
+  `RollbackAsync()` returns without effect
 
 ### Requirement: Cancellation tokens are honoured only where I/O occurs
 

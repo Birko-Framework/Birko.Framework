@@ -60,6 +60,7 @@ public sealed class InfluxDbUnitOfWork : IUnitOfWork<BatchPointContext>
     private readonly string _bucket;
     private readonly string _organization;
     private BatchPointContext? _context;
+    private bool _endedByFailedCommit;
     private bool _disposed;
 
     public bool IsActive => _context is not null;
@@ -107,29 +108,52 @@ public sealed class InfluxDbUnitOfWork : IUnitOfWork<BatchPointContext>
             throw new TransactionAlreadyActiveException();
 
         _context = new BatchPointContext(_bucket, _organization);
+        _endedByFailedCommit = false;
         return Task.CompletedTask;
     }
 
+    /// <remarks>
+    /// TASK-578 (SH-M431): the points are spent the moment they are sent, whatever the outcome, as on Elasticsearch
+    /// (TASK-325). A failed write used to leave the context active with the same points, so a retry re-sent all of
+    /// them, including any the server had already written. The client's exception propagates unchanged, and the
+    /// <see cref="RollbackAsync"/> that follows is a no-op.
+    /// </remarks>
     public async Task CommitAsync(CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
             throw new NoActiveTransactionException();
 
-        if (_context!.Points.Count > 0)
+        var points = _context!.Points;
+        _context = null;
+        if (points.Count == 0)
+            return;
+
+        try
         {
             var writeApi = _client.GetWriteApiAsync();
-            await writeApi.WritePointsAsync(_context.Points, _bucket, _organization, ct);
+            await writeApi.WritePointsAsync(points, _bucket, _organization, ct);
         }
-
-        _context = null;
+        catch
+        {
+            _endedByFailedCommit = true;
+            throw;
+        }
     }
 
     public Task RollbackAsync(CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
+        {
+            if (_endedByFailedCommit)
+            {
+                // Nothing left to discard: the failed commit already sent, and spent, the points.
+                _endedByFailedCommit = false;
+                return Task.CompletedTask;
+            }
             throw new NoActiveTransactionException();
+        }
 
         // Discard collected points — nothing was written yet.
         _context = null;

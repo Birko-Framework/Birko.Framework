@@ -188,7 +188,8 @@ This implementation targets InfluxDB 2.x with:
 
 InfluxDB has no transaction concept. `InfluxDbUnitOfWork` accumulates points and writes them in one call:
 `Capabilities.Atomicity` is `BestEffort` and `Capabilities.Scope` is `None`. A partial write is possible and
-nothing can be rolled back once written.
+nothing can be rolled back once written. The points are spent once sent: a failed write ends the unit of work and
+the rollback after it is a no-op, so a retry does not re-send them (TASK-578).
 
 Like ElasticSearch, `AsyncInfluxDBStore` deliberately does **not** implement `IAsyncTransactionalStore` --
 there is no context to hand it, which is the honest "no". Do not add one: a hook that accepts a context and

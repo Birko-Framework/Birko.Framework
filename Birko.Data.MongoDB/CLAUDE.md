@@ -265,7 +265,8 @@ using (var session = Client.StartSession())
 
 ## Transaction boundary (TASK-240)
 
-`MongoDbUnitOfWork` gives an **atomic, cluster-scoped** boundary, and both reads and writes honour it.
+`MongoDbUnitOfWork` gives an **atomic, cluster-scoped** boundary, and both reads and writes honour it. Commit, rollback
+and a failed commit each dispose the session; the rollback after a failed commit is a no-op (TASK-578).
 
 ```csharp
 await using var uow = MongoDbUnitOfWork.FromStore(store);

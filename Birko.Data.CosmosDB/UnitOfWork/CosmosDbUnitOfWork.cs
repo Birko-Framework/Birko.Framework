@@ -16,6 +16,7 @@ public sealed class CosmosDbUnitOfWork : IUnitOfWork<TransactionalBatch>
     private readonly Container _container;
     private readonly PartitionKey _partitionKey;
     private TransactionalBatch? _batch;
+    private bool _endedByFailedCommit;
     private bool _disposed;
 
     public bool IsActive => _batch is not null;
@@ -70,21 +71,44 @@ public sealed class CosmosDbUnitOfWork : IUnitOfWork<TransactionalBatch>
             throw new TransactionAlreadyActiveException();
 
         _batch = _container.CreateTransactionalBatch(_partitionKey);
+        _endedByFailedCommit = false;
         return Task.CompletedTask;
     }
 
+    /// <remarks>
+    /// TASK-578 (SH-M430): the batch is spent the moment it is sent, whatever the outcome, as on Elasticsearch
+    /// (TASK-325). A throwing <c>ExecuteAsync</c> left it active, so the obvious retry re-sent it. A refused batch is a
+    /// <see cref="UnitOfWorkException"/> naming the status, the type the other backends report a refused commit with
+    /// (it was an <see cref="InvalidOperationException"/>); an exception the SDK throws propagates unchanged. Either way
+    /// the <see cref="RollbackAsync"/> that follows is a no-op.
+    /// </remarks>
     public async Task CommitAsync(CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
             throw new NoActiveTransactionException();
 
-        using var response = await _batch!.ExecuteAsync(ct);
+        var batch = _batch!;
         _batch = null;
 
-        if (!response.IsSuccessStatusCode)
+        TransactionalBatchResponse response;
+        try
         {
-            throw new InvalidOperationException(
+            response = await batch.ExecuteAsync(ct);
+        }
+        catch
+        {
+            _endedByFailedCommit = true;
+            throw;
+        }
+
+        using (response)
+        {
+            if (response.IsSuccessStatusCode)
+                return;
+
+            _endedByFailedCommit = true;
+            throw new UnitOfWorkException(
                 $"Cosmos DB transactional batch failed with status {response.StatusCode}.");
         }
     }
@@ -93,7 +117,15 @@ public sealed class CosmosDbUnitOfWork : IUnitOfWork<TransactionalBatch>
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
+        {
+            if (_endedByFailedCommit)
+            {
+                // Nothing left to discard: the failed commit already sent, and spent, the batch.
+                _endedByFailedCommit = false;
+                return Task.CompletedTask;
+            }
             throw new NoActiveTransactionException();
+        }
 
         // Cosmos DB batches are not committed until ExecuteAsync — just discard the batch.
         _batch = null;

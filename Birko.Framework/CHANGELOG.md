@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-16 — Migrations take a model's property names on PostgreSQL
+
+[[TASK-637]]. The data migrator and `RenameField` quoted column names, so on PostgreSQL `"Name"` missed the folded column
+`name` (42703), and a `[NamedField]` property failed everywhere. Columns are now bare, resolved through the loaded model
+(`DataBase.MigrationColumn`), and a name that is not a plain identifier is refused.
+
 ## 2026-10-16 — An entity can live in a database schema
 
 [[TASK-272]]. `[Table("Events", Schema = "reporting")]` (also DataAnnotations and `ToTable(name, schema)`), and settings

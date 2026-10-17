@@ -26,6 +26,7 @@ Azure Cosmos DB (NoSQL API) implementation for the Birko data layer providing do
 
 ### UnitOfWork
 - `CosmosDbUnitOfWork` - Wraps `TransactionalBatch` (partition-key scoped)
+  - The batch is spent once sent: a refused batch is a `UnitOfWorkException` naming the status, a thrown one propagates unchanged, and the rollback after a failed commit is a no-op (TASK-578)
 
 ### IndexManagement
 - `CosmosDBIndexManager` - Manages indexing policies (included paths, composite indexes, spatial indexes). Index names are kept in the `__birko_indexes` registry container (TASK-628); `Unique`, `Sparse`, `ExpireAfter`, non-standard field types, a single descending field and `Properties` are refused

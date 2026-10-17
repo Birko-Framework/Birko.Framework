@@ -14,6 +14,7 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
 {
     private readonly IMongoClient _client;
     private IClientSessionHandle? _session;
+    private bool _endedByFailedCommit;
     private bool _disposed;
 
     public bool IsActive => _session?.IsInTransaction ?? false;
@@ -68,26 +69,69 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
         if (IsActive)
             throw new TransactionAlreadyActiveException();
 
+        ReleaseSession();
         _session = await _client.StartSessionAsync(cancellationToken: ct);
         _session.StartTransaction();
+        _endedByFailedCommit = false;
     }
 
+    /// <remarks>
+    /// TASK-578 (SH-M429): the session is disposed when the transaction ends, by commit, abort or a failed commit. It
+    /// used to stay held, so the next <see cref="BeginAsync"/> started a new session over the undisposed one. A failed
+    /// commit ends the boundary as on SQL and Elasticsearch (TASK-325): the driver's exception propagates unchanged,
+    /// disposing the session aborts what it did not commit, and the <see cref="RollbackAsync"/> that follows is a no-op.
+    /// </remarks>
     public async Task CommitAsync(CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
             throw new NoActiveTransactionException();
 
-        await _session!.CommitTransactionAsync(ct);
+        try
+        {
+            await _session!.CommitTransactionAsync(ct);
+        }
+        catch
+        {
+            _endedByFailedCommit = true;
+            throw;
+        }
+        finally
+        {
+            ReleaseSession();
+        }
     }
 
     public async Task RollbackAsync(CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
+        {
+            if (_endedByFailedCommit)
+            {
+                // Nothing left to abort: the failed commit already released the session, which aborted it.
+                _endedByFailedCommit = false;
+                return;
+            }
             throw new NoActiveTransactionException();
+        }
 
-        await _session!.AbortTransactionAsync(ct);
+        try
+        {
+            await _session!.AbortTransactionAsync(ct);
+        }
+        finally
+        {
+            ReleaseSession();
+        }
+    }
+
+    private void ReleaseSession()
+    {
+        var session = _session;
+        _session = null;
+        try { session?.Dispose(); }
+        catch { /* releasing must not replace the exception that ended the transaction */ }
     }
 
     public ValueTask DisposeAsync()

@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-17 21:32. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-17 21:43. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -17,7 +17,7 @@ which this regeneration never touches._
 | in-progress  | 9     | 13      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 336   |
+| done         | 1     | 23      | 337   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -168,7 +168,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (203/270 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (204/271 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -366,7 +366,7 @@ _None._
     - [x] [TASK-575](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-575-two-workers-reclaim-the-same-stale-job.md) Two SQL job workers can both reclaim the same stale Processing job and run it twice (P1) · FEATURE-014
     - [x] [TASK-576](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-576-async-database-model-repository-rejects-concrete-stores.md) `AsyncDataBaseModelRepository<T>` rejects every store built with a concrete connector (P2) · FEATURE-014
     - [x] [TASK-577](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-577-cross-assembly-field-attributes-lose-values.md) A cross-assembly SQL field attribute is rebuilt without its value: lengths, precision and scale become 0, and `[UtcField]` is dropped (P1) · FEATURE-014
-  - STORY-053 Spec-harvest — medium findings — planned (45/58 done)
+  - STORY-053 Spec-harvest — medium findings — planned (46/59 done)
     - [x] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
     - [x] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
     - [x] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
@@ -398,7 +398,7 @@ _None._
     - [x] [TASK-565](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-565-in-process-bus-resolves-handlers-from-the-root-provider.md) The in-process bus resolves event handlers from the root provider — scoped handler dependencies throw or are shared forever (P1) · FEATURE-014
     - [x] [TASK-566](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-566-distributed-bus-resolves-handlers-from-the-root-provider.md) The distributed bus resolves event handlers from the root provider too — the same defect as TASK-565 on the message-queue path (P2) · FEATURE-014
     - [x] [TASK-567](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-567-sql-table-without-declared-key-accepts-duplicate-guids.md) A SQL table for a model with no declared key accepts a second row with the same Guid — create never refuses it (P2) · FEATURE-014
-    - [ ] [TASK-578](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-578-non-sql-units-of-work-leave-state-after-commit.md) The MongoDB, Cosmos DB and InfluxDB units of work leave state behind after a commit or a failed commit (P2) · FEATURE-014
+    - [x] [TASK-578](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-578-non-sql-units-of-work-leave-state-after-commit.md) The MongoDB, Cosmos DB and InfluxDB units of work leave state behind after a commit or a failed commit (P2) · FEATURE-014
     - [x] [TASK-626](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-626-join-groups-drop-on-clause-and-conditionless-joins.md) A CROSS join with conditions loses its ON clause, and a join with no conditions disappears (P2) · FEATURE-014
     - [x] [TASK-627](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-627-unterminated-schema-builder-chain-is-recorded-applied.md) A migration that forgets `Build()` performs no DDL and is recorded as applied (P2) · FEATURE-014
     - [x] [TASK-628](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-628-cosmos-index-manager-has-no-index-names.md) The Cosmos DB index manager cannot find, by name, an index it created (P2) · FEATURE-014
@@ -425,6 +425,7 @@ _None._
     - [ ] [TASK-653](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-653-connection-strings-escape-credentials-on-every-sql-provider.md) Connection strings escape credentials on every SQL provider (P1)
     - [ ] [TASK-655](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-655-document-backend-dropfield-and-dropindex-no-ops-are-recorded-as-applied.md) Document-backend DropField and DropIndex do nothing, and the migration is recorded as applied (P2) · FEATURE-014
     - [ ] [TASK-656](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-656-mysql-and-sql-server-drop-datetime-precision.md) MySQL stores a DateTime to the second, and SQL Server to about 3 ms (P2) · FEATURE-014
+    - [ ] [TASK-658](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-658-ravendb-unit-of-work-stays-active-after-a-failed-savechanges.md) The RavenDB unit of work stays active after a failed `SaveChanges`, unlike every other backend (P2) · FEATURE-014
   - STORY-054 Spec-harvest — low findings — planned (0/24 done)
     - [ ] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
     - [ ] [TASK-174](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-174-triage-low-event-bus-and-messaging.md) Triage the 29 low spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014
