@@ -63,16 +63,16 @@ namespace Birko.AI.Providers
                     var errorDetail = ExtractErrorFromResponseBody(responseJson) ?? responseJson;
                     var errorMsg = $"Ollama API Error ({response.StatusCode}): {errorDetail}";
                     SendMessage("error", errorMsg);
-                    return LlmResponse.Error(errorMsg);
+                    return LlmResponse.Error(errorMsg, ClassifyResponse(response, responseJson));
                 }
 
                 return ParseResponse(responseJson);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 var errorMsg = $"Error calling Ollama API: {ex.Message}";
                 SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, ClassifyException(ex));
             }
         }
 
@@ -140,7 +140,7 @@ namespace Birko.AI.Providers
                 // _baseUrl directly, so every streaming call hit e.g. http://localhost:11434 (404). (CR-C01)
                 var url = $"{_baseUrl}/api/chat";
 
-                var response = await SendStreamingWithRetryAsync(
+                var (response, failure) = await ConnectStreamingAsync(
                     _httpClient,
                     () =>
                     {
@@ -153,12 +153,7 @@ namespace Birko.AI.Providers
 
                 if (response == null)
                 {
-                    return new LlmStreamingResponse
-                    {
-                        GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(
-                            new HttpRequestException("Failed to connect to Ollama API after retries")),
-                        Error = "Connection failed"
-                    };
+                    return StreamingFailure("Failed to connect to Ollama API after retries", failure ?? LlmFailure.Unknown);
                 }
 
                 // Create response object that will be populated during streaming
@@ -177,14 +172,10 @@ namespace Birko.AI.Providers
 
                 return streamingResponse;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 SendMessage("error", $"Error calling Ollama streaming API: {ex.Message}");
-                return new LlmStreamingResponse
-                {
-                    GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(ex),
-                    Error = ex.Message
-                };
+                return StreamingFailure(ex.Message, ClassifyException(ex));
             }
         }
 

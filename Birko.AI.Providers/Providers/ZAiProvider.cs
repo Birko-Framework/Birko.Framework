@@ -121,16 +121,16 @@ namespace Birko.AI.Providers
                     var errorDetail = ExtractErrorFromResponseBody(responseJson) ?? responseJson;
                     var errorMsg = $"Z.AI API Error ({response.StatusCode}): {errorDetail}";
                     SendMessage("error", errorMsg);
-                    return LlmResponse.Error(errorMsg);
+                    return LlmResponse.Error(errorMsg, ClassifyResponse(response, responseJson));
                 }
 
                 return ParseResponse(responseJson);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 var errorMsg = $"Error calling Z.AI API: {ex.Message}";
                 SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, ClassifyException(ex));
             }
         }
 
@@ -210,7 +210,7 @@ namespace Birko.AI.Providers
                 if (!result.TryGetProperty("choices", out var choices) || choices.GetArrayLength() == 0)
                 {
                     SendMessage("error", "Invalid response format: missing choices array");
-                    return LlmResponse.Error("Z.AI: Invalid response format - missing choices array");
+                    return LlmResponse.Error("Z.AI: Invalid response format - missing choices array", new LlmFailure(LlmFailureKind.InvalidResponse));
                 }
 
                 var choice = choices[0];
@@ -305,7 +305,7 @@ namespace Birko.AI.Providers
             {
                 var errorMsg = $"Error parsing Z.AI response: {ex.Message}";
                 SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
             }
         }
 
@@ -417,7 +417,7 @@ namespace Birko.AI.Providers
                 });
                 var url = $"{_baseUrl}/chat/completions";
 
-                var response = await SendStreamingWithRetryAsync(
+                var (response, failure) = await ConnectStreamingAsync(
                     _httpClient,
                     () =>
                     {
@@ -430,12 +430,7 @@ namespace Birko.AI.Providers
 
                 if (response == null)
                 {
-                    return new LlmStreamingResponse
-                    {
-                        GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(
-                            new HttpRequestException("Failed to connect to Z.AI API after retries")),
-                        Error = "Connection failed"
-                    };
+                    return StreamingFailure("Failed to connect to Z.AI API after retries", failure ?? LlmFailure.Unknown);
                 }
 
                 // Create response object that will be populated during streaming
@@ -455,14 +450,10 @@ namespace Birko.AI.Providers
 
                 return streamingResponse;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 SendMessage("error", $"Error calling Z.AI streaming API: {ex.Message}");
-                return new LlmStreamingResponse
-                {
-                    GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(ex),
-                    Error = ex.Message
-                };
+                return StreamingFailure(ex.Message, ClassifyException(ex));
             }
         }
     }

@@ -42,10 +42,10 @@ namespace Birko.AI.Orchestration.Tests
         {
             var failed = new ImplementationStep();
             failed.Start();
-            failed.Fail("boom", "Permanent");
+            failed.Fail("boom", Birko.AI.Models.ErrorCategory.Permanent);
             failed.Status.Should().Be(StepStatus.Failed);
             failed.ErrorMessage.Should().Be("boom");
-            failed.ErrorCategory.Should().Be("Permanent");
+            failed.ErrorCategory.Should().Be(Birko.AI.Models.ErrorCategory.Permanent);
             failed.Metrics.Failed.Should().BeTrue();
             failed.CompletedAt.Should().NotBeNull();
 
@@ -78,13 +78,13 @@ namespace Birko.AI.Orchestration.Tests
             var step = new ImplementationStep { MaxRetries = 2 };
             step.Start();
 
-            step.RetryOrFail("timeout", "Transient", retryable: true).Should().BeTrue();
+            step.RetryOrFail("timeout", Birko.AI.Models.ErrorCategory.Transient, retryable: true).Should().BeTrue();
 
             step.Status.Should().Be(StepStatus.Pending);
             step.RetryCount.Should().Be(1);
             step.StartedAt.Should().BeNull();
             step.ErrorMessage.Should().Be("timeout");
-            step.ErrorCategory.Should().Be("Transient");
+            step.ErrorCategory.Should().Be(Birko.AI.Models.ErrorCategory.Transient);
             step.Metrics.Failed.Should().BeFalse("a retry is not a failure");
         }
 
@@ -93,10 +93,10 @@ namespace Birko.AI.Orchestration.Tests
         {
             var step = new ImplementationStep { MaxRetries = 2 };
 
-            step.RetryOrFail("t1", "Transient", true).Should().BeTrue();
-            step.RetryOrFail("t2", "Transient", true).Should().BeTrue();
+            step.RetryOrFail("t1", Birko.AI.Models.ErrorCategory.Transient, true).Should().BeTrue();
+            step.RetryOrFail("t2", Birko.AI.Models.ErrorCategory.Transient, true).Should().BeTrue();
             step.CanRetry.Should().BeFalse();
-            step.RetryOrFail("t3", "Transient", true).Should().BeFalse();
+            step.RetryOrFail("t3", Birko.AI.Models.ErrorCategory.Transient, true).Should().BeFalse();
 
             step.Status.Should().Be(StepStatus.Failed);
             step.RetryCount.Should().Be(2);
@@ -108,7 +108,7 @@ namespace Birko.AI.Orchestration.Tests
         {
             var step = new ImplementationStep();
 
-            step.RetryOrFail("syntax error", "Permanent", retryable: false).Should().BeFalse();
+            step.RetryOrFail("syntax error", Birko.AI.Models.ErrorCategory.Permanent, retryable: false).Should().BeFalse();
 
             step.Status.Should().Be(StepStatus.Failed);
             step.RetryCount.Should().Be(0);
@@ -119,7 +119,7 @@ namespace Birko.AI.Orchestration.Tests
         public void MaxRetries_0_makes_a_retryable_failure_final()
         {
             var step = new ImplementationStep { MaxRetries = 0 };
-            step.RetryOrFail("t", "Transient", true).Should().BeFalse();
+            step.RetryOrFail("t", Birko.AI.Models.ErrorCategory.Transient, true).Should().BeFalse();
             step.Status.Should().Be(StepStatus.Failed);
         }
 
@@ -230,7 +230,7 @@ namespace Birko.AI.Orchestration.Tests
         {
             var plan = Plan(2);
             plan.Steps[0].FilesToCreate.Add("a.cs");
-            plan.Steps[0].RetryOrFail("rate limited", "Transient", true);
+            plan.Steps[0].RetryOrFail("rate limited", Birko.AI.Models.ErrorCategory.Transient, true);
             plan.Steps[0].Metrics.IterationsUsed = 12;
             plan.Steps[0].Complete();
             plan.Steps[1].Complete();

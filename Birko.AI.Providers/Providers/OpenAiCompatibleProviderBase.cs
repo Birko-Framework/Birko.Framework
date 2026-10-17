@@ -38,11 +38,12 @@ namespace Birko.AI.Providers
 
         public override string Name => $"{ProviderName} ({Model})";
 
-        protected OpenAiCompatibleProviderBase(string model, string baseUrl, string? apiKey = null)
+        protected OpenAiCompatibleProviderBase(string model, string baseUrl, string? apiKey = null, HttpMessageHandler? handler = null)
         {
             Model = model;
             BaseUrl = baseUrl.TrimEnd('/');
-            HttpClient = new HttpClient
+            // handler is a test seam (inject a fake HttpMessageHandler); production callers omit it.
+            HttpClient = new HttpClient(handler ?? new HttpClientHandler())
             {
                 Timeout = RequestTimeout
             };
@@ -98,16 +99,16 @@ namespace Birko.AI.Providers
                     var errorDetail = ExtractErrorFromResponseBody(responseJson) ?? responseJson;
                     var errorMsg = $"{ProviderName} API Error ({response.StatusCode}): {errorDetail}";
                     SendMessage("error", errorMsg);
-                    return LlmResponse.Error(errorMsg);
+                    return LlmResponse.Error(errorMsg, ClassifyResponse(response, responseJson));
                 }
 
                 return ParseResponse(responseJson);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 var errorMsg = $"Error calling {ProviderName} API: {ex.Message}";
                 SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, ClassifyException(ex));
             }
         }
 
@@ -158,7 +159,7 @@ namespace Birko.AI.Providers
             {
                 var errorMsg = $"{ProviderName}: Invalid response format - missing choices array";
                 SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
             }
 
             var choice = choices[0];
@@ -222,7 +223,7 @@ namespace Birko.AI.Providers
                 var json = JsonSerializer.Serialize(payload);
                 var url = ChatCompletionsUrl;
 
-                var response = await SendStreamingWithRetryAsync(
+                var (response, failure) = await ConnectStreamingAsync(
                     HttpClient,
                     () =>
                     {
@@ -235,12 +236,7 @@ namespace Birko.AI.Providers
 
                 if (response == null)
                 {
-                    return new LlmStreamingResponse
-                    {
-                        GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(
-                            new HttpRequestException($"Failed to connect to {ProviderName} API after retries")),
-                        Error = "Connection failed"
-                    };
+                    return StreamingFailure($"Failed to connect to {ProviderName} API after retries", failure ?? LlmFailure.Unknown);
                 }
 
                 // Create response object that will be populated during streaming
@@ -260,14 +256,10 @@ namespace Birko.AI.Providers
 
                 return streamingResponse;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 SendMessage("error", $"Error calling {ProviderName} streaming API: {ex.Message}");
-                return new LlmStreamingResponse
-                {
-                    GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(ex),
-                    Error = ex.Message
-                };
+                return StreamingFailure(ex.Message, ClassifyException(ex));
             }
         }
 

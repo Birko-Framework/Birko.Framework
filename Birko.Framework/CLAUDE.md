@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A failed LLM call says why, and a cancelled one throws (2026-10-17)
+[[TASK-531]]. `LlmResponse.Failure` carries the kind, HTTP status, Retry-After and `IsTransient`. The provider base
+classifies it once, on every provider, from the status, never the text. Measured: a cancelled call came back as an
+error response; it now throws `OperationCanceledException`. **Breaking:** `ErrorCategory` on plan steps and task
+records is an enum. Copilot's streaming 401 refresh now runs.
 ### Birko.AI.Resilience.Data: breaker state and LLM usage persist on any store (2026-10-17)
 [[TASK-530]]. New project. `StoreCircuitBreakerStore` and `StoreUsageRepository` implement the two resilience interfaces
 over any `IAsyncBulkStore<T>`. Nothing implemented them before, so every restart closed an open circuit. Usage totals are
@@ -317,11 +322,6 @@ removes its new index; one cancelled after it succeeds with a `CleanupError`.
 written by sync read as changed next run, and the lossy copy overwrote the precise source. Written sides are now read
 back before their version is recorded. Custom is asked about an item with no recorded pair. Every failure reaches
 `result.Errors` and `OnError` once. MySQL / SQL Server precision itself is [[TASK-656]].
-### Rule `Between` and `In` no longer round a fractional value (2026-10-17)
-
-[[TASK-645]]. Measured: `Qty Between 10.5..20` selected Qty 10 at the store and `Qty In [10.6]` selected 11, while
-the in-memory evaluator compared exactly. Each bound and candidate now goes through the comparison TASK-171 fixed,
-so both engines agree.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

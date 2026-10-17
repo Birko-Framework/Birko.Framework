@@ -400,7 +400,7 @@ namespace Birko.AI.Providers
                     var errorType = error.TryGetProperty("type", out var type) ? type.GetString() : "unknown";
                     var errorMsg = $"API returned error: {errorType} - {errorMessage}";
                     messageCallback?.Invoke("error", errorMsg);
-                    return LlmResponse.Error(errorMsg);
+                    return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
                 }
 
                 var choice = result.GetProperty("choices")[0];
@@ -448,16 +448,105 @@ namespace Birko.AI.Providers
             {
                 var errorMsg = $"Error parsing OpenAI-style response: {ex.Message}";
                 messageCallback?.Invoke("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
             }
         }
 
-        protected static LlmResponse NotConfigured() => new() { StopReason = "NotConfigured", Content = [], ErrorMessage = "Provider is not properly configured. Check API keys and settings." };
+        protected static LlmResponse NotConfigured() => new()
+        {
+            StopReason = "NotConfigured",
+            Content = [],
+            ErrorMessage = "Provider is not properly configured. Check API keys and settings.",
+            Failure = new LlmFailure(LlmFailureKind.NotConfigured),
+        };
+
+        // ── Failure classification (TASK-531) ──
+        // One producer for "why did this call fail". Providers used to build LlmResponse.Error(string) on every path,
+        // so the HTTP status this class already had was thrown away and consumers matched substrings of the message
+        // (DraCode's ErrorClassifier: "500" and "timeout" matched unrelated text, quota exhaustion counted as transient).
+
+        /// <summary>
+        /// True when <paramref name="ex"/> is the caller cancelling: such a call has not failed and must not be answered
+        /// with an error response. Every provider's catch-all is <c>catch (Exception ex) when (!IsCallerCancellation(ex, ct))</c>,
+        /// so the cancellation propagates; before TASK-531 it came back as <c>StopReason = "error"</c>.
+        /// </summary>
+        protected static bool IsCallerCancellation(Exception ex, CancellationToken cancellationToken)
+            => ex is OperationCanceledException && cancellationToken.IsCancellationRequested;
+
+        /// <summary>Classifies a non-success response returned by <see cref="SendWithRetryAsync"/> (the headers survive its disposal).</summary>
+        protected static LlmFailure ClassifyResponse(HttpResponseMessage response, string? responseBody)
+        {
+            var status = (int)response.StatusCode;
+            if (status == 429 && IsQuotaExhausted(responseBody))
+                return new LlmFailure(LlmFailureKind.Billing, status);
+            return LlmFailure.FromStatusCode(status, GetRetryAfterDelay(response));
+        }
+
+        /// <summary>Classifies an exception a provider caught (never the caller's cancellation, see <see cref="IsCallerCancellation"/>).</summary>
+        protected static LlmFailure ClassifyException(Exception ex) => ex switch
+        {
+            HttpRequestException { StatusCode: { } code } => LlmFailure.FromStatusCode((int)code),
+            HttpRequestException => new LlmFailure(LlmFailureKind.Network),
+            TimeoutException => new LlmFailure(LlmFailureKind.Timeout),
+            // HttpClient.Timeout surfaces as a TaskCanceledException the caller's token did not cause.
+            OperationCanceledException => new LlmFailure(LlmFailureKind.Timeout),
+            JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException
+                => new LlmFailure(LlmFailureKind.InvalidResponse),
+            _ => LlmFailure.Unknown,
+        };
+
+        /// <summary>
+        /// OpenAI answers an exhausted quota with 429 and <c>error.code</c> / <c>error.type</c> <c>insufficient_quota</c>:
+        /// a billing state, not a rate limit, so retrying it only spends time. Read from the structured code, not the text.
+        /// </summary>
+        private static bool IsQuotaExhausted(string? responseBody)
+        {
+            if (string.IsNullOrWhiteSpace(responseBody)) return false;
+            try
+            {
+                var doc = JsonSerializer.Deserialize<JsonElement>(responseBody);
+                if (doc.ValueKind != JsonValueKind.Object || !doc.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object)
+                    return false;
+                foreach (var name in new[] { "code", "type" })
+                {
+                    if (error.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                        && value.GetString() == "insufficient_quota")
+                        return true;
+                }
+            }
+            catch (JsonException)
+            {
+            }
+            return false;
+        }
+
+        /// <summary>A streaming response for a request that failed before any stream existed.</summary>
+        protected static LlmStreamingResponse StreamingFailure(string message, LlmFailure failure) => new()
+        {
+            GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(new HttpRequestException(message)),
+            Error = message,
+            FinalResponse = LlmResponse.Error(message, failure),
+        };
+
+        /// <summary>The result of <see cref="ConnectStreamingAsync"/>: an open response, or why there is none.</summary>
+        protected readonly record struct StreamingConnection(HttpResponseMessage? Response, LlmFailure? Failure);
 
         /// <summary>
         /// Sends a streaming HTTP request with retry logic for initial connection failures.
         /// </summary>
+        /// <returns>The open response, or <c>null</c> when the request failed; <see cref="ConnectStreamingAsync"/> also says why.</returns>
         protected async Task<HttpResponseMessage?> SendStreamingWithRetryAsync(
+            HttpClient httpClient,
+            Func<HttpRequestMessage> requestFactory,
+            string providerName,
+            CancellationToken cancellationToken = default)
+            => (await ConnectStreamingAsync(httpClient, requestFactory, providerName, cancellationToken)).Response;
+
+        /// <summary>
+        /// Opens a streaming HTTP request with retry logic for initial connection failures, and classifies the failure
+        /// when there is no stream (TASK-531). The caller's cancellation propagates.
+        /// </summary>
+        protected async Task<StreamingConnection> ConnectStreamingAsync(
             HttpClient httpClient,
             Func<HttpRequestMessage> requestFactory,
             string providerName,
@@ -474,22 +563,24 @@ namespace Birko.AI.Providers
                     var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
                     if (response.IsSuccessStatusCode)
-                        return response;
+                        return new StreamingConnection(response, null);
 
                     var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
                     if (!IsRetryableStatusCode(response.StatusCode))
                     {
                         SendMessage("error", $"{providerName} API Error: {response.StatusCode}");
+                        var failure = ClassifyResponse(response, responseBody);
                         response.Dispose();
-                        return null;
+                        return new StreamingConnection(null, failure);
                     }
 
                     if (attempt >= policy.MaxRetries)
                     {
                         SendMessage("error", $"{providerName} API Error after {attempt + 1} attempts: {response.StatusCode}");
+                        var failure = ClassifyResponse(response, responseBody);
                         response.Dispose();
-                        return null;
+                        return new StreamingConnection(null, failure);
                     }
 
                     var retryAfter = GetRetryAfterDelay(response);
@@ -506,7 +597,7 @@ namespace Birko.AI.Providers
                     if (attempt >= policy.MaxRetries)
                     {
                         SendMessage("error", $"{providerName}: Network error after {attempt + 1} attempts: {ex.Message}");
-                        return null;
+                        return new StreamingConnection(null, ClassifyException(ex));
                     }
 
                     var delay = policy.GetDelay(attempt + 1);
@@ -520,7 +611,7 @@ namespace Birko.AI.Providers
                     if (attempt >= policy.MaxRetries)
                     {
                         SendMessage("error", $"{providerName}: Timeout after {attempt + 1} attempts");
-                        return null;
+                        return new StreamingConnection(null, new LlmFailure(LlmFailureKind.Timeout));
                     }
 
                     var delay = policy.GetDelay(attempt + 1);
@@ -531,7 +622,7 @@ namespace Birko.AI.Providers
                 }
             }
 
-            return null;
+            return new StreamingConnection(null, LlmFailure.Unknown);
         }
 
         /// <summary>

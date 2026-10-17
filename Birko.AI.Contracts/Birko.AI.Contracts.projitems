@@ -15,6 +15,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\MessageText.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\ContentBlock.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\TokenUsage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\LlmFailure.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\LlmResponse.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\LlmStreamingResponse.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Providers\ILlmProvider.cs" />

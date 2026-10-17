@@ -14,11 +14,12 @@ namespace Birko.AI.Providers
 
         public override string Name => "Gemini";
 
-        public GeminiProvider(string apiKey, string model = "gemini-2.0-flash-exp", string baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/")
+        public GeminiProvider(string apiKey, string model = "gemini-2.0-flash-exp", string baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/", HttpMessageHandler? handler = null)
         {
             _apiKey = apiKey;
             _model = model;
-            _httpClient = new HttpClient();
+            // handler is a test seam (inject a fake HttpMessageHandler); production callers omit it.
+            _httpClient = new HttpClient(handler ?? new HttpClientHandler());
             _baseUrl = baseUrl;
         }
 
@@ -54,16 +55,16 @@ namespace Birko.AI.Providers
                     var errorDetail = ExtractErrorFromResponseBody(responseJson) ?? responseJson;
                     var errorMsg = $"Gemini API Error ({response.StatusCode}): {errorDetail}";
                     SendMessage("error", errorMsg);
-                    return LlmResponse.Error(errorMsg);
+                    return LlmResponse.Error(errorMsg, ClassifyResponse(response, responseJson));
                 }
 
                 return ParseResponse(responseJson, MessageCallback);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 var errorMsg = $"Error calling Gemini API: {ex.Message}";
                 SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, ClassifyException(ex));
             }
         }
 
@@ -333,7 +334,7 @@ namespace Birko.AI.Providers
             {
                 var errorMsg = $"Error parsing Gemini response: {ex.Message}";
                 messageCallback?.Invoke("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
             }
         }
 
@@ -355,7 +356,7 @@ namespace Birko.AI.Providers
                 var json = JsonSerializer.Serialize(payload);
                 var url = $"{_baseUrl}{_model}:streamGenerateContent?alt=sse&key={_apiKey}";
 
-                var response = await SendStreamingWithRetryAsync(
+                var (response, failure) = await ConnectStreamingAsync(
                     _httpClient,
                     () =>
                     {
@@ -368,12 +369,7 @@ namespace Birko.AI.Providers
 
                 if (response == null)
                 {
-                    return new LlmStreamingResponse
-                    {
-                        GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(
-                            new HttpRequestException("Failed to connect to Gemini API after retries")),
-                        Error = "Connection failed"
-                    };
+                    return StreamingFailure("Failed to connect to Gemini API after retries", failure ?? LlmFailure.Unknown);
                 }
 
                 // Create response object that will be populated during streaming
@@ -392,14 +388,10 @@ namespace Birko.AI.Providers
 
                 return streamingResponse;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 SendMessage("error", $"Error calling Gemini streaming API: {ex.Message}");
-                return new LlmStreamingResponse
-                {
-                    GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(ex),
-                    Error = ex.Message
-                };
+                return StreamingFailure(ex.Message, ClassifyException(ex));
             }
         }
 

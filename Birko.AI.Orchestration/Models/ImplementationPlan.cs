@@ -258,9 +258,9 @@ namespace Birko.AI.Orchestration.Models
         public string? ErrorMessage { get; set; }
 
         /// <summary>
-        /// Classification of the last error (e.g. "Transient", "Permanent"), as the consumer's classifier names it.
+        /// Classification of the last error (TASK-531: typed; it was a string each consumer spelled its own way).
         /// </summary>
-        public string? ErrorCategory { get; set; }
+        public Birko.AI.Models.ErrorCategory? ErrorCategory { get; set; }
 
         /// <summary>
         /// Retries already scheduled by <see cref="RetryOrFail"/>.
@@ -309,7 +309,7 @@ namespace Birko.AI.Orchestration.Models
         /// <summary>
         /// Marks the step as finally failed — no retry. For a failure that may be retried use <see cref="RetryOrFail"/>.
         /// </summary>
-        public void Fail(string? error = null, string? errorCategory = null)
+        public void Fail(string? error = null, Birko.AI.Models.ErrorCategory? errorCategory = null)
         {
             Status = StepStatus.Failed;
             ErrorMessage = error;
@@ -327,13 +327,23 @@ namespace Birko.AI.Orchestration.Models
         }
 
         /// <summary>
+        /// <see cref="RetryOrFail(string?, Birko.AI.Models.ErrorCategory?, bool)"/> for an LLM failure: retryable exactly
+        /// when the provider classified it transient (TASK-531), so no caller decides that from the error text.
+        /// </summary>
+        public bool RetryOrFail(string? error, Birko.AI.Models.LlmFailure failure)
+        {
+            ArgumentNullException.ThrowIfNull(failure);
+            return RetryOrFail(error, failure.Category, failure.IsTransient);
+        }
+
+        /// <summary>
         /// Records a failure and decides between a retry and a final failure. A retryable error with retries left
         /// puts the step back to <see cref="StepStatus.Pending"/> (start time cleared, <see cref="RetryCount"/> + 1)
         /// and returns <c>true</c>; anything else is <see cref="Fail"/> — with the message saying the retries ran out
         /// when they did — and returns <c>false</c>. The error is kept in <see cref="ErrorMessage"/> either way.
         /// </summary>
         /// <returns><c>true</c> when a retry was scheduled.</returns>
-        public bool RetryOrFail(string? error, string? errorCategory, bool retryable)
+        public bool RetryOrFail(string? error, Birko.AI.Models.ErrorCategory? errorCategory, bool retryable)
         {
             ErrorMessage = error;
             ErrorCategory = errorCategory;

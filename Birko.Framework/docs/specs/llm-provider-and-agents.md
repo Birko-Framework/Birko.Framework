@@ -6,6 +6,7 @@ sources:
   - ../Birko.AI.Contracts/AgentOptions.cs
   - ../Birko.AI.Contracts/LlmProviderFactory.cs
   - ../Birko.AI.Contracts/Models/ContentBlock.cs
+  - ../Birko.AI.Contracts/Models/LlmFailure.cs
   - ../Birko.AI.Contracts/Models/LlmResponse.cs
   - ../Birko.AI.Contracts/Models/LlmStreamingResponse.cs
   - ../Birko.AI.Contracts/Models/Message.cs
@@ -219,6 +220,54 @@ underlying exception.
 - **Then** the live `HttpResponseMessage` obtained with `HttpCompletionOption.ResponseHeadersRead`
   is returned undisposed so the body stream can be read
 
+#### Scenario: ConnectStreamingAsync says why there is no stream
+
+- **Given** any of the terminal failures above
+- **When** `ConnectStreamingAsync` (which `SendStreamingWithRetryAsync` now wraps) runs
+- **Then** it returns no response and the classified `LlmFailure` (TASK-531); the providers build their failed
+  `LlmStreamingResponse` from it with `StreamingFailure`, so `FinalResponse.Failure` carries the classification
+
+### Requirement: A failed call carries a classified failure
+
+The system SHALL set `LlmResponse.Failure` (an `LlmFailure`: `Kind`, `StatusCode`, `RetryAfter`, `IsTransient`,
+`Category`) on every error response, classified once in `LlmProviderBase` from the HTTP status, the Retry-After
+header and the exception type, never from the error text (TASK-531). 429 is `RateLimited`, 5xx `ServerError`, 408 and
+the client's own timeout `Timeout`, a connection failure `Network` (these four are transient); 400 and other 4xx
+`BadRequest`, 401 `Unauthorized`, 402 and a 429 whose `error.code` or `error.type` is `insufficient_quota` `Billing`,
+403 `Forbidden`, 404 `NotFound`, a missing key `NotConfigured`, an unreadable success body `InvalidResponse`, anything
+else `Unknown` (all permanent). `LlmResponse.Error(message)` without a failure is `Unknown`. A Claude error object in
+a 200 body is classified by its documented `error.type`. `ErrorCategory` (`Transient = 0`, `Permanent = 1`) and
+`LlmFailureKind` have pinned values. Every HTTP provider, sync and streaming, is covered.
+
+The system SHALL NOT answer the caller's cancellation with an error response: every provider's catch-all excludes
+an `OperationCanceledException` raised while the caller's token is cancelled, so it propagates.
+
+#### Scenario: A rate limit with Retry-After
+
+- **Given** a provider whose request is answered 429 with `Retry-After: 7` and no retries left
+- **When** `SendMessageAsync` returns
+- **Then** `Failure.Kind = RateLimited`, `StatusCode = 429`, `IsTransient = true`, `RetryAfter = 7 s`
+
+#### Scenario: Quota exhaustion is billing, not a rate limit
+
+- **Given** a 429 whose body is `{"error":{"code":"insufficient_quota",...}}`
+- **When** the call fails
+- **Then** `Failure.Kind = Billing` and `IsTransient = false`
+
+#### Scenario: Cancellation is not a failure
+
+- **Given** a request in flight and the caller's token cancelled
+- **When** the provider observes the cancellation
+- **Then** `SendMessageAsync` / `SendMessageStreamingAsync` throw `OperationCanceledException`; before TASK-531 they
+  returned `StopReason = "error"` with "A task was canceled"
+
+#### Scenario: The client's own timeout is transient
+
+- **Given** `HttpClient.Timeout` elapses (a `TaskCanceledException` wrapping `TimeoutException`, the caller's token not
+  cancelled)
+- **When** the provider catches it
+- **Then** `Failure.Kind = Timeout` and `IsTransient = true`
+
 ### Requirement: Provider error messages are extracted from the response body
 
 The system SHALL attempt, in `ExtractErrorFromResponseBody`, to read a human-readable message
@@ -385,8 +434,8 @@ Both error paths SHALL also invoke the supplied message callback with type `"err
 ### Requirement: Not-configured providers return a distinct stop reason
 
 The system SHALL provide `LlmProviderBase.NotConfigured()` producing an `LlmResponse` with
-`StopReason = "NotConfigured"`, empty `Content` and `ErrorMessage = "Provider is not properly
-configured. Check API keys and settings."`, and SHALL declare an abstract `IsConfigured()` that
+`StopReason = "NotConfigured"`, empty `Content`, `ErrorMessage = "Provider is not properly
+configured. Check API keys and settings."` and `Failure.Kind = NotConfigured` (TASK-531), and SHALL declare an abstract `IsConfigured()` that
 derived providers implement.
 
 #### Scenario: Agent reaction to NotConfigured

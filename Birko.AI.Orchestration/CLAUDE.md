@@ -20,7 +20,8 @@ Multi-agent task orchestration — dispatch, planning, dependency analysis, esca
   `AssignSteps` / `GetAssignedSteps`, `GetAggregatedMetrics`, `CaptureLessonsLearned` (virtual), `Reflections`,
   `Escalations`. Not sealed — a consumer adds its own context by deriving.
 - `ImplementationStep` — `Start` / `Complete` / `Fail` / `Skip`; `RetryOrFail(error, category, retryable)` is the
-  retry decision (`RetryCount` / `MaxRetries`, back to `Pending` while retries remain); `ErrorMessage` keeps the
+  retry decision, and `RetryOrFail(error, LlmFailure)` takes it from the provider's classification (TASK-531).
+  `ErrorCategory` on the step and on `AgentTaskRecord` is the typed `Birko.AI.Models.ErrorCategory?` (`RetryCount` / `MaxRetries`, back to `Pending` while retries remain); `ErrorMessage` keeps the
   last error across retries; `Metrics`; `ExpectedContent` (checked by `ContentExpectationValidator`).
 - `PlanStatus`, `StepStatus` — **numeric values pinned** (see Rules).
 
@@ -95,6 +96,7 @@ Behaviour that differs, on purpose:
 - `ValidationAttempts` was counted once per validator; now once per validation.
 
 ## Dependencies
+- **Birko.AI.Contracts** — `ErrorCategory` / `LlmFailure` for the typed `ErrorCategory` and `RetryOrFail(error, failure)` (TASK-531; the first type it uses from there)
 - **Microsoft.Extensions.Logging** — logging abstractions
 
 ## Consumers

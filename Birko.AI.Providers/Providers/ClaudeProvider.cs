@@ -14,12 +14,13 @@ namespace Birko.AI.Providers
 
         public override string Name => "Claude";
 
-        public ClaudeProvider(string apiKey, string model, string baseUrl = "https://api.anthropic.com/v1/messages")
+        public ClaudeProvider(string apiKey, string model, string baseUrl = "https://api.anthropic.com/v1/messages", HttpMessageHandler? handler = null)
         {
             _apiKey = apiKey;
             _model = model;
             _baseUrl = baseUrl;
-            _httpClient = new HttpClient();
+            // handler is a test seam (inject a fake HttpMessageHandler); production callers omit it.
+            _httpClient = new HttpClient(handler ?? new HttpClientHandler());
             _httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
             _httpClient.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
         }
@@ -55,16 +56,16 @@ namespace Birko.AI.Providers
                     var errorDetail = ExtractErrorFromResponseBody(responseJson) ?? responseJson;
                     var errorMsg = $"Claude API Error ({response.StatusCode}): {errorDetail}";
                     SendMessage("error", errorMsg);
-                    return LlmResponse.Error(errorMsg);
+                    return LlmResponse.Error(errorMsg, ClassifyResponse(response, responseJson));
                 }
 
                 return ParseResponse(responseJson, MessageCallback);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 var errorMsg = $"Error calling Claude API: {ex.Message}";
                 SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, ClassifyException(ex));
             }
         }
 
@@ -126,7 +127,7 @@ namespace Birko.AI.Providers
                     var errorMessage = error.TryGetProperty("message", out var msg) ? msg.GetString() : "Unknown error";
                     var errorMsg = $"Claude API returned error: {errorType} - {errorMessage}";
                     messageCallback?.Invoke("error", errorMsg);
-                    return LlmResponse.Error(errorMsg);
+                    return LlmResponse.Error(errorMsg, ClassifyErrorType(errorType));
                 }
 
                 var llmResponse = new LlmResponse
@@ -176,9 +177,23 @@ namespace Birko.AI.Providers
             {
                 var errorMsg = $"Error parsing Claude response: {ex.Message}";
                 messageCallback?.Invoke("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
             }
         }
+
+        // TASK-531: an error object in the body is classified by its documented type, never by its message.
+        private static LlmFailure ClassifyErrorType(string? errorType) => new(errorType switch
+        {
+            "rate_limit_error" => LlmFailureKind.RateLimited,
+            "overloaded_error" or "api_error" => LlmFailureKind.ServerError,
+            "timeout_error" => LlmFailureKind.Timeout,
+            "invalid_request_error" or "request_too_large" => LlmFailureKind.BadRequest,
+            "authentication_error" => LlmFailureKind.Unauthorized,
+            "billing_error" => LlmFailureKind.Billing,
+            "permission_error" => LlmFailureKind.Forbidden,
+            "not_found_error" => LlmFailureKind.NotFound,
+            _ => LlmFailureKind.Unknown,
+        });
 
         public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
@@ -205,7 +220,7 @@ namespace Birko.AI.Providers
                 };
                 var json = JsonSerializer.Serialize(payload);
 
-                var response = await SendStreamingWithRetryAsync(
+                var (response, failure) = await ConnectStreamingAsync(
                     _httpClient,
                     () =>
                     {
@@ -218,12 +233,7 @@ namespace Birko.AI.Providers
 
                 if (response == null)
                 {
-                    return new LlmStreamingResponse
-                    {
-                        GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(
-                            new HttpRequestException("Failed to connect to Claude API after retries")),
-                        Error = "Connection failed"
-                    };
+                    return StreamingFailure("Failed to connect to Claude API after retries", failure ?? LlmFailure.Unknown);
                 }
 
                 // Create response object that will be populated during streaming
@@ -242,14 +252,10 @@ namespace Birko.AI.Providers
 
                 return streamingResponse;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 SendMessage("error", $"Error calling Claude streaming API: {ex.Message}");
-                return new LlmStreamingResponse
-                {
-                    GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(ex),
-                    Error = ex.Message
-                };
+                return StreamingFailure(ex.Message, ClassifyException(ex));
             }
         }
 

@@ -13,6 +13,11 @@ Core AI agent framework with LLM provider base class, agent run loop, factories,
 
 ### Providers/LlmProviderBase.cs
 - `LlmProviderBase` — Base class for LLM providers with retry logic, SSE parsing, and OpenAI-compatible helpers
+- Failure classification (TASK-531), the one producer: `ClassifyResponse(response, body)` (status, Retry-After, a 429
+  `insufficient_quota` is Billing), `ClassifyException(ex)`, `IsCallerCancellation(ex, ct)`, `StreamingFailure(message,
+  failure)`, and `ConnectStreamingAsync` (the streaming connect with its failure; `SendStreamingWithRetryAsync` wraps
+  it). **A provider's catch-all is `catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))`**: the
+  caller's cancellation propagates, it is not an error response.
 
 ### Agents/Agent.cs
 - `Agent` — Core agent run loop with streaming support and tool execution. **One** private loop (`RunLoopAsync`)

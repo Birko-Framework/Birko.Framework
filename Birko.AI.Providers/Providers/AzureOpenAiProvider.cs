@@ -14,12 +14,13 @@ namespace Birko.AI.Providers
 
         public override string Name => "Azure OpenAI";
 
-        public AzureOpenAiProvider(string endpoint, string apiKey, string deployment = "gpt-4")
+        public AzureOpenAiProvider(string endpoint, string apiKey, string deployment = "gpt-4", HttpMessageHandler? handler = null)
         {
             _endpoint = endpoint.TrimEnd('/');
             _apiKey = apiKey;
             _deployment = deployment;
-            _httpClient = new HttpClient();
+            // handler is a test seam (inject a fake HttpMessageHandler); production callers omit it.
+            _httpClient = new HttpClient(handler ?? new HttpClientHandler());
             _httpClient.DefaultRequestHeaders.Add("api-key", apiKey);
         }
 
@@ -60,16 +61,16 @@ namespace Birko.AI.Providers
                     var errorDetail = ExtractErrorFromResponseBody(responseJson) ?? responseJson;
                     var errorMsg = $"Azure OpenAI API Error ({response.StatusCode}): {errorDetail}";
                     SendMessage("error", errorMsg);
-                    return LlmResponse.Error(errorMsg);
+                    return LlmResponse.Error(errorMsg, ClassifyResponse(response, responseJson));
                 }
 
                 return ParseOpenAiStyleResponse(responseJson, MessageCallback);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 var errorMsg = $"Error calling Azure OpenAI API: {ex.Message}";
                 SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, ClassifyException(ex));
             }
         }
 
@@ -99,7 +100,7 @@ namespace Birko.AI.Providers
                 var json = JsonSerializer.Serialize(payload);
                 var url = $"{_endpoint}/openai/deployments/{_deployment}/chat/completions?api-version=2024-02-15-preview";
 
-                var response = await SendStreamingWithRetryAsync(
+                var (response, failure) = await ConnectStreamingAsync(
                     _httpClient,
                     () =>
                     {
@@ -112,12 +113,7 @@ namespace Birko.AI.Providers
 
                 if (response == null)
                 {
-                    return new LlmStreamingResponse
-                    {
-                        GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(
-                            new HttpRequestException("Failed to connect to Azure OpenAI API after retries")),
-                        Error = "Connection failed"
-                    };
+                    return StreamingFailure("Failed to connect to Azure OpenAI API after retries", failure ?? LlmFailure.Unknown);
                 }
 
                 // Create response object that will be populated during streaming
@@ -137,14 +133,10 @@ namespace Birko.AI.Providers
 
                 return streamingResponse;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 SendMessage("error", $"Error calling Azure OpenAI streaming API: {ex.Message}");
-                return new LlmStreamingResponse
-                {
-                    GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(ex),
-                    Error = ex.Message
-                };
+                return StreamingFailure(ex.Message, ClassifyException(ex));
             }
         }
     }

@@ -19,6 +19,7 @@
     </PackageReference>
   </ItemGroup>
 
+  <Import Project="..\..\Birko.AI.Contracts\Birko.AI.Contracts.projitems" Label="Shared" />
   <Import Project="..\..\Birko.AI.Orchestration\Birko.AI.Orchestration.projitems" Label="Shared" />
 
 </Project>

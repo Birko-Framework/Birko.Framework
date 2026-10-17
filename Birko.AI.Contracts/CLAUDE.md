@@ -24,7 +24,14 @@ Zero-dependency shared project with LLM provider interface, message models, tool
 - `TokenUsage` — Input/output token counts
 
 ### Models/LlmResponse.cs
-- `LlmResponse` — Complete LLM response with message, usage, stop reason
+- `LlmResponse` — Complete LLM response with message, usage, stop reason. A failed one carries `Failure`
+  (`LlmFailure`), with `IsTransient`, `StatusCode` and `RetryAfter` read through it (TASK-531)
+
+### Models/LlmFailure.cs
+- `LlmFailure(Kind, StatusCode, RetryAfter)` — why a call failed; `IsTransient` (RateLimited, ServerError, Timeout,
+  Network) and `Category`. `FromStatusCode(int, retryAfter)` maps a status. Classified by `LlmProviderBase`, never
+  from the message text.
+- `LlmFailureKind`, `ErrorCategory` (`Transient = 0`, `Permanent = 1`, DraCode's names and order) — **pinned values**
 
 ### Models/LlmStreamingResponse.cs
 - `LlmStreamingResponse` — Streaming response chunk

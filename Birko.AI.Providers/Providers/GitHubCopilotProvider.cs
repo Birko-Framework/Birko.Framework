@@ -28,12 +28,14 @@ namespace Birko.AI.Providers
         public GitHubCopilotProvider(
             IOAuthClient oauthClient,
             string model = "gpt-4o",
-            string baseUrl = "https://api.githubcopilot.com/chat/completions")
+            string baseUrl = "https://api.githubcopilot.com/chat/completions",
+            HttpMessageHandler? handler = null)
         {
             _oauthClient = oauthClient ?? throw new ArgumentNullException(nameof(oauthClient));
             _model = model;
             _baseUrl = baseUrl;
-            _httpClient = new HttpClient();
+            // handler is a test seam (inject a fake HttpMessageHandler); production callers omit it.
+            _httpClient = new HttpClient(handler ?? new HttpClientHandler());
         }
 
         public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
@@ -78,16 +80,16 @@ namespace Birko.AI.Providers
                     var errorDetail = responseJson != null ? (ExtractErrorFromResponseBody(responseJson) ?? responseJson) : "No response";
                     var errorMsg = $"GitHub Copilot API Error ({response?.StatusCode}): {errorDetail}";
                     SendMessage("error", errorMsg);
-                    return LlmResponse.Error(errorMsg);
+                    return LlmResponse.Error(errorMsg, response == null ? LlmFailure.Unknown : ClassifyResponse(response, responseJson));
                 }
 
                 return ParseOpenAiStyleResponse(responseJson, MessageCallback);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 var errorMsg = $"Error calling GitHub Copilot API: {ex.Message}";
                 SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
+                return LlmResponse.Error(errorMsg, ClassifyException(ex));
             }
         }
 
@@ -150,17 +152,19 @@ namespace Birko.AI.Providers
                 };
                 var json = JsonSerializer.Serialize(payload);
 
-                var response = await SendStreamingWithRetryAsync(
+                var (response, failure) = await ConnectStreamingAsync(
                     _httpClient,
                     () => CreateRequest(json),
                     Name,
                     cancellationToken);
 
-                // Handle 401 — refresh token and retry once (parity with the non-streaming path).
-                if (response is { StatusCode: System.Net.HttpStatusCode.Unauthorized })
+                // Handle 401 — refresh token and retry once (parity with the non-streaming path). The streaming connect
+                // returns no response for a non-success status, so the 401 is read from its classification: the
+                // former `response is { StatusCode: Unauthorized }` could never match, and the refresh never ran.
+                if (failure?.Kind == LlmFailureKind.Unauthorized)
                 {
                     _currentToken = await _oauthClient.RefreshTokenAsync();
-                    response = await SendStreamingWithRetryAsync(
+                    (response, failure) = await ConnectStreamingAsync(
                         _httpClient,
                         () => CreateRequest(json),
                         Name,
@@ -169,12 +173,7 @@ namespace Birko.AI.Providers
 
                 if (response == null)
                 {
-                    return new LlmStreamingResponse
-                    {
-                        GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(
-                            new HttpRequestException("Failed to connect to GitHub Copilot API after retries")),
-                        Error = "Connection failed"
-                    };
+                    return StreamingFailure("Failed to connect to GitHub Copilot API after retries", failure ?? LlmFailure.Unknown);
                 }
 
                 var streamingResponse = new LlmStreamingResponse
@@ -193,14 +192,10 @@ namespace Birko.AI.Providers
 
                 return streamingResponse;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
                 SendMessage("error", $"Error calling GitHub Copilot streaming API: {ex.Message}");
-                return new LlmStreamingResponse
-                {
-                    GetStreamAsync = () => Task.FromException<IAsyncEnumerable<string>>(ex),
-                    Error = ex.Message
-                };
+                return StreamingFailure(ex.Message, ClassifyException(ex));
             }
         }
     }

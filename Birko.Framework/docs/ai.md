@@ -42,7 +42,11 @@ Core interfaces, models, and provider factory with zero dependencies:
 - **Message** — Conversation message with role and content
 - **ContentBlock** — Content types: text, tool_use (with Id, Name, Input)
 - **TokenUsage** — PromptTokens, CompletionTokens, TotalTokens
-- **LlmResponse** — StopReason, Content blocks, Usage, ErrorMessage
+- **LlmResponse** — StopReason, Content blocks, Usage, ErrorMessage, and `Failure` when the call failed
+- **LlmFailure** — why it failed: `Kind` (RateLimited, ServerError, Timeout, Network are transient; BadRequest,
+  Unauthorized, Billing, Forbidden, NotFound, NotConfigured, InvalidResponse, Unknown are not), `StatusCode`,
+  `RetryAfter`, `IsTransient`, `Category`. Classified by the provider base from the status and exception, so retry on
+  `response.IsTransient` instead of matching the message. A cancelled call throws `OperationCanceledException`.
 - **LlmStreamingResponse** — Async stream with FinalResponse, AccumulatedText
 - **Tool** — Abstract base: Name, Description, InputSchema, Execute/ExecuteAsync
 - **AgentOptions** — MaxIterations, ModelDepth, WorkingDirectory, EnableStreaming, etc.

@@ -36,9 +36,10 @@ namespace Birko.AI.Orchestration.Models
         public int RetryCount { get; set; } = 0;
 
         /// <summary>
-        /// Error category for determining retry eligibility (transient vs permanent).
+        /// Error category for determining retry eligibility (transient vs permanent). Typed since TASK-531; an LLM
+        /// failure's is <see cref="Birko.AI.Models.LlmFailure.Category"/>.
         /// </summary>
-        public string? ErrorCategory { get; set; }
+        public Birko.AI.Models.ErrorCategory? ErrorCategory { get; set; }
 
         /// <summary>
         /// LLM provider used for this task.

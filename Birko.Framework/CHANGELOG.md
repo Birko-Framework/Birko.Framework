@@ -4,6 +4,37 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-17 — A failed LLM call says why: LlmResponse.Failure, classified once
+
+[[TASK-531]]. `LlmResponse.Failure` (`LlmFailure`: kind, HTTP status, Retry-After, `IsTransient`, `Category`) is set on
+every error response, by `LlmProviderBase` from the status and the exception type, on every HTTP provider, sync and
+streaming. It replaces matching the error text: DraCode's `ErrorClassifier` matched `"500"` and `"timeout"` in
+unrelated text and called an exhausted quota transient. A 429 with `insufficient_quota` is `Billing`, permanent.
+
+**Behaviour change — a cancelled call throws.** Measured on Ollama and Z.AI: a provider answered the caller's
+cancellation with `StopReason = "error"` and "A task was canceled", so an agent appended an empty assistant turn and a
+retry policy saw an error. Every provider now lets `OperationCanceledException` propagate when the caller's token is
+cancelled; `HttpClient`'s own timeout is still an error response (`Timeout`, transient).
+
+**Fixed on the way:** `GitHubCopilotProvider`'s streaming 401 refresh never ran (it tested a response the streaming
+connect never returns for a non-success status); it now refreshes once and retries.
+
+**Breaking — `ErrorCategory` is typed (Birko.AI.Orchestration).**
+
+| Member | Old | New |
+|--------|-----|-----|
+| `AgentTaskRecord.ErrorCategory` | `string?` | `Birko.AI.Models.ErrorCategory?` |
+| `ImplementationStep.ErrorCategory` | `string?` | `Birko.AI.Models.ErrorCategory?` |
+| `ImplementationStep.Fail` | `(string? error = null, string? errorCategory = null)` | `(string? error = null, ErrorCategory? errorCategory = null)` |
+| `ImplementationStep.RetryOrFail` | `(string? error, string? errorCategory, bool retryable)` | `(string? error, ErrorCategory? errorCategory, bool retryable)`, plus `RetryOrFail(string? error, LlmFailure failure)` |
+
+Migration: the compiler points at every assignment of a string (CS0029) and every string argument (CS1503). Pass
+`ErrorCategory.Transient` / `.Permanent`, or `response.Failure` to the new overload. `ErrorCategory` has DraCode's
+names and order (`Transient = 0`, `Permanent = 1`), so a value stored by name or by number reads back. Birko.AI.Orchestration
+now imports Birko.AI.Contracts, as the dependency graph already drew it; every consumer importing it already does.
+Source-compatible additions: `LlmResponse.Error(message, failure = null)`, an optional `HttpMessageHandler` on the
+Claude, OpenAI, Azure OpenAI, Gemini, GitHub Copilot and OpenAI-compatible providers (a test seam, as Ollama and Z.AI had).
+
 ## 2026-10-17 — Birko.AI.Resilience.Data: circuit breaker state and usage persist on any store
 
 [[TASK-530]]. New project. `StoreCircuitBreakerStore` and `StoreUsageRepository` implement `ICircuitBreakerStore` and
@@ -29,6 +60,12 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 (DraCode TASK-128). Callers compile unchanged. `ProviderCircuitBreaker.LoadPersistedStateAsync` and
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
+
+## 2026-10-17 — Rule `Between` and `In` no longer round a fractional value
+
+[[TASK-645]]. Measured: `Qty Between 10.5..20` selected Qty 10 at the store and `Qty In [10.6]` selected 11, while
+the in-memory evaluator compared exactly. Each bound and candidate now goes through the comparison TASK-171 fixed,
+so both engines agree.
 
 ## 2026-10-17 — ElasticSearch refuses a comparison it cannot translate instead of testing existence
 
