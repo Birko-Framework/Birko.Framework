@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — Migrations: back-dated migrations run, filters refuse what they cannot express, nothing reports false success
+
+[[TASK-152]]. A migration added below the current version never ran; a rollback ran `Down` for unapplied ones. `$in` was
+equality and null matched nothing on SQL. Every backend now shares one filter reader, refuses unknown operators, and
+reads null as MongoDB does. InfluxDB, ES, RavenDB and Cosmos report what they cannot do. RavenDB/Cosmos indexes are built.
+
 ## 2026-10-15 — Index drift on MongoDB, RavenDB and Cosmos DB, and a health check for it
 
 [[TASK-635]]. `IndexDeclarationDriftDetector` compares the `IndexDefinition`s a host declares with a store's index manager:

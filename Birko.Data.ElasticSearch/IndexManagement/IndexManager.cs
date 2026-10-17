@@ -616,18 +616,37 @@ namespace Birko.Data.ElasticSearch.IndexManagement
         /// at all and throws. NEST's own flags cannot decide it: <c>IsValid</c> is false for a 404 too, and
         /// <c>Exists</c> is false for every failure.
         /// </summary>
-        private static bool ExistsAnswer(ExistsResponse response, string indexName) => response.ApiCall?.HttpStatusCode switch
+        private static bool ExistsAnswer(ExistsResponse response, string indexName)
         {
-            200 => true,
-            404 => false,
-            _ => throw new InvalidOperationException(
-                $"Failed to check whether index '{indexName}' exists: {response.DebugInformation}", response.OriginalException),
-        };
+            switch (response.ApiCall?.HttpStatusCode)
+            {
+                case 200: return true;
+                case 404: return false;
+            }
+            ThrowIfCancelled(response);
+            throw new InvalidOperationException(
+                $"Failed to check whether index '{indexName}' exists: {response.DebugInformation}", response.OriginalException);
+        }
+
+        /// <summary>
+        /// Rethrows the cancellation a response failed with.
+        /// </summary>
+        /// <remarks>
+        /// TASK-648, rule 9: NEST does not throw on a cancelled request; it answers an invalid response carrying the
+        /// <see cref="OperationCanceledException"/>. Wrapped as <see cref="InvalidOperationException"/> ("Failed to …"), or read
+        /// as a refused reindex, the caller's cancellation became an ordinary failure (measured live).
+        /// </remarks>
+        internal static void ThrowIfCancelled(IResponse response)
+        {
+            if (!response.IsValid && response.OriginalException is OperationCanceledException cancelled)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cancelled).Throw();
+        }
 
         private static void ValidateResponse(IResponse response, string operation)
         {
             if (!response.IsValid)
             {
+                ThrowIfCancelled(response);
                 throw new InvalidOperationException(
                     $"Failed to {operation}: {response.DebugInformation}",
                     response.OriginalException);

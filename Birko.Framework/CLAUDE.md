@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### An ElasticSearch reindex reports a cancellation as one (2026-10-17)
+
+[[TASK-648]]. Measured: NEST answers a cancelled request with an invalid response, so every cancelled reindex came back
+`Failed`. `IndexManager` and the reindex calls now rethrow the cancellation. An alias reindex cancelled before the swap
+removes its new index; one cancelled after it succeeds with a `CleanupError`.
 ### Sync versions a written side as stored, asks Custom without a pair, reports a failure once (2026-10-17)
 
 [[TASK-647]]. Measured: every SQL provider and MongoDB read `UpdatedAt` back with another precision or Kind, so an item
@@ -332,11 +337,6 @@ and settings reach the raw store through `StoreChain.SetTransactionContext` / `S
 [[TASK-626]]. A CROSS join's ON was not rendered, and Cross was the default, so `Join.Create(a, b, cond)` and every
 `[View]` declared without `connect:` returned the cartesian product. A conditionless join was skipped. A join given
 conditions is now Inner by default; Cross with conditions, and Inner/Left without, are refused.
-### Migrations: back-dated migrations run, filters refuse what they cannot express, nothing reports false success (2026-10-15)
-
-[[TASK-152]]. A migration added below the current version never ran; a rollback ran `Down` for unapplied ones. `$in` was
-equality and null matched nothing on SQL. Every backend now shares one filter reader, refuses unknown operators, and
-reads null as MongoDB does. InfluxDB, ES, RavenDB and Cosmos report what they cannot do. RavenDB/Cosmos indexes are built.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

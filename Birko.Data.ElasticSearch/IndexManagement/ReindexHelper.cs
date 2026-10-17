@@ -95,6 +95,7 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                     .Source(s => s.Index(sourceIndex))
                     .Destination(d => d.Index(targetIndex))
                     .WaitForCompletion(waitForCompletion), ct).ConfigureAwait(false);
+                IndexManager.ThrowIfCancelled(response); // TASK-648: NEST answers a cancellation as an invalid response
 
                 sw.Stop();
 
@@ -109,11 +110,11 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                     return refused;
                 }
 
-                await _client.Indices.RefreshAsync(targetIndex, null, ct).ConfigureAwait(false);
+                IndexManager.ThrowIfCancelled(await _client.Indices.RefreshAsync(targetIndex, null, ct).ConfigureAwait(false));
 
                 return ReindexResult.Successful(sourceIndex, targetIndex, response.Created, sw.Elapsed);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException) // TASK-648: a cancellation is the caller's (rule 9)
             {
                 sw.Stop();
                 return ReindexResult.Failed(sourceIndex, targetIndex, ex.Message);
@@ -177,6 +178,7 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                     .Destination(d => d.Index(targetIndex))
                     .Script(sc => sc.Source(scriptSource))
                     .WaitForCompletion(true), ct).ConfigureAwait(false);
+                IndexManager.ThrowIfCancelled(response);
 
                 sw.Stop();
 
@@ -186,11 +188,11 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                     return refused;
                 }
 
-                await _client.Indices.RefreshAsync(targetIndex, null, ct).ConfigureAwait(false);
+                IndexManager.ThrowIfCancelled(await _client.Indices.RefreshAsync(targetIndex, null, ct).ConfigureAwait(false));
 
                 return ReindexResult.Successful(sourceIndex, targetIndex, response.Created, sw.Elapsed);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException) // TASK-648, rule 9
             {
                 sw.Stop();
                 return ReindexResult.Failed(sourceIndex, targetIndex, ex.Message);
@@ -289,6 +291,11 @@ namespace Birko.Data.ElasticSearch.IndexManagement
             var oldIndexName = await ResolveAliasToSingleIndexAsync(aliasName, ct).ConfigureAwait(false);
             var sw = Stopwatch.StartNew();
 
+            // TASK-648: where a cancellation landed decides what it means. Before the swap, it propagates and the new index
+            // is removed (with CancellationToken.None, the caller's token being cancelled), so a retry can create it. During
+            // the swap request, the cluster may or may not have applied it, so nothing is undone. After the swap, the reindex
+            // is done: a cancelled old-index delete is a CleanupError on a successful result.
+            var swapping = false;
             try
             {
                 // Step 1: Create the new index
@@ -312,6 +319,7 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                 }
 
                 // Step 3: Atomic alias swap
+                swapping = true;
                 await _indexManager.SwapAliasAsync(aliasName, oldIndexName, newIndexName, ct).ConfigureAwait(false);
 
                 // Step 4: Optionally delete old index (SH-M235: a cleanup failure does not undo a completed swap).
@@ -319,7 +327,11 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                 if (deleteOldIndex)
                 {
                     try { await _indexManager.DeleteIndexAsync(oldIndexName, ct).ConfigureAwait(false); }
-                    catch (Exception cleanup) when (cleanup is not OperationCanceledException) { cleanupError = cleanup.Message; }
+                    catch (OperationCanceledException)
+                    {
+                        cleanupError = $"Cancelled before the old index '{oldIndexName}' was deleted; alias '{aliasName}' points at '{newIndexName}'.";
+                    }
+                    catch (Exception cleanup) { cleanupError = cleanup.Message; }
                 }
 
                 sw.Stop();
@@ -327,7 +339,13 @@ namespace Birko.Data.ElasticSearch.IndexManagement
                 done.CleanupError = cleanupError;
                 return done;
             }
-            catch (Exception ex)
+            catch (OperationCanceledException) when (!swapping)
+            {
+                try { await _indexManager.DeleteIndexAsync(newIndexName, CancellationToken.None).ConfigureAwait(false); }
+                catch (Exception) { /* best effort: the caller's cancellation is what is reported */ }
+                throw;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 sw.Stop();
                 return ReindexResult.Failed(oldIndexName, newIndexName, ex.Message);

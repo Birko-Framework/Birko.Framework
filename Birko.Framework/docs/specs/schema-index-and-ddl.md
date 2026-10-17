@@ -1995,7 +1995,13 @@ The system SHALL implement `ReindexWithAlias` as: resolve the alias to exactly o
 index, reindex (optionally with a script) waiting for completion, atomically swap the alias, and optionally
 delete the old index; returning a successful result whose `SourceIndex` is the resolved old index. A failure to
 delete the old index after a completed swap SHALL NOT fail the result: it SHALL be reported in the successful
-result's `CleanupError`.
+result's `CleanupError`, a cancelled delete included. On the async path a cancellation is the caller's (rule 9). A
+response NEST answers as invalid because the request was cancelled SHALL rethrow that `OperationCanceledException`
+(`IndexManager.ThrowIfCancelled`, used by `ValidateResponse`, the existence check and both `ReindexOnServer`
+calls); `ReindexAsync` / `ReindexWithScriptAsync` SHALL let it propagate rather than answer `Failed`; and
+`ReindexWithAliasAsync` SHALL, for a cancellation before the swap, delete the new index with
+`CancellationToken.None` and rethrow, and for one during the swap request rethrow without undoing anything, since
+the cluster may have applied it (TASK-648: measured live, every cancellation came back as a `Failed` result).
 
 #### Scenario: The alias must resolve to exactly one index
 
@@ -2043,9 +2049,16 @@ result's `CleanupError`.
 - **Given** `deleteOldIndex: true`, a completed reindex and swap, and a delete of the old index that throws
 - **When** `ReindexWithAlias` completes
 - **Then** a successful result is returned with the delete's message in `CleanupError`, the alias pointing at the
-  new index and the old index left for manual deletion — except that on the async path an
-  `OperationCanceledException` from the delete is excluded from this handling, reaches the outer catch-all and
-  is reported as a `Failed` result although the swap completed
+  new index and the old index left for manual deletion. A cancelled delete is the same: `CleanupError` reads
+  "Cancelled before the old index … was deleted; alias … points at …" (TASK-648, measured live)
+
+#### Scenario: A cancellation before the swap propagates and leaves nothing behind
+
+- **Given** `ReindexWithAliasAsync` whose token is cancelled while the `_reindex` request is in flight
+- **When** it runs
+- **Then** `OperationCanceledException` propagates, the new index is deleted (with `CancellationToken.None`) so a
+  retry can create it, and the alias still points at the old index. A cancelled `ReindexAsync` propagates too.
+  Measured before TASK-648: both answered `Failed`, and the alias variant's retry would meet "already exists" 
 
 #### Scenario: Typed overload auto-maps the new index
 
