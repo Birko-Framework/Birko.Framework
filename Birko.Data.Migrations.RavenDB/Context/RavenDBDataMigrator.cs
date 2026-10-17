@@ -29,12 +29,12 @@ namespace Birko.Data.Migrations.RavenDB.Context
             foreach (var kvp in updates)
             {
                 var paramName = $"u{uIndex++}";
-                patchParts.Add($"this.{kvp.Key} = ${paramName}");
+                patchParts.Add($"this.{RqlField(kvp.Key)} = ${paramName}");
                 parameters[paramName] = kvp.Value;
             }
             var patchScript = string.Join("; ", patchParts);
 
-            var query = $"FROM '{collection}'";
+            var query = $"FROM {RqlCollection(collection)}";
             var (whereClause, whereParams) = ParseFilterToRql(filterJson);
             // SH-H032: an empty clause means either "no filter" or "every term was dropped" (e.g.
             // {"status":{}} takes the object branch and the operator loop adds nothing). Only the first is
@@ -58,7 +58,7 @@ namespace Birko.Data.Migrations.RavenDB.Context
 
         public void DeleteDocuments(string collection, string filterJson)
         {
-            var query = $"FROM '{collection}'";
+            var query = $"FROM {RqlCollection(collection)}";
             var (whereClause, whereParams) = ParseFilterToRql(filterJson);
             // SH-H032 — see UpdateDocuments. This path used to send an unfiltered DeleteByQueryOperation.
             Data.Migrations.Context.MigrationFilter.RequireBounded(filterJson, whereClause.Length > 0,
@@ -187,11 +187,30 @@ namespace Birko.Data.Migrations.RavenDB.Context
         /// (dotted) identifier and anything else refused (rule 33): it was interpolated raw, so a crafted key in a
         /// delete filter rewrote the query.
         /// </summary>
+        /// <remarks>
+        /// TASK-640: an update key and <c>RenameField</c>'s two names reach the patch script the same way, so they are held
+        /// to the same rule. Measured live: an update key <c>Role = 'admin'; this.Note</c> wrote <c>Role</c> as well.
+        /// </remarks>
         internal static string RqlField(string field)
-            => RqlPath.IsMatch(field)
+            => field != null && RqlPath.IsMatch(field)
                 ? field
                 : throw new NotSupportedException(
-                    $"Migration filter field '{field}' is not a plain identifier path, so it cannot be put into an RQL query. Use Raw().");
+                    $"Migration field '{field}' is not a plain identifier path, so it cannot be put into an RQL query. Use Raw().");
+
+        /// <summary>
+        /// A collection name as it reaches RQL text: a quoted string literal, with <c>\</c> and <c>'</c> escaped.
+        /// </summary>
+        /// <remarks>
+        /// TASK-640. A collection name cannot be a query parameter, and an apostrophe in one is legitimate, so it is escaped
+        /// rather than refused. It was interpolated inside quotes raw: measured live,
+        /// <c>DropCollection("Accounts' WHERE Name = 'b")</c> deleted only <c>b</c> from <c>Accounts</c>.
+        /// </remarks>
+        internal static string RqlCollection(string collection)
+        {
+            if (string.IsNullOrEmpty(collection))
+                throw new ArgumentException("A migration needs a collection name.", nameof(collection));
+            return "'" + collection.Replace("\\", "\\\\").Replace("'", "\\'") + "'";
+        }
 
         /// <summary>
         /// Applies the filter to <paramref name="query"/> and reports whether it added any term at all

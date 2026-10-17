@@ -1147,7 +1147,8 @@ no-op for CosmosDB.
   `$rename` over an empty filter; ElasticSearch issues `_update_by_query` over the documents where `old`
   **exists**, with `Refresh`, the Painless source
   `ctx._source[params.newName] = ctx._source.remove(params.oldName)` and both names as script params; RavenDB issues a `PatchByQueryOperation` with `FROM
-  'things' UPDATE { this.new = this.old; delete this.old; }`; CosmosDB queries every document where
+  'things' UPDATE { this.new = this.old; delete this.old; }`, the collection an escaped literal and both names held to
+  `RqlField` (TASK-640); CosmosDB queries every document where
   `IS_DEFINED(c["old"])` and point-patches each with `Set /new` + `Remove /old`; InfluxDB does
   nothing at all
 
@@ -1375,11 +1376,22 @@ assigns each value from a script parameter, the field name being a script parame
 (`ctx._source[params.fN] = params.pN`), and SHALL throw when the response is invalid **or** reports any
 version conflict or per-document failure (SH-M198, TASK-152); `_delete_by_query` SHALL be checked the same
 way. RavenDB SHALL issue a `PatchByQueryOperation` with `$uN` query parameters and
-wait for completion. CosmosDB SHALL query matching ids (plus the partition-key field), then issue one
+wait for completion; each update key SHALL pass `RqlField` (a plain dotted identifier path, else
+`NotSupportedException`) and the collection SHALL reach `FROM` as `RqlCollection`'s escaped literal (TASK-640). CosmosDB SHALL query matching ids (plus the partition-key field), then issue one
 `PatchItemAsync` per document. InfluxDB `UpdateDocuments` SHALL throw `NotSupportedException` — points
 are immutable (SH-M191; it was a silent no-op). InfluxDB `DeleteDocuments` SHALL throw
 `InvalidOperationException` when the bucket is not found by exact name (SH-M193), and SHALL wait on the
 delete so that a refused predicate propagates (TASK-619).
+
+#### Scenario: RavenDB names cannot change what the RQL means
+
+- **Given** a RavenDB migration whose update key is `Role = 'admin'; this.Note`, whose `RenameField` new name is
+  `Role = 'admin'; this.Label`, or whose collection is `Accounts' WHERE Name = 'b`
+- **When** `UpdateDocuments`, `DeleteDocuments`, `RenameField` or `DropCollection` runs
+- **Then** a field name that is not a plain dotted identifier path is refused with `NotSupportedException` before
+  anything is sent, and a collection name becomes one RQL string literal with `\` and `'` escaped, so
+  `O'Brien\Co` is addressed exactly and the injected name matches no collection. Measured live (TASK-640): the update
+  key wrote `Role` too, and `DropCollection("Accounts' WHERE Name = 'b")` deleted only `b` from `Accounts`
 
 #### Scenario: InfluxDB update is refused
 

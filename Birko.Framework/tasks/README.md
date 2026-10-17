@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-17 15:13. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-17 15:21. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 26      | —     |
-| todo         | —     | —       | 182   |
+| todo         | —     | —       | 181   |
 | in-progress  | 8     | 13      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 23      | 321   |
+| done         | 2     | 23      | 322   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 12× P1 · 127× P2 · 43× P3.
+`todo` by priority: 11× P1 · 127× P2 · 43× P3.
 
 ## In progress now
 
@@ -167,7 +167,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (188/268 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (189/268 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -365,7 +365,7 @@ _None._
     - [x] [TASK-575](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-575-two-workers-reclaim-the-same-stale-job.md) Two SQL job workers can both reclaim the same stale Processing job and run it twice (P1) · FEATURE-014
     - [ ] [TASK-576](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-576-async-database-model-repository-rejects-concrete-stores.md) `AsyncDataBaseModelRepository<T>` rejects every store built with a concrete connector (P2) · FEATURE-014
     - [x] [TASK-577](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-577-cross-assembly-field-attributes-lose-values.md) A cross-assembly SQL field attribute is rebuilt without its value: lengths, precision and scale become 0, and `[UtcField]` is dropped (P1) · FEATURE-014
-  - STORY-053 Spec-harvest — medium findings — planned (31/56 done)
+  - STORY-053 Spec-harvest — medium findings — planned (32/56 done)
     - [x] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
     - [x] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
     - [x] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
@@ -409,7 +409,7 @@ _None._
     - [x] [TASK-637](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-637-migration-data-migrator-quotes-column-names.md) The migration data migrator and `RenameField` quote column names, so on PostgreSQL they miss a PascalCase model's columns (P2) · FEATURE-014
     - [x] [TASK-638](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-638-a-soft-deleted-row-still-holds-the-unique-default-marker-or-slug-so-la.md) A soft-deleted row still holds the unique default marker or slug, so later promotions and slugs are refused (P1) · FEATURE-014
     - [x] [TASK-639](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-639-a-filter-on-a-persistent-or-auto-sql-view-names-the-source-column-whic.md) A filter on a Persistent or Auto SQL view names the source column, which the view does not have (P1) · FEATURE-014
-    - [ ] [TASK-640](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-640-ravendb-migrations-put-update-keys-the-collection-name-and-renamefield.md) RavenDB migrations put update keys, the collection name and RenameField's fields into RQL unescaped (P1) · FEATURE-014
+    - [x] [TASK-640](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-640-ravendb-migrations-put-update-keys-the-collection-name-and-renamefield.md) RavenDB migrations put update keys, the collection name and RenameField's fields into RQL unescaped (P1) · FEATURE-014
     - [ ] [TASK-641](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-641-a-stored-grant-whose-role-was-later-retired-makes-permission-checks-fo.md) A stored grant whose role was later retired makes permission checks for that user and type throw (P1) · FEATURE-014
     - [ ] [TASK-642](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-642-influxdb-migration-renamefield-and-dropfield-do-nothing-and-the-migrat.md) InfluxDB migration RenameField and DropField do nothing, and the migration is recorded as applied (P2) · FEATURE-014
     - [ ] [TASK-643](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-643-elasticsearch-migration-schema-builder-reads-a-failed-existence-check.md) ElasticSearch migration schema builder reads a failed existence check as absent and ignores the create response (P2) · FEATURE-014

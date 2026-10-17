@@ -37,7 +37,7 @@ namespace Birko.Data.Migrations.RavenDB.Context
             var operation = _store.Operations.Send(new DeleteByQueryOperation(
                 new Raven.Client.Documents.Queries.IndexQuery
                 {
-                    Query = $"FROM '{name}'"
+                    Query = $"FROM {RavenDBDataMigrator.RqlCollection(name)}"
                 }));
             operation.WaitForCompletion();
         }
@@ -74,10 +74,14 @@ namespace Birko.Data.Migrations.RavenDB.Context
 
         public void RenameField(string collectionName, string oldName, string newName)
         {
+            // TASK-640: the names are held to the filter's identifier rule and the collection is escaped, as in the migrator.
+            var collection = RavenDBDataMigrator.RqlCollection(collectionName);
+            var from = RavenDBDataMigrator.RqlField(oldName);
+            var to = RavenDBDataMigrator.RqlField(newName);
             var operation = _store.Operations.Send(new PatchByQueryOperation(
                 new Raven.Client.Documents.Queries.IndexQuery
                 {
-                    Query = $"FROM '{collectionName}' UPDATE {{ this.{newName} = this.{oldName}; delete this.{oldName}; }}"
+                    Query = $"FROM {collection} UPDATE {{ this.{to} = this.{from}; delete this.{from}; }}"
                 }));
             operation.WaitForCompletion();
         }

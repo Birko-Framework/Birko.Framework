@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-15 — One rule-to-LINQ translator
+
+[[TASK-144]]. `RuleSpecification` had its own copy of `RuleExpressionConverter`, and the two drifted both ways. The
+converter is now the only one, with the specification's safety rules and its own nested fields. String `Equal` is plain
+`==` (what stores translate), so it is case-sensitive at the store and case-insensitive in memory. A typed entity's
+unknown or unreachable field now matches nothing in memory too (`IRuleContext.HasFixedFields`).
+
 ## 2026-10-15 — Schema drift produces its repair SQL
 
 [[TASK-633]]. `connector.PlanRepair(typeof(T))` turns a drift report into statements a host reviews and runs itself:

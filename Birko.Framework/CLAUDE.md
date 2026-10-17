@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### RavenDB migrations cannot rewrite their RQL through a name (2026-10-17)
+
+[[TASK-640]]. Measured live: `DropCollection("Accounts' WHERE Name = 'b")` deleted only `b`, and an update key or
+`RenameField` name could write another field. A collection now reaches RQL as one escaped literal, so `O'Brien` works,
+and a field name must be a plain dotted path, as filter fields already were.
 ### A filter on a Persistent or Auto SQL view works (2026-10-17)
 
 [[TASK-639]]. Measured on all four SQL providers: every filtered read and count of a Persistent view, and of an Auto view
@@ -333,12 +338,6 @@ read the new fields as defaults. MongoDB and RavenDB need no plan; an old docume
 [[TASK-156]]. In memory, distinct longs and decimals compared equal through double, and "007" equalled "7". Editing a
 `RuleSet` while it was evaluated threw; `Rules` is now a copy-on-write `RuleList`. `Range(-50, 150)` on a double threw,
 a nested `RuleFor` threw on a null parent, and the validating bulk store skipped validation on filtered updates.
-### One rule-to-LINQ translator (2026-10-15)
-
-[[TASK-144]]. `RuleSpecification` had its own copy of `RuleExpressionConverter`, and the two drifted both ways. The
-converter is now the only one, with the specification's safety rules and its own nested fields. String `Equal` is plain
-`==` (what stores translate), so it is case-sensitive at the store and case-insensitive in memory. A typed entity's
-unknown or unreachable field now matches nothing in memory too (`IRuleContext.HasFixedFields`).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -15,6 +15,9 @@ RavenDB migration backend using IDocumentStore. Implements platform-agnostic IMi
 - `RavenDBMigrationContext` — Wraps IDocumentStore. Schema and Data properties. Raw() exposes IDocumentStore.
 - `RavenDBSchemaBuilder` — CreateCollection is no-op (auto-created). AddField/DropField are no-op. CreateIndex uses PutIndexesOperation.
 - `RavenDBDataMigrator` — UpdateDocuments via PatchByQueryOperation, DeleteDocuments via DeleteByQueryOperation.
+- Every name reaching RQL text has one producer here (TASK-640): `RqlField` refuses a field (filter term, update key,
+  `RenameField`'s names) that is not a plain dotted identifier path, and `RqlCollection` makes a collection one escaped
+  string literal (`\` and `'`), so `O'Brien` works and a crafted name cannot add a `WHERE`. Values are `$` parameters.
 
 ### Store
 - `RavenMigrationStore` — Stores migration state in a single RavenDB document.
