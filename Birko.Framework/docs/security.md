@@ -86,6 +86,26 @@ var decryptedBytes = provider.Decrypt(encryptedBytes, key);
 
 The ciphertext includes the nonce and GCM authentication tag — no separate IV storage needed.
 
+### FieldCipher
+
+For a value stored in a database row (an API key, a token), `FieldCipher` (TASK-532) adds what a raw key lacks: the
+key is derived with HKDF from a master secret, the envelope `bfc1:{keyId}:{payload}` names the key it was encrypted
+under (so masters can rotate), and the caller's associated data is authenticated (so a value copied into another row
+does not decrypt). Masters must be at least 32 random bytes; a missing one throws at construction.
+
+```csharp
+// Master secrets live in a secret store as base64 (FieldCipher.GenerateMasterSecret()), one per key id.
+var cipher = await FieldCipher.FromSecretProviderAsync(secrets, currentKeyId: "2026-10", previousKeyIds: ["2026-01"]);
+var stored = cipher.Encrypt(apiKey, associatedData: $"provider-config/{row.Id}/apiKey");  // bfc1:2026-10:...
+var apiKey = cipher.Decrypt(stored, $"provider-config/{row.Id}/apiKey");
+if (cipher.NeedsReencryption(stored)) stored = cipher.Reencrypt(stored, $"provider-config/{row.Id}/apiKey");
+```
+
+### InMemorySecretProvider
+
+An `ISecretProvider` for local runs, tests and secrets that arrive through configuration, with no vault:
+`new InMemorySecretProvider(configuration.GetSection("Secrets").AsEnumerable(makePathsRelative: true))`.
+
 ## Token Provider
 
 ### ITokenProvider

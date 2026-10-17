@@ -61,6 +61,13 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
 
+## 2026-10-17 — Sync versions a written side as stored, asks Custom without a pair, reports a failure once
+
+[[TASK-647]]. Measured: every SQL provider and MongoDB read `UpdatedAt` back with another precision or Kind, so an item
+written by sync read as changed next run, and the lossy copy overwrote the precise source. Written sides are now read
+back before their version is recorded. Custom is asked about an item with no recorded pair. Every failure reaches
+`result.Errors` and `OnError` once. MySQL / SQL Server precision itself is [[TASK-656]].
+
 ## 2026-10-17 — Rule `Between` and `In` no longer round a fractional value
 
 [[TASK-645]]. Measured: `Qty Between 10.5..20` selected Qty 10 at the store and `Qty In [10.6]` selected 11, while

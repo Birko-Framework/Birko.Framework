@@ -74,7 +74,9 @@ sources:
   - ../Birko.Security/Core/IPasswordHasher.cs
   - ../Birko.Security/Core/ISecretProvider.cs
   - ../Birko.Security/Core/ITokenProvider.cs
+  - ../Birko.Security/Core/InMemorySecretProvider.cs
   - ../Birko.Security/Encryption/AesEncryptionProvider.cs
+  - ../Birko.Security/Encryption/FieldCipher.cs
   - ../Birko.Security/Hashing/Pbkdf2PasswordHasher.cs
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
 # repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
@@ -363,6 +365,33 @@ match the ciphertext, nonce or key. `DecryptString` SHALL throw `FormatException
 - **Given** an envelope produced under key A
 - **When** `Decrypt(envelope, keyB)` is called
 - **Then** the tag check fails and `CryptographicException` propagates
+
+### Requirement: A field cipher derives its keys, names them, and binds each value to its context
+
+The system SHALL provide `FieldCipher` (TASK-532) that encrypts a field value with AES-256-GCM under a key derived by
+`HKDF-SHA256(master, info: "Birko.FieldCipher/v1/" + keyId)` and emits `bfc1:{keyId}:{base64url(nonce ‖ ciphertext ‖
+tag)}`, authenticating the header `bfc1:{keyId}`, a zero byte and the caller's associated data. It SHALL encrypt under
+`CurrentKeyId` and decrypt under the key id in the envelope, SHALL refuse at construction a current key id with no
+master and any master shorter than 32 bytes, and `FromSecretProviderAsync` SHALL throw `InvalidOperationException`
+for a listed master secret that is missing, empty or not base64, with no fallback value.
+
+#### Scenario: A value copied to another row
+
+- **Given** a value encrypted with associated data `provider-config/row-1/apiKey`
+- **When** it is decrypted with `provider-config/row-2/apiKey`
+- **Then** `CryptographicException` is thrown
+
+#### Scenario: Rotation
+
+- **Given** values encrypted under key id `a`, and a cipher holding `a` and `b` with `b` current
+- **When** an old value is decrypted and re-encrypted
+- **Then** it reads back, `NeedsReencryption` is true before and false after, and the new envelope names `b`
+
+#### Scenario: A relabelled or unknown key id
+
+- **Given** an envelope whose key id is changed to another key the cipher holds, or to one it does not hold
+- **When** it is decrypted
+- **Then** `CryptographicException` is thrown (the header is authenticated; the unknown id is named)
 
 ### Requirement: JWT generation signs with HMAC-SHA256 and supplies jti and iat
 
@@ -1144,6 +1173,19 @@ interface.
 - **Given** a key that does not exist
 - **When** `GetSecretPairsAsync` is called
 - **Then** null is returned, distinguishing "absent" from "present but empty"
+
+### Requirement: An in-memory secret provider serves local and configured secrets
+
+The system SHALL provide `InMemorySecretProvider` (TASK-532), a flat (`IsHierarchical` false), case-sensitive,
+read-write `ISecretProvider` over a dictionary, seedable from any key/value sequence such as
+`IConfiguration.AsEnumerable(makePathsRelative: true)`, skipping entries whose value is null. `ListSecretsAsync`
+SHALL answer the full names that start with the path, ordered.
+
+#### Scenario: Seeded from configuration
+
+- **Given** pairs `db = null`, `db:password = p1`, `api-key = k1`
+- **When** the provider is built from them
+- **Then** `db:password` reads `p1`, `db` reads null, and the listing is `api-key`, `db:password`
 
 ### Requirement: The Vault provider speaks KV v1 and KV v2 with per-request credentials
 

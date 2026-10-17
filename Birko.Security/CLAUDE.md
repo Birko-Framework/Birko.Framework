@@ -12,7 +12,8 @@ Birko.Security/
 │   ├── IPasswordHasher.cs            - Hash(password) → string, Verify(password, hash) → bool
 │   ├── IEncryptionProvider.cs         - Encrypt/Decrypt byte[] and string, AES-256-GCM
 │   ├── ITokenProvider.cs             - GenerateToken/ValidateToken, TokenResult, TokenOptions
-│   └── ISecretProvider.cs           - GetSecret/SetSecret/DeleteSecret/ListSecrets, SecretResult
+│   ├── ISecretProvider.cs           - GetSecret/SetSecret/DeleteSecret/ListSecrets, SecretResult
+│   └── InMemorySecretProvider.cs    - flat, read-write, seedable from configuration (TASK-532)
 ├── Authentication/                    ← Moved from Birko.Communication.Authentication
 │   ├── AuthenticationService.cs       - Static token validation + IP binding, thread-safe; ResolveClientIp believes forwarding headers only from TrustedProxies (SH-M249)
 │   ├── AuthenticationConfiguration.cs - Enabled, Tokens[], TokenBindings[], TrustedProxies[] (addresses or CIDR; empty = trust none)
@@ -22,7 +23,8 @@ Birko.Security/
 ├── Hashing/
 │   └── Pbkdf2PasswordHasher.cs        - PBKDF2-SHA512, 600k iterations, self-contained hash format
 └── Encryption/
-    └── AesEncryptionProvider.cs        - AES-256-GCM, nonce+tag embedded in output
+    ├── AesEncryptionProvider.cs        - AES-256-GCM, nonce+tag embedded in output
+    └── FieldCipher.cs                  - field values at rest: HKDF keys, key id in the envelope, associated data (TASK-532)
 ```
 
 ## Dependencies
@@ -43,6 +45,23 @@ var key = AesEncryptionProvider.GenerateKey();  // Random 256-bit key
 var encrypted = provider.EncryptString("sensitive data", key);
 var decrypted = provider.DecryptString(encrypted, key);
 ```
+
+### FieldCipher (a value stored in a row)
+```csharp
+// Master secrets live in a secret store as base64 (FieldCipher.GenerateMasterSecret()), one per key id.
+var cipher = await FieldCipher.FromSecretProviderAsync(secrets, currentKeyId: "2026-10", previousKeyIds: ["2026-01"]);
+var stored = cipher.Encrypt(apiKey, associatedData: $"provider-config/{row.Id}/apiKey");  // bfc1:2026-10:...
+var apiKey = cipher.Decrypt(stored, $"provider-config/{row.Id}/apiKey");
+if (cipher.NeedsReencryption(stored)) stored = cipher.Reencrypt(stored, $"provider-config/{row.Id}/apiKey");
+```
+
+`AesEncryptionProvider` takes a raw key and carries no key id; use `FieldCipher` for anything stored, so the master
+can rotate and a value cannot be moved to another row. A master under 32 bytes, or a listed one that is missing, is
+refused at construction with no fallback.
+
+## Secrets without a vault
+`InMemorySecretProvider` (flat names, case-sensitive) for local runs and tests, or seeded from configuration:
+`new InMemorySecretProvider(configuration.GetSection("Secrets").AsEnumerable(makePathsRelative: true))` (a snapshot).
 
 ## Static Token Auth (from former Birko.Communication.Authentication)
 ```csharp

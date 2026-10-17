@@ -14,6 +14,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Core\IEncryptionProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\ITokenProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\ISecretProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\InMemorySecretProvider.cs" />
     <!-- Authentication (moved from Birko.Communication.Authentication) -->
     <Compile Include="$(MSBuildThisFileDirectory)Authentication\AuthenticationService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authentication\AuthenticationConfiguration.cs" />
@@ -24,5 +25,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Hashing\Pbkdf2PasswordHasher.cs" />
     <!-- Encryption -->
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\AesEncryptionProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Encryption\FieldCipher.cs" />
   </ItemGroup>
 </Project>

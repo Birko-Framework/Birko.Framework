@@ -240,6 +240,10 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### FieldCipher and InMemorySecretProvider in Birko.Security (2026-10-17)
+[[TASK-532]]. `FieldCipher` encrypts a stored value with an HKDF-derived key. Its envelope names the key id, so masters
+rotate, and it authenticates the caller's associated data, so a value moved to another row does not decrypt. A missing
+or short master throws at construction. `InMemorySecretProvider` serves local and configuration-seeded secrets.
 ### A failed LLM call says why, and a cancelled one throws (2026-10-17)
 [[TASK-531]]. `LlmResponse.Failure` carries the kind, HTTP status, Retry-After and `IsTransient`. The provider base
 classifies it once, on every provider, from the status, never the text. Measured: a cancelled call came back as an
@@ -316,12 +320,6 @@ soft-delete wrapper is the explicit way back.
 [[TASK-648]]. Measured: NEST answers a cancelled request with an invalid response, so every cancelled reindex came back
 `Failed`. `IndexManager` and the reindex calls now rethrow the cancellation. An alias reindex cancelled before the swap
 removes its new index; one cancelled after it succeeds with a `CleanupError`.
-### Sync versions a written side as stored, asks Custom without a pair, reports a failure once (2026-10-17)
-
-[[TASK-647]]. Measured: every SQL provider and MongoDB read `UpdatedAt` back with another precision or Kind, so an item
-written by sync read as changed next run, and the lossy copy overwrote the precise source. Written sides are now read
-back before their version is recorded. Custom is asked about an item with no recorded pair. Every failure reaches
-`result.Errors` and `OnError` once. MySQL / SQL Server precision itself is [[TASK-656]].
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

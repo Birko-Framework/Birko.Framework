@@ -51,6 +51,8 @@ var result = await provider.ValidateTokenAsync(token);
 
 - **Pbkdf2PasswordHasher** - PBKDF2 password hashing
 - **AesEncryption** - AES-256-GCM encrypt/decrypt
+- **FieldCipher** - a stored field value: HKDF-derived keys, key id in the envelope, associated data, rotation
+- **InMemorySecretProvider** - an `ISecretProvider` for local runs, tests and configuration-seeded secrets
 - **ITokenProvider** - Token generation and validation interface
 - **StaticTokenAuthenticator** - Static token authentication
 
