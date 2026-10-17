@@ -469,6 +469,10 @@
 			"path": "../Birko.Health.Redis"
 		},
 		{
+			"name": "Health / Birko.Health.Security.Grants",
+			"path": "../Birko.Health.Security.Grants"
+		},
+		{
 			"name": "Helpers / Birko.Helpers",
 			"path": "../Birko.Helpers"
 		},
@@ -1099,6 +1103,10 @@
 		{
 			"name": "Tests / Birko.Health.Redis.Tests",
 			"path": "../tests/Birko.Health.Redis.Tests"
+		},
+		{
+			"name": "Tests / Birko.Health.Security.Grants.Tests",
+			"path": "../tests/Birko.Health.Security.Grants.Tests"
 		},
 		{
 			"name": "Tests / Birko.Health.Tests",

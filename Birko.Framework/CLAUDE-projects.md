@@ -53,6 +53,7 @@ Birko.Health (IHealthCheck, HealthCheckResult, HealthCheckRunner — zero deps)
   -> Birko.Health.Data.SQL (SchemaDriftHealthCheck) + Birko.Data.SQL
   -> Birko.Health.Data.ElasticSearch (ElasticSearchMappingDriftHealthCheck) + Birko.Data.ElasticSearch
   -> Birko.Health.Data.IndexManagement (IndexDeclarationDriftHealthCheck) + Birko.Data.Patterns
+  -> Birko.Health.Security.Grants (StaleGrantHealthCheck) + Birko.Security.Grants
      (a per-dependency sibling, like .Redis and .Azure, so the Health leaf stays dependency-free)
 
 Birko.Security.Grants (GrantRoleTable, ResourceGrant, IResourceGrantStore, IGrantService — per-resource grants)
@@ -213,6 +214,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Health.Data.ElasticSearch** - Elasticsearch mapping drift (an index mapped differently from its store)
 - **Birko.Health.Data.IndexManagement** - index declaration drift through `IIndexManager` (MongoDB, RavenDB, Cosmos DB)
 - **Birko.Health.Redis** - Redis PING + latency
+- **Birko.Health.Security.Grants** - stored grants whose role or resource type is no longer declared (`StaleGrantHealthCheck`)
 - **Birko.Health.Azure** - Blob Storage, Key Vault checks
 
 ## Storage & Telemetry
@@ -259,7 +261,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Storage.Tests, Birko.Storage.AzureBlob.Tests
 - Birko.Telemetry.Tests, Birko.Telemetry.OpenTelemetry.Tests
 - Birko.Rules.Tests, Birko.Data.Processors.Tests, Birko.Data.Aggregates.Tests
-- Birko.Health.Tests, Birko.Health.Azure.Tests, Birko.Health.Data.SQL.Tests, Birko.Health.Data.ElasticSearch.Tests, Birko.Health.Data.IndexManagement.Tests
+- Birko.Health.Tests, Birko.Health.Azure.Tests, Birko.Health.Data.SQL.Tests, Birko.Health.Data.ElasticSearch.Tests, Birko.Health.Data.IndexManagement.Tests, Birko.Health.Security.Grants.Tests
 - Birko.Messaging.Tests, Birko.Messaging.Razor.Tests
 - Birko.Serialization.Tests, Birko.Time.Tests, Birko.Caching.Hybrid.Tests
 - Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests

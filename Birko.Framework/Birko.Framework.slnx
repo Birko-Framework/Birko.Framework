@@ -167,6 +167,7 @@
     <Project Path="../Birko.Health.Data.IndexManagement/Birko.Health.Data.IndexManagement.shproj" />
     <Project Path="../Birko.Health.Data.SQL/Birko.Health.Data.SQL.shproj" />
     <Project Path="../Birko.Health.Redis/Birko.Health.Redis.shproj" />
+    <Project Path="../Birko.Health.Security.Grants/Birko.Health.Security.Grants.shproj" />
     <Project Path="../Birko.Health.Azure/Birko.Health.Azure.shproj" />
   </Folder>
   <Folder Name="/Storage/">
@@ -262,6 +263,7 @@
     <Project Path="../tests/Birko.Health.Data.ElasticSearch.Tests/Birko.Health.Data.ElasticSearch.Tests.csproj" />
     <Project Path="../tests/Birko.Health.Data.IndexManagement.Tests/Birko.Health.Data.IndexManagement.Tests.csproj" />
     <Project Path="../tests/Birko.Health.Data.SQL.Tests/Birko.Health.Data.SQL.Tests.csproj" />
+    <Project Path="../tests/Birko.Health.Security.Grants.Tests/Birko.Health.Security.Grants.Tests.csproj" />
     <Project Path="../tests/Birko.Telemetry.OpenTelemetry.Tests/Birko.Telemetry.OpenTelemetry.Tests.csproj" />
     <Project Path="../tests/Birko.Caching.Hybrid.Tests/Birko.Caching.Hybrid.Tests.csproj" />
     <Project Path="../tests/Birko.Data.Aggregates.Tests/Birko.Data.Aggregates.Tests.csproj" />

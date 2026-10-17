@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>1f0ed27b-b41d-46ea-b144-3f92b3fd6d75</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Health.Security.Grants</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- Its own project for the reason the other Birko.Health.* checks are (TASK-654): Birko.Health stays dependency-free,
+       and a stale-grant check needs Birko.Security.Grants. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)StaleGrantHealthCheck.cs" />
+  </ItemGroup>
+</Project>

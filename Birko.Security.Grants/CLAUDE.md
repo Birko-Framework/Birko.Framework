@@ -58,7 +58,7 @@ No NuGet packages, no ASP.NET, no `Birko.Models.Users`: the host maps its login 
   it. It used to throw, so one stale row broke that user's checks of the resource, every check of the type for a
   type-wide grant, and every listing of the type (measured). The loud half is `StaleGrantDetector.FindAsync(store,
   table)`: it lists grants whose role or type is undeclared, so a role renamed in configuration is caught at start-up
-  or by a health check rather than quietly removing access. `GrantRoleTable.IsRole` / `IsResourceType` are the
+  or by `StaleGrantHealthCheck` (Birko.Health.Security.Grants, TASK-654) rather than quietly removing access. `GrantRoleTable.IsRole` / `IsResourceType` are the
   non-throwing lookups for stored values only.
 - **Tenant is explicit, from one source** (rules 38/39). Every call takes `Guid? tenantGuid`; the service never
   reads an ambient tenant. In scope: untenanted grants plus the tenant's; with no tenant, untenanted only.

@@ -271,6 +271,25 @@ never Unhealthy for drift. RavenDB reports the fields of a map its manager gener
 compared". Cosmos DB answers by the names its manager registered (TASK-628); a policy path nobody named is "not
 compared". Detection only: nothing is created.
 
+## Stale Grant Health Check (Birko.Health.Security.Grants)
+
+A stored resource grant whose role or resource type was retired from the `GrantRoleTable` grants nothing (TASK-641): it
+cannot break the user's checks, and it cannot silently grant either. The cost of that safety is silence, since a role
+renamed in configuration removes everyone's access through the old name. `StaleGrantHealthCheck` (TASK-654) is where
+it becomes visible, through `StaleGrantDetector.FindAsync`.
+
+```csharp
+// After AddBirkoGrants(...), which registers the IResourceGrantStore and the GrantRoleTable:
+var check = new StaleGrantHealthCheck(
+    sp.GetRequiredService<IResourceGrantStore>(),
+    sp.GetRequiredService<GrantRoleTable>());
+```
+
+Healthy when none; Degraded when some, with `Data["stale"]` (the full count), `roleNotDeclared`,
+`resourceTypeNotDeclared` and `staleGrants` (at most 50 descriptions). Degraded, never Healthy, when the store cannot
+be read. Never Unhealthy. The reserved admin grant is never reported, and nothing is migrated or revoked: a person
+decides.
+
 ## Schema Drift Health Check (Birko.Health.Data.SQL)
 
 Birko never reconciles an existing table: `CREATE TABLE` is guarded by `IF NOT EXISTS` and schema-ensure
@@ -469,6 +488,7 @@ app.MapGet("/health/live", async () =>
 | `Birko.Health.Data.ElasticSearch` | Elasticsearch mapping drift | Birko.Data.ElasticSearch |
 | `Birko.Health.Data.IndexManagement` | Index declaration drift (MongoDB, RavenDB, Cosmos DB) | Birko.Data.Patterns |
 | `Birko.Health.Redis` | Redis PING | StackExchange.Redis |
+| `Birko.Health.Security.Grants` | Stored grants with an undeclared role or resource type | Birko.Security.Grants |
 | `Birko.Health.Azure` | Azure Blob Storage, Azure Key Vault | Birko.Storage.AzureBlob, Birko.Security.AzureKeyVault |
 
 ## See Also

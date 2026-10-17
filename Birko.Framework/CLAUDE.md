@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Birko.Health.Security.Grants: a health check for grants that grant nothing (2026-10-17)
+[[TASK-654]]. New project. `StaleGrantHealthCheck(store, table)` reports the stored grants whose role or resource type the
+`GrantRoleTable` no longer declares. Since TASK-641 they grant nothing, so a role renamed in configuration quietly removed
+access. Degraded with the count and up to 50 descriptions, Degraded when the store cannot be read, Healthy with none,
+never Unhealthy. The admin grant is ignored; nothing is revoked.
 ### A DateTime keeps its sub-second digits on MySQL and SQL Server (2026-10-17)
 [[TASK-656]]. Measured live: MySQL stored a `DateTime` to the second (`DATETIME`), and SQL Server rounded it to ~3.33 ms
 because SqlClient infers a `datetime` parameter, though the column was `DATETIME2`. Exact-value filters matched nothing and
@@ -318,16 +323,6 @@ applied having changed nothing; both now refuse. The ElasticSearch schema builde
 [[TASK-646]]. Measured: an async repository's `UpdateAsync` / `DeleteAsync` with no store reported success, while
 every other call refuses. `AddRepository<TRepository>(store)` threw unless given a lifetime, because its default was
 `Scoped`, which it refuses; the default is now `Singleton`. The sync bulk ViewModel delete now prunes its hashes.
-### A grant whose role was retired grants nothing instead of throwing (2026-10-17)
-
-[[TASK-641]]. Measured: one stored grant with a retired role made the user's checks of that resource, every check of
-the type for a type-wide grant, and every listing of the type throw. It now grants nothing (fail closed). Owners may
-replace or remove it. `StaleGrantDetector.FindAsync` lists such grants; a health check over it is [[TASK-654]].
-### RavenDB migrations cannot rewrite their RQL through a name (2026-10-17)
-
-[[TASK-640]]. Measured live: `DropCollection("Accounts' WHERE Name = 'b")` deleted only `b`, and an update key or
-`RenameField` name could write another field. A collection now reaches RQL as one escaped literal, so `O'Brien` works,
-and a field name must be a plain dotted path, as filter fields already were.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

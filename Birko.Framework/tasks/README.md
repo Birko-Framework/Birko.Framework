@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-17 22:32. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-17 22:37. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 26      | —     |
-| todo         | —     | —       | 168   |
-| in-progress  | 9     | 13      | 0     |
+| todo         | —     | —       | 167   |
+| in-progress  | 8     | 12      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 1     | 23      | 341   |
+| done         | 2     | 24      | 342   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 118× P2 · 41× P3.
+`todo` by priority: 9× P1 · 117× P2 · 41× P3.
 
 ## In progress now
 
@@ -570,14 +570,6 @@ _None._
     - [ ] [TASK-541](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-541-owner-or-admin-access-predicate.md) Birko.Communication.AspNetCore: an owner-or-admin access check usable outside MapOwnedCrud (P3)
     - [x] [TASK-542](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-542-websocket-reverse-proxy-endpoint.md) A WebSocket reverse-proxy endpoint mapper (P3)
     - [ ] [TASK-569](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-569-websocket-proxy-forwards-subprotocols.md) MapWebSocketProxy drops the client's requested sub-protocols, so a client that asks for one fails its handshake (P3)
-- **EPIC-020** Security — access control — in-progress (5/6 tasks done)
-  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — in-progress (5/6 done)
-    - [x] [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1)
-    - [x] [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1)
-    - [x] [TASK-590](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-590-grants-aspnetcore-requiregrant-and-wiring.md) Birko.Security.Grants.AspNetCore — RequireGrant, resolver decorator, DI, end-to-end README (P1)
-    - [x] [TASK-593](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-593-grants-predicates-on-a-sql-backend.md) Grants: run the grant predicates against a SQL backend, not only InMemory (P2)
-    - [x] [TASK-594](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-594-birko-security-grants-sql-mappings.md) Birko.Security.Grants.SQL — fluent SQL mappings for ResourceGrant and Invitation (P2)
-    - [ ] [TASK-654](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-654-stale-grant-health-check.md) A health check reports stored grants whose role or resource type was retired (P2)
 
 ## Loose tasks
 
@@ -643,12 +635,20 @@ _None._
 
 ## Completed
 
-<details><summary>1 closed epic(s)</summary>
+<details><summary>2 closed epic(s)</summary>
 
 - **EPIC-009** Birko.Communication — Remaining protocols — done (2/2 tasks done)
   - STORY-019 gRPC support — done (1/1 done) (done)
     - [x] [TASK-026](EPIC-009-communication-protocols/STORY-019-grpc/TASK-026-grpc-client-server.md) gRPC client + server support (P2) · FEATURE-009
   - STORY-020 OAuth2 authorization server — done (1/1 done) (done)
     - [x] [TASK-027](EPIC-009-communication-protocols/STORY-020-oauth2-server/TASK-027-birko-security-oauth-server.md) Implement Birko.Security.OAuth.Server (P2) · FEATURE-009
+- **EPIC-020** Security — access control — done (6/6 tasks done)
+  - STORY-062 Per-resource access grants and invitations (Birko.Security.Grants) — done (6/6 done) (done)
+    - [x] [TASK-588](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-588-birko-security-grants-core.md) Birko.Security.Grants core — role table, per-resource grants, CanAsync, Grant/Revoke (P1)
+    - [x] [TASK-589](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-589-grants-invitations-and-bootstrap-admins.md) Grants — invitations, bootstrap admins, and the sign-in hook (P1)
+    - [x] [TASK-590](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-590-grants-aspnetcore-requiregrant-and-wiring.md) Birko.Security.Grants.AspNetCore — RequireGrant, resolver decorator, DI, end-to-end README (P1)
+    - [x] [TASK-593](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-593-grants-predicates-on-a-sql-backend.md) Grants: run the grant predicates against a SQL backend, not only InMemory (P2)
+    - [x] [TASK-594](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-594-birko-security-grants-sql-mappings.md) Birko.Security.Grants.SQL — fluent SQL mappings for ResourceGrant and Invitation (P2)
+    - [x] [TASK-654](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-654-stale-grant-health-check.md) A health check reports stored grants whose role or resource type was retired (P2)
 
 </details>

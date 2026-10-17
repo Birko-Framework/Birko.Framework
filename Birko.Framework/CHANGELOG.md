@@ -4,6 +4,18 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-17 — A grant whose role was retired grants nothing instead of throwing
+
+[[TASK-641]]. Measured: one stored grant with a retired role made the user's checks of that resource, every check of
+the type for a type-wide grant, and every listing of the type throw. It now grants nothing (fail closed). Owners may
+replace or remove it. `StaleGrantDetector.FindAsync` lists such grants; a health check over it is [[TASK-654]].
+
+## 2026-10-17 — RavenDB migrations cannot rewrite their RQL through a name
+
+[[TASK-640]]. Measured live: `DropCollection("Accounts' WHERE Name = 'b")` deleted only `b`, and an update key or
+`RenameField` name could write another field. A collection now reaches RQL as one escaped literal, so `O'Brien` works,
+and a field name must be a plain dotted path, as filter fields already were.
+
 ## 2026-10-17 — A filter on a Persistent or Auto SQL view works
 
 [[TASK-639]]. Measured on all four SQL providers: every filtered read and count of a Persistent view, and of an Auto view

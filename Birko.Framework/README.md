@@ -252,6 +252,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Health.Data.IndexManagement | Index declaration drift on MongoDB, RavenDB and Cosmos DB (a declared index missing, over other fields, or of the other uniqueness) |
 | Birko.Health.Data.SQL | Schema drift (a column whose stored type is no longer the declared one) + unbuilt indexes |
 | Birko.Health.Redis | Redis PING + latency |
+| Birko.Health.Security.Grants | Stored resource grants whose role or resource type is no longer declared (they grant nothing) |
 | Birko.Health.Azure | Blob Storage, Key Vault checks |
 
 ### Cross-Cutting
@@ -376,6 +377,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Health.Data.ElasticSearch.Tests | The Elasticsearch mapping-drift health check, offline and live |
 | Birko.Health.Data.IndexManagement.Tests | Index declaration drift detection and its health check, offline |
 | Birko.Health.Data.SQL.Tests | Schema-drift detection + the health check that reports it |
+| Birko.Health.Security.Grants.Tests | The stale-grant health check, offline |
 | Birko.Localization.Tests | Localization tests (CLDR pluralization, JSON/RESX providers) |
 | Birko.Localization.Data.Tests | Database-backed localization tests (namespace scoping, TTL cache) |
 | Birko.MessageQueue.Redis.Tests | Redis message queue tests |
