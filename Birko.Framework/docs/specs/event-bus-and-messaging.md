@@ -583,6 +583,22 @@ when any of those steps yields null or an incompatible type.
 - **When** a message arrives
 - **Then** the callback returns before running the pipeline
 
+### Requirement: Distributed delivery resolves DI handlers from one scope per message
+
+The system SHALL resolve `IEnumerable<IEventHandler<TEvent>>` for each delivered message from a fresh
+async DI scope opened for that message (from the bus's `IServiceProvider`'s `IServiceScopeFactory`;
+directly from the provider when it has none), followed by the manually `Subscribe`d handlers, and SHALL
+dispose the scope once dispatch, pipeline included, is over (TASK-566, the contract `InProcessEventBus`
+has since TASK-565).
+
+#### Scenario: Handler with a scoped dependency
+
+- **Given** a handler registered transiently that depends on a scoped service, in a root built with
+  `ValidateScopes = true`
+- **When** two messages are delivered
+- **Then** each runs with its own scoped instance, disposed after its dispatch (before TASK-566 the
+  resolve from the root threw under `ValidateScopes` and otherwise shared one root-owned instance)
+
 ### Requirement: Distributed delivery runs every handler then faults for transport retry
 
 The system SHALL invoke all handlers for a delivered event even when earlier handlers throw,
@@ -644,8 +660,11 @@ and SHALL make both paths no-ops after the first.
 
 The system SHALL, in `AutoSubscriber.SubscribeAllAsync`, scan every assembly in the current
 `AppDomain` for non-abstract, non-interface types implementing `IEventHandler<T>`, keep those `T` that
-are classes assignable to `IEvent` **and** for which DI resolves at least one handler instance, and
-call `DistributedEventBus.SubscribeToTransportAsync<T>` reflectively for each distinct `T`.
+are classes assignable to `IEvent` **and** for which DI has an `IEventHandler<T>` registration, and
+call `DistributedEventBus.SubscribeToTransportAsync<T>` reflectively for each distinct `T`. The
+registration SHALL be asked of `IServiceProviderIsService` without building a handler, and only for a
+container that does not offer it, of a short-lived scope; never by resolving handlers from the root,
+which under `ValidateScopes` threw at startup for any handler with a scoped dependency (TASK-566).
 
 #### Scenario: Handler type exists but is not registered in DI
 

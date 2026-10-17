@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Birko.EventBus.MessageQueue
 {
@@ -82,11 +83,7 @@ namespace Birko.EventBus.MessageQueue
                             // robust if that interface constraint ever loosens, and documents the requirement.
                             if (eventType.IsClass && typeof(IEvent).IsAssignableFrom(eventType))
                             {
-                                // Verify it's actually registered in DI
-                                var handlerServiceType = typeof(IEnumerable<>).MakeGenericType(
-                                    handlerOpenType.MakeGenericType(eventType));
-                                var handlers = _serviceProvider.GetService(handlerServiceType);
-                                if (handlers is System.Collections.IEnumerable enumerable && enumerable.Cast<object>().Any())
+                                if (IsRegistered(handlerOpenType.MakeGenericType(eventType)))
                                 {
                                     eventTypes.Add(eventType);
                                 }
@@ -97,6 +94,24 @@ namespace Birko.EventBus.MessageQueue
             }
 
             return eventTypes;
+        }
+
+        /// <summary>
+        /// TASK-566: whether DI has a registration for <paramref name="handlerType"/>, asked without resolving it from the
+        /// root, where a handler with a scoped dependency throws under ValidateScopes before any message is consumed.
+        /// The container answers through <see cref="IServiceProviderIsService"/> without building a handler. A container
+        /// that does not offer it is asked inside a short-lived scope, which does build the handlers, as before.
+        /// </summary>
+        private bool IsRegistered(Type handlerType)
+        {
+            if (_serviceProvider.GetService(typeof(IServiceProviderIsService)) is IServiceProviderIsService isService)
+            {
+                return isService.IsService(handlerType);
+            }
+
+            using var scope = _serviceProvider.CreateScope();
+            var handlers = scope.ServiceProvider.GetService(typeof(IEnumerable<>).MakeGenericType(handlerType));
+            return handlers is System.Collections.IEnumerable enumerable && enumerable.Cast<object>().Any();
         }
     }
 }

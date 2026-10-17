@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### The distributed event bus gives each message its own DI scope (2026-10-17)
+[[TASK-566]]. Measured: a handler with a scoped dependency threw on every delivery under `ValidateScopes`, and at startup
+in `AutoSubscriber`; otherwise every message shared one root-owned dependency that was never disposed. Each delivered
+message now resolves its handlers from its own scope, disposed after dispatch, as `InProcessEventBus` does (TASK-565).
+Discovery asks `IServiceProviderIsService` and builds no handler.
 ### Spec-regen cleanup: ambiguous fields, address headers, index settings (2026-10-17)
 [[TASK-651]]. Fixed from the 2026-10-16 spec regeneration. A `DictionaryRuleContext` field matching two keys only ignoring case now throws instead of taking the first. `RuleSet.Rules` copies the list it is given, and `RuleGroup.Rules = null` is refused. `GetClientIpAddress` returns only a parsed address: `unknown` in X-Forwarded-For had been returned as the IP. An ES `CopyData` with `{}` is a plain copy. `ByName("guid")` is the Guid key. ES index settings refuse negative numbers. Mongo text-index fields compare as a set. `[ViewField]` is not a column on a mapped model.
 
@@ -328,12 +333,6 @@ what is shown. The nodes stay the real objects, so `SelectedValue` still seriali
 `Schema` as the connection default. PostgreSQL, TimescaleDB and SQL Server store `reporting.Events`; MySQL and SQLite store
 `reporting__Events`. Every statement goes through `TableIdentifier`, the one producer; without a schema the SQL is
 unchanged. View names and the migrations history table stay in the default schema.
-### Concurrent slug and default writers: the storage refuses, the decorator retries (2026-10-16)
-
-[[TASK-632]]. Measured: two concurrent creates of "widget" ended in an unhandled duplicate, and two promotions left two
-defaults. A unique refusal is now `StoreUniqueViolationException` (a `StoreException`) on create and update, on every
-provider. The slug wrappers retry with the next suffix. A model opting in with `IDefaultMarker` gets one default; the
-last writer wins. Stores without unique indexes stay best effort. MongoDB partial indexes: [[TASK-636]].
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

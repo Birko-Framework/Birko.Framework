@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-16 — Concurrent slug and default writers: the storage refuses, the decorator retries
+
+[[TASK-632]]. Measured: two concurrent creates of "widget" ended in an unhandled duplicate, and two promotions left two
+defaults. A unique refusal is now `StoreUniqueViolationException` (a `StoreException`) on create and update, on every
+provider. The slug wrappers retry with the next suffix. A model opting in with `IDefaultMarker` gets one default; the
+last writer wins. Stores without unique indexes stay best effort. MongoDB partial indexes: [[TASK-636]].
+
 ## 2026-10-16 — An ElasticSearch reindex started without waiting is pending, not a success
 
 [[TASK-560]]. `Reindex(…, waitForCompletion: false)` reported `Successful` with 0 documents for a copy that had only
