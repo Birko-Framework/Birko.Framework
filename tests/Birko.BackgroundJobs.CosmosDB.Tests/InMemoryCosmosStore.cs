@@ -22,6 +22,19 @@ public class InMemoryCosmosStore<T> : AsyncCosmosDBStore<T> where T : AbstractMo
     public override Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
         => Task.FromResult(_items.TryGetValue(guid, out var v) ? v : null);
 
+    private readonly object _gate = new();
+
+    // TASK-661: the store's compare-and-set, atomic under a lock (the real one uses the item's ETag).
+    public override Task<T?> UpdateIfAsync(Guid guid, Func<T, bool> condition, Action<T> update, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            if (!_items.TryGetValue(guid, out var item) || !condition(item)) return Task.FromResult<T?>(null);
+            update(item);
+            return Task.FromResult<T?>(item);
+        }
+    }
+
     protected override Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
         if (data.Guid == null || data.Guid == Guid.Empty) data.Guid = Guid.NewGuid();

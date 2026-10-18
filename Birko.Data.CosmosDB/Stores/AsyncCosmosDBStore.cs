@@ -333,6 +333,72 @@ public class AsyncCosmosDBStore<T>
         await _container.DeleteItemAsync<T>(data.Guid.Value.ToString(), new PartitionKey(data.Guid.Value.ToString()), cancellationToken: ct);
     }
 
+    /// <summary>
+    /// Conflicts <see cref="UpdateIfAsync"/> absorbs before it reports <see cref="StoreConcurrencyException"/>. Each one
+    /// means another writer changed the item, so the condition is evaluated again on what it wrote.
+    /// </summary>
+    public const int MaxConditionalUpdateAttempts = 16;
+
+    /// <summary>
+    /// A compare-and-set on one item (TASK-661): reads it with its ETag, applies <paramref name="update"/> only when
+    /// <paramref name="condition"/> holds for the stored item, and replaces it only if nobody wrote it in between
+    /// (<c>IfMatchEtag</c>). On a lost race the item is read again and the condition asked again, so a caller sees either
+    /// its change applied to the current item or <c>null</c>, never a write over a newer version.
+    /// </summary>
+    /// <returns>The item as written, or <c>null</c> when it is missing or the condition does not hold.</returns>
+    /// <exception cref="StoreConcurrencyException">The item kept changing for <see cref="MaxConditionalUpdateAttempts"/> reads.</exception>
+    /// <exception cref="InvalidOperationException">Called inside a transactional batch, which cannot read and decide.</exception>
+    public virtual async Task<T?> UpdateIfAsync(Guid guid, Func<T, bool> condition, Action<T> update, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        ArgumentNullException.ThrowIfNull(update);
+        await EnsureInitializedAsync(ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        if (TransactionContext != null)
+        {
+            throw new InvalidOperationException(
+                "UpdateIfAsync reads the item and decides before it writes; a transactional batch defers every write to its commit, so it cannot run inside one.");
+        }
+        if (_container == null || guid == Guid.Empty) return null;
+
+        var id = guid.ToString();
+        var partition = new PartitionKey(id);
+        for (var attempt = 1; attempt <= MaxConditionalUpdateAttempts; attempt++)
+        {
+            ItemResponse<T> read;
+            try
+            {
+                read = await _container.ReadItemAsync<T>(id, partition, cancellationToken: ct).ConfigureAwait(false);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            var item = read.Resource;
+            if (item == null || !condition(item)) return null;
+            update(item);
+
+            try
+            {
+                await _container.ReplaceItemAsync(item, id, partition, new ItemRequestOptions { IfMatchEtag = read.ETag }, ct).ConfigureAwait(false);
+                return item;
+            }
+            catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+            {
+                // Another writer got there first: read what it wrote and ask the condition again.
+            }
+            catch (CosmosException ex) when (IsItemNotFound(ex))
+            {
+                return null;
+            }
+        }
+
+        throw new StoreConcurrencyException(
+            $"Item {guid} of {typeof(T).Name} changed under {MaxConditionalUpdateAttempts} consecutive conditional updates.",
+            applied: 0, conflicts: MaxConditionalUpdateAttempts);
+    }
+
     #endregion
 
     #region Query and Count Operations

@@ -64,6 +64,12 @@ Settings mapping from `RemoteSettings`:
 - Bulk execution is enabled by default via `Settings.AllowBulkExecution = true`
 - Sync store operations use `.GetAwaiter().GetResult()` wrappers; prefer async store for production
 
+## Conditional update (TASK-661)
+- `AsyncCosmosDBStore.UpdateIfAsync(guid, condition, update)` is a compare-and-set on one item: read with its ETag, apply
+  only where `condition` holds, replace with `IfMatchEtag`; a 412 re-reads and asks again, up to
+  `MaxConditionalUpdateAttempts` (16), then `StoreConcurrencyException`. Returns the written item, or `null` when the item
+  is missing or the condition fails. Refused inside a transactional batch. Async store only.
+
 ## Transaction boundary (TASK-240)
 
 `CosmosDbUnitOfWork` wraps a `TransactionalBatch`: **atomic, but scoped to ONE logical partition key**.

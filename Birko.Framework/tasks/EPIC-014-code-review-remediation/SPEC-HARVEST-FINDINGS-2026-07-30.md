@@ -1091,7 +1091,7 @@ The update branch does `existing.UpdateFromInstance(instance); existing.Workflow
 
 `../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueue.cs:71`  ·  _restates a first-pass finding_
 
-**Verdict: CONFIRMED, spawned as [[TASK-661]]** (TASK-158, 2026-10-18). `CosmosDBJobQueue.DequeueAsync` still reads the top candidate, mutates it and calls `UpdateAsync(model)`, with no claim token, guard or retry. The fix needs a conditional write (ETag / patch with a predicate) that `Birko.Data.CosmosDB` does not have yet.
+**Verdict: CONFIRMED, spawned as [[TASK-661]]** (TASK-158, 2026-10-18). `CosmosDBJobQueue.DequeueAsync` still reads the top candidate, mutates it and calls `UpdateAsync(model)`, with no claim token, guard or retry. The fix needs a conditional write (ETag / patch with a predicate) that `Birko.Data.CosmosDB` does not have yet. **Fixed by TASK-661:** `AsyncCosmosDBStore.UpdateIfAsync` (ETag compare-and-set); the claim re-checks eligibility on the stored item. Measured on the emulator before: 6 workers, 6 jobs, 24 claims of 4 jobs; after: 6 claims of 6. Live and offline tests red on HEAD.
 
 Lines 71-79 read the top candidate, mutate Status/AttemptCount/LastAttemptAt in memory and call `_store.UpdateAsync(model)`. There is no ClaimToken (the model has no such field), no status-guarded conditional update, no MaxClaimAttempts loop and no lock - unlike the four store-backed siblings hardened for CR-H011. Two concurrent workers both return the same JobDescriptor, the job body runs twice, and AttemptCount ends at 1 instead of 2 so the retry budget is wrong too.
 
@@ -1099,7 +1099,7 @@ Lines 71-79 read the top candidate, mutate Status/AttemptCount/LastAttemptAt in 
 
 `../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueue.cs:119`  ·  _restates a first-pass finding_
 
-**Verdict: CONFIRMED, spawned as [[TASK-661]]** (TASK-158). `CancelAsync` reads by id with no status guard and returns `true` for any existing job; it is fixed with the same conditional write.
+**Verdict: CONFIRMED, spawned as [[TASK-661]]** (TASK-158). `CancelAsync` reads by id with no status guard and returns `true` for any existing job; it is fixed with the same conditional write. **Fixed by TASK-661:** Cancel is a compare-and-set on Pending | Scheduled; Complete and Fail on Processing (Fail of an unclaimed job rescheduled it on HEAD, measured live).
 
 Every other backend reads with `j.Guid == jobId && (Status == Pending || Status == Scheduled)` and returns false otherwise; IJobQueue.CancelAsync is documented as 'Cancels a pending or scheduled job'. Cosmos reads by id only, so CancelAsync on a Completed, Processing or Dead job overwrites Status to Cancelled, restamps CompletedAt and reports success. A completed job's terminal record is destroyed, and a running job reports cancelled while it keeps running.
 

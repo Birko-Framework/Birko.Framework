@@ -240,6 +240,10 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Cosmos DB job queue claims each job once; the store gains a compare-and-set (2026-10-18)
+[[TASK-661]]. Measured on the emulator: 6 concurrent dequeuers claimed 6 jobs 24 times (4 distinct), Cancel cancelled a
+running or completed job and answered true, and Fail rescheduled an unclaimed job. `AsyncCosmosDBStore.UpdateIfAsync`
+is a compare-and-set on the item's ETag (a lost race re-reads and re-checks); claim, Complete, Fail and Cancel use it.
 ### BREAKING: a job's MaxRetries is nullable; 0 means no retries everywhere (2026-10-18)
 [[TASK-662]]. `JobDescriptor.MaxRetries` is `int?`: `null` = the queue's `RetryPolicy`, `0` = no retry, on all nine
 backends (0 used to mean "the policy" on InMemory, JSON and RavenDB). An old SQL `MaxRetries NOT NULL` column refuses a
@@ -316,11 +320,6 @@ never Unhealthy. The admin grant is ignored; nothing is revoked.
 because SqlClient infers a `datetime` parameter, though the column was `DATETIME2`. Exact-value filters matched nothing and
 writes within a second tied. MySQL columns are now `DATETIME(6)`, and SQL Server binds `DATETIME2`. An existing MySQL
 `DATETIME` column is reported as drift; widening it with `ALTER … MODIFY … DATETIME(6)` is the operator's step.
-### A migration's DropField drops the field; a DropIndex that cannot drop refuses (2026-10-17)
-[[TASK-655]]. Measured live: on MongoDB, RavenDB, Cosmos DB and ElasticSearch `DropField` left every document carrying the
-field, and ElasticSearch and Cosmos `DropIndex` did nothing, yet the migration was recorded. `DropField` now removes the field
-from every document (on ElasticSearch the mapping keeps it until a reindex). Cosmos `DropIndex` drops by name; ElasticSearch
-and InfluxDB `DropIndex` refuse, as their `CreateIndex` does. Cosmos `RenameField` on a plain client: [[TASK-659]].
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

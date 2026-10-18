@@ -86,6 +86,13 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
 
+## 2026-10-17 — A migration's DropField drops the field; a DropIndex that cannot drop refuses
+
+[[TASK-655]]. Measured live: on MongoDB, RavenDB, Cosmos DB and ElasticSearch `DropField` left every document carrying the
+field, and ElasticSearch and Cosmos `DropIndex` did nothing, yet the migration was recorded. `DropField` now removes the field
+from every document (on ElasticSearch the mapping keeps it until a reindex). Cosmos `DropIndex` drops by name; ElasticSearch
+and InfluxDB `DropIndex` refuse, as their `CreateIndex` does. Cosmos `RenameField` on a plain client: [[TASK-659]].
+
 ## 2026-10-17 — SQL connection strings quote their credentials on every provider
 
 [[TASK-653]]. **Security.** Measured live: on SQL Server, MySQL, PostgreSQL and TimescaleDB a password ending `;Server=evil`

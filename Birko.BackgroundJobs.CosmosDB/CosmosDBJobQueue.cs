@@ -53,9 +53,98 @@ public class CosmosDBJobQueue : IJobQueue
     public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
+        var results = await ReadCandidatesAsync(now, queueName, ct).ConfigureAwait(false);
+
+        // TASK-661 (SH-M001): each candidate is claimed by a conditional write (ETag), re-checked on the item as stored.
+        // It was read, mutated and replaced, so concurrent dequeuers all claimed the same job (measured on the emulator:
+        // 6 workers, 6 jobs, 24 claims of 4 jobs). A lost race moves on to the next candidate.
+        for (var round = 0; round < MaxClaimRounds; round++)
+        {
+            foreach (var candidate in results)
+            {
+                var claimed = await _store.UpdateIfAsync(
+                    candidate.Guid!.Value,
+                    m => IsDue(m, now, queueName),
+                    m =>
+                    {
+                        m.Status = (int)JobStatus.Processing;
+                        m.LastAttemptAt = DateTime.UtcNow;
+                        m.AttemptCount++;
+                    },
+                    ct).ConfigureAwait(false);
+                if (claimed != null) return claimed.ToDescriptor();
+            }
+
+            if (results.Count < ClaimBatch) return null;
+            results = await ReadCandidatesAsync(now, queueName, ct).ConfigureAwait(false);
+            if (results.Count == 0) return null;
+        }
+
+        return null;
+    }
+
+    /// <summary>Candidates read per round; every one a round loses to another worker is skipped, not retried.</summary>
+    private const int ClaimBatch = 8;
+
+    /// <summary>Rounds of candidates one dequeue tries before it reports nothing to do.</summary>
+    private const int MaxClaimRounds = 4;
+
+    private static bool IsDue(CosmosJobDescriptorModel m, DateTime now, string? queueName)
+        => (m.Status == (int)JobStatus.Pending || (m.Status == (int)JobStatus.Scheduled && m.ScheduledAt != null && m.ScheduledAt <= now))
+            && (queueName == null || m.QueueName == null || m.QueueName == queueName);
+
+    /// <inheritdoc />
+    public async Task CompleteAsync(Guid jobId, CancellationToken ct = default)
+    {
+        // TASK-661: only a claimed job completes, as on every backend since TASK-158.
+        await _store.UpdateIfAsync(jobId, m => m.Status == (int)JobStatus.Processing, m =>
+        {
+            m.Status = (int)JobStatus.Completed;
+            m.CompletedAt = DateTime.UtcNow;
+        }, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task FailAsync(Guid jobId, string error, CancellationToken ct = default)
+    {
+        // TASK-661: only a claimed job fails; the retry decision reads the item as stored, not a stale copy.
+        await _store.UpdateIfAsync(jobId, m => m.Status == (int)JobStatus.Processing, m =>
+        {
+            m.LastError = error;
+            var now = DateTime.UtcNow;
+            if (m.AttemptCount < _retryPolicy.MaxRetriesFor(m.MaxRetries))
+            {
+                m.Status = (int)JobStatus.Scheduled;
+                m.ScheduledAt = now.Add(_retryPolicy.GetDelay(m.AttemptCount));
+            }
+            else
+            {
+                // Retries exhausted — terminal Dead status (CR-H008), not the retryable Failed.
+                m.Status = (int)JobStatus.Dead;
+                m.CompletedAt = now;
+            }
+        }, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> CancelAsync(Guid jobId, CancellationToken ct = default)
+    {
+        // TASK-661 (SH-M002): only a job that has not started is cancelled. It read by id alone, so a running,
+        // completed or dead job was marked Cancelled and the call answered true.
+        var cancelled = await _store.UpdateIfAsync(jobId,
+            m => m.Status == (int)JobStatus.Pending || m.Status == (int)JobStatus.Scheduled,
+            m =>
+            {
+                m.Status = (int)JobStatus.Cancelled;
+                m.CompletedAt = DateTime.UtcNow;
+            }, ct).ConfigureAwait(false);
+        return cancelled != null;
+    }
+
+    private async Task<List<CosmosJobDescriptorModel>> ReadCandidatesAsync(DateTime now, string? queueName, CancellationToken ct)
+    {
         var pendingStatus = (int)JobStatus.Pending;
         var scheduledStatus = (int)JobStatus.Scheduled;
-
         var results = await _store.ReadAsync(
             // Guard ScheduledAt != null (a Scheduled row with a null ScheduledAt is malformed and the
             // null-comparison semantics under the Cosmos SQL translation aren't guaranteed to match
@@ -68,65 +157,10 @@ public class CosmosDBJobQueue : IJobQueue
             filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
                 && (queueName == null || j.QueueName == null || j.QueueName == queueName),
             orderBy: OrderBy<CosmosJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-            limit: 1,
+            limit: ClaimBatch,
             ct: ct
         ).ConfigureAwait(false);
-
-        var model = results.FirstOrDefault();
-        if (model == null) return null;
-
-        model.Status = (int)JobStatus.Processing;
-        model.LastAttemptAt = DateTime.UtcNow;
-        model.AttemptCount++;
-        await _store.UpdateAsync(model, ct: ct).ConfigureAwait(false);
-
-        return model.ToDescriptor();
-    }
-
-    /// <inheritdoc />
-    public async Task CompleteAsync(Guid jobId, CancellationToken ct = default)
-    {
-        var model = await _store.ReadAsync(jobId, ct).ConfigureAwait(false);
-        if (model == null) return;
-
-        model.Status = (int)JobStatus.Completed;
-        model.CompletedAt = DateTime.UtcNow;
-        await _store.UpdateAsync(model, ct: ct).ConfigureAwait(false);
-    }
-
-    /// <inheritdoc />
-    public async Task FailAsync(Guid jobId, string error, CancellationToken ct = default)
-    {
-        var model = await _store.ReadAsync(jobId, ct).ConfigureAwait(false);
-        if (model == null) return;
-
-        model.LastError = error;
-        if (model.AttemptCount < _retryPolicy.MaxRetriesFor(model.MaxRetries))
-        {
-            // Retries remain — re-enqueue with backoff (mirrors MongoDBJobQueue).
-            model.Status = (int)JobStatus.Scheduled;
-            model.ScheduledAt = DateTime.UtcNow.Add(_retryPolicy.GetDelay(model.AttemptCount));
-        }
-        else
-        {
-            // Retries exhausted — terminal Dead status (CR-H008), not the retryable Failed.
-            model.Status = (int)JobStatus.Dead;
-            model.CompletedAt = DateTime.UtcNow;
-        }
-
-        await _store.UpdateAsync(model, ct: ct).ConfigureAwait(false);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> CancelAsync(Guid jobId, CancellationToken ct = default)
-    {
-        var model = await _store.ReadAsync(jobId, ct).ConfigureAwait(false);
-        if (model == null) return false;
-
-        model.Status = (int)JobStatus.Cancelled;
-        model.CompletedAt = DateTime.UtcNow;
-        await _store.UpdateAsync(model, ct: ct).ConfigureAwait(false);
-        return true;
+        return results.ToList();
     }
 
     /// <inheritdoc />

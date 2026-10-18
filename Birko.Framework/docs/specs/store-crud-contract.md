@@ -952,6 +952,26 @@ exception that already is a `StoreUniqueViolationException` SHALL pass through u
 - **When** its `CreateCore` or `UpdateCore` throws anything
 - **Then** the exception propagates untranslated
 
+### Requirement: Cosmos DB offers a compare-and-set on one item
+
+The system SHALL provide `AsyncCosmosDBStore<T>.UpdateIfAsync(guid, condition, update, ct)`, which reads the item with its
+ETag, returns `null` without writing when the item is missing or `condition` is false for it, and otherwise applies
+`update` and replaces the item with `IfMatchEtag`. A replace refused with 412 SHALL read the item again and re-evaluate
+`condition`, up to `MaxConditionalUpdateAttempts` (16) times, then throw `StoreConcurrencyException`. It SHALL refuse
+to run inside a transactional batch (`InvalidOperationException`). (TASK-661.)
+
+#### Scenario: Concurrent conditional increments all land
+
+- **Given** one stored item and 8 concurrent `UpdateIfAsync(id, _ => true, c => c.Hits++)` calls
+- **When** they all complete
+- **Then** `Hits` is 8; without the ETag condition, measured on the emulator, it was 1
+
+#### Scenario: A condition that does not hold writes nothing
+
+- **Given** a stored item whose `State` is `"open"`
+- **When** `UpdateIfAsync(id, c => c.State == "closed", c => c.Hits = 99)` is called
+- **Then** it returns `null` and the stored item is unchanged
+
 ### Requirement: StoreException is the store-layer exception type and carries an optional inner exception
 
 The system SHALL declare `Birko.Data.Exceptions.StoreException : Exception` with a `(string message)`

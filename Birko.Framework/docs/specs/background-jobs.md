@@ -353,8 +353,9 @@ due members (FIELD-028, fixed by TASK-561 — Redis used to serve an unnamed job
 
 The system SHALL prevent two workers from claiming the same job, using a token-verified,
 status-guarded conditional update on SQL, MongoDB, Elasticsearch and RavenDB; a single atomic Lua
-script on Redis; an in-process `SemaphoreSlim` on the in-memory, JSON and XML backends; and SHALL
-provide **no** concurrency protection at all on Cosmos DB.
+script on Redis; an in-process `SemaphoreSlim` on the in-memory, JSON and XML backends; and a
+compare-and-set on the item's ETag (`AsyncCosmosDBStore.UpdateIfAsync`) on Cosmos DB, which re-checks
+eligibility on the item as stored (TASK-661).
 
 #### Scenario: SQL claims via ClaimToken and verifies by re-read
 
@@ -404,11 +405,11 @@ provide **no** concurrency protection at all on Cosmos DB.
 - **When** both call `DequeueAsync` concurrently
 - **Then** the private `_dequeueLock` `SemaphoreSlim(1,1)` serialises read-claim-update so only one gets the job; two separate *processes* over the same file have no compare-and-swap and can both claim it
 
-#### Scenario: Cosmos DB has a read-then-write race
+#### Scenario: Cosmos DB claims by ETag
 
-- **Given** two `CosmosDBJobQueue` workers polling the same eligible document
-- **When** both read it and both then call `UpdateAsync(model)` with `Status = Processing`
-- **Then** both return the same `JobDescriptor` — there is no `ClaimToken`, no conditional filter, no retry loop and no lock in the Cosmos implementation
+- **Given** several `CosmosDBJobQueue` workers polling the same eligible documents
+- **When** they call `DequeueAsync` concurrently
+- **Then** each job is returned to one worker with `AttemptCount = 1`: a claim replaces the item only if its ETag is unchanged, a lost race (412) re-reads it and finds it no longer due, and the worker moves on to the next of up to 8 candidates (measured on the emulator before TASK-661: 6 workers, 6 jobs, 24 claims of 4 jobs)
 
 ### Requirement: SQL reclaims a job abandoned in Processing, bounded by its retry budget
 
@@ -508,31 +509,11 @@ remain, or set `Status = Dead` with `CompletedAt` stamped when they do not.
 - **When** `FailAsync(jobId, "boom")` is called
 - **Then** the call returns without error
 
-### Requirement: The queue-level MaxRetries fallback is honoured by only four backends
-
-The system SHALL, on the in-memory, JSON and RavenDB backends, fall back to the queue's configured
-`RetryPolicy.MaxRetries` when the job's own `MaxRetries` is `0` (`maxRetries = model.MaxRetries > 0
-? model.MaxRetries : _retryPolicy.MaxRetries`), and SHALL NOT apply that fallback on the SQL,
-MongoDB, Elasticsearch, XML, Cosmos DB or Redis backends, where a `MaxRetries = 0` job goes
-straight to `Dead`.
-
-#### Scenario: Fallback applied on the reference and two ports
-
-- **Given** an `InMemoryJobQueue`, `JsonJobQueue` or `RavenDBJobQueue` constructed with `new RetryPolicy { MaxRetries = 5 }`, and a job with `MaxRetries = 0` and `AttemptCount = 1`
-- **When** `FailAsync(jobId, "boom")` is called
-- **Then** the job is rescheduled (`Status = Scheduled`), because the effective budget is the policy's `5`
-
-#### Scenario: Fallback absent on the other six backends
-
-- **Given** a `SqlJobQueue`, `MongoDBJobQueue`, `ElasticSearchJobQueue`, `XmlJobQueue`, `CosmosDBJobQueue` or `RedisJobQueue` constructed with `new RetryPolicy { MaxRetries = 5 }`, and a job with `MaxRetries = 0` and `AttemptCount = 1`
-- **When** `FailAsync(jobId, "boom")` is called
-- **Then** the job becomes `Dead` immediately, because the comparison is the bare `AttemptCount < MaxRetries` and the injected policy's `MaxRetries` is never consulted
-
-### Requirement: Cancellation is status-guarded everywhere except Cosmos DB
+### Requirement: Cancellation is status-guarded on every backend
 
 The system SHALL cancel a job through `CancelAsync(jobId)` only when its current status is `Pending`
-or `Scheduled`, returning `true` on success and `false` otherwise — except on Cosmos DB, where
-`CancelAsync` SHALL apply no status guard and return `true` for any existing job.
+or `Scheduled`, returning `true` on success and `false` otherwise, on every backend (Cosmos DB since
+TASK-661; it applied no status guard and returned `true` for any existing job).
 
 #### Scenario: Cancelling a pending job succeeds
 
@@ -543,7 +524,7 @@ or `Scheduled`, returning `true` on success and `false` otherwise — except on 
 #### Scenario: Cancelling a processing job is refused
 
 - **Given** a job in `Status = Processing`
-- **When** `CancelAsync(jobId)` is called on the in-memory, SQL, MongoDB, Elasticsearch, RavenDB, JSON, XML or Redis backend
+- **When** `CancelAsync(jobId)` is called on any backend
 - **Then** `false` is returned and the status is unchanged
 
 #### Scenario: Cancelling an unknown job returns false
@@ -552,11 +533,11 @@ or `Scheduled`, returning `true` on success and `false` otherwise — except on 
 - **When** `CancelAsync(jobId)` is called
 - **Then** `false` is returned
 
-#### Scenario: Cosmos DB cancels a completed job
+#### Scenario: Cosmos DB refuses to cancel a completed job
 
 - **Given** a Cosmos DB job in `Status = Completed` (or `Processing`, or `Dead`)
 - **When** `CancelAsync(jobId)` is called
-- **Then** the status is overwritten to `Cancelled`, `CompletedAt` is restamped, and `true` is returned — the Cosmos implementation reads by id with no status predicate
+- **Then** `false` is returned and the item is unchanged: the cancel is a compare-and-set whose condition is `Pending | Scheduled`
 
 #### Scenario: Redis cancellation also detaches the queue entry
 

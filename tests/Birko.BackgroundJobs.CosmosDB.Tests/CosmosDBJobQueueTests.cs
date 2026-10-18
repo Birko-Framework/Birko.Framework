@@ -61,8 +61,8 @@ public class CosmosDBJobQueueTests
         var deadId = await EnqueueAndDequeue(queue, maxRetries: 1);
         await queue.FailAsync(deadId, "dead");
 
-        // A completed job — should be purged.
-        var doneId = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+        // A completed job — should be purged. Claimed first: only a claimed job completes (TASK-158 / TASK-661).
+        var doneId = await EnqueueAndDequeue(queue, maxRetries: 3);
         await queue.CompleteAsync(doneId);
 
         // A retryable (Scheduled) job — must NOT be purged.
@@ -108,5 +108,61 @@ public class CosmosDBJobQueueTests
 
         claims.Should().Be(attempts);
         (await queue.GetAsync(id))!.Status.Should().Be(JobStatus.Dead);
+    }
+
+    // ── TASK-661: claims and transitions are compare-and-set ──
+
+    [Fact]
+    public async Task TASK_661_concurrent_dequeuers_claim_each_job_once()
+    {
+        var queue = NewQueue();
+        const int jobs = 20;
+        for (var i = 0; i < jobs; i++) await queue.EnqueueAsync(new JobDescriptor { JobType = "j" + i });
+
+        var claims = new System.Collections.Concurrent.ConcurrentBag<Guid>();
+        using var start = new ManualResetEventSlim(false);
+        var workers = Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
+        {
+            start.Wait();
+            for (var k = 0; k < 6; k++)
+            {
+                var job = await queue.DequeueAsync();
+                if (job != null) claims.Add(job.Guid);
+            }
+        })).ToArray();
+        start.Set();
+        await Task.WhenAll(workers);
+
+        claims.Should().OnlyHaveUniqueItems();
+        claims.Should().HaveCount(jobs);
+    }
+
+    [Fact]
+    public async Task TASK_661_cancel_acts_only_on_a_job_that_has_not_started()
+    {
+        var queue = NewQueue();
+        var running = await EnqueueAndDequeue(queue, maxRetries: 3);
+        (await queue.CancelAsync(running)).Should().BeFalse("a running job is not cancelled");
+        (await queue.GetAsync(running))!.Status.Should().Be(JobStatus.Processing);
+
+        await queue.CompleteAsync(running);
+        (await queue.CancelAsync(running)).Should().BeFalse("a completed job is not cancelled");
+        (await queue.GetAsync(running))!.Status.Should().Be(JobStatus.Completed);
+
+        var pending = await queue.EnqueueAsync(new JobDescriptor { JobType = "p" });
+        (await queue.CancelAsync(pending)).Should().BeTrue();
+        (await queue.CancelAsync(pending)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TASK_661_complete_and_fail_act_only_on_a_claimed_job()
+    {
+        var queue = NewQueue();
+        var pending = await queue.EnqueueAsync(new JobDescriptor { JobType = "p" });
+        await queue.CompleteAsync(pending);
+        await queue.FailAsync(pending, "x");
+        var job = await queue.GetAsync(pending);
+        job!.Status.Should().Be(JobStatus.Pending);
+        job.LastError.Should().BeNull();
     }
 }
