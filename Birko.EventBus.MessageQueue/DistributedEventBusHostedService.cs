@@ -16,12 +16,12 @@ namespace Birko.EventBus.MessageQueue
         private readonly DistributedEventBusOptions _options;
 
         public DistributedEventBusHostedService(
-            IEventBus bus,
+            DistributedEventBus bus,
             IServiceProvider serviceProvider,
             DistributedEventBusOptions options)
         {
-            _bus = bus as DistributedEventBus ?? throw new InvalidOperationException(
-                $"DistributedEventBusHostedService requires IEventBus to be a DistributedEventBus, but got {bus.GetType().Name}.");
+            // SH-M114: the concrete bus, registered on its own by AddDistributedEventBus, whatever decorates IEventBus.
+            _bus = bus ?? throw new ArgumentNullException(nameof(bus));
             _serviceProvider = serviceProvider;
             _options = options;
         }

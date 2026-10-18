@@ -4,6 +4,34 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — Event bus and messaging triage: transports refuse what they cannot honour, dedup is at-least-once
+
+[[TASK-155]]. 24 medium findings in `event-bus-and-messaging`. Four decisions by the user change what consumers see:
+
+- **A new Redis consumer group starts at the stream's tail** unless `ConsumerOptions.FromBeginning` (it started at
+  `0-0` and replayed the whole stream). A message published before the group exists is not delivered to it: set
+  `FromBeginning` for a group that must see the backlog.
+- **Transports refuse what they cannot honour** (`NotSupportedException`): MQTT `ManualAck`, `FromBeginning`,
+  `GroupId` and `RejectAsync(requeue: true)`; a `QueueMessage.Delay` on MQTT and Redis (it was published at once).
+- **The distributed bus retries an unknown event type** (the callback throws, so the transport redelivers it), and
+  reports a corrupt message through the new `DistributedEventBus.MessageDropped` before acking it.
+- **Deduplication is at-least-once:** a handler failure releases the reservation, so a redelivery runs again.
+
+**Breaking, compile-time:**
+
+| Member | Old | New |
+|--------|-----|-----|
+| `IDeduplicationStore` | `Exists`, `MarkProcessed`, `TryMarkProcessed` | + required `ReleaseAsync(Guid, CancellationToken)` |
+| `DistributedEventBusHostedService` ctor | `(IEventBus, IServiceProvider, options)` | `(DistributedEventBus, IServiceProvider, options)` |
+
+**Also:** the outbox composed over the distributed bus starts (it threw at startup); the distributed consume path
+applies `IEventScopeAccessor`; a publish with no handlers runs the pipeline; an outbox shutdown is not a failed
+attempt; `EventStoreEventBus` puts the appended-but-unpublished events in the exception's
+`Data[UnpublishedEventsKey]`; Redis reclaims on a busy stream, retries a setup blip, acks every entry of a repeated
+message id; MQTT keeps several handlers per filter and releases them properly, and a throwing connection-event
+subscriber no longer stops reconnect; the in-memory transport keeps a failed ManualAck message requeueable, removes a
+disposed consumer's handlers, and a delayed send outlives the caller's token (an already-cancelled call now throws).
+
 ## 2026-10-18 — BREAKING: JobDescriptor.MaxRetries is nullable; 0 means no retries everywhere
 
 [[TASK-662]] (SH-M003, decided by the user 2026-10-18). A job's `MaxRetries` of `0` meant "use the queue's
@@ -28,6 +56,19 @@ PostgreSQL / TimescaleDB `ALTER COLUMN "MaxRetries" DROP NOT NULL`, SQLite a tab
 **Fixed on the way (MongoDB):** `PropertyUpdate.Set` of a `Guid` threw "System.Guid cannot be mapped to a BsonValue"
 under driver 3.x, so the MongoDB job queue could not claim a job on a real server (its tests ran on an in-memory
 double). A set value is now written with the member's own serializer; a null is `BsonNull`. Measured live.
+
+## 2026-10-17 — FieldCipher and InMemorySecretProvider in Birko.Security
+
+[[TASK-532]]. `FieldCipher` encrypts a stored value with an HKDF-derived key. Its envelope names the key id, so masters
+rotate, and it authenticates the caller's associated data, so a value moved to another row does not decrypt. A missing
+or short master throws at construction. `InMemorySecretProvider` serves local and configuration-seeded secrets.
+
+## 2026-10-17 — A failed LLM call says why, and a cancelled one throws
+
+[[TASK-531]]. `LlmResponse.Failure` carries the kind, HTTP status, Retry-After and `IsTransient`. The provider base
+classifies it once, on every provider, from the status, never the text. Measured: a cancelled call came back as an
+error response; it now throws `OperationCanceledException`. **Breaking:** `ErrorCategory` on plan steps and task
+records is an enum. Copilot's streaming 401 refresh now runs.
 
 ## 2026-10-17 — A failed LLM call says why: LlmResponse.Failure, classified once
 

@@ -18,6 +18,18 @@ namespace Birko.MessageQueue.InMemory
         private readonly ConcurrentDictionary<Guid, (string Destination, QueueMessage Message)> _pendingAck = new();
         private bool _disposed;
 
+        // SH-M111: the channel subscribers this consumer registered, removed on Dispose. They stayed on the shared
+        // channel, so a disposed consumer kept receiving (and its handlers' Ack / Reject then threw ObjectDisposed).
+        private readonly ConcurrentDictionary<Guid, string> _subscribers = new();
+
+        /// <summary>
+        /// Invoked when a message handler throws (SH-M109), so a failure is observable instead of discarded by the
+        /// channel's dispatch loop. The in-memory transport does not redeliver a failed message by itself; under
+        /// ManualAck it stays pending, so <see cref="RejectAsync"/> with requeue redelivers it. An exception thrown by
+        /// the hook is swallowed.
+        /// </summary>
+        public Func<Exception, QueueMessage, Task>? OnHandlerError { get; set; }
+
         internal InMemoryConsumer(InMemoryChannel channel, IMessageSerializer serializer)
         {
             _channel = channel ?? throw new ArgumentNullException(nameof(channel));
@@ -45,17 +57,17 @@ namespace Birko.MessageQueue.InMemory
                         // Auto-acknowledged on success
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    if (opts.AckMode == MessageAckMode.ManualAck)
-                    {
-                        _pendingAck.TryRemove(message.Guid, out _);
-                    }
+                    // SH-M110: under ManualAck the entry stays pending, so the caller can still RejectAsync(requeue: true)
+                    // it — that failure is exactly what requeue is for. It was removed here, so the requeue found nothing.
+                    await InvokeHandlerErrorAsync(ex, message).ConfigureAwait(false);
                     throw;
                 }
             };
 
             var subscriberId = _channel.AddSubscriber(destination, wrappedHandler);
+            _subscribers[subscriberId] = destination;
             ISubscription subscription = new InMemorySubscription(_channel, destination, subscriberId);
             return Task.FromResult(subscription);
         }
@@ -105,9 +117,32 @@ namespace Birko.MessageQueue.InMemory
             return _serializer.Deserialize<T>(message.Body);
         }
 
+        private async Task InvokeHandlerErrorAsync(Exception ex, QueueMessage message)
+        {
+            var hook = OnHandlerError;
+            if (hook == null)
+            {
+                return;
+            }
+
+            try
+            {
+                await hook(ex, message).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The error hook must never break dispatch.
+            }
+        }
+
         public void Dispose()
         {
             _disposed = true;
+            foreach (var (subscriberId, destination) in _subscribers)
+            {
+                _channel.RemoveSubscriber(destination, subscriberId);
+            }
+            _subscribers.Clear();
             _pendingAck.Clear();
         }
     }

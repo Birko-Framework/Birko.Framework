@@ -34,6 +34,13 @@ namespace Birko.MessageQueue.Mqtt
 
         public async Task SendAsync(string destination, QueueMessage message, CancellationToken cancellationToken = default)
         {
+            // SH-M113 (decided by the user 2026-10-18: refuse loudly): MQTT has no delayed delivery, and a message with
+            // Delay was published at once. Only the in-memory transport honours Delay.
+            if (message?.Delay != null)
+            {
+                throw new NotSupportedException("The MQTT transport cannot delay a message; send it without Delay, or delay it before sending.");
+            }
+
             ObjectDisposedException.ThrowIf(_disposed, this);
 
             if (!MqttTopic.IsValidPublishTopic(destination))

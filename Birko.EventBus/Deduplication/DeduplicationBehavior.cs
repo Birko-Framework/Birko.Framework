@@ -24,16 +24,24 @@ namespace Birko.EventBus.Deduplication
             // returns false if the event was already seen — or was claimed concurrently by another
             // publish — so duplicates, including a simultaneous double-publish, are dropped exactly once
             // (the old Exists-then-Mark pair let two concurrent publishes both run the handlers).
-            // This is mark-before = at-most-once: a handler that throws does NOT un-mark the event, so
-            // it will not be reprocessed on a later republish. A caller needing at-least-once semantics
-            // (reprocess on handler failure) should mark only after successful handling with a different
-            // behavior rather than this dedup guard.
+            // SH-M118 (decided by the user 2026-10-18: at-least-once): when a handler throws, the reservation is
+            // released, so a retry or a transport redelivery runs again. It was kept (at-most-once), so on the
+            // distributed bus — whose callback rethrows precisely so the transport redelivers — the redelivery hit
+            // the mark and every handler failure became a lost event.
             if (!await _store.TryMarkProcessedAsync(@event.EventGuid, cancellationToken).ConfigureAwait(false))
             {
                 return; // Duplicate — skip
             }
 
-            await next().ConfigureAwait(false);
+            try
+            {
+                await next().ConfigureAwait(false);
+            }
+            catch
+            {
+                await _store.ReleaseAsync(@event.EventGuid, CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
         }
     }
 }

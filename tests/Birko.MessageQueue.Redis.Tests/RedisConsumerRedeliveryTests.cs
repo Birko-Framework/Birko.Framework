@@ -114,7 +114,7 @@ namespace Birko.MessageQueue.Redis.Tests
         {
             var db = new Mock<IDatabase>();
             db.Setup(d => d.StreamAcknowledgeAsync(
-                    It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<RedisValue>(), It.IsAny<CommandFlags>()))
+                    It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<RedisValue[]>(), It.IsAny<CommandFlags>()))
                 .ReturnsAsync(1L);
 
             using var consumer = new RedisConsumer(() => db.Object, new JsonMessageSerializer(), Settings(0));
@@ -122,9 +122,9 @@ namespace Birko.MessageQueue.Redis.Tests
 
             await consumer.RejectAsync(messageId, requeue: false);
 
-            // No requeue → the entry is XACK'd so it leaves the PEL and is not re-delivered.
+            // No requeue → every entry of the message is XACK'd so it leaves the PEL and is not re-delivered.
             db.Verify(d => d.StreamAcknowledgeAsync(
-                It.IsAny<RedisKey>(), (RedisValue)"g", (RedisValue)"7-0", It.IsAny<CommandFlags>()), Times.Once);
+                It.IsAny<RedisKey>(), (RedisValue)"g", It.Is<RedisValue[]>(ids => ids.Length == 1 && ids[0] == "7-0"), It.IsAny<CommandFlags>()), Times.Once);
         }
 
         [Fact]
@@ -154,7 +154,7 @@ namespace Birko.MessageQueue.Redis.Tests
             var pm = Activator.CreateInstance(pmType)!;
             pmType.GetProperty("StreamKey")!.SetValue(pm, streamKey);
             pmType.GetProperty("ConsumerGroup")!.SetValue(pm, group);
-            pmType.GetProperty("StreamEntryId")!.SetValue(pm, (RedisValue)entryId);
+            pmType.GetMethod("Add")!.Invoke(pm, new object[] { (RedisValue)entryId }); // TASK-155: a message id keeps every entry id
             dict[messageId] = pm;
             return messageId;
         }

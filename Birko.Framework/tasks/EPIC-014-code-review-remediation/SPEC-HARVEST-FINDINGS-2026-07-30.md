@@ -1837,11 +1837,15 @@ DeleteEntityTagAsync(link) at 121/132 and DeleteTagInternalAsync(tag) at 86 pass
 
 `../Birko.MessageQueue.Redis/RedisConsumer.cs:319`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, found fixed by SH-H020** (verified at TASK-155). `ProcessEntryAsync` now advances the non-group read position before parsing or the TTL check (RedisConsumer.cs ~300), so an unparseable or expired entry is passed over, not re-read; `RedisNonGroupReadPositionTests` pins it.
+
 ProcessEntryAsync returns early when ParseStreamEntry yields null (line 302) or the ttl_ms check expires the entry (line 319), skipping `if (!useConsumerGroup) state.LastReadId = entry.Id;` at line 354. Without a consumer group the read position IS state.LastReadId, so XREAD returns the same entry on every poll — an unbounded hot loop on one poisoned or expired entry, hammering Redis with no progress.
 
 #### SH-M100 — Redis non-group mode advances the read cursor even when the handler throws
 
 `../Birko.MessageQueue.Redis/RedisConsumer.cs:354`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-155). Without a consumer group there is no PEL, so delivery is at-most-once by construction; what the finding rightly flags is that the failure was silent. A failing handler now reaches the new `RedisConsumer.OnHandlerError` hook (as MQTT's CR-L289 hook), in both modes, and the at-most-once contract is documented. Red on HEAD (with the property stubbed): live test.
 
 The `state.LastReadId = entry.Id` assignment sits AFTER the try/catch at 333-350, so a failed handler still advances the cursor. With no consumer group there is no PEL and no XAUTOCLAIM reclaim, so the message is silently lost — while the identical failure under a consumer group is redelivered. Same code, opposite guarantee, decided only by whether ConsumerGroup is set, and the bare `catch` at 343 logs nothing.
 
@@ -1849,11 +1853,15 @@ The `state.LastReadId = entry.Id` assignment sits AFTER the try/catch at 333-350
 
 `../Birko.MessageQueue.Redis/RedisConsumer.cs:250`
 
+**Verdict: CONFIRMED, fixed** (TASK-155). The reclaim also runs after a non-empty batch, once per `PendingRetryMilliseconds`. Red on HEAD live: a poison entry on a stream kept busy by a 500-entry backlog and a non-stop feeder was never redelivered.
+
 ReclaimPendingEntriesAsync is called only in the `else` branch taken when the poll returned zero entries. On a continuously-busy destination every poll returns entries, so XAUTOCLAIM never runs and an entry left unacked by a throwing handler or by RejectAsync(requeue:true) is never redelivered for the subscription's whole life. The spec's promise that an empty poll reclaims it only holds on an idle stream.
 
 #### SH-M102 — Redis auto-created consumer group starts at 0-0, replaying the whole stream despite FromBeginning=false
 
 `../Birko.MessageQueue.Redis/RedisConsumer.cs:501`
+
+**Verdict: CONFIRMED, fixed** (TASK-155; decided by the user 2026-10-18: honour FromBeginning). `EnsureConsumerGroupAsync` creates a new group at `$` unless `FromBeginning`, then at `0-0`. Red on HEAD live (3 old entries replayed); the FromBeginning=true case passes either way (a pin). An existing group keeps its position.
 
 EnsureConsumerGroupAsync always calls StreamCreateConsumerGroupAsync(streamKey, groupName, "0-0", createStream: true), so the group's last-delivered-id is 0-0 and the first `>` read delivers every retained entry. ConsumerOptions.FromBeginning is documented as "When false, only new messages are received" (ConsumerOptions.cs:26-29) and is not consulted here at all — attaching a new group to an existing stream reprocesses the entire history, duplicating side effects.
 
@@ -1861,11 +1869,15 @@ EnsureConsumerGroupAsync always calls StreamCreateConsumerGroupAsync(streamKey, 
 
 `../Birko.MessageQueue.Redis/RedisConsumer.cs:395`
 
+**Verdict: CONFIRMED, fixed** (TASK-155). Group creation and the FromBeginning pending drain run inside a retry on `RedisException` (2 s, as the loop); any other setup fault still ends the subscription (CR-M207, pinned). Red on HEAD (mock: a connection blip at setup removed the subscription).
+
 ProcessPendingEntriesAsync (and EnsureConsumerGroupAsync) run BEFORE the `while` loop's try/catch. A RedisException there propagates out of RunPollLoopAsync into PollLoopAsync's generic catch (line 173), which fires PollError and calls RemoveSubscription — the subscription is gone for good. The identical RedisException one line later, inside the loop, is retried after 2 s (line 263). A connection blip at subscribe time is permanently fatal; mid-run it is not.
 
 #### SH-M104 — Redis _pendingAck grows without bound and a repeated message id loses the earlier stream entry id
 
 `../Birko.MessageQueue.Redis/RedisConsumer.cs:325`
+
+**Verdict: CONFIRMED-NARROWER, fixed in part** (TASK-155). A message id keeps every stream entry id it was delivered as, and Ack / Reject act on all of them (red on HEAD live: one entry stayed in the PEL). The unbounded growth for a ManualAck handler that neither acks nor rejects is the ManualAck contract itself (the caller must decide), so it is waived; Dispose still clears it.
 
 `_pendingAck[message.Id] = new PendingMessage{...}` is an indexer assignment with no eviction. A ManualAck handler that neither acks nor rejects leaves the entry forever (only Dispose clears it), leaking one entry per message. Worse, when the same message id reappears (duplicate publish, or the same entry re-processed by the reclaim pass) the assignment overwrites the previous PendingMessage, discarding its StreamEntryId — that PEL entry can then never be XACKed by AcknowledgeAsync.
 
@@ -1873,11 +1885,15 @@ ProcessPendingEntriesAsync (and EnsureConsumerGroupAsync) run BEFORE the `while`
 
 `../Birko.MessageQueue.MQTT/MqttSubscription.cs:40`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-155). An `MqttSubscription` now removes its own handler from the consumer (by subscription id) on Unsubscribe / Dispose, so the reconnect replay no longer resubscribes it; the dead `RemoveHandler(string)` is replaced. Red on HEAD.
+
 UnsubscribeAsync/Dispose only issue a broker UNSUBSCRIBE; neither calls MqttConsumer.RemoveHandler (verified dead — grep finds only its own declaration at MqttConsumer.cs:133). The handler stays in `_handlers`, so ResubscribeAllAsync (MqttConsumer.cs:65) re-subscribes that filter on the next reconnect and the supposedly-disposed handler starts receiving again.
 
 #### SH-M106 — MqttConsumer.SubscribeAsync overwrites an existing handler for the same topic filter
 
 `../Birko.MessageQueue.MQTT/MqttConsumer.cs:92`
+
+**Verdict: CONFIRMED, fixed** (TASK-155). Handlers are kept per filter AND subscription; every handler of a matching filter receives the message, and the broker UNSUBSCRIBE is issued only when the last one leaves. Red on HEAD (the first handler received nothing).
 
 `_handlers[destination] = handler` is a dictionary indexer assignment keyed by filter. A second SubscribeAsync("sensors/#", otherHandler) silently replaces the first handler, which stops receiving while its ISubscription still reports IsActive == true. The in-memory backend fans out to every subscriber and Redis starts an independent poll loop per subscription — three backends, three answers to "two subscribers on one destination".
 
@@ -1885,11 +1901,15 @@ UnsubscribeAsync/Dispose only issue a broker UNSUBSCRIBE; neither calls MqttCons
 
 `../Birko.MessageQueue.MQTT/MqttConsumer.cs:119`
 
+**Verdict: CONFIRMED, fixed** (TASK-155; decided by the user 2026-10-18: refuse loudly). `SubscribeAsync` throws `NotSupportedException` for ManualAck, FromBeginning and GroupId; `RejectAsync(requeue: true)` throws. Acknowledge stays a no-op (acknowledgement is QoS) and PrefetchCount is ignored as having no effect. Red on HEAD: 4 tests.
+
 The `options` parameter of both SubscribeAsync overloads is never read, so AckMode, PrefetchCount, GroupId and FromBeginning are all silently dropped. AcknowledgeAsync (119) and RejectAsync (126) return Task.CompletedTask unconditionally, so a caller running the documented ManualAck flow — or calling RejectAsync(requeue:true) for a poison message — gets a success result while nothing happened and the message is gone.
 
 #### SH-M108 — A throwing Disconnected event subscriber prevents MQTT auto-reconnect from ever starting
 
 `../Birko.MessageQueue.MQTT/MqttMessageQueue.cs:136`
+
+**Verdict: CONFIRMED, fixed** (TASK-155). `Connected` / `Disconnected` subscribers are each awaited and isolated (`RaiseSafelyAsync`), so a throwing one no longer prevents the reconnect loop; a multicast `Invoke` also awaited only the last subscriber. Red on HEAD (reflection over the real queue, no broker).
 
 OnDisconnectedAsync awaits `Disconnected.Invoke()` before the `if (_disposed || !_options.AutoReconnect) return;` check and before StartNewReconnectCts(). If any subscriber to the public Disconnected event throws, the exception propagates into MQTTnet's event invocation and the reconnect loop is never launched — the client stays offline permanently even with AutoReconnect true.
 
@@ -1897,11 +1917,15 @@ OnDisconnectedAsync awaits `Disconnected.Invoke()` before the `if (_disposed || 
 
 `../Birko.MessageQueue.InMemory/InMemoryChannel.cs:149`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-155). The failure is now observable through the new `InMemoryConsumer.OnHandlerError` hook. The in-memory transport still does not redeliver by itself (a poison message would loop); under ManualAck the entry stays pending so a requeue redelivers it (SH-M110). Red on HEAD (property stubbed).
+
 The dispatch loop's bare `catch { }` discards every handler exception. DistributedEventBus's consume callback deliberately rethrows (CR-H114, DistributedEventBus.cs:205) so the transport can retry / dead-letter, but over InMemoryMessageQueue that rethrow is unobservable: no redelivery, no DLQ, no log, no hook. Any test of the distributed bus's retry contract on the in-memory transport passes vacuously.
 
 #### SH-M110 — InMemory ManualAck drops the pending entry on handler failure, so requeue is impossible
 
 `../Birko.MessageQueue.InMemory/InMemoryConsumer.cs:52`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-155). On handler failure the ManualAck entry stays pending, so `RejectAsync(requeue: true)` writes it back. Red on HEAD.
 
 The wrapped handler removes message.Id from _pendingAck in its catch before rethrowing. A poison-message flow that then calls RejectAsync(id, requeue: true) finds nothing (TryRemove fails at line 89) and the CR-M202 requeue write never runs — the message is lost precisely in the failure case requeue exists for. Redis leaves the PEL entry so reclaim still redelivers it.
 
@@ -1909,11 +1933,15 @@ The wrapped handler removes message.Id from _pendingAck in its catch before reth
 
 `../Birko.MessageQueue.InMemory/InMemoryConsumer.cs:108`
 
+**Verdict: CONFIRMED, fixed** (TASK-155). The consumer records the channel subscribers it registers and removes them on Dispose. Red on HEAD.
+
 Dispose sets `_disposed = true` and clears _pendingAck but never removes the subscriber ids it registered via _channel.AddSubscriber (line 58). The wrapped handlers keep being invoked by the dispatch loop after disposal, and any AcknowledgeAsync/RejectAsync those handlers call now throws ObjectDisposedException from lines 80/87 — a disposed consumer that still delivers but can no longer ack.
 
 #### SH-M112 — InMemory delayed send uses the caller's cancellation token for work that outlives the call
 
 `../Birko.MessageQueue.InMemory/InMemoryProducer.cs:38`
+
+**Verdict: CONFIRMED, fixed** (TASK-155). A delayed send runs on the producer's lifetime token (cancelled by Dispose), not the caller's. A call whose token is already cancelled now throws `OperationCanceledException`, as a send without a delay does; the CR-M201 test that pinned "returns quietly" was inverted. Red on HEAD: 2 tests.
 
 The detached `Task.Run(async () => { await Task.Delay(message.Delay.Value, cancellationToken); await _channel.WriteAsync(destination, message, cancellationToken); }, cancellationToken)` captures the per-call token, then SendAsync returns success immediately. In the normal ASP.NET case that token is the request's and is cancelled as soon as the response completes, so a message with Delay = 2s is silently dropped in the ContinueWith fault sink after the caller was told the send succeeded.
 
@@ -1921,11 +1949,15 @@ The detached `Task.Run(async () => { await Task.Delay(message.Delay.Value, cance
 
 `../Birko.MessageQueue.MQTT/MqttProducer.cs:35`
 
+**Verdict: CONFIRMED, fixed** (TASK-155; decided by the user: refuse loudly). `MqttProducer` and `RedisProducer` throw `NotSupportedException` for a message with `Delay`. Red on HEAD: 2 tests.
+
 MqttProducer.SendAsync and RedisProducer.SendAsync (RedisProducer.cs:36) never read message.Delay — verified by grep: the only reads in the area are InMemoryProducer.cs:34. Setting Delay on MQTT or Redis publishes immediately with no error, so the same publishing code silently changes semantics with the configured transport, and Delay is not carried on the wire either.
 
 #### SH-M114 — AddDistributedEventBus + AddOutboxEventBus throws InvalidOperationException at host startup
 
 `../Birko.EventBus.MessageQueue/DistributedEventBusHostedService.cs:23`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-155). `AddDistributedEventBus` registers the `DistributedEventBus` as its own singleton and maps `IEventBus` to it; the hosted service takes the concrete bus, so the outbox decorator no longer hides it (no reach into the outbox's internal `Inner` is needed). Red on HEAD (startup threw); the CR-L258 cast-guard test was replaced by a null-argument test.
 
 The ctor does `bus as DistributedEventBus ?? throw`. AddOutboxEventBus decorates IEventBus with OutboxEventBus, so the documented outbox-over-distributed composition resolves an OutboxEventBus and the hosted service (registered by AddDistributedEventBus whenever AutoSubscribe is true) fails to construct, killing startup. Unwrapping OutboxEventBus.Inner — as AddOutbox does for the processor — would fix it, but Inner is `internal` to Birko.EventBus.Outbox so this assembly cannot reach it.
 
@@ -1933,11 +1965,15 @@ The ctor does `bus as DistributedEventBus ?? throw`. AddOutboxEventBus decorates
 
 `../Birko.EventBus.MessageQueue/AutoSubscriber.cs:88`
 
+**Verdict: CONFIRMED, found fixed by TASK-566** (verified at TASK-155). `AutoSubscriber` asks `IServiceProviderIsService` and builds no handler; only a container without that service falls back to a scoped probe.
+
 DiscoverEventTypes calls `_serviceProvider.GetService(IEnumerable<IEventHandler<T>>)` and enumerates it purely to test "is it registered". Handlers are AddTransient (EventBusServiceCollectionExtensions.cs:61), so every handler in the app is constructed at startup, its ctor side effects run, and the instances are discarded while staying rooted for disposal. Any handler with a scoped dependency makes GetService throw InvalidOperationException, which propagates out of StartAsync and aborts host startup.
 
 #### SH-M116 — Distributed delivery silently acknowledges undecodable messages
 
 `../Birko.EventBus.MessageQueue/DistributedEventBus.cs:149`
+
+**Verdict: CONFIRMED, fixed** (TASK-155; decided by the user 2026-10-18). An event type this process cannot load now throws, so the transport redelivers it; an undecodable envelope or payload, or a type that is not the subscription's, raises the new `DistributedEventBus.MessageDropped` with the reason and is then acked. Red on HEAD: 2 tests.
 
 The transport callback returns plainly when the envelope deserializes to null (149), when Type.GetType(envelope.EventType) fails or the type is not assignable to TEvent (154), or when the payload deserializes to null (161). Returning normally tells the transport the delivery succeeded, so the message is acked and dropped: a rolling deployment where the consumer lacks the new event type discards every message of that type with no log, no DLQ and no counter.
 
@@ -1945,17 +1981,23 @@ The transport callback returns plainly when the envelope deserializes to null (1
 
 `../Birko.EventBus/Core/IEventScopeAccessor.cs:13`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-155). The consume callback runs the pipeline inside `IEventScopeAccessor.RunWithScopeAsync` (resolved from the message's DI scope, `NullEventScopeAccessor` when absent), as the outbox processor does. Red on HEAD (the handler saw no tenant).
+
 The interface doc names "the outbox processor loop and the message-queue consumer callback" as the two tenant-less dispatch sites, but only OutboxProcessor consumes it (grep: the remaining references are Birko.EventBus.Tenant and its DI extension). SubscribeToTransportAsync builds an EventContext carrying envelope.TenantGuid then invokes handlers directly, so handlers relying on the ambient tenant break under TenantIsolationMode.Strict on the distributed path.
 
 #### SH-M118 — Deduplication marks before handlers run, defeating the transport retry the distributed bus enables
 
 `../Birko.EventBus/Deduplication/DeduplicationBehavior.cs:31`
 
+**Verdict: CONFIRMED, fixed** (TASK-155; decided by the user 2026-10-18: at-least-once). `DeduplicationBehavior` still reserves before the handlers run, but releases the reservation when they throw, through a new required `IDeduplicationStore.ReleaseAsync` (no default implementation, so a custom store fails to compile rather than silently keep at-most-once; no other implementer exists in the framework or the consumer repos). The CR-L248 test that pinned at-most-once was inverted. Red on HEAD: 2 tests.
+
 On the consume path the pipeline runs inside the delivery callback (DistributedEventBus.cs:183) and DeduplicationBehavior reserves the EventId via TryMarkProcessedAsync BEFORE calling next(). When a handler then throws, the callback deliberately rethrows so the transport redelivers (CR-H114) — but the redelivered message hits the already-marked EventId and is dropped. Registering AddEventDeduplication on a distributed bus turns every handler failure into permanent event loss, silently disabling the retry configured alongside it.
 
 #### SH-M119 — No-handler publish skips the pipeline, so deduplication never records the EventId
 
 `../Birko.EventBus/Local/InProcessEventBus.cs:61`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-155). `InProcessEventBus` (and the distributed consume path) run the pipeline even with no handlers, so deduplication records the EventId and other behaviours see the publish. Red on HEAD.
 
 PublishAsync returns as soon as handlers.Count == 0, before _pipeline.ExecuteAsync. DeduplicationBehavior therefore never marks the EventId; if a handler is registered later (or another bus instance handles the retry) the same EventId is processed as first-seen. RuleFilterBehavior and any auditing/metrics behaviour are likewise bypassed for handler-less event types, so a publish that should have been recorded leaves no trace.
 
@@ -1971,11 +2013,15 @@ AddEventBus registers `new InProcessEventBus(sp, ...)` where sp is the ROOT prov
 
 `../Birko.EventBus.Outbox/Publishing/OutboxProcessor.cs:109`
 
+**Verdict: CONFIRMED, fixed** (TASK-155). `OperationCanceledException` while the stopping token is cancelled now ends the batch without `MarkFailedAsync`; the claimed entries stay Publishing and the store's stale-claim reclaim republishes them. Red on HEAD (the entry was Failed at MaxAttempts = 1).
+
 The `catch (Exception ex)` has no OperationCanceledException filter. On host shutdown the inner bus's PublishAsync observes the stopping token and throws OCE, which becomes MarkFailedAsync(entry.Id, "...canceled...", MaxAttempts, cancellationToken) — incrementing Attempts and, at the cap, pinning a perfectly good event to Failed forever. It also passes the already-cancelled token to MarkFailedAsync, so a real store's call throws, escaping ProcessBatchAsync and leaving remaining claimed entries stuck in Publishing.
 
 #### SH-M122 — EventStoreEventBus range append publishes one at a time with no record of a partial publish
 
 `../Birko.EventBus.EventSourcing/EventStoreEventBus.cs:42`
+
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-155). Retrying or recording the boundary durably is the outbox's job, not this decorator's; what it can do without changing the exception type callers catch is say where it stopped. An exception from publishing now carries `Data[EventStoreEventBus.UnpublishedEventsKey]`: the appended events not yet published (also for the single append). Red on HEAD (constant stubbed).
 
 AppendRangeAsync appends the whole list, then loops publishing each event; a throw on event N propagates with events 1..N-1 published and N..end not, all already durably appended. There is no retry, no record of the boundary and no way for the caller to know where it stopped, so projections silently diverge from the store. The single-append path (line 34) has the same append-then-publish gap for one event.
 

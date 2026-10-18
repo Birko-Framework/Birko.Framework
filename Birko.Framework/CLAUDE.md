@@ -240,6 +240,14 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Event bus and messaging: transports refuse what they cannot do; dedup retries failures (2026-10-18)
+[[TASK-155]]. 24 medium findings. Decided by the user:
+- A new Redis group starts at the stream's tail unless `FromBeginning`.
+- MQTT and Redis refuse options and `Delay` they cannot honour.
+- An unknown event type is redelivered; a corrupt message is reported.
+- Deduplication releases its mark on failure. **Breaking:** `IDeduplicationStore.ReleaseAsync`.
+
+The outbox over the distributed bus now starts. Details: CHANGELOG.
 ### Background-jobs low triage: Delay honoured, opt-in purge, PostgreSQL lock waits (2026-10-18)
 [[TASK-175]]. 24 low findings: 19 confirmed, 3 narrower, 2 refuted; 21 fixed or covered, 2 waived in part.
 - `Delay` on an enqueued job is honoured on every backend (it ran at once), and the in-memory queue refuses a duplicate
@@ -319,15 +327,6 @@ touches the working tree, as DraCode's trial merge did.
 Each subscriber has a bounded drop-oldest buffer and counts what it dropped, and every event carries a per-key sequence.
 Measured: DraCode's version could deliver sequence 6 before 5 under concurrent publishers (red 3/3); it now writes
 under the lock.
-### FieldCipher and InMemorySecretProvider in Birko.Security (2026-10-17)
-[[TASK-532]]. `FieldCipher` encrypts a stored value with an HKDF-derived key. Its envelope names the key id, so masters
-rotate, and it authenticates the caller's associated data, so a value moved to another row does not decrypt. A missing
-or short master throws at construction. `InMemorySecretProvider` serves local and configuration-seeded secrets.
-### A failed LLM call says why, and a cancelled one throws (2026-10-17)
-[[TASK-531]]. `LlmResponse.Failure` carries the kind, HTTP status, Retry-After and `IsTransient`. The provider base
-classifies it once, on every provider, from the status, never the text. Measured: a cancelled call came back as an
-error response; it now throws `OperationCanceledException`. **Breaking:** `ErrorCategory` on plan steps and task
-records is an enum. Copilot's streaming 401 refresh now runs.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -25,13 +25,17 @@ namespace Birko.EventBus.MessageQueue
             configure?.Invoke(options);
 
             services.AddSingleton(options);
-            services.AddSingleton<IEventBus>(sp =>
+            // SH-M114: the bus is its own singleton, and IEventBus resolves to it. The hosted service takes the bus by
+            // its concrete type, so a decorator over IEventBus (AddOutboxEventBus) no longer hides it: the hosted service
+            // cast IEventBus to DistributedEventBus and threw at startup once the outbox wrapped it.
+            services.AddSingleton(sp =>
             {
                 var messageQueue = sp.GetRequiredService<IMessageQueue>();
                 var behaviors = sp.GetServices<IEventPipelineBehavior>();
                 var enrichers = sp.GetServices<IEventEnricher>();
                 return new DistributedEventBus(messageQueue, options, sp, behaviors, enrichers);
             });
+            services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<DistributedEventBus>());
 
             if (options.AutoSubscribe)
             {

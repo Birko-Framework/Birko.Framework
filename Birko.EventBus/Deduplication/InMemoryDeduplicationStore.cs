@@ -38,6 +38,13 @@ namespace Birko.EventBus.Deduplication
             return Task.FromResult(_processed.ContainsKey(eventId));
         }
 
+        /// <inheritdoc />
+        public Task ReleaseAsync(Guid eventId, CancellationToken cancellationToken = default)
+        {
+            _processed.TryRemove(eventId, out _);
+            return Task.CompletedTask;
+        }
+
         public Task MarkProcessedAsync(Guid eventId, CancellationToken cancellationToken = default)
         {
             _processed[eventId] = _clock.UtcNow;

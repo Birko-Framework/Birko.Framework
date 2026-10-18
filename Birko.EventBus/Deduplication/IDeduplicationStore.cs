@@ -25,6 +25,18 @@ namespace Birko.EventBus.Deduplication
         Task MarkProcessedAsync(Guid eventId, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Removes the record of an event, so it is processed again when it is next seen. The deduplication pipeline
+        /// calls it when a handler fails (SH-M118), which makes delivery at-least-once: a retry or a transport
+        /// redelivery of a failed event runs, instead of being dropped as a duplicate. Removing an event that is not
+        /// recorded does nothing.
+        /// </summary>
+        /// <remarks>
+        /// Required, with no default implementation, on purpose: a store that could not release would silently turn
+        /// every handler failure back into a lost event. An implementer of an earlier version gets a compile error.
+        /// </remarks>
+        Task ReleaseAsync(Guid eventId, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Atomically records the event as processed <em>if it was not already present</em>, returning
         /// <c>true</c> when this call performed the mark (the event had not been seen) and <c>false</c>
         /// when it was already recorded (a duplicate, including one claimed concurrently by another caller).

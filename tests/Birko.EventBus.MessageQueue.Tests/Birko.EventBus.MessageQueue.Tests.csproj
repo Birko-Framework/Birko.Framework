@@ -27,5 +27,6 @@
   <Import Project="..\..\Birko.EventBus\Birko.EventBus.projitems" Label="Shared" />
   <Import Project="..\..\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
   <Import Project="..\..\Birko.EventBus.MessageQueue\Birko.EventBus.MessageQueue.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.EventBus.Outbox\Birko.EventBus.Outbox.projitems" Label="Shared" />
 
 </Project>

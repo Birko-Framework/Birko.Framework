@@ -91,7 +91,7 @@ public class InMemoryProducerConsumerTests
     }
 
     [Fact]
-    public async Task DelayedSend_WithCancelledToken_DoesNotThrow_AndIsBestEffort()
+    public async Task DelayedSend_WithAnAlreadyCancelledToken_IsCancelled_AndNotDelivered()
     {
         var (_, producer, consumer) = NewQueue();
         var received = 0;
@@ -100,10 +100,11 @@ public class InMemoryProducerConsumerTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        // Fire-and-forget delayed send: the call returns without surfacing the cancellation (best-effort),
-        // and the detached task's fault is observed rather than left unobserved.
+        // TASK-155 (SH-M112) inverted this: a call whose token is already cancelled is cancelled, as a send without a
+        // delay is. It used to return quietly. What the token does NOT do any more is cancel the delayed delivery after
+        // the call has returned: that runs on the producer's lifetime (Task155InMemoryTests).
         await producer.Invoking(p => p.SendAsync("q", new QueueMessage { Body = "x", Delay = TimeSpan.FromMilliseconds(50) }, cts.Token))
-            .Should().NotThrowAsync();
+            .Should().ThrowAsync<OperationCanceledException>();
 
         await Task.Delay(100);
         received.Should().Be(0, "a cancelled delayed send is not delivered");

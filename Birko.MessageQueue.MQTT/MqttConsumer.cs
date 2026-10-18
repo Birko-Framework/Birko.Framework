@@ -19,7 +19,10 @@ namespace Birko.MessageQueue.Mqtt
         private readonly IMessageSerializer _serializer;
         private readonly MqttSettings _options;
         private readonly IDateTimeProvider _clock;
-        private readonly ConcurrentDictionary<string, Func<QueueMessage, CancellationToken, Task>> _handlers = new();
+        // SH-M106: every handler of a filter, by subscription. Keyed by filter alone, a second subscriber replaced the
+        // first, which stopped receiving while its subscription still reported IsActive.
+        private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, Func<QueueMessage, CancellationToken, Task>>> _handlers = new();
+        private readonly object _handlersLock = new(); // adding to and emptying a filter's handlers are one step each
         private bool _disposed;
         private bool _eventAttached;
         private readonly object _eventAttachLock = new(); // CR-M203: guards the _eventAttached check-and-set
@@ -87,9 +90,14 @@ namespace Birko.MessageQueue.Mqtt
                 throw new ArgumentException($"Invalid MQTT subscribe filter: '{destination}'.", nameof(destination));
             }
 
+            RefuseUnsupported(options);
             EnsureEventAttached();
 
-            _handlers[destination] = handler;
+            var subscriptionId = Guid.NewGuid();
+            lock (_handlersLock)
+            {
+                _handlers.GetOrAdd(destination, _ => new ConcurrentDictionary<Guid, Func<QueueMessage, CancellationToken, Task>>())[subscriptionId] = handler;
+            }
 
             var qos = MqttProducer.ToMqttQos(_options.DefaultQualityOfService);
             var subscribeOptions = new MqttClientSubscribeOptionsBuilder()
@@ -98,7 +106,7 @@ namespace Birko.MessageQueue.Mqtt
 
             await _client.SubscribeAsync(subscribeOptions, cancellationToken).ConfigureAwait(false);
 
-            return new MqttSubscription(_client, destination);
+            return new MqttSubscription(this, destination, subscriptionId);
         }
 
         public Task<ISubscription> SubscribeAsync<T>(string destination, IMessageHandler<T> handler, ConsumerOptions? options = null, CancellationToken cancellationToken = default) where T : class
@@ -125,14 +133,57 @@ namespace Birko.MessageQueue.Mqtt
 
         public Task RejectAsync(Guid messageId, bool requeue = false, CancellationToken cancellationToken = default)
         {
-            // MQTT has no native reject/requeue mechanism.
-            // Application-level reject is a no-op.
+            // SH-M107 (decided by the user 2026-10-18: refuse loudly): MQTT cannot redeliver a message on request, so a
+            // requeue is refused rather than reported done. A reject without requeue is what already happened.
+            if (requeue)
+            {
+                throw new NotSupportedException("The MQTT transport cannot requeue a message: the broker has already delivered it.");
+            }
             return Task.CompletedTask;
         }
 
-        internal void RemoveHandler(string topicFilter)
+        /// <summary>
+        /// SH-M107: the options MQTT cannot honour are refused instead of dropped. Acknowledgement is the protocol's (QoS),
+        /// so ManualAck has nothing to drive; a subscription receives only what is published after it, so FromBeginning
+        /// cannot be met; and a consumer group is not part of this transport. PrefetchCount has no effect and is ignored.
+        /// </summary>
+        private static void RefuseUnsupported(ConsumerOptions? options)
         {
-            _handlers.TryRemove(topicFilter, out _);
+            if (options == null) return;
+            if (options.AckMode == MessageAckMode.ManualAck)
+                throw new NotSupportedException("The MQTT transport acknowledges at the protocol level (QoS); ManualAck is not supported.");
+            if (options.FromBeginning)
+                throw new NotSupportedException("An MQTT subscription receives only messages published after it; FromBeginning is not supported.");
+            if (options.GroupId != null)
+                throw new NotSupportedException("The MQTT transport has no consumer groups; GroupId is not supported.");
+        }
+
+        /// <summary>
+        /// Removes one subscription's handler (SH-M105: a released subscription stayed registered and was re-subscribed
+        /// on the next reconnect). Returns true when it was the filter's last handler, so the broker subscription can go.
+        /// </summary>
+        internal bool RemoveHandler(string topicFilter, Guid subscriptionId)
+        {
+            lock (_handlersLock)
+            {
+                if (!_handlers.TryGetValue(topicFilter, out var handlers) || !handlers.TryRemove(subscriptionId, out _))
+                {
+                    return false;
+                }
+                if (!handlers.IsEmpty)
+                {
+                    return false;
+                }
+                _handlers.TryRemove(topicFilter, out _);
+                return true;
+            }
+        }
+
+        /// <summary>Issues the broker UNSUBSCRIBE for a filter no handler needs any more.</summary>
+        internal Task UnsubscribeFromBrokerAsync(string topicFilter, CancellationToken cancellationToken = default)
+        {
+            var unsubscribeOptions = new MqttClientUnsubscribeOptionsBuilder().WithTopicFilter(topicFilter).Build();
+            return _client.UnsubscribeAsync(unsubscribeOptions, cancellationToken);
         }
 
         private void EnsureEventAttached()
@@ -199,9 +250,14 @@ namespace Birko.MessageQueue.Mqtt
             }
 
             // Try exact match first, then wildcard matches
-            foreach (var (filter, handler) in _handlers)
+            foreach (var (filter, handlers) in _handlers)
             {
-                if (string.Equals(filter, topic, StringComparison.Ordinal) || MqttTopic.Matches(filter, topic))
+                if (!string.Equals(filter, topic, StringComparison.Ordinal) && !MqttTopic.Matches(filter, topic))
+                {
+                    continue;
+                }
+
+                foreach (var handler in handlers.Values)
                 {
                     try
                     {

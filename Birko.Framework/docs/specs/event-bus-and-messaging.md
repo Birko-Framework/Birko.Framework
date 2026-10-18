@@ -202,24 +202,25 @@ is shared by every handler of that publish, and is disposed when the publish end
 - **Then** the handler is not invoked — resolution uses the closed generic `IEventHandler<TEvent>` for
   the static `TEvent` of the publish call, and manual subscriptions are keyed by `typeof(TEvent)`
 
-### Requirement: In-process publication skips the pipeline when there are no handlers
+### Requirement: In-process publication runs the pipeline even when there are no handlers
 
-The system SHALL return from `InProcessEventBus.PublishAsync` immediately after enrichment when the
-collected handler list is empty, so no `IEventPipelineBehavior` runs for that publish.
+The system SHALL, in `InProcessEventBus.PublishAsync`, run enrichment and then the
+`IEventPipelineBehavior` chain for every publish, including one whose collected handler list is empty,
+so behaviours such as deduplication and auditing observe every published event.
 
 #### Scenario: Deduplication behaviour registered but no handler for the event type
 
 - **Given** `AddEventDeduplication()` is registered and no handler exists for `OrderPlaced`
 - **When** `OrderPlaced` with a given `EventGuid` is published
-- **Then** `DeduplicationBehavior` is not invoked and the `EventGuid` is **not** recorded in the
-  deduplication store, so a later publish of the same `EventGuid` (once a handler exists) is treated as
-  first-seen
+- **Then** `DeduplicationBehavior` runs and records the `EventGuid`, so a later publish of the same
+  `EventGuid` (once a handler exists) is dropped as a duplicate (SH-M119; it returned before the
+  pipeline, so the id was not recorded and the later publish was treated as first-seen)
 
 #### Scenario: Enrichers still run
 
 - **Given** a `CorrelationEventEnricher` is registered and no handler exists for the event type
 - **When** the event is published
-- **Then** the enricher still runs to completion before the early return
+- **Then** the enricher runs to completion, then the pipeline runs around an empty dispatch
 
 ### Requirement: Pipeline behaviours wrap dispatch outermost-first
 
@@ -350,11 +351,14 @@ the key; a key whose last subscriber leaves SHALL be forgotten, so its sequence 
 - **When** a subscriber reads them
 - **Then** its sequences are exactly 1..16000 in order (with the write outside the lock, as DraCode had it, this fails)
 
-### Requirement: Deduplication is mark-before-handle (at-most-once)
+### Requirement: Deduplication reserves before handling and releases on failure (at-least-once)
 
 The system SHALL, in `DeduplicationBehavior`, atomically reserve the event's `EventGuid` via
 `IDeduplicationStore.TryMarkProcessedAsync` **before** invoking the rest of the pipeline, and skip the
-event entirely when the reservation fails. A handler failure SHALL NOT release the reservation.
+event entirely when the reservation fails. When the rest of the pipeline throws, the behaviour SHALL
+release the reservation through the required `IDeduplicationStore.ReleaseAsync(Guid, CancellationToken)`
+(no default implementation; `InMemoryDeduplicationStore` removes the entry) and rethrow, so a retry or
+redelivery runs the handlers again.
 
 #### Scenario: Same EventGuid published twice
 
@@ -373,7 +377,9 @@ event entirely when the reservation fails. A handler failure SHALL NOT release t
 
 - **Given** the event was marked and a downstream handler throws
 - **When** the same event is republished later
-- **Then** it is dropped as a duplicate — the failed processing is never retried through this behaviour
+- **Then** the reservation was released when the handler threw, so the republish runs the handlers
+  again (SH-M118, decided by the user; it kept the mark, so a retry or redelivery was dropped as a
+  duplicate and the failed processing was never retried)
 
 #### Scenario: A custom store implements only Exists + Mark
 
@@ -565,12 +571,15 @@ create a transport subscription as a side effect of `Subscribe`.
 - **When** an `OrderPlaced` envelope arrives on the topic
 - **Then** the handler is invoked
 
-### Requirement: Distributed delivery reconstructs the event and its context, and drops undecodable messages
+### Requirement: Distributed delivery reconstructs the event and its context, reports dropped messages and redelivers unknown types
 
 The system SHALL, in the transport delivery callback, deserialize the `EventEnvelope`, resolve
 `envelope.EventType` via `Type.GetType`, require it to be assignable to `TEvent`, deserialize the
-payload, rebuild an `EventContext` from the envelope, and return silently (acknowledging the message)
-when any of those steps yields null or an incompatible type.
+payload, and rebuild an `EventContext` from the envelope. When the envelope or the payload
+deserializes to null, or the resolved type is not assignable to `TEvent`, it SHALL raise
+`DistributedEventBus.MessageDropped` (`Action<QueueMessage, string reason>`, a throwing subscriber
+ignored) and return, acknowledging the message. When the event type cannot be loaded in this process
+it SHALL throw `InvalidOperationException`, so the transport redelivers the message.
 
 #### Scenario: Well-formed envelope
 
@@ -583,14 +592,24 @@ when any of those steps yields null or an incompatible type.
 
 - **Given** an envelope whose `EventType` assembly-qualified name cannot be resolved locally
 - **When** the message is delivered
-- **Then** the callback returns without throwing, so the transport treats the delivery as successful
-  and the message is not retried or dead-lettered
+- **Then** the callback throws `InvalidOperationException` naming the type, so the transport leaves the
+  message for redelivery and a consumer that knows the type can take it (SH-M116, decided by the user;
+  it returned without throwing, so the message was acknowledged and lost)
 
 #### Scenario: Envelope body is not an EventEnvelope
 
 - **Given** a message whose body deserializes to null as `EventEnvelope`
 - **When** the message is delivered
-- **Then** the callback returns silently
+- **Then** `MessageDropped` is raised with the message and a reason, and the callback returns
+  (SH-M116; it returned silently, so the drop was unobservable)
+
+#### Scenario: Event type is not the subscribed type, or the payload does not decode
+
+- **Given** an envelope whose type resolves but is not assignable to `TEvent`, or whose payload
+  deserializes to null
+- **When** the message is delivered
+- **Then** `MessageDropped` is raised with a reason and the message is acknowledged; an exception
+  thrown by a `MessageDropped` subscriber is ignored (SH-M116; it returned silently)
 
 #### Scenario: Delivery count header present
 
@@ -605,7 +624,8 @@ when any of those steps yields null or an incompatible type.
 
 - **Given** a transport subscription exists but no DI or manual handler for `TEvent`
 - **When** a message arrives
-- **Then** the callback returns before running the pipeline
+- **Then** the pipeline still runs around an empty dispatch, so behaviours such as deduplication record
+  the `EventGuid` (SH-M119; the callback returned before running the pipeline)
 
 ### Requirement: Distributed delivery resolves DI handlers from one scope per message
 
@@ -646,8 +666,10 @@ policy.
 
 - **Given** the same failing handler but an `InMemoryMessageQueue` as transport
 - **When** the message is delivered
-- **Then** `InMemoryChannel`'s dispatch loop catches and discards the fault, so **no** redelivery or
-  dead-lettering occurs — the deliberate rethrow has no observable effect on this backend
+- **Then** the fault is reported through `InMemoryConsumer.OnHandlerError` and the dispatch loop
+  continues; the in-memory transport does not redeliver by itself — under `ManualAck` the entry stays
+  pending so `RejectAsync(requeue: true)` redelivers it (SH-M109/SH-M110; the dispatch loop discarded the
+  fault unobserved, so the rethrow had no observable effect on this backend)
 
 #### Scenario: Retry options set on the bus
 
@@ -716,11 +738,13 @@ which under `ValidateScopes` threw at startup for any handler with a scoped depe
 - **Then** it is skipped (`eventType.IsClass` is false) rather than throwing from
   `MakeGenericMethod`
 
-### Requirement: Hosted auto-subscription requires the bus to be a DistributedEventBus
+### Requirement: Hosted auto-subscription takes the DistributedEventBus by its concrete type
 
-The system SHALL construct `DistributedEventBusHostedService` only when the resolved `IEventBus` is a
-`DistributedEventBus`, throwing `InvalidOperationException` otherwise, and SHALL run the auto
-subscriber on `StartAsync` only when `DistributedEventBusOptions.AutoSubscribe` is true.
+The system SHALL, in `AddDistributedEventBus`, register `DistributedEventBus` as its own singleton and
+map `IEventBus` to that instance; `DistributedEventBusHostedService` SHALL take the `DistributedEventBus`
+itself in its constructor (null throwing `ArgumentNullException`), never cast the resolved `IEventBus`,
+and SHALL run the auto subscriber on `StartAsync` only when `DistributedEventBusOptions.AutoSubscribe`
+is true.
 
 #### Scenario: Distributed bus registered alone
 
@@ -740,8 +764,9 @@ subscriber on `StartAsync` only when `DistributedEventBusOptions.AutoSubscribe` 
 - **Given** `AddDistributedEventBus()` followed by `AddOutboxEventBus()`, so `IEventBus` resolves to an
   `OutboxEventBus`
 - **When** the hosted service is constructed at host startup
-- **Then** the `as DistributedEventBus` cast yields null and `InvalidOperationException` is thrown,
-  naming the actual type
+- **Then** it receives the registered `DistributedEventBus` singleton (the instance the decorator wraps)
+  and the host starts and auto-subscribes (SH-M114; the hosted service cast `IEventBus` to
+  `DistributedEventBus`, the cast yielded null and `InvalidOperationException` broke host startup)
 
 ### Requirement: Outbox publication persists instead of dispatching
 
@@ -783,7 +808,8 @@ deserialized to `IEvent`, otherwise publish it through the inner bus (reflective
 event type) inside the scope reconstructed by `IEventScopeAccessor` and mark it published; any
 exception SHALL be unwrapped from `TargetInvocationException` and recorded via `MarkFailedAsync` with
 the configured `MaxAttempts`. Every entry — succeeded or failed — SHALL count toward the returned
-processed count.
+processed count. An `OperationCanceledException` raised while the processing token is cancelled SHALL
+end the batch without `MarkFailedAsync` — a shutdown is not a failed attempt.
 
 #### Scenario: Batch of three, one unresolvable type
 
@@ -803,8 +829,17 @@ processed count.
 
 - **Given** a cancelled token and a claimed batch
 - **When** the loop reaches the next entry's `ThrowIfCancellationRequested`
-- **Then** `OperationCanceledException` propagates and the remaining claimed entries stay in
-  `Publishing` until a stale-claim reclaim returns them to `Pending`
+- **Then** `OperationCanceledException` propagates, no attempt is recorded, and the remaining claimed
+  entries stay in `Publishing` until a stale-claim reclaim returns them to `Pending`
+
+#### Scenario: Shutdown while an entry is being published
+
+- **Given** a claimed batch and the processing token cancelled while an entry's publish is in flight
+- **When** the publish throws `OperationCanceledException`
+- **Then** the batch ends and `ProcessBatchAsync` returns normally with the count so far; the entry's
+  `Attempts` is not incremented and it and the rest of the batch stay `Publishing` until the stale-claim
+  reclaim returns them (SH-M121; it was recorded through `MarkFailedAsync` as a failed attempt with the
+  already-cancelled token, so that store call threw too)
 
 #### Scenario: Empty outbox
 
@@ -837,8 +872,10 @@ with no scope established.
 
 - **Given** a `DistributedEventBus` transport subscription and a registered `IEventScopeAccessor`
 - **When** a message is delivered and handlers run
-- **Then** no scope is established — `DistributedEventBus` does not consume `IEventScopeAccessor` at
-  all, so scope restoration applies to the outbox path only
+- **Then** the pipeline runs inside `IEventScopeAccessor.RunWithScopeAsync` with the rebuilt
+  `EventContext`, the accessor resolved from the message's DI scope (or the bus's provider), falling back
+  to `NullEventScopeAccessor` when none is registered (SH-M117; `DistributedEventBus` did not consume
+  `IEventScopeAccessor` at all, so scope restoration applied to the outbox path only)
 
 ### Requirement: Outbox retention cleanup is throttled
 
@@ -995,8 +1032,11 @@ The system SHALL, in `EventStoreEventBus`, delegate all read operations to the i
 
 - **Given** an event bus whose `PublishAsync` throws
 - **When** `AppendAsync` is called
-- **Then** the exception propagates although the domain event is already durably appended — the append
-  is not rolled back
+- **Then** the exception propagates with its type unchanged although the domain event is already
+  durably appended — the append is not rolled back — and carries
+  `Data[EventStoreEventBus.UnpublishedEventsKey]` holding the appended-but-unpublished events: that one
+  event for `AppendAsync`, and for `AppendRangeAsync` the failing event through the end of the list
+  (SH-M122; the exception said neither, so a caller could not republish exactly what was missing)
 
 #### Scenario: Null constructor arguments
 
@@ -1099,7 +1139,9 @@ the queue is disposed.
 The system SHALL buffer messages per destination in a bounded channel (default capacity 1000,
 `FullMode.Wait`), start a single dispatch loop when the first subscriber is added and stop it when the
 last leaves — both transitions taken under a per-destination lock — and deliver each drained message
-to **every** currently registered subscriber, swallowing individual handler exceptions.
+to **every** currently registered subscriber, a handler exception stopping no other subscriber and
+being reported through `InMemoryConsumer.OnHandlerError` (a throwing hook swallowed). Disposing an
+`InMemoryConsumer` SHALL remove every channel subscriber it registered.
 
 #### Scenario: Two subscribers on one destination
 
@@ -1124,8 +1166,16 @@ to **every** currently registered subscriber, swallowing individual handler exce
 
 - **Given** two subscribers where the first throws
 - **When** a message is dispatched
-- **Then** the exception is discarded, the second subscriber still receives the message, and the
-  dispatch loop continues
+- **Then** the exception is passed to `OnHandlerError`, the second subscriber still receives the
+  message, and the dispatch loop continues (SH-M109; the exception was discarded unobserved)
+
+#### Scenario: Consumer disposed while its subscriptions are registered
+
+- **Given** an `InMemoryConsumer` with subscriptions on a shared channel
+- **When** the consumer is disposed and a message is then sent to that destination
+- **Then** its handlers no longer receive it — `Dispose` removed the channel subscribers it registered
+  (SH-M111; they stayed on the shared channel, so a disposed consumer kept receiving and its
+  ack/reject calls then threw `ObjectDisposedException`)
 
 #### Scenario: Pull and push mixed on one destination
 
@@ -1141,11 +1191,14 @@ to **every** currently registered subscriber, swallowing individual handler exce
 - **When** a new subscriber is added for that destination
 - **Then** a fresh dispatch loop is started under the lock
 
-### Requirement: In-memory delayed send is best-effort
+### Requirement: Delayed send is in-memory only and best-effort
 
-The system SHALL, when `QueueMessage.Delay` has a value, schedule the enqueue on a detached task after
-the delay and return a completed `SendAsync` immediately, observing but discarding any fault of that
-detached task.
+The system SHALL, in the in-memory producer, when `QueueMessage.Delay` has a value, throw
+`OperationCanceledException` if the caller's token is already cancelled, otherwise schedule the enqueue
+on a detached task that runs on the producer's lifetime (cancelled by the producer's `Dispose`, not by
+the caller's token) and return a completed `SendAsync` immediately, observing but discarding any fault
+of that detached task. `MqttProducer.SendAsync` and `RedisProducer.SendAsync` SHALL throw
+`NotSupportedException` for a message with a `Delay`.
 
 #### Scenario: Delayed message
 
@@ -1161,6 +1214,23 @@ detached task.
 - **Then** the write fails, the fault is observed and discarded, and the caller — whose `SendAsync`
   already returned success — is never informed; the message is lost
 
+#### Scenario: Caller's token and the delayed send
+
+- **Given** a message with a `Delay`
+- **When** `SendAsync` is called with a token that is already cancelled, or with a token cancelled
+  after the call returned
+- **Then** the first throws `OperationCanceledException` and nothing is scheduled; the second still
+  enqueues after the delay, and only disposing the producer cancels the pending send (SH-M112; the
+  detached send ran on the caller's token, and a call whose token was already cancelled returned
+  quietly)
+
+#### Scenario: Delay on the MQTT or Redis transport
+
+- **Given** a `QueueMessage` with `Delay` set
+- **When** it is sent through `MqttProducer.SendAsync` or `RedisProducer.SendAsync`
+- **Then** `NotSupportedException` is thrown and nothing is published (SH-M113, decided by the user:
+  refuse loudly; the delay was ignored and the message published immediately)
+
 #### Scenario: Non-delayed send
 
 - **Given** a message with no `Delay`
@@ -1170,9 +1240,10 @@ detached task.
 ### Requirement: Acknowledgment semantics differ per transport
 
 The system SHALL implement `ConsumerOptions.AckMode` per backend: the in-memory consumer tracks
-manual-ack messages in a local dictionary keyed by message id; the MQTT consumer implements
-`AcknowledgeAsync` and `RejectAsync` as no-ops (protocol-level QoS only); the Redis consumer performs
-`XACK` and only when a consumer group is in use.
+manual-ack messages in a local dictionary keyed by message id, keeping a failed handler's entry
+pending; the MQTT consumer acknowledges at the protocol level (QoS) only, refusing what it cannot honour
+with `NotSupportedException`; the Redis consumer performs `XACK` — of every stream entry id the message
+id was delivered as — and only when a consumer group is in use.
 
 #### Scenario: In-memory manual ack
 
@@ -1183,9 +1254,10 @@ manual-ack messages in a local dictionary keyed by message id; the MQTT consumer
 #### Scenario: In-memory manual ack, handler throws
 
 - **Given** the same subscription and a handler that throws
-- **When** the wrapped handler catches, removes the pending entry and rethrows
-- **Then** a subsequent `RejectAsync(message.Guid, requeue: true)` finds nothing to requeue and the
-  message is lost
+- **When** the wrapped handler catches, reports the failure to `OnHandlerError` and rethrows
+- **Then** the entry stays pending, so a subsequent `RejectAsync(message.Guid, requeue: true)` writes
+  the message back to its destination and it is redelivered (SH-M110; the wrapper removed the pending
+  entry, so the requeue found nothing and the message was lost)
 
 #### Scenario: In-memory reject with requeue after a successful handler
 
@@ -1201,16 +1273,32 @@ manual-ack messages in a local dictionary keyed by message id; the MQTT consumer
 
 #### Scenario: MQTT acknowledge
 
-- **Given** an MQTT subscription in any ack mode
-- **When** `AcknowledgeAsync` or `RejectAsync(requeue: true)` is called
-- **Then** both complete successfully and do nothing — MQTT has no application-level ack or requeue
-  here
+- **Given** an MQTT subscription
+- **When** `AcknowledgeAsync` or `RejectAsync(requeue: false)` is called
+- **Then** both complete successfully and do nothing — acknowledgement is the protocol's (QoS)
+
+#### Scenario: MQTT asked for what it cannot honour
+
+- **Given** an `MqttConsumer`
+- **When** `SubscribeAsync` is called with `ConsumerOptions` carrying `AckMode = ManualAck`,
+  `FromBeginning = true` or a `GroupId`, or `RejectAsync(requeue: true)` is called
+- **Then** `NotSupportedException` is thrown; `PrefetchCount` has no effect and is ignored (SH-M107,
+  decided by the user: refuse loudly; those options were silently ignored and the requeue reported
+  success while nothing was redelivered)
 
 #### Scenario: Redis auto-ack in a consumer group
 
 - **Given** a Redis subscription with a consumer group and `AckMode = AutoAck`
 - **When** the handler completes successfully
 - **Then** `XACK` removes the entry from the Pending Entries List
+
+#### Scenario: Redis manual ack of a message delivered as two entries
+
+- **Given** a consumer-group subscription with `AckMode = ManualAck` and one message id published twice,
+  so it is delivered as two stream entries
+- **When** `AcknowledgeAsync(id)` or `RejectAsync(id, requeue: false)` is called
+- **Then** both entry ids are `XACK`ed and none stays in the Pending Entries List (SH-M104; the later
+  delivery replaced the tracked entry id, so the earlier entry sat in the PEL forever)
 
 #### Scenario: Redis subscription without a consumer group
 
@@ -1222,9 +1310,14 @@ manual-ack messages in a local dictionary keyed by message id; the MQTT consumer
 ### Requirement: Redis Streams delivery, failure retention and reclaim
 
 The system SHALL poll a stream with `XREADGROUP` (consumer group present) or `XREAD` (otherwise),
-leave a failed handler's entry unacknowledged in the Pending Entries List, and — when a consumer group
-is used and `PendingRetryMilliseconds > 0` — reclaim and reprocess idle pending entries via
-`XAUTOCLAIM` on each empty poll. Without a consumer group the read position is the consumer's own
+report a failed handler through `RedisConsumer.OnHandlerError` (in both modes, a throwing hook
+swallowed), leave a failed handler's entry unacknowledged in the Pending Entries List, and — when a
+consumer group is used and `PendingRetryMilliseconds > 0` — reclaim and reprocess idle pending entries
+via `XAUTOCLAIM` on each empty poll and, after a non-empty batch, once per `PendingRetryMilliseconds`.
+An auto-created consumer group SHALL start at `"$"` (new messages only) unless
+`ConsumerOptions.FromBeginning`, then at `"0-0"`; an existing group keeps its position. Group creation
+and the `FromBeginning` pending drain SHALL be retried every 2 seconds on a `RedisException`. Without a
+consumer group there is no PEL, so delivery is at-most-once, and the read position is the consumer's own
 `LastReadId`, which starts at `"0-0"` when `FromBeginning` is set and otherwise at the id of the stream's
 newest entry at the first poll (`"0-0"` for an empty or missing stream) — never `"$"` — and advances past
 every entry a read returned, including one that is unparseable or expired.
@@ -1251,8 +1344,25 @@ every entry a read returned, including one that is unparseable or expired.
 
 - **Given** a consumer-group subscription and a handler that throws
 - **When** the entry is processed
-- **Then** no `XACK` is issued, the entry remains in the PEL, and after
-  `PendingRetryMilliseconds` idle time an empty poll reclaims and reprocesses it
+- **Then** the failure reaches `OnHandlerError`, no `XACK` is issued, the entry remains in the PEL, and
+  after `PendingRetryMilliseconds` idle time the reclaim pass reprocesses it (SH-M100; the failure was
+  swallowed unobserved)
+
+#### Scenario: Handler fails without a consumer group
+
+- **Given** a subscription with no consumer group and a handler that throws
+- **When** the entry is processed
+- **Then** the failure reaches `OnHandlerError` and the read position moves on — there is no PEL, so the
+  message is not redelivered (at-most-once) (SH-M100; the failure was swallowed, so the loss left no
+  trace)
+
+#### Scenario: A failed entry on a busy stream
+
+- **Given** a consumer-group subscription whose stream always has new entries, and one entry whose
+  handler failed
+- **When** `PendingRetryMilliseconds` has elapsed since the last reclaim
+- **Then** the reclaim runs after the next non-empty batch and the failed entry is redelivered
+  (SH-M101; the reclaim ran only after an empty poll, so on a busy stream it never ran)
 
 #### Scenario: Reclaim disabled
 
@@ -1272,9 +1382,18 @@ every entry a read returned, including one that is unparseable or expired.
 - **Given** `AutoCreateConsumerGroup = true` (the default), a stream holding retained entries, no
   existing group, and `ConsumerOptions.FromBeginning` at its default false
 - **When** the group is created and the first `">"` read runs
-- **Then** the whole retained stream is delivered — `EnsureConsumerGroupAsync` always creates the group
-  at `"0-0"` and never consults `FromBeginning`, so the code disagrees with that option's own doc
-  comment ("When false, only new messages are received")
+- **Then** the group starts at `"$"` and only entries added afterwards are delivered; with
+  `FromBeginning = true` it starts at `"0-0"` and the retained stream is delivered (SH-M102, decided by
+  the user; `EnsureConsumerGroupAsync` always created the group at `"0-0"`, replaying the whole stream
+  against the option's own doc comment)
+
+#### Scenario: Redis unreachable at subscription setup
+
+- **Given** group creation or the `FromBeginning` pending drain throws a `RedisException`
+- **When** the poll task starts
+- **Then** the setup is retried every 2 seconds until it succeeds, and the subscription stays active
+  (SH-M103; the setup ran outside the loop's retry, so a connection blip at subscribe time ended the
+  subscription for good)
 
 #### Scenario: Consumer group already exists
 
@@ -1323,10 +1442,11 @@ internal `PollError` event and keep polling after a 2-second backoff, retry afte
 
 #### Scenario: Consumer-group creation fails fatally
 
-- **Given** `EnsureConsumerGroupAsync` throws a non-`BUSYGROUP` error before the loop starts
+- **Given** subscription setup throws an error that is not a `RedisException` before the loop starts
 - **When** the poll task terminates
 - **Then** `PollError` fires, the subscription is removed, and `IsActive` reports false rather than
-  claiming an alive subscription that processes nothing
+  claiming an alive subscription that processes nothing (CR-M207; a `RedisException` at setup is retried
+  instead, SH-M103)
 
 #### Scenario: Unsubscribe
 
@@ -1444,8 +1564,8 @@ level, and match a topic against a filter level by level with MQTT wildcard sema
 
 The system SHALL attach the MQTTnet message-received handler exactly once (double-checked under a
 lock), re-issue a broker SUBSCRIBE for every registered filter on each client `Connected` event
-(best-effort, swallowing failures), and dispatch each received message to every registered filter that
-matches, isolating handler exceptions behind the optional `OnHandlerError` hook.
+(best-effort, swallowing failures), and dispatch each received message to every handler of every
+registered filter that matches, isolating handler exceptions behind the optional `OnHandlerError` hook.
 
 #### Scenario: Concurrent first subscriptions
 
@@ -1483,8 +1603,9 @@ matches, isolating handler exceptions behind the optional `OnHandlerError` hook.
 
 - **Given** an existing subscription for `"sensors/#"`
 - **When** `SubscribeAsync("sensors/#", otherHandler)` is called
-- **Then** the handler dictionary entry is **overwritten** — the earlier handler stops receiving,
-  unlike the in-memory transport where both subscribers receive
+- **Then** handlers are kept per filter and per subscription, so both handlers receive every matching
+  message, as on the in-memory transport (SH-M106; the handler dictionary entry was keyed by filter and
+  overwritten, so the earlier handler stopped receiving while its subscription still reported active)
 
 #### Scenario: Handlers receive no cancellation token
 
@@ -1529,7 +1650,9 @@ properties (`payload_type`, `headers`) when present, and on receipt rebuild `Pay
 The system SHALL, on an unexpected disconnect and when `AutoReconnect` is true and the queue is not
 disposed, raise `Disconnected`, cancel-and-dispose any previous reconnect `CancellationTokenSource`
 and start a fresh one under a lock, then retry `ConnectAsync` every `ReconnectDelay` until connected,
-cancelled, or `MaxReconnectAttempts` failures (0 meaning unlimited).
+cancelled, or `MaxReconnectAttempts` failures (0 meaning unlimited). Each `Connected` and `Disconnected`
+subscriber SHALL be awaited in turn and isolated, so a throwing one stops neither the others nor the
+reconnect loop.
 
 #### Scenario: Broker restarts
 
@@ -1557,25 +1680,41 @@ cancelled, or `MaxReconnectAttempts` failures (0 meaning unlimited).
 - **Then** the `Disconnected` event still fires but no reconnect is started, and the MQTTnet event
   handlers were already detached by `Dispose`
 
-### Requirement: MQTT subscription disposal unsubscribes at the broker only
+#### Scenario: A Disconnected subscriber throws
 
-The system SHALL, on `MqttSubscription.UnsubscribeAsync`, await a broker UNSUBSCRIBE for the
-destination and flip `IsActive` false; `Dispose` SHALL flip `IsActive` first and fire the UNSUBSCRIBE
-on a detached task swallowing failures. Neither SHALL remove the consumer's local handler
-registration.
+- **Given** `AutoReconnect = true` and two `Disconnected` subscribers, the first of which throws
+- **When** the connection drops
+- **Then** the second subscriber is still awaited and the reconnect loop starts (SH-M108; the exception
+  propagated into the client's event and the reconnect loop never started, leaving the client offline,
+  and a multicast invoke awaited only the last subscriber)
+
+### Requirement: MQTT subscription disposal removes its handler and unsubscribes the last one at the broker
+
+The system SHALL, on `MqttSubscription.UnsubscribeAsync` or `Dispose`, flip `IsActive` false and remove
+that subscription's handler from the consumer; only when it was the filter's last handler SHALL it
+issue the broker UNSUBSCRIBE — awaited by `UnsubscribeAsync`, fired on a detached task swallowing
+failures by `Dispose`.
 
 #### Scenario: Unsubscribe awaited
 
-- **Given** an active MQTT subscription
+- **Given** the only active MQTT subscription for a filter
 - **When** `UnsubscribeAsync` is awaited
-- **Then** the broker UNSUBSCRIBE completes and `IsActive` is false
+- **Then** its handler is removed, the broker UNSUBSCRIBE completes and `IsActive` is false
+
+#### Scenario: One of two subscriptions on a filter released
+
+- **Given** two subscriptions on `"sensors/#"`
+- **When** one is unsubscribed or disposed
+- **Then** no broker UNSUBSCRIBE is issued and the remaining subscription keeps receiving (SH-M106; the
+  release unsubscribed the filter at the broker for both)
 
 #### Scenario: Disposed subscription and a later reconnect
 
 - **Given** a subscription disposed while other subscriptions remain, then a reconnect
 - **When** `ResubscribeAllAsync` replays the consumer's registered filters
-- **Then** the disposed subscription's filter is still in `_handlers` and is re-subscribed, so its
-  handler starts receiving again
+- **Then** the disposed subscription's handler is gone, so it receives nothing and a filter with no
+  handler left is not re-subscribed (SH-M105; the handler stayed registered, so the filter was
+  re-subscribed and the released handler started receiving again)
 
 #### Scenario: Unsubscribe twice
 

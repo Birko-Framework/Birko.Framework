@@ -123,18 +123,37 @@ namespace Birko.MessageQueue.Mqtt
 
         private async Task OnConnectedAsync(MqttClientConnectedEventArgs args)
         {
-            if (Connected != null)
+            await RaiseSafelyAsync(Connected).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Invokes every subscriber of a connection event, each awaited, none able to stop the others or the caller
+        /// (SH-M108: a throwing Disconnected subscriber propagated into the client's event and the reconnect loop never
+        /// started, leaving the client offline for good; a multicast Invoke also awaited only the last subscriber).
+        /// </summary>
+        private static async Task RaiseSafelyAsync(Func<Task>? handlers)
+        {
+            if (handlers == null)
             {
-                await Connected.Invoke().ConfigureAwait(false);
+                return;
+            }
+
+            foreach (var handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    await ((Func<Task>)handler)().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // A diagnostic subscriber must not break the connection lifecycle (rule 25).
+                }
             }
         }
 
         private async Task OnDisconnectedAsync(MqttClientDisconnectedEventArgs args)
         {
-            if (Disconnected != null)
-            {
-                await Disconnected.Invoke().ConfigureAwait(false);
-            }
+            await RaiseSafelyAsync(Disconnected).ConfigureAwait(false);
 
             if (_disposed || !_options.AutoReconnect)
             {

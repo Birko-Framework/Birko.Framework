@@ -106,6 +106,14 @@ namespace Birko.EventBus.Outbox.Publishing
                     await _store.MarkPublishedAsync(entry.Guid, cancellationToken).ConfigureAwait(false);
                     processed++;
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // SH-M121: a shutdown is not a failed attempt. It was recorded as one (an Attempts increment, and
+                    // Failed for good at the cap) with the already-cancelled token, so the store call threw too and the
+                    // rest of the batch stayed claimed. The claimed entries are left Publishing; the store reclaims
+                    // stale claims, so the next run publishes them.
+                    break;
+                }
                 catch (Exception ex)
                 {
                     // CR-M189: record the underlying cause, not the opaque reflection wrapper

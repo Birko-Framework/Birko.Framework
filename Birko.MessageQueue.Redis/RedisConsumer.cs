@@ -37,6 +37,14 @@ namespace Birko.MessageQueue.Redis
         internal bool IsSubscriptionActive(Guid subscriptionId)
             => !_disposed && _subscriptions.ContainsKey(subscriptionId);
 
+        /// <summary>
+        /// Invoked when a message handler throws (SH-M100), so a failure is observable instead of lost silently.
+        /// With a consumer group the entry stays in the Pending Entries List and is redelivered by the reclaim pass;
+        /// without one there is no PEL, the read position moves on, and delivery is at-most-once — this hook is the
+        /// only trace. An exception thrown by the hook is swallowed.
+        /// </summary>
+        public Func<Exception, QueueMessage, Task>? OnHandlerError { get; set; }
+
         internal RedisConsumer(RedisConnectionManager connectionManager, IMessageSerializer serializer, RedisStreamSettings settings)
         {
             if (connectionManager == null) throw new ArgumentNullException(nameof(connectionManager));
@@ -122,7 +130,7 @@ namespace Birko.MessageQueue.Redis
             if (_pendingAck.TryRemove(messageId, out var pending) && pending.ConsumerGroup != null)
             {
                 var db = _databaseFactory();
-                await db.StreamAcknowledgeAsync(pending.StreamKey, pending.ConsumerGroup, pending.StreamEntryId).ConfigureAwait(false);
+                await db.StreamAcknowledgeAsync(pending.StreamKey, pending.ConsumerGroup, pending.EntryIds()).ConfigureAwait(false);
             }
         }
 
@@ -147,7 +155,7 @@ namespace Birko.MessageQueue.Redis
             // No requeue: acknowledge the entry so it leaves the PEL and is not re-delivered.
             // (There is no dead-letter stream, so this discards the message.)
             var db = _databaseFactory();
-            await db.StreamAcknowledgeAsync(pending.StreamKey, pending.ConsumerGroup, pending.StreamEntryId).ConfigureAwait(false);
+            await db.StreamAcknowledgeAsync(pending.StreamKey, pending.ConsumerGroup, pending.EntryIds()).ConfigureAwait(false);
         }
 
         internal void RemoveSubscription(Guid subscriptionId)
@@ -184,23 +192,38 @@ namespace Birko.MessageQueue.Redis
         {
             var db = _databaseFactory();
 
-            // Create consumer group if configured
-            if (state.ConsumerGroup != null && _settings.AutoCreateConsumerGroup)
-            {
-                await EnsureConsumerGroupAsync(db, state.StreamKey, state.ConsumerGroup).ConfigureAwait(false);
-            }
-
             // For consumer groups, start reading from ">" (new messages only),
             // unless FromBeginning is specified, in which case read from "0" first
             var position = state.Options.FromBeginning ? "0" : ">";
             var useConsumerGroup = state.ConsumerGroup != null;
 
-            // If FromBeginning and using consumer group, first process pending entries
-            if (useConsumerGroup && state.Options.FromBeginning)
+            // SH-M103: the setup is retried on a Redis error, as every poll is. It ran outside the loop's retry, so a
+            // connection blip at subscribe time removed the subscription for good while the same blip a moment later
+            // was retried. Any other setup fault still ends the loop (CR-M207).
+            while (true)
             {
-                await ProcessPendingEntriesAsync(db, state, ct).ConfigureAwait(false);
-                position = ">";
+                try
+                {
+                    if (state.ConsumerGroup != null && _settings.AutoCreateConsumerGroup)
+                    {
+                        await EnsureConsumerGroupAsync(db, state.StreamKey, state.ConsumerGroup, state.Options.FromBeginning).ConfigureAwait(false);
+                    }
+
+                    // If FromBeginning and using consumer group, first process pending entries
+                    if (useConsumerGroup && state.Options.FromBeginning)
+                    {
+                        await ProcessPendingEntriesAsync(db, state, ct).ConfigureAwait(false);
+                        position = ">";
+                    }
+                    break;
+                }
+                catch (RedisException)
+                {
+                    await Task.Delay(2000, ct).ConfigureAwait(false);
+                }
             }
+
+            var nextReclaimAt = Environment.TickCount64 + _settings.PendingRetryMilliseconds;
 
             while (!ct.IsCancellationRequested)
             {
@@ -246,6 +269,15 @@ namespace Birko.MessageQueue.Redis
                             }
 
                             await ProcessEntryAsync(db, state, entry, useConsumerGroup, ct).ConfigureAwait(false);
+                        }
+
+                        // SH-M101: the reclaim also runs on a busy stream, once per PendingRetryMilliseconds. It ran
+                        // only after an empty poll, so on a stream that always had entries a failed or requeued entry
+                        // was never redelivered.
+                        if (useConsumerGroup && _settings.PendingRetryMilliseconds > 0 && Environment.TickCount64 >= nextReclaimAt)
+                        {
+                            nextReclaimAt = Environment.TickCount64 + _settings.PendingRetryMilliseconds;
+                            await ReclaimPendingEntriesAsync(db, state, ct).ConfigureAwait(false);
                         }
                     }
                     else
@@ -337,12 +369,12 @@ namespace Birko.MessageQueue.Redis
 
             if (state.Options.AckMode == MessageAckMode.ManualAck && useConsumerGroup)
             {
-                _pendingAck[message.Guid] = new PendingMessage
-                {
-                    StreamKey = state.StreamKey,
-                    ConsumerGroup = state.ConsumerGroup,
-                    StreamEntryId = entry.Id
-                };
+                // SH-M104: a message id delivered as more than one entry (a duplicate publish) keeps every entry id,
+                // so acknowledging the id acknowledges them all. The assignment replaced the earlier entry's id,
+                // which then sat in the PEL forever.
+                _pendingAck.AddOrUpdate(message.Guid,
+                    _ => new PendingMessage { StreamKey = state.StreamKey, ConsumerGroup = state.ConsumerGroup, StreamEntryIds = { entry.Id } },
+                    (_, existing) => { existing.Add(entry.Id); return existing; });
             }
 
             try
@@ -355,13 +387,32 @@ namespace Birko.MessageQueue.Redis
                     await db.StreamAcknowledgeAsync(state.StreamKey, state.ConsumerGroup!, entry.Id).ConfigureAwait(false);
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 if (state.Options.AckMode == MessageAckMode.ManualAck)
                 {
                     _pendingAck.TryRemove(message.Guid, out _);
                 }
                 // Entry stays in the Pending Entries List; the reclaim pass will redeliver it.
+                await InvokeHandlerErrorAsync(ex, message).ConfigureAwait(false);
+            }
+        }
+
+        private async Task InvokeHandlerErrorAsync(Exception ex, QueueMessage message)
+        {
+            var hook = OnHandlerError;
+            if (hook == null)
+            {
+                return;
+            }
+
+            try
+            {
+                await hook(ex, message).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The error hook must never break the poll loop.
             }
         }
 
@@ -513,13 +564,15 @@ namespace Birko.MessageQueue.Redis
             return queueMessage;
         }
 
-        private static async Task EnsureConsumerGroupAsync(IDatabase db, string streamKey, string groupName)
+        private static async Task EnsureConsumerGroupAsync(IDatabase db, string streamKey, string groupName, bool fromBeginning)
         {
             try
             {
-                // Create the group starting from the beginning of the stream.
-                // MKSTREAM creates the stream if it doesn't exist.
-                await db.StreamCreateConsumerGroupAsync(streamKey, groupName, "0-0", createStream: true).ConfigureAwait(false);
+                // SH-M102 (decided by the user 2026-10-18): a new group starts where FromBeginning says — at the start of
+                // the stream when true, at its tail ("$", new messages only) when false, as ConsumerOptions documents.
+                // It always started at 0-0, so attaching a new group replayed the whole stream. An existing group keeps
+                // its position. MKSTREAM creates the stream if it doesn't exist.
+                await db.StreamCreateConsumerGroupAsync(streamKey, groupName, fromBeginning ? "0-0" : "$", createStream: true).ConfigureAwait(false);
             }
             catch (RedisServerException ex) when (ex.Message.Contains("BUSYGROUP"))
             {
@@ -572,7 +625,20 @@ namespace Birko.MessageQueue.Redis
         {
             public required string StreamKey { get; set; }
             public string? ConsumerGroup { get; set; }
-            public required RedisValue StreamEntryId { get; set; }
+            public List<RedisValue> StreamEntryIds { get; } = new();
+
+            public void Add(RedisValue entryId)
+            {
+                lock (StreamEntryIds)
+                {
+                    if (!StreamEntryIds.Contains(entryId)) StreamEntryIds.Add(entryId);
+                }
+            }
+
+            public RedisValue[] EntryIds()
+            {
+                lock (StreamEntryIds) return StreamEntryIds.ToArray();
+            }
         }
     }
 }

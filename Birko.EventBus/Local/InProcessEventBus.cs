@@ -69,11 +69,9 @@ namespace Birko.EventBus.Local
             // Collect handlers: DI-registered + manual subscriptions
             var handlers = GetHandlers<TEvent>(scope?.ServiceProvider ?? _serviceProvider);
 
-            if (handlers.Count == 0)
-            {
-                return;
-            }
-
+            // SH-M119: the pipeline runs even when no handler is registered, so its behaviours see every publish:
+            // deduplication records the EventId (a later handler then does not process it as first-seen) and auditing
+            // or metrics behaviours leave a trace. It returned before the pipeline.
             // Dispatch through pipeline
             await _pipeline.ExecuteAsync(@event, context, async () =>
             {

@@ -14,6 +14,11 @@ namespace Birko.MessageQueue.InMemory
         private readonly IMessageSerializer _serializer;
         private bool _disposed;
 
+        // SH-M112: a delayed send outlives the call that made it, so it runs on the producer's lifetime, ended by Dispose.
+        // It ran on the caller's token, which in a request is cancelled as soon as the response is sent: a message the
+        // call had reported as sent was then dropped.
+        private readonly CancellationTokenSource _lifetime = new();
+
         internal InMemoryProducer(InMemoryChannel channel, IMessageSerializer serializer)
         {
             _channel = channel ?? throw new ArgumentNullException(nameof(channel));
@@ -35,11 +40,13 @@ namespace Birko.MessageQueue.InMemory
             {
                 // Observe the detached task's fault so a post-delay failure isn't raised as an
                 // unobserved-task exception (best-effort, as documented above).
+                cancellationToken.ThrowIfCancellationRequested();
+                var lifetime = _lifetime.Token;
                 _ = Task.Run(async () =>
                 {
-                    await Task.Delay(message.Delay.Value, cancellationToken).ConfigureAwait(false);
-                    await _channel.WriteAsync(destination, message, cancellationToken).ConfigureAwait(false);
-                }, cancellationToken)
+                    await Task.Delay(message.Delay.Value, lifetime).ConfigureAwait(false);
+                    await _channel.WriteAsync(destination, message, lifetime).ConfigureAwait(false);
+                }, lifetime)
                 .ContinueWith(static t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
                 return;
             }
@@ -68,7 +75,13 @@ namespace Birko.MessageQueue.InMemory
 
         public void Dispose()
         {
+            if (_disposed)
+            {
+                return;
+            }
             _disposed = true;
+            _lifetime.Cancel();
+            _lifetime.Dispose();
         }
     }
 }

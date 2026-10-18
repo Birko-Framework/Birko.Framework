@@ -27,26 +27,18 @@ namespace Birko.EventBus.Tests.MessageQueue
             }
         }
 
-        private sealed class NotADistributedEventBus : IEventBus
-        {
-            public Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : IEvent
-                => Task.CompletedTask;
-            public IEventSubscription Subscribe<TEvent>(IEventHandler<TEvent> handler) where TEvent : IEvent
-                => throw new NotSupportedException();
-            public void Dispose() { }
-        }
-
         [Fact]
-        public void Constructor_NonDistributedEventBus_ThrowsInvalidOperationException()
+        public void Constructor_NullBus_ThrowsArgumentNullException()
         {
+            // TASK-155 (SH-M114) replaced the IEventBus -> DistributedEventBus cast guard this test pinned: the hosted
+            // service now takes the concrete bus (registered on its own by AddDistributedEventBus), so a decorator over
+            // IEventBus such as the outbox no longer makes the cast fail at startup. The type system enforces the rest.
             var services = new ServiceCollection();
             using var provider = services.BuildServiceProvider();
 
-            Action act = () => new DistributedEventBusHostedService(
-                new NotADistributedEventBus(), provider, new DistributedEventBusOptions());
+            Action act = () => new DistributedEventBusHostedService(null!, provider, new DistributedEventBusOptions());
 
-            act.Should().Throw<InvalidOperationException>()
-                .WithMessage("*requires IEventBus to be a DistributedEventBus*");
+            act.Should().Throw<ArgumentNullException>();
         }
 
         [Fact]

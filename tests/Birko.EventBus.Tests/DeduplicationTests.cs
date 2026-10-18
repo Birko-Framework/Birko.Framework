@@ -26,8 +26,11 @@ namespace Birko.EventBus.Tests
         }
 
         [Fact]
-        public async Task DeduplicationBehavior_MarksBeforeHandler_SoAThrowingHandlerStillDedups()
+        public async Task DeduplicationBehavior_MarksBeforeHandler_AndReleasesTheMarkWhenItThrows()
         {
+            // TASK-155 (SH-M118) inverted this test: the reservation is still taken before the handler runs (so two
+            // concurrent publishes run it once), but a handler that throws releases it, so a redelivery or republish
+            // runs again (at-least-once). It used to stay marked, and the redelivery was dropped.
             var store = new InMemoryDeduplicationStore();
             var behavior = new DeduplicationBehavior(store);
             var evt = new OrderPlaced(Guid.NewGuid(), 1m);
@@ -39,14 +42,13 @@ namespace Birko.EventBus.Tests
                 throw new InvalidOperationException("handler failed");
             };
 
-            // Mark-before (at-most-once): the event is reserved before the handler runs, so even though
-            // the handler throws, the event stays marked and a republish is skipped (not reprocessed).
             await behavior.Invoking(b => b.HandleAsync(evt, EventContext.From(evt), throwingNext))
                 .Should().ThrowAsync<InvalidOperationException>();
-            (await store.ExistsAsync(evt.EventGuid)).Should().BeTrue("mark happens before the handler");
+            (await store.ExistsAsync(evt.EventGuid)).Should().BeFalse("a failed handling releases the reservation");
 
-            await behavior.HandleAsync(evt, EventContext.From(evt), throwingNext); // duplicate → skipped
-            handlerCalls.Should().Be(1, "the duplicate must not re-invoke the handler");
+            await behavior.Invoking(b => b.HandleAsync(evt, EventContext.From(evt), throwingNext))
+                .Should().ThrowAsync<InvalidOperationException>();
+            handlerCalls.Should().Be(2, "the republish runs the handler again");
         }
 
         // ---- CR-L249: cleanup evicts expired entries (functional pin over the Interlocked-guarded sweep) ----

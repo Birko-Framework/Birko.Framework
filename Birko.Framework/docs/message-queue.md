@@ -97,7 +97,7 @@ The message wrapper sent through the queue:
 | PayloadType | string? | .NET type name for deserialization |
 | Headers | MessageHeaders | Metadata |
 | CreatedAt | DateTimeOffset | Creation timestamp |
-| Delay | TimeSpan? | Visibility delay |
+| Delay | TimeSpan? | Visibility delay (in-memory transport only; MQTT and Redis refuse it) |
 | TimeToLive | TimeSpan? | Message expiration |
 | Priority | int | Higher = more urgent (default 0) |
 
@@ -175,6 +175,11 @@ var options = new ConsumerOptions
     FromBeginning = false                  // Start from latest (true = replay all)
 };
 ```
+
+A transport refuses an option it cannot honour (`NotSupportedException`) rather than ignoring it. MQTT has no
+ManualAck, FromBeginning, GroupId or requeue; MQTT and Redis have no `Delay`. A new Redis consumer group starts at
+the stream's tail unless `FromBeginning` is set, so a message published before the group exists is not delivered to it.
+Each consumer has an `OnHandlerError` hook (in-memory, MQTT, Redis) through which a failing handler is reported.
 
 ### Acknowledgment Modes
 

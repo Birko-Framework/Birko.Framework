@@ -184,6 +184,10 @@ Prevents duplicate event processing based on `EventGuid`:
 services.AddEventDeduplication(ttl: TimeSpan.FromHours(2));
 ```
 
+An event is reserved before its handlers run, so a concurrent duplicate runs once. If a handler throws, the
+reservation is released, so a retry or a transport redelivery runs it again (at-least-once). An implementation of
+`IDeduplicationStore` must provide `ReleaseAsync` for that.
+
 Uses `InMemoryDeduplicationStore` by default. For distributed scenarios, implement `IDeduplicationStore` and register:
 
 ```csharp

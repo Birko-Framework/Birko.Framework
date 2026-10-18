@@ -25,6 +25,17 @@ namespace Birko.EventBus.MessageQueue
         private readonly EventPipeline _pipeline;
         private readonly IReadOnlyList<IEventEnricher> _enrichers;
         private readonly IServiceProvider? _serviceProvider;
+
+        /// <summary>
+        /// Raised when a delivered message can never be dispatched — its envelope or payload does not decode, or it
+        /// names an event type that is not this subscription's — with the reason. The message is then acknowledged
+        /// and dropped (SH-M116: it was dropped with no trace). A throwing subscriber is ignored.
+        /// </summary>
+        /// <remarks>
+        /// An event type this process cannot load is NOT dropped: the callback throws, so the transport redelivers it
+        /// and a consumer that knows the type (after a rolling deploy) can take it (decided by the user 2026-10-18).
+        /// </remarks>
+        public event Action<QueueMessage, string>? MessageDropped;
         private readonly ConcurrentDictionary<Type, List<object>> _subscriptions = new();
         private readonly ConcurrentBag<ISubscription> _queueSubscriptions = new();
         private bool _disposed;
@@ -148,18 +159,27 @@ namespace Birko.EventBus.MessageQueue
                 var envelope = _serializer.Deserialize<EventEnvelope>(message.Body);
                 if (envelope == null)
                 {
+                    ReportDropped(message, "The message body is not an event envelope.");
                     return;
                 }
 
                 var eventType = Type.GetType(envelope.EventType);
-                if (eventType == null || !typeof(TEvent).IsAssignableFrom(eventType))
+                if (eventType == null)
                 {
+                    // Not loadable here, e.g. a newer publisher during a rolling deploy: redelivered, not lost.
+                    throw new InvalidOperationException(
+                        $"Event type '{envelope.EventType}' cannot be loaded by this consumer; the message is left for redelivery.");
+                }
+                if (!typeof(TEvent).IsAssignableFrom(eventType))
+                {
+                    ReportDropped(message, $"Event type '{envelope.EventType}' is not a {typeof(TEvent).Name}, which this subscription handles.");
                     return;
                 }
 
                 var @event = (TEvent?)_serializer.Deserialize(envelope.Payload, eventType);
                 if (@event == null)
                 {
+                    ReportDropped(message, $"The payload of event {envelope.EventGuid} does not decode to {eventType.Name}.");
                     return;
                 }
 
@@ -184,12 +204,16 @@ namespace Birko.EventBus.MessageQueue
                     : (AsyncServiceScope?)null;
 
                 var handlers = GetHandlers<TEvent>(scope?.ServiceProvider ?? _serviceProvider);
-                if (handlers.Count == 0)
-                {
-                    return;
-                }
 
-                await _pipeline.ExecuteAsync(@event, context, async () =>
+                // SH-M117: handlers run in the ambient scope the event was published under (the tenant, when a bridge
+                // is registered), as the outbox processor's re-publish does. The scope accessor was documented for this
+                // callback but never applied, so a handler relying on the ambient tenant failed under Strict isolation.
+                var scopeAccessor = (scope?.ServiceProvider ?? _serviceProvider)?.GetService(typeof(IEventScopeAccessor)) as IEventScopeAccessor
+                    ?? NullEventScopeAccessor.Instance;
+
+                // SH-M119: the pipeline runs even with no handlers, so its behaviours (deduplication, auditing) see the
+                // event, as InProcessEventBus does.
+                await scopeAccessor.RunWithScopeAsync(context, () => _pipeline.ExecuteAsync(@event, context, async () =>
                 {
                     List<Exception>? failures = null;
                     foreach (var handler in handlers)
@@ -213,10 +237,22 @@ namespace Birko.EventBus.MessageQueue
                     {
                         throw failures.Count == 1 ? failures[0] : new AggregateException(failures);
                     }
-                }, ct).ConfigureAwait(false);
+                }, ct), ct).ConfigureAwait(false);
             }, _options.ConsumerOptions, cancellationToken).ConfigureAwait(false);
 
             _queueSubscriptions.Add(sub);
+        }
+
+        private void ReportDropped(QueueMessage message, string reason)
+        {
+            try
+            {
+                MessageDropped?.Invoke(message, reason);
+            }
+            catch
+            {
+                // A diagnostic channel must survive its own subscriber (rule 25).
+            }
         }
 
         private List<IEventHandler<TEvent>> GetHandlers<TEvent>(IServiceProvider? provider) where TEvent : IEvent

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DomainEvent = Birko.Data.EventSourcing.Events.IEvent;
@@ -28,10 +29,25 @@ namespace Birko.EventBus.EventSourcing
             _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         }
 
+        /// <summary>
+        /// Key under which an exception thrown while publishing appended events carries, in <see cref="Exception.Data"/>,
+        /// the <see cref="IReadOnlyList{T}"/> of <see cref="DomainEvent"/>s that were appended but not published (SH-M122).
+        /// The events are durable; the caller decides how to publish them again. The exception's type is unchanged.
+        /// </summary>
+        public const string UnpublishedEventsKey = "Birko.EventSourcing.UnpublishedEvents";
+
         public async Task AppendAsync(DomainEvent @event, CancellationToken cancellationToken = default)
         {
             await _inner.AppendAsync(@event, cancellationToken).ConfigureAwait(false);
-            await PublishDomainEventAsync(@event, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await PublishDomainEventAsync(@event, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                ex.Data[UnpublishedEventsKey] = new[] { @event };
+                throw;
+            }
         }
 
         public async Task AppendRangeAsync(IEnumerable<DomainEvent> events, CancellationToken cancellationToken = default)
@@ -39,9 +55,19 @@ namespace Birko.EventBus.EventSourcing
             var eventList = events is IList<DomainEvent> list ? list : new List<DomainEvent>(events);
             await _inner.AppendRangeAsync(eventList, cancellationToken).ConfigureAwait(false);
 
-            foreach (var @event in eventList)
+            for (var i = 0; i < eventList.Count; i++)
             {
-                await PublishDomainEventAsync(@event, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await PublishDomainEventAsync(eventList[i], cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    // SH-M122: the boundary is recorded. Events 0..i-1 are published, i..end are appended and not; a
+                    // throw used to say neither, so a caller could not republish exactly what was missing.
+                    ex.Data[UnpublishedEventsKey] = eventList.Skip(i).ToList();
+                    throw;
+                }
             }
         }
 
