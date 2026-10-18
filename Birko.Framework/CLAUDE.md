@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### GitHub web sign-in helpers; OAuthClient survives GitHub's 200 errors (2026-10-18)
+[[TASK-521]]. New `IOAuthStateStore` (single-use, expiring, browser-bound sign-in state), `IOAuthCodeExchanger`,
+GitHub web-flow settings and `GitHubUserClient`. Measured: GitHub answers errors with HTTP 200, so `OAuthClient` threw
+`KeyNotFoundException` on a bad code and on the first device-flow poll (Copilot sign-in). It now asks for JSON and reads
+a 2xx `error` as an error, and a borrowed HttpClient is no longer reconfigured.
 ### client_credentials tokens can be shaped; a scope claim reads as permissions (2026-10-18)
 [[TASK-520]]. `TokenEndpointHandler.ShapeClientCredentialsToken` sets a service account's subject and extra claims
 without replacing the grant; registered claims are refused. `ClaimsCurrentUser` splits a `scope` permission claim on
@@ -325,10 +330,6 @@ claim and transitions use it, as Cosmos does since TASK-661.
 and both won (5 of 5 runs), racing Complete / Fail left a job in two status sets, and priority spanned under 1 ms of
 score. Enqueue, dequeue, Complete, Fail and Cancel are each one guarded Lua script; due jobs move to a ready set ranked
 by priority, then age (decided by the user: as on every backend). Jobs stored before are still served.
-### Cosmos DB job queue claims each job once; the store gains a compare-and-set (2026-10-18)
-[[TASK-661]]. Measured on the emulator: 6 concurrent dequeuers claimed 6 jobs 24 times (4 distinct), Cancel cancelled a
-running or completed job and answered true, and Fail rescheduled an unclaimed job. `AsyncCosmosDBStore.UpdateIfAsync`
-is a compare-and-set on the item's ETag (a lost race re-reads and re-checks); claim, Complete, Fail and Cancel use it.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

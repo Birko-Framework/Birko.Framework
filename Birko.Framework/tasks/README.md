@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-18 14:57. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-18 14:58. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 26      | —     |
-| todo         | —     | —       | 147   |
+| todo         | —     | —       | 146   |
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 25      | 372   |
+| done         | 2     | 25      | 373   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 97× P2 · 41× P3.
+`todo` by priority: 9× P1 · 97× P2 · 40× P3.
 
 ## In progress now
 
@@ -545,13 +545,13 @@ _None._
   - [x] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P1)
   - [x] [TASK-581](EPIC-018-birko-web-core-runtime/TASK-581-syncmanager-backoff-cap-dead-letter.md) `SyncManager` retries a failing write every cycle forever: no backoff, no cap, no dead letter (P2) · FEATURE-018
   - [x] [TASK-598](EPIC-018-birko-web-core-runtime/TASK-598-an-action-interrupted-mid-sync-stays-syncing-forever.md) A queued write interrupted mid-sync stays `syncing` forever, invisible to every list and count (P2)
-- **EPIC-019** Birko framework backports from DraCode — in-progress (24/30 tasks done)
-  - STORY-058 Security / OAuth backports from DraCode — planned (4/6 done)
+- **EPIC-019** Birko framework backports from DraCode — in-progress (25/30 tasks done)
+  - STORY-058 Security / OAuth backports from DraCode — planned (5/6 done)
     - [x] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
     - [x] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)
     - [x] [TASK-519](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-519-aspnetcore-endpoint-mapping-for-the-oauth-server.md) ASP.NET Core endpoint mapping for the OAuth server (P3)
     - [x] [TASK-520](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-520-client-credentials-claims-hook-and-space-delimited-scope.md) client_credentials: let the app shape the token; read space-delimited scopes as permissions (P3)
-    - [ ] [TASK-521](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-521-web-sign-in-helpers-for-oauth-providers.md) Web (authorization-code) sign-in helpers for external OAuth providers, GitHub first (P3)
+    - [x] [TASK-521](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-521-web-sign-in-helpers-for-oauth-providers.md) Web (authorization-code) sign-in helpers for external OAuth providers, GitHub first (P3)
     - [ ] [TASK-522](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-522-loopback-only-auth-bypass-option.md) Optional "no token needed when listening on loopback only" for Birko.Security.AspNetCore (P3)
   - STORY-059 Web backports from DraCode — in-progress (3/4 done)
     - [x] [TASK-523](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-523-wsclient-request-response.md) WsClient: request/response with id correlation and timeout (P2)

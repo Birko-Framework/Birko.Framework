@@ -16,5 +16,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)OAuthDelegatingHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OAuthException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PkceChallenge.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OAuthStateStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OAuthCodeExchanger.cs" />
   </ItemGroup>
 </Project>

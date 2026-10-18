@@ -12,6 +12,8 @@ OAuth2 client library for the Birko Framework providing support for multiple OAu
 - **Token Caching** — Thread-safe token caching with configurable expiry buffer
 - **DelegatingHandler** — Automatic Bearer token injection for HttpClient with 401 retry
 - **PKCE Generation** — Built-in SHA-256 PKCE challenge pair generation
+- **Sign-in state** — `InMemoryOAuthStateStore` (`IOAuthStateStore`): single-use, expiring `state` bound to the browser
+- **Code exchanger** — `OAuthCodeExchanger` (`IOAuthCodeExchanger`): a DI-friendly, fakeable callback code exchange
 - **Settings Hierarchy** — Extends `RemoteSettings` (ClientId = UserName, ClientSecret = Password, TokenEndpoint = Location)
 
 ## Usage
@@ -77,6 +79,21 @@ Console.WriteLine($"Visit {deviceAuth.VerificationUri} and enter code: {deviceAu
 
 // 2. Poll for token (blocks until user authorizes or timeout)
 var token = await client.PollDeviceTokenAsync(deviceAuth.DeviceCode);
+```
+
+### Web sign-in callback (state + code exchange)
+
+```csharp
+// sign-in start: a random cookie binds the state to this browser (login CSRF)
+var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+http.Response.Cookies.Append("signin", nonce, new() { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax });
+var state = await states.CreateAsync(binding: nonce);
+return Results.Redirect(new OAuthClient(settings).BuildAuthorizationUrl(state));
+
+// callback
+if (await states.TryConsumeAsync(query["state"], http.Request.Cookies["signin"]) is null)
+    return Results.BadRequest(new { error = "invalid_state" });
+OAuthToken token = await exchanger.ExchangeAsync(query["code"]!);   // IOAuthCodeExchanger; OAuthException if refused
 ```
 
 ### DelegatingHandler for Automatic Token Injection

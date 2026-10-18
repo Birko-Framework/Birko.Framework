@@ -1,10 +1,12 @@
+using System;
+using System.Net.Http;
 using Birko.Communication.OAuth;
 
 namespace Birko.Communication.OAuth.Providers;
 
 /// <summary>
-/// Pre-configured OAuth client factory for GitHub Device Code flow.
-/// Used for GitHub Copilot and other GitHub API access.
+/// Pre-configured OAuth settings for GitHub: the device flow (GitHub Copilot and other CLI access) and the web
+/// (authorization-code) flow for signing users in (TASK-521).
 /// </summary>
 public static class GitHubOAuthProvider
 {
@@ -17,6 +19,39 @@ public static class GitHubOAuthProvider
     /// GitHub's token endpoint.
     /// </summary>
     public const string TokenEndpoint = "https://github.com/login/oauth/access_token";
+
+    /// <summary>
+    /// GitHub's authorization endpoint for the web flow.
+    /// </summary>
+    public const string AuthorizationEndpoint = "https://github.com/login/oauth/authorize";
+
+    /// <summary>
+    /// Creates OAuthSettings for GitHub's web (authorization-code) sign-in. Build the redirect with
+    /// <see cref="OAuthClient.BuildAuthorizationUrl"/>, exchange the callback's code with <see cref="OAuthCodeExchanger"/>,
+    /// and read the account with <see cref="GitHubUserClient"/>.
+    /// </summary>
+    /// <param name="clientId">GitHub OAuth App client ID.</param>
+    /// <param name="clientSecret">GitHub OAuth App client secret.</param>
+    /// <param name="redirectUri">The callback URL registered on the OAuth App.</param>
+    /// <param name="scope">Space-separated scopes. Default <c>read:user user:email</c>: the profile, and the
+    /// verified primary address through <see cref="IGitHubUserClient.GetPrimaryEmailAsync"/>.</param>
+    public static OAuthSettings CreateWebFlowSettings(string clientId, string clientSecret, string redirectUri, string scope = "read:user user:email")
+    {
+        if (string.IsNullOrWhiteSpace(clientId)) throw new ArgumentException("A client id is required.", nameof(clientId));
+        if (string.IsNullOrWhiteSpace(clientSecret)) throw new ArgumentException("A client secret is required.", nameof(clientSecret));
+        if (string.IsNullOrWhiteSpace(redirectUri)) throw new ArgumentException("A redirect URI is required.", nameof(redirectUri));
+
+        return new OAuthSettings
+        {
+            GrantType = OAuthGrantType.AuthorizationCode,
+            ClientId = clientId,
+            ClientSecret = clientSecret,
+            AuthorizationEndpoint = AuthorizationEndpoint,
+            TokenEndpoint = TokenEndpoint,
+            RedirectUri = redirectUri,
+            Scope = scope
+        };
+    }
 
     /// <summary>
     /// Creates an IOAuthClient configured for GitHub Device Code flow.

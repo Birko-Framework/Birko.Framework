@@ -10,7 +10,8 @@ Birko.Communication.OAuth.Providers offers ready-made factory methods that creat
 
 | Type | Namespace | Description |
 |------|-----------|-------------|
-| `GitHubOAuthProvider` | `Birko.Communication.OAuth.Providers` | Factory for GitHub device flow OAuth clients |
+| `GitHubOAuthProvider` | `Birko.Communication.OAuth.Providers` | GitHub settings: device flow, and web (authorization-code) sign-in |
+| `GitHubUserClient` / `IGitHubUserClient` | `Birko.Communication.OAuth.Providers` | Reads the signed-in user (`GitHubUser`) and their verified primary email |
 
 ## Dependencies
 
@@ -26,6 +27,20 @@ Birko.Communication.OAuth.Providers offers ready-made factory methods that creat
 using Birko.Communication.OAuth.Providers;
 
 var client = GitHubOAuthProvider.CreateDeviceFlowClient("client-id");
+```
+
+### GitHub web sign-in
+
+```csharp
+var settings = GitHubOAuthProvider.CreateWebFlowSettings(clientId, clientSecret, "https://app.example.com/auth/github/callback");
+services.AddSingleton<IOAuthStateStore, InMemoryOAuthStateStore>();
+services.AddHttpClient<IOAuthCodeExchanger, OAuthCodeExchanger>((http, _) => new OAuthCodeExchanger(settings, http));
+services.AddHttpClient<IGitHubUserClient, GitHubUserClient>((http, _) => new GitHubUserClient(http, "MyApp"));
+
+// in the callback, after the state check:
+var token = await exchanger.ExchangeAsync(code);
+var user  = await users.GetUserAsync(token.AccessToken);              // key accounts on user.Id
+var email = user.Email ?? await users.GetPrimaryEmailAsync(token.AccessToken);
 ```
 
 ## License

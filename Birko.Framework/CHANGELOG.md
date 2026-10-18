@@ -46,6 +46,12 @@ message id; MQTT keeps several handlers per filter and releases them properly, a
 subscriber no longer stops reconnect; the in-memory transport keeps a failed ManualAck message requeueable, removes a
 disposed consumer's handlers, and a delayed send outlives the caller's token (an already-cancelled call now throws).
 
+## 2026-10-18 — Cosmos DB job queue claims each job once; the store gains a compare-and-set
+
+[[TASK-661]]. Measured on the emulator: 6 concurrent dequeuers claimed 6 jobs 24 times (4 distinct), Cancel cancelled a
+running or completed job and answered true, and Fail rescheduled an unclaimed job. `AsyncCosmosDBStore.UpdateIfAsync`
+is a compare-and-set on the item's ETag (a lost race re-reads and re-checks); claim, Complete, Fail and Cancel use it.
+
 ## 2026-10-18 — BREAKING: a job's MaxRetries is nullable; 0 means no retries everywhere
 
 [[TASK-662]]. `JobDescriptor.MaxRetries` is `int?`: `null` = the queue's `RetryPolicy`, `0` = no retry, on all nine

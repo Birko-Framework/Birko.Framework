@@ -42,7 +42,12 @@ public class OAuthClient : IOAuthClient
 
         _ownsHttpClient = httpClient == null;
         _httpClient = httpClient ?? new HttpClient();
-        _httpClient.Timeout = TimeSpan.FromSeconds(_settings.TimeoutSeconds);
+        // TASK-521: only a client this instance owns is reconfigured. Setting Timeout on a borrowed HttpClient threw
+        // InvalidOperationException once that client had sent a request (a pooled or DI client backing a second
+        // OAuthClient), and silently changed the caller's timeout for everything else it sends. A borrowed client
+        // gets TimeoutSeconds per request instead (PostFormAsync).
+        if (_ownsHttpClient)
+            _httpClient.Timeout = TimeSpan.FromSeconds(_settings.TimeoutSeconds);
     }
 
     /// <inheritdoc />
@@ -173,12 +178,10 @@ public class OAuthClient : IOAuthClient
         if (!string.IsNullOrEmpty(_settings.Audience))
             parameters["audience"] = _settings.Audience;
 
-        using var content = new FormUrlEncodedContent(parameters);
-        using var response = await _httpClient.PostAsync(endpoint, content, ct).ConfigureAwait(false);
-        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        var (status, json) = await PostFormAsync(endpoint, parameters, ct).ConfigureAwait(false);
 
-        if (!response.IsSuccessStatusCode)
-            ThrowFromErrorResponse(json, (int)response.StatusCode);
+        if (!IsSuccess(status) || TryGetError(json, out _))
+            ThrowFromErrorResponse(json, status);
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -220,11 +223,11 @@ public class OAuthClient : IOAuthClient
             // RFC 8628: poll immediately, then wait `interval` only between subsequent polls (after an
             // authorization_pending / slow_down). The delay used to sit here, adding an unnecessary
             // ~interval wait before the very first request (CR-L075).
-            using var content = new FormUrlEncodedContent(parameters);
-            using var response = await _httpClient.PostAsync(_settings.TokenEndpoint, content, ct).ConfigureAwait(false);
-            var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            var (status, json) = await PostFormAsync(_settings.TokenEndpoint, parameters, ct).ConfigureAwait(false);
 
-            if (response.IsSuccessStatusCode)
+            // TASK-521: GitHub answers authorization_pending / slow_down with HTTP 200, so a 2xx carrying an `error` is
+            // the same answer as a 4xx carrying it. Parsing it as a token threw KeyNotFoundException on the first poll.
+            if (IsSuccess(status) && !TryGetError(json, out _))
             {
                 await _tokenLock.WaitAsync(ct).ConfigureAwait(false);
                 try
@@ -255,7 +258,7 @@ public class OAuthClient : IOAuthClient
                     var errorDescription = GetStringProperty(errorDoc.RootElement, "error_description");
                     throw new OAuthException(
                         $"Device code token request failed: {error}",
-                        error, errorDescription, (int)response.StatusCode);
+                        error, errorDescription, status);
             }
         }
 
@@ -382,14 +385,51 @@ public class OAuthClient : IOAuthClient
 
     private async Task<OAuthToken> RequestTokenAsync(Dictionary<string, string> parameters, CancellationToken ct)
     {
-        using var content = new FormUrlEncodedContent(parameters);
-        using var response = await _httpClient.PostAsync(_settings.TokenEndpoint, content, ct).ConfigureAwait(false);
-        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        var (status, json) = await PostFormAsync(_settings.TokenEndpoint, parameters, ct).ConfigureAwait(false);
 
-        if (!response.IsSuccessStatusCode)
-            ThrowFromErrorResponse(json, (int)response.StatusCode);
+        // TASK-521: a 2xx whose body carries `error` is an error response (GitHub answers bad_verification_code and the
+        // like with HTTP 200). It used to be parsed as a token and threw KeyNotFoundException, not OAuthException.
+        if (!IsSuccess(status) || TryGetError(json, out _))
+            ThrowFromErrorResponse(json, status);
 
         return ParseTokenResponse(json);
+    }
+
+    /// <summary>
+    /// POSTs a form to an OAuth endpoint and returns the status and body. Asks for JSON (GitHub answers form-encoded
+    /// otherwise, which the parser cannot read) and, on a borrowed HttpClient, applies <see cref="OAuthSettings.TimeoutSeconds"/>
+    /// to this request.
+    /// </summary>
+    private async Task<(int Status, string Body)> PostFormAsync(string endpoint, Dictionary<string, string> parameters, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = new FormUrlEncodedContent(parameters) };
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        using var timeout = _ownsHttpClient ? null : CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout?.CancelAfter(TimeSpan.FromSeconds(_settings.TimeoutSeconds));
+        var token = timeout?.Token ?? ct;
+
+        using var response = await _httpClient.SendAsync(request, token).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+        return ((int)response.StatusCode, body);
+    }
+
+    private static bool IsSuccess(int status) => status >= 200 && status <= 299;
+
+    /// <summary>Whether a response body is a JSON object carrying a string <c>error</c>.</summary>
+    private static bool TryGetError(string json, out string? error)
+    {
+        error = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            error = doc.RootElement.ValueKind == JsonValueKind.Object ? GetStringProperty(doc.RootElement, "error") : null;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        return error != null;
     }
 
     private OAuthToken ParseTokenResponse(string json)

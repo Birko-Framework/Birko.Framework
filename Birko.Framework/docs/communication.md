@@ -53,6 +53,14 @@ OAuth2 client library supporting multiple grant types with automatic token cachi
 - **PkceChallenge** — built-in SHA-256 PKCE challenge pair generation
 - **OAuthSettings** — extends `RemoteSettings` (ClientId=UserName, ClientSecret=Password, TokenEndpoint=Location)
 
+Web sign-in (TASK-521): `InMemoryOAuthStateStore` (`IOAuthStateStore`) issues short-lived, single-use `state` values
+bound to the initiating browser (pass a random HttpOnly cookie's value as the binding; an unbound state does not stop
+login CSRF), and `OAuthCodeExchanger` (`IOAuthCodeExchanger`) exchanges the callback code, a seam tests can fake.
+`Birko.Communication.OAuth.Providers` adds `GitHubOAuthProvider.CreateWebFlowSettings` and `GitHubUserClient` (the user
+by stable numeric id, plus the verified primary email). `OAuthClient` asks for JSON, treats a 2xx response carrying
+`error` as an error (GitHub answers errors with 200, which broke its device-flow polling), and no longer reconfigures a
+borrowed HttpClient.
+
 > Issuing tokens (not just consuming them)? See `Birko.Security.OAuth.Server` for the authorization-server side — full /token, /authorize, /device_authorization, and dynamic client registration endpoints. Documented in [docs/security.md](security.md#oauth2-authorization-server-birkosecurityoauthserver).
 
 ### Birko.Communication.GraphQL

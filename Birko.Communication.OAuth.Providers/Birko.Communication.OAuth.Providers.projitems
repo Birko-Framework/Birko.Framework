@@ -10,5 +10,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)GitHubOAuthProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GitHubUserClient.cs" />
   </ItemGroup>
 </Project>
