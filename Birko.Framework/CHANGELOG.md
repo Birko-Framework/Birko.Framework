@@ -71,6 +71,14 @@ PostgreSQL / TimescaleDB `ALTER COLUMN "MaxRetries" DROP NOT NULL`, SQLite a tab
 under driver 3.x, so the MongoDB job queue could not claim a job on a real server (its tests ran on an in-memory
 double). A set value is now written with the member's own serializer; a null is `BsonNull`. Measured live.
 
+## 2026-10-18 — Background-jobs triage: guarded transitions, loops that survive, one lock per provider
+
+[[TASK-158]]. 21 medium findings: 12 fixed and 9 spawned ([[TASK-661]] Cosmos, [[TASK-662]] nullable `MaxRetries`,
+[[TASK-663]] Redis, [[TASK-664]] reclaim).
+- `CompleteAsync` / `FailAsync` now act only on a claimed job, as guarded updates.
+- A stopped processor still records a finished job, and one failed enqueue no longer kills the scheduler.
+- Lock providers refuse a second name, and SQL unlocks on dispose (a pooled MySQL session kept the lock).
+
 ## 2026-10-18 — Birko.BackgroundJobs.Hosting: AddBackgroundJobs and the hosted services
 
 [[TASK-538]]. New project, from Symbio's version. `AddBackgroundJobs` is idempotent and keyed on the processor, so a

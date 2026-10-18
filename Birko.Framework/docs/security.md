@@ -546,42 +546,37 @@ var server = new OAuthServer(
     deviceVerificationUri: "https://auth.example.com/device");
 ```
 
-### Wiring the /token endpoint
+### ASP.NET Core endpoints (Birko.Security.OAuth.Server.AspNetCore)
+
+`MapOAuthServer()` maps the handlers onto minimal-API routes (TASK-519, from DraCode's `OAuthEndpoints.cs`). `OAuthServer`
+is resolved from DI per request.
 
 ```csharp
-app.MapPost("/token", async (HttpRequest req) =>
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapOAuthServer(o =>
 {
-    var form = await req.ReadFormAsync();
-    var request = new TokenRequest
-    {
-        GrantType = form["grant_type"]!,
-        ClientId = form["client_id"]!,
-        ClientSecret = form["client_secret"],
-        Code = form["code"],
-        RedirectUri = form["redirect_uri"],
-        CodeVerifier = form["code_verifier"],
-        RefreshToken = form["refresh_token"],
-        DeviceCode = form["device_code"],
-        Scope = form["scope"]
-    };
-    try
-    {
-        var response = await server.Token.HandleAsync(request);
-        return Results.Json(new
-        {
-            access_token = response.AccessToken,
-            token_type = response.TokenType,
-            expires_in = response.ExpiresIn,
-            refresh_token = response.RefreshToken,
-            scope = response.Scope
-        });
-    }
-    catch (OAuthServerException ex)
-    {
-        return Results.Json(TokenErrorResponse.From(ex), statusCode: 400);
-    }
+    o.AllowDynamicRegistration = true;                          // off by default
+    o.ConfigureRegistration = b => b.RequireAuthorization("admin");
+    o.AuthorizeResponseMode = OAuthAuthorizeResponseMode.Redirect; // default Json (an SPA drives the redirect)
+    o.GrantHandlers[OAuthGrantTypes.ClientCredentials] = myIssuer; // optional: the app takes over one grant
 });
 ```
+
+- **Routes.** `POST /token` and `POST /device_authorization` authenticate the client in the request: form fields or
+  HTTP Basic, form-decoded per RFC 6749 §2.3.1. `GET /authorize` and `POST /device/approve` always require an
+  authenticated caller, and take the user from the principal (`sub`, else NameIdentifier), never from a request field.
+  `POST /register` and `/register/{clientId}/disable` exist only with `AllowDynamicRegistration`; they always require
+  authorization, plus the app's policy.
+- **Errors.** `{error, error_description, error_uri}` with 400. `invalid_client` after HTTP Basic is 401 with
+  `WWW-Authenticate: Basic`, `server_error` is 500 and `temporarily_unavailable` 503.
+- **Client authentication.** A malformed Basic header is `invalid_client`. A body secret beside Basic, or a body
+  `client_id` naming another client, is `invalid_request`: a client uses one authentication method (§2.3).
+- **Caching.** Token, device-authorization and registration responses carry `Cache-Control: no-store` and
+  `Pragma: no-cache` (§5.1).
+- **`/authorize`.** An error is never redirected, since the error may be the `redirect_uri` itself.
+- **Grant handlers.** A grant handler owns client authentication for its grant; the framework checks nothing on that
+  path.
 
 ### Persistence
 

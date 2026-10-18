@@ -76,7 +76,7 @@
 #   (except Time.Abstractions), Birko.Storage*, Birko.Communication*,
 #   Birko.Models.*, Birko.Structures, Birko.Random, Birko.Data.Processors,
 #   Birko.Helpers, Birko.VersionControl.Git, Birko.Redis (except RedisSettings), Birko.Data.EventSourcing,
-#   Birko.Security.OAuth.Server(.InMemory/.SqLite), Birko.Security.NFC, Birko.AI.Providers,
+#   Birko.Security.OAuth.Server(.InMemory/.SqLite/.AspNetCore), Birko.Security.NFC, Birko.AI.Providers,
 #   Birko.AI.Agents, Birko.AI.Resilience(.Data), Birko.AI.Orchestration,
 #   Birko.Data.SQL.View*, Birko.Messaging*, Birko.Web.*, Birko.Xaml.*,
 #   Birko.DesignTokens, per-backend store bodies (JSON/XML/Mongo/Raven/Cosmos/

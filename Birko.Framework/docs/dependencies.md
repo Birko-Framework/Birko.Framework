@@ -96,7 +96,8 @@ Only 4 projitems-level import chains exist:
            ├──► Security.AspNetCore (← Security, Security.Jwt, Data.Tenant)
            └──► Security.OAuth.Server (← Security, Data.Stores, Time.Abstractions)
                   ├──► OAuth.Server.InMemory (← Data.InMemory)
-                  └──► OAuth.Server.SqLite (← Data.SQL.SqLite)
+                  ├──► OAuth.Server.SqLite (← Data.SQL.SqLite)
+                  └──► OAuth.Server.AspNetCore (← Microsoft.AspNetCore.App)
 ```
 
 ---
@@ -261,6 +262,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Security.NFC** | Birko.Security |
 | **Birko.Security.OAuth.Server** | Birko.Configuration, Birko.Security, Birko.Data.Core, Birko.Data.Stores, Birko.Time.Abstractions |
 | **Birko.Security.OAuth.Server.InMemory** | Birko.Security.OAuth.Server, Birko.Data.InMemory; Microsoft.Extensions.DependencyInjection (consumer-supplied) |
+| **Birko.Security.OAuth.Server.AspNetCore** | Birko.Security.OAuth.Server; Microsoft.AspNetCore.App (consumer-supplied FrameworkReference) |
 | **Birko.Security.OAuth.Server.SqLite** | Birko.Security.OAuth.Server, Birko.Data.SQL.SqLite; Microsoft.Extensions.DependencyInjection (consumer-supplied) |
 
 ## Storage

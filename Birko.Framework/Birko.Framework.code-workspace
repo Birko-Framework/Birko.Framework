@@ -641,6 +641,10 @@
 			"path": "../Birko.Security.OAuth.Server.InMemory"
 		},
 		{
+			"name": "Security / Birko.Security.OAuth.Server.AspNetCore",
+			"path": "../Birko.Security.OAuth.Server.AspNetCore"
+		},
+		{
 			"name": "Security / Birko.Security.OAuth.Server.SqLite",
 			"path": "../Birko.Security.OAuth.Server.SqLite"
 		},
@@ -1287,6 +1291,10 @@
 		{
 			"name": "Tests / Birko.Security.OAuth.Server.SqLite.Tests",
 			"path": "../tests/Birko.Security.OAuth.Server.SqLite.Tests"
+		},
+		{
+			"name": "Tests / Birko.Security.OAuth.Server.AspNetCore.Tests",
+			"path": "../tests/Birko.Security.OAuth.Server.AspNetCore.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.Vault.Tests",

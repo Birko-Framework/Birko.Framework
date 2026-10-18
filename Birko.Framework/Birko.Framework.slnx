@@ -192,6 +192,7 @@
     <Project Path="../Birko.Security.OAuth.Server.InMemory/Birko.Security.OAuth.Server.InMemory.shproj" />
     <Project Path="../Birko.Security.OAuth.Server.SqLite/Birko.Security.OAuth.Server.SqLite.shproj" />
     <Project Path="../Birko.Security.Grants/Birko.Security.Grants.shproj" />
+    <Project Path="../Birko.Security.OAuth.Server.AspNetCore/Birko.Security.OAuth.Server.AspNetCore.shproj" />
     <Project Path="../Birko.Security.Grants.AspNetCore/Birko.Security.Grants.AspNetCore.shproj" />
     <Project Path="../Birko.Security.Grants.SQL/Birko.Security.Grants.SQL.shproj" />
   </Folder>
@@ -256,6 +257,7 @@
     <Project Path="../tests/Birko.Security.OAuth.Server.InMemory.Tests/Birko.Security.OAuth.Server.InMemory.Tests.csproj" />
     <Project Path="../tests/Birko.Security.OAuth.Server.SqLite.Tests/Birko.Security.OAuth.Server.SqLite.Tests.csproj" />
     <Project Path="../tests/Birko.Security.Grants.Tests/Birko.Security.Grants.Tests.csproj" />
+    <Project Path="../tests/Birko.Security.OAuth.Server.AspNetCore.Tests/Birko.Security.OAuth.Server.AspNetCore.Tests.csproj" />
     <Project Path="../tests/Birko.Security.Grants.SQL.Tests/Birko.Security.Grants.SQL.Tests.csproj" />
     <Project Path="../tests/Birko.Rules.Tests/Birko.Rules.Tests.csproj" />
     <Project Path="../tests/Birko.Data.Patterns.Tests/Birko.Data.Patterns.Tests.csproj" />

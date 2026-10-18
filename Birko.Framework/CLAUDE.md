@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Birko.Security.OAuth.Server.AspNetCore: MapOAuthServer (2026-10-18)
+[[TASK-519]]. New project, from DraCode's `OAuthEndpoints.cs`. `MapOAuthServer()` maps `/token`, `/device_authorization`,
+`/device/approve`, `/authorize` and an opt-in `/register`. They take form or Basic client credentials and return RFC 6749
+errors, and `GrantHandlers` lets the app take over a grant. Fixed against DraCode: no `no-store`, `invalid_client` sent
+as 400, Basic not form-decoded or a malformed one ignored, and `/register` refusing its own `client_type`.
 ### WebSocketCommandRouter: the server half of WsClient.request (2026-10-18)
 [[TASK-539]]. New in Birko.Communication.WebSocket. It routes `{ type, id, data }` to a handler by command name and
 replies `response` or `error`. Every reply carries the request id, including errors (DraCode's dropped it, so clients
@@ -325,12 +330,6 @@ is a compare-and-set on the item's ETag (a lost race re-reads and re-checks); cl
 backends (0 used to mean "the policy" on InMemory, JSON and RavenDB). An old SQL `MaxRetries NOT NULL` column refuses a
 null budget and is reported as drift. Fixed on the way: a MongoDB `$set` of a `Guid` threw, so the MongoDB job queue
 could not claim on a real server. Details: CHANGELOG.
-### Background-jobs triage: guarded transitions, loops that survive, one lock per provider (2026-10-18)
-[[TASK-158]]. 21 medium findings: 12 fixed and 9 spawned ([[TASK-661]] Cosmos, [[TASK-662]] nullable `MaxRetries`,
-[[TASK-663]] Redis, [[TASK-664]] reclaim).
-- `CompleteAsync` / `FailAsync` now act only on a claimed job, as guarded updates.
-- A stopped processor still records a finished job, and one failed enqueue no longer kills the scheduler.
-- Lock providers refuse a second name, and SQL unlocks on dispose (a pooled MySQL session kept the lock).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
