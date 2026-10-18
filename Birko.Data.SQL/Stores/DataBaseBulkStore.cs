@@ -117,17 +117,36 @@ namespace Birko.Data.SQL.Stores
             catch (EntityNotFoundException)
             {
                 scope.Dispose();
-                transaction.Commit();
+                CommitAndRunCallbacks(transaction);
                 throw;
             }
             catch
             {
                 scope.Dispose();
+                AmbientSqlTransaction.DiscardCommitted(transaction);
                 transaction.Rollback();
                 throw;
             }
             scope.Dispose();
-            transaction.Commit();
+            CommitAndRunCallbacks(transaction);
+        }
+
+        /// <summary>
+        /// Commits a batch's own transaction, then runs the work registered to follow it (TASK-669). A failed commit
+        /// discards that work; a callback's failure is recorded on the connector (channel <c>AfterCommit</c>).
+        /// </summary>
+        private void CommitAndRunCallbacks(System.Data.Common.DbTransaction transaction)
+        {
+            try
+            {
+                transaction.Commit();
+            }
+            catch
+            {
+                AmbientSqlTransaction.DiscardCommitted(transaction);
+                throw;
+            }
+            AmbientSqlTransaction.RunCommitted(transaction, ex => Connector?.RecordSubscriberFailure("AfterCommit", ex));
         }
 
         /// <summary>

@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Birko.Data.SQL.Connectors
 {
@@ -36,6 +39,109 @@ namespace Birko.Data.SQL.Connectors
     /// </remarks>
     public static class AmbientSqlTransaction
     {
+        /// <summary>
+        /// Work to run once a transaction has committed (TASK-669), keyed by the transaction itself.
+        /// </summary>
+        /// <remarks>
+        /// Keyed by the <see cref="DbTransaction"/>, not by an ambient <see cref="Entry"/>: a store given an explicit
+        /// context publishes a fresh entry per operation (<c>EnterTransactionScope</c>), and a participant of a joined
+        /// <c>SqlUnitOfWork</c> may run in another async flow, so the one thing every participant and the owner share is
+        /// the transaction object. A <see cref="ConditionalWeakTable{TKey,TValue}"/> holds the registrations only as long
+        /// as the transaction lives, so one nobody runs (a caller committing the <see cref="DbTransaction"/> itself) is
+        /// collected with it. This is not per-caller state on a shared object (rule 36): the key IS the boundary.
+        /// </remarks>
+        private static readonly ConditionalWeakTable<DbTransaction, AfterCommitList> _afterCommit = new();
+
+        private sealed class AfterCommitList
+        {
+            internal readonly object Gate = new();
+            internal readonly List<(string Key, Func<Task> Callback)> Items = new();
+        }
+
+        /// <summary>
+        /// Registers <paramref name="callback"/> to run once <paramref name="transaction"/> has committed. A second
+        /// registration with the same <paramref name="key"/> on the same transaction is ignored, so a store writing many
+        /// rows in one boundary registers its work once.
+        /// </summary>
+        /// <remarks>
+        /// Run by the boundary's owner after a successful commit (<c>SqlUnitOfWork.CommitAsync</c>, the bulk stores'
+        /// <c>Atomically(Async)</c>) and discarded on rollback or a failed commit. ⚠ A caller that commits the
+        /// <see cref="DbTransaction"/> itself, outside those owners, runs nothing: the callbacks are dropped with the
+        /// transaction. Register only work that is also safe to have done before the commit (e.g. invalidating a cache).
+        /// </remarks>
+        public static void OnCommitted(DbTransaction transaction, string key, Func<Task> callback)
+        {
+            if (transaction == null) throw new ArgumentNullException(nameof(transaction));
+            if (key == null) throw new ArgumentNullException(nameof(key));
+            if (callback == null) throw new ArgumentNullException(nameof(callback));
+            var list = _afterCommit.GetValue(transaction, _ => new AfterCommitList());
+            lock (list.Gate)
+            {
+                foreach (var item in list.Items)
+                {
+                    if (string.Equals(item.Key, key, StringComparison.Ordinal)) return;
+                }
+                list.Items.Add((key, callback));
+            }
+        }
+
+        /// <summary>
+        /// Runs and removes the callbacks registered on <paramref name="transaction"/>. Called by a boundary's owner
+        /// after its commit succeeded. Each callback runs once and on its own: one that throws does not stop the rest,
+        /// and its exception goes to <paramref name="recordFailure"/>, never to the caller, because the transaction has
+        /// committed and reporting a failure would claim otherwise (rule 22's mirror). Swallowed means recorded
+        /// (rule 25): owners pass the connector's <c>SubscriberFailures</c> recorder, channel <c>AfterCommit</c>.
+        /// </summary>
+        public static async Task RunCommittedAsync(DbTransaction transaction, Action<Exception>? recordFailure)
+        {
+            foreach (var callback in Take(transaction))
+            {
+                try
+                {
+                    await callback().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    recordFailure?.Invoke(ex);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The synchronous owner's form of <see cref="RunCommittedAsync"/> (<c>DataBaseBulkStore.Atomically</c>): each
+        /// callback is waited on in turn.
+        /// </summary>
+        public static void RunCommitted(DbTransaction transaction, Action<Exception>? recordFailure)
+        {
+            foreach (var callback in Take(transaction))
+            {
+                try
+                {
+                    callback().GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    recordFailure?.Invoke(ex);
+                }
+            }
+        }
+
+        /// <summary>Drops the callbacks registered on <paramref name="transaction"/>: it rolled back or failed to commit.</summary>
+        public static void DiscardCommitted(DbTransaction transaction) => Take(transaction);
+
+        private static List<Func<Task>> Take(DbTransaction transaction)
+        {
+            var taken = new List<Func<Task>>();
+            if (transaction == null || !_afterCommit.TryGetValue(transaction, out var list)) return taken;
+            lock (list.Gate)
+            {
+                foreach (var item in list.Items) taken.Add(item.Callback);
+                list.Items.Clear();
+            }
+            _afterCommit.Remove(transaction);
+            return taken;
+        }
+
         /// <summary>
         /// One entry in the ambient chain: a boundary against one database.
         /// </summary>

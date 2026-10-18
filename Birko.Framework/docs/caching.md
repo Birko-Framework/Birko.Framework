@@ -191,7 +191,7 @@ await store.CreateAsync(newCustomer);                           // invalidates t
 
 Keys are `sql:{database id}:{table}:…`, so stores on different databases sharing one cache never see each other's rows. Every write (single and collection Create / Update / Delete, filter `UpdateAsync` / `DeleteAsync`, and `DestroyAsync`) removes the table's prefix afterwards. Invalidation does not take the caller's token, so a token cancelled after the write cannot skip it, and it also runs when the write throws.
 
-⚠ Inside a transaction the invalidation runs before the commit, so a reader outside the transaction can cache the pre-commit rows in between ([TASK-669](../tasks/EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-669-sql-cache-invalidates-before-commit.md)).
+Inside a transaction that invalidation runs before the commit, so a reader outside the transaction could cache the pre-commit rows in between. The write therefore also invalidates again **after** the commit (TASK-669): it registers that on the transaction (`AmbientSqlTransaction.OnCommitted`), and the boundary's owner — `SqlUnitOfWork`, or a bulk write's own transaction — runs it once after a successful commit and drops it on rollback. ⚠ A `DbTransaction` you hand in through `SetTransactionContext` and commit yourself, without a `SqlUnitOfWork`, has no owner to run it: that path keeps the window, so use `SqlUnitOfWork`.
 
 ### Configuration
 

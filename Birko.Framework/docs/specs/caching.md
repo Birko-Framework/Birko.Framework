@@ -1283,9 +1283,11 @@ written skipped it, and the cached reads served the pre-write rows until they ex
 when the base write threw, since a failed write may still have changed rows; an invalidation failure there
 is swallowed so the write's own exception reaches the caller.
 
-⚠ Known gap: inside a transaction the invalidation still runs when the write statement completes, i.e.
-**before** the commit, so a reader outside the transaction can re-cache the pre-commit rows between the
-invalidation and the commit (the half of SH-M044 spawned as TASK-669).
+Inside a transaction that invalidation runs when the write statement completes, before the commit, so a reader
+outside the transaction could re-cache the pre-commit rows in between. The store SHALL therefore also register,
+on the boundary's transaction (`AmbientSqlTransaction.OnCommitted`, keyed per store instance), a second
+invalidation that the boundary's owner runs once after a successful commit and drops on rollback (TASK-669). A
+`DbTransaction` the caller commits itself, without a `SqlUnitOfWork`, has no owner to run it.
 
 #### Scenario: A single-entity create clears cached queries
 
@@ -1317,11 +1319,23 @@ invalidation and the commit (the half of SH-M044 spawned as TASK-669).
 - **When** `DestroyAsync()` drops the table
 - **Then** the table prefix is invalidated and no read is served the dropped rows (SH-M046)
 
-#### Scenario: A transactional write invalidates before its commit
+#### Scenario: A transactional write invalidates again after its commit
 
-- **Given** a write inside a transaction on the store's database, and a reader outside it
-- **When** the write statement completes, the prefix is invalidated, and the outside reader reads before the commit
-- **Then** the outside reader can cache the pre-commit rows, which then survive the commit until expiry — a known gap tracked by TASK-669
+- **Given** a write inside a `SqlUnitOfWork` (ambient, or through `SetTransactionContext`) and a reader outside it that cached the pre-commit rows
+- **When** the unit of work commits
+- **Then** the table prefix is invalidated again and the next outside read returns the committed rows (TASK-669)
+
+#### Scenario: A rolled-back write runs no after-commit invalidation
+
+- **Given** a write inside a `SqlUnitOfWork`
+- **When** the unit of work rolls back
+- **Then** the registered invalidation is dropped, and the cached pre-write rows remain correct
+
+#### Scenario: Many writes in one boundary invalidate once after the commit
+
+- **Given** three writes through one store inside one `SqlUnitOfWork`
+- **When** it commits
+- **Then** exactly one after-commit invalidation runs
 
 #### Scenario: Invalidation is coarse
 

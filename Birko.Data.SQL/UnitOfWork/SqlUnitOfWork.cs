@@ -168,7 +168,16 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
             await ReleaseAfterFailureAsync();
             throw;
         }
+        // TASK-669: the work registered to run after this commit (AmbientSqlTransaction.OnCommitted) runs now, once.
+        // A callback's failure is recorded on the connector, never thrown: the transaction has committed.
+        await AmbientSqlTransaction.RunCommittedAsync(_transaction!, RecordAfterCommitFailure);
         await CleanupAsync();
+    }
+
+    private void RecordAfterCommitFailure(Exception error)
+    {
+        if (_connector is AbstractConnector connector)
+            connector.RecordSubscriberFailure("AfterCommit", error);
     }
 
     public async Task RollbackAsync(CancellationToken ct = default)
@@ -241,6 +250,8 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
         Context = null;
         if (_transaction is not null)
         {
+            // A commit has already taken its after-commit work; anything left belongs to a rollback.
+            AmbientSqlTransaction.DiscardCommitted(_transaction);
             await _transaction.DisposeAsync();
             _transaction = null;
         }
@@ -270,6 +281,7 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
             ExitAmbient();
             _cellScope.Dispose();
             _joined = null;
+            if (_transaction is not null) AmbientSqlTransaction.DiscardCommitted(_transaction);
             _transaction?.Dispose();
             _transaction = null;
             _connection?.Close();

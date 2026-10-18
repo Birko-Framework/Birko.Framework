@@ -335,12 +335,18 @@ namespace Birko.Data.SQL.Stores
         /// a transaction stops part-way), so it invalidates too; an invalidation failure there is swallowed, because
         /// the write's own exception is the one the caller needs. Invalidating more than necessary costs a miss.
         /// <para>
-        /// ⚠ Inside a transaction this still runs before the commit, so a reader outside the transaction can cache
-        /// the pre-commit rows between the invalidation and the commit (SH-M044, the half spawned as TASK-669).
+        /// Inside a transaction that first invalidation runs before the commit, so a reader outside the transaction
+        /// could cache the pre-commit rows in between, and that entry survived the commit for the whole TTL (SH-M044).
+        /// TASK-669: the write also registers a second invalidation to run once the boundary commits
+        /// (<see cref="AmbientSqlTransaction.OnCommitted"/>), run by its owner — <c>SqlUnitOfWork</c> or a bulk
+        /// write's own transaction — and dropped on rollback. ⚠ A caller that commits the <c>DbTransaction</c> it
+        /// handed in through <c>SetTransactionContext</c> itself, without a <c>SqlUnitOfWork</c>, has no owner to run
+        /// it, so that path keeps the pre-commit window.
         /// </para>
         /// </remarks>
         private async Task WriteThenInvalidateAsync(Func<Task> write)
         {
+            InvalidateAgainAfterCommit();
             try
             {
                 await write().ConfigureAwait(false);
@@ -359,6 +365,21 @@ namespace Birko.Data.SQL.Stores
             }
             await InvalidateCacheAsync().ConfigureAwait(false);
         }
+
+        /// <summary>
+        /// Registers this table's invalidation to run after the enclosing transaction commits, when the write runs
+        /// inside one (TASK-669). Keyed per store instance, so many writes in one boundary invalidate once, and two
+        /// stores over different caches each invalidate their own.
+        /// </summary>
+        private void InvalidateAgainAfterCommit()
+        {
+            if (Connector == null) return;
+            var transaction = TransactionContext?.Transaction ?? AmbientSqlTransaction.Find(Connector.Settings.GetId())?.Transaction;
+            if (transaction == null) return;
+            AmbientSqlTransaction.OnCommitted(transaction, _afterCommitKey, () => InvalidateCacheAsync());
+        }
+
+        private readonly string _afterCommitKey = "birko-sql-cache:" + Guid.NewGuid().ToString("N");
 
         // SH-L054: no Enabled check. A store with caching disabled still writes the table, and another store over
         // the same cache and table with caching enabled must not go on serving the rows it changed.

@@ -402,10 +402,22 @@ namespace Birko.Data.SQL.Connectors
                 }
                 catch (Exception ex)
                 {
-                    _subscriberFailures.Record(channel + " " + ex.GetType().FullName,
-                        new SubscriberFailure(channel, ex));
+                    RecordSubscriberFailure(channel, ex);
                 }
             }
+        }
+
+        /// <summary>
+        /// Records a callback's failure in <see cref="SubscriberFailures"/> under <paramref name="channel"/>, keyed by
+        /// (channel, exception type). The one recorder for <see cref="RaiseDiagnostic{T}"/> and for work that must not throw
+        /// at its caller, such as the after-commit callbacks a transaction owner runs
+        /// (<see cref="AmbientSqlTransaction.RunCommittedAsync"/>, channel <c>AfterCommit</c>, TASK-669).
+        /// </summary>
+        public void RecordSubscriberFailure(string channel, Exception error)
+        {
+            if (channel == null) throw new ArgumentNullException(nameof(channel));
+            if (error == null) throw new ArgumentNullException(nameof(error));
+            _subscriberFailures.Record(channel + " " + error.GetType().FullName, new SubscriberFailure(channel, error));
         }
 
         protected void RecordSchemaEscape(Exception ex, IEnumerable<string>? tableNames)

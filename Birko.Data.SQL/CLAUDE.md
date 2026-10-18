@@ -236,6 +236,13 @@ lifetime, and it composes across stores without the caller remembering to wire e
 - **A boundary stops resolving the instant its owner leaves** (`Entry.IsEnded`), even for a flow still
   holding a stale cell — because `DisposeAsync` cannot restore the cell either. Without it, a later read
   ran on a disposed connection.
+- **After-commit work (TASK-669).** `AmbientSqlTransaction.OnCommitted(transaction, key, callback)` registers work on
+  the boundary's `DbTransaction` (keyed by the transaction, not an ambient entry: an explicit context publishes a fresh
+  entry per operation, and a participant may run in another flow). The owner runs it once after a successful commit —
+  `SqlUnitOfWork.CommitAsync`, the bulk stores' `Atomically(Async)` — and drops it on rollback, a failed commit or
+  disposal; a joined participant's commit runs nothing. A callback's failure never fails the committed transaction: it
+  is recorded in the connector's `SubscriberFailures`, channel `AfterCommit` (rule 25). ⚠ A caller committing a
+  `DbTransaction` itself has no owner to run the callbacks; they are collected with the transaction.
 - **`SetTransactionContext` still exists and now works**, as store *instance* state routed through the
   same ambient mechanism, matching Mongo/Raven/Cosmos — with their caveat: safe only while the store is
   per-scope. It no longer touches the connector. Prefer `SqlUnitOfWork` for anything spanning stores.

@@ -1275,6 +1275,8 @@ On the SQL bulk stores, each public collection `Create` / `Update` / `Delete` (a
 store's `TransactionContext`, or an ambient SQL transaction for the same settings id — it joins that boundary;
 otherwise it opens a connection and transaction, publishes them as the ambient scope so every per-item write
 and a provider's native bulk insert join it, commits at the end and rolls back on any failure or cancellation.
+As that transaction's owner it SHALL run the work registered on it with `AmbientSqlTransaction.OnCommitted` once
+after the commit succeeds, and drop it on rollback or a failed commit (TASK-669).
 The collection `Create` SHALL translate a duplicate-key failure into the shared duplicate-create
 refusal, and the collection `Update` SHALL translate a unique-index violation into
 `StoreUniqueViolationException`, on the abstract bases and the SQL bulk stores alike (TASK-567, TASK-625,

@@ -124,18 +124,37 @@ namespace Birko.Data.SQL.Stores
             catch (Exceptions.EntityNotFoundException)
             {
                 scope.Dispose();
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
+                await CommitAndRunCallbacksAsync(transaction, ct).ConfigureAwait(false);
                 throw;
             }
             catch
             {
                 scope.Dispose();
+                AmbientSqlTransaction.DiscardCommitted(transaction);
                 // Not the caller's token: a cancelled batch must still be rolled back.
                 await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 throw;
             }
             scope.Dispose();
-            await transaction.CommitAsync(ct).ConfigureAwait(false);
+            await CommitAndRunCallbacksAsync(transaction, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Commits a batch's own transaction, then runs the work registered to follow it (TASK-669). A failed commit
+        /// discards that work; a callback's failure is recorded on the connector (channel <c>AfterCommit</c>).
+        /// </summary>
+        private async Task CommitAndRunCallbacksAsync(System.Data.Common.DbTransaction transaction, CancellationToken ct)
+        {
+            try
+            {
+                await transaction.CommitAsync(ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                AmbientSqlTransaction.DiscardCommitted(transaction);
+                throw;
+            }
+            await AmbientSqlTransaction.RunCommittedAsync(transaction, ex => Connector?.RecordSubscriberFailure("AfterCommit", ex)).ConfigureAwait(false);
         }
 
         /// <inheritdoc />

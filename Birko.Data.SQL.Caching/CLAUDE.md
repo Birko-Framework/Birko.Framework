@@ -15,7 +15,9 @@ Subclass of `AsyncDataBaseBulkStore<DB,T>` (overrides the `*Core` seams) that:
 - Does not read or fill the cache inside a transaction (`TransactionContext` or ambient), nor while a read-then-write
   `UpdateAsync(filter, Action)` runs (SH-H007)
 - Invalidates the table prefix after every write, including `DestroyAsync`, with no cancellation token and also when the
-  write threw. Inside a transaction that is before the commit: [[TASK-669]]
+  write threw. Inside a transaction it also registers a second invalidation that the boundary's owner runs after the
+  commit (`AmbientSqlTransaction.OnCommitted`, TASK-669); a `DbTransaction` committed by the caller itself (no
+  `SqlUnitOfWork`) has no owner to run it
 
 ### SqlCacheKeyBuilder
 - `BuildKey` (collection reads) and `BuildSingleKey` (single reads, `:one` suffix): SHA256 of the value-distinguishing

@@ -416,6 +416,35 @@ disposal.
 - **Then** the ambient entry is exited before `DbTransaction.CommitAsync` is awaited, so a store used
   during the commit cannot enlist in the transaction being ended
 
+### Requirement: SQL after-commit work runs once, after a successful commit
+
+The system SHALL let code inside a SQL transaction register work to run after it commits,
+`AmbientSqlTransaction.OnCommitted(transaction, key, callback)`, keyed by the `DbTransaction` (a second
+registration with the same key on the same transaction is ignored). The boundary's owner — `SqlUnitOfWork.CommitAsync`,
+and the SQL bulk stores' `Atomically` / `AtomicallyAsync` for the transaction they open — SHALL run the callbacks once
+after a successful commit and drop them on rollback, a failed commit or disposal; a joined participant's commit SHALL
+run nothing. A callback that throws SHALL NOT fail the commit or stop the next callback: its exception is recorded in
+the connector's `SubscriberFailures` under channel `AfterCommit` (TASK-669). A `DbTransaction` committed by its caller
+outside these owners runs no callbacks.
+
+#### Scenario: Callbacks run after the commit
+
+- **Given** a callback registered on a `SqlUnitOfWork`'s transaction
+- **When** `CommitAsync` succeeds
+- **Then** the callback has run exactly once
+
+#### Scenario: A failing callback is recorded, not thrown
+
+- **Given** two callbacks on one transaction, the first throwing
+- **When** `CommitAsync` runs
+- **Then** it completes, the second callback runs, and `SubscriberFailures` holds an `AfterCommit` entry for the exception
+
+#### Scenario: A rollback drops the callbacks
+
+- **Given** a callback registered on a `SqlUnitOfWork`'s transaction
+- **When** `RollbackAsync` runs
+- **Then** the callback never runs
+
 ### Requirement: A nested SQL unit of work joins the enclosing boundary
 
 The system SHALL, when `SqlUnitOfWork.BeginAsync` finds a live enclosing ambient boundary for the same
