@@ -133,6 +133,16 @@ namespace Birko.BackgroundJobs.Processing
         /// <param name="queueName">Optional queue name.</param>
         public void Register<TJob>(string name, TimeSpan interval, string? queueName = null) where TJob : IJob
         {
+            // SH-L004: a zero or negative interval made every tick enqueue the job, forever.
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ArgumentException("A recurring job needs a name.", nameof(name));
+            }
+            if (interval <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(interval), interval, "A recurring job's interval must be positive.");
+            }
+
             var definition = new RecurringJobDefinition
             {
                 Name = name,
@@ -225,7 +235,9 @@ namespace Birko.BackgroundJobs.Processing
                                     }
                                     continue;
                                 }
-                                def.NextRunAt = now.Add(def.Interval);
+                                // SH-L005: the next run follows the schedule, not the moment this tick observed it, so the
+                                // tick latency does not accumulate; occurrences missed while stopped are skipped, not replayed.
+                                def.NextRunAt = NextOccurrence(def.NextRunAt, def.Interval, now);
                                 def.LastRunAt = now;
                             }
                         }
@@ -233,7 +245,7 @@ namespace Birko.BackgroundJobs.Processing
 
                     try
                     {
-                        await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+                        await Task.Delay(NextTickDelay(_clock.UtcNow), cancellationToken).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
@@ -250,6 +262,42 @@ namespace Birko.BackgroundJobs.Processing
         /// <summary>
         /// Answers whether this tick may enqueue, acquiring or re-acquiring leadership as needed.
         /// </summary>
+        /// <summary>The longest the loop sleeps; also how quickly a newly registered job is first looked at.</summary>
+        internal static readonly TimeSpan MaxTick = TimeSpan.FromSeconds(1);
+
+        /// <summary>The shortest the loop sleeps, so a sub-second interval cannot spin it.</summary>
+        internal static readonly TimeSpan MinTick = TimeSpan.FromMilliseconds(10);
+
+        /// <summary>
+        /// The first occurrence after <paramref name="now"/> on the grid <paramref name="previous"/> + n ×
+        /// <paramref name="interval"/> (SH-L005).
+        /// </summary>
+        internal static DateTime NextOccurrence(DateTime previous, TimeSpan interval, DateTime now)
+        {
+            var next = previous.Add(interval);
+            if (next > now)
+            {
+                return next;
+            }
+            var missed = (now - next).Ticks / interval.Ticks + 1;
+            return next.AddTicks(missed * interval.Ticks);
+        }
+
+        /// <summary>
+        /// How long to sleep: until the earliest due job, between <see cref="MinTick"/> and <see cref="MaxTick"/>. A fixed
+        /// one-second sleep ran a 100 ms job about once a second (SH-L004).
+        /// </summary>
+        internal TimeSpan NextTickDelay(DateTime now)
+        {
+            var delay = MaxTick;
+            foreach (var def in _definitions.Values)
+            {
+                var until = def.NextRunAt - now;
+                if (until < delay) delay = until;
+            }
+            return delay < MinTick ? MinTick : delay;
+        }
+
         private async Task<bool> EnsureLeadershipAsync(CancellationToken cancellationToken)
         {
             // No provider is not "assume leadership": it is the uncoordinated behaviour every existing

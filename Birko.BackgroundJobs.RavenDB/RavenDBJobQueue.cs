@@ -50,6 +50,7 @@ namespace Birko.BackgroundJobs.RavenDB
 
         public async Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken cancellationToken = default)
         {
+            JobEnqueue.ResolveDelay(descriptor); // SH-L013
             var model = RavenJobDescriptorModel.FromDescriptor(descriptor);
             var id = await _store.CreateAsync(model, ct: cancellationToken).ConfigureAwait(false);
             return id;
@@ -215,19 +216,15 @@ namespace Birko.BackgroundJobs.RavenDB
             var deadStatus = (int)JobStatus.Dead;
             var cancelledStatus = (int)JobStatus.Cancelled;
 
-            var toPurge = await _store.ReadAsync(
-                filter: j => (j.Status == completedStatus || j.Status == deadStatus || j.Status == cancelledStatus)
-                          && j.CompletedAt != null && j.CompletedAt < cutoff,
-                ct: cancellationToken
-            ).ConfigureAwait(false);
-
-            var list = toPurge.ToList();
-            if (list.Count > 0)
+            // SH-L018: counted and deleted by filter, never loaded. It read every expired row into memory first, on a
+            // queue that nothing purged before SH-L010. (SQL, MongoDB and Elasticsearch delete natively.)
+            System.Linq.Expressions.Expression<Func<RavenJobDescriptorModel, bool>> expired = j => (j.Status == completedStatus || j.Status == deadStatus || j.Status == cancelledStatus) && j.CompletedAt != null && j.CompletedAt < cutoff;
+            var count = (int)await _store.CountAsync(expired, cancellationToken).ConfigureAwait(false);
+            if (count > 0)
             {
-                await _store.DeleteAsync(list, cancellationToken).ConfigureAwait(false);
+                await _store.DeleteAsync(expired, cancellationToken).ConfigureAwait(false);
             }
-
-            return list.Count;
+            return count;
         }
 
     }

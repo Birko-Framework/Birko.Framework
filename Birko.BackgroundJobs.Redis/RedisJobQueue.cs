@@ -263,6 +263,7 @@ namespace Birko.BackgroundJobs.Redis
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            JobEnqueue.ResolveDelay(descriptor); // SH-L013
             var db = _connectionManager.GetDatabase();
             var args = new List<RedisValue>
             {
@@ -402,24 +403,23 @@ namespace Birko.BackgroundJobs.Redis
             var statusKey = GetStatusKey(status);
 
             var members = await db.SetMembersAsync(statusKey).ConfigureAwait(false);
-            var result = new List<JobDescriptor>();
 
             // Redis sets are unordered, so materialize ALL members first, then order by EnqueuedAt and
             // take the newest `limit` — truncating before ordering returned an arbitrary subset (CR-M023).
-            foreach (var member in members)
+            // SH-L017: the hashes are requested together, so the connection pipelines them; one awaited round trip per
+            // member made a large status set cost one network round trip per job. It still reads every member: the set
+            // has no order to push the limit into (a sorted index would change the key layout; not done here).
+            var ids = members.Select(m => Guid.TryParse(m.ToString(), out var id) ? id : (Guid?)null).Where(id => id != null).Select(id => id!.Value).ToList();
+            cancellationToken.ThrowIfCancellationRequested();
+            var reads = ids.Select(id => db.HashGetAllAsync(GetJobKey(id))).ToList();
+            var hashes = await Task.WhenAll(reads).ConfigureAwait(false);
+
+            var result = new List<JobDescriptor>();
+            for (var i = 0; i < hashes.Length; i++)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (!Guid.TryParse(member.ToString(), out var jobId))
+                if (hashes[i].Length > 0)
                 {
-                    continue;
-                }
-
-                var jobKey = GetJobKey(jobId);
-                var fields = await db.HashGetAllAsync(jobKey).ConfigureAwait(false);
-                if (fields.Length > 0)
-                {
-                    result.Add(DeserializeDescriptor(fields));
+                    result.Add(DeserializeDescriptor(hashes[i]));
                 }
             }
 
@@ -561,9 +561,23 @@ namespace Birko.BackgroundJobs.Redis
             return entries.ToArray();
         }
 
+        private static readonly string[] RequiredFields = { "Id", "JobType", "Status", "Priority", "MaxRetries", "AttemptCount", "EnqueuedAt" };
+
         private JobDescriptor DeserializeDescriptor(HashEntry[] fields)
         {
             var dict = fields.ToDictionary(f => f.Name.ToString(), f => f.Value);
+            // SH-L015: a hash missing a required field is named, with the field, instead of an anonymous
+            // KeyNotFoundException. Enqueue writes the hash in one script since TASK-663, so only an outside change
+            // (a manual edit, an EXPIRE) can leave one; it is reported, not skipped, so it is not mistaken for absent.
+            foreach (var required in RequiredFields)
+            {
+                if (!dict.ContainsKey(required))
+                {
+                    var id = dict.TryGetValue("Id", out var idValue) ? idValue.ToString() : "?";
+                    throw new InvalidOperationException(
+                        $"The Redis job hash {KeyPrefix}:job:{id} has no '{required}' field; it was not written by EnqueueAsync or was changed since.");
+                }
+            }
 
             var descriptor = new JobDescriptor
             {

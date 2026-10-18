@@ -117,6 +117,22 @@ public class BackgroundJobsHostingTests
         services.BuildServiceProvider().GetRequiredService<IJobQueue>().Should().BeSameAs(durable);
     }
 
+    // ── SH-L009 (TASK-175): the default queue uses the options' retry policy ──
+
+    [Fact]
+    public async Task The_default_queue_takes_its_retry_policy_from_the_options()
+    {
+        var services = new ServiceCollection();
+        services.AddBackgroundJobs(o => o.Queue.RetryPolicy = new RetryPolicy { MaxRetries = 1, BaseDelay = TimeSpan.Zero });
+        var queue = services.BuildServiceProvider().GetRequiredService<IJobQueue>();
+
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", MaxRetries = null });
+        await queue.DequeueAsync();
+        await queue.FailAsync(id, "boom");
+
+        (await queue.GetAsync(id))!.Status.Should().Be(JobStatus.Dead, "the options allow one attempt; the default policy allowed three");
+    }
+
     // ── a job runs end to end, from its own scope ──
 
     [Fact]

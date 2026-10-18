@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Collections.Generic;
 using System;
 using System.Threading.Tasks;
 using Birko.BackgroundJobs;
@@ -131,5 +132,68 @@ public class JobQueueLiveTests(ITestOutputHelper output)
         var got = await Task.WhenAll(workers);
         got.Count(j => j != null).Should().Be(1, "one worker wins the reclaim");
         (await queue.GetAsync(id))!.AttemptCount.Should().Be(2);
+    }
+
+    // ── TASK-175 (SH-L013): a Delay on an enqueued descriptor is honoured, not dropped ──
+
+    [Fact]
+    public async Task TASK_175_SH_L013_a_delay_on_an_enqueued_descriptor_is_honoured()
+    {
+        if (Queue() is null) return;
+        var queue = Task664Queue(new RetryPolicy());
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", Delay = TimeSpan.FromHours(1) });
+        (await queue.DequeueAsync()).Should().BeNull("the job is not due for an hour");
+        var stored = (await queue.GetAsync(id))!;
+        stored.Status.Should().Be(JobStatus.Scheduled);
+        stored.ScheduledAt.Should().BeCloseTo(stored.EnqueuedAt.AddHours(1), TimeSpan.FromSeconds(1));
+    }
+
+    // ── TASK-175: SH-L015 / SH-L016 / SH-L017 ──
+
+    private static (RedisJobQueue Queue, string Prefix) Task175Queue()
+    {
+        var prefix = "birko:jobs:" + Guid.NewGuid().ToString("N");
+        return (new RedisJobQueue(new RedisSettings(Environment.GetEnvironmentVariable("BIRKO_REDIS_HOST")!) { KeyPrefix = prefix }), prefix);
+    }
+
+    [Fact]
+    public async Task TASK_175_SH_L015_a_hash_missing_a_required_field_is_named()
+    {
+        if (Queue() is null) return;
+        var (queue, prefix) = Task175Queue();
+        using var _ = queue;
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+        await queue.ConnectionManager.GetDatabase().HashDeleteAsync($"{prefix}:job:{id}", "AttemptCount");
+
+        var read = () => queue.GetAsync(id);
+        (await read.Should().ThrowAsync<InvalidOperationException>()).Which.Message.Should().Contain("AttemptCount").And.Contain(id.ToString());
+    }
+
+    [Fact]
+    public async Task TASK_175_SH_L016_a_queue_member_whose_hash_is_gone_does_not_stop_the_poll()
+    {
+        if (Queue() is null) return;
+        var (queue, prefix) = Task175Queue();
+        using var _ = queue;
+        var db = queue.ConnectionManager.GetDatabase();
+        var orphan = Guid.NewGuid().ToString();
+        await db.SortedSetAddAsync($"{prefix}:queue:default", orphan, DateTime.UtcNow.AddSeconds(-10).Ticks / 1e4);
+        var real = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+
+        (await queue.DequeueAsync())!.Guid.Should().Be(real, "the orphan is dropped and the poll moves on (TASK-663)");
+    }
+
+    [Fact]
+    public async Task TASK_175_SH_L017_status_listing_returns_the_newest_within_the_limit()
+    {
+        if (Queue() is null) return;
+        var (queue, _) = Task175Queue();
+        using var __ = queue;
+        var ids = new List<Guid>();
+        for (var i = 0; i < 30; i++)
+            ids.Add(await queue.EnqueueAsync(new JobDescriptor { JobType = "t", EnqueuedAt = DateTime.UtcNow.AddMinutes(i) }));
+
+        var newest = await queue.GetByStatusAsync(JobStatus.Pending, 5);
+        newest.Select(j => j.Guid).Should().Equal(ids.AsEnumerable().Reverse().Take(5));
     }
 }

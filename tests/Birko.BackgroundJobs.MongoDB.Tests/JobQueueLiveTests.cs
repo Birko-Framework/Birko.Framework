@@ -135,4 +135,20 @@ public class JobQueueLiveTests(ITestOutputHelper output)
         got.Count(j => j != null).Should().Be(1, "one worker wins the reclaim");
         (await queue.GetAsync(id))!.AttemptCount.Should().Be(2);
     }
+
+    // TASK-175 (SH-L018): the purge counts and deletes by filter on the server, keeping what is not terminal.
+    [Fact]
+    public async Task TASK_175_SH_L018_purge_deletes_terminal_jobs_by_filter()
+    {
+        if (Queue() is null) return;
+        var queue = Task664Queue(new RetryPolicy());
+        var done = await queue.EnqueueAsync(new JobDescriptor { JobType = "d" });
+        (await queue.DequeueAsync())!.Guid.Should().Be(done);
+        await queue.CompleteAsync(done);
+        var pending = await queue.EnqueueAsync(new JobDescriptor { JobType = "p" });
+
+        (await queue.PurgeAsync(TimeSpan.FromSeconds(-5))).Should().Be(1);
+        (await queue.GetAsync(done)).Should().BeNull();
+        (await queue.GetAsync(pending)).Should().NotBeNull();
+    }
 }

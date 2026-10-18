@@ -2,7 +2,7 @@
 id: TASK-175
 parent: STORY-054
 feature: FEATURE-014
-# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+# status: done | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 status: todo
 priority: P2
 assignee: ai
@@ -47,18 +47,18 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 24 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 24 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
-- [ ] Any behavioural fix is followed by `/specs regen background-jobs`, with the spec diff reviewed as the change's
+- [x] Any behavioural fix is followed by `/specs regen background-jobs`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
 
 ## Out of scope
 
@@ -73,12 +73,43 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A — fully covered by automated tests: a library contract with no UI surface; the backends are exercised live.
 
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-175` — leave empty until then._
+
+## Outcome (2026-10-18)
+
+**24 findings: 19 confirmed, 3 confirmed-narrower (SH-L014, SH-L015, SH-L017), 2 refuted (SH-L008, SH-L019).**
+Verdicts with `file:line` and the mechanism are in the findings doc.
+- **Fixed, grouped by root cause:**
+  - Processor: L001 (one loop at a time) and L010 (opt-in purge, `PurgeInterval`; user decision).
+  - Executor: L002 (type checked before it is built) and L003 (only reflection's wrapper unwrapped).
+  - Scheduler: L004 (interval validated, adaptive tick) and L005 (the grid kept).
+  - In-memory queue: L006 (duplicate refused) and L007 (copies).
+  - Hosting: L009 (the options' `RetryPolicy` used).
+  - Retry policies: L011 (`Random.Shared`) and L012 (attempt clamped to 1, doc fixed).
+  - Enqueue: L013 and L023 (`JobEnqueue.ResolveDelay` on all nine queues; JSON/XML stamp `EnqueuedAt`), and
+    L014 (null input refused).
+  - Redis: L015 (the missing field named) and L017 (reads pipelined).
+  - Purge: L018 (by filter).
+  - SQL lock: L020 (PostgreSQL waits via `lock_timeout`) and L022 (base-type dialect).
+  - Comment: L024.
+- **Found fixed / waived:** L016 fixed by TASK-663 and pinned. L017 still reads every member (waived: an ordered index
+  would change stored keys). L021 waived (a rolling deploy would lose exclusion).
+- **Spawned and fixed first: [[TASK-667]].** The live Elasticsearch purge test showed a job completed right after its
+  claim was never recorded: a regression from TASK-158's `update_by_query` transitions.
+- **Red check.** Production was reverted to HEAD, with the two new members the tests call (`PurgeInterval`,
+  `NextOccurrence`) stubbed to HEAD behaviour:
+  - Red: 13 core, 9 per-backend `Delay` (InMemory counted in core), 3 PostgreSQL lock, 1 Redis L015, 1 Hosting L009,
+    and the L014 permissive-serializer test.
+  - Hung on HEAD: the L001 concurrent-run test (a second loop started); its test host alone was stopped.
+  - Pins that pass either way: L001 stop-without-run, L014 default serializer, L016, L017, and the MongoDB and
+    Elasticsearch live purge tests (L018).
+- Tests needing doubles: the MongoDB and Elasticsearch doubles gained `DeleteAsync(filter)` (the stores delete natively).
+- Found on the way: the spec scenario "Stop … faults the caller" was stale since TASK-158 (SH-M010), and
+  `docs/background-jobs.md` used a non-existent `DefaultTimeout`; both corrected.
+
+**Regression, live:** all 102 test projects importing a changed project (Birko.Contracts, every BackgroundJobs project, the
+MongoDB / Elasticsearch / RavenDB / Cosmos DB data stores) green. Sandbox builds.

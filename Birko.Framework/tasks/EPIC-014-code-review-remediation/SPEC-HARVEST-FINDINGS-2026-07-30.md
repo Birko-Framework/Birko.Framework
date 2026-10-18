@@ -4393,11 +4393,15 @@ The create branch returns whatever CreateAsync returns; AsyncDataBaseStore.Creat
 
 `../Birko.BackgroundJobs/Processing/BackgroundJobProcessor.cs:33`
 
+**Verdict: CONFIRMED, fixed** (TASK-175). `BackgroundJobProcessor.RunAsync` (BackgroundJobProcessor.cs:33) created a linked token source per call, never disposed it, and a second call replaced `_cts`, so `Stop()` reached only the newer loop. The loop now owns a `using` token source, a second concurrent `RunAsync` throws `InvalidOperationException`, and `Stop()` with no loop running is documented as doing nothing. Red on HEAD: the concurrent-run test hung (a second loop started); `Stop` before run passes either way (a pin).
+
 `_cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)` is assigned per RunAsync call and never disposed, so each run leaks a registration on the caller's token (a long-lived host token accumulates them). A second RunAsync overwrites the field, so Stop() only affects the newest loop and the previous one runs forever; Stop() called before RunAsync hits `_cts?.Cancel()` on null and reports nothing.
 
 #### SH-L002 — JobExecutor's typed path never checks that the resolved type implements IJob<TInput>
 
 `../Birko.BackgroundJobs/Processing/JobExecutor.cs:65`
+
+**Verdict: CONFIRMED, fixed** (TASK-175). `JobExecutor` (JobExecutor.cs:65) built the stored type with the factory and invoked any `ExecuteAsync(TInput, JobContext, CancellationToken)` it found. The type is now checked against `IJob<TInput>` (or `IJob`) before the factory runs, and the method is taken from the interface. Red on HEAD: 2 tests (the factory ran).
 
 The parameterless branch guards with `job is IJob` (84) and fails cleanly otherwise, but the typed branch only does `jobType.GetMethod("ExecuteAsync", new[]{ inputType, typeof(JobContext), typeof(CancellationToken) })` and invokes whatever it finds. Any type with a coincidentally matching signature is constructed via the factory and invoked, and JobType/InputType come from persisted storage rather than from code, so a tampered or hand-written job row selects the type to instantiate with no interface check.
 
@@ -4405,11 +4409,15 @@ The parameterless branch guards with `job is IJob` (84) and fails cleanly otherw
 
 `../Birko.BackgroundJobs/Processing/JobExecutor.cs:100`
 
+**Verdict: CONFIRMED, fixed** (TASK-175). `ex.InnerException ?? ex` (JobExecutor.cs:100) unwrapped every exception; now only a `TargetInvocationException`. Red on HEAD.
+
 `var innerEx = ex.InnerException ?? ex;` is applied to every exception, not just TargetInvocationException. A job that throws its own wrapper (`throw new ImportFailedException("file 3 of 40 rejected", ioEx)`) has its message discarded and only the inner IOException text is persisted as LastError and surfaced in JobResult.Error, losing the context the wrapper existed to carry.
 
 #### SH-L004 — RecurringJobScheduler ignores sub-second intervals and accepts zero/negative ones without validation
 
 `../Birko.BackgroundJobs/Processing/RecurringJobScheduler.cs:82`
+
+**Verdict: CONFIRMED, fixed** (TASK-175). `Register` validated nothing and the loop slept a fixed 1 s (RecurringJobScheduler.cs:82). A blank name and a zero or negative interval are refused, and the loop sleeps until the earliest due run, between 10 ms and 1 s. Red on HEAD: 3 tests (a 100 ms job fired about once a second).
 
 The loop sleeps a hard-coded `TimeSpan.FromSeconds(1)` and enqueues each due definition at most once per iteration, so Register(name, TimeSpan.FromMilliseconds(100)) fires ~1x/s, not 10x/s, with no error or warning. Register (31-43) validates neither name nor interval: TimeSpan.Zero or a negative interval sets NextRunAt at or before now, so the job is enqueued on every tick forever.
 
@@ -4417,11 +4425,15 @@ The loop sleeps a hard-coded `TimeSpan.FromSeconds(1)` and enqueues each due def
 
 `../Birko.BackgroundJobs/Processing/RecurringJobScheduler.cs:75`
 
+**Verdict: CONFIRMED, fixed** (TASK-175). `def.NextRunAt = now.Add(def.Interval)` (RecurringJobScheduler.cs:75) let the tick latency accumulate. `NextOccurrence` advances along the definition's own grid and skips missed runs instead of replaying them. Red on HEAD (with `NextOccurrence` stubbed to the old `now + interval`). The unsynchronised write is not changed: only the scheduler's single loop writes a definition, and `Register` replaces the object rather than mutating it.
+
 `def.NextRunAt = now.Add(def.Interval)` uses the loop's observed `now` rather than the previous NextRunAt, so each firing adds the up-to-1s tick latency (plus the awaited EnqueueAsync duration) to the period. A '5 minutes' job slips a few seconds per run, so a job registered to align with a wall-clock time walks away from it indefinitely. The mutation also writes a shared definition object with no synchronization.
 
 #### SH-L006 — InMemoryJobQueue.EnqueueAsync silently overwrites an existing job with the same Id
 
 `../Birko.BackgroundJobs/Processing/InMemoryJobQueue.cs:35`
+
+**Verdict: CONFIRMED, fixed** (TASK-175). `_jobs[descriptor.Guid] = descriptor` (InMemoryJobQueue.cs:35) is now `TryAdd`; a duplicate id throws `InvalidOperationException` and the stored job is kept. Red on HEAD.
 
 `_jobs[descriptor.Id] = descriptor` is an upsert, so enqueuing a descriptor whose Id already exists (a caller retrying an enqueue after a timeout, or re-submitting one fetched from GetAsync) destroys the stored job's status/attempt history and returns success. Every store-backed backend inserts instead: AbstractAsyncJsonStore.CreateCoreAsync does `_items.Add(...)` which throws on a duplicate key, and a SQL insert violates the primary key.
 
@@ -4429,11 +4441,15 @@ The loop sleeps a hard-coded `TimeSpan.FromSeconds(1)` and enqueues each due def
 
 `../Birko.BackgroundJobs/Processing/InMemoryJobQueue.cs:120`
 
+**Verdict: CONFIRMED, fixed** (TASK-175). The queue stores and returns copies (`JobDescriptor.Clone`, metadata included) from Enqueue, Dequeue, Get and GetByStatus. Red on HEAD.
+
 GetAsync (119-120), GetByStatusAsync (125-129) and DequeueAsync (62) hand back the same JobDescriptor instances stored in `_jobs`. Every other backend materialises a fresh descriptor via ToDescriptor(). A consumer that adjusts a returned descriptor (Status, MaxRetries, Metadata) as if it were a snapshot silently rewrites the queue's state, so behaviour verified against the reference in-memory queue does not carry over to any persistent backend.
 
 #### SH-L008 — The dequeue SemaphoreSlim is never disposed because the queue types are not disposable
 
 `../Birko.BackgroundJobs/Processing/InMemoryJobQueue.cs:19`
+
+**Verdict: REFUTED** (TASK-175). A `SemaphoreSlim` allocates an OS wait handle only when `AvailableWaitHandle` is read, which nothing here does, so an undisposed one is reclaimed by the GC with nothing leaked. Since TASK-158 the JSON and XML gates are shared per file on purpose and must outlive any one queue, so disposing them per queue would be wrong.
 
 InMemoryJobQueue (19), JsonJobQueue (27) and XmlJobQueue (28) each own a `new SemaphoreSlim(1, 1)` but none implements IDisposable, so the semaphore's internal wait handle is never released. Any consumer that creates queues per scope or per tenant leaks one per instance; RedisJobQueue is disposable, so the family is inconsistent here too.
 
@@ -4441,11 +4457,15 @@ InMemoryJobQueue (19), JsonJobQueue (27) and XmlJobQueue (28) each own a `new Se
 
 `../Birko.BackgroundJobs/Core/JobQueueOptions.cs:29`
 
+**Verdict: CONFIRMED, fixed** (TASK-175). Nothing read `JobQueueOptions.RetryPolicy` (JobQueueOptions.cs:29). `AddBackgroundJobs` now gives its in-memory queue the options' `RetryPolicy`, and the property documents that a queue you construct takes its own. Red on HEAD (Hosting test: one attempt allowed, the default's three used).
+
 Documented as 'Default retry policy for jobs that don't specify their own', but a grep across the whole framework shows BackgroundJobProcessor reads only PollingInterval, MaxConcurrency, DefaultQueueName and JobTimeout. Each queue takes its own RetryPolicy? constructor argument, so configuring JobQueueOptions.RetryPolicy - the obvious place, given the type name - has no effect at all on backoff or on the retry budget.
 
 #### SH-L010 — JobQueueOptions.RetentionPeriod is never read and PurgeAsync is never called
 
 `../Birko.BackgroundJobs/Core/JobQueueOptions.cs:45`
+
+**Verdict: CONFIRMED, fixed** (TASK-175; decided by the user 2026-10-18: opt-in). New `JobQueueOptions.PurgeInterval` (default `null` = no purge); when set, the processor calls `PurgeAsync(RetentionPeriod)` at that interval and reports a failure through `PurgeFailed`. Nothing is deleted unless a host opts in. Red on HEAD.
 
 RetentionPeriod is documented as 'How long to keep completed/dead jobs before they are eligible for purging', but no file in the family reads it and nothing calls IJobQueue.PurgeAsync. An operator who sets RetentionPeriod reasonably expects retention to be enforced; instead terminal jobs accumulate without bound in every backend until a consumer writes its own purge loop.
 
@@ -4453,11 +4473,15 @@ RetentionPeriod is documented as 'How long to keep completed/dead jobs before th
 
 `../Birko.Contracts/Retry/RetryPolicy.cs:11`
 
+**Verdict: CONFIRMED, fixed** (TASK-175). `Birko.RetryPolicy` (Contracts RetryPolicy.cs:11) shared one `System.Random` without a lock; jitter now uses `System.Random.Shared`. No red test: the corruption is a data race whose symptom is probabilistic, so this is fixed by inspection and recorded as such.
+
 `private static readonly System.Random _jitterRandom = new();` is used from GetDelay (73) with no lock. System.Random is documented as not thread-safe; concurrent NextDouble() calls corrupt its internal state and can make it return 0 indefinitely, collapsing the jitter factor exactly when many callers retry at once - the thundering herd AddJitter exists to prevent. Random.Shared or a [ThreadStatic] instance is the fix.
 
 #### SH-L012 — BackgroundJobs.RetryPolicy does not clamp attemptNumber and its BaseDelay doc contradicts the formula
 
 `../Birko.BackgroundJobs/Core/RetryPolicy.cs:46`
+
+**Verdict: CONFIRMED, fixed** (TASK-175). `GetDelay` now clamps `attemptNumber` to at least 1, and the `BaseDelay` doc states the actual formula. Red on HEAD: 2 tests (0 gave 15 s, -3 gave 1.875 s). Also fixed: a TASK-662 edit had left `Default`'s summary stacked above `MaxRetriesFor`.
 
 `BaseDelay.Ticks * Math.Pow(2, attemptNumber - 1)` with attemptNumber = 0 gives half of BaseDelay and with -3 gives BaseDelay/16, while the otherwise-parallel Birko.RetryPolicy clamps to 1 for exactly this reason (CR-L095). Any FailAsync reached with AttemptCount == 0 (Cosmos double-dispatch, or a descriptor failed without being dequeued) schedules a shorter-than-configured retry. The BaseDelay doc at line 16 also states 'Multiplied by the attempt number', which is not what the body computes.
 
@@ -4465,11 +4489,15 @@ RetentionPeriod is documented as 'How long to keep completed/dead jobs before th
 
 `../Birko.BackgroundJobs/Core/JobDescriptor.cs:49`
 
+**Verdict: CONFIRMED, fixed** (TASK-175). No queue resolved `Delay` (JobDescriptor.cs:49). `JobEnqueue.ResolveDelay`, called by all nine queues' `EnqueueAsync`, stores a Delay-only descriptor Scheduled at `EnqueuedAt + Delay`. Red on HEAD on every backend: 9 tests (InMemory, JSON, XML, SQL, MongoDB, Elasticsearch, RavenDB, Cosmos DB, Redis live).
+
 Delay is documented as 'Delay before the job becomes eligible for processing' and ScheduledAt as 'EnqueuedAt + Delay', but no backing model has a Delay column/field and no queue derives ScheduledAt or Status from it. `new JobDescriptor { Delay = TimeSpan.FromHours(1) }` passed straight to EnqueueAsync runs immediately on every backend and the delay is silently dropped on the first round trip. Only JobDispatcher.ScheduleAsync resolves it, for its own callers.
 
 #### SH-L014 — JobDispatcher typed enqueue accepts a null input and produces a job that can only ever fail
 
 `../Birko.BackgroundJobs/Processing/JobDispatcher.cs:48`
+
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-175). With the default `JsonJobSerializer` a null input already threw (`SystemJsonSerializer` refuses null), so the claim holds only with a custom `IJobSerializer` that writes `"null"`. Both typed methods now refuse a null input themselves. Red on HEAD with such a serializer; the default-serializer test passes either way (a pin).
 
 EnqueueAsync<TJob, TInput>(input) and ScheduleAsync<TJob, TInput>(input, delay) call `_serializer.Serialize(input)` with no null check. A null input serializes to the string "null", so the descriptor is stored with a non-null SerializedInput and InputType; at execution JobExecutor deserializes it to null and returns 'Failed to deserialize job input' (JobExecutor.cs:61) on every attempt until the job goes Dead. The error surfaces minutes later in a worker rather than at the call site.
 
@@ -4477,11 +4505,15 @@ EnqueueAsync<TJob, TInput>(input) and ScheduleAsync<TJob, TInput>(input, delay) 
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:452`
 
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-175). The producing cause, a non-atomic enqueue, was removed by TASK-663. A hash missing a required field now throws `InvalidOperationException` naming the key and the field; it is not skipped, so a corrupt job is not mistaken for an absent one. Red on HEAD live (`KeyNotFoundException`).
+
 Id, JobType, Status, Priority, MaxRetries, AttemptCount and EnqueuedAt are read as `dict["..."]` while every optional field uses TryGetValue. A hash written by an older or partial enqueue (see the non-atomic enqueue finding), or truncated by an unrelated EXPIRE, makes DeserializeDescriptor throw KeyNotFoundException - and it is on the GetAsync, DequeueAsync, FailAsync and GetByStatusAsync paths, so one bad hash breaks GetByStatusAsync for the entire status set.
 
 #### SH-L016 — A Redis queue member whose job hash is gone aborts the whole dequeue poll
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:48`
+
+**Verdict: CONFIRMED, fixed by TASK-663** (verified at TASK-175). The dequeue script drops a member whose hash is gone or not runnable and moves to the next candidate. Pinned live (`TASK_175_SH_L016`); it passes on HEAD because TASK-663 is in.
 
 The Lua script takes the single lowest-scored member, ZREMs it, and `if redis.call('EXISTS', jobKey) == 0 then return nil end`. An orphan member (hash purged or expired while the member survived) therefore makes DequeueAsync return null even though other due jobs exist, so the processor sleeps a full PollingInterval per orphan instead of moving to the next candidate. The same early return also skips the status-set cleanup for that id.
 
@@ -4489,11 +4521,15 @@ The Lua script takes the single lowest-scored member, ZREMs it, and `if redis.ca
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:287`
 
+**Verdict: CONFIRMED-NARROWER, fixed in part** (TASK-175). The hashes are now requested together and pipelined instead of one awaited round trip each. Every member is still read: a Redis set has no order to push the limit into, and an ordered index would change the key layout of stored data. Waived for that reason. Pinned live; it passes either way.
+
 SetMembersAsync pulls every id in `{prefix}:status:{n}` and the loop does a separate awaited HashGetAllAsync per id before ordering and applying `limit`. GetByStatusAsync(Completed, 10) against a status set that has accumulated 100k completed jobs (which it will, since nothing calls PurgeAsync) performs 100k sequential round trips to return 10 descriptors. Every other backend pushes the limit into the query.
 
 #### SH-L018 — Store-backed PurgeAsync materialises every expired row before deleting
 
 `../Birko.BackgroundJobs.SQL/SqlJobQueue.cs:213`
+
+**Verdict: CONFIRMED, fixed** (TASK-175). The seven store-backed purges count and delete by filter (`CountAsync` + `DeleteAsync(filter)`) instead of loading the rows; SQL, MongoDB and Elasticsearch delete natively, while RavenDB, Cosmos DB, JSON and XML still read inside their base filtered delete. The live purge tests (MongoDB, Elasticsearch) pass on HEAD too (pins). The Elasticsearch one first exposed that a job completed right after its claim was never recorded: a TASK-158 regression, fixed as [[TASK-667]].
 
 PurgeAsync reads all matching rows with no limit and no batching, then passes the whole list to DeleteAsync (SQL:213, Mongo:198, ES:199, Raven:203, JSON:196, XML:193, Cosmos:158). On a queue that has run untended - and nothing calls PurgeAsync automatically - the first purge loads potentially millions of descriptors into memory. The bulk stores expose Delete(filter), which these same backends already use for native deletes elsewhere.
 
@@ -4501,11 +4537,15 @@ PurgeAsync reads all matching rows with no limit and no batching, then passes th
 
 `../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueue.cs:164`
 
+**Verdict: REFUTED** (TASK-175). `AsyncCosmosDBStore.ReadCoreAsync` returns a materialised `List<T>` (AsyncCosmosDBStore.cs ~505-513), so `Count()` and `DeleteAsync(results)` enumerated memory twice and queried once. Superseded anyway: the purge now counts and deletes by filter (SH-L018).
+
 `var count = results.Count();` followed by `await _store.DeleteAsync(results, ct)` enumerates the returned IEnumerable a second time. If the store returns a lazily evaluated sequence the Cosmos query is executed twice (double RU charge) and the reported count can disagree with the set actually deleted. The SQL/Mongo/ES/Raven/JSON/XML siblings all call ToList() once and use list.Count.
 
 #### SH-L020 — SqlJobLockProvider ignores the timeout on PostgreSQL
 
 `../Birko.BackgroundJobs.SQL/SqlJobLockProvider.cs:71`
+
+**Verdict: CONFIRMED, fixed** (TASK-175). PostgreSQL now waits with `SET lock_timeout` and a blocking `pg_advisory_lock` (SQLSTATE 55P03 means the wait ran out); a zero timeout stays a single `pg_try_advisory_lock`, because `lock_timeout = 0` means wait forever. It is a server-side wait, not the poll the old doc rejected. Red on HEAD live: 2 tests.
 
 The PostgreSQL branch issues `pg_try_advisory_lock`, which returns immediately, so TryAcquireAsync("jobs", TimeSpan.FromMinutes(1)) returns false the instant another session holds the lock; `timeout` only shapes cmd.CommandTimeout. The MSSql and MySQL branches genuinely wait for it. Callers written against the documented acquire semantics get a spuriously contended result on PostgreSQL under normal contention.
 
@@ -4513,11 +4553,15 @@ The PostgreSQL branch issues `pg_try_advisory_lock`, which returns immediately, 
 
 `../Birko.BackgroundJobs.SQL/SqlJobLockProvider.cs:183`
 
+**Verdict: CONFIRMED-NARROWER, waived** (TASK-175). The cross-release half was fixed by TASK-158: a provider releases only the name it holds. A djb2 collision between two real lock names remains possible in principle. Changing the key derivation would break mutual exclusion between old and new nodes during a rolling deploy, a worse failure than the one it removes. Recorded in the spec.
+
 GetLockKey folds the name with djb2 and masks the sign bit, and PostgreSQL locks on that number. Two lock names that collide serialise against each other invisibly (one worker blocks on a lock it never asked for), and combined with ReleaseAsync building the key from the caller-supplied name, releasing "queue-b" can unlock a colliding "queue-a". MSSql and MySQL pass the name through verbatim, so the collision behaviour differs by dialect.
 
 #### SH-L022 — SqlJobLockProvider picks its dialect from a connector type-name substring
 
 `../Birko.BackgroundJobs.SQL/SqlJobLockProvider.cs:160`
+
+**Verdict: CONFIRMED, fixed** (TASK-175). The dialect is now read from the connector type or any type it derives from, so `TenantDbConnector : PostgreSQLConnector` locks. `TimescaleDBConnector` derives from `PostgreSQLConnector` (TimescaleDBConnector.cs:45), so `SqlJobLockProvider<TimescaleDBConnector>` now takes the PostgreSQL lock where it resolved to `Other` and never locked; by construction, not tested live. An unknown dialect still returns `false`, a decision recorded at CR-M027 and pinned by `LockProvider_OnNonPostgres_ReturnsFalse_NotFalseSuccess`. Red on HEAD live.
 
 Dialect matches typeof(DB).Name against 'PostgreSQL'/'Postgres', 'MSSql'/'SqlServer' and 'MySQL', defaulting to Other. Any wrapped, renamed or consumer-supplied connector (a decorating TenantPostgresDbConnector, or MariaDbConnector) silently resolves to Other, at which point TryAcquireAsync returns false without opening a connection - indistinguishable from genuine contention, so callers cannot tell 'not supported here' from 'someone else holds it'.
 
@@ -4525,11 +4569,15 @@ Dialect matches typeof(DB).Name against 'PostgreSQL'/'Postgres', 'MSSql'/'SqlSer
 
 `../Birko.BackgroundJobs.JSON/JsonJobQueue.cs:55`
 
+**Verdict: CONFIRMED, fixed** (TASK-175). JSON and XML now stamp `EnqueuedAt` from the queue's clock, as InMemory does. Red on HEAD (asserted in the SH-L013 test on both).
+
 Both queues require a non-null clock and use it for eligibility, LastAttemptAt, CompletedAt, retry ScheduledAt and the purge cutoff, but EnqueueAsync copies the descriptor's EnqueuedAt straight through and JobDescriptor defaults it to the real DateTime.UtcNow. InMemoryJobQueue restamps it (line 34, CR-L017) precisely so the ThenBy(EnqueuedAt) ordering is deterministic under a test clock; on JSON/XML a TestDateTimeProvider cannot control dequeue order, so equal-priority FIFO behaviour stays wall-clock dependent.
 
 #### SH-L024 — XmlJobDescriptorModel's design comment names types that do not exist
 
 `../Birko.BackgroundJobs.XML/Models/XmlJobDescriptorModel.cs:108`
+
+**Verdict: CONFIRMED, fixed** (TASK-175). The comment now names `JobEnqueue.ResolveDelay` in every queue's `EnqueueAsync`, which since SH-L013 is what resolves Delay; the raw Delay-only path it called unsupported is supported.
 
 The CR-L033 comment justifies dropping Delay by asserting 'the enqueue pipeline (JobProcessor/JobScheduler) resolves Delay into ScheduledAt + Status=Scheduled before EnqueueAsync'. There is no JobProcessor or JobScheduler type; the resolver is JobDispatcher.ScheduleAsync, and RecurringJobScheduler never sets Delay at all. A reader looking for that guarantee finds nothing, and nothing rejects the 'not a supported path' raw Delay-only descriptor the comment describes.
 

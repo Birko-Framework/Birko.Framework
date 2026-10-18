@@ -107,4 +107,13 @@ public class InMemoryElasticStore<T> : AsyncElasticSearchStore<T> where T : Abst
         if (filter != null) q = q.Where(filter.Compile());
         return Task.FromResult((long)q.Count());
     }
+
+    // The store deletes by filter natively (TASK-175 purges through it), so the double must too.
+    public override Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+    {
+        var match = filter.Compile();
+        foreach (var item in _items.Values.Where(match).ToList())
+            if (item.Guid.HasValue) _items.TryRemove(item.Guid.Value, out _);
+        return Task.CompletedTask;
+    }
 }

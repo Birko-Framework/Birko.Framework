@@ -204,4 +204,17 @@ public class SqlJobLockAndLifecycleTests : IDisposable
         job.LastError.Should().StartWith("Abandoned: held in Processing");
         job.CompletedAt.Should().NotBeNull();
     }
+
+    // ── TASK-175 (SH-L013): a Delay on an enqueued descriptor is honoured, not dropped ──
+
+    [Fact]
+    public async Task TASK_175_SH_L013_a_delay_on_an_enqueued_descriptor_is_honoured()
+    {
+        var queue = Task664Queue(new RetryPolicy());
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", Delay = TimeSpan.FromHours(1) });
+        (await queue.DequeueAsync()).Should().BeNull("the job is not due for an hour");
+        var stored = (await queue.GetAsync(id))!;
+        stored.Status.Should().Be(JobStatus.Scheduled);
+        stored.ScheduledAt.Should().BeCloseTo(stored.EnqueuedAt.AddHours(1), TimeSpan.FromSeconds(1));
+    }
 }

@@ -16,6 +16,7 @@ namespace Birko.BackgroundJobs.Processing
         private readonly JobQueueOptions _options;
         private readonly SemaphoreSlim _concurrencySemaphore;
         private CancellationTokenSource? _cts;
+        private int _running;
 
         public BackgroundJobProcessor(IJobQueue queue, IJobExecutor executor, JobQueueOptions? options = null)
         {
@@ -26,25 +27,42 @@ namespace Birko.BackgroundJobs.Processing
         }
 
         /// <summary>
-        /// Starts the processor loop. Blocks until the cancellation token is triggered.
+        /// Starts the processor loop. Blocks until the cancellation token is triggered or <see cref="Stop"/> is called.
+        /// One loop per processor: a second concurrent call throws (SH-L001 — it replaced the token source, so
+        /// <see cref="Stop"/> reached only the newer loop and the first ran on). A loop may be started again once the
+        /// previous one has returned.
         /// </summary>
         public async Task RunAsync(CancellationToken cancellationToken = default)
         {
-            _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            if (Interlocked.CompareExchange(ref _running, 1, 0) != 0)
+            {
+                throw new InvalidOperationException("This processor is already running; a processor runs one loop at a time.");
+            }
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _cts = cts;
             var tasks = new List<Task>();
+            var nextPurgeAt = DateTime.UtcNow;
 
             try
             {
-                while (!_cts.Token.IsCancellationRequested)
+                while (!cts.Token.IsCancellationRequested)
                 {
                     // Clean up completed tasks
                     tasks.RemoveAll(t => t.IsCompleted);
+
+                    // SH-L010: an opt-in purge of terminal jobs older than RetentionPeriod, every PurgeInterval.
+                    if (_options.PurgeInterval is { } purgeInterval && DateTime.UtcNow >= nextPurgeAt)
+                    {
+                        nextPurgeAt = DateTime.UtcNow + purgeInterval;
+                        await PurgeAsync(cts.Token).ConfigureAwait(false);
+                    }
 
                     // SH-M010: a stop while waiting for a slot (the normal state at MaxConcurrency) ends the loop like
                     // every other wait in it; it used to throw out of RunAsync.
                     try
                     {
-                        await _concurrencySemaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
+                        await _concurrencySemaphore.WaitAsync(cts.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
@@ -54,7 +72,7 @@ namespace Birko.BackgroundJobs.Processing
                     JobDescriptor? descriptor;
                     try
                     {
-                        descriptor = await _queue.DequeueAsync(_options.DefaultQueueName, _cts.Token).ConfigureAwait(false);
+                        descriptor = await _queue.DequeueAsync(_options.DefaultQueueName, cts.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
@@ -67,7 +85,7 @@ namespace Birko.BackgroundJobs.Processing
                         _concurrencySemaphore.Release();
                         try
                         {
-                            await Task.Delay(_options.PollingInterval, _cts.Token).ConfigureAwait(false);
+                            await Task.Delay(_options.PollingInterval, cts.Token).ConfigureAwait(false);
                         }
                         catch (OperationCanceledException)
                         {
@@ -76,7 +94,7 @@ namespace Birko.BackgroundJobs.Processing
                         continue;
                     }
 
-                    var task = ProcessJobAsync(descriptor, _cts.Token);
+                    var task = ProcessJobAsync(descriptor, cts.Token);
                     tasks.Add(task);
                 }
             }
@@ -86,6 +104,36 @@ namespace Birko.BackgroundJobs.Processing
                 if (tasks.Count > 0)
                 {
                     await Task.WhenAll(tasks).ConfigureAwait(false);
+                }
+                _cts = null;
+                Volatile.Write(ref _running, 0);
+            }
+        }
+
+        /// <summary>
+        /// Raised when the opt-in purge (<see cref="JobQueueOptions.PurgeInterval"/>) failed; the loop goes on and tries
+        /// again at the next interval. A throwing handler is ignored.
+        /// </summary>
+        public event Action<Exception>? PurgeFailed;
+
+        private async Task PurgeAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await _queue.PurgeAsync(_options.RetentionPeriod, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    PurgeFailed?.Invoke(ex);
+                }
+                catch
+                {
+                    // A diagnostic channel must survive its own subscriber (rule 25).
                 }
             }
         }
@@ -97,11 +145,18 @@ namespace Birko.BackgroundJobs.Processing
         public event Action<JobDescriptor, Exception>? JobOutcomeNotRecorded;
 
         /// <summary>
-        /// Stops the processor gracefully.
+        /// Stops the running loop gracefully. With no loop running it does nothing: it does not stop a loop started later.
         /// </summary>
         public void Stop()
         {
-            _cts?.Cancel();
+            try
+            {
+                _cts?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // The loop ended (and disposed its token source) between the read and the cancel: nothing left to stop.
+            }
         }
 
         private async Task ProcessJobAsync(JobDescriptor descriptor, CancellationToken cancellationToken)

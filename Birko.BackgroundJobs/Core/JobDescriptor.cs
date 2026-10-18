@@ -46,7 +46,8 @@ namespace Birko.BackgroundJobs
         public int? MaxRetries { get; set; } = 3;
 
         /// <summary>
-        /// Delay before the job becomes eligible for processing.
+        /// Delay before the job becomes eligible for processing. Every queue resolves it at enqueue: with no
+        /// <see cref="ScheduledAt"/>, the job is stored Scheduled at <see cref="EnqueuedAt"/> + Delay (SH-L013).
         /// </summary>
         public TimeSpan? Delay { get; set; }
 
@@ -89,5 +90,13 @@ namespace Birko.BackgroundJobs
         /// Arbitrary metadata for the job.
         /// </summary>
         public Dictionary<string, string> Metadata { get; set; } = new();
+
+        /// <summary>A copy, metadata included, that shares no mutable state with this descriptor (SH-L007).</summary>
+        public JobDescriptor Clone()
+        {
+            var copy = (JobDescriptor)MemberwiseClone();
+            copy.Metadata = new Dictionary<string, string>(Metadata);
+            return copy;
+        }
     }
 }

@@ -130,8 +130,9 @@ var options = new JobQueueOptions
 {
     MaxConcurrency = 4,
     PollingInterval = TimeSpan.FromSeconds(5),
-    DefaultTimeout = TimeSpan.FromMinutes(30),
-    RetentionPeriod = TimeSpan.FromDays(7)
+    JobTimeout = TimeSpan.FromMinutes(30),
+    RetentionPeriod = TimeSpan.FromDays(7),
+    PurgeInterval = TimeSpan.FromHours(1) // opt-in: null (the default) purges nothing
 };
 
 var executor = new JobExecutor(type => serviceProvider.GetRequiredService(type));

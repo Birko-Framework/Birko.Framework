@@ -50,11 +50,10 @@ namespace Birko.BackgroundJobs.SQL
         /// The lock is held on a dedicated connection until released or disposed.
         /// </summary>
         /// <remarks>
-        /// <paramref name="acquireTimeout"/> is the wait for a current holder, which is what MSSql's
-        /// <c>@LockTimeout</c> and MySQL's <c>GET_LOCK</c> take. PostgreSQL's <c>pg_try_advisory_lock</c>
-        /// does not block at all, so it returns immediately whatever is passed — documented rather than
-        /// simulated, because busy-waiting to fake blocking would burn a connection and a core to no
-        /// benefit.
+        /// <paramref name="acquireTimeout"/> is the wait for a current holder, on every dialect: MSSql's
+        /// <c>@LockTimeout</c>, MySQL's <c>GET_LOCK</c>, and on PostgreSQL a blocking <c>pg_advisory_lock</c> bounded by
+        /// <c>lock_timeout</c> — a server-side wait, not a poll (SH-L020: <c>pg_try_advisory_lock</c> returned at once, so
+        /// a holder releasing a moment later read as contention). A zero timeout is a single try.
         /// <para>
         /// <paramref name="leaseDuration"/> must be <c>null</c>. A SQL advisory lock has no expiry: it is
         /// released explicitly or when the connection drops. Accepting a duration and silently ignoring it
@@ -109,9 +108,26 @@ namespace Birko.BackgroundJobs.SQL
                 switch (dialect)
                 {
                     case SqlDialect.PostgreSql:
-                        cmd.CommandText = $"SELECT pg_try_advisory_lock({GetLockKey(lockName)})";
-                        var pg = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-                        IsLocked = pg is bool b && b;
+                        if (acquireTimeout <= TimeSpan.Zero)
+                        {
+                            // lock_timeout = 0 means "wait forever", so no wait is a single try.
+                            cmd.CommandText = $"SELECT pg_try_advisory_lock({GetLockKey(lockName)})";
+                            var pg = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                            IsLocked = pg is bool b && b;
+                            break;
+                        }
+                        var waitMs = Math.Max(1L, (long)Math.Ceiling(acquireTimeout.TotalMilliseconds));
+                        cmd.CommandText = $"SET lock_timeout = {waitMs}; SELECT pg_advisory_lock({GetLockKey(lockName)}); SET lock_timeout = 0;";
+                        try
+                        {
+                            await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                            IsLocked = true;
+                        }
+                        catch (DbException ex) when (ex.SqlState == "55P03")
+                        {
+                            // lock_not_available: the wait ran out with the lock still held elsewhere.
+                            IsLocked = false;
+                        }
                         break;
 
                     case SqlDialect.MSSql:
@@ -215,19 +231,24 @@ namespace Birko.BackgroundJobs.SQL
         private enum SqlDialect { PostgreSql, MSSql, MySql, Other }
 
         /// <summary>
-        /// Which advisory-lock dialect to use, derived from the connector type name.
+        /// Which advisory-lock dialect to use, derived from the connector type's name or the name of a type it derives
+        /// from. SH-L022: only the type's own name was read, so a connector deriving from a provider's (a tenant-aware
+        /// PostgreSQL connector, a MariaDB one over MySQL) resolved to Other and never locked.
         /// </summary>
         private static SqlDialect Dialect
         {
             get
             {
-                var name = typeof(DB).Name;
-                if (name.Contains("PostgreSQL", StringComparison.OrdinalIgnoreCase) || name.Contains("Postgres", StringComparison.OrdinalIgnoreCase))
-                    return SqlDialect.PostgreSql;
-                if (name.Contains("MSSql", StringComparison.OrdinalIgnoreCase) || name.Contains("SqlServer", StringComparison.OrdinalIgnoreCase))
-                    return SqlDialect.MSSql;
-                if (name.Contains("MySQL", StringComparison.OrdinalIgnoreCase))
-                    return SqlDialect.MySql;
+                for (var type = typeof(DB); type != null && type != typeof(object); type = type.BaseType)
+                {
+                    var name = type.Name;
+                    if (name.Contains("PostgreSQL", StringComparison.OrdinalIgnoreCase) || name.Contains("Postgres", StringComparison.OrdinalIgnoreCase))
+                        return SqlDialect.PostgreSql;
+                    if (name.Contains("MSSql", StringComparison.OrdinalIgnoreCase) || name.Contains("SqlServer", StringComparison.OrdinalIgnoreCase))
+                        return SqlDialect.MSSql;
+                    if (name.Contains("MySQL", StringComparison.OrdinalIgnoreCase))
+                        return SqlDialect.MySql;
+                }
                 return SqlDialect.Other;
             }
         }

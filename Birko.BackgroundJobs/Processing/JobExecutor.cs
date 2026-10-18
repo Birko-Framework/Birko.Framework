@@ -39,6 +39,27 @@ namespace Birko.BackgroundJobs.Processing
                     return JobResult.Failed(stopwatch.Elapsed, $"Job type not found: {descriptor.JobType}");
                 }
 
+                // SH-L002: JobType and InputType come from storage, so the type is checked BEFORE the factory builds it.
+                // The typed path invoked any type with a matching ExecuteAsync signature, implementing IJob<T> or not.
+                var typedInput = descriptor.InputType != null && descriptor.SerializedInput != null;
+                Type? inputType = null;
+                if (typedInput)
+                {
+                    inputType = Type.GetType(descriptor.InputType!);
+                    if (inputType == null)
+                    {
+                        return JobResult.Failed(stopwatch.Elapsed, $"Input type not found: {descriptor.InputType}");
+                    }
+                    if (!typeof(IJob<>).MakeGenericType(inputType).IsAssignableFrom(jobType))
+                    {
+                        return JobResult.Failed(stopwatch.Elapsed, $"Job {jobType.Name} does not implement IJob<{inputType.Name}>");
+                    }
+                }
+                else if (!typeof(IJob).IsAssignableFrom(jobType))
+                {
+                    return JobResult.Failed(stopwatch.Elapsed, $"Job {jobType.Name} does not implement IJob");
+                }
+
                 var job = _jobFactory(jobType);
                 var context = new JobContext(
                     descriptor.Guid,
@@ -47,22 +68,16 @@ namespace Birko.BackgroundJobs.Processing
                     descriptor.Metadata
                 );
 
-                if (descriptor.InputType != null && descriptor.SerializedInput != null)
+                if (typedInput)
                 {
-                    var inputType = Type.GetType(descriptor.InputType);
-                    if (inputType == null)
-                    {
-                        return JobResult.Failed(stopwatch.Elapsed, $"Input type not found: {descriptor.InputType}");
-                    }
-
-                    var input = _serializer.Deserialize(descriptor.SerializedInput, inputType);
+                    var input = _serializer.Deserialize(descriptor.SerializedInput!, inputType!);
                     if (input == null)
                     {
                         return JobResult.Failed(stopwatch.Elapsed, "Failed to deserialize job input");
                     }
 
                     // Invoke IJob<TInput>.ExecuteAsync via reflection
-                    var executeMethod = jobType.GetMethod("ExecuteAsync", new[] { inputType, typeof(JobContext), typeof(CancellationToken) });
+                    var executeMethod = typeof(IJob<>).MakeGenericType(inputType!).GetMethod("ExecuteAsync");
                     if (executeMethod == null)
                     {
                         return JobResult.Failed(stopwatch.Elapsed, $"ExecuteAsync method not found on {jobType.Name}");
@@ -97,8 +112,10 @@ namespace Birko.BackgroundJobs.Processing
             catch (Exception ex)
             {
                 stopwatch.Stop();
-                var innerEx = ex.InnerException ?? ex;
-                return JobResult.Failed(stopwatch.Elapsed, innerEx.Message, innerEx);
+                // SH-L003: only reflection's own wrapper is unwrapped. Every exception's inner one was taken, so a job's
+                // ImportFailedException("file 3 of 40 rejected", ioEx) was reported as the bare IOException.
+                var thrown = ex is System.Reflection.TargetInvocationException { InnerException: { } inner } ? inner : ex;
+                return JobResult.Failed(stopwatch.Elapsed, thrown.Message, thrown);
             }
         }
     }

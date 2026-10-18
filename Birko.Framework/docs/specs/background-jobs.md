@@ -148,11 +148,11 @@ saturated at `MaxDelay`, with defaults `MaxRetries = 3`, `BaseDelay = 30s`, `Max
 - **When** `GetDelay(7)` is called
 - **Then** it returns 5 minutes
 
-#### Scenario: A zero attempt number yields a fraction of BaseDelay
+#### Scenario: An attempt number below one gets the full BaseDelay
 
 - **Given** `new RetryPolicy()` with `BaseDelay = 30s`
-- **When** `GetDelay(0)` is called
-- **Then** it returns 15 seconds, because the exponent `attemptNumber - 1` is `-1` and `2^-1 = 0.5`; this class does **not** clamp `attemptNumber` to a minimum of 1
+- **When** `GetDelay(0)` or `GetDelay(-3)` is called
+- **Then** it returns 30 seconds: `attemptNumber` is clamped to a minimum of 1, as `Birko.RetryPolicy` does (SH-L012; it returned 15 s and 1.875 s)
 
 #### Scenario: RetryPolicy.None disables retries
 
@@ -611,13 +611,13 @@ absent), and SHALL return via `GetByStatusAsync(status, limit)` the jobs in that
 
 - **Given** a Redis `{prefix}:status:3` set with 1000 members and `limit = 10`
 - **When** `GetByStatusAsync(JobStatus.Completed, 10)` is called
-- **Then** every member's hash is fetched (Redis sets are unordered), the results are then ordered by `EnqueuedAt` descending and only then truncated to 10 — so the call costs 1000 round trips
+- **Then** every member's hash is fetched (Redis sets are unordered), the results are then ordered by `EnqueuedAt` descending and only then truncated to 10. The hashes are requested together and pipelined on the connection (SH-L017; it was one awaited round trip per member), but every member is still read: the set has no order to push the limit into
 
-#### Scenario: The in-memory queue hands back live references
+#### Scenario: The in-memory queue hands back snapshots and refuses a duplicate id
 
 - **Given** an `InMemoryJobQueue`
-- **When** `GetAsync` or `GetByStatusAsync` or `DequeueAsync` returns a descriptor
-- **Then** it is the same `JobDescriptor` instance held in the internal `ConcurrentDictionary`, so a caller mutating it mutates the queue's state
+- **When** `GetAsync`, `GetByStatusAsync` or `DequeueAsync` returns a descriptor, or `EnqueueAsync` is given one
+- **Then** the caller gets or gives a copy (`JobDescriptor.Clone`), so mutating it does not change the queue, as on every other backend; enqueueing an id already queued throws `InvalidOperationException` and keeps the stored job (SH-L006 / SH-L007: it was an upsert of a shared instance)
 
 ### Requirement: Purge removes only terminal jobs older than the retention window
 
@@ -655,11 +655,17 @@ SHALL return the number of jobs removed.
 - **When** `PurgeAsync(olderThan)` is called
 - **Then** it iterates the `Completed`, `Dead` and `Cancelled` status sets, reads each member's `CompletedAt` tick field, and for each expired one deletes the job hash and removes the id from that status set
 
-#### Scenario: Purge is never invoked automatically
+#### Scenario: Purge runs only when a host opts in
 
-- **Given** a `BackgroundJobProcessor` configured with `JobQueueOptions.RetentionPeriod = 7 days`
+- **Given** a `BackgroundJobProcessor` with `JobQueueOptions.PurgeInterval = null` (the default)
 - **When** the processor runs indefinitely
-- **Then** `PurgeAsync` is never called; `RetentionPeriod` is not read anywhere in this capability and purging is entirely the consumer's responsibility
+- **Then** `PurgeAsync` is never called and nothing is deleted. With `PurgeInterval` set, the loop calls `PurgeAsync(RetentionPeriod)` at that interval; a failed purge raises `PurgeFailed` and is tried again at the next interval (SH-L010, decided by the user 2026-10-18: opt-in)
+
+#### Scenario: A store-backed purge counts and deletes by filter
+
+- **Given** a SQL, MongoDB, Elasticsearch, RavenDB, Cosmos DB, JSON or XML queue with expired terminal jobs
+- **When** `PurgeAsync(olderThan)` is called
+- **Then** it returns `CountAsync(expired)` and calls `DeleteAsync(expired)`; the queue no longer loads the rows (SH-L018; SQL, MongoDB and Elasticsearch delete natively)
 
 ### Requirement: Recurring scheduling is coordinated by leader election, and is opt-in
 
@@ -825,11 +831,17 @@ and `SerializedInput` are non-null, or `IJob.ExecuteAsync(context, ct)` otherwis
 - **When** `ExecuteAsync(descriptor)` is called
 - **Then** `JobResult.Failed` is returned with `"Job {typeName} does not implement IJob"`
 
-#### Scenario: A thrown exception is unwrapped one level
+#### Scenario: Only reflection's wrapper is unwrapped
 
 - **Given** a job whose body throws `InvalidOperationException("bad")`, surfaced through reflection as a `TargetInvocationException`
 - **When** `ExecuteAsync(descriptor)` is called
-- **Then** `JobResult.Failed` carries the *inner* exception (`ex.InnerException ?? ex`) and its `Message` as the error text
+- **Then** `JobResult.Failed` carries the `InvalidOperationException` and `"bad"`; a job's own exception with an inner one (`ImportFailedException("file 3 of 40 rejected", ioEx)`) is reported as itself, not as the inner `IOException` (SH-L003)
+
+#### Scenario: A stored type is checked before it is built
+
+- **Given** a descriptor whose `JobType` does not implement `IJob<TInput>` (or `IJob` when it has no input)
+- **When** `ExecuteAsync(descriptor)` is called
+- **Then** it fails with `"Job {name} does not implement IJob<{input}>"` and the job factory is never called (SH-L002: any type with a matching `ExecuteAsync` was built and invoked)
 
 #### Scenario: Cancellation is reported as a failure, not propagated
 
@@ -896,9 +908,9 @@ model a `SerializableMetadata`/`MetadataEntry` element wrapper, and Redis the qu
 
 #### Scenario: Redis requires the core hash fields to be present
 
-- **Given** a Redis job hash missing the `MaxRetries` field
+- **Given** a Redis job hash missing a required field (`Id`, `JobType`, `Status`, `Priority`, `MaxRetries`, `AttemptCount` or `EnqueuedAt`)
 - **When** `DeserializeDescriptor` runs
-- **Then** it throws `KeyNotFoundException`, because `Id`, `JobType`, `Status`, `Priority`, `MaxRetries`, `AttemptCount` and `EnqueuedAt` are read with the indexer rather than `TryGetValue`
+- **Then** it throws `InvalidOperationException` naming the hash key and the missing field (SH-L015; an anonymous `KeyNotFoundException`). Since TASK-663 enqueue writes the hash in one script, so only an outside change can produce one
 
 ### Requirement: Persisted status is trusted as-is and a null stored identity is replaced
 
@@ -918,16 +930,17 @@ stored `Guid` is null.
 - **When** `ToDescriptor()` is called
 - **Then** `descriptor.Guid` is a brand-new random `Guid`, so a subsequent `CompleteAsync(descriptor.Guid)` or `FailAsync(descriptor.Guid, …)` finds no job and silently no-ops
 
-### Requirement: Descriptor Delay is advisory and never persisted
+### Requirement: Descriptor Delay is resolved at enqueue on every backend
 
-The system SHALL treat `JobDescriptor.Delay` as an input to the enqueue caller only: no backing
-model persists it, and no queue derives `ScheduledAt` or `Status` from it.
+The system SHALL, in every queue's `EnqueueAsync`, resolve a `JobDescriptor.Delay` with no `ScheduledAt` into
+`ScheduledAt = EnqueuedAt + Delay` and, for a Pending job, `Status = Scheduled` (`JobEnqueue.ResolveDelay`). No backing
+model persists `Delay` itself. JSON and XML stamp `EnqueuedAt` from the queue's clock first, as InMemory does (SH-L023).
 
-#### Scenario: A Delay-only descriptor runs immediately
+#### Scenario: A Delay-only descriptor waits
 
 - **Given** a descriptor with `Delay = TimeSpan.FromHours(1)`, `ScheduledAt = null` and `Status = Pending`
 - **When** it is enqueued and `DequeueAsync()` is called
-- **Then** the job is returned at once, because eligibility looks only at `Status` and `ScheduledAt`
+- **Then** nothing is returned, and the stored job is Scheduled at `EnqueuedAt + 1h`, on every backend (SH-L013: it ran at once and the delay was dropped)
 
 #### Scenario: The dispatcher resolves Delay for the caller
 
@@ -1010,7 +1023,13 @@ rethrows cancellation.
 
 - **Given** a running processor
 - **When** `Stop()` is called
-- **Then** the linked `CancellationTokenSource` is cancelled and the `finally` block awaits `Task.WhenAll` over the recorded job tasks; `RunAsync` returns normally only when the cancellation is observed by `DequeueAsync` or by the polling `Task.Delay`, which each catch `OperationCanceledException` and `break` — when it is observed by `await _concurrencySemaphore.WaitAsync(_cts.Token)`, which sits outside every `catch` (the normal state at `MaxConcurrency`), that exception propagates out of `RunAsync` after the in-flight wait and faults the caller's task
+- **Then** the loop's linked `CancellationTokenSource` is cancelled, the `finally` block awaits the recorded job tasks, and `RunAsync` returns normally wherever the cancellation is observed, the wait for a free slot included (SH-M010). The token source is disposed when the loop returns (SH-L001); `Stop()` with no loop running does nothing
+
+#### Scenario: A processor runs one loop at a time
+
+- **Given** a processor whose `RunAsync` is running
+- **When** `RunAsync` is called again
+- **Then** it throws `InvalidOperationException`; once the first loop has returned the processor can be run again. A second call used to replace the token source, so `Stop()` reached only the newer loop and the first ran on (SH-L001)
 
 #### Scenario: A queue-reporting failure escapes the job task
 
@@ -1058,10 +1077,12 @@ the underlying queue.
 ### Requirement: Recurring job scheduling
 
 The system SHALL let a caller register named recurring jobs with a fixed interval via
-`RecurringJobScheduler.Register<TJob>(name, interval, queueName)`, set the first run to
-`clock.UtcNow + interval`, and — in `RunAsync` — once per second enqueue every definition whose
-`NextRunAt` has passed, tagging each enqueued descriptor with `Metadata["recurring.name"]` and
-advancing `NextRunAt` to the loop's observed `now + interval`.
+`RecurringJobScheduler.Register<TJob>(name, interval, queueName)` — refusing a blank name and a zero or negative
+interval — set the first run to `clock.UtcNow + interval`, and — in `RunAsync` — enqueue every definition whose
+`NextRunAt` has passed, tagging each enqueued descriptor with `Metadata["recurring.name"]` and advancing `NextRunAt`
+along its own grid (`NextOccurrence`: the previous run plus whole intervals, skipping missed ones). The loop sleeps
+until the earliest due run, between 10 ms and 1 s (SH-L004: a fixed 1 s ran a 100 ms job about once a second, and a
+zero interval enqueued every tick; SH-L005: `now + interval` let the tick latency accumulate, so a schedule drifted).
 
 #### Scenario: A registered job first fires one interval later
 
@@ -1114,10 +1135,10 @@ advancing `NextRunAt` to the loop's observed `now + interval`.
 ### Requirement: SQL advisory-lock provider
 
 The system SHALL provide `SqlJobLockProvider<DB>` which acquires a named advisory lock on a
-dedicated connection, choosing the statement from the connector type *name* —
-`pg_try_advisory_lock` for PostgreSQL, `sp_getapplock` (session-owned, exclusive) for MSSql,
-`GET_LOCK` for MySQL — and SHALL return `false` without opening a connection for any other
-connector.
+dedicated connection, choosing the statement from the name of the connector type or a type it derives from
+(SH-L022) — `pg_advisory_lock` under `lock_timeout` for PostgreSQL (`pg_try_advisory_lock` for a zero timeout),
+`sp_getapplock` (session-owned, exclusive) for MSSql, `GET_LOCK` for MySQL — and SHALL return `false` without opening a
+connection for any other connector.
 
 #### Scenario: SQLite cannot take a cross-connection lock
 
@@ -1129,13 +1150,19 @@ connector.
 
 - **Given** `SqlJobLockProvider<PostgreSQLConnector>` and lock name `"jobs"`
 - **When** the lock is taken
-- **Then** the statement is `SELECT pg_try_advisory_lock(<djb2("jobs") & 0x7FFFFFFFFFFFFFFF>)`, and two distinct lock names that collide under that hash share one lock
+- **Then** the key is `djb2("jobs") & 0x7FFFFFFFFFFFFFFF`, and two distinct lock names that collide under that hash share one lock (SH-L021, waived: a provider releases only the name it holds since TASK-158, and changing the key would break mutual exclusion between old and new nodes during a rolling deploy)
 
-#### Scenario: The PostgreSQL path ignores the timeout
+#### Scenario: The PostgreSQL path waits up to the timeout
 
-- **Given** a PostgreSQL provider called with `acquireTimeout = TimeSpan.FromMinutes(1)`
-- **When** another session already holds the lock
-- **Then** `pg_try_advisory_lock` returns immediately with `false` — the timeout only shapes `cmd.CommandTimeout`, it does not make the acquisition wait
+- **Given** a PostgreSQL provider called with `acquireTimeout = 5s` while another session holds the lock
+- **When** the holder releases it after 0.5 s
+- **Then** the call returns `true` after waiting; against a holder that keeps it, it returns `false` once the timeout has passed (`lock_timeout`, SQLSTATE 55P03). It used to answer `false` at once (SH-L020)
+
+#### Scenario: A connector deriving from a provider's takes that provider's lock
+
+- **Given** `SqlJobLockProvider<TenantDbConnector>` where `TenantDbConnector : PostgreSQLConnector`
+- **When** `TryAcquireAsync` is called
+- **Then** it takes the PostgreSQL advisory lock; reading only the type's own name resolved it to `Other`, which never locks (SH-L022)
 
 #### Scenario: MSSql grant is read from the return value
 

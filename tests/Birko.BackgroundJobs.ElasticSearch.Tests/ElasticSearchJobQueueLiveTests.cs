@@ -172,4 +172,29 @@ public sealed class ElasticSearchJobQueueLiveTests : IDisposable
         got.Count(j => j != null).Should().Be(1, "one worker wins the reclaim");
         (await queue.GetAsync(id))!.AttemptCount.Should().Be(2);
     }
+
+    // TASK-175 (SH-L018): the purge counts and deletes by filter (delete_by_query), keeping what is not terminal.
+    [Fact]
+    public async Task TASK_175_SH_L018_purge_deletes_terminal_jobs_by_filter()
+    {
+        if (string.IsNullOrWhiteSpace(Url))
+        {
+            _output.WriteLine("SKIPPED: no live Elasticsearch. Set BIRKO_ES_URL.");
+            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE")))
+                throw new InvalidOperationException("BIRKO_REQUIRE_LIVE is set but BIRKO_ES_URL is not.");
+            return;
+        }
+        var queue = Task664Queue(new RetryPolicy());
+        var done = await queue.EnqueueAsync(new JobDescriptor { JobType = "d" });
+        await Refresh();
+        (await queue.DequeueAsync())!.Guid.Should().Be(done);
+        await queue.CompleteAsync(done);
+        var pending = await queue.EnqueueAsync(new JobDescriptor { JobType = "p" });
+        await Refresh();
+
+        (await queue.PurgeAsync(TimeSpan.FromSeconds(-5))).Should().Be(1);
+        await Refresh();
+        (await queue.GetAsync(done)).Should().BeNull();
+        (await queue.GetAsync(pending)).Should().NotBeNull();
+    }
 }

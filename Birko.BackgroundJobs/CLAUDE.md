@@ -152,4 +152,7 @@ Tests should be created in `Birko.BackgroundJobs.Tests` covering:
   `JobReclaim.DefaultClaimTimeout` = 30 min = `JobQueueOptions.JobTimeout`'s default), one winner per reclaim, and
   buries it as Dead with `JobReclaim.AbandonedError` when its budget is spent (TASK-664). A host that raises
   `JobTimeout` must raise the queue's `claimTimeout`; `AddBackgroundJobs` does that for its in-memory queue.
+- TASK-175: every queue resolves `Delay` at enqueue (`JobEnqueue.ResolveDelay`); the in-memory queue refuses a duplicate
+  id and hands out copies; a processor runs one loop at a time; purging is opt-in (`JobQueueOptions.PurgeInterval`,
+  null = off) and store-backed purges delete by filter; `AddBackgroundJobs` uses the options' `RetryPolicy`.
 

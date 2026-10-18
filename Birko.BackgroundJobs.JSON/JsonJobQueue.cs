@@ -86,6 +86,9 @@ namespace Birko.BackgroundJobs.JSON
 
         private async Task<Guid> EnqueueCoreAsync(JobDescriptor descriptor, CancellationToken cancellationToken)
         {
+            // SH-L023: stamped from the queue's clock, as InMemoryJobQueue does (CR-L017), so dequeue order follows it.
+            descriptor.EnqueuedAt = _clock.UtcNow;
+            JobEnqueue.ResolveDelay(descriptor); // SH-L013
             var model = JsonJobDescriptorModel.FromDescriptor(descriptor);
             var id = await _store.CreateAsync(model, ct: cancellationToken).ConfigureAwait(false);
             return id;
@@ -321,19 +324,15 @@ namespace Birko.BackgroundJobs.JSON
             var deadStatus = (int)JobStatus.Dead;
             var cancelledStatus = (int)JobStatus.Cancelled;
 
-            var toPurge = await _store.ReadAsync(
-                filter: j => (j.Status == completedStatus || j.Status == deadStatus || j.Status == cancelledStatus)
-                          && j.CompletedAt != null && j.CompletedAt < cutoff,
-                ct: cancellationToken
-            ).ConfigureAwait(false);
-
-            var list = toPurge.ToList();
-            if (list.Count > 0)
+            // SH-L018: counted and deleted by filter, never loaded. It read every expired row into memory first, on a
+            // queue that nothing purged before SH-L010. (SQL, MongoDB and Elasticsearch delete natively.)
+            System.Linq.Expressions.Expression<Func<JsonJobDescriptorModel, bool>> expired = j => (j.Status == completedStatus || j.Status == deadStatus || j.Status == cancelledStatus) && j.CompletedAt != null && j.CompletedAt < cutoff;
+            var count = (int)await _store.CountAsync(expired, cancellationToken).ConfigureAwait(false);
+            if (count > 0)
             {
-                await _store.DeleteAsync(list, cancellationToken).ConfigureAwait(false);
+                await _store.DeleteAsync(expired, cancellationToken).ConfigureAwait(false);
             }
-
-            return list.Count;
+            return count;
         }
     }
 }

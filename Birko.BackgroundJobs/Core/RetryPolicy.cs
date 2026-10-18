@@ -13,8 +13,8 @@ namespace Birko.BackgroundJobs
         public int MaxRetries { get; set; } = 3;
 
         /// <summary>
-        /// Base delay between retries. Multiplied by the attempt number for exponential backoff.
-        /// Default is 30 seconds.
+        /// Delay before the first retry. With exponential backoff, attempt n waits BaseDelay × 2^(n−1), capped at
+        /// <see cref="MaxDelay"/>. Default is 30 seconds.
         /// </summary>
         public TimeSpan BaseDelay { get; set; } = TimeSpan.FromSeconds(30);
 
@@ -34,6 +34,9 @@ namespace Birko.BackgroundJobs
         /// </summary>
         public TimeSpan GetDelay(int attemptNumber)
         {
+            // SH-L012: attempt numbers start at 1. Below that the exponent went negative and the delay shrank below
+            // BaseDelay (0 gave half of it), as Birko.RetryPolicy already guards against (CR-L095).
+            attemptNumber = Math.Max(1, attemptNumber);
             if (!UseExponentialBackoff)
             {
                 return BaseDelay;
@@ -50,14 +53,14 @@ namespace Birko.BackgroundJobs
         }
 
         /// <summary>
-        /// Default retry policy: 3 retries with exponential backoff starting at 30s.
-        /// </summary>
-        /// <summary>
         /// How many attempts a job gets (TASK-662): its own <see cref="JobDescriptor.MaxRetries"/> when set, otherwise this
         /// policy's <see cref="MaxRetries"/>. The one producer every queue asks, so the nine backends cannot disagree again.
         /// </summary>
         public int MaxRetriesFor(int? jobMaxRetries) => jobMaxRetries ?? MaxRetries;
 
+        /// <summary>
+        /// Default retry policy: 3 retries with exponential backoff starting at 30s.
+        /// </summary>
         public static RetryPolicy Default => new();
 
         /// <summary>

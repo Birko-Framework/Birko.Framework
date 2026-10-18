@@ -267,4 +267,18 @@ public class JsonJobQueueTests : IDisposable
         got.Count(j => j != null).Should().Be(1, "one worker wins the reclaim");
         (await queue.GetAsync(id))!.AttemptCount.Should().Be(2);
     }
+
+    // ── TASK-175 (SH-L013): a Delay on an enqueued descriptor is honoured, not dropped ──
+
+    [Fact]
+    public async Task TASK_175_SH_L013_a_delay_on_an_enqueued_descriptor_is_honoured()
+    {
+        var queue = new JsonJobQueue(new Birko.Configuration.Settings(_location, "jobs"), _clock);
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", Delay = TimeSpan.FromHours(1) });
+        (await queue.DequeueAsync()).Should().BeNull("the job is not due for an hour");
+        var stored = (await queue.GetAsync(id))!;
+        stored.Status.Should().Be(JobStatus.Scheduled);
+        stored.ScheduledAt.Should().BeCloseTo(stored.EnqueuedAt.AddHours(1), TimeSpan.FromSeconds(1));
+        stored.EnqueuedAt.Should().Be(_clock.UtcNow, "SH-L023: stamped from the queue's clock");
+    }
 }

@@ -24,7 +24,8 @@ namespace Birko.BackgroundJobs
         public string DefaultQueueName { get; set; } = "default";
 
         /// <summary>
-        /// Default retry policy for jobs that don't specify their own.
+        /// Retry policy for the in-memory queue <c>AddBackgroundJobs</c> registers (Birko.BackgroundJobs.Hosting). A queue
+        /// you construct yourself takes its own <c>RetryPolicy</c> constructor argument; nothing else reads this (SH-L009).
         /// </summary>
         public RetryPolicy RetryPolicy { get; set; } = new()
         {
@@ -40,9 +41,15 @@ namespace Birko.BackgroundJobs
         public TimeSpan JobTimeout { get; set; } = JobReclaim.DefaultClaimTimeout;
 
         /// <summary>
-        /// How long to keep completed/dead jobs before they are eligible for purging.
-        /// Default is 7 days.
+        /// How long to keep completed, dead and cancelled jobs before the purge removes them. Default is 7 days. Used only
+        /// when <see cref="PurgeInterval"/> is set (SH-L010).
         /// </summary>
         public TimeSpan RetentionPeriod { get; set; } = TimeSpan.FromDays(7);
+
+        /// <summary>
+        /// How often the processor purges terminal jobs older than <see cref="RetentionPeriod"/>. <c>null</c> — the
+        /// default — purges nothing, so nothing is deleted unless a host opts in (SH-L010, decided by the user 2026-10-18).
+        /// </summary>
+        public TimeSpan? PurgeInterval { get; set; }
     }
 }

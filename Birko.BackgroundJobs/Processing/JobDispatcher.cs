@@ -41,6 +41,8 @@ namespace Birko.BackgroundJobs.Processing
             where TJob : IJob<TInput>
             where TInput : class
         {
+            // SH-L014: a null input serialised to "null" and failed on every attempt, minutes later, in a worker.
+            ArgumentNullException.ThrowIfNull(input);
             var descriptor = new JobDescriptor
             {
                 JobType = typeof(TJob).AssemblyQualifiedName!,
@@ -73,6 +75,8 @@ namespace Birko.BackgroundJobs.Processing
             where TJob : IJob<TInput>
             where TInput : class
         {
+            // SH-L014: a null input serialised to "null" and failed on every attempt, minutes later, in a worker.
+            ArgumentNullException.ThrowIfNull(input);
             var now = _clock.UtcNow;
             var descriptor = new JobDescriptor
             {

@@ -8,7 +8,6 @@ namespace Birko
     /// </summary>
     public class RetryPolicy
     {
-        private static readonly System.Random _jitterRandom = new();
         /// <summary>
         /// Maximum number of retry attempts. Default is 3.
         /// </summary>
@@ -70,7 +69,7 @@ namespace Birko
             if (!AddJitter)
                 return delay;
 
-            var jitterFactor = 0.75 + (_jitterRandom.NextDouble() * 0.5);
+            var jitterFactor = 0.75 + (System.Random.Shared.NextDouble() /* SH-L011: thread-safe; a shared Random is not */ * 0.5);
             return TimeSpan.FromTicks((long)(delay.Ticks * jitterFactor));
         }
 

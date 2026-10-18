@@ -36,7 +36,13 @@ namespace Birko.BackgroundJobs.Processing
             // (the descriptor default is DateTime.UtcNow, set before it reaches the clock-aware queue) —
             // this makes enqueue time and the ThenBy(EnqueuedAt) dequeue ordering test-deterministic (CR-L017).
             descriptor.EnqueuedAt = _clock.UtcNow;
-            _jobs[descriptor.Guid] = descriptor;
+            JobEnqueue.ResolveDelay(descriptor);
+            // SH-L006: an insert, as on every store-backed queue; it was an upsert that silently replaced a stored job's
+            // status and history. SH-L007: the queue keeps its own copy, so the caller's object is not its state.
+            if (!_jobs.TryAdd(descriptor.Guid, descriptor.Clone()))
+            {
+                throw new InvalidOperationException($"A job with id {descriptor.Guid} is already queued.");
+            }
             return Task.FromResult(descriptor.Guid);
         }
 
@@ -76,7 +82,7 @@ namespace Birko.BackgroundJobs.Processing
                     candidate.AttemptCount++;
                     candidate.LastAttemptAt = now;
 
-                    return candidate;
+                    return candidate.Clone();
                 }
             }
             finally
@@ -160,8 +166,9 @@ namespace Birko.BackgroundJobs.Processing
 
         public Task<JobDescriptor?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
+            // SH-L007: a snapshot, as every other backend returns; the stored descriptor is the queue's state.
             _jobs.TryGetValue(jobId, out var descriptor);
-            return Task.FromResult(descriptor);
+            return Task.FromResult(descriptor?.Clone());
         }
 
         /// <summary>
@@ -183,6 +190,7 @@ namespace Birko.BackgroundJobs.Processing
                 .Where(j => j.Status == status)
                 .OrderByDescending(j => j.EnqueuedAt)
                 .Take(limit)
+                .Select(j => j.Clone())
                 .ToList();
 
             return Task.FromResult<IReadOnlyList<JobDescriptor>>(result);

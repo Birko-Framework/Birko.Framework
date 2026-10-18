@@ -60,6 +60,13 @@ now imports Birko.AI.Contracts, as the dependency graph already drew it; every c
 Source-compatible additions: `LlmResponse.Error(message, failure = null)`, an optional `HttpMessageHandler` on the
 Claude, OpenAI, Azure OpenAI, Gemini, GitHub Copilot and OpenAI-compatible providers (a test seam, as Ollama and Z.AI had).
 
+## 2026-10-17 — Birko.AI.Resilience.Data: breaker state and LLM usage persist on any store
+
+[[TASK-530]]. New project. `StoreCircuitBreakerStore` and `StoreUsageRepository` implement the two resilience interfaces
+over any `IAsyncBulkStore<T>`. Nothing implemented them before, so every restart closed an open circuit. Usage totals are
+computed by `AggregateAsync`, and a store that cannot aggregate is refused. A breaker `Reset` now persists. **Breaking:**
+both interfaces take a `CancellationToken`, and `GetTotalSpendAsync` adds a provider filter (CHANGELOG lists the signatures).
+
 ## 2026-10-17 — Birko.AI.Resilience.Data: circuit breaker state and usage persist on any store
 
 [[TASK-530]]. New project. `StoreCircuitBreakerStore` and `StoreUsageRepository` implement `ICircuitBreakerStore` and

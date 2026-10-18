@@ -49,6 +49,7 @@ public class CosmosDBJobQueue : IJobQueue
     /// <inheritdoc />
     public async Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken ct = default)
     {
+        JobEnqueue.ResolveDelay(descriptor); // SH-L013
         var model = CosmosJobDescriptorModel.FromDescriptor(descriptor);
         var id = await _store.CreateAsync(model, ct: ct).ConfigureAwait(false);
         return id;
@@ -219,16 +220,12 @@ public class CosmosDBJobQueue : IJobQueue
         var cancelledStatus = (int)JobStatus.Cancelled;
 
         // Purge terminal jobs only: Completed | Dead | Cancelled (CR-H009). Failed is retryable.
-        var results = await _store.ReadAsync(
-            filter: j => (j.Status == completedStatus || j.Status == deadStatus || j.Status == cancelledStatus)
-                && j.CompletedAt != null && j.CompletedAt < cutoff,
-            ct: ct
-        ).ConfigureAwait(false);
-
-        var count = results.Count();
+        // SH-L018 / SH-L019: counted and deleted by filter, never loaded by the queue.
+        System.Linq.Expressions.Expression<Func<CosmosJobDescriptorModel, bool>> expired = j => (j.Status == completedStatus || j.Status == deadStatus || j.Status == cancelledStatus) && j.CompletedAt != null && j.CompletedAt < cutoff;
+        var count = (int)await _store.CountAsync(expired, ct).ConfigureAwait(false);
         if (count > 0)
         {
-            await _store.DeleteAsync(results, ct).ConfigureAwait(false);
+            await _store.DeleteAsync(expired, ct).ConfigureAwait(false);
         }
         return count;
     }

@@ -240,6 +240,14 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Background-jobs low triage: Delay honoured, opt-in purge, PostgreSQL lock waits (2026-10-18)
+[[TASK-175]]. 24 low findings: 19 confirmed, 3 narrower, 2 refuted; 21 fixed or covered, 2 waived in part.
+- `Delay` on an enqueued job is honoured on every backend (it ran at once), and the in-memory queue refuses a duplicate
+  id and hands out copies.
+- **Opt-in purge, decided by the user:** `JobQueueOptions.PurgeInterval` (null = off) purges by `RetentionPeriod`.
+- Executor and scheduler: the executor checks a stored job type before building it, and a sub-second recurring job
+  fires at its rate.
+- PostgreSQL locks wait for the timeout, and a derived connector (e.g. TimescaleDB) now locks.
 ### Elasticsearch job queue records an outcome reported right after the claim (2026-10-18)
 [[TASK-667]]. **Regression from TASK-158**, measured live: its guarded transitions were `update_by_query` calls, which
 match the search index, so a job completed or failed within ~1 s of its claim was still indexed Pending and the outcome
@@ -320,11 +328,6 @@ or short master throws at construction. `InMemorySecretProvider` serves local an
 classifies it once, on every provider, from the status, never the text. Measured: a cancelled call came back as an
 error response; it now throws `OperationCanceledException`. **Breaking:** `ErrorCategory` on plan steps and task
 records is an enum. Copilot's streaming 401 refresh now runs.
-### Birko.AI.Resilience.Data: breaker state and LLM usage persist on any store (2026-10-17)
-[[TASK-530]]. New project. `StoreCircuitBreakerStore` and `StoreUsageRepository` implement the two resilience interfaces
-over any `IAsyncBulkStore<T>`. Nothing implemented them before, so every restart closed an open circuit. Usage totals are
-computed by `AggregateAsync`, and a store that cannot aggregate is refused. A breaker `Reset` now persists. **Breaking:**
-both interfaces take a `CancellationToken`, and `GetTotalSpendAsync` adds a provider filter (CHANGELOG lists the signatures).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
