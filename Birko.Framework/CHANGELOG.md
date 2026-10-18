@@ -46,6 +46,13 @@ message id; MQTT keeps several handlers per filter and releases them properly, a
 subscriber no longer stops reconnect; the in-memory transport keeps a failed ManualAck message requeueable, removes a
 disposed consumer's handlers, and a delayed send outlives the caller's token (an already-cancelled call now throws).
 
+## 2026-10-18 — RavenDB job queue claims each job once; the store gains a compare-and-set
+
+[[TASK-665]]. Measured live: a cancel racing a claim let both win (3 of 3 runs), and a job was claimed twice. The
+RavenDB store has no native filtered update, so TASK-158's "guarded" update ran as a possibly stale index query and an
+unconditional write. `AsyncRavenDBStore.UpdateIfAsync` loads by id and saves with optimistic concurrency; the queue's
+claim and transitions use it, as Cosmos does since TASK-661.
+
 ## 2026-10-18 — Redis job queue: every transition is one script, and priority dominates
 
 [[TASK-663]]. Measured live: a Cancelled, Completed or Dead descriptor was dequeued and run, a cancel raced a claim

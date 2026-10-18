@@ -307,6 +307,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Communication.REST** | Birko.Communication |
 | **Birko.Communication.SOAP** | Birko.Communication |
 | **Birko.Communication.SSE** | Birko.Communication, Birko.Serialization |
+| **Birko.Communication.SSE.AspNetCore** | Birko.Communication.SSE; Microsoft.AspNetCore.App (consumer-supplied) |
 | **Birko.Communication.Modbus** | Birko.Communication |
 | **Birko.Communication.Camera** | Birko.Communication |
 | **Birko.Communication.OAuth** | Birko.Configuration |

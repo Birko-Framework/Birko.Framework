@@ -153,6 +153,10 @@
 			"path": "../Birko.Communication.SSE"
 		},
 		{
+			"name": "Communication / Birko.Communication.SSE.AspNetCore",
+			"path": "../Birko.Communication.SSE.AspNetCore"
+		},
+		{
 			"name": "Communication / Birko.Communication.WebSocket",
 			"path": "../Birko.Communication.WebSocket"
 		},
@@ -871,6 +875,10 @@
 		{
 			"name": "Tests / Birko.Communication.SSE.Tests",
 			"path": "../tests/Birko.Communication.SSE.Tests"
+		},
+		{
+			"name": "Tests / Birko.Communication.SSE.AspNetCore.Tests",
+			"path": "../tests/Birko.Communication.SSE.AspNetCore.Tests"
 		},
 		{
 			"name": "Tests / Birko.Configuration.Tests",

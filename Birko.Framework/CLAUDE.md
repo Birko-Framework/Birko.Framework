@@ -240,6 +240,10 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Birko.Communication.SSE.AspNetCore: SSE results with heartbeat and terminal stop (2026-10-18)
+[[TASK-540]]. New project. `SseResults.Stream` streams a `ChannelReader` or `IAsyncEnumerable` as SSE. It sends
+proxy-friendly headers and a `: heartbeat` when idle, and stops after a terminal item. A disconnect ends it, and an owned
+subscription is always disposed. Frames come from `SseEvent`, and `KeyedEventBroadcaster` feeds it directly.
 ### Opt-in loopback-only auth bypass (2026-10-18)
 [[TASK-522]]. `BirkoSecurityOptions.LoopbackBypass` with `UseBirkoLoopbackBypass()` lets local tools call a loopback-only
 server without a token. It decides from the addresses Kestrel actually bound. Measured: DraCode's rule, read from the
@@ -325,11 +329,6 @@ had just filled it. Every build now comes from the view's attributes alone.
 Processing forever. Each queue now takes a `claimTimeout` (default 30 min, `JobReclaim.DefaultClaimTimeout`) and offers
 such a job again, to one worker, or buries it as Dead when its attempts are spent. On Redis claimed jobs are kept in a
 `processing:{queue}` set for this.
-### RavenDB job queue claims each job once; the store gains a compare-and-set (2026-10-18)
-[[TASK-665]]. Measured live: a cancel racing a claim let both win (3 of 3 runs), and a job was claimed twice. The
-RavenDB store has no native filtered update, so TASK-158's "guarded" update ran as a possibly stale index query and an
-unconditional write. `AsyncRavenDBStore.UpdateIfAsync` loads by id and saves with optimistic concurrency; the queue's
-claim and transitions use it, as Cosmos does since TASK-661.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

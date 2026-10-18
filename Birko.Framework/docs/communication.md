@@ -28,6 +28,21 @@ SOAP client for consuming WSDL-based web services.
 ### Birko.Communication.SSE
 Server-Sent Events (SSE) client for real-time server push.
 
+### Birko.Communication.SSE.AspNetCore
+Server-Sent Events from a minimal-API endpoint (TASK-540). `SseResults.Stream(reader | asyncSequence, toEvent, isTerminal, options, owns)` returns an `IResult` that sends `text/event-stream` with `Cache-Control: no-cache` and `X-Accel-Buffering: no`, writes each item as `SseEvent.ToString()` (the one frame formatter), sends a `: heartbeat` comment when idle (`SseStreamOptions.HeartbeatInterval`, default 15 s), stops after an item matching `isTerminal`, ends when the client disconnects, and disposes `owns` in every case. It feeds straight from `KeyedEventBroadcaster` (Birko.EventBus):
+
+```csharp
+app.MapGet("/runs/{id}/events", (Guid id, KeyedEventBroadcaster<Guid, RunEvent> live) =>
+{
+    var subscription = live.Subscribe(id); // subscribe before returning, so nothing is missed
+    return SseResults.Stream(subscription.Reader,
+        e => SseEvent.FromJson(e.Event, e.Event.Kind, e.Sequence.ToString()),
+        isTerminal: e => e.Event.IsFinal, owns: subscription);
+});
+```
+
+Its own project, so `Birko.Communication.SSE` (client, HttpListener server) needs no ASP.NET Core; the host supplies `Microsoft.AspNetCore.App`.
+
 ### Birko.Communication.Modbus
 Modbus RTU (serial) and Modbus TCP (network) communication for industrial devices:
 - Function codes: 01-06 (read/write coils and registers), 15-16 (write multiple)

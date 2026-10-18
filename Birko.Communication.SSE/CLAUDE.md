@@ -63,6 +63,9 @@ client.AddHeader("Authorization", "Bearer token");
 client.AddHeader("Accept", "text/event-stream");
 ```
 
+An ASP.NET Core minimal-API result over this project's `SseEvent` (heartbeat, terminal stop) lives in the companion
+**Birko.Communication.SSE.AspNetCore** (TASK-540), so this project needs no ASP.NET Core.
+
 ## Dependencies
 - Birko.Communication
 - Birko.Serialization — ISerializer for SseEvent.FromJson helper (optional, defaults to SystemJsonSerializer)

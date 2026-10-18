@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>919542b9-3fdf-471a-b93a-3f9d0520ee7e</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.SSE.AspNetCore</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- Depends on Birko.Communication.SSE (SseEvent, the one frame formatter).
+       Framework dependency: Microsoft.AspNetCore.App is CONSUMER-SUPPLIED, as for Birko.Communication.AspNetCore:
+       an ASP.NET Core host already has it, and a duplicate FrameworkReference is NETSDK1087, a hard error (TASK-234).
+       This is a separate project so Birko.Communication.SSE (client, HttpListener server) needs no ASP.NET Core. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)SseResults.cs" />
+  </ItemGroup>
+</Project>

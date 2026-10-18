@@ -83,6 +83,10 @@ Birko.Communication.OAuth (IOAuthClient, OAuthClient, OAuthSettings)
 
 Birko.Communication.GraphQL (IGraphQLClient, GraphQLClient, GraphQLSettings — queries, mutations, subscriptions over HttpClient + ClientWebSocket)
 
+Birko.Communication.SSE (SseEvent — the one SSE frame formatter, SseClient, SseServer)
+  -> Birko.Communication.SSE.AspNetCore (SseResults.Stream — minimal-API IResult with heartbeat and terminal stop)
+     <- Microsoft.AspNetCore.App consumer-supplied (its own project so SSE clients need no ASP.NET Core)
+
 Birko.Communication.gRPC (GrpcSettings, GrpcChannelPool, GrpcClientFactory, GrpcAuthenticationInterceptor, GrpcException — client over Grpc.Net.Client)
   -> Birko.Communication.gRPC.Server (GrpcServerSettings, AddBirkoGrpc, GrpcServerAuthenticationInterceptor — server over Grpc.AspNetCore; mirrors REST / REST.Server split)
 
@@ -158,6 +162,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Communication.IR** - Consumer IR (38 kHz, NEC/Samsung/RC5, pluggable transports)
 - **Birko.Communication.NFC** - NFC/RFID tag reading (ISO 14443A, NDEF, pluggable transports)
 - **Birko.Communication.AspNetCore** - ASP.NET Core minimal-API helpers (owner-scoped CRUD skeleton: MapOwnedCrud, OwnedCrudResults, OwnedCrudMapping)
+- **Birko.Communication.SSE.AspNetCore** - Server-Sent Events as a minimal-API result (SseResults.Stream over a ChannelReader / IAsyncEnumerable: heartbeat, terminal stop, proxy-friendly headers, disconnect ends the loop)
 
 ## Messaging
 - **Birko.Messaging** - Core interfaces (IMessageSender, IEmailSender, ISmsSender, IPushSender), SMTP, string templates
@@ -295,7 +300,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Data.Views.Tests
 - Birko.Validation.Tests, Birko.Data.Sync.Tests
 - Birko.BackgroundJobs.SQL.Tests, Birko.Workflow.SQL.Tests, Birko.Data.EventSourcing.SQL.Tests
-- Birko.Communication.Camera.Tests, Birko.Communication.REST.Tests, Birko.Communication.WebSocket.Tests
+- Birko.Communication.Camera.Tests, Birko.Communication.REST.Tests, Birko.Communication.WebSocket.Tests, Birko.Communication.SSE.AspNetCore.Tests
 - Birko.Data.Migrations.SQL.Tests, Birko.Data.XML.Tests
 - Birko.Caching.Tests
 - Birko.DesignTokens.Tests, Birko.Xaml.Core.Tests, Birko.Xaml.Avalonia.Tests (EPIC-015; Avalonia tests are headless + Skia)
