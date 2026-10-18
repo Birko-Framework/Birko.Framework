@@ -94,7 +94,10 @@ before [[TASK-175]].**
   - M011: InMemory transitions take the lock, and `ScheduledAt` is written before `Status`; fixed by inspection.
 - **Claim and transition guards** (M012, M013) on SQL, MongoDB, ES and RavenDB: the claim also requires the attempt
   count read; Complete / Fail / Cancel are guarded native updates. Red on HEAD: 4 forced interleavings on SQLite. Mongo,
-  ES and Raven take the same code (one script) and pass their live suites.
+  ES and Raven take the same code (one script). ES passes its live suite.
+  - **Corrected by TASK-662 (2026-10-18):** this said Mongo and Raven passed live too. Their job suites ran on
+    in-memory doubles; live tests came with TASK-662, which found the MongoDB queue could not claim on a real server
+    (a `$set` of a Guid threw in the store) and fixed it.
   - **Contract change:** Complete / Fail of a non-Processing job is a no-op on every backend. InMemory, JSON and XML
     were aligned, and 4 tests that completed an unclaimed job now claim it first.
 - **Lock providers:**

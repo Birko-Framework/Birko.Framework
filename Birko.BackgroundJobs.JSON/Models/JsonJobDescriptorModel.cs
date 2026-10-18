@@ -28,7 +28,8 @@ public class JsonJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     public int Priority { get; set; }
 
     [JsonPropertyName("maxRetries")]
-    public int MaxRetries { get; set; } = 3;
+        // null = the queue's RetryPolicy (TASK-662). No initializer: a null a store omits must read back as null, not 3.
+        public int? MaxRetries { get; set; }
 
     [JsonPropertyName("status")]
     public int Status { get; set; }

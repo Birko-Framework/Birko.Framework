@@ -98,7 +98,7 @@ namespace Birko.BackgroundJobs.Processing
             {
                 descriptor.LastError = error;
 
-                var maxRetries = descriptor.MaxRetries > 0 ? descriptor.MaxRetries : _retryPolicy.MaxRetries;
+                var maxRetries = _retryPolicy.MaxRetriesFor(descriptor.MaxRetries);
 
                 if (descriptor.AttemptCount < maxRetries)
                 {

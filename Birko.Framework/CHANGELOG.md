@@ -4,6 +4,31 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — BREAKING: JobDescriptor.MaxRetries is nullable; 0 means no retries everywhere
+
+[[TASK-662]] (SH-M003, decided by the user 2026-10-18). A job's `MaxRetries` of `0` meant "use the queue's
+`RetryPolicy`" on InMemory, JSON and RavenDB and "no retries" on SQL, MongoDB, Elasticsearch, XML, Cosmos DB and Redis.
+It is now `int?`: `null` = the queue's policy, `0` = no retry (dead on the first failure), `n` = `n` attempts, on all
+nine backends, the SQL reclaim included. `RetryPolicy.MaxRetriesFor(int?)` is the one producer every queue asks.
+
+| Member | Old | New |
+|--------|-----|-----|
+| `JobDescriptor.MaxRetries` | `int`, default `3` | `int?`, default `3` |
+| backend models' `MaxRetries` | `int`, default `3` | `int?`, no default (a stored null reads back as null) |
+| `RetryPolicy.MaxRetriesFor(int?)` | — | new |
+
+**Behaviour change:** a job enqueued with `MaxRetries = 0` on InMemory, JSON or RavenDB used to follow the policy; it is
+now dead on its first failure. Use `null` for the policy. Code reading `descriptor.MaxRetries` as an `int` needs `?? `.
+
+**SQL column:** a `__BackgroundJobs` table created earlier has `MaxRetries NOT NULL`. It still takes every non-null
+budget, refuses a null one, and `DetectDrift` reports it as `NullabilityMismatch` (measured on SQLite). Making it
+nullable is the operator's step: SQL Server `ALTER COLUMN MaxRetries INT NULL`, MySQL `MODIFY MaxRetries INT NULL`,
+PostgreSQL / TimescaleDB `ALTER COLUMN "MaxRetries" DROP NOT NULL`, SQLite a table rebuild.
+
+**Fixed on the way (MongoDB):** `PropertyUpdate.Set` of a `Guid` threw "System.Guid cannot be mapped to a BsonValue"
+under driver 3.x, so the MongoDB job queue could not claim a job on a real server (its tests ran on an in-memory
+double). A set value is now written with the member's own serializer; a null is `BsonNull`. Measured live.
+
 ## 2026-10-17 — A failed LLM call says why: LlmResponse.Failure, classified once
 
 [[TASK-531]]. `LlmResponse.Failure` (`LlmFailure`: kind, HTTP status, Retry-After, `IsTransient`, `Category`) is set on
@@ -60,6 +85,13 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 (DraCode TASK-128). Callers compile unchanged. `ProviderCircuitBreaker.LoadPersistedStateAsync` and
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
+
+## 2026-10-17 — SQL connection strings quote their credentials on every provider
+
+[[TASK-653]]. **Security.** Measured live: on SQL Server, MySQL, PostgreSQL and TimescaleDB a password ending `;Server=evil`
+moved the connection to that host, `;Encrypt=False` dropped TLS, and a `;` or quote broke the connection. Every provider
+now composes through its driver's builder, with one producer shared by the settings type and the connector's
+`RemoteSettings` path. Key spellings follow the builders (`Data Source`, `Connect Timeout`, MySQL `SSL Mode`).
 
 ## 2026-10-17 — MongoDB, Cosmos DB and InfluxDB units of work end the boundary on every outcome
 

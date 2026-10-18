@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### BREAKING: a job's MaxRetries is nullable; 0 means no retries everywhere (2026-10-18)
+[[TASK-662]]. `JobDescriptor.MaxRetries` is `int?`: `null` = the queue's `RetryPolicy`, `0` = no retry, on all nine
+backends (0 used to mean "the policy" on InMemory, JSON and RavenDB). An old SQL `MaxRetries NOT NULL` column refuses a
+null budget and is reported as drift. Fixed on the way: a MongoDB `$set` of a `Guid` threw, so the MongoDB job queue
+could not claim on a real server. Details: CHANGELOG.
 ### Background-jobs triage: guarded transitions, loops that survive, one lock per provider (2026-10-18)
 [[TASK-158]]. 21 medium findings: 12 fixed and 9 spawned ([[TASK-661]] Cosmos, [[TASK-662]] nullable `MaxRetries`,
 [[TASK-663]] Redis, [[TASK-664]] reclaim).
@@ -316,11 +321,6 @@ writes within a second tied. MySQL columns are now `DATETIME(6)`, and SQL Server
 field, and ElasticSearch and Cosmos `DropIndex` did nothing, yet the migration was recorded. `DropField` now removes the field
 from every document (on ElasticSearch the mapping keeps it until a reindex). Cosmos `DropIndex` drops by name; ElasticSearch
 and InfluxDB `DropIndex` refuse, as their `CreateIndex` does. Cosmos `RenameField` on a plain client: [[TASK-659]].
-### SQL connection strings quote their credentials on every provider (2026-10-17)
-[[TASK-653]]. **Security.** Measured live: on SQL Server, MySQL, PostgreSQL and TimescaleDB a password ending `;Server=evil`
-moved the connection to that host, `;Encrypt=False` dropped TLS, and a `;` or quote broke the connection. Every provider
-now composes through its driver's builder, with one producer shared by the settings type and the connector's
-`RemoteSettings` path. Key spellings follow the builders (`Data Source`, `Connect Timeout`, MySQL `SSL Mode`).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

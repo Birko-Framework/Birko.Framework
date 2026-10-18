@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-18 07:08. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-18 07:27. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 26      | —     |
-| todo         | —     | —       | 160   |
+| todo         | —     | —       | 159   |
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 25      | 354   |
+| done         | 2     | 25      | 355   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 109× P2 · 42× P3.
+`todo` by priority: 9× P1 · 108× P2 · 42× P3.
 
 ## In progress now
 
@@ -168,7 +168,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (212/277 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (213/277 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -366,7 +366,7 @@ _None._
     - [x] [TASK-575](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-575-two-workers-reclaim-the-same-stale-job.md) Two SQL job workers can both reclaim the same stale Processing job and run it twice (P1) · FEATURE-014
     - [x] [TASK-576](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-576-async-database-model-repository-rejects-concrete-stores.md) `AsyncDataBaseModelRepository<T>` rejects every store built with a concrete connector (P2) · FEATURE-014
     - [x] [TASK-577](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-577-cross-assembly-field-attributes-lose-values.md) A cross-assembly SQL field attribute is rebuilt without its value: lengths, precision and scale become 0, and `[UtcField]` is dropped (P1) · FEATURE-014
-  - STORY-053 Spec-harvest — medium findings — planned (53/64 done)
+  - STORY-053 Spec-harvest — medium findings — planned (54/64 done)
     - [x] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
     - [x] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
     - [x] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
@@ -428,7 +428,7 @@ _None._
     - [x] [TASK-658](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-658-ravendb-unit-of-work-stays-active-after-a-failed-savechanges.md) The RavenDB unit of work stays active after a failed `SaveChanges`, unlike every other backend (P2) · FEATURE-014
     - [x] [TASK-659](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-659-cosmos-renamefield-depends-on-the-callers-serializer.md) Cosmos `RenameField` fails on a `Database` whose client uses the SDK's default serializer (P2) · FEATURE-014
     - [ ] [TASK-661](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-661-cosmos-job-queue-transitions-are-unguarded.md) The Cosmos DB job queue claims and transitions with unguarded read-then-write (P2) · FEATURE-014
-    - [ ] [TASK-662](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-662-job-maxretries-nullable.md) JobDescriptor.MaxRetries becomes nullable: null = the queue's RetryPolicy, 0 = no retries (P2) · FEATURE-014
+    - [x] [TASK-662](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-662-job-maxretries-nullable.md) JobDescriptor.MaxRetries becomes nullable: null = the queue's RetryPolicy, 0 = no retries (P2) · FEATURE-014
     - [ ] [TASK-663](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-663-redis-job-queue-transitions-are-not-atomic.md) Redis job queue: atomic transitions, a status-aware dequeue, and priority that dominates (P2) · FEATURE-014
     - [ ] [TASK-664](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-664-stale-processing-reclaim-on-every-backend.md) A job left in Processing by a dead worker is reclaimed on every backend, not only SQL (P2) · FEATURE-014
   - STORY-054 Spec-harvest — low findings — planned (1/25 done)

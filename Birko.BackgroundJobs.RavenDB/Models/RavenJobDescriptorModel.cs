@@ -21,7 +21,8 @@ public class RavenJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
 
     public int Priority { get; set; }
 
-    public int MaxRetries { get; set; } = 3;
+        // null = the queue's RetryPolicy (TASK-662). No initializer: a null a store omits must read back as null, not 3.
+        public int? MaxRetries { get; set; }
 
     public int Status { get; set; }
 

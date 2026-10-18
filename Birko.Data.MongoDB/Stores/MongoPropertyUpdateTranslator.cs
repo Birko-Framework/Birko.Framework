@@ -23,7 +23,7 @@ namespace Birko.Data.MongoDB.Stores
                     ?? throw new ArgumentException($"Unable to resolve property from expression: {assignment.Property}");
 
                 updateDefs.Add(assignment.Match(
-                    set => Builders<T>.Update.Set(name, BsonValue.Create(set.Value)),
+                    set => Builders<T>.Update.Set(name, ToBsonValue<T>(name, set.Value)),
                     increment =>
                     {
                         RefuseStringRepresentation<T>(name);
@@ -31,6 +31,32 @@ namespace Birko.Data.MongoDB.Stores
                     }));
             }
             return Builders<T>.Update.Combine(updateDefs);
+        }
+
+        /// <summary>
+        /// A value as the member's own serializer writes it (TASK-662). <see cref="BsonValue.Create(object)"/> knows no
+        /// representation, so a <see cref="Guid"/> threw ("cannot be mapped to a BsonValue") under driver 3.x, and every
+        /// <c>$set</c> of a Guid failed — the MongoDB job queue's claim among them, so it could not dequeue on a real server.
+        /// The member's serializer applies the representation the document itself is written with.
+        /// </summary>
+        private static BsonValue ToBsonValue<T>(string name, object? value)
+        {
+            if (value == null)
+            {
+                return BsonNull.Value;
+            }
+
+            var memberMap = BsonClassMap.LookupClassMap(typeof(T)).AllMemberMaps.FirstOrDefault(m => m.MemberName == name);
+            var serializer = memberMap?.GetSerializer() ?? BsonSerializer.LookupSerializer(value.GetType());
+            var holder = new BsonDocument();
+            using (var writer = new global::MongoDB.Bson.IO.BsonDocumentWriter(holder))
+            {
+                writer.WriteStartDocument();
+                writer.WriteName("v");
+                serializer.Serialize(BsonSerializationContext.CreateRoot(writer), new BsonSerializationArgs(), value);
+                writer.WriteEndDocument();
+            }
+            return holder["v"];
         }
 
         /// <summary>

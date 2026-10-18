@@ -142,7 +142,7 @@ namespace Birko.BackgroundJobs.MongoDB
             if (model == null) return;
 
             var attempts = model.AttemptCount;
-            var maxRetries = model.MaxRetries;
+            var maxRetries = _retryPolicy.MaxRetriesFor(model.MaxRetries);
             var now = DateTime.UtcNow;
             var update = new PropertyUpdate<MongoJobDescriptorModel>().Set(j => j.LastError, error);
             if (attempts < maxRetries)

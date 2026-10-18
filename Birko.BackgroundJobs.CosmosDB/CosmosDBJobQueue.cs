@@ -101,7 +101,7 @@ public class CosmosDBJobQueue : IJobQueue
         if (model == null) return;
 
         model.LastError = error;
-        if (model.AttemptCount < model.MaxRetries)
+        if (model.AttemptCount < _retryPolicy.MaxRetriesFor(model.MaxRetries))
         {
             // Retries remain — re-enqueue with backoff (mirrors MongoDBJobQueue).
             model.Status = (int)JobStatus.Scheduled;

@@ -184,7 +184,7 @@ namespace Birko.BackgroundJobs.XML
 
             model.LastError = error;
 
-            if (model.AttemptCount < model.MaxRetries)
+            if (model.AttemptCount < _retryPolicy.MaxRetriesFor(model.MaxRetries))
             {
                 var delay = _retryPolicy.GetDelay(model.AttemptCount);
                 model.Status = (int)JobStatus.Scheduled;

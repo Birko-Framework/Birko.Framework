@@ -152,7 +152,7 @@ namespace Birko.BackgroundJobs.ElasticSearch
             if (model == null) return;
 
             var attempts = model.AttemptCount;
-            var maxRetries = model.MaxRetries;
+            var maxRetries = _retryPolicy.MaxRetriesFor(model.MaxRetries);
             var now = DateTime.UtcNow;
             var update = new PropertyUpdate<ElasticJobDescriptorModel>().Set(j => j.LastError, error);
             if (attempts < maxRetries)

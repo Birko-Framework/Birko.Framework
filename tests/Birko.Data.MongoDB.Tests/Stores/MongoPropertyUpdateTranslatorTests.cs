@@ -36,6 +36,10 @@ public class MongoPropertyUpdateTranslatorTests
 
         [BsonRepresentation(BsonType.String)]
         public decimal PriceAsText { get; set; }
+
+        public Guid Owner { get; set; }
+        public Guid? Claim { get; set; }
+        public int? Budget { get; set; }
     }
 
     private static BsonDocument Render(UpdateDefinition<Doc> definition)
@@ -74,5 +78,21 @@ public class MongoPropertyUpdateTranslatorTests
         var act = () => MongoPropertyUpdateTranslator.Build(new PropertyUpdate<Doc>().Set(x => x.PriceAsText, 0.2m));
 
         act.Should().NotThrow();
+    }
+
+    // TASK-662: BsonValue.Create(Guid) threw under driver 3.x, so every $set of a Guid failed (the job queue's claim).
+    [Fact]
+    public void TASK_662_a_Guid_and_a_null_are_set_as_the_member_serializes_them()
+    {
+        var owner = Guid.NewGuid();
+        var claim = Guid.NewGuid();
+        var rendered = Render(MongoPropertyUpdateTranslator.Build(
+            new PropertyUpdate<Doc>().Set(x => x.Owner, owner).Set(x => x.Claim, claim).Set(x => x.Budget, null)));
+
+        var set = rendered["$set"].AsBsonDocument;
+        var written = new Doc { Owner = owner, Claim = claim }.ToBsonDocument();
+        set["Owner"].Should().Be(written["Owner"], "the same representation the document is written with");
+        set["Claim"].Should().Be(written["Claim"]);
+        set["Budget"].IsBsonNull.Should().BeTrue();
     }
 }

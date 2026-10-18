@@ -28,8 +28,9 @@ public class XmlJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     [XmlElement("Priority")]
     public int Priority { get; set; }
 
-    [XmlElement("MaxRetries")]
-    public int MaxRetries { get; set; } = 3;
+    [XmlElement("MaxRetries", IsNullable = true)]
+        // null = the queue's RetryPolicy (TASK-662). No initializer: a null a store omits must read back as null, not 3.
+        public int? MaxRetries { get; set; }
 
     [XmlElement("Status")]
     public int Status { get; set; }

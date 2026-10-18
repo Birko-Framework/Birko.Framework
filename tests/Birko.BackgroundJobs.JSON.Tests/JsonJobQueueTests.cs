@@ -91,13 +91,12 @@ public class JsonJobQueueTests : IDisposable
     }
 
     [Fact]
-    public async Task FailAsync_JobMaxRetriesZero_FallsBackToPolicyMaxRetries()
+    public async Task FailAsync_JobMaxRetriesNull_FallsBackToPolicyMaxRetries()
     {
-        // Regression for CR-L025: a job with MaxRetries == 0 went straight to Dead on first failure,
-        // ignoring the queue's RetryPolicy.MaxRetries. It must now fall back to the policy (mirroring
-        // the reference InMemoryJobQueue), so the job reschedules while the policy has retries left.
+        // CR-L025 made a job's MaxRetries of 0 fall back to the queue's policy here. TASK-662 (decided 2026-10-18)
+        // moved that meaning to null, on every backend; 0 is now "no retry" (TASK_662 theory below).
         var queue = NewQueue(new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.FromMinutes(1) });
-        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", MaxRetries = 0 });
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", MaxRetries = null });
 
         await queue.DequeueAsync(); // AttemptCount -> 1, below the policy's 3
         await queue.FailAsync(id, "boom");
@@ -187,4 +186,37 @@ public class JsonJobQueueTests : IDisposable
         claimed.Should().HaveCount(20).And.OnlyHaveUniqueItems();
     }
 
+
+    // ── TASK-662: MaxRetries null = the policy (2 here), 0 = no retry, n = n attempts ──
+
+    private static readonly RetryPolicy Task662Policy = new() { MaxRetries = 2, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false };
+
+    [Theory]
+    [InlineData(null, 2)]
+    [InlineData(0, 1)]
+    [InlineData(1, 1)]
+    [InlineData(3, 3)]
+    public async Task TASK_662_a_jobs_attempt_budget_is_its_own_or_else_the_policys(int? maxRetries, int attempts)
+    {
+        var queue = NewQueue(Task662Policy);
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", MaxRetries = maxRetries });
+        (await queue.GetAsync(id))!.MaxRetries.Should().Be(maxRetries, "null is stored as null, not as a default");
+
+        var claims = 0;
+        for (var i = 0; i < 40 && claims < 10; i++)
+        {
+            var job = await queue.DequeueAsync();
+            if (job == null)
+            {
+                if ((await queue.GetAsync(id))!.Status == JobStatus.Dead) break;
+                await Task.Delay(25);
+                continue;
+            }
+            claims++;
+            await queue.FailAsync(job.Guid, "boom");
+        }
+
+        claims.Should().Be(attempts);
+        (await queue.GetAsync(id))!.Status.Should().Be(JobStatus.Dead);
+    }
 }

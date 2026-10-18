@@ -21,7 +21,7 @@ public class RavenDBJobQueueTests
     private static RavenDBJobQueue NewQueue() =>
         new(new InMemoryRavenStore<RavenJobDescriptorModel>());
 
-    private static async Task<Guid> EnqueueAndDequeue(RavenDBJobQueue queue, int maxRetries)
+    private static async Task<Guid> EnqueueAndDequeue(RavenDBJobQueue queue, int? maxRetries)
     {
         var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", MaxRetries = maxRetries });
         await queue.DequeueAsync(); // moves to Processing, AttemptCount -> 1
@@ -71,13 +71,12 @@ public class RavenDBJobQueueTests
     }
 
     [Fact]
-    public async Task FailAsync_JobMaxRetriesZero_FallsBackToDefaultPolicy()
+    public async Task FailAsync_JobMaxRetriesNull_FallsBackToDefaultPolicy()
     {
-        // Regression for CR-L029: a job with MaxRetries == 0 went straight to Dead, ignoring the
-        // queue's RetryPolicy. NewQueue() uses the default policy (MaxRetries = 3), so a first failure
-        // must reschedule rather than die.
+        // CR-L029 made a job's MaxRetries of 0 fall back to the queue's policy here. TASK-662 (decided 2026-10-18)
+        // moved that meaning to null, on every backend; 0 is now "no retry" (TASK_662 theory below).
         var queue = NewQueue();
-        var id = await EnqueueAndDequeue(queue, maxRetries: 0); // AttemptCount -> 1, below default policy's 3
+        var id = await EnqueueAndDequeue(queue, maxRetries: null); // AttemptCount -> 1, below default policy's 3
 
         await queue.FailAsync(id, "boom");
 
@@ -151,5 +150,38 @@ public class RavenDBJobQueueTests
         claimed.Should().BeEquivalentTo(ids, "every enqueued job is claimed exactly once");
 
         (await queue.DequeueAsync()).Should().BeNull("no eligible jobs remain after all three are claimed");
+    }
+
+    // ── TASK-662: MaxRetries null = the policy (2 here), 0 = no retry, n = n attempts ──
+
+    private static readonly RetryPolicy Task662Policy = new() { MaxRetries = 2, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false };
+
+    [Theory]
+    [InlineData(null, 2)]
+    [InlineData(0, 1)]
+    [InlineData(1, 1)]
+    [InlineData(3, 3)]
+    public async Task TASK_662_a_jobs_attempt_budget_is_its_own_or_else_the_policys(int? maxRetries, int attempts)
+    {
+        var queue = new RavenDBJobQueue(new InMemoryRavenStore<RavenJobDescriptorModel>(), Task662Policy);
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", MaxRetries = maxRetries });
+        (await queue.GetAsync(id))!.MaxRetries.Should().Be(maxRetries, "null is stored as null, not as a default");
+
+        var claims = 0;
+        for (var i = 0; i < 40 && claims < 10; i++)
+        {
+            var job = await queue.DequeueAsync();
+            if (job == null)
+            {
+                if ((await queue.GetAsync(id))!.Status == JobStatus.Dead) break;
+                await Task.Delay(25);
+                continue;
+            }
+            claims++;
+            await queue.FailAsync(job.Guid, "boom");
+        }
+
+        claims.Should().Be(attempts);
+        (await queue.GetAsync(id))!.Status.Should().Be(JobStatus.Dead);
     }
 }

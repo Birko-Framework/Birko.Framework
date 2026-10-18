@@ -145,4 +145,6 @@ Tests should be created in `Birko.BackgroundJobs.Tests` covering:
 - `BackgroundJobProcessor` writes a job's outcome even after `Stop()`, and raises `JobOutcomeNotRecorded` when the write
   fails. `RecurringJobScheduler` raises `EnqueueFailed` and keeps running. Both events ignore a throwing subscriber.
 - `IJobLockProvider` implementations hold one lock name per provider (another name throws). Use a provider per lock.
+- `JobDescriptor.MaxRetries` is `int?` (TASK-662): `null` = the queue's `RetryPolicy`, `0` = no retry. Every queue asks
+  `RetryPolicy.MaxRetriesFor(job.MaxRetries)`; never compare `AttemptCount` with the job's value directly.
 

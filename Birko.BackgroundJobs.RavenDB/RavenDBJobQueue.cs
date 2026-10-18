@@ -143,7 +143,7 @@ namespace Birko.BackgroundJobs.RavenDB
             if (model == null) return;
 
             var attempts = model.AttemptCount;
-            var maxRetries = model.MaxRetries > 0 ? model.MaxRetries : _retryPolicy.MaxRetries;
+            var maxRetries = _retryPolicy.MaxRetriesFor(model.MaxRetries);
             var now = DateTime.UtcNow;
             var update = new PropertyUpdate<RavenJobDescriptorModel>().Set(j => j.LastError, error);
             if (attempts < maxRetries)

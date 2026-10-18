@@ -160,7 +160,7 @@ namespace Birko.BackgroundJobs.SQL
                     // matched again, and the stale claim ran it inside its backoff with a lower AttemptCount.
                     j => j.Guid == claimId && j.Status == originalStatus && j.AttemptCount == seenAttempts;
 
-                if (reclaim && candidate.AttemptCount >= candidate.MaxRetries)
+                if (reclaim && candidate.AttemptCount >= _retryPolicy.MaxRetriesFor(candidate.MaxRetries))
                 {
                     // TASK-575: guarded like the claim. This was a read-modify-write of the whole row, so a job its
                     // slow (not dead) worker completed in the meantime was overwritten as Dead (measured).
@@ -221,7 +221,7 @@ namespace Birko.BackgroundJobs.SQL
             if (model == null) return;
 
             var attempts = model.AttemptCount;
-            var maxRetries = model.MaxRetries;
+            var maxRetries = _retryPolicy.MaxRetriesFor(model.MaxRetries);
             var now = DateTime.UtcNow;
             var update = new PropertyUpdate<JobDescriptorModel>().Set(j => j.LastError, error);
             if (attempts < maxRetries)

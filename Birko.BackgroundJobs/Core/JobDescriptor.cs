@@ -39,9 +39,11 @@ namespace Birko.BackgroundJobs
         public int Priority { get; set; }
 
         /// <summary>
-        /// Maximum number of retry attempts on failure. Default is 3.
+        /// How many attempts this job gets before it is Dead: <c>null</c> = the queue's <see cref="RetryPolicy"/>, <c>0</c> = no
+        /// retry (dead on its first failure), <c>n</c> = n attempts. Default 3 (TASK-662, decided 2026-10-18; it was an
+        /// <c>int</c> whose 0 meant "the policy" on three backends and "no retries" on six).
         /// </summary>
-        public int MaxRetries { get; set; } = 3;
+        public int? MaxRetries { get; set; } = 3;
 
         /// <summary>
         /// Delay before the job becomes eligible for processing.

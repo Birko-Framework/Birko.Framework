@@ -238,7 +238,7 @@ namespace Birko.BackgroundJobs.Redis
 
             descriptor.LastError = error;
 
-            if (descriptor.AttemptCount < descriptor.MaxRetries)
+            if (descriptor.AttemptCount < _retryPolicy.MaxRetriesFor(descriptor.MaxRetries))
             {
                 var delay = _retryPolicy.GetDelay(descriptor.AttemptCount);
                 descriptor.Status = JobStatus.Scheduled;
@@ -455,7 +455,7 @@ namespace Birko.BackgroundJobs.Redis
                 new("JobType", descriptor.JobType),
                 new("Status", (int)descriptor.Status),
                 new("Priority", descriptor.Priority),
-                new("MaxRetries", descriptor.MaxRetries),
+                new("MaxRetries", descriptor.MaxRetries is { } max ? max : RedisValue.EmptyString), // "" = null (TASK-662)
                 new("AttemptCount", descriptor.AttemptCount),
                 new("EnqueuedAt", descriptor.EnqueuedAt.Ticks)
             };
@@ -490,7 +490,7 @@ namespace Birko.BackgroundJobs.Redis
                 JobType = dict["JobType"]!,
                 Status = (JobStatus)(int)dict["Status"],
                 Priority = (int)dict["Priority"],
-                MaxRetries = (int)dict["MaxRetries"],
+                MaxRetries = dict["MaxRetries"].IsNullOrEmpty ? null : (int)dict["MaxRetries"],
                 AttemptCount = (int)dict["AttemptCount"],
                 EnqueuedAt = new DateTime((long)dict["EnqueuedAt"], DateTimeKind.Utc)
             };

@@ -88,7 +88,7 @@ worker coordination; nothing in this area uses them internally.
 
 The system SHALL represent an enqueued unit of work as a `JobDescriptor` whose `Guid` defaults to a
 new `Guid`, whose `EnqueuedAt` defaults to `DateTime.UtcNow` at construction, whose `Status`
-defaults to `JobStatus.Pending`, whose `MaxRetries` defaults to `3`, whose `Priority` defaults to
+defaults to `JobStatus.Pending`, whose `MaxRetries` (an `int?`) defaults to `3`, whose `Priority` defaults to
 `0`, and whose `Metadata` defaults to an empty `Dictionary<string, string>`.
 
 #### Scenario: Constructing a bare descriptor
@@ -159,6 +159,34 @@ saturated at `MaxDelay`, with defaults `MaxRetries = 3`, `BaseDelay = 30s`, `Max
 - **Given** `RetryPolicy.None`
 - **When** its `MaxRetries` is read
 - **Then** it is `0`
+
+### Requirement: A job's attempt budget is its own or the queue's policy
+
+The system SHALL give a job `RetryPolicy.MaxRetriesFor(job.MaxRetries)` attempts — its own `MaxRetries` when it is
+set, otherwise the queue's `RetryPolicy.MaxRetries` — on every shipped backend (InMemory, JSON, XML, SQL including its
+reclaim, MongoDB, Elasticsearch, RavenDB, Cosmos DB, Redis). `null` means "the queue's policy", `0` means no retry (the
+job is `Dead` on its first failure), and `n` means `n` attempts. Every backend SHALL store a null `MaxRetries` as null
+and read it back as null. A SQL table created before `MaxRetries` became nullable has a `NOT NULL` column: it refuses a
+null budget, and `DetectDrift` reports it as `NullabilityMismatch`; making the column nullable is the operator's step.
+(TASK-662, decided 2026-10-18: `0` meant "the policy" on three backends and "no retries" on six.)
+
+#### Scenario: A job that sets no budget follows the queue's policy
+
+- **Given** a queue whose `RetryPolicy.MaxRetries` is `2` and a job enqueued with `MaxRetries = null`
+- **When** every claim of it fails
+- **Then** it is claimed twice and is then `Dead`, and `GetAsync` reads `MaxRetries` back as `null`
+
+#### Scenario: A budget of zero means no retry
+
+- **Given** the same queue and a job enqueued with `MaxRetries = 0`
+- **When** its first claim fails
+- **Then** it is `Dead` after that one attempt, on every backend
+
+#### Scenario: An old SQL column is reported, not silently relied on
+
+- **Given** a `__BackgroundJobs` table whose `MaxRetries` column is `NOT NULL`
+- **When** `DetectDrift(typeof(JobDescriptorModel))` runs
+- **Then** it reports `MaxRetries` as `NullabilityMismatch`, and enqueueing a job with `MaxRetries = null` fails
 
 ### Requirement: Shared contracts retry policy is a distinct type with different defaults
 
@@ -390,8 +418,8 @@ The system SHALL, on `SqlJobQueue<DB>` only, additionally treat as a dequeue can
 and SHALL claim it through the same `ClaimToken` conditional update as any other candidate, except that a
 reclaim's filter requires the row to be still stale — `j.Guid == claimId && j.Status == Processing &&
 j.LastAttemptAt != null && j.LastAttemptAt < staleBefore` — rather than merely still `Processing`. When such
-a stale candidate's `AttemptCount` is already `>= MaxRetries` (the row's own value, with no queue-policy
-fallback), the system SHALL instead mark it `Dead`, stamp `CompletedAt`, set `LastError` to an
+a stale candidate's `AttemptCount` is already `>= RetryPolicy.MaxRetriesFor(MaxRetries)` (the row's own value, or the
+queue's policy when it is null), the system SHALL instead mark it `Dead`, stamp `CompletedAt`, set `LastError` to an
 `"Abandoned: held in Processing for longer than {claimTimeout} after {AttemptCount} attempt(s), and the attempt budget is spent."`
 message, and move on to the next candidate within the same `MaxClaimAttempts` budget; that burial is a
 conditional `PropertyUpdate` under the same still-stale filter, not a write of the whole row. No other backend

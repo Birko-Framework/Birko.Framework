@@ -52,6 +52,12 @@ namespace Birko.BackgroundJobs
         /// <summary>
         /// Default retry policy: 3 retries with exponential backoff starting at 30s.
         /// </summary>
+        /// <summary>
+        /// How many attempts a job gets (TASK-662): its own <see cref="JobDescriptor.MaxRetries"/> when set, otherwise this
+        /// policy's <see cref="MaxRetries"/>. The one producer every queue asks, so the nine backends cannot disagree again.
+        /// </summary>
+        public int MaxRetriesFor(int? jobMaxRetries) => jobMaxRetries ?? MaxRetries;
+
         public static RetryPolicy Default => new();
 
         /// <summary>

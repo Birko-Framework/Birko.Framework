@@ -1107,7 +1107,7 @@ Every other backend reads with `j.Guid == jobId && (Status == Pending || Status 
 
 `../Birko.BackgroundJobs.SQL/SqlJobQueue.cs:152`  ·  _restates a first-pass finding_
 
-**Verdict: CONFIRMED, spawned as [[TASK-662]]** (TASK-158). SQL (including its reclaim), MongoDB, ES, XML, Cosmos and Redis compare a bare `AttemptCount < MaxRetries`, while InMemory, JSON and Raven fall back to the policy for 0. **Decided by the user:** `MaxRetries` becomes nullable (null = the policy, 0 = no retries). That is a signature change on every backend, so it is its own task.
+**Verdict: CONFIRMED, spawned as [[TASK-662]]** (TASK-158). SQL (including its reclaim), MongoDB, ES, XML, Cosmos and Redis compare a bare `AttemptCount < MaxRetries`, while InMemory, JSON and Raven fall back to the policy for 0. **Decided by the user:** `MaxRetries` becomes nullable (null = the policy, 0 = no retries). That is a signature change on every backend, so it is its own task. **Fixed by TASK-662:** `int?` with default 3, `RetryPolicy.MaxRetriesFor` asked by all nine backends; tested null / 0 / 1 / 3 on every backend (Mongo, Raven, Redis also live), and an old SQL NOT NULL column measured as drift.
 
 InMemory (reference, line 86), JSON (134) and RavenDB (141) compute `maxRetries = model.MaxRetries > 0 ? model.MaxRetries : _retryPolicy.MaxRetries`. SQL:152, MongoDB:137, ElasticSearch:138, XML:132, Cosmos:100 and Redis:204 compare the bare `AttemptCount < MaxRetries`. A descriptor built with MaxRetries left at 0 goes to Dead on its first failure on those six, and the RetryPolicy passed to the constructor is silently never consulted - the same defect CR-L025/L029 fixed on the other three.
 
@@ -1179,7 +1179,7 @@ DequeueAsync reads Status and ScheduledAt under `_lock`, but FailAsync/CompleteA
 
 `../Birko.BackgroundJobs.SQL/SqlJobQueue.cs:112`
 
-**Verdict: CONFIRMED, fixed on SQL, MongoDB, ES and RavenDB** (TASK-158). The claim guard was Status-only (ABA). It now also requires the `AttemptCount` the worker read, which every fail-and-reschedule increments. Red on HEAD (SQLite, forced interleaving: B claimed a job inside its backoff, AttemptCount 1 instead of 2). Mongo / ES / Raven take the same code and pass their live suites.
+**Verdict: CONFIRMED, fixed on SQL, MongoDB, ES and RavenDB** (TASK-158). The claim guard was Status-only (ABA). It now also requires the `AttemptCount` the worker read, which every fail-and-reschedule increments. Red on HEAD (SQLite, forced interleaving: B claimed a job inside its backoff, AttemptCount 1 instead of 2). Mongo / ES / Raven take the same code. **Corrected by TASK-662:** only ES ran live. The Mongo and Raven job suites used in-memory doubles; their live tests came with TASK-662, where the MongoDB queue could not claim at all on a real server (a `$set` of a Guid threw in the store), now fixed.
 
 The conditional update is `j.Guid == claimId && j.Status == originalStatus` and sets AttemptCount to the *stale* `candidate.AttemptCount + 1`. Worker B can read a Scheduled candidate, stall while worker A claims (Processing), runs and fails it back to Scheduled, then issue its UPDATE - the WHERE matches again, B's ClaimToken verifies, and B executes the job immediately in defiance of ScheduledAt while rewriting AttemptCount downward, granting extra retries. Identical code at Mongo:99, ES:100, Raven:100.
 

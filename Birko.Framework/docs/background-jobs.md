@@ -43,18 +43,22 @@ Full persistence model tracked in the queue:
 ```csharp
 public class JobDescriptor
 {
-    public Guid Id { get; }
-    public string JobType { get; }          // Assembly-qualified type name
-    public string? SerializedInput { get; } // JSON-serialized input
-    public JobStatus Status { get; }
-    public int RetryCount { get; }
-    public int MaxRetries { get; }
-    public JobPriority Priority { get; }
-    public DateTime? ScheduledAt { get; }
-    public DateTime? StartedAt { get; }
-    public DateTime? CompletedAt { get; }
-    public string? Error { get; }
-    public IDictionary<string, string> Metadata { get; }
+    public Guid Guid { get; set; }
+    public string JobType { get; set; }          // Assembly-qualified type name
+    public string? SerializedInput { get; set; } // JSON-serialized input
+    public string? InputType { get; set; }
+    public string? QueueName { get; set; }
+    public int Priority { get; set; }            // Higher is dequeued first
+    public int? MaxRetries { get; set; } = 3;    // null = the queue's RetryPolicy, 0 = no retry
+    public TimeSpan? Delay { get; set; }
+    public JobStatus Status { get; set; }
+    public int AttemptCount { get; set; }
+    public DateTime EnqueuedAt { get; set; }
+    public DateTime? ScheduledAt { get; set; }
+    public DateTime? LastAttemptAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public string? LastError { get; set; }
+    public Dictionary<string, string> Metadata { get; set; }
 }
 ```
 
@@ -179,10 +183,17 @@ the processor stops and running jobs get their cancellation; the host waits for 
 var policy = new RetryPolicy
 {
     MaxRetries = 5,
-    InitialDelay = TimeSpan.FromSeconds(10),
-    BackoffMultiplier = 2.0  // Exponential: 10s, 20s, 40s, 80s, 160s
+    BaseDelay = TimeSpan.FromSeconds(10),
+    MaxDelay = TimeSpan.FromHours(1),
+    UseExponentialBackoff = true  // 10s, 20s, 40s, 80s
 };
 ```
+
+A job gets `policy.MaxRetriesFor(job.MaxRetries)` attempts: its own `MaxRetries` when set, otherwise the policy's.
+Set `MaxRetries = null` on a job to defer to the queue's policy; `0` means no retry (dead on the first failure). A SQL
+`__BackgroundJobs` table created before this was nullable keeps a `NOT NULL` column, which `DetectDrift` reports; make
+it nullable (`ALTER TABLE … ALTER COLUMN MaxRetries INT NULL` on SQL Server, `… MODIFY MaxRetries INT NULL` on MySQL,
+`… ALTER COLUMN "MaxRetries" DROP NOT NULL` on PostgreSQL, a table rebuild on SQLite) before enqueueing a null budget.
 
 ## Queue Backends
 
