@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### OAuth server issues tokens for a federated sign-in (2026-10-18)
+[[TASK-517]]. `TokenEndpointHandler.IssueForSubjectAsync(clientId, subject, scope, claims)` gives a subject who signed in
+elsewhere (e.g. `github:42`) the server's own token pair. The refresh token renews through the normal grant, with
+rotation and reuse detection. Extra claims ride on `RefreshTokenRecord.Claims` (new; stores must persist it), so every
+refresh re-issues them. Registered claims are refused.
 ### Caching low triage: TTLs validated, nulls on Redis, a fenced lock (2026-10-18)
 [[TASK-184]]. 17 low findings: 16 confirmed (2 already fixed by TASK-169), 1 narrower. Decided by the user:
 - A zero or negative TTL is refused on every backend (`CacheEntryOptions.Validate`).
@@ -327,13 +332,6 @@ run's outcomes apart).
 - SSE parsing follows the grammar, and a negative retry count still sends once.
 - The agent refuses zero iterations and counts a response once.
 - Tools resolve paths one way, report no matches explicitly, and keep a timed-out command's output.
-### LLM provider and agent triage: robust parsers, honest tool failures (2026-10-18)
-[[TASK-160]]. 20 medium findings: 19 confirmed and 1 narrower. Each was reproduced red, and 18 are fixed here.
-- OpenAI-style parsers survive `null` error, tool-call and usage fields, and read `finish_reason`. A `length` stop is
-  `max_tokens` and does not run a truncated tool call.
-- Every built-in tool's failure starts with `Error:`. `run_command` reports a non-zero exit, `search_code` honours
-  allowed paths and times out a runaway regex, and `ask_user` lets cancellation through.
-- `AgentFactory` is thread-safe. `AgentOptions.Merge` copies only what the other instance set.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

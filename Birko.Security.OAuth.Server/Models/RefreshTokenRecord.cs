@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Birko.Data.Models;
 
 namespace Birko.Security.OAuth.Server.Models;
@@ -19,4 +20,12 @@ public class RefreshTokenRecord : AbstractModel
 
     /// <summary>Set to <c>true</c> on rotation, logout, or compromise.</summary>
     public bool Revoked { get; set; }
+
+    /// <summary>
+    /// Extra access-token claims, beyond the registered ones (<c>sub</c>, <c>client_id</c>, <c>iss</c>, <c>scope</c>),
+    /// re-issued on every refresh and carried to the rotated record. Set by
+    /// <see cref="Endpoints.Token.TokenEndpointHandler.IssueForSubjectAsync"/>; empty for the protocol grants.
+    /// A store must persist it, or a refreshed access token loses these claims.
+    /// </summary>
+    public Dictionary<string, string> Claims { get; set; } = new();
 }

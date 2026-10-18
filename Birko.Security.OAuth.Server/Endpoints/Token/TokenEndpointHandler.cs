@@ -85,6 +85,72 @@ public class TokenEndpointHandler
         };
     }
 
+    /// <summary>
+    /// Claims an extra-claims dictionary may not set: the ones this handler writes itself, and the JWT
+    /// registered claims the token provider writes.
+    /// </summary>
+    private static readonly HashSet<string> ReservedClaims = new(StringComparer.Ordinal)
+    {
+        "sub", "client_id", "iss", "scope", "aud", "exp", "iat", "nbf", "jti"
+    };
+
+    /// <summary>
+    /// Issues an access + refresh token pair for a subject that authenticated outside this server (a federated
+    /// sign-in such as GitHub), as if an authorization had just completed for <paramref name="clientId"/>. The
+    /// refresh token then renews through the normal <c>refresh_token</c> grant, with rotation and reuse detection.
+    /// </summary>
+    /// <param name="clientId">A registered, enabled client allowed the <c>refresh_token</c> grant.</param>
+    /// <param name="subject">The <c>sub</c> claim, any string (e.g. <c>github:42</c>).</param>
+    /// <param name="scope">
+    /// Space-separated scope, narrowed to the client's allowed scopes and the server's supported scopes as for
+    /// <c>client_credentials</c>; null or empty grants all of them.
+    /// </param>
+    /// <param name="claims">
+    /// Extra access-token claims (e.g. <c>name</c>, <c>roles</c>), stored on the refresh record and re-issued on every
+    /// refresh. A registered claim (<c>sub</c>, <c>client_id</c>, <c>iss</c>, <c>scope</c>, <c>aud</c>, <c>exp</c>,
+    /// <c>iat</c>, <c>nbf</c>, <c>jti</c>) is refused rather than silently overridden: permissions belong in
+    /// <paramref name="scope"/>.
+    /// </param>
+    /// <exception cref="OAuthServerException">
+    /// <c>invalid_client</c> for an unknown or disabled client; <c>unauthorized_client</c> when the client may not use
+    /// the <c>refresh_token</c> grant (the refresh token would be unusable); <c>invalid_scope</c> when none of the
+    /// requested scopes is allowed.
+    /// </exception>
+    /// <remarks>
+    /// The caller is trusted: no client secret is checked, because the server's own host is the one asserting the
+    /// sign-in. Never expose this as an endpoint.
+    /// </remarks>
+    public async Task<TokenResponse> IssueForSubjectAsync(
+        string clientId,
+        string subject,
+        string? scope = null,
+        IReadOnlyDictionary<string, string>? claims = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(clientId)) throw new ArgumentException("A client id is required.", nameof(clientId));
+        if (string.IsNullOrEmpty(subject)) throw new ArgumentException("A subject is required.", nameof(subject));
+        var extra = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (claims != null)
+        {
+            foreach (var (name, value) in claims)
+            {
+                if (ReservedClaims.Contains(name))
+                    throw new ArgumentException($"The claim '{name}' is set by the server and cannot be supplied.", nameof(claims));
+                extra[name] = value ?? throw new ArgumentException($"The claim '{name}' has no value.", nameof(claims));
+            }
+        }
+
+        var client = await _clients.GetByClientIdAsync(clientId, ct).ConfigureAwait(false);
+        if (client == null || !client.IsEnabled)
+            throw new OAuthServerException(OAuthErrorCodes.InvalidClient, "Unknown or disabled client.");
+        if (!client.AllowedGrantTypes.Contains(OAuthGrantTypes.RefreshToken))
+            throw new OAuthServerException(OAuthErrorCodes.UnauthorizedClient,
+                $"Client is not authorized to use grant type '{OAuthGrantTypes.RefreshToken}', so its refresh token could not be used.");
+
+        var granted = ScopeUtil.NarrowScope(scope, client.AllowedScopes, _settings.SupportedScopes);
+        return await IssueTokenPairAsync(client.ClientId, subject, granted, extra, ct).ConfigureAwait(false);
+    }
+
     private async Task<OAuthClient> AuthenticateClientAsync(TokenRequest request, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(request.ClientId))
@@ -154,7 +220,7 @@ public class TokenEndpointHandler
         code.Used = true;
         await _codes.UpdateAsync(code, ct: ct).ConfigureAwait(false);
 
-        return await IssueTokenPairAsync(client.ClientId, code.UserId, code.Scope, ct).ConfigureAwait(false);
+        return await IssueTokenPairAsync(client.ClientId, code.UserId, code.Scope, null, ct).ConfigureAwait(false);
     }
 
     private async Task<TokenResponse> HandleRefreshTokenAsync(OAuthClient client, TokenRequest request, CancellationToken ct)
@@ -184,11 +250,11 @@ public class TokenEndpointHandler
         {
             record.Revoked = true;
             await _refreshes.UpdateAsync(record, ct: ct).ConfigureAwait(false);
-            return await IssueTokenPairAsync(client.ClientId, record.UserId, scope, ct).ConfigureAwait(false);
+            return await IssueTokenPairAsync(client.ClientId, record.UserId, scope, record.Claims, ct).ConfigureAwait(false);
         }
 
         // No rotation — keep the old refresh token, issue only a new access token.
-        var response = IssueAccessToken(client.ClientId, subject: record.UserId, scope: scope);
+        var response = IssueAccessToken(client.ClientId, subject: record.UserId, scope: scope, extra: record.Claims);
         response.RefreshToken = request.RefreshToken;
         return response;
     }
@@ -223,19 +289,25 @@ public class TokenEndpointHandler
         {
             DeviceCodeStatus.Pending => throw new OAuthServerException(OAuthErrorCodes.AuthorizationPending, "User has not yet completed authorization."),
             DeviceCodeStatus.Denied => throw new OAuthServerException(OAuthErrorCodes.AccessDenied, "User denied the request."),
-            DeviceCodeStatus.Authorized => await IssueTokenPairAsync(client.ClientId, device.UserId ?? string.Empty, device.Scope, ct).ConfigureAwait(false),
+            DeviceCodeStatus.Authorized => await IssueTokenPairAsync(client.ClientId, device.UserId ?? string.Empty, device.Scope, null, ct).ConfigureAwait(false),
             _ => throw new OAuthServerException(OAuthErrorCodes.ServerError, "Unknown device-code state.")
         };
     }
 
-    private TokenResponse IssueAccessToken(string clientId, string subject, string scope)
+    private TokenResponse IssueAccessToken(string clientId, string subject, string scope, IReadOnlyDictionary<string, string>? extra = null)
     {
-        var claims = new Dictionary<string, string>
+        // Extra claims first, so the registered ones always win (IssueForSubjectAsync also refuses them up front).
+        var claims = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (extra != null)
         {
-            ["sub"] = subject,
-            ["client_id"] = clientId,
-            ["iss"] = _settings.GetIssuer()
-        };
+            foreach (var (name, value) in extra)
+            {
+                if (!ReservedClaims.Contains(name)) claims[name] = value;
+            }
+        }
+        claims["sub"] = subject;
+        claims["client_id"] = clientId;
+        claims["iss"] = _settings.GetIssuer();
         if (!string.IsNullOrEmpty(scope)) claims["scope"] = scope;
 
         var opts = new TokenOptions
@@ -257,9 +329,9 @@ public class TokenEndpointHandler
         };
     }
 
-    private async Task<TokenResponse> IssueTokenPairAsync(string clientId, string userId, string scope, CancellationToken ct)
+    private async Task<TokenResponse> IssueTokenPairAsync(string clientId, string userId, string scope, IReadOnlyDictionary<string, string>? extra, CancellationToken ct)
     {
-        var response = IssueAccessToken(clientId, subject: userId, scope: scope);
+        var response = IssueAccessToken(clientId, subject: userId, scope: scope, extra: extra);
 
         var refresh = RandomStringGenerator.Base64Url(32);
         var record = new RefreshTokenRecord
@@ -268,7 +340,8 @@ public class TokenEndpointHandler
             ClientId = clientId,
             UserId = userId,
             Scope = scope,
-            ExpiresAt = _clock.UtcNow.AddSeconds(_settings.RefreshTokenLifetimeSeconds)
+            ExpiresAt = _clock.UtcNow.AddSeconds(_settings.RefreshTokenLifetimeSeconds),
+            Claims = extra == null ? new Dictionary<string, string>() : new Dictionary<string, string>(extra)
         };
         await _refreshes.CreateAsync(record, ct: ct).ConfigureAwait(false);
 

@@ -71,6 +71,15 @@ PostgreSQL / TimescaleDB `ALTER COLUMN "MaxRetries" DROP NOT NULL`, SQLite a tab
 under driver 3.x, so the MongoDB job queue could not claim a job on a real server (its tests ran on an in-memory
 double). A set value is now written with the member's own serializer; a null is `BsonNull`. Measured live.
 
+## 2026-10-18 — LLM provider and agent triage: robust parsers, honest tool failures
+
+[[TASK-160]]. 20 medium findings: 19 confirmed and 1 narrower. Each was reproduced red, and 18 are fixed here.
+- OpenAI-style parsers survive `null` error, tool-call and usage fields, and read `finish_reason`. A `length` stop is
+  `max_tokens` and does not run a truncated tool call.
+- Every built-in tool's failure starts with `Error:`. `run_command` reports a non-zero exit, `search_code` honours
+  allowed paths and times out a runaway regex, and `ask_user` lets cancellation through.
+- `AgentFactory` is thread-safe. `AgentOptions.Merge` copies only what the other instance set.
+
 ## 2026-10-18 — Conversation checkpoints restore what the agent built; a trim keeps tool pairs
 
 [[TASK-535]]. `ConversationCheckpoint` saves a conversation and restores it in the agent's in-memory shapes, so

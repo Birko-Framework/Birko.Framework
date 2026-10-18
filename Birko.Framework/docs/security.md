@@ -492,6 +492,23 @@ Features:
 
 `password` (resource-owner) and implicit (`response_type=token`) are intentionally **not** supported — both are deprecated by OAuth 2.1.
 
+### Federated sign-in (TASK-517)
+
+A subject who signed in elsewhere (GitHub, a corporate IdP) gets the server's own token pair from
+`TokenEndpointHandler.IssueForSubjectAsync(clientId, subject, scope, claims)`. The pair behaves as if an authorization had
+just completed, so the refresh token renews through the normal `refresh_token` grant, with rotation and reuse detection.
+
+```csharp
+var tokens = await oauthServer.Token.IssueForSubjectAsync(
+    "web", "github:42", "read write",
+    new Dictionary<string, string> { ["name"] = "octocat", ["roles"] = "admin" });
+```
+
+- The client must exist, be enabled and be allowed `refresh_token`. The scope is narrowed as for `client_credentials`.
+- Extra claims are stored on `RefreshTokenRecord.Claims` and re-issued on every refresh, so a store must persist that
+  property. A registered claim (`sub`, `client_id`, `iss`, `scope`, `aud`, `exp`, `iat`, `nbf`, `jti`) is refused.
+- No client secret is checked: the host asserts the sign-in. Never expose it as an endpoint.
+
 ### Composition root
 
 `OAuthServer` owns one handler per endpoint. The host instantiates one (typically as a singleton) and routes incoming HTTP requests to the matching handler.
