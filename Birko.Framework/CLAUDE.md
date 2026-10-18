@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Opt-in loopback-only auth bypass (2026-10-18)
+[[TASK-522]]. `BirkoSecurityOptions.LoopbackBypass` with `UseBirkoLoopbackBypass()` lets local tools call a loopback-only
+server without a token. It decides from the addresses Kestrel actually bound. Measured: DraCode's rule, read from the
+configured URLs, bypassed while bound to `[::]`. Unknown or wildcard binds enforce, and the host refuses to start if the
+bypass is enabled without its middleware.
 ### GitHub web sign-in helpers; OAuthClient survives GitHub's 200 errors (2026-10-18)
 [[TASK-521]]. New `IOAuthStateStore` (single-use, expiring, browser-bound sign-in state), `IOAuthCodeExchanger`,
 GitHub web-flow settings and `GitHubUserClient`. Measured: GitHub answers errors with HTTP 200, so `OAuthClient` threw
@@ -325,11 +330,6 @@ such a job again, to one worker, or buries it as Dead when its attempts are spen
 RavenDB store has no native filtered update, so TASK-158's "guarded" update ran as a possibly stale index query and an
 unconditional write. `AsyncRavenDBStore.UpdateIfAsync` loads by id and saves with optimistic concurrency; the queue's
 claim and transitions use it, as Cosmos does since TASK-661.
-### Redis job queue: every transition is one script, and priority dominates (2026-10-18)
-[[TASK-663]]. Measured live: a Cancelled, Completed or Dead descriptor was dequeued and run, a cancel raced a claim
-and both won (5 of 5 runs), racing Complete / Fail left a job in two status sets, and priority spanned under 1 ms of
-score. Enqueue, dequeue, Complete, Fail and Cancel are each one guarded Lua script; due jobs move to a ready set ranked
-by priority, then age (decided by the user: as on every backend). Jobs stored before are still served.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

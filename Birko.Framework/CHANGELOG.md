@@ -46,6 +46,13 @@ message id; MQTT keeps several handlers per filter and releases them properly, a
 subscriber no longer stops reconnect; the in-memory transport keeps a failed ManualAck message requeueable, removes a
 disposed consumer's handlers, and a delayed send outlives the caller's token (an already-cancelled call now throws).
 
+## 2026-10-18 — Redis job queue: every transition is one script, and priority dominates
+
+[[TASK-663]]. Measured live: a Cancelled, Completed or Dead descriptor was dequeued and run, a cancel raced a claim
+and both won (5 of 5 runs), racing Complete / Fail left a job in two status sets, and priority spanned under 1 ms of
+score. Enqueue, dequeue, Complete, Fail and Cancel are each one guarded Lua script; due jobs move to a ready set ranked
+by priority, then age (decided by the user: as on every backend). Jobs stored before are still served.
+
 ## 2026-10-18 — Cosmos DB job queue claims each job once; the store gains a compare-and-set
 
 [[TASK-661]]. Measured on the emulator: 6 concurrent dequeuers claimed 6 jobs 24 times (4 distinct), Cancel cancelled a

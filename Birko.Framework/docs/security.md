@@ -224,6 +224,15 @@ builder.Services.AddBirkoSecurity(options =>
 
 This registers: JWT Bearer authentication, `ICurrentUser`, `IPermissionChecker`, `ITenantResolver`, and `ITenantContext`.
 
+### Loopback-only bypass (TASK-522)
+
+`options.LoopbackBypass = true` (off by default) lets a token-less request through as a principal holding `*` in the
+configured `PermissionClaim`, but only while every address the server actually bound is loopback (read per request from
+`IServerAddressesFeature`, not from configured URLs). Unknown, wildcard (`0.0.0.0`, `[::]`, `*`, `+`) or other
+addresses enforce authentication, and a request with a valid token keeps its own principal. It needs
+`app.UseBirkoLoopbackBypass()` after `UseAuthentication()`; without it the host refuses to start. Never enable it behind
+a reverse proxy on the same machine: the proxy forwards remote callers over loopback.
+
 ### ICurrentUser
 
 Access the authenticated user from any service via DI:

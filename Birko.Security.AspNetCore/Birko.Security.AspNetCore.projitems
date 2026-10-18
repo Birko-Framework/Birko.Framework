@@ -50,6 +50,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Authentication/JwtAuthenticationOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authentication/JwtBearerExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authentication/TokenServiceAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authentication/LoopbackBypass.cs" />
     <!-- Authorization -->
     <Compile Include="$(MSBuildThisFileDirectory)Authorization/ClaimsPermissionChecker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authorization/PermissionEndpointFilter.cs" />
@@ -67,5 +68,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Extensions/PermissionResolutionExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions/TenantHeaderGuardExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions/TenantHeaderGuardStartupCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions/LoopbackBypassExtensions.cs" />
   </ItemGroup>
 </Project>

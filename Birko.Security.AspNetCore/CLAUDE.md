@@ -17,7 +17,8 @@ Birko.Security.AspNetCore/
 │   ├── JwtClaimNames.cs             - Standard claim name constants (sub, email, tenant_id, role, permission)
 │   ├── JwtAuthenticationOptions.cs  - JWT Bearer configuration (Secret, Issuer, Audience, Expiration, ClockSkew, Claims mapping)
 │   ├── JwtBearerExtensions.cs       - AddBirkoJwtBearer() DI extension method
-│   └── TokenServiceAdapter.cs       - Wraps ITokenProvider with TokenRequest/TokenValidationInfo records
+│   ├── TokenServiceAdapter.cs       - Wraps ITokenProvider with TokenRequest/TokenValidationInfo records
+│   └── LoopbackBypass.cs            - TASK-522: ShouldBypass decision + LoopbackBypassMiddleware (opt-in, loopback-only binds)
 ├── Authorization/
 │   ├── ClaimsPermissionChecker.cs   - IPermissionChecker from JWT claims (wildcard "*" superadmin support)
 │   └── PermissionEndpointFilter.cs  - Minimal API RequirePermission() endpoint filter
@@ -31,7 +32,8 @@ Birko.Security.AspNetCore/
 └── Extensions/
     ├── SecurityServiceExtensions.cs - AddBirkoSecurity() one-line DI (JWT + User + Permissions + Tenant)
     ├── TenantHeaderGuardExtensions.cs - UseBirkoTenantHeaderGuard() middleware wiring (sets the startup marker)
-    └── TenantHeaderGuardStartupCheck.cs - TASK-161: the host refuses to start when the guard is required but not wired
+    ├── TenantHeaderGuardStartupCheck.cs - TASK-161: the host refuses to start when the guard is required but not wired
+    └── LoopbackBypassExtensions.cs  - UseBirkoLoopbackBypass() + the startup check refusing an enabled bypass that is not wired
 ```
 
 ## Dependencies
@@ -52,6 +54,12 @@ Birko.Security.AspNetCore/
 - `TenantMiddleware` resolves tenant per-request and clears context after response
 - `TokenServiceAdapter` wraps raw `ITokenProvider` with structured `TokenRequest`/`TokenValidationInfo` records for type-safe claim handling
 - `BirkoSecurityOptions` is registered as a **singleton** so middleware (e.g. the header/claim guard) can read the resolved options
+- `LoopbackBypass` (off by default, TASK-522): with `app.UseBirkoLoopbackBypass()` between `UseAuthentication()` and
+  `UseAuthorization()`, a request without a token runs as a principal with the `*` permission when every address the
+  server **actually bound** (`IServerAddressesFeature`, per request) is loopback. Unknown addresses, a wildcard bind
+  (`0.0.0.0`, `[::]`) or any other address enforce. DraCode decided from the configured URLs, which a code-level
+  Kestrel `Listen` overrides: measured, it bypassed while bound to `[::]`. An enabled bypass without its middleware
+  refuses to start. Never enable it behind a same-machine reverse proxy (remote callers arrive over loopback)
 
 ### Tenant header/claim correlation (`TenantHeaderClaimGuardMiddleware`)
 

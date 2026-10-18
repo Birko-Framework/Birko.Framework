@@ -796,6 +796,32 @@ and register `ICurrentUser` → `ResolvedPermissionsCurrentUser` as scoped, leav
 - **When** a request reaches the middleware
 - **Then** the middleware's `IUserPermissionResolver` parameter cannot be resolved and the request fails with the container's own resolution exception
 
+### Requirement: An opt-in loopback bypass applies only while every bound address is loopback
+
+When `BirkoSecurityOptions.LoopbackBypass` is true and `UseBirkoLoopbackBypass()` runs between authentication and
+authorization, the system SHALL run an unauthenticated request as a principal holding the `*` permission only if every
+address in the server's `IServerAddressesFeature` is loopback. Unknown, wildcard or non-loopback addresses SHALL enforce
+authentication, and an authenticated request SHALL keep its own principal. An enabled bypass without the middleware
+SHALL refuse to start (TASK-522).
+
+#### Scenario: Configured loopback URL but bound to all interfaces
+
+- **Given** `LoopbackBypass = true`, `--urls http://127.0.0.1:0` and a Kestrel `ListenAnyIP`
+- **When** a request without a token arrives
+- **Then** it is answered 401, because the bound addresses include `[::]` (deciding from the configured URL bypassed here)
+
+#### Scenario: Off never bypasses
+
+- **Given** `LoopbackBypass = false` and a server bound to loopback only
+- **When** a request without a token arrives
+- **Then** authentication is enforced
+
+#### Scenario: An authenticated request keeps its principal
+
+- **Given** the bypass is active and a request carries a valid token
+- **When** it is authorized
+- **Then** it runs as the token's principal, not as the `*` principal
+
 ### Requirement: Static-token authentication allows everything only when deliberately switched off
 
 The system SHALL treat `AuthenticationConfiguration.Enabled = false` as the **only** state in which every

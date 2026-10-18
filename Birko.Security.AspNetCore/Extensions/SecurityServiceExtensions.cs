@@ -71,6 +71,16 @@ public class BirkoSecurityOptions
     /// </para>
     /// </summary>
     public bool RequireTenantHeaderMatchesClaim { get; set; } = true;
+
+    /// <summary>
+    /// Lets a request without a token through, as a principal with the wildcard permission, when every address the server
+    /// is bound to is loopback (TASK-522, DraCode's daemon mode: local tools call a server only this machine can reach).
+    /// Off by default. Fails safe: unknown addresses, a wildcard bind (<c>0.0.0.0</c>, <c>[::]</c>) or any non-loopback
+    /// address enforce authentication. Needs <c>app.UseBirkoLoopbackBypass()</c> between <c>UseAuthentication()</c> and
+    /// <c>UseAuthorization()</c>; the host refuses to start when this is on without it. Never enable it behind a reverse
+    /// proxy on the same machine: the proxy forwards remote callers over loopback.
+    /// </summary>
+    public bool LoopbackBypass { get; set; }
 }
 
 /// <summary>
@@ -108,6 +118,8 @@ public static class SecurityServiceExtensions
         services.AddSingleton(options);
         // SH-M354 (TASK-161): the header guard is on by default, so a pipeline without it refuses to start.
         services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter>(new TenantHeaderGuardStartupCheck(options));
+        // TASK-522: an enabled loopback bypass without its middleware refuses to start.
+        services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter>(new LoopbackBypassStartupCheck(options));
 
         // ICurrentUser — reads from JWT claims, unless one is already registered (UseResolvedPermissions called first:
         // SH-M255, an unconditional Add here registered last and won).
