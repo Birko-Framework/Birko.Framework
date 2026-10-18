@@ -176,7 +176,17 @@ AgentFactory.RegisterAlias("cs", "csharp");
 // Via factories (low-level control)
 var provider = LlmProviderFactory.Create("claude", new() { ["apiKey"] = "sk-..." });
 var agent = AgentFactory.Create(provider, agentType: "csharp");
-var result = await agent.RunAsync("Add unit tests for UserService");
+var conversation = await agent.RunAsync("Add unit tests for UserService");
+
+// The same run, telling the outcomes apart without matching "Error:" text (TASK-660):
+var result = await agent.RunWithOutcomeAsync("Add unit tests for UserService");
+switch (result.Outcome)
+{
+    case AgentRunOutcome.Completed: break;
+    case AgentRunOutcome.LlmFailed: Console.WriteLine($"{result.Failure?.Kind}: {result.Detail}"); break;
+    case AgentRunOutcome.MaxIterationsReached: Console.WriteLine("ran out of iterations; may be incomplete"); break;
+    default: Console.WriteLine($"{result.Outcome} ({result.StopReason})"); break;
+}
 
 // Via AgentRegistration convenience method (handles both factory calls)
 var agent = AgentRegistration.Create("claude",

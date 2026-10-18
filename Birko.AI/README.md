@@ -66,6 +66,13 @@ sealed class ReflectEvery3 : AgentHooks
 agent.Hooks = new ReflectEvery3();
 var conversation = await agent.RunAsync("Fix the build");
 
+// How did it end? RunWithOutcomeAsync returns the same conversation plus the outcome (TASK-660).
+var result = await agent.RunWithOutcomeAsync("Fix the build");
+if (result.Outcome == AgentRunOutcome.LlmFailed && result.Failure?.IsTransient == true)
+    await Task.Delay(result.Failure.RetryAfter ?? TimeSpan.FromSeconds(10)); // retry later
+// Completed, LlmFailed (with the classified Failure), NotConfigured, MaxIterationsReached, Truncated,
+// MissingToolCall, StoppedByHook, UnexpectedStop (with StopReason)
+
 // After a crash — continue a conversation checkpointed mid-run, exactly as it stands. No user turn is added,
 // so it must end in a user or tool-result turn; one ending in an assistant turn is refused (use ContinueAsync).
 await agent.ResumeAsync(checkpoint);

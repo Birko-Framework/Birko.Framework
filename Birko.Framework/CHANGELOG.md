@@ -46,6 +46,16 @@ message id; MQTT keeps several handlers per filter and releases them properly, a
 subscriber no longer stops reconnect; the in-memory transport keeps a failed ManualAck message requeueable, removes a
 disposed consumer's handlers, and a delayed send outlives the caller's token (an already-cancelled call now throws).
 
+## 2026-10-18 — Background-jobs low triage: Delay honoured, opt-in purge, PostgreSQL lock waits
+
+[[TASK-175]]. 24 low findings: 19 confirmed, 3 narrower, 2 refuted; 21 fixed or covered, 2 waived in part.
+- `Delay` on an enqueued job is honoured on every backend (it ran at once), and the in-memory queue refuses a duplicate
+  id and hands out copies.
+- **Opt-in purge, decided by the user:** `JobQueueOptions.PurgeInterval` (null = off) purges by `RetentionPeriod`.
+- Executor and scheduler: the executor checks a stored job type before building it, and a sub-second recurring job
+  fires at its rate.
+- PostgreSQL locks wait for the timeout, and a derived connector (e.g. TimescaleDB) now locks.
+
 ## 2026-10-18 — Elasticsearch job queue records an outcome reported right after the claim
 
 [[TASK-667]]. **Regression from TASK-158**, measured live: its guarded transitions were `update_by_query` calls, which

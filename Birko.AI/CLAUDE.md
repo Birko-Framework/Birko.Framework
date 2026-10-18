@@ -24,6 +24,10 @@ Core AI agent framework with LLM provider base class, agent run loop, factories,
   serves the streaming and non-streaming paths (only iteration 1 streams) — never reintroduce a second copy, it is
   how hooks or token flow drift on one path. `CurrentSystemPrompt` exposes the protected `SystemPrompt`;
   `ResumeAsync` continues a saved conversation without adding a user turn.
+- **How a run ended (TASK-660):** `RunWithOutcomeAsync` / `ContinueWithOutcomeAsync` / `ResumeWithOutcomeAsync` return
+  `AgentRunResult(Conversation, Outcome, Failure, StopReason, Detail)` (`Agents/AgentRunResult.cs`). `HandleResponse` /
+  `HandleToolUse` / the hook stop are where the outcome is set — return the result from there, never re-derive it from
+  the conversation text. The conversation-returning methods forward and return the same list.
 
 ### Agents/AgentHooks.cs
 - `IAgentHooks` / `AgentHooks` (no-op base) — attached via `Agent.Hooks`. `OnIterationStartingAsync(AgentIterationContext)`

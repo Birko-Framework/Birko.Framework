@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### An agent run reports how it ended (2026-10-18)
+[[TASK-660]]. New `RunWithOutcomeAsync` / `ContinueWithOutcomeAsync` / `ResumeWithOutcomeAsync` return an `AgentRunResult`.
+Its outcome is Completed, LlmFailed (with the classified `LlmFailure`), NotConfigured, MaxIterationsReached, Truncated,
+MissingToolCall, StoppedByHook or UnexpectedStop, so callers no longer match `"Error:"` text. `RunAsync` and the other
+two old methods are unchanged (decided by the user).
 ### Messaging options TASK-174 refused are honoured where a transport can (2026-10-18)
 [[TASK-668]].
 - TimeToLive works in memory and on MQTT 5 (new `MqttSettings.ProtocolVersion`).
@@ -322,14 +327,6 @@ Redeliveries carry `x-delivery-count`; `RedisConsumer.PollError` is public; any 
 - Deduplication releases its mark on failure. **Breaking:** `IDeduplicationStore.ReleaseAsync`.
 
 The outbox over the distributed bus now starts. Details: CHANGELOG.
-### Background-jobs low triage: Delay honoured, opt-in purge, PostgreSQL lock waits (2026-10-18)
-[[TASK-175]]. 24 low findings: 19 confirmed, 3 narrower, 2 refuted; 21 fixed or covered, 2 waived in part.
-- `Delay` on an enqueued job is honoured on every backend (it ran at once), and the in-memory queue refuses a duplicate
-  id and hands out copies.
-- **Opt-in purge, decided by the user:** `JobQueueOptions.PurgeInterval` (null = off) purges by `RetentionPeriod`.
-- Executor and scheduler: the executor checks a stored job type before building it, and a sub-second recurring job
-  fires at its rate.
-- PostgreSQL locks wait for the timeout, and a derived connector (e.g. TimescaleDB) now locks.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

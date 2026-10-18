@@ -165,7 +165,16 @@ Reasoning approach: Balanced
         /// </summary>
         public string CurrentSystemPrompt => SystemPrompt;
 
+        /// <summary>Runs <paramref name="task"/> and returns the conversation. To learn how the run ended, use <see cref="RunWithOutcomeAsync"/>.</summary>
         public async Task<List<Message>> RunAsync(string task, int? maxIterations = null, CancellationToken cancellationToken = default)
+            => (await RunWithOutcomeAsync(task, maxIterations, cancellationToken)).Conversation;
+
+        /// <summary>
+        /// Runs <paramref name="task"/> and returns the conversation with how the run ended (TASK-660): completed, an LLM
+        /// failure with its classified cause, not configured, out of iterations, truncated, or stopped otherwise. The
+        /// conversation is the one <see cref="RunAsync"/> returns. Cancellation throws, as there.
+        /// </summary>
+        public async Task<AgentRunResult> RunWithOutcomeAsync(string task, int? maxIterations = null, CancellationToken cancellationToken = default)
         {
             var conversation = new List<Message>
             {
@@ -174,7 +183,12 @@ Reasoning approach: Balanced
             return await RunWithHistoryAsync(conversation, maxIterations, cancellationToken);
         }
 
+        /// <summary>Adds a user message and continues the run. To learn how the run ended, use <see cref="ContinueWithOutcomeAsync"/>.</summary>
         public async Task<List<Message>> ContinueAsync(List<Message> conversationHistory, string newUserMessage, int? maxIterations = null, CancellationToken cancellationToken = default)
+            => (await ContinueWithOutcomeAsync(conversationHistory, newUserMessage, maxIterations, cancellationToken)).Conversation;
+
+        /// <summary>Like <see cref="ContinueAsync"/>, returning how the run ended as well (TASK-660).</summary>
+        public async Task<AgentRunResult> ContinueWithOutcomeAsync(List<Message> conversationHistory, string newUserMessage, int? maxIterations = null, CancellationToken cancellationToken = default)
         {
             var conversation = new List<Message>(conversationHistory);
             conversation.Add(new Message { Role = "user", Content = newUserMessage });
@@ -189,6 +203,11 @@ Reasoning approach: Balanced
         /// <exception cref="ArgumentException">The conversation is empty, or ends in an assistant turn
         /// (there is nothing for the model to answer).</exception>
         public async Task<List<Message>> ResumeAsync(IEnumerable<Message> conversation, int? maxIterations = null, CancellationToken cancellationToken = default)
+            => (await ResumeWithOutcomeAsync(conversation, maxIterations, cancellationToken)).Conversation;
+
+        /// <summary>Like <see cref="ResumeAsync"/>, returning how the run ended as well (TASK-660).</summary>
+        /// <exception cref="ArgumentException">As <see cref="ResumeAsync"/>.</exception>
+        public async Task<AgentRunResult> ResumeWithOutcomeAsync(IEnumerable<Message> conversation, int? maxIterations = null, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(conversation);
 
@@ -201,13 +220,13 @@ Reasoning approach: Balanced
             return await RunWithHistoryAsync(copy, maxIterations, cancellationToken);
         }
 
-        private async Task<List<Message>> RunWithHistoryAsync(List<Message> conversation, int? maxIterations = null, CancellationToken cancellationToken = default)
+        private async Task<AgentRunResult> RunWithHistoryAsync(List<Message> conversation, int? maxIterations = null, CancellationToken cancellationToken = default)
         {
             return await RunLoopAsync(conversation, _options.EnableStreaming, Hooks, maxIterations, cancellationToken);
         }
 
         // The only run loop — streaming and sync share it so hooks and the token cannot drift between paths.
-        private async Task<List<Message>> RunLoopAsync(List<Message> conversation, bool streaming, IAgentHooks? hooks, int? maxIterations, CancellationToken cancellationToken)
+        private async Task<AgentRunResult> RunLoopAsync(List<Message> conversation, bool streaming, IAgentHooks? hooks, int? maxIterations, CancellationToken cancellationToken)
         {
             var maxIter = maxIterations ?? _options.MaxIterations;
             // SH-L160: zero or fewer iterations returned the seed conversation with no model call and no signal.
@@ -219,8 +238,8 @@ Reasoning approach: Balanced
                 var systemPrompt = SystemPrompt;
                 var streamThisCall = streaming && iteration == 1;
 
-                if (hooks != null && await StoppedByIterationHookAsync(hooks, conversation, iteration, maxIter, streamThisCall, systemPrompt, cancellationToken))
-                    return conversation;
+                if (hooks != null && await StoppedByIterationHookAsync(hooks, conversation, iteration, maxIter, streamThisCall, systemPrompt, cancellationToken) is { } hookStop)
+                    return hookStop;
 
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -237,17 +256,20 @@ Reasoning approach: Balanced
                 conversation.Add(new Message { Role = "assistant", Content = response.Content });
 
                 var result = await HandleResponse(response, conversation, iteration, maxIter, hooks, cancellationToken);
-                if (result.HasValue)
-                    return conversation;
+                if (result != null)
+                    return result;
             }
 
+            // Not reached today: the last iteration's tool_use turn already ends the run as MaxIterationsReached. Kept so
+            // the loop's own exit answers the same way if that changes.
             if (_options.Verbose)
                 SendMessage("warning", $"Maximum iterations ({maxIter}) reached.");
 
-            return conversation;
+            return new AgentRunResult(conversation, AgentRunOutcome.MaxIterationsReached);
         }
 
-        private async Task<bool> StoppedByIterationHookAsync(IAgentHooks hooks, List<Message> conversation, int iteration, int maxIter,
+        // Null when the run goes on; otherwise the StoppedByHook result.
+        private async Task<AgentRunResult?> StoppedByIterationHookAsync(IAgentHooks hooks, List<Message> conversation, int iteration, int maxIter,
             bool streamThisCall, string systemPrompt, CancellationToken cancellationToken)
         {
             var context = new AgentIterationContext(iteration, maxIter, streamThisCall, systemPrompt, conversation.AsReadOnly(), cancellationToken);
@@ -257,11 +279,11 @@ Reasoning approach: Balanced
                 conversation.Add(new Message { Role = "user", Content = message });
 
             if (!context.StopRequested)
-                return false;
+                return null;
 
             if (_options.Verbose)
                 SendMessage("info", $"Run stopped by hook at iteration {iteration}{(context.StopReason is null ? "" : $": {context.StopReason}")}");
-            return true;
+            return new AgentRunResult(conversation, AgentRunOutcome.StoppedByHook, Detail: context.StopReason);
         }
 
         private async Task<LlmResponse> GetSyncResponseAsync(List<Message> conversation, string systemPrompt, CancellationToken cancellationToken)
@@ -344,10 +366,9 @@ Reasoning approach: Balanced
             }
         }
 
-        // Returns non-null (true) when the iteration loop should stop, null to continue. Neither the
-        // Done nor Continue flags of the former tuple were ever consulted by the callers, so the tuple
-        // machinery was pure complexity (CR-L002).
-        private async Task<bool?> HandleResponse(LlmResponse response, List<Message> conversation, int iteration, int maxIter, IAgentHooks? hooks, CancellationToken cancellationToken = default)
+        // Returns how the run ended when this turn ends it, null to continue. This is the one place each terminal path is
+        // decided, so the outcome is set here rather than re-derived by a caller (TASK-660; the former bool? only said "stop").
+        private async Task<AgentRunResult?> HandleResponse(LlmResponse response, List<Message> conversation, int iteration, int maxIter, IAgentHooks? hooks, CancellationToken cancellationToken = default)
         {
             switch (response.StopReason)
             {
@@ -357,27 +378,35 @@ Reasoning approach: Balanced
                 case "end_turn":
                     foreach (var block in (response.Content ?? Enumerable.Empty<ContentBlock>()).Where(b => b.Type == "text"))
                         SendMessage("assistant_final", block.Text ?? "");
-                    return true;
+                    return new AgentRunResult(conversation, AgentRunOutcome.Completed, StopReason: response.StopReason);
 
                 case "error":
                     var actualError = response.ErrorMessage ?? "Unknown LLM error";
                     SendMessage("error", $"LLM request failed: {actualError}");
                     EnsureErrorContent(response, conversation, $"Error: LLM request failed: {actualError}");
-                    return true;
+                    return new AgentRunResult(conversation, AgentRunOutcome.LlmFailed, response.Failure, response.StopReason, actualError);
 
                 case "NotConfigured":
                     SendMessage("error", $"Provider '{_llmProvider.Name}' is not properly configured.");
                     EnsureErrorContent(response, conversation, $"Error: Provider '{_llmProvider.Name}' is not properly configured.");
-                    return true;
+                    return new AgentRunResult(conversation, AgentRunOutcome.NotConfigured, response.Failure, response.StopReason, response.ErrorMessage);
+
+                case "max_tokens":
+                    // Not an error the conversation should spell out (TASK-160 keeps a truncated turn as it came): the result says it.
+                    if (_options.Verbose)
+                        SendMessage("warning", "The model's output was cut off by its token limit. Stopping.");
+                    return new AgentRunResult(conversation, AgentRunOutcome.Truncated, StopReason: response.StopReason);
 
                 default:
+                    // The conversation is left as it was (no injected "Error:" text, whatever Verbose is): callers that read
+                    // the conversation see what they saw before. The stop reason travels on the result instead.
                     if (_options.Verbose)
                         SendMessage("warning", $"Unexpected stop reason: {response.StopReason ?? "unknown"}. Stopping.");
-                    return true;
+                    return new AgentRunResult(conversation, AgentRunOutcome.UnexpectedStop, StopReason: response.StopReason);
             }
         }
 
-        private async Task<bool?> HandleToolUse(LlmResponse response, List<Message> conversation, int iteration, int maxIter, IAgentHooks? hooks, CancellationToken cancellationToken = default)
+        private async Task<AgentRunResult?> HandleToolUse(LlmResponse response, List<Message> conversation, int iteration, int maxIter, IAgentHooks? hooks, CancellationToken cancellationToken = default)
         {
             var toolResults = new List<object>();
             var errorCount = 0;
@@ -390,7 +419,7 @@ Reasoning approach: Balanced
                 SendMessage("warning", "The model stopped for a tool call but sent none; ending the run.");
                 foreach (var text in (response.Content ?? []).Where(b => b.Type == "text"))
                     SendMessage("assistant_final", text.Text ?? "");
-                return true;
+                return new AgentRunResult(conversation, AgentRunOutcome.MissingToolCall, StopReason: response.StopReason);
             }
 
             foreach (var block in toolUses)
@@ -463,7 +492,7 @@ Reasoning approach: Balanced
             if (iteration >= maxIter)
             {
                 SendMessage("warning", $"Maximum iterations ({maxIter}) reached. Task may be incomplete.");
-                return true;
+                return new AgentRunResult(conversation, AgentRunOutcome.MaxIterationsReached, StopReason: response.StopReason);
             }
 
             // "All tool executions failed" — derived from the error counter tracked in the loop

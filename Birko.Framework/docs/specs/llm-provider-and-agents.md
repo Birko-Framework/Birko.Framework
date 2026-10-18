@@ -854,6 +854,36 @@ and normally continues; `"end_turn"` emits every text block as `"assistant_final
 `null`) emits a `"warning"` when `Verbose` and stops. For the `"error"` and `"NotConfigured"`
 cases the system SHALL ensure the assistant turn carries the error text.
 
+The system SHALL report how the run ended (TASK-660, decided by the user: a result type from new overloads).
+`RunWithOutcomeAsync` / `ContinueWithOutcomeAsync` / `ResumeWithOutcomeAsync` return an `AgentRunResult(Conversation,
+Outcome, Failure, StopReason, Detail)`, with the outcome set where the loop decides to stop:
+
+| Ending | `AgentRunOutcome` | Carried |
+|---|---|---|
+| `"end_turn"` | `Completed` | |
+| `"error"` | `LlmFailed` | the response's classified `LlmFailure`, the error message |
+| `"NotConfigured"` | `NotConfigured` | the failure, if any |
+| `"tool_use"` on the last iteration | `MaxIterationsReached` | |
+| `"max_tokens"` | `Truncated` | |
+| `"tool_use"` with no tool call | `MissingToolCall` | |
+| an iteration hook's `Stop` | `StoppedByHook` | the hook's reason; no stop reason |
+| any other value | `UnexpectedStop` | the stop reason |
+
+`RunAsync` / `ContinueAsync` / `ResumeAsync` SHALL return the same conversation as the outcome methods; the outcome is
+never written into the conversation (an unexpected stop injects no text, whatever `Verbose` is). Cancellation throws.
+
+#### Scenario: A failed call is told apart from a completed one
+
+- **Given** a provider answering `LlmResponse.Error("slow down", new LlmFailure(RateLimited, 429, 30 s))`
+- **When** `RunWithOutcomeAsync` runs
+- **Then** the outcome is `LlmFailed`, `Failure` is that failure (transient) and `Detail` is `"slow down"`
+
+#### Scenario: An unexpected stop leaves the conversation as it was
+
+- **Given** a response with `StopReason = "content_filter"`
+- **When** the run is made through `RunAsync` and through `RunWithOutcomeAsync`
+- **Then** both conversations are equal, and the result's outcome is `UnexpectedStop` with `StopReason = "content_filter"`
+
 #### Scenario: Error response with no content gets error text injected
 
 - **Given** an `"error"` response whose `Content` is empty
