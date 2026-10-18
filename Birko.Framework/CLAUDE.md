@@ -240,6 +240,10 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### client_credentials tokens can be shaped; a scope claim reads as permissions (2026-10-18)
+[[TASK-520]]. `TokenEndpointHandler.ShapeClientCredentialsToken` sets a service account's subject and extra claims
+without replacing the grant; registered claims are refused. `ClaimsCurrentUser` splits a `scope` permission claim on
+spaces too (RFC 6749 §3.3), so `"a b"` reads as two permissions. Commas still work, and other claims are unchanged.
 ### Birko.Security.OAuth.Server.AspNetCore: MapOAuthServer (2026-10-18)
 [[TASK-519]]. New project, from DraCode's `OAuthEndpoints.cs`. `MapOAuthServer()` maps `/token`, `/device_authorization`,
 `/device/approve`, `/authorize` and an opt-in `/register`. They take form or Basic client credentials and return RFC 6749
@@ -325,11 +329,6 @@ by priority, then age (decided by the user: as on every backend). Jobs stored be
 [[TASK-661]]. Measured on the emulator: 6 concurrent dequeuers claimed 6 jobs 24 times (4 distinct), Cancel cancelled a
 running or completed job and answered true, and Fail rescheduled an unclaimed job. `AsyncCosmosDBStore.UpdateIfAsync`
 is a compare-and-set on the item's ETag (a lost race re-reads and re-checks); claim, Complete, Fail and Cancel use it.
-### BREAKING: a job's MaxRetries is nullable; 0 means no retries everywhere (2026-10-18)
-[[TASK-662]]. `JobDescriptor.MaxRetries` is `int?`: `null` = the queue's `RetryPolicy`, `0` = no retry, on all nine
-backends (0 used to mean "the policy" on InMemory, JSON and RavenDB). An old SQL `MaxRetries NOT NULL` column refuses a
-null budget and is reported as drift. Fixed on the way: a MongoDB `$set` of a `Guid` threw, so the MongoDB job queue
-could not claim on a real server. Details: CHANGELOG.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

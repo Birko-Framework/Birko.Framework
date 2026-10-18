@@ -546,7 +546,21 @@ unauthenticated identity. `GetClaim` SHALL return the first value of an arbitrar
 
 The system SHALL make `ClaimsCurrentUser.Roles` and `.Permissions` collect **all** claims of the configured
 type, split each value on both `','` and `';'` with `RemoveEmptyEntries | TrimEntries`, and return the union
-as a set. Multiple same-named claims and a single joined claim are therefore equivalent to a reader.
+as a set. Multiple same-named claims and a single joined claim are therefore equivalent to a reader. A permission
+claim value SHALL also be split on spaces when `ClaimMappingOptions.SplitPermissionsOnSpace` is true, or, when it is
+null (the default), when `PermissionClaim` is `"scope"` (RFC 6749 §3.3 forbids spaces inside a scope token) (TASK-520).
+
+#### Scenario: A space-delimited scope reads as separate permissions
+
+- **Given** `PermissionClaim = "scope"` and a claim `"projects:read runs:write"`
+- **When** `Permissions` is read
+- **Then** the set is `{ "projects:read", "runs:write" }`
+
+#### Scenario: Other permission claims are not split on spaces by default
+
+- **Given** the default `PermissionClaim` and a claim `"a b"`
+- **When** `Permissions` is read
+- **Then** the set is `{ "a b" }`
 
 #### Scenario: Superadmin wildcard inside a joined value
 

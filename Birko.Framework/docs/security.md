@@ -509,6 +509,13 @@ var tokens = await oauthServer.Token.IssueForSubjectAsync(
   property. A registered claim (`sub`, `client_id`, `iss`, `scope`, `aud`, `exp`, `iat`, `nbf`, `jti`) is refused.
 - No client secret is checked: the host asserts the sign-in. Never expose it as an endpoint.
 
+### Shaping a client_credentials token (TASK-520)
+
+`TokenEndpointHandler.ShapeClientCredentialsToken` sets a `client_credentials` token's subject (e.g. `service:billing`) and
+extra claims after the client is authenticated and its scope granted, so a service account needs no replacement grant.
+A registered claim or an empty subject is refused. The scope stays space-delimited; with `PermissionClaim = "scope"`,
+Birko.Security.AspNetCore reads it as separate permissions (`SplitPermissionsOnSpace`, null = only for `scope`).
+
 ### Composition root
 
 `OAuthServer` owns one handler per endpoint. The host instantiates one (typically as a singleton) and routes incoming HTTP requests to the matching handler.

@@ -57,11 +57,15 @@ public sealed class ClaimsCurrentUser : ICurrentUser
     // (e.g. `Contains("*")` works for a superadmin + TenantAdmin combo joined as "*,users:user:read,...").
     public IReadOnlySet<string> Permissions =>
         Principal?.FindAll(_options.PermissionClaim)
-            .SelectMany(c => c.Value.Split(ClaimSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .SelectMany(c => c.Value.Split(_options.SplitsPermissionsOnSpace ? ScopeSeparators : ClaimSeparators,
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .ToHashSet()
         ?? new HashSet<string>();
 
     private static readonly char[] ClaimSeparators = [',', ';'];
+
+    // An OAuth scope is space-delimited (RFC 6749 §3.3); ',' and ';' still work for a joined permission value (TASK-520).
+    private static readonly char[] ScopeSeparators = [',', ';', ' '];
 
     public string? GetClaim(string claimType) => Principal?.FindFirstValue(claimType);
 }

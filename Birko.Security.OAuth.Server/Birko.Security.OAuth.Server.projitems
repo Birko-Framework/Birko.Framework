@@ -28,6 +28,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\TokenResponse.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\TokenErrorResponse.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\TokenEndpointHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\ClientCredentialsTokenContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Authorize\AuthorizeRequest.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Authorize\AuthorizeResponse.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Authorize\AuthorizationEndpointHandler.cs" />

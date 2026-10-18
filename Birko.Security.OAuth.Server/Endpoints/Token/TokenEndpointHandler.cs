@@ -179,12 +179,36 @@ public class TokenEndpointHandler
         return client;
     }
 
-    private Task<TokenResponse> HandleClientCredentialsAsync(OAuthClient client, TokenRequest request, CancellationToken ct)
+    /// <summary>
+    /// Shapes the access token of the <c>client_credentials</c> grant: its subject and extra claims (TASK-520). Called
+    /// after the client is authenticated and the scope granted. Null keeps the default (<c>sub</c> = the client id).
+    /// </summary>
+    /// <remarks>
+    /// This exists so a consumer need not replace the grant to name a service account: DraCode re-implemented client
+    /// authentication, secret hashing and scope narrowing (<c>ServiceAccountTokenIssuer</c>) only to set
+    /// <c>sub = "service:&lt;name&gt;"</c>. Set it at startup, before the server takes requests.
+    /// A registered claim in <see cref="ClientCredentialsTokenContext.Claims"/>, or an empty subject, is a configuration
+    /// error and throws <see cref="InvalidOperationException"/> rather than being dropped.
+    /// </remarks>
+    public Func<ClientCredentialsTokenContext, CancellationToken, Task>? ShapeClientCredentialsToken { get; set; }
+
+    private async Task<TokenResponse> HandleClientCredentialsAsync(OAuthClient client, TokenRequest request, CancellationToken ct)
     {
         var scope = ScopeUtil.NarrowScope(request.Scope, client.AllowedScopes, _settings.SupportedScopes);
+        var shaped = new ClientCredentialsTokenContext(client, scope);
+        if (ShapeClientCredentialsToken is { } shape)
+        {
+            await shape(shaped, ct).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(shaped.Subject))
+                throw new InvalidOperationException("ShapeClientCredentialsToken left the subject empty.");
+            foreach (var name in shaped.Claims.Keys)
+            {
+                if (ReservedClaims.Contains(name))
+                    throw new InvalidOperationException($"ShapeClientCredentialsToken set the claim '{name}', which the server sets.");
+            }
+        }
         // RFC 6749 §4.4.3 — refresh tokens SHOULD NOT be issued.
-        var response = IssueAccessToken(client.ClientId, subject: client.ClientId, scope: scope);
-        return Task.FromResult(response);
+        return IssueAccessToken(client.ClientId, subject: shaped.Subject, scope: scope, extra: new Dictionary<string, string>(shaped.Claims));
     }
 
     private async Task<TokenResponse> HandleAuthorizationCodeAsync(OAuthClient client, TokenRequest request, CancellationToken ct)

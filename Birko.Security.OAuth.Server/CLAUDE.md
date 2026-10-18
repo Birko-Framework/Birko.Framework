@@ -73,6 +73,26 @@ var tokens = await oauthServer.Token.IssueForSubjectAsync(
   property. A registered claim (`sub`, `client_id`, `iss`, `scope`, `aud`, `exp`, `iat`, `nbf`, `jti`) is refused.
 - No client secret is checked: the host asserts the sign-in. Never expose it as an endpoint.
 
+### Shaping a client_credentials token (TASK-520)
+
+`TokenEndpointHandler.ShapeClientCredentialsToken` sets the subject and extra claims of a `client_credentials` access
+token, after the client is authenticated and the scope granted. With it, an app does not replace the grant to name a
+service account (DraCode's `ServiceAccountTokenIssuer` re-implemented client authentication, secret hashing and scope
+narrowing for this alone).
+
+```csharp
+oauthServer.Token.ShapeClientCredentialsToken = (ctx, ct) =>
+{
+    ctx.Subject = $"service:{ctx.Client.Name}";
+    ctx.Claims["name"] = ctx.Client.Name;
+    return Task.CompletedTask;
+};
+```
+
+The scope stays the grant's, space-delimited; read it as permissions with `ClaimMappingOptions.PermissionClaim = "scope"`
+(Birko.Security.AspNetCore splits a `scope` claim on spaces). A registered claim, or an empty subject, throws
+`InvalidOperationException`: it is a configuration error, not something to drop.
+
 ## Wire integration
 The handlers don't know about HTTP. A host typically does:
 

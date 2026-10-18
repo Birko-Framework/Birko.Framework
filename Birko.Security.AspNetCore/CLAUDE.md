@@ -44,6 +44,9 @@ Birko.Security.AspNetCore/
 - `AddBirkoSecurity()` is the single entry point — registers JWT Bearer auth, ICurrentUser, IPermissionChecker, ITenantResolver, and ITenantContext in one call
 - `BirkoSecurityOptions` configures JWT settings, tenant resolution strategy (Header/Subdomain/Custom), and wildcard permission flag
 - `ClaimsCurrentUser` resolves lazily from `IHttpContextAccessor` — safe for scoped DI
+- Role and permission claim values split on `,` and `;`; a permission claim also splits on spaces when
+  `ClaimMappingOptions.SplitPermissionsOnSpace` is true, or (null, the default) when `PermissionClaim` is `"scope"`, the
+  OAuth scope claim, which RFC 6749 §3.3 defines as space-delimited (TASK-520: `"a b"` read as one permission)
 - `ClaimsPermissionChecker` supports wildcard `"*"` permission for superadmin bypass
 - `PermissionEndpointFilter` works with Minimal API endpoint filters (not MVC attributes)
 - `TenantMiddleware` resolves tenant per-request and clears context after response

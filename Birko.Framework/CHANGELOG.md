@@ -46,6 +46,13 @@ message id; MQTT keeps several handlers per filter and releases them properly, a
 subscriber no longer stops reconnect; the in-memory transport keeps a failed ManualAck message requeueable, removes a
 disposed consumer's handlers, and a delayed send outlives the caller's token (an already-cancelled call now throws).
 
+## 2026-10-18 — BREAKING: a job's MaxRetries is nullable; 0 means no retries everywhere
+
+[[TASK-662]]. `JobDescriptor.MaxRetries` is `int?`: `null` = the queue's `RetryPolicy`, `0` = no retry, on all nine
+backends (0 used to mean "the policy" on InMemory, JSON and RavenDB). An old SQL `MaxRetries NOT NULL` column refuses a
+null budget and is reported as drift. Fixed on the way: a MongoDB `$set` of a `Guid` threw, so the MongoDB job queue
+could not claim on a real server. Details: CHANGELOG.
+
 ## 2026-10-18 — BREAKING: JobDescriptor.MaxRetries is nullable; 0 means no retries everywhere
 
 [[TASK-662]] (SH-M003, decided by the user 2026-10-18). A job's `MaxRetries` of `0` meant "use the queue's
