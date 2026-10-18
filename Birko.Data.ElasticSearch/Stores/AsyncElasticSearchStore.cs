@@ -375,6 +375,65 @@ namespace Birko.Data.ElasticSearch.Stores
                 response.OriginalException);
         }
 
+        /// <summary>
+        /// Conflicts <see cref="UpdateIfAsync"/> absorbs before it reports <see cref="StoreConcurrencyException"/>. Each one
+        /// means another writer changed the document, so the condition is evaluated again on what it wrote.
+        /// </summary>
+        public const int MaxConditionalUpdateAttempts = 16;
+
+        /// <summary>
+        /// A compare-and-set on one document (TASK-667): a realtime GET (which sees writes the search index has not yet
+        /// refreshed), <paramref name="update"/> applied only when <paramref name="condition"/> holds for that document,
+        /// and a write conditioned on its <c>_seq_no</c> / <c>_primary_term</c>, so a write by anyone in between is a
+        /// conflict (409), not overwritten. On a conflict the document is read again and the condition asked again.
+        /// </summary>
+        /// <remarks>
+        /// The filtered <see cref="UpdateAsync(Expression{Func{T, bool}}, Data.Stores.PropertyUpdate{T}, CancellationToken)"/>
+        /// is an <c>update_by_query</c>, which matches against the search index: a document changed under a second ago
+        /// is matched as it was. A condition that must hold at the moment of writing needs this method.
+        /// </remarks>
+        /// <returns>The document as written, or <c>null</c> when it is missing or the condition does not hold.</returns>
+        /// <exception cref="StoreConcurrencyException">The document kept changing for <see cref="MaxConditionalUpdateAttempts"/> reads.</exception>
+        public virtual async Task<T?> UpdateIfAsync(Guid guid, Func<T, bool> condition, Action<T> update, CancellationToken ct = default)
+        {
+            ArgumentNullException.ThrowIfNull(condition);
+            ArgumentNullException.ThrowIfNull(update);
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            RequireConnector();
+            if (guid == Guid.Empty) return null;
+
+            var indexName = GetIndexName();
+            for (var attempt = 1; attempt <= MaxConditionalUpdateAttempts; attempt++)
+            {
+                var read = await Connector.GetAsync<T>(guid, g => g.Index(indexName).Realtime(), ct).ConfigureAwait(false);
+                if (!read.Found)
+                {
+                    if (read.ApiCall?.HttpStatusCode == 404) return null;
+                    throw new InvalidOperationException(
+                        $"ElasticSearch realtime get of {guid} failed. Index: {indexName}. DebugInfo: {read.DebugInformation}",
+                        read.OriginalException);
+                }
+
+                var item = read.Source;
+                item.Guid ??= guid;
+                if (!condition(item)) return null;
+                update(item);
+
+                var write = await Connector.IndexAsync(item, i => i.Index(indexName).Id(guid)
+                    .IfSequenceNumber(read.SequenceNumber).IfPrimaryTerm(read.PrimaryTerm), ct).ConfigureAwait(false);
+                if (write.IsValid) return item;
+                if (write.ApiCall?.HttpStatusCode == 409) continue; // another writer got there first: read it again
+                throw new InvalidOperationException(
+                    $"ElasticSearch conditional write of {guid} failed. Index: {indexName}. DebugInfo: {write.DebugInformation}",
+                    write.OriginalException);
+            }
+
+            throw new StoreConcurrencyException(
+                $"Document {guid} of {typeof(T).Name} changed under {MaxConditionalUpdateAttempts} consecutive conditional updates.",
+                applied: 0, conflicts: MaxConditionalUpdateAttempts);
+        }
+
         /// <inheritdoc />
         public override async Task UpdateAsync(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates, CancellationToken ct = default)
         {

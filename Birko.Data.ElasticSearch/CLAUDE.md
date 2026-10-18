@@ -91,6 +91,16 @@ public class ProductStore : ElasticSearchStore<Product>
 }
 ```
 
+### Conditional update (TASK-667)
+`AsyncElasticSearchStore.UpdateIfAsync(guid, condition, update)` is a compare-and-set on one document: a realtime GET,
+`update` applied only where `condition` holds, and an index request with `if_seq_no` / `if_primary_term`; a 409
+re-reads and asks again, up to `MaxConditionalUpdateAttempts` (16), then `StoreConcurrencyException`. Returns the
+written document, or `null` when missing or the condition fails.
+
+⚠ The filtered `UpdateAsync(filter, …)` is an `update_by_query`, which matches against the **search index**: a document
+written under a second ago is matched as it was. Use `UpdateIfAsync` (and `ReadRealtimeAsync`) where a condition must
+hold at the moment of writing or a write must be read back.
+
 ## Bulk Operations
 
 ```csharp

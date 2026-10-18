@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Elasticsearch job queue records an outcome reported right after the claim (2026-10-18)
+[[TASK-667]]. **Regression from TASK-158**, measured live: its guarded transitions were `update_by_query` calls, which
+match the search index, so a job completed or failed within ~1 s of its claim was still indexed Pending and the outcome
+was dropped; Cancel cancelled a running job. `AsyncElasticSearchStore.UpdateIfAsync` (realtime GET, write conditioned
+on `_seq_no`) now carries the claim and every transition, and `GetAsync` reads realtime.
 ### A SQL view built concurrently keeps its aggregates (2026-10-18)
 [[TASK-666]]. Seen on CI: a view loaded by several threads at once could render `COUNT(Orders.Guid) AS OrderCount` as
 `"Orders".Guid AS CustomerId`, because a build took a field from the cache by source column name while another build
@@ -320,11 +325,6 @@ records is an enum. Copilot's streaming 401 refresh now runs.
 over any `IAsyncBulkStore<T>`. Nothing implemented them before, so every restart closed an open circuit. Usage totals are
 computed by `AggregateAsync`, and a store that cannot aggregate is refused. A breaker `Reset` now persists. **Breaking:**
 both interfaces take a `CancellationToken`, and `GetTotalSpendAsync` adds a provider filter (CHANGELOG lists the signatures).
-### Cosmos migrations work on any client serializer (2026-10-17)
-[[TASK-659]]. Measured live: on a plain `CosmosClient` (the SDK's Newtonsoft serializer), `RenameField`, `UpdateDocuments`,
-`DeleteDocuments` and `CopyData` threw on their first read, because they typed results as `JsonElement`. Reads now stream and
-parse with System.Text.Json. `CopyData` upserts each document's raw JSON (exact, and checked), and a renamed value is
-written as plain values. Birko's own client was unaffected.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

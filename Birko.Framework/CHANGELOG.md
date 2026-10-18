@@ -86,6 +86,13 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
 
+## 2026-10-17 — Cosmos migrations work on any client serializer
+
+[[TASK-659]]. Measured live: on a plain `CosmosClient` (the SDK's Newtonsoft serializer), `RenameField`, `UpdateDocuments`,
+`DeleteDocuments` and `CopyData` threw on their first read, because they typed results as `JsonElement`. Reads now stream and
+parse with System.Text.Json. `CopyData` upserts each document's raw JSON (exact, and checked), and a renamed value is
+written as plain values. Birko's own client was unaffected.
+
 ## 2026-10-17 — A failed RavenDB commit ends the unit of work
 
 [[TASK-658]]. Measured live: after a cluster-wide conflict the unit of work stayed active and every retry hit the same

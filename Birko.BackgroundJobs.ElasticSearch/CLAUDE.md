@@ -23,14 +23,18 @@ Elasticsearch-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncEl
 - NEST / Elasticsearch.Net
 
 ## Concurrency
-`DequeueAsync` claims a job with a conditional update guarded on the still-eligible status plus a
-`ClaimToken` re-read verification (CR-M016), so a worker that loses a race skips the row and tries
-the next candidate. The re-read is a **realtime GET** (`AsyncElasticSearchStore.ReadRealtimeAsync`), never a
-search: a search sees the claim only after the next refresh (~1 s), and TASK-616 measured what that did. Every
-re-read was stale, the token never matched, and one dequeue claimed every eligible job, left them all in
-Processing and returned none. The claim's `update_by_query` writes with the version it matched, so a job another
-worker already claimed is a version conflict and does not land. Concurrent claims were not measured. Delivery is
-still at-least-once (a worker can die after claiming), so **job handlers must be idempotent.**
+Dequeue, Complete, Fail and Cancel are compare-and-sets through `AsyncElasticSearchStore.UpdateIfAsync` (TASK-667): a
+**realtime GET**, the condition (due / Processing / Pending | Scheduled) checked on that document, and a write
+conditioned on its `_seq_no` / `_primary_term`; a 409 re-reads. `GetAsync` is a realtime GET too. Nothing that decides
+or reads back a single job may use a search: a search sees a write only after the next refresh (~1 s).
+- TASK-616 measured that for the claim's read-back (every claim stranded).
+- TASK-667 measured it for the transitions TASK-158 made `update_by_query` calls. A job completed or failed within a
+  second of its claim was still indexed Pending, the Processing guard matched nothing and the outcome was dropped,
+  and Cancel cancelled a running job.
+
+The candidate search is only a hint. Delivery is still at-least-once (a reclaim after the claim timeout can hand a slow
+job to a second worker), so **job handlers must be idempotent.** A store substituted for tests must override
+`UpdateIfAsync`.
 
 ## Maintenance
 - Keep in sync with IJobQueue interface changes in Birko.BackgroundJobs

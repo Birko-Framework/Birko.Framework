@@ -952,7 +952,7 @@ exception that already is a `StoreUniqueViolationException` SHALL pass through u
 - **When** its `CreateCore` or `UpdateCore` throws anything
 - **Then** the exception propagates untranslated
 
-### Requirement: Cosmos DB and RavenDB offer a compare-and-set on one item
+### Requirement: Cosmos DB, RavenDB and Elasticsearch offer a compare-and-set on one item
 
 The system SHALL provide `AsyncCosmosDBStore<T>.UpdateIfAsync(guid, condition, update, ct)`, which reads the item with its
 ETag, returns `null` without writing when the item is missing or `condition` is false for it, and otherwise applies
@@ -960,14 +960,17 @@ ETag, returns `null` without writing when the item is missing or `condition` is 
 `condition`, up to `MaxConditionalUpdateAttempts` (16) times, then throw `StoreConcurrencyException`. It SHALL refuse
 to run inside a transactional batch (`InvalidOperationException`). (TASK-661.) `AsyncRavenDBStore<T>.UpdateIfAsync` SHALL
 do the same with a load by id and optimistic concurrency (the change vector), retrying on `ConcurrencyException`, and
-SHALL refuse inside a unit of work (TASK-665). Neither store has a native filtered update: their filtered `UpdateAsync`
-is a read followed by unconditional writes, so a condition that must hold at the moment of writing needs `UpdateIfAsync`.
+SHALL refuse inside a unit of work (TASK-665). `AsyncElasticSearchStore<T>.UpdateIfAsync` SHALL do the same with a
+realtime GET and a write conditioned on `_seq_no` / `_primary_term`, retrying on 409 (TASK-667). On Cosmos DB and RavenDB
+the filtered `UpdateAsync` is a read followed by unconditional writes; on Elasticsearch it is an `update_by_query`, which
+matches the search index as of its last refresh. So a condition that must hold at the moment of writing needs
+`UpdateIfAsync` on all three.
 
 #### Scenario: Concurrent conditional increments all land
 
 - **Given** one stored item and 8 concurrent `UpdateIfAsync(id, _ => true, c => c.Hits++)` calls
 - **When** they all complete
-- **Then** `Hits` is 8 on both stores; without the ETag condition, measured on the Cosmos emulator, it was 1
+- **Then** `Hits` is 8 on every one of the three stores; without the condition (the ETag, the `_seq_no`), measured on the Cosmos emulator and on Elasticsearch, it was 1
 
 #### Scenario: A condition that does not hold writes nothing
 

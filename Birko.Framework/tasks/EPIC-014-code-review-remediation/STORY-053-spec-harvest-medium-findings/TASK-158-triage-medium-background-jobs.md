@@ -101,6 +101,10 @@ before [[TASK-175]].**
   - **Corrected by TASK-665 (2026-10-18):** on RavenDB the guarded update is not atomic. The store has no native
     filtered update, so the base runs it as a (possibly stale) index query and an unconditional write; a cancel racing
     a claim let both win. RavenDB now uses a compare-and-set (`UpdateIfAsync`).
+  - **Corrected by TASK-667 (2026-10-18), a regression this task introduced:** on Elasticsearch the guarded
+    transitions are `update_by_query` calls, which match the search index. A job completed or failed within a refresh
+    (~1 s) of its claim was still indexed Pending, so the outcome was silently dropped, and Cancel cancelled a running
+    job. Elasticsearch now uses a compare-and-set too, and `GetAsync` reads realtime.
   - **Contract change:** Complete / Fail of a non-Processing job is a no-op on every backend. InMemory, JSON and XML
     were aligned, and 4 tests that completed an unclaimed job now claim it first.
 - **Lock providers:**

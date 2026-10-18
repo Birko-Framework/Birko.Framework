@@ -22,6 +22,19 @@ public class InMemoryElasticStore<T> : AsyncElasticSearchStore<T> where T : Abst
 
     protected override Task InitCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
 
+    private readonly object _gate = new();
+
+    // TASK-667: the store's compare-and-set, atomic under a lock (the real one writes with if_seq_no / if_primary_term).
+    public override Task<T?> UpdateIfAsync(Guid guid, Func<T, bool> condition, Action<T> update, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            if (!_items.TryGetValue(guid, out var item) || !condition(item)) return Task.FromResult<T?>(null);
+            update(item);
+            return Task.FromResult<T?>(item);
+        }
+    }
+
     protected override Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
         if (data.Guid == null || data.Guid == Guid.Empty) data.Guid = Guid.NewGuid();

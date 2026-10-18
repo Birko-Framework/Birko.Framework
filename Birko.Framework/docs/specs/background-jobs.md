@@ -358,11 +358,11 @@ due members (FIELD-028, fixed by TASK-561 — Redis used to serve an unnamed job
 ### Requirement: Concurrent dequeue claiming differs per backend
 
 The system SHALL prevent two workers from claiming the same job, using a token-verified,
-status-guarded conditional update on SQL, MongoDB and Elasticsearch; a single atomic Lua
-script on Redis; an in-process `SemaphoreSlim` on the in-memory, JSON and XML backends; and a
-compare-and-set that re-checks eligibility on the stored document on Cosmos DB (the item's ETag,
-`AsyncCosmosDBStore.UpdateIfAsync`, TASK-661) and RavenDB (load by id and optimistic concurrency,
-`AsyncRavenDBStore.UpdateIfAsync`, TASK-665).
+status-guarded conditional update on SQL and MongoDB; a single atomic Lua script on Redis; an in-process
+`SemaphoreSlim` on the in-memory, JSON and XML backends; and a compare-and-set that re-checks eligibility on the
+stored document on Cosmos DB (the item's ETag, `AsyncCosmosDBStore.UpdateIfAsync`, TASK-661), RavenDB (load by id and
+optimistic concurrency, `AsyncRavenDBStore.UpdateIfAsync`, TASK-665) and Elasticsearch (a realtime GET and a write
+conditioned on `_seq_no` / `_primary_term`, `AsyncElasticSearchStore.UpdateIfAsync`, TASK-667).
 
 #### Scenario: SQL claims via ClaimToken and verifies by re-read
 
@@ -387,6 +387,12 @@ compare-and-set that re-checks eligibility on the stored document on Cosmos DB (
 - **Given** an `ElasticSearchJobQueue` and two racing workers that read the same eligible candidate
 - **When** worker A's conditional `update_by_query` lands first and worker B's then matches the version A replaced
 - **Then** B's `UpdateAsync` throws `StoreConcurrencyException`, which the dequeue loop catches and treats as a lost race, moving on to the next candidate within the same `MaxClaimAttempts` budget; any other store failure propagates
+
+#### Scenario: Elasticsearch records an outcome reported right after the claim
+
+- **Given** an `ElasticSearchJobQueue` job claimed less than a refresh interval ago
+- **When** `CompleteAsync`, `FailAsync` or `CancelAsync` is called at once and the job is read back with `GetAsync`
+- **Then** it is Completed, or Scheduled with its `LastError`, and the cancel returns `false`: each transition is a compare-and-set on the realtime document, and `GetAsync` is a realtime GET. As TASK-158's `update_by_query` transitions they matched the search index, which still said Pending, so the outcome was dropped and the cancel succeeded (TASK-667, measured live)
 
 #### Scenario: Elasticsearch verifies its claim with a realtime read
 
