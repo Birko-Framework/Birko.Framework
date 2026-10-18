@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Redis job queue: every transition is one script, and priority dominates (2026-10-18)
+[[TASK-663]]. Measured live: a Cancelled, Completed or Dead descriptor was dequeued and run, a cancel raced a claim
+and both won (5 of 5 runs), racing Complete / Fail left a job in two status sets, and priority spanned under 1 ms of
+score. Enqueue, dequeue, Complete, Fail and Cancel are each one guarded Lua script; due jobs move to a ready set ranked
+by priority, then age (decided by the user: as on every backend). Jobs stored before are still served.
 ### Cosmos DB job queue claims each job once; the store gains a compare-and-set (2026-10-18)
 [[TASK-661]]. Measured on the emulator: 6 concurrent dequeuers claimed 6 jobs 24 times (4 distinct), Cancel cancelled a
 running or completed job and answered true, and Fail rescheduled an unclaimed job. `AsyncCosmosDBStore.UpdateIfAsync`

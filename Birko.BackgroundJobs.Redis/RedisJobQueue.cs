@@ -31,67 +31,157 @@ namespace Birko.BackgroundJobs.Redis
         /// </summary>
         private const int UnnamedScanLimit = 100;
 
-        // Lua script for atomic dequeue: finds the best eligible candidate, removes it from the queue,
-        // and — in the SAME atomic script — flips the job hash to Processing (bump AttemptCount, stamp
-        // LastAttemptAt) and moves its status-set membership. Doing the whole claim in one script closes
-        // the orphan/double-dispatch window that existed when the ZREM was atomic but the hash mutation
-        // ran as separate round-trips (CR-M025).
-        //
-        // FIELD-028 (TASK-561): a job with no QueueName is stored under the `default` key, and a named dequeue used to
-        // read only its own key — so with JobQueueOptions.DefaultQueueName = "work" no JobDispatcher job (QueueName
-        // null) ever ran. Every sibling backend admits an unnamed job on any named dequeue, so this script also reads
-        // the unnamed key and claims the better-scored of the two candidates. That key is shared with jobs EXPLICITLY
-        // named "default", which must stay on their queue, so only members whose hash carries no QueueName qualify;
-        // the scan steps past up to ARGV[6] of them (a backlog deeper than that waits for the default processor to
-        // drain it, it is never claimed by the wrong queue).
-        // KEYS[1] = named queue key, KEYS[2] = unnamed (`default`) key. ARGV: [1] key prefix, [2] now threshold,
-        // [3] LastAttemptAt ticks, [4] Processing status int, [5] "1" when KEYS[2] is a different key that must
-        // also be read, [6] how many due members of KEYS[2] to inspect. Returns the job id, or nil.
-        private const string DequeueScript = @"
-            local prefix = ARGV[1]
-            local now = tonumber(ARGV[2])
-            local nowTicks = ARGV[3]
-            local processing = ARGV[4]
-            local queueKey = KEYS[1]
-            local id = nil
-            local score = nil
-            local named = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', now, 'WITHSCORES', 'LIMIT', 0, 1)
-            if #named > 0 then
-                id = named[1]
-                score = tonumber(named[2])
+        // TASK-663: every state change is ONE Lua script, so no transition is ever half-applied and every guard is checked
+        // by the same atomic step that writes. Each queue has two sorted sets:
+        //   {prefix}:queue:{name} — DELAYED: score = the time the job becomes due (ticks / 1e4, the scale it always had,
+        //                           so jobs stored before TASK-663 are read as delayed and promoted when due);
+        //   {prefix}:ready:{name} — READY:   score = rank (priority, then EnqueuedAt), computed by RankLua below.
+        // Eligibility and order are decoupled: the dequeue promotes due members to READY and claims the best-ranked one,
+        // so priority dominates among due jobs as on every other backend (SH-M015; it used to span < 1 ms of score).
+
+        // Rank among ready jobs: priority clamped to [-999, 999] dominates (higher first), then EnqueuedAt in milliseconds
+        // since 2020 (older first). (999 - p) * 1e12 + ms stays below 2^53, so every rank is an exact integer.
+        private const string RankLua = @"
+            local function rank(jobKey)
+                local f = redis.call('HMGET', jobKey, 'Priority', 'EnqueuedAt')
+                local p = tonumber(f[1] or '0') or 0
+                if p > 999 then p = 999 elseif p < -999 then p = -999 end
+                local ms = math.floor((tonumber(f[2] or '0') or 0) / 10000) - 63713433600000
+                return (999 - p) * 1000000000000 + ms
             end
-            if ARGV[5] == '1' then
-                local due = redis.call('ZRANGEBYSCORE', KEYS[2], '-inf', now, 'WITHSCORES', 'LIMIT', 0, tonumber(ARGV[6]))
-                for i = 1, #due, 2 do
-                    local q = redis.call('HGET', prefix .. ':job:' .. due[i], 'QueueName')
-                    if not q or q == '' then
-                        local s = tonumber(due[i + 1])
-                        if score == nil or s < score then
-                            id = due[i]
-                            score = s
-                            queueKey = KEYS[2]
-                        end
-                        break
+            local function runnable(st)
+                return st == ARGV[2] or st == ARGV[3]
+            end
+            local function promote(delayedKey, readyKey, now, prefix, limit)
+                local due = redis.call('ZRANGEBYSCORE', delayedKey, '-inf', now, 'LIMIT', 0, limit)
+                for i = 1, #due do
+                    redis.call('ZREM', delayedKey, due[i])
+                    local jobKey = prefix .. ':job:' .. due[i]
+                    if runnable(redis.call('HGET', jobKey, 'Status')) then
+                        redis.call('ZADD', readyKey, rank(jobKey), due[i])
                     end
                 end
             end
-            if id == nil then
-                return nil
+        ";
+
+        // Dequeue (CR-M025, FIELD-028, TASK-663). KEYS: [1] named delayed, [2] named ready, [3] unnamed delayed,
+        // [4] unnamed ready. ARGV: [1] prefix, [2] Pending int, [3] Scheduled int, [4] Processing int, [5] now threshold,
+        // [6] LastAttemptAt ticks, [7] "1" when the unnamed keys are different keys that must also be read, [8] how many
+        // ready unnamed members to inspect, [9] how many due members to promote per key.
+        // A member whose hash is gone or no longer runnable (cancelled, or enqueued as Completed / Dead / Processing) is
+        // dropped from READY, never claimed (SH-M014). An unnamed job shares the `default` keys with jobs explicitly named
+        // "default", which must stay on their queue, so only members whose hash carries no QueueName qualify there.
+        private const string DequeueScript = RankLua + @"
+            local prefix = ARGV[1]
+            local now = tonumber(ARGV[5])
+            local scan = tonumber(ARGV[8])
+            local promoteLimit = tonumber(ARGV[9])
+            local readUnnamed = ARGV[7] == '1'
+            promote(KEYS[1], KEYS[2], now, prefix, promoteLimit)
+            if readUnnamed then promote(KEYS[3], KEYS[4], now, prefix, promoteLimit) end
+
+            local function best(readyKey, unnamedOnly)
+                local members = redis.call('ZRANGE', readyKey, 0, scan - 1, 'WITHSCORES')
+                for i = 1, #members, 2 do
+                    local id = members[i]
+                    local jobKey = prefix .. ':job:' .. id
+                    local st = redis.call('HGET', jobKey, 'Status')
+                    if not runnable(st) then
+                        redis.call('ZREM', readyKey, id)
+                    else
+                        if not unnamedOnly then return id, tonumber(members[i + 1]) end
+                        local q = redis.call('HGET', jobKey, 'QueueName')
+                        if not q or q == '' then return id, tonumber(members[i + 1]) end
+                    end
+                end
+                return nil, nil
             end
-            redis.call('ZREM', queueKey, id)
+
+            local id, score = best(KEYS[2], false)
+            local readyKey = KEYS[2]
+            if readUnnamed then
+                local uid, uscore = best(KEYS[4], true)
+                if uid and (score == nil or uscore < score) then
+                    id = uid
+                    readyKey = KEYS[4]
+                end
+            end
+            if id == nil then return nil end
+
+            redis.call('ZREM', readyKey, id)
             local jobKey = prefix .. ':job:' .. id
-            if redis.call('EXISTS', jobKey) == 0 then
-                return nil
-            end
             local oldStatus = redis.call('HGET', jobKey, 'Status')
-            if oldStatus then
-                redis.call('SREM', prefix .. ':status:' .. oldStatus, id)
-            end
+            redis.call('SREM', prefix .. ':status:' .. oldStatus, id)
             local attempt = tonumber(redis.call('HGET', jobKey, 'AttemptCount') or '0') + 1
-            redis.call('HSET', jobKey, 'Status', processing, 'AttemptCount', attempt, 'LastAttemptAt', nowTicks)
-            redis.call('SADD', prefix .. ':status:' .. processing, id)
+            redis.call('HSET', jobKey, 'Status', ARGV[4], 'AttemptCount', attempt, 'LastAttemptAt', ARGV[6])
+            redis.call('SADD', prefix .. ':status:' .. ARGV[4], id)
             return id
         ";
+
+        // Enqueue (SH-M016): the hash, its status set and — for a runnable job — the delayed set, in one step. A job
+        // stored under the same id before is replaced whole, and its old status-set membership removed.
+        // KEYS: [1] job hash, [2] delayed set. ARGV: [1] prefix, [2] Pending int, [3] Scheduled int, [4] id, [5] status,
+        // [6] due score, then field/value pairs.
+        private const string EnqueueScript = RankLua + @"
+            local prefix = ARGV[1]
+            local id = ARGV[4]
+            local old = redis.call('HGET', KEYS[1], 'Status')
+            if old then redis.call('SREM', prefix .. ':status:' .. old, id) end
+            redis.call('DEL', KEYS[1])
+            local fields = {}
+            for i = 7, #ARGV do fields[#fields + 1] = ARGV[i] end
+            redis.call('HSET', KEYS[1], unpack(fields))
+            redis.call('SADD', prefix .. ':status:' .. ARGV[5], id)
+            if runnable(ARGV[5]) then redis.call('ZADD', KEYS[2], ARGV[6], id) end
+            return 1
+        ";
+
+        // Complete (SH-M017): only a Processing job, hash and status sets in one step.
+        // KEYS: [1] job hash. ARGV: [1] prefix, [2] id, [3] Processing int, [4] Completed int, [5] CompletedAt ticks.
+        private const string CompleteScript = @"
+            if redis.call('HGET', KEYS[1], 'Status') ~= ARGV[3] then return 0 end
+            redis.call('SREM', ARGV[1] .. ':status:' .. ARGV[3], ARGV[2])
+            redis.call('HSET', KEYS[1], 'Status', ARGV[4], 'CompletedAt', ARGV[5])
+            redis.call('SADD', ARGV[1] .. ':status:' .. ARGV[4], ARGV[2])
+            return 1
+        ";
+
+        // Fail (SH-M017): only the Processing attempt the caller read (SH-M013's guard on Redis); writes LastError and the
+        // outcome the caller decided, and reschedules into the job's own delayed set — no whole-hash rewrite.
+        // KEYS: [1] job hash. ARGV: [1] prefix, [2] id, [3] Processing int, [4] attempt read, [5] error, [6] new status,
+        // [7] "ScheduledAt" or "CompletedAt", [8] that time in ticks, [9] due score ("" when not rescheduled).
+        private const string FailScript = @"
+            if redis.call('HGET', KEYS[1], 'Status') ~= ARGV[3] then return 0 end
+            if redis.call('HGET', KEYS[1], 'AttemptCount') ~= ARGV[4] then return 0 end
+            redis.call('SREM', ARGV[1] .. ':status:' .. ARGV[3], ARGV[2])
+            redis.call('HSET', KEYS[1], 'Status', ARGV[6], 'LastError', ARGV[5], ARGV[7], ARGV[8])
+            redis.call('SADD', ARGV[1] .. ':status:' .. ARGV[6], ARGV[2])
+            if ARGV[9] ~= '' then
+                local q = redis.call('HGET', KEYS[1], 'QueueName')
+                if not q or q == '' then q = 'default' end
+                redis.call('ZADD', ARGV[1] .. ':queue:' .. q, ARGV[9], ARGV[2])
+            end
+            return 1
+        ";
+
+        // Cancel (SH-M018): the status check and the flip are one step, so a claim cannot land in between.
+        // KEYS: [1] job hash. ARGV: [1] prefix, [2] id, [3] Pending int, [4] Scheduled int, [5] Cancelled int,
+        // [6] CompletedAt ticks.
+        private const string CancelScript = @"
+            local st = redis.call('HGET', KEYS[1], 'Status')
+            if st ~= ARGV[3] and st ~= ARGV[4] then return 0 end
+            local q = redis.call('HGET', KEYS[1], 'QueueName')
+            if not q or q == '' then q = 'default' end
+            redis.call('ZREM', ARGV[1] .. ':queue:' .. q, ARGV[2])
+            redis.call('ZREM', ARGV[1] .. ':ready:' .. q, ARGV[2])
+            redis.call('SREM', ARGV[1] .. ':status:' .. st, ARGV[2])
+            redis.call('HSET', KEYS[1], 'Status', ARGV[5], 'CompletedAt', ARGV[6])
+            redis.call('SADD', ARGV[1] .. ':status:' .. ARGV[5], ARGV[2])
+            return 1
+        ";
+
+        /// <summary>Due members one dequeue moves from a delayed set to its ready set, per key.</summary>
+        private const int PromoteLimit = 100;
 
         /// <summary>
         /// Creates a new Redis job queue with connection settings.
@@ -133,20 +223,20 @@ namespace Birko.BackgroundJobs.Redis
             cancellationToken.ThrowIfCancellationRequested();
 
             var db = _connectionManager.GetDatabase();
-            var jobKey = GetJobKey(descriptor.Guid);
+            var args = new List<RedisValue>
+            {
+                KeyPrefix, (int)JobStatus.Pending, (int)JobStatus.Scheduled, descriptor.Guid.ToString(), (int)descriptor.Status,
+                GetDueScore(descriptor.ScheduledAt ?? descriptor.EnqueuedAt),
+            };
+            foreach (var field in SerializeDescriptor(descriptor))
+            {
+                args.Add(field.Name);
+                args.Add(field.Value);
+            }
 
-            var fields = SerializeDescriptor(descriptor);
-            await db.HashSetAsync(jobKey, fields).ConfigureAwait(false);
-
-            // Add to the appropriate sorted set for dequeue ordering
-            // Score: negative priority * 1e13 + enqueued ticks (lower score = higher priority, older first)
-            var score = GetQueueScore(descriptor.Priority, descriptor.ScheduledAt ?? descriptor.EnqueuedAt);
-            var queueKey = GetQueueKey(descriptor.QueueName);
-            await db.SortedSetAddAsync(queueKey, descriptor.Guid.ToString(), score).ConfigureAwait(false);
-
-            // Track in status set
-            await db.SetAddAsync(GetStatusKey(descriptor.Status), descriptor.Guid.ToString()).ConfigureAwait(false);
-
+            await db.ScriptEvaluateAsync(EnqueueScript,
+                new RedisKey[] { GetJobKey(descriptor.Guid), GetQueueKey(descriptor.QueueName) },
+                args.ToArray()).ConfigureAwait(false);
             return descriptor.Guid;
         }
 
@@ -155,41 +245,28 @@ namespace Birko.BackgroundJobs.Redis
             cancellationToken.ThrowIfCancellationRequested();
 
             var db = _connectionManager.GetDatabase();
-            var queueKey = GetQueueKey(queueName);
-            var unnamedKey = GetQueueKey(null);
-            var readUnnamed = queueKey != unnamedKey;
-            // Encode the threshold on the SAME scale as the stored score's time component (CR-C02):
-            // previously this passed raw ticks while the score used ticks/1e4, so the threshold was
-            // ~4 orders of magnitude larger than any score and every future job dequeued immediately.
+            var readUnnamed = GetQueueKey(queueName) != GetQueueKey(null);
+            // The threshold is on the SAME scale as the delayed score (CR-C02).
             var now = GetDequeueThreshold(DateTime.UtcNow);
 
-            // Atomic dequeue + claim (ZREM + hash flip to Processing) in a single Lua script (CR-M025).
             var result = await db.ScriptEvaluateAsync(
                 DequeueScript,
-                new RedisKey[] { queueKey, unnamedKey },
-                new RedisValue[] { KeyPrefix, now, DateTime.UtcNow.Ticks, (int)JobStatus.Processing, readUnnamed ? "1" : "0", UnnamedScanLimit }
+                new RedisKey[] { GetQueueKey(queueName), GetReadyKey(queueName), GetQueueKey(null), GetReadyKey(null) },
+                new RedisValue[]
+                {
+                    KeyPrefix, (int)JobStatus.Pending, (int)JobStatus.Scheduled, (int)JobStatus.Processing, now,
+                    DateTime.UtcNow.Ticks, readUnnamed ? "1" : "0", UnnamedScanLimit, PromoteLimit,
+                }
             ).ConfigureAwait(false);
 
-            if (result.IsNull)
-            {
-                return null;
-            }
-
-            var jobIdStr = result.ToString();
-            if (!Guid.TryParse(jobIdStr, out var jobId))
+            if (result.IsNull || !Guid.TryParse(result.ToString(), out var jobId))
             {
                 return null;
             }
 
             // The script already flipped the hash to Processing; just read the current state back.
-            var jobKey = GetJobKey(jobId);
-            var fields = await db.HashGetAllAsync(jobKey).ConfigureAwait(false);
-            if (fields.Length == 0)
-            {
-                return null;
-            }
-
-            return DeserializeDescriptor(fields);
+            var fields = await db.HashGetAllAsync(GetJobKey(jobId)).ConfigureAwait(false);
+            return fields.Length == 0 ? null : DeserializeDescriptor(fields);
         }
 
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
@@ -197,24 +274,10 @@ namespace Birko.BackgroundJobs.Redis
             cancellationToken.ThrowIfCancellationRequested();
 
             var db = _connectionManager.GetDatabase();
-            var jobKey = GetJobKey(jobId);
-            var jobIdStr = jobId.ToString();
-
-            if (!await db.KeyExistsAsync(jobKey).ConfigureAwait(false))
-            {
-                return;
-            }
-
-            var oldStatus = await GetJobStatusAsync(db, jobKey).ConfigureAwait(false);
-            await db.SetRemoveAsync(GetStatusKey(oldStatus), jobIdStr).ConfigureAwait(false);
-
-            await db.HashSetAsync(jobKey, new[]
-            {
-                new HashEntry("Status", (int)JobStatus.Completed),
-                new HashEntry("CompletedAt", DateTime.UtcNow.Ticks)
-            }).ConfigureAwait(false);
-
-            await db.SetAddAsync(GetStatusKey(JobStatus.Completed), jobIdStr).ConfigureAwait(false);
+            await db.ScriptEvaluateAsync(CompleteScript,
+                new RedisKey[] { GetJobKey(jobId) },
+                new RedisValue[] { KeyPrefix, jobId.ToString(), (int)JobStatus.Processing, (int)JobStatus.Completed, DateTime.UtcNow.Ticks }
+            ).ConfigureAwait(false);
         }
 
         public async Task FailAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
@@ -223,40 +286,32 @@ namespace Birko.BackgroundJobs.Redis
 
             var db = _connectionManager.GetDatabase();
             var jobKey = GetJobKey(jobId);
-            var jobIdStr = jobId.ToString();
-
-            if (!await db.KeyExistsAsync(jobKey).ConfigureAwait(false))
+            var fields = await db.HashGetAllAsync(jobKey).ConfigureAwait(false);
+            if (fields.Length == 0)
             {
                 return;
             }
 
-            var fields = await db.HashGetAllAsync(jobKey).ConfigureAwait(false);
+            // The retry decision needs the policy, so it is made here on what was read; the script applies it only if the
+            // job is still the Processing attempt that was read.
             var descriptor = DeserializeDescriptor(fields);
-
-            // Remove from old status set
-            await db.SetRemoveAsync(GetStatusKey(descriptor.Status), jobIdStr).ConfigureAwait(false);
-
-            descriptor.LastError = error;
-
-            if (descriptor.AttemptCount < _retryPolicy.MaxRetriesFor(descriptor.MaxRetries))
+            if (descriptor.Status != JobStatus.Processing)
             {
-                var delay = _retryPolicy.GetDelay(descriptor.AttemptCount);
-                descriptor.Status = JobStatus.Scheduled;
-                descriptor.ScheduledAt = DateTime.UtcNow.Add(delay);
-
-                // Re-add to queue sorted set with scheduled time as score
-                var queueKey = GetQueueKey(descriptor.QueueName);
-                var score = GetQueueScore(descriptor.Priority, descriptor.ScheduledAt.Value);
-                await db.SortedSetAddAsync(queueKey, jobIdStr, score).ConfigureAwait(false);
-            }
-            else
-            {
-                descriptor.Status = JobStatus.Dead;
-                descriptor.CompletedAt = DateTime.UtcNow;
+                return;
             }
 
-            await db.HashSetAsync(jobKey, SerializeDescriptor(descriptor)).ConfigureAwait(false);
-            await db.SetAddAsync(GetStatusKey(descriptor.Status), jobIdStr).ConfigureAwait(false);
+            var now = DateTime.UtcNow;
+            var retry = descriptor.AttemptCount < _retryPolicy.MaxRetriesFor(descriptor.MaxRetries);
+            var at = retry ? now.Add(_retryPolicy.GetDelay(descriptor.AttemptCount)) : now;
+            await db.ScriptEvaluateAsync(FailScript,
+                new RedisKey[] { jobKey },
+                new RedisValue[]
+                {
+                    KeyPrefix, jobId.ToString(), (int)JobStatus.Processing, descriptor.AttemptCount, error,
+                    (int)(retry ? JobStatus.Scheduled : JobStatus.Dead), retry ? "ScheduledAt" : "CompletedAt", at.Ticks,
+                    retry ? GetDueScore(at) : RedisValue.EmptyString,
+                }
+            ).ConfigureAwait(false);
         }
 
         public async Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken = default)
@@ -264,38 +319,15 @@ namespace Birko.BackgroundJobs.Redis
             cancellationToken.ThrowIfCancellationRequested();
 
             var db = _connectionManager.GetDatabase();
-            var jobKey = GetJobKey(jobId);
-            var jobIdStr = jobId.ToString();
-
-            if (!await db.KeyExistsAsync(jobKey).ConfigureAwait(false))
-            {
-                return false;
-            }
-
-            var status = await GetJobStatusAsync(db, jobKey).ConfigureAwait(false);
-
-            if (status != JobStatus.Pending && status != JobStatus.Scheduled)
-            {
-                return false;
-            }
-
-            // Remove from old status set and queue
-            await db.SetRemoveAsync(GetStatusKey(status), jobIdStr).ConfigureAwait(false);
-
-            // Remove from all queue sorted sets (we don't know the exact queue name from the hash alone)
-            var queueName = (string?)await db.HashGetAsync(jobKey, "QueueName").ConfigureAwait(false);
-            var queueKey = GetQueueKey(queueName);
-            await db.SortedSetRemoveAsync(queueKey, jobIdStr).ConfigureAwait(false);
-
-            await db.HashSetAsync(jobKey, new[]
-            {
-                new HashEntry("Status", (int)JobStatus.Cancelled),
-                new HashEntry("CompletedAt", DateTime.UtcNow.Ticks)
-            }).ConfigureAwait(false);
-
-            await db.SetAddAsync(GetStatusKey(JobStatus.Cancelled), jobIdStr).ConfigureAwait(false);
-
-            return true;
+            var result = await db.ScriptEvaluateAsync(CancelScript,
+                new RedisKey[] { GetJobKey(jobId) },
+                new RedisValue[]
+                {
+                    KeyPrefix, jobId.ToString(), (int)JobStatus.Pending, (int)JobStatus.Scheduled, (int)JobStatus.Cancelled,
+                    DateTime.UtcNow.Ticks,
+                }
+            ).ConfigureAwait(false);
+            return (int)result == 1;
         }
 
         public async Task<JobDescriptor?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)
@@ -407,6 +439,12 @@ namespace Birko.BackgroundJobs.Redis
         private string GetStatusKey(JobStatus status) =>
             $"{KeyPrefix}:status:{(int)status}";
 
+        /// <summary>The ready set of a queue: due jobs ranked by priority, then age (TASK-663).</summary>
+        private string GetReadyKey(string? queueName) =>
+            queueName != null
+                ? $"{KeyPrefix}:ready:{queueName}"
+                : $"{KeyPrefix}:ready:default";
+
         #endregion
 
         #region Scoring
@@ -416,22 +454,11 @@ namespace Birko.BackgroundJobs.Redis
         // immediately (CR-C02).
         private const double TimeScale = 1e4; // ticks -> 0.1ms units (keeps values in double's precise range)
 
-        // The priority tiebreaker is deliberately bounded to strictly less than one time unit so it
-        // can reorder jobs of (effectively) the same scheduled time WITHOUT ever pulling a
-        // future-scheduled job across the eligibility threshold. Higher priority -> larger bonus
-        // subtracted -> lower score -> dequeued first among ready jobs.
-        private const double MaxPriorityBonus = 0.999;
-
         /// <summary>
-        /// Calculates the sorted-set score. Time dominates (so scheduled/delayed jobs are not
-        /// eligible until their time), with priority as a bounded tiebreaker among ready jobs.
-        /// Lower score = dequeued first.
+        /// The delayed-set score: the time the job becomes due. Priority is not in it; the dequeue ranks due jobs by
+        /// priority in the ready set (TASK-663), so a high priority can never pull a future job forward.
         /// </summary>
-        private static double GetQueueScore(int priority, DateTime scheduledAt)
-        {
-            var priorityBonus = Math.Clamp(priority, 0, 999) * (MaxPriorityBonus / 999.0);
-            return (scheduledAt.Ticks / TimeScale) - priorityBonus;
-        }
+        private static double GetDueScore(DateTime dueAt) => dueAt.Ticks / TimeScale;
 
         /// <summary>
         /// The dequeue eligibility threshold for "now": a job is eligible once its scheduled time has
@@ -519,12 +546,6 @@ namespace Birko.BackgroundJobs.Redis
             }
 
             return descriptor;
-        }
-
-        private static async Task<JobStatus> GetJobStatusAsync(IDatabase db, string jobKey)
-        {
-            var statusValue = await db.HashGetAsync(jobKey, "Status").ConfigureAwait(false);
-            return statusValue.HasValue ? (JobStatus)(int)statusValue : JobStatus.Pending;
         }
 
         #endregion

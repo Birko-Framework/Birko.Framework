@@ -25,8 +25,13 @@ Birko.BackgroundJobs.Redis/
 - **KeyPrefix from settings** — Uses `RedisSettings.KeyPrefix` with fallback to `"birko:jobs"` default
 - **No generic type parameter** — Unlike `SqlJobQueue<DB>`, Redis has a single client library, so no generic connector type needed
 - **Hash-based storage** — Each job is a Redis hash (`{prefix}:job:{id}`) with all descriptor fields as hash entries
-- **Sorted set queuing** — Jobs ordered by `-(priority * 1e13) + (scheduledAt.Ticks / 1e4)` — priority dominates, FIFO within same priority
-- **Atomic dequeue via Lua** — `ZRANGEBYSCORE` + `ZREM` in a single Lua script prevents race conditions between workers
+- **Two sorted sets per queue (TASK-663)** — `{prefix}:queue:{name}` holds jobs by due time (`Ticks / 1e4`, the old key
+  and scale, so jobs stored before are promoted when due); `{prefix}:ready:{name}` ranks due jobs
+  `(999 - priority) * 1e12 + EnqueuedAt ms since 2020` (priority clamped to ±999). Priority dominates among due jobs, as on
+  every backend; a future job never jumps the queue.
+- **Every transition is one Lua script** — enqueue, dequeue, complete, fail and cancel each check status and write the
+  hash, the status sets and the queue sets in one step. Dequeue claims only a hash whose status is Pending / Scheduled;
+  Complete / Fail only a Processing one (Fail also the attempt count it read); Cancel only Pending / Scheduled.
 - **Status tracking via sets** — Redis sets (`{prefix}:status:{int}`) index jobs by status for fast `GetByStatusAsync`
 - **DateTime as Ticks** — All DateTime values stored as `long` ticks in hash fields for precision
 - **Metadata as JSON** — `Dictionary<string, string>` serialized to a single hash field

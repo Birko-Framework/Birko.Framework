@@ -10,7 +10,7 @@ using Xunit.Abstractions;
 namespace Birko.BackgroundJobs.Redis.Tests;
 
 /// <summary>
-/// TASK-662 and TASK-158 on a live Redis: the attempt budget (MaxRetries null = the policy, 0 = no retry) and the
+/// TASK-662, TASK-158 and TASK-663 on a live Redis: the attempt budget (MaxRetries null = the policy, 0 = no retry) and the
 /// guarded transitions (complete / fail only a claimed job, cancel only a pending one) against the real server's native
 /// filter update. Gated on <c>BIRKO_REDIS_HOST</c>; skipped without it, failed under <c>BIRKO_REQUIRE_LIVE</c>.
 /// </summary>
@@ -59,5 +59,22 @@ public class JobQueueLiveTests(ITestOutputHelper output)
         (await queue.GetAsync(id))!.Status.Should().Be(JobStatus.Dead);
     }
 
-    // The guarded transitions on Redis are TASK-663 (atomic Redis transitions); its test lands there.
+    [Fact]
+    public async Task Transitions_act_only_on_the_status_they_belong_to()
+    {
+        if (Queue() is not { } queue) return;
+        var pending = await queue.EnqueueAsync(new JobDescriptor { JobType = "p" });
+        await queue.CompleteAsync(pending);
+        await queue.FailAsync(pending, "x");
+        (await queue.GetAsync(pending))!.Status.Should().Be(JobStatus.Pending, "an unclaimed job is neither completed nor failed");
+        (await queue.CancelAsync(pending)).Should().BeTrue();
+        (await queue.CancelAsync(pending)).Should().BeFalse();
+
+        var running = await queue.EnqueueAsync(new JobDescriptor { JobType = "r" });
+        (await queue.DequeueAsync())!.Guid.Should().Be(running);
+        (await queue.CancelAsync(running)).Should().BeFalse("a running job is not cancelled");
+        await queue.CompleteAsync(running);
+        (await queue.GetAsync(running))!.Status.Should().Be(JobStatus.Completed);
+        (await queue.CancelAsync(running)).Should().BeFalse();
+    }
 }

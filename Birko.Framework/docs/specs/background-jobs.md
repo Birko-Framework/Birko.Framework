@@ -231,11 +231,11 @@ queue name, priority, retry budget, status, attempt count, timestamps and serial
 - **When** `EnqueueAsync(descriptor)` is called
 - **Then** `JobDescriptorModel.FromDescriptor` maps the descriptor onto the `__BackgroundJobs` table model, `AsyncDataBaseBulkStore.CreateAsync` inserts it, and the store-assigned `Guid` is returned
 
-#### Scenario: Redis enqueue writes three keys
+#### Scenario: Redis enqueue writes three keys in one script
 
 - **Given** a `RedisJobQueue` with `KeyPrefix = "birko:jobs"` and a descriptor with `Guid = g`, `QueueName = null`, `Status = Pending`
 - **When** `EnqueueAsync(descriptor)` is called
-- **Then** the hash `birko:jobs:job:{g}` holds the descriptor fields, the sorted set `birko:jobs:queue:default` gains member `{g}` scored from `ScheduledAt ?? EnqueuedAt` and priority, the set `birko:jobs:status:0` gains `{g}`, and `descriptor.Guid` is returned
+- **Then** one Lua script replaces the hash `birko:jobs:job:{g}` with the descriptor fields, adds `{g}` to `birko:jobs:status:0` (removing it from the status set of a job stored under the same id before), and adds `{g}` to the delayed set `birko:jobs:queue:default` scored `(ScheduledAt ?? EnqueuedAt).Ticks / 1e4`; a descriptor whose status is not `Pending` or `Scheduled` is stored but never queued (TASK-663, SH-M014 / SH-M016: it was three round trips, and a Cancelled descriptor was queued and run)
 
 #### Scenario: InMemory enqueue restamps EnqueuedAt from the injected clock
 
@@ -292,17 +292,23 @@ return `null` when no such job exists.
 - **When** `DequeueAsync()` returns it
 - **Then** the stored status is `Processing`, `AttemptCount` is `1`, and `LastAttemptAt` is the current time — so the returned `JobDescriptor.AttemptCount` is 1-based for the attempt about to run
 
-#### Scenario: Redis ordering is time-dominant with a sub-millisecond priority tiebreaker
+#### Scenario: Redis drains the highest priority first among due jobs
 
-- **Given** a `RedisJobQueue`, a pending job A with `Priority = 999` enqueued at T+10ms and a pending job B with `Priority = 0` enqueued at T
-- **When** both are eligible and `DequeueAsync()` is called
-- **Then** B is returned first: the sorted-set score is `ScheduledAt.Ticks / 1e4` minus a priority bonus clamped to at most `0.999` score units (under 1 ms), so priority only reorders jobs whose times are within ~1 ms — unlike the other backends, where priority strictly dominates enqueue time
+- **Given** a `RedisJobQueue`, a pending job B with `Priority = 0` enqueued at T and a pending job A with `Priority = 5` enqueued at T+30s
+- **When** both are due and `DequeueAsync()` is called
+- **Then** A is returned first, as on every backend: eligibility and order are decoupled. `{prefix}:queue:{name}` holds jobs by due time; the dequeue script moves due members (up to 100 per key per call) to `{prefix}:ready:{name}`, ranked `(999 - priority) * 1e12 + EnqueuedAt in ms since 2020`, and claims the lowest rank (TASK-663, decided by the user; priority used to span under 1 ms of score, so a mixed-priority queue drained FIFO)
 
-#### Scenario: Redis priority above 999 is clamped
+#### Scenario: Redis keeps a future high-priority job waiting
 
-- **Given** a descriptor with `Priority = 100000`
-- **When** its score is computed by `GetQueueScore`
-- **Then** the priority is clamped to `999` by `Math.Clamp(priority, 0, 999)`, giving the maximum bonus of `0.999`
+- **Given** a job with `Priority = 999` scheduled 5 minutes ahead and a due job with `Priority = 0`
+- **When** `DequeueAsync()` is called twice
+- **Then** the due job is returned, then `null`: priority is not part of the due-time score
+
+#### Scenario: Redis priority beyond ±999 is clamped
+
+- **Given** a descriptor with `Priority = 100000` (or `-100000`)
+- **When** it is ranked in the ready set
+- **Then** the priority is clamped to `999` (or `-999`); within that range a negative priority runs after the default `0`
 
 ### Requirement: Queue-name scoping on dequeue
 
@@ -391,13 +397,13 @@ eligibility on the item as stored (TASK-661).
 
 - **Given** a `RedisJobQueue`
 - **When** `DequeueAsync` runs
-- **Then** a single `ScriptEvaluateAsync` performs `ZRANGEBYSCORE`/`ZREM`, checks the job hash exists, moves status-set membership, increments `AttemptCount` and sets `Status = Processing` and `LastAttemptAt` atomically, returning the job id or nil
+- **Then** a single `ScriptEvaluateAsync` promotes due members to the ready set, takes the best-ranked member whose hash `Status` is still `Pending` or `Scheduled` (dropping any other member it meets), removes it, moves status-set membership, increments `AttemptCount` and sets `Status = Processing` and `LastAttemptAt` atomically, returning the job id or nil
 
 #### Scenario: Redis discards the queue entry before the job is done
 
 - **Given** a job claimed by the Redis dequeue script (its member has been `ZREM`ed from the queue sorted set)
 - **When** the worker dies before calling `CompleteAsync` or `FailAsync`
-- **Then** the job hash remains in `Status = Processing` with no queue-set membership, and nothing re-adds it
+- **Then** the job hash remains in `Status = Processing` with no queue-set membership, and nothing re-adds it (reclaim on every backend is [[TASK-664]])
 
 #### Scenario: JSON and XML serialise dequeue in-process only
 
@@ -477,13 +483,13 @@ The system SHALL, on `CompleteAsync(jobId)`, set the job's status to `Completed`
 
 - **Given** a `jobId` that is not stored
 - **When** `CompleteAsync(jobId)` is called
-- **Then** the call returns without error and without creating anything (store-backed backends return early on a null read; Redis returns early on `KeyExistsAsync == false`; in-memory returns early on `TryGetValue == false`)
+- **Then** the call returns without error and without creating anything (store-backed backends' guarded update matches nothing; Redis's script finds no `Processing` status; in-memory returns early on `TryGetValue == false`)
 
-#### Scenario: Completion is unconditional on status
+#### Scenario: Completion acts only on a claimed job
 
-- **Given** a job already in `Status = Cancelled` or `Dead`
-- **When** `CompleteAsync(jobId)` is called
-- **Then** it is overwritten to `Completed`; no backend guards `CompleteAsync` by current status
+- **Given** a job in `Status = Pending`, `Scheduled`, `Cancelled` or `Dead`
+- **When** `CompleteAsync(jobId)` or `FailAsync(jobId, error)` is called
+- **Then** nothing changes, on every backend: both act only on a `Processing` job (TASK-158; Cosmos DB since TASK-661, Redis since TASK-663, where the check and the write are one script)
 
 ### Requirement: Failure escalates to a scheduled retry or to Dead
 
@@ -543,7 +549,13 @@ TASK-661; it applied no status guard and returned `true` for any existing job).
 
 - **Given** a Redis job in `Status = Scheduled` on queue `reports`
 - **When** `CancelAsync(jobId)` is called
-- **Then** the id is removed from `{prefix}:status:1` and from `{prefix}:queue:reports` (the queue name is re-read from the job hash), the hash is flipped to `Cancelled` with `CompletedAt`, and the id is added to `{prefix}:status:6`
+- **Then** one script checks the status and, only when it is `Pending` or `Scheduled`, removes the id from `{prefix}:status:1`, `{prefix}:queue:reports` and `{prefix}:ready:reports` (the queue name is read from the job hash), flips the hash to `Cancelled` with `CompletedAt` and adds the id to `{prefix}:status:6`; a claim cannot land between the check and the flip (TASK-663, SH-M018: measured 5 of 5 runs, a job both claimed and cancelled)
+
+#### Scenario: Redis status sets stay disjoint under concurrent transitions
+
+- **Given** claimed Redis jobs on which `CompleteAsync` and `FailAsync` race
+- **When** both have returned
+- **Then** each job is in exactly one `{prefix}:status:*` set, matching its hash, and a fail that lost writes no `LastError` (SH-M017: each transition moved set membership in four commands and Fail rewrote the whole hash)
 
 ### Requirement: Reading a single job and listing by status
 
@@ -1189,11 +1201,11 @@ by `ReleaseAsync`, `DisposeAsync` and `Dispose`.
 - **When** `Dispose()` or `DisposeAsync()` runs
 - **Then** the safe-release script is attempted inside a `try`/`catch` that swallows failures, `IsLocked` is cleared, and the connection manager is disposed only when the provider created it (`_ownsConnection`)
 
-#### Scenario: Requesting a second lock name while holding one succeeds without locking
+#### Scenario: Requesting a second lock name while holding one is refused
 
 - **Given** a provider with `IsLocked == true` for `"queue-a"`
 - **When** `TryAcquireAsync("queue-b", timeout)` is called
-- **Then** `true` is returned immediately without contacting Redis, so `"queue-b"` is not actually locked
+- **Then** `InvalidOperationException` is thrown; a provider holds one lock name (TASK-158, SH-M006 — it returned `true` without locking `"queue-b"`)
 
 ### Requirement: Explicit schema helpers are optional and separate from the runtime path
 

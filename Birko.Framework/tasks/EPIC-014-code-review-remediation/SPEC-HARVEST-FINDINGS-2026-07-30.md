@@ -1195,7 +1195,7 @@ CompleteAsync/FailAsync/CancelAsync read the whole model, mutate two fields and 
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:41`
 
-**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): the dequeue script never checks Status.
+**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): the dequeue script never checks Status. **Fixed by TASK-663:** the enqueue never queues a non-runnable descriptor and the dequeue claims only a Pending / Scheduled hash. Red on HEAD live: Cancelled, Completed, Dead and Processing descriptors were all dequeued (4/4).
 
 The Lua script picks any queue member with score <= now and never inspects the hash's Status. Enqueue (108-113) scores from `ScheduledAt ?? EnqueuedAt` regardless of status, so: a descriptor enqueued with Status=Cancelled/Completed/Dead is dequeued and executed on Redis (never on the others); a Scheduled job with ScheduledAt=null is immediately eligible on Redis but permanently ineligible everywhere else; and a Pending job with a future ScheduledAt is deferred on Redis but immediate elsewhere.
 
@@ -1203,7 +1203,7 @@ The Lua script picks any queue member with score <= now and never inspects the h
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:393`
 
-**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158). **Decided by the user:** align Redis with the other backends, so priority strictly dominates among due jobs.
+**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158). **Decided by the user:** align Redis with the other backends, so priority strictly dominates among due jobs. **Fixed by TASK-663:** a delayed set (due time) and a ready set (priority, then age); red on HEAD live: a priority-5 job enqueued 30 s after a priority-0 one ran second, and a priority -1 job ran before 0.
 
 GetQueueScore subtracts at most MaxPriorityBonus = 0.999 score units, and one unit is TimeScale = 1e4 ticks = 0.1 ms. So Priority=999 only outranks a Priority=0 job enqueued less than ~0.1 ms earlier. On every other backend the order is ByDescending(Priority).ThenBy(EnqueuedAt) and priority strictly dominates. The same IJobQueue call therefore drains a mixed-priority queue in FIFO order on Redis and in priority order everywhere else.
 
@@ -1211,7 +1211,7 @@ GetQueueScore subtracts at most MaxPriorityBonus = 0.999 score units, and one un
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:104`
 
-**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): enqueue is three round trips.
+**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): enqueue is three round trips. **Fixed by TASK-663:** one script. Not reproduced live (it needs a failure between round trips); fixed by construction.
 
 EnqueueAsync writes the job hash (104), then the queue sorted set (110), then the status set (113) as three separate commands with no MULTI/Lua. A connection drop or timeout between them leaves a hash with no queue membership - the job is stored, reported by GetAsync, and never dequeued by anyone - or a status-set entry with no queue entry. Nothing reconciles the three keys afterwards, and no other backend can half-enqueue.
 
@@ -1219,7 +1219,7 @@ EnqueueAsync writes the job hash (104), then the queue sorted set (110), then th
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:171`
 
-**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): the status-set moves are four commands, and Fail rewrites the whole hash.
+**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): the status-set moves are four commands, and Fail rewrites the whole hash. **Fixed by TASK-663:** Complete and Fail are scripts guarded on Processing (Fail also on the attempt count read), writing only their fields. Red on HEAD live: racing Complete and Fail left jobs in two status sets.
 
 CompleteAsync reads oldStatus (171), SREMs that set (172), HSETs the new status (174) and SADDs the new set (180) as four commands; FailAsync (196-222) and CancelAsync (238-259) are the same shape. A concurrent transition (or a failure between commands) removes the id from a set it is no longer in and leaves it in the one it left, so GetByStatusAsync(Processing) returns Completed/Cancelled jobs and the terminal set misses them - and PurgeAsync, which only walks the status sets, never reclaims those hashes.
 
@@ -1227,7 +1227,7 @@ CompleteAsync reads oldStatus (171), SREMs that set (172), HSETs the new status 
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:238`
 
-**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): Cancel checks the status, then flips it in another round trip.
+**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): Cancel checks the status, then flips it in another round trip. **Fixed by TASK-663:** one script. Red on HEAD live 5 of 5 runs (4 dequeuers racing 4 cancellers over 60 jobs: a job both claimed and cancelled); green 5 of 5 after.
 
 The guard reads Status via HGET (238), checks Pending|Scheduled (240) and only then flips the hash (253). A concurrent DequeueAsync script can claim the job between those two round trips, so the job is flipped to Cancelled while a worker is executing it and `true` is returned, breaking the documented 'only Pending or Scheduled' contract. The subsequent SREM also targets the stale status set, so the id is left in status:2 as well.
 

@@ -24,7 +24,7 @@ public class RedisJobQueueSerializationTests
     private static readonly MethodInfo Deserialize = typeof(RedisJobQueue)
         .GetMethod("DeserializeDescriptor", BindingFlags.NonPublic | BindingFlags.Instance)!;
     private static readonly MethodInfo Score = typeof(RedisJobQueue)
-        .GetMethod("GetQueueScore", BindingFlags.NonPublic | BindingFlags.Static)!;
+        .GetMethod("GetDueScore", BindingFlags.NonPublic | BindingFlags.Static)!;
     private static readonly MethodInfo Threshold = typeof(RedisJobQueue)
         .GetMethod("GetDequeueThreshold", BindingFlags.NonPublic | BindingFlags.Static)!;
 
@@ -95,7 +95,7 @@ public class RedisJobQueueSerializationTests
         var now = new DateTime(2026, 7, 6, 12, 0, 0, DateTimeKind.Utc);
         var reschedule = now.Add(policy.GetDelay(1));
 
-        var score = (double)Score.Invoke(null, new object[] { 0, reschedule })!;
+        var score = (double)Score.Invoke(null, new object[] { reschedule })!;
         var threshold = (double)Threshold.Invoke(null, new object[] { now })!;
 
         policy.GetDelay(1).Should().BeGreaterThan(TimeSpan.Zero);
