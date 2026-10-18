@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,7 +17,7 @@ public sealed class HybridCache : ICache
     private readonly HybridCacheOptions _options;
     private readonly Dictionary<string, KeyLock> _locks = new();
     private readonly object _locksGate = new();
-    private bool _disposed;
+    private int _disposed;
 
     /// <summary>
     /// Invalidation generations, striped by key hash (SH-M048). A removal bumps the key's stripe between
@@ -56,6 +56,7 @@ public sealed class HybridCache : ICache
 
     public async Task<CacheResult<T>> GetAsync<T>(string key, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         // Check L1 first
         var l1Result = await _l1.GetAsync<T>(key, ct);
         if (l1Result.HasValue)
@@ -87,8 +88,18 @@ public sealed class HybridCache : ICache
         return l2Result;
     }
 
+    /// <remarks>
+    /// The key's generation is bumped once L2 holds the new value, and L1 is written after that bump (SH-M048's
+    /// mechanism, extended by TASK-184): a concurrent read that fetched the OLD value from L2 then either sees the
+    /// bump and withdraws its backfill, or backfills before the bump and is overwritten by the L1 write after it.
+    /// Before, such a read could leave the old value in L1 over this write for <c>L1DefaultExpiration</c>. With
+    /// <see cref="HybridCacheOptions.WriteThrough"/> the two tiers are still written together, so L1 is written a
+    /// second time after the bump.
+    /// </remarks>
     public async Task SetAsync<T>(string key, T value, CacheEntryOptions? options = null, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
+        CacheEntryOptions.Validate(options); // SH-L041: a non-positive TTL is refused on every backend
         var l1Options = GetL1Options(options);
 
         if (_options.WriteThrough)
@@ -110,6 +121,9 @@ public sealed class HybridCache : ICache
             {
                 await l1Task;
             }
+
+            Interlocked.Increment(ref _generations[Stripe(key)]);
+            await _l1.SetAsync(key, value, l1Options, ct);
         }
         else
         {
@@ -123,12 +137,14 @@ public sealed class HybridCache : ICache
                 // L2 failed, still populate L1
             }
 
+            Interlocked.Increment(ref _generations[Stripe(key)]);
             await _l1.SetAsync(key, value, l1Options, ct);
         }
     }
 
     public async Task RemoveAsync(string key, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         // L2 first, then the generation, then L1 (SH-M048). Removing both at once let a concurrent read miss
         // the cleared L1, read the value still in L2 and write it back into L1 for L1DefaultExpiration. In this
         // order a read either finds L2 already empty or backfills L1 under the old generation, and that
@@ -152,6 +168,7 @@ public sealed class HybridCache : ICache
 
     public async Task<bool> ExistsAsync(string key, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         if (await _l1.ExistsAsync(key, ct))
             return true;
 
@@ -165,8 +182,14 @@ public sealed class HybridCache : ICache
         }
     }
 
+    /// <remarks>
+    /// A cached null is a hit (CR-L036): it is returned as-is and the factory does not run, whatever the nullability
+    /// of <typeparamref name="T"/>. Use a nullable <typeparamref name="T"/> where a null may be cached (SH-L047).
+    /// </remarks>
     public async Task<T> GetOrSetAsync<T>(string key, Func<CancellationToken, Task<T>> factory, CacheEntryOptions? options = null, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
+        CacheEntryOptions.Validate(options); // SH-L041: a non-positive TTL is refused on every backend
         // Check L1
         var l1Result = await _l1.GetAsync<T>(key, ct);
         if (l1Result.HasValue)
@@ -235,6 +258,7 @@ public sealed class HybridCache : ICache
 
     public async Task RemoveByPrefixAsync(string prefix, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         // Same order as RemoveAsync (SH-M048), with the epoch standing in for every stripe.
         try
         {
@@ -253,6 +277,7 @@ public sealed class HybridCache : ICache
 
     public async Task ClearAsync(CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         // Same order as RemoveAsync (SH-M048), with the epoch standing in for every stripe.
         try
         {
@@ -306,7 +331,11 @@ public sealed class HybridCache : ICache
 
         if (requested == null)
         {
-            return CacheEntryOptions.Absolute(_options.L1DefaultExpiration);
+            // SH-L038: the cap applies here too. This is the L2-backfill path, and it returned L1DefaultExpiration
+            // even when that exceeded the documented hard cap.
+            return CacheEntryOptions.Absolute(maxExpiry.HasValue && maxExpiry.Value < _options.L1DefaultExpiration
+                ? maxExpiry.Value
+                : _options.L1DefaultExpiration);
         }
 
         if (maxExpiry == null)
@@ -332,18 +361,19 @@ public sealed class HybridCache : ICache
         };
     }
 
+    /// <summary>
+    /// Marks the cache disposed: every later operation throws <see cref="ObjectDisposedException"/> (SH-L043).
+    /// </summary>
+    /// <remarks>
+    /// SH-L044: the stampede locks are left alone. Disposing them here made a caller still inside
+    /// <see cref="GetOrSetAsync{T}"/> throw <see cref="ObjectDisposedException"/> from its <c>Release</c>, masking the
+    /// factory's result; each lock is disposed by its last releaser instead, and no new caller can take one. The
+    /// caches are not disposed either: the caller owns L1 and L2.
+    /// </remarks>
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
-
-        lock (_locksGate)
-        {
-            foreach (var kvp in _locks)
-                kvp.Value.Semaphore.Dispose();
-            _locks.Clear();
-        }
-
-        // Hybrid cache does NOT dispose L1/L2 — caller owns their lifetime
+        Interlocked.Exchange(ref _disposed, 1);
     }
+
+    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 }

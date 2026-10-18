@@ -240,6 +240,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Caching low triage: TTLs validated, nulls on Redis, a fenced lock (2026-10-18)
+[[TASK-184]]. 17 low findings: 16 confirmed (2 already fixed by TASK-169), 1 narrower. Decided by the user:
+- A zero or negative TTL is refused on every backend (`CacheEntryOptions.Validate`).
+- Redis stores a null and returns it as a hit, as MemoryCache does.
+
+Every cache throws after `Dispose`. MemoryCache takes an optional `TimeProvider`. The Redis stampede lock releases
+only its own token. SQL cache keys name the entity type.
 ### Caching triage: the SQL cache hands out copies; Redis and Hybrid fixes (2026-10-18)
 [[TASK-169]]. 14 medium findings: 13 confirmed, 1 found fixed. One half was spawned as [[TASK-669]].
 - `CachedAsyncDataBaseBulkStore` caches a JSON copy and caches a not-found row on Redis too.
@@ -327,10 +334,6 @@ run's outcomes apart).
 - Every built-in tool's failure starts with `Error:`. `run_command` reports a non-zero exit, `search_code` honours
   allowed paths and times out a runaway regex, and `ask_user` lets cancellation through.
 - `AgentFactory` is thread-safe. `AgentOptions.Merge` copies only what the other instance set.
-### Conversation checkpoints restore what the agent built; a trim keeps tool pairs (2026-10-18)
-[[TASK-535]]. `ConversationCheckpoint` saves a conversation and restores it in the agent's in-memory shapes, so
-`ResumeAsync` sends it as it would a live one. `ConversationTrimmer` keeps the first user message and never orphans a
-tool_result. Measured: `MessageText.From` read a `JsonElement` content (a plain deserializer's output) as ""; it reads it now.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-18 11:55. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-18 13:41. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 26      | —     |
-| todo         | —     | —       | 154   |
+| todo         | —     | —       | 153   |
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 25      | 365   |
+| done         | 2     | 25      | 366   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 102× P2 · 43× P3.
+`todo` by priority: 9× P1 · 101× P2 · 43× P3.
 
 ## In progress now
 
@@ -168,7 +168,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (223/282 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (224/282 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -435,7 +435,7 @@ _None._
     - [x] [TASK-666](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-666-view-rebuild-takes-cached-field-by-column-name.md) A SQL view built concurrently takes a cached field by source column name and loses its aggregate (P2) · FEATURE-014
     - [x] [TASK-667](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-667-elasticsearch-job-transitions-match-a-stale-index.md) Elasticsearch job transitions match a stale search index, so an outcome reported right after the claim is dropped (P1) · FEATURE-014
     - [ ] [TASK-669](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-669-sql-cache-invalidates-before-commit.md) SQL cached store invalidates before commit (P2) · FEATURE-014
-  - STORY-054 Spec-harvest — low findings — planned (3/26 done)
+  - STORY-054 Spec-harvest — low findings — planned (4/26 done)
     - [x] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
     - [x] [TASK-174](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-174-triage-low-event-bus-and-messaging.md) Triage the 29 low spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014
     - [x] [TASK-175](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-175-triage-low-background-jobs.md) Triage the 24 low spec-harvest findings in `background-jobs` (P2) · FEATURE-014
@@ -447,7 +447,7 @@ _None._
     - [ ] [TASK-181](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-181-triage-low-validation-and-rules.md) Triage the 19 low spec-harvest findings in `validation-and-rules` (P2) · FEATURE-014
     - [ ] [TASK-182](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-182-triage-low-store-crud-contract.md) Triage the 19 low spec-harvest findings in `store-crud-contract` (P2) · FEATURE-014
     - [ ] [TASK-183](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-183-triage-low-settings-configuration-chain.md) Triage the 18 low spec-harvest findings in `settings-configuration-chain` (P2) · FEATURE-014
-    - [ ] [TASK-184](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-184-triage-low-caching.md) Triage the 17 low spec-harvest findings in `caching` (P2) · FEATURE-014
+    - [x] [TASK-184](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-184-triage-low-caching.md) Triage the 17 low spec-harvest findings in `caching` (P2) · FEATURE-014
     - [ ] [TASK-185](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-185-triage-low-tenant-isolation.md) Triage the 15 low spec-harvest findings in `tenant-isolation` (P2) · FEATURE-014
     - [ ] [TASK-186](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-186-triage-low-entity-tagging.md) Triage the 14 low spec-harvest findings in `entity-tagging` (P2) · FEATURE-014
     - [ ] [TASK-187](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-187-triage-low-store-decorator-composition.md) Triage the 13 low spec-harvest findings in `store-decorator-composition` (P2) · FEATURE-014

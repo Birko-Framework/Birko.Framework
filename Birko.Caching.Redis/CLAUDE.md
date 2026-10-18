@@ -35,7 +35,7 @@ var result = await cache.GetAsync<User>("user:42");
 - `DefaultExpiration` is a constructor parameter, not part of settings
 - `_ownsConnection` flag tracks whether to dispose the connection manager (fixes bug where shared connections were disposed)
 - Sliding expiration uses Redis Hash metadata key (`{key}:__meta`) to track sliding/absolute TTL
-- GetOrSetAsync uses Redis SET NX as distributed lock to prevent stampede
+- GetOrSetAsync uses Redis SET NX with a per-call token as a distributed lock; a Lua compare-and-delete releases only its own token (TASK-184). A null value is stored and read back as a hit
 - RemoveByPrefixAsync uses SCAN via KeysAsync (non-blocking)
 - **A cache-scoped delete that would match the whole database refuses (SH-H006).** `ClearAsync` does prefix
   removal when a `KeyPrefix` is configured; with none it throws `WholeDatabaseDeleteException` rather than

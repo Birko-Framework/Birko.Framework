@@ -15,7 +15,8 @@ namespace Birko.Data.SQL.Caching
 
         /// <summary>
         /// Gets or sets whether caching is enabled.
-        /// When disabled, the cached store delegates directly to the base store.
+        /// When disabled, reads go straight to the database and nothing is cached, but writes still invalidate the
+        /// table in the cache, so another store sharing the cache and table is not left stale (SH-L054).
         /// Defaults to true.
         /// </summary>
         public bool Enabled { get; set; } = true;

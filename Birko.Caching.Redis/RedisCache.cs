@@ -19,7 +19,7 @@ public sealed class RedisCache : ICache
     private readonly RedisSettings _settings;
     private readonly TimeSpan _defaultExpiration;
     private readonly bool _ownsConnection;
-    private bool _disposed;
+    private int _disposed;
 
     /// <summary>
     /// Creates a new RedisCache that owns its connection.
@@ -50,6 +50,7 @@ public sealed class RedisCache : ICache
 
     public async Task<CacheResult<T>> GetAsync<T>(string key, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         ct.ThrowIfCancellationRequested();
         var db = _connectionManager.GetDatabase();
         var fullKey = GetFullKey(key);
@@ -66,6 +67,8 @@ public sealed class RedisCache : ICache
 
     public async Task SetAsync<T>(string key, T value, CacheEntryOptions? options = null, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
+        CacheEntryOptions.Validate(options); // SH-L041: a non-positive TTL is refused on every backend
         ct.ThrowIfCancellationRequested();
         var db = _connectionManager.GetDatabase();
         var fullKey = GetFullKey(key);
@@ -107,6 +110,7 @@ public sealed class RedisCache : ICache
 
     public async Task RemoveAsync(string key, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         ct.ThrowIfCancellationRequested();
         var db = _connectionManager.GetDatabase();
         var fullKey = GetFullKey(key);
@@ -115,6 +119,7 @@ public sealed class RedisCache : ICache
 
     public async Task<bool> ExistsAsync(string key, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         ct.ThrowIfCancellationRequested();
         var db = _connectionManager.GetDatabase();
         return await db.KeyExistsAsync(GetFullKey(key));
@@ -122,6 +127,8 @@ public sealed class RedisCache : ICache
 
     public async Task<T> GetOrSetAsync<T>(string key, Func<CancellationToken, Task<T>> factory, CacheEntryOptions? options = null, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
+        CacheEntryOptions.Validate(options); // SH-L041: a non-positive TTL is refused on every backend
         ct.ThrowIfCancellationRequested();
         var result = await GetAsync<T>(key, ct);
         if (result.HasValue)
@@ -130,7 +137,11 @@ public sealed class RedisCache : ICache
         // Use Redis SET NX as distributed lock
         var db = _connectionManager.GetDatabase();
         var lockKey = GetFullKey($"__lock:{key}");
-        var lockAcquired = await db.StringSetAsync(lockKey, "1", TimeSpan.FromSeconds(30), When.NotExists);
+        // SH-L048: the lock holds this caller's own token, and only the holder of that token releases it. With a
+        // constant value, a factory running past the 30 s expiry let a second caller take the lock, and the first
+        // caller's release then deleted the second caller's lock.
+        var lockToken = Guid.NewGuid().ToString("N");
+        var lockAcquired = await db.StringSetAsync(lockKey, lockToken, TimeSpan.FromSeconds(30), When.NotExists);
 
         try
         {
@@ -158,12 +169,13 @@ public sealed class RedisCache : ICache
         finally
         {
             if (lockAcquired)
-                await db.KeyDeleteAsync(lockKey);
+                await db.ScriptEvaluateAsync(ReleaseLockScript, [lockKey], [lockToken]);
         }
     }
 
     public async Task RemoveByPrefixAsync(string prefix, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         ct.ThrowIfCancellationRequested();
         // Report the argument the caller actually passed: null and "" both normalise to the same empty scope,
         // and an operator grepping logs for their own call must be able to find it.
@@ -178,6 +190,7 @@ public sealed class RedisCache : ICache
 
     public async Task ClearAsync(CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         ct.ThrowIfCancellationRequested();
         // SH-H006: this used to fall through to FLUSHDB whenever no KeyPrefix was configured — which is the
         // DEFAULT, since RedisSettings.KeyPrefix is an unassigned string?. It targeted every key in the
@@ -217,6 +230,7 @@ public sealed class RedisCache : ICache
     /// </summary>
     public async Task FlushDatabaseAsync(CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         ct.ThrowIfCancellationRequested();
         // The database the cache writes to, on every primary (SH-M042, SH-M043): settings.Database could name
         // another index than the shared connection manager's, and one endpoint left the other shards intact.
@@ -405,10 +419,19 @@ public sealed class RedisCache : ICache
         return slidingSpan < remainingSpan ? slidingSpan : remainingSpan;
     }
 
+    /// <summary>Deletes the lock only while it still holds the caller's token (SH-L048).</summary>
+    private const string ReleaseLockScript =
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+
+    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+    /// <summary>
+    /// Disposes an owned connection once, however many threads call it; every later operation throws
+    /// <see cref="ObjectDisposedException"/> (SH-L043).
+    /// </summary>
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         if (_ownsConnection)
         {
             _connectionManager.Dispose();

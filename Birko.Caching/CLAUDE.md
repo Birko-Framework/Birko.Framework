@@ -47,7 +47,7 @@ await cache.RemoveByPrefixAsync("product:");  // Invalidate all product cache en
 - ICache is async-first (distributed backends are inherently async)
 - MemoryCache uses per-key SemaphoreSlim in GetOrSetAsync to prevent cache stampede
 - Background Timer evicts expired entries (configurable interval, default 60s)
-- CachePriority.NeverRemove entries survive eviction sweeps
+- CachePriority is only carried (no memory-pressure eviction): an expired entry is removed whatever its priority (TASK-184). Expiry runs on an optional TimeProvider (monotonic timestamps); a non-positive TTL is refused (CacheEntryOptions.Validate); every operation after Dispose throws ObjectDisposedException
 - CacheResult<T> struct distinguishes "not found" from "found null value"
 - CacheSerializer is static — used by Redis and other distributed backends
 

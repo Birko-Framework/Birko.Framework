@@ -35,8 +35,8 @@ that layers a local L1 in front of a shared L2 — plus one consumer of that con
 `CachedAsyncDataBaseBulkStore<DB, T>`, a drop-in SQL store subclass that transparently caches read
 results and wipes its table's cache entries on every write. Anything in the framework that wants
 memoisation, a distributed cache, or read-through query caching for a SQL store depends on this area.
-The three backends deliberately do **not** behave identically for null values, type mismatches,
-`ClearAsync`, or `CachePriority`, and those divergences are recorded below as first-class behaviour.
+The three backends deliberately do **not** behave identically for type mismatches, a stored null read
+as another type, or `ClearAsync`, and those divergences are recorded below as first-class behaviour.
 
 ## Requirements
 
@@ -84,6 +84,26 @@ The system SHALL express entry lifetime through `CacheEntryOptions` carrying a n
 `CachePriority.Normal`, with static factories `Absolute(ttl)`, `Sliding(window)`,
 `AbsoluteAndSliding(ttl, sliding)` and `Default` (which is `Absolute(TimeSpan.FromMinutes(5))`).
 
+A zero or negative absolute or sliding window SHALL be refused with `ArgumentOutOfRangeException`: by the
+three factories at construction, and — because the properties stay settable — by
+`CacheEntryOptions.Validate(options, paramName)`, which passes a null `options` through (it means the
+backend default) and which `MemoryCache`, `RedisCache` and `HybridCache` call on the options of every
+`SetAsync` and, before the cache is read or the factory runs, of every `GetOrSetAsync` (SH-L041, decided by
+the user: a non-positive window used to be a silent already-expired entry on `MemoryCache` and a server error
+on Redis).
+
+#### Scenario: A non-positive window is refused at construction
+
+- **Given** `CacheEntryOptions.Absolute(TimeSpan.Zero)`, `Sliding(TimeSpan.FromSeconds(-1))` or `AbsoluteAndSliding(1.Hour(), TimeSpan.Zero)`
+- **When** the factory is called
+- **Then** `ArgumentOutOfRangeException` is thrown, naming the offending parameter (`ttl`, `window` or `sliding`) (SH-L041)
+
+#### Scenario: A non-positive window set afterwards is refused on every write
+
+- **Given** `new CacheEntryOptions { AbsoluteExpiration = TimeSpan.Zero }`
+- **When** it is passed to `SetAsync` or `GetOrSetAsync` on a `MemoryCache`, `RedisCache` or `HybridCache`
+- **Then** `ArgumentOutOfRangeException` is thrown before anything is stored, and for `GetOrSetAsync` before the cache is read or the factory runs (SH-L041)
+
 #### Scenario: Default options
 
 - **Given** no explicit options
@@ -104,9 +124,26 @@ The system SHALL express entry lifetime through `CacheEntryOptions` carrying a n
 
 ### Requirement: MemoryCache expiry evaluation
 
-The system SHALL treat a `MemoryCacheEntry` as expired when `AbsoluteExpiration` is set and
-`UtcNow - CreatedAt` is **strictly greater** than it, or when `SlidingExpiration` is set and
-`UtcNow - LastAccessedAt` is strictly greater than it; an entry with neither window set never expires.
+The system SHALL treat a `MemoryCacheEntry` as expired when `AbsoluteExpiration` is set and the time
+elapsed since its creation timestamp is **strictly greater** than it, or when `SlidingExpiration` is set
+and the time elapsed since its last-access timestamp is strictly greater than it; an entry with neither
+window set never expires. Both timestamps SHALL be the **monotonic** `TimeProvider.GetTimestamp()` of the
+cache's clock, measured with `GetElapsedTime`, so a wall-clock step neither extends nor shortens an entry's
+life; the clock is the optional last `MemoryCache` constructor parameter `TimeProvider? clock`, defaulting to
+`TimeProvider.System`, through which a test drives expiry (SH-L052). The last-access timestamp is a `long`
+read and written with `Volatile`.
+
+#### Scenario: Expiry follows the injected clock
+
+- **Given** `new MemoryCache(clock: fakeTimeProvider)` and `SetAsync("k", v, Absolute(1 minute))`
+- **When** the fake clock is advanced by 61 seconds, with no real time passing
+- **Then** `GetAsync("k")` returns `Miss()` (SH-L052)
+
+#### Scenario: A wall-clock step does not change an entry's lifetime
+
+- **Given** an entry stored with `Absolute(1 minute)` on a default `MemoryCache`, and a system wall-clock correction of an hour (forward or back) 10 seconds later
+- **When** the entry is read
+- **Then** it is still live, because `TimeProvider.System.GetTimestamp()` is the monotonic `Stopwatch` timestamp, not `UtcNow` (SH-L052)
 
 #### Scenario: Absolute window elapsed
 
@@ -131,7 +168,9 @@ The system SHALL treat a `MemoryCacheEntry` as expired when `AbsoluteExpiration`
 The system SHALL, on `MemoryCache.GetAsync` and `MemoryCache.ExistsAsync`, remove an entry it finds
 expired from the backing `ConcurrentDictionary` and report `Miss()` / `false` respectively — **without
 consulting `CachePriority`**, so a `NeverRemove` entry is still evicted by a read once its window has
-elapsed.
+elapsed. The removal SHALL go through `RemoveIfUnchanged(key, observed)`, the key/value
+`TryRemove(KeyValuePair)` overload, so it removes only the entry the reader observed as expired and never
+one a concurrent `SetAsync` wrote in between (SH-L042).
 
 #### Scenario: Expired entry is dropped by the reader
 
@@ -145,12 +184,19 @@ elapsed.
 - **When** `ExistsAsync(key)` is awaited two seconds later
 - **Then** it returns `false` and the entry has been removed, because the read path does not check `Priority`
 
-### Requirement: MemoryCache background eviction honours NeverRemove
+#### Scenario: A fresh write racing an expiry removal survives
+
+- **Given** a reader that has observed key `"k"`'s entry as expired, and a concurrent `SetAsync("k", v2)` (e.g. a `GetOrSetAsync` storing its factory result) that replaces it before the reader removes it
+- **When** the reader removes the expired entry
+- **Then** the key/value removal does not match the new entry and `v2` stays cached (SH-L042: removal by key alone deleted it)
+
+### Requirement: MemoryCache background eviction removes every expired entry
 
 The system SHALL run a `Timer`-driven `EvictExpired()` sweep at a configurable interval (constructor
-parameter `cleanupInterval`, defaulting to 60 seconds) that removes every expired entry **except** those
-whose `Options.Priority == CachePriority.NeverRemove`, returns immediately if the cache has been
-disposed, and never touches the per-key lock map.
+parameter `cleanupInterval`, defaulting to 60 seconds) that removes every expired entry **whatever its
+`Priority`**, `NeverRemove` included, each through `RemoveIfUnchanged` (SH-L042), returns immediately if the
+cache has been disposed, and never touches the per-key lock map. SH-L039: the sweep used to keep an expired
+`NeverRemove` entry that the read path had already stopped serving, so it was only retained memory.
 
 #### Scenario: Sweep removes an ordinary expired entry
 
@@ -158,11 +204,11 @@ disposed, and never touches the per-key lock map.
 - **When** the cleanup timer fires
 - **Then** the entry is removed from `_entries`
 
-#### Scenario: Sweep skips a NeverRemove entry
+#### Scenario: Sweep removes an expired NeverRemove entry too
 
 - **Given** the same cache holding an expired `NeverRemove` entry
 - **When** the cleanup timer fires
-- **Then** the entry remains in `_entries` (though a subsequent `GetAsync` will still report a miss and delete it)
+- **Then** the entry is removed from `_entries`, as a read would have removed it (SH-L039)
 
 #### Scenario: Sweep after disposal is a no-op
 
@@ -172,21 +218,21 @@ disposed, and never touches the per-key lock map.
 
 ### Requirement: MemoryCache sliding refresh happens only on GetAsync
 
-The system SHALL update `MemoryCacheEntry.LastAccessedAt` to `DateTime.UtcNow` only inside
-`MemoryCache.GetAsync` for a non-expired entry; `ExistsAsync`, `SetAsync` on a different key, and the
+The system SHALL update the entry's last-access timestamp (`MemoryCacheEntry.Touch()`, the clock's
+current timestamp) only inside `MemoryCache.GetAsync` for a non-expired entry; `ExistsAsync`, `SetAsync` on a different key, and the
 eviction sweep SHALL NOT extend a sliding window.
 
 #### Scenario: Reads keep a sliding entry alive
 
 - **Given** an entry stored with `Sliding(1 minute)`
 - **When** `GetAsync` is called every 30 seconds
-- **Then** the entry never expires, because each call rewrites `LastAccessedAt`
+- **Then** the entry never expires, because each call rewrites the last-access timestamp
 
 #### Scenario: Existence probes do not keep it alive
 
 - **Given** the same entry
 - **When** only `ExistsAsync` is called every 30 seconds
-- **Then** the entry expires after 60 seconds without access, because `ExistsAsync` does not touch `LastAccessedAt`
+- **Then** the entry expires after 60 seconds without access, because `ExistsAsync` does not call `Touch()`
 
 ### Requirement: MemoryCache stores values untyped and degrades type mismatch to a miss
 
@@ -213,7 +259,7 @@ same key as "no rows"); the CR-L036 stored-null hit for the same type is kept.
 
 - **Given** a `MemoryCache` where the key holds a stored `null`
 - **When** `GetOrSetAsync<Foo>(key, factory)` is awaited
-- **Then** the factory is never invoked and `null` is returned from a `Task<Foo>`-typed method (`result.Value!`)
+- **Then** the factory is never invoked and `null` is returned from a `Task<Foo>`-typed method (`result.Value!`) — documented on `ICache.GetOrSetAsync` rather than changed (SH-L047, decided by the user): a caller that may find a cached null asks for a nullable `T`; `RedisCache` and `HybridCache` behave the same since SH-L045
 
 ### Requirement: MemoryCache write applies default options when none are given
 
@@ -230,7 +276,7 @@ and unconditionally overwrite any existing entry for that key (indexer assignmen
 
 - **Given** a key already holding an entry created at T0
 - **When** `SetAsync` is called again for the same key at T1
-- **Then** a brand-new `MemoryCacheEntry` replaces it with `CreatedAt == T1`, restarting the absolute window
+- **Then** a brand-new `MemoryCacheEntry` replaces it with its creation timestamp taken at T1, restarting the absolute window
 
 ### Requirement: MemoryCache stampede protection via reference-counted per-key locks
 
@@ -314,9 +360,13 @@ and `SetAsync`.
 ### Requirement: MemoryCache disposal
 
 The system SHALL make `MemoryCache.Dispose()` idempotent via a `volatile bool _disposed` flag, dispose
-the cleanup timer, dispose every remaining key semaphore while swallowing `ObjectDisposedException`, and
-clear both the lock map and the entry map. Cache operations after disposal are not guarded and continue
-to operate on the (now empty) dictionaries.
+the cleanup timer, and clear both the lock map and the entry map — **without** disposing the per-key
+semaphores, each of which stays with its last releaser (SH-L044: disposing them made a `GetOrSetAsync` caller
+inside its critical section throw `ObjectDisposedException` from its `Release()`; a semaphore never released
+holds no wait handle, so nothing leaks). Every cache operation after disposal SHALL throw
+`ObjectDisposedException` — `GetAsync`, `SetAsync`, `RemoveAsync`, `ExistsAsync`, `RemoveByPrefixAsync` and
+`ClearAsync` check first, and `GetOrSetAsync` through its inner `GetAsync` (SH-L043: a disposed cache used to
+go on accepting writes with no sweep left to expire them).
 
 #### Scenario: Double dispose is safe
 
@@ -324,17 +374,17 @@ to operate on the (now empty) dictionaries.
 - **When** `Dispose()` is called twice
 - **Then** the second call returns immediately at the `_disposed` guard
 
-#### Scenario: Already-disposed semaphore does not break disposal
+#### Scenario: Disposal does not dispose a semaphore a caller still holds
 
-- **Given** a lock whose semaphore was already disposed by its last releaser but which is still visible in the map
-- **When** `Dispose()` enumerates the locks
-- **Then** the `ObjectDisposedException` is caught and disposal continues to the next lock
+- **Given** a `GetOrSetAsync` caller holding its key's semaphore while its factory runs
+- **When** `Dispose()` is called and the caller's `finally` then runs
+- **Then** its `Semaphore.Release()` succeeds, and the lock is retired and its semaphore disposed by `ReleaseKeyLock` as the last releaser (SH-L044) — though the caller's own `SetAsync` of the factory result, running after disposal, throws `ObjectDisposedException` (SH-L043)
 
-#### Scenario: Reads after disposal do not throw
+#### Scenario: Operations after disposal throw
 
 - **Given** a disposed `MemoryCache`
-- **When** `GetAsync<T>("k")` is awaited
-- **Then** it returns `Miss()` rather than `ObjectDisposedException`, because no operation checks `_disposed`
+- **When** `GetAsync<T>("k")`, `SetAsync("k", v)` or any other operation is awaited
+- **Then** `ObjectDisposedException` is thrown, before the cancellation check and before the dictionary is touched (SH-L043)
 
 ### Requirement: Redis cache key namespacing
 
@@ -442,8 +492,13 @@ on `null` it SHALL delete both the value and metadata keys instead of re-extendi
 ### Requirement: Redis values are JSON-serialised through CacheSerializer
 
 The system SHALL serialise and deserialise distributed cache payloads with `CacheSerializer`, a static
-facade over a `SystemJsonSerializer` configured with `JsonNamingPolicy.CamelCase`,
-`JsonIgnoreCondition.WhenWritingNull` and `WriteIndented = false`.
+facade over a private static `SystemJsonSerializer` configured with `JsonNamingPolicy.CamelCase`,
+`JsonIgnoreCondition.WhenWritingNull` and `WriteIndented = false`. The format is fixed: nothing can plug in
+another `ISerializer` (SH-L046: the type's documentation used to claim pluggable format support). A `null`
+value SHALL be a value (SH-L045, decided by the user — a stored null is a hit on every backend, as
+`MemoryCache`'s CR-L036): `Serialize` / `SerializeToString` write the JSON `null` without reaching the
+underlying serializer (which refuses null), and `Deserialize` / `DeserializeFromString` read exactly the JSON
+`null` back as `default`.
 
 #### Scenario: Property names are camel-cased on the wire
 
@@ -457,11 +512,17 @@ facade over a `SystemJsonSerializer` configured with `JsonNamingPolicy.CamelCase
 - **When** it is serialised
 - **Then** the `description` member is absent from the JSON payload
 
-#### Scenario: Caching a null value throws
+#### Scenario: A cached null is stored and read back as a hit
 
 - **Given** a `RedisCache`
-- **When** `SetAsync<Foo>("k", null)` is awaited
-- **Then** `CacheSerializer.Serialize` reaches `ArgumentNullException.ThrowIfNull(value)` inside `SystemJsonSerializer.SerializeToBytes<T>` and an `ArgumentNullException` propagates — where `MemoryCache` would have stored the null as a legitimate hit
+- **When** `SetAsync<Foo>("k", null)` is awaited and then `GetAsync<Foo>("k")`
+- **Then** the key holds the JSON `null`, and the read returns `Hit(null)` — `HasValue == true`, as on `MemoryCache` (SH-L045); it used to throw `ArgumentNullException` from the underlying serializer
+
+#### Scenario: A stored null hits for any requested type on Redis
+
+- **Given** a `RedisCache` key holding the JSON `null` written as `Foo`
+- **When** `GetAsync<Bar>("k")` is awaited for an unrelated `Bar`
+- **Then** it returns `Hit(default)`, because the JSON `null` carries no type — where `MemoryCache` returns `Miss()` for a type not assignable from the stored one (SH-M039)
 
 #### Scenario: Reading a payload of the wrong shape throws
 
@@ -471,17 +532,28 @@ facade over a `SystemJsonSerializer` configured with `JsonNamingPolicy.CamelCase
 
 ### Requirement: Redis stampede protection uses a best-effort SET NX lock
 
-The system SHALL, in `RedisCache.GetOrSetAsync`, read first, then attempt `StringSetAsync(lockKey, "1",
-TimeSpan.FromSeconds(30), When.NotExists)` on `GetFullKey("__lock:{key}")`. The acquirer SHALL run the
-factory, store the result, and delete the lock key in a `finally`. A caller that fails to acquire the
-lock SHALL `Task.Delay(50, ct)`, re-read once, and if still a miss SHALL run the factory anyway; such a
-caller SHALL NOT delete the lock key.
+The system SHALL, in `RedisCache.GetOrSetAsync`, read first, then attempt `StringSetAsync(lockKey, token,
+TimeSpan.FromSeconds(30), When.NotExists)` on `GetFullKey("__lock:{key}")`, where `token` is a fresh
+per-call `Guid` (SH-L048). The acquirer SHALL run the factory, store the result, and in a `finally` release
+the lock with a Lua compare-and-delete (`if GET == token then DEL`), so it deletes the lock only while it
+still holds its own token. A caller that fails to acquire the lock SHALL `Task.Delay(50, ct)`, re-read once,
+and if still a miss SHALL run the factory anyway; such a caller SHALL NOT release the lock.
+
+SH-L048: the lock value used to be the constant `"1"` and the release an unconditional `DEL`, so a factory
+running past the 30-second expiry let a second caller take the lock and the first caller's release then
+deleted the second caller's lock.
 
 #### Scenario: The lock holder populates the cache
 
 - **Given** a cold key and a single caller
 - **When** `GetOrSetAsync` is awaited
-- **Then** the lock is acquired, the factory runs once, the value is stored with the supplied options, and the lock key is deleted
+- **Then** the lock is acquired with the caller's token, the factory runs once, the value is stored with the supplied options, and the compare-and-delete removes the lock key
+
+#### Scenario: An expired holder does not release its successor's lock
+
+- **Given** a lock holder whose factory outlives the 30-second lock expiry, and a second caller that has since acquired the lock with its own token
+- **When** the first caller's `finally` runs the release script
+- **Then** the lock holds the second caller's token, so the script deletes nothing and the second caller's lock survives (SH-L048)
 
 #### Scenario: A loser that finds the value avoids the factory
 
@@ -499,7 +571,7 @@ caller SHALL NOT delete the lock key.
 
 - **Given** a caller whose `lockAcquired` is `false`
 - **When** its `finally` block runs
-- **Then** `KeyDeleteAsync(lockKey)` is skipped, so the real holder's lock survives
+- **Then** the release script is not run, so the real holder's lock survives
 
 ### Requirement: Redis prefix removal scans and deletes in batches
 
@@ -643,8 +715,9 @@ additionally requiring a connection built with admin mode.
 
 The system SHALL create and own a `RedisConnectionManager` when constructed from `RedisSettings`, and
 SHALL NOT own one when constructed from an externally supplied `RedisConnectionManager`; `Dispose()`
-SHALL be idempotent for sequential calls — guarded by a plain, non-`volatile` `bool _disposed`, unlike
-`MemoryCache`'s `volatile` one — and dispose the manager only in the owning case. Every data operation
+SHALL run once however many threads call it — an `Interlocked.Exchange` on an `int _disposed` — and dispose
+the manager only in the owning case, and every operation after disposal (each `ICache` member and
+`FlushDatabaseAsync`) SHALL throw `ObjectDisposedException` before anything else (SH-L043). Every data operation
 SHALL address the database index the connection manager captured at *its* construction
 (`GetDatabase()`), and `RemoveByPrefixAsync`'s and `ClearAsync`'s SCAN and `FlushDatabaseAsync`'s
 `FLUSHDB` SHALL address that same index (`GetDatabase().Database`), not `RedisSettings.Database` from the
@@ -674,17 +747,25 @@ settings handed to the cache — which the shared-manager constructor allows to 
 - **When** entries are written and then `RemoveByPrefixAsync(prefix)` is awaited
 - **Then** the values were written to database 0 and `KeysAsync(..., database: 0)` enumerates database 0, so they are deleted — and `FlushDatabaseAsync` would `FLUSHDB` database 0, the one this cache writes to, leaving database 3 alone (SH-M042)
 
-#### Scenario: Concurrent disposal is not serialised
+#### Scenario: Concurrent disposal disposes the connection once
 
 - **Given** two threads calling `Dispose()` on the same owning `RedisCache` simultaneously
-- **When** both read `_disposed` before either writes it
-- **Then** both pass the guard and `RedisConnectionManager.Dispose()` is entered twice, because the flag is neither `volatile` nor lock-protected
+- **When** both reach the guard
+- **Then** only the thread whose `Interlocked.Exchange` saw 0 disposes the `RedisConnectionManager` (SH-L043)
 
-### Requirement: CachePriority is honoured only by MemoryCache's sweep
+#### Scenario: Operations after disposal throw
 
-The system SHALL apply `CacheEntryOptions.Priority` nowhere except `MemoryCache.EvictExpired()`;
-`RedisCache` and `HybridCache`'s L2 path ignore it entirely, and `HybridCache.GetL1Options` merely
-copies it onto the derived L1 options.
+- **Given** a disposed `RedisCache`
+- **When** `GetAsync`, `SetAsync`, `ClearAsync`, `FlushDatabaseAsync` or any other operation is awaited
+- **Then** `ObjectDisposedException` is thrown before the cancellation check and before the connection is used (SH-L043)
+
+### Requirement: CachePriority is carried but honoured by no backend
+
+The system SHALL carry `CacheEntryOptions.Priority` without acting on it: no backend evicts under memory
+pressure or has a size limit, every backend removes an expired entry whatever its priority
+(`MemoryCache`'s sweep included, since SH-L039), `RedisCache` does not store it, and
+`HybridCache.GetL1Options` merely copies it onto the derived L1 options. It is kept for source
+compatibility and for a backend that may honour it (SH-L040).
 
 #### Scenario: NeverRemove has no effect in Redis
 
@@ -701,8 +782,8 @@ copies it onto the derived L1 options.
 ### Requirement: HybridCache read path checks L1 then L2 and backfills L1
 
 The system SHALL, in `HybridCache.GetAsync`, return an L1 hit immediately; otherwise consult L2, return
-`Miss()` if L2 misses, and on an L2 hit write the value into L1 using `GetL1Options(null)` — i.e. always
-`Absolute(L1DefaultExpiration)` — before returning the L2 result. The backfill (here and in
+`Miss()` if L2 misses, and on an L2 hit write the value into L1 using `GetL1Options(null)` — i.e.
+`Absolute(min(L1DefaultExpiration, L1MaxExpiration))` (SH-L038) — before returning the L2 result. The backfill (here and in
 `GetOrSetAsync`) SHALL be conditional on no removal having run since the read began: see "HybridCache
 removal is not undone by a concurrent read" (SH-M048).
 
@@ -727,7 +808,8 @@ removal is not undone by a concurrent read" (SH-M048).
 ### Requirement: HybridCache derives capped L1 entry options
 
 The system SHALL compute L1 options in `GetL1Options(requested)` as follows: when `requested == null`,
-return `Absolute(L1DefaultExpiration)` **uncapped**; when `L1MaxExpiration == null`, return the
+return `Absolute(L1DefaultExpiration)` capped by `L1MaxExpiration` when one is set (SH-L038: this L2-backfill
+branch used to return before the cap, so L1 entries could exceed the documented hard cap); when `L1MaxExpiration == null`, return the
 `requested` instance itself; otherwise return a new `CacheEntryOptions` whose `AbsoluteExpiration` is
 `min(requested.AbsoluteExpiration, L1MaxExpiration)` if the request set one and
 `min(L1MaxExpiration, L1DefaultExpiration)` if it did not, whose `SlidingExpiration` is
@@ -758,11 +840,11 @@ whose `Priority` is copied from the request.
 - **When** `GetL1Options(requested)` runs
 - **Then** the exact `requested` instance is returned, so L1 and L2 share one mutable options object
 
-#### Scenario: Null request bypasses the cap
+#### Scenario: Null request is capped too
 
 - **Given** `L1DefaultExpiration = 10 minutes` and `L1MaxExpiration = 5 minutes`
 - **When** `GetL1Options(null)` runs
-- **Then** it returns `Absolute(10 minutes)` — the `requested == null` branch returns before the cap is applied, so L1 entries can exceed `L1MaxExpiration`
+- **Then** it returns `Absolute(5 minutes)`, so an L2 backfill cannot exceed `L1MaxExpiration` (SH-L038); with `L1MaxExpiration = null` it returns `Absolute(10 minutes)`
 
 ### Requirement: HybridCache write ordering is configurable
 
@@ -770,7 +852,10 @@ The system SHALL, when `HybridCacheOptions.WriteThrough` is `true` (the default)
 first, await the L2 write inside a `try`, and always await the L1 task in a `finally` so it is never
 left unobserved; and when `WriteThrough` is `false`, await the L2 write first (rethrowing when
 `FallbackToL1OnL2Failure` is false) and only then write L1. L2 receives the caller's original options;
-L1 receives `GetL1Options(options)`.
+L1 receives `GetL1Options(options)`. In both modes, once the L2 write has completed (or been absorbed), the
+system SHALL bump the key's invalidation generation and then write L1 — in write-through mode a second L1
+write, after the bump (TASK-184, extending SH-M048; see "HybridCache removal is not undone by a concurrent
+read").
 
 #### Scenario: Write-through writes both tiers
 
@@ -848,7 +933,10 @@ succeeded, was absorbed or propagated.
 
 The system SHALL, in `RemoveAsync`, remove the key from L2 first, then increment the key's invalidation
 generation (one of 256 stripes chosen by key hash), then remove it from L1; and in `RemoveByPrefixAsync`
-and `ClearAsync` follow the same order with a single `_epoch` counter standing in for every stripe. A read
+and `ClearAsync` follow the same order with a single `_epoch` counter standing in for every stripe.
+`SetAsync` SHALL follow it too: write L2, increment the key's generation, then write L1 (TASK-184), so a read
+that fetched the **old** value from L2 either sees the bump and withdraws its backfill, or backfilled before
+the bump and is overwritten by the L1 write after it. A read
 that backfills L1 from an L2 hit (`GetAsync`, `GetOrSetAsync`) SHALL capture `(epoch, stripe generation)`
 before reading L2, skip the backfill if it has changed by the time it would write, and remove its own
 backfill from L1 if it changed while writing.
@@ -868,6 +956,12 @@ next read goes to L2 — never a stale one.
 - **Given** in-flight reads for several keys under one prefix, each between its L2 read and its L1 backfill
 - **When** `RemoveByPrefixAsync(prefix)` or `ClearAsync()` completes
 - **Then** the `_epoch` bump makes every one of those reads skip or withdraw its backfill, whichever stripe its key hashes to
+
+#### Scenario: A read that got the old L2 value does not overwrite a concurrent write in L1
+
+- **Given** a key absent from L1 and holding `v1` in L2, and a `GetAsync` that has captured the generation and read `v1` from L2 when `SetAsync(key, v2)` runs
+- **When** the read's backfill and the write interleave in either order
+- **Then** L1 ends holding `v2`: a backfill after the write's generation bump is skipped or withdrawn, and one before it is overwritten by the write's L1 write after the bump — before TASK-184 the read could leave `v1` in L1 over the write for `L1DefaultExpiration`
 
 ### Requirement: HybridCache existence probe is an OR across tiers
 
@@ -921,8 +1015,11 @@ then store the value via its own `SetAsync` (writing both tiers).
 ### Requirement: HybridCache does not own its tiers
 
 The system SHALL reject null `l1` or `l2` at construction with `ArgumentNullException`, default
-`options` to `new HybridCacheOptions()`, and in `Dispose()` dispose only its own key semaphores —
-**never** L1 or L2, whose lifetime belongs to the caller.
+`options` to `new HybridCacheOptions()`, and in `Dispose()` only mark itself disposed (an
+`Interlocked.Exchange` on an `int _disposed`) — disposing **neither** L1 nor L2, whose lifetime belongs to
+the caller, **nor** its key semaphores, each of which is disposed by its last releaser (SH-L044: disposing them
+made a caller inside `GetOrSetAsync` throw `ObjectDisposedException` from its `Release()`). Every operation
+after disposal SHALL throw `ObjectDisposedException` before touching either tier (SH-L043).
 
 #### Scenario: Tiers survive the hybrid's disposal
 
@@ -939,17 +1036,35 @@ The system SHALL reject null `l1` or `l2` at construction with `ArgumentNullExce
 #### Scenario: Disposal is idempotent
 
 - **Given** a `HybridCache`
-- **When** `Dispose()` is called twice
-- **Then** the second call returns at the `_disposed` guard without re-disposing semaphores — a plain, non-`volatile` `bool`, so this holds for sequential calls only
+- **When** `Dispose()` is called twice, sequentially or concurrently
+- **Then** both calls only set the `_disposed` flag, so there is nothing to dispose twice (SH-L043)
+
+#### Scenario: Operations after disposal throw
+
+- **Given** a disposed `HybridCache`
+- **When** `GetAsync`, `SetAsync`, `GetOrSetAsync` or any other operation is awaited
+- **Then** `ObjectDisposedException` is thrown before L1 or L2 is consulted (SH-L043)
+
+#### Scenario: Disposal does not dispose a semaphore a caller still holds
+
+- **Given** a `GetOrSetAsync` caller holding its key's semaphore while its factory runs
+- **When** `Dispose()` is called and the caller's `finally` then runs
+- **Then** its `Release()` succeeds and the last releaser removes and disposes the lock (SH-L044) — though the caller's own `SetAsync` of the factory result, running after disposal, throws `ObjectDisposedException` (SH-L043)
 
 ### Requirement: SQL query cache keys are deterministic, database-scoped and table-scoped
 
 The system SHALL build SQL query cache keys as
-`"sql:{scopeHash}:{tableName}:{filterHash}:{orderHash}:{limit}:{offset}"`, where each hash is the first
+`"sql:{scopeHash}:{tableName}:{typeSegment}{filterHash}:{orderHash}:{limit}:{offset}"`, where each hash is the first
 8 bytes of the SHA-256 of the corresponding string rendered as 16 lowercase hex characters, and where a
 null or empty filter string, order string, limit or offset is rendered as the literal `"_"`. The
+`typeSegment` SHALL be `"t{typeHash}:"` — the hash of the entity type's `AssemblyQualifiedName` (falling back
+to `FullName`, then `Name`) — when `BuildKey`'s optional trailing `Type? entityType` is given, and empty when
+it is null (SH-L053: two types mapped to one table read the same rows into different shapes, and a key
+without the type served one type the other's payload). The segment sits **after** the table prefix, so a
+write through either type still invalidates both. The
 invalidation prefix for a table SHALL be `"sql:{scopeHash}:{tableName}:"`. A **single-result** read SHALL
-be keyed by `BuildSingleKey(scope, tableName, filterString)` = `"sql:{scopeHash}:{tableName}:{filterHash}:one"`
+be keyed by `BuildSingleKey(scope, tableName, filterString, entityType = null)` =
+`"sql:{scopeHash}:{tableName}:{typeSegment}{filterHash}:one"`
 — under the same table prefix, so invalidation reaches it, and with a shape (one segment after the filter,
 not four) that no `BuildKey` result can produce (SH-M036).
 
@@ -995,6 +1110,18 @@ that nothing ever removes.
 - **When** `GetTablePrefix(scope, "User")` is used for invalidation
 - **Then** `"sql:{scopeHash}:UserRole:..."` keys do **not** match, because the prefix ends with the `:` separator
 
+#### Scenario: Two entity types over one table do not share a key
+
+- **Given** two cached stores over one `ICache` and one database, for entity types `UserSummary` and `UserDetail` both mapped to table `"User"`
+- **When** each issues the same filtered read
+- **Then** the keys carry different `t{typeHash}:` segments, so neither type is served the other's cached payload (SH-L053)
+
+#### Scenario: A write through either type invalidates both
+
+- **Given** cached reads of table `"User"` through both `UserSummary` and `UserDetail`
+- **When** either store writes
+- **Then** `GetTablePrefix(scope, "User")` matches both types' keys, because the type segment follows the table prefix, and both are removed (SH-L053)
+
 ### Requirement: A filter that cannot be described by value is not cached
 
 The system SHALL, in `SqlCacheKeyBuilder.TryDescribeFilter`, produce the filter description a key is
@@ -1034,8 +1161,8 @@ The system SHALL override both `ReadCoreAsync` overloads of `AsyncDataBaseBulkSt
 `CachedAsyncDataBaseBulkStore<DB, T>`. Both SHALL obtain the filter description from
 `TryDescribeFilter` and, when it reports the filter cannot be described, SHALL delegate to the base
 overload without touching the cache. Otherwise the single-result overload keys on
-`BuildSingleKey(scope, table, description)` (SH-M036), and the collection overload keys on
-`BuildKey(scope, table, description, orderString, limit, offset)` — where `orderString` is
+`BuildSingleKey(scope, table, description, typeof(T))` (SH-M036, SH-L053), and the collection overload keys on
+`BuildKey(scope, table, description, orderString, limit, offset, typeof(T))` — where `orderString` is
 `orderBy?.ToDictionary()` joined as `"{key}:{value}"` pairs separated by commas, or null — and
 materialises the base result with `ToList()`. Both SHALL cache a **JSON string copy** of the result
 (`GetAsync<string>` / `SetAsync<string>`), serialised with the store's own `JsonSerializerOptions` (the
@@ -1095,14 +1222,14 @@ constructor: the table name depends only on `T`'s mapping and is resolved before
 
 - **Given** `ReadCoreAsync(filter)` (single) and `ReadCoreAsync(filter, orderBy: null, limit: 1, offset: null)` (collection) for the same filter
 - **When** both keys are built
-- **Then** the single read's key is `"sql:{scopeHash}:{table}:{filterHash}:one"` and the collection read's is `"sql:{scopeHash}:{table}:{filterHash}:_:1:_"`, so neither path overwrites the other's entry (SH-M036)
+- **Then** the single read's key is `"sql:{scopeHash}:{table}:t{typeHash}:{filterHash}:one"` and the collection read's is `"sql:{scopeHash}:{table}:t{typeHash}:{filterHash}:_:1:_"`, so neither path overwrites the other's entry (SH-M036)
 
 ### Requirement: Cached SQL store caches negative single-result reads
 
 The system SHALL store the result of the single-result `ReadCoreAsync` even when the base store returned
-`null`, as the JSON string `"null"`, so a not-found row is cached as a hit on every backend — including one
-that refuses to store a null value (`RedisCache`, or a `HybridCache` over it) — and the read never throws
-for caching it (SH-M035).
+`null`, as the JSON string `"null"`, so a not-found row is cached as a hit on every backend and the read
+never throws for caching it (SH-M035; `RedisCache` refused a null value until SH-L045, and the store
+still caches the non-null string, so a hit whose string is null remains a miss).
 
 #### Scenario: Miss is remembered on a memory-backed cache
 
@@ -1205,20 +1332,21 @@ invalidation and the commit (the half of SH-M044 spawned as TASK-669).
 ### Requirement: SQL caching can be disabled at runtime
 
 The system SHALL, when `SqlCacheOptions.Enabled` is `false`, delegate both `ReadCoreAsync` overloads
-straight to `base` without touching the cache, and make `InvalidateCacheAsync` a no-op that returns
-before computing a prefix; the write overrides still call `base`.
+straight to `base` without touching the cache, and SHALL still invalidate the table prefix on every write
+exactly as an enabled store does (SH-L054: `InvalidateCacheAsync` used to return early when disabled, so a
+store with caching off left another store sharing the cache and table serving the rows it changed).
 
 #### Scenario: Disabled reads bypass the cache entirely
 
 - **Given** `new SqlCacheOptions { Enabled = false }`
 - **When** any read is awaited
-- **Then** no key is built, `_cache` is never called, and the base store's result is returned directly
+- **Then** no key is built, `_cache` is not read or written, and the base store's result is returned directly
 
-#### Scenario: Disabled writes leave a shared cache stale
+#### Scenario: Disabled writes still invalidate a shared cache
 
-- **Given** two stores over the same `ICache` and the same table, one with `Enabled = false` and one with `Enabled = true`
+- **Given** two stores over the same `ICache` and the same table, one with `Enabled = false` and one with `Enabled = true` holding cached reads
 - **When** the disabled store performs a write
-- **Then** `InvalidateCacheAsync` returns early, so the enabled store keeps serving its now-stale cached reads until TTL expiry
+- **Then** the table prefix is removed from the cache, so the enabled store's next read re-queries the database and sees the write (SH-L054)
 
 ### Requirement: Cached SQL store resolves its table name once at construction
 

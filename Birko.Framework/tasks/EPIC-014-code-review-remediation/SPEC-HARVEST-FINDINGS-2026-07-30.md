@@ -4741,11 +4741,15 @@ ReadFirst calls base.Read(filter), i.e. the single-result ReadCore(filter) - a s
 
 `../Birko.Caching.Hybrid/HybridCache.cs:257`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-184). `HybridCache.GetL1Options(null)` (the L2-backfill path) returned `L1DefaultExpiration` before the cap; it now takes the smaller of it and `L1MaxExpiration`. Red on HEAD.
+
 The `requested == null` branch returns CacheEntryOptions.Absolute(_options.L1DefaultExpiration) before the maxExpiry cap is applied. If a consumer sets L1DefaultExpiration > L1MaxExpiration, the GetAsync L2-backfill path (which always passes null) creates L1 entries longer-lived than the documented hard cap — the staleness bound L1MaxExpiration exists to enforce.
 
 #### SH-L039 — CachePriority.NeverRemove is honoured by the sweep but ignored by the read path
 
 `../Birko.Caching/Memory/MemoryCache.cs:45`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-184). `MemoryCache`'s sweep skipped an expired `NeverRemove` entry that every read already treated as gone (retained memory only). The sweep removes any expired entry; priority has no meaning without memory-pressure eviction (SH-L040). Red on HEAD: 2.
 
 EvictExpired() skips entries with Priority == NeverRemove (line 178), but GetAsync (45-49) and ExistsAsync (85-89) call _entries.TryRemove for any expired entry without consulting Priority. A NeverRemove entry survives the timer yet is deleted by the first read after its window elapses — the two eviction paths disagree and NeverRemove buys nothing observable.
 
@@ -4753,11 +4757,15 @@ EvictExpired() skips entries with Priority == NeverRemove (line 178), but GetAsy
 
 `../Birko.Caching/Core/CacheEntryOptions.cs:29`
 
+**Verdict: CONFIRMED, documented** (TASK-184). No backend evicts under memory pressure; the XML docs on `CachePriority` and `CacheEntryOptions.Priority` now say the value is only carried. No behaviour change.
+
 Priority is read in exactly one place (MemoryCache.EvictExpired, and only the NeverRemove comparison). Low/Normal/High are never read by any backend, and no backend implements any size limit or memory-pressure eviction at all, yet the XML doc states 'Eviction priority when cache is under memory pressure'. RedisCache and HybridCache's L2 path never see Priority; HybridCache.GetL1Options only copies it forward.
 
 #### SH-L041 — Non-positive TTLs are unvalidated and diverge between backends
 
 `../Birko.Caching/Core/CacheEntryOptions.cs:33`
+
+**Verdict: CONFIRMED, fixed** (TASK-184; decided by the user 2026-10-18: refuse up front). `CacheEntryOptions`'s factories and the new `CacheEntryOptions.Validate` throw `ArgumentOutOfRangeException` for a non-positive absolute or sliding expiration; MemoryCache, RedisCache and HybridCache validate every write before any work (GetOrSet before its factory). Red on HEAD: 3 (Core); the Redis and Hybrid tests are pins against removing only their own call (the L1 MemoryCache, and a negative sliding window on Redis, already throw further in).
 
 Absolute(TimeSpan.Zero) / a negative window is accepted by the factories and by every backend. MemoryCache stores an entry whose IsExpired() is true from the next tick (SetAsync reports success but the value is unreachable — a silent no-op write), whereas RedisCache passes it as the StringSetAsync expiry and Redis rejects a non-positive PX/EX with a server error. Same call, success on one backend and an exception on the other.
 
@@ -4765,11 +4773,15 @@ Absolute(TimeSpan.Zero) / a negative window is accepted by the factories and by 
 
 `../Birko.Caching/Memory/MemoryCache.cs:47`
 
+**Verdict: CONFIRMED, fixed** (TASK-184). Get, Exists and the sweep removed an expired entry by key alone, deleting a fresh write made in between. New `RemoveIfUnchanged` uses the key/value `TryRemove`. Red on HEAD: 1 (deterministic); a sweep-vs-writer race test is a pin.
+
 GetAsync (47), ExistsAsync (87) and EvictExpired (179) all call _entries.TryRemove(key, out _) after deciding the entry they OBSERVED is expired. If another thread completes SetAsync for that key in between, the reader/sweeper deletes the brand-new entry. The per-key lock map uses the correct TryRemove(KeyValuePair) pair overload (line 148) — the entry map does not. Observable as a GetOrSetAsync whose factory result vanishes immediately.
 
 #### SH-L043 — No cache operation guards _disposed, and a disposed MemoryCache grows without bound
 
 `../Birko.Caching/Memory/MemoryCache.cs:188`
+
+**Verdict: CONFIRMED, fixed** (TASK-184). MemoryCache, RedisCache and HybridCache: every operation after `Dispose` throws `ObjectDisposedException`, and Redis and Hybrid dispose once through `Interlocked.Exchange` (Redis owned a connection a racing double Dispose could dispose twice). Red on HEAD: 3 (one per backend).
 
 Dispose() sets _disposed and clears the maps, but GetAsync/SetAsync/GetOrSetAsync never check it. A disposed MemoryCache keeps accepting writes while its cleanup timer is gone, so expired entries are only removed when someone happens to read that exact key — unbounded growth with no error. RedisCache/HybridCache are the same (and their _disposed flags are plain bools, not volatile like MemoryCache's, so concurrent Dispose can double-dispose the owned RedisConnectionManager).
 
@@ -4777,11 +4789,15 @@ Dispose() sets _disposed and clears the maps, but GetAsync/SetAsync/GetOrSetAsyn
 
 `../Birko.Caching/Memory/MemoryCache.cs:194`
 
+**Verdict: CONFIRMED, fixed** (TASK-184). MemoryCache and HybridCache `Dispose` no longer dispose the stampede semaphores; each lock is still retired by its last releaser. A factory running across Dispose ends with the cache's own `ObjectDisposedException` (its SetAsync refuses), not the semaphore's from the `finally`. Red on HEAD: 2.
+
 Dispose() disposes every KeyLock semaphore and clears _locks regardless of RefCount/Refs. A caller currently inside its critical section then hits ObjectDisposedException on keyLock.Semaphore.Release() in its finally (line 118), which masks the factory's result and skips ReleaseKeyLock. HybridCache.Dispose (lines 290-295) has the identical hazard against its RefCount>0 locks.
 
 #### SH-L045 — CacheSerializer suppresses a genuinely-null value into a ThrowIfNull parameter
 
 `../Birko.Caching/Serialization/CacheSerializer.cs:24`
+
+**Verdict: CONFIRMED, fixed** (TASK-184; decided by the user 2026-10-18: store it, a hit). `CacheSerializer` writes a null as JSON `null` and reads it back as `default`, so RedisCache (and a Redis-backed Hybrid) store a null and return it as a hit, as MemoryCache does (CR-L036). Red on HEAD: serializer unit test and Redis live.
 
 Serialize<T>(T value) forwards `value!` to ISerializer.SerializeToBytes, whose first statement is ArgumentNullException.ThrowIfNull. The `!` asserts non-null for exactly the input the ICache contract permits (MemoryCache stores nulls as hits), converting a supported cache operation into an ArgumentNullException at the Redis backend. SerializeToString (line 34) does the same; Deserialize returns T? which RedisCache.cs:64 re-suppresses with `!` into CacheResult<T>.Hit.
 
@@ -4789,11 +4805,15 @@ Serialize<T>(T value) forwards `value!` to ISerializer.SerializeToBytes, whose f
 
 `../Birko.Caching/Serialization/CacheSerializer.cs:15`
 
+**Verdict: CONFIRMED, documented** (TASK-184). The class doc no longer claims a pluggable `ISerializer`; nothing can plug one in. No API change.
+
 The class doc says it 'Delegates to ISerializer for pluggable serialization format support', but DefaultSerializer is a private static readonly SystemJsonSerializer with no setter, constructor, factory or configuration hook, and every member is static. No consumer can substitute a format — the abstraction is dead and the doc claim is false.
 
 #### SH-L047 — GetOrSetAsync returns a cached null through a non-nullable Task<T>
 
 `../Birko.Caching/Memory/MemoryCache.cs:99`
+
+**Verdict: CONFIRMED-NARROWER, documented** (TASK-184; decided by the user 2026-10-18: document only). A cached null is a hit by design (CR-L036), so `GetOrSetAsync` returns it without running the factory. Remarks on `ICache.GetOrSetAsync`, MemoryCache and HybridCache say so and advise a nullable `T` where a null may be cached. No behaviour change.
 
 For a cached null, GetAsync returns HasValue==true with Value==null and GetOrSetAsync returns `result.Value!` (lines 99 and 110). The declared return is Task<T>, so a caller writing `Foo f = await cache.GetOrSetAsync<Foo>(...)` receives null with no nullable-flow warning and NREs later; the factory is also never consulted. HybridCache repeats this at lines 158 and 167.
 
@@ -4801,11 +4821,15 @@ For a cached null, GetAsync returns HasValue==true with Value==null and GetOrSet
 
 `../Birko.Caching.Redis/RedisCache.cs:147`
 
+**Verdict: CONFIRMED, fixed** (TASK-184). RedisCache's stampede lock holds a per-call token, and release is a Lua compare-and-delete, so a holder whose lock expired cannot delete the next holder's. Red on HEAD live.
+
 The lock is taken with a fixed 30-second TTL and released with `KeyDeleteAsync(lockKey)` whenever lockAcquired is true, without checking that the value "1" is still the one this caller wrote. A factory that runs longer than 30 s lets the lock expire, a second caller acquires it, and then the first caller's finally deletes the second caller's lock — collapsing stampede protection precisely under the slow-factory conditions it exists for.
 
 #### SH-L049 — The always-observe-L1 fix exists only in SetAsync; Remove/RemoveByPrefix/Clear leave l1Task unobserved
 
 `../Birko.Caching.Hybrid/HybridCache.cs:130`
+
+**Verdict: CONFIRMED, found fixed by TASK-169** (SH-M048's restructuring): RemoveAsync, RemoveByPrefixAsync and ClearAsync now await L2 and then clear L1 in a `finally`, so no L1 task is left unobserved and L1 is always cleared. Pin: with fallback off, a failing L2 removal propagates and L1 is cleared.
 
 SetAsync deliberately awaits l1Task in a finally (CR-M031). RemoveAsync (125-135), RemoveByPrefixAsync (219-232) and ClearAsync (234-247) instead start l1Task, then await Task.WhenAll inside a try whose only catch is `when (FallbackToL1OnL2Failure)`. With that flag false, an L2 failure propagates without l1Task ever being awaited — the same unobserved-faulted-task hazard, and the caller cannot tell whether L1 was cleared. A synchronous throw from _l2.RemoveAsync before l2Task is assigned has the same effect.
 
@@ -4813,11 +4837,15 @@ SetAsync deliberately awaits l1Task in a finally (CR-M031). RemoveAsync (125-135
 
 `../Birko.Caching.Hybrid/HybridCache.cs:170`
 
+**Verdict: CONFIRMED, found fixed by TASK-169**: GetOrSetAsync's L1 backfill (`BackfillL1Async`) is outside the L2 try, so an L1 failure propagates and the factory does not run. Pin.
+
 The try at lines 161-173 wraps both `_l2.GetAsync` and the `_l1.SetAsync` backfill (line 166). An L1 write failure is therefore swallowed by `catch when (FallbackToL1OnL2Failure)` and execution falls through to the stampede lock and the factory, so the factory runs and overwrites a value that L2 had already returned successfully — an L1 fault is misattributed to L2 and duplicate work is silently performed.
 
 #### SH-L051 — HybridCache.cs compiles only under ImplicitUsings (Dictionary with no System.Collections.Generic import)
 
 `../Birko.Caching.Hybrid/HybridCache.cs:2`
+
+**Verdict: CONFIRMED, fixed** (TASK-184). HybridCache.cs imports `System.Collections.Generic` and no longer the unused `System.Collections.Concurrent`. By inspection: the test project sets ImplicitUsings, so no test can be red.
 
 Line 18 declares `Dictionary<string, KeyLock>` but the file imports System, System.Collections.Concurrent (which it never uses), System.Threading and System.Threading.Tasks — not System.Collections.Generic. Every consumer today happens to set ImplicitUsings=enable, so it builds; a consumer aggregator without it fails to compile this shared project. Every other file in the area declares its usings explicitly.
 
@@ -4825,17 +4853,23 @@ Line 18 declares `Dictionary<string, KeyLock>` but the file imports System, Syst
 
 `../Birko.Caching/Memory/MemoryCacheEntry.cs:22`
 
+**Verdict: CONFIRMED, fixed** (TASK-184). MemoryCache takes an optional `TimeProvider` (BCL; not `IDateTimeProvider`, which would add a project dependency to every importer of Birko.Caching) and measures expiry on its monotonic timestamps, so an NTP step no longer moves it; the last access is a `long` written with `Volatile`. Red on HEAD: 2 (injected clock).
+
 IsExpired() and the CreatedAt/LastAccessedAt stamps read DateTime.UtcNow directly, so a backwards clock adjustment (NTP step) silently extends every entry's lifetime past its TTL, and expiry cannot be driven deterministically even though Birko.Time.Abstractions.IDateTimeProvider is the framework's stated abstraction for exactly this (used by the Birko.Data.Patterns timestamp/audit decorators). LastAccessedAt is also a non-volatile DateTime written by readers (MemoryCache.cs:51) and read by the sweep with no synchronisation, so on a 32-bit runtime the sweep can observe a torn value.
 
 #### SH-L053 — BuildKey keys on table name only, so distinct entity types sharing a table name share entries
 
 `../Birko.Data.SQL.Caching/Caching/SqlCacheKeyBuilder.cs:31`
 
+**Verdict: CONFIRMED, fixed** (TASK-184). `BuildKey` / `BuildSingleKey` take the entity type, hashed after the table prefix (so a write through either type still invalidates both), and the store passes `typeof(T)`. Red on HEAD (with the parameter stubbed as ignored). The unmapped-fallback case is also not cached at all since TASK-169.
+
 The key format has no component identifying T. Two entity types mapped to the same table, or two unmapped types in different namespaces both falling back to typeof(T).Name (CachedAsyncDataBaseBulkStore.cs:195, e.g. Sales.Order and Logistics.Order), produce identical keys over one shared ICache — so a read for one type is served the other type's payload (Miss/churn on MemoryCache, JsonException or a wrongly-shaped object on Redis).
 
 #### SH-L054 — Enabled=false suppresses invalidation, so a shared cache is left stale by that store's writes
 
 `../Birko.Data.SQL.Caching/Caching/SqlCacheOptions.cs:21`
+
+**Verdict: CONFIRMED, fixed** (TASK-184). A store with `Enabled = false` still invalidates the table on its writes; the doc on `Enabled` says so. Red on HEAD.
 
 Enabled is a settable property and InvalidateCacheAsync returns before computing a prefix when it is false (CachedAsyncDataBaseBulkStore.cs:172). A second store over the same ICache and table with Enabled=true therefore keeps serving cached rows that the disabled store has already changed or deleted, until DefaultExpiration. Disabling the cache is documented as 'delegates directly to the base store', which reads as safe.
 

@@ -71,6 +71,12 @@ PostgreSQL / TimescaleDB `ALTER COLUMN "MaxRetries" DROP NOT NULL`, SQLite a tab
 under driver 3.x, so the MongoDB job queue could not claim a job on a real server (its tests ran on an in-memory
 double). A set value is now written with the member's own serializer; a null is `BsonNull`. Measured live.
 
+## 2026-10-18 — Conversation checkpoints restore what the agent built; a trim keeps tool pairs
+
+[[TASK-535]]. `ConversationCheckpoint` saves a conversation and restores it in the agent's in-memory shapes, so
+`ResumeAsync` sends it as it would a live one. `ConversationTrimmer` keeps the first user message and never orphans a
+tool_result. Measured: `MessageText.From` read a `JsonElement` content (a plain deserializer's output) as ""; it reads it now.
+
 ## 2026-10-17 — One process runner; Birko.VersionControl.Git with agent git tools
 
 [[TASK-534]]. `Birko.Helpers.ProcessRunner` drains stdout and stderr together and kills the process tree on a timeout.

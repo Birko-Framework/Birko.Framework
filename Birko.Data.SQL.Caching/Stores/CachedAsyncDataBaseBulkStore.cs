@@ -157,7 +157,7 @@ namespace Birko.Data.SQL.Stores
                 return await base.ReadCoreAsync(filter, ct);
             }
 
-            var key = SqlCacheKeyBuilder.BuildSingleKey(CacheScope, _tableName, filterString);
+            var key = SqlCacheKeyBuilder.BuildSingleKey(CacheScope, _tableName, filterString, typeof(T));
 
             var cached = await _cache.GetAsync<string>(key, ct);
             if (cached.HasValue && cached.Value != null)
@@ -195,7 +195,7 @@ namespace Birko.Data.SQL.Stores
             var orderString = orderBy?.ToDictionary() is { } dict
                 ? string.Join(",", dict.Select(kvp => $"{kvp.Key}:{kvp.Value}"))
                 : null;
-            var key = SqlCacheKeyBuilder.BuildKey(CacheScope, _tableName, filterString, orderString, limit, offset);
+            var key = SqlCacheKeyBuilder.BuildKey(CacheScope, _tableName, filterString, orderString, limit, offset, typeof(T));
 
             var cached = await _cache.GetAsync<string>(key, ct);
             if (cached.HasValue && cached.Value != null)
@@ -360,9 +360,10 @@ namespace Birko.Data.SQL.Stores
             await InvalidateCacheAsync().ConfigureAwait(false);
         }
 
+        // SH-L054: no Enabled check. A store with caching disabled still writes the table, and another store over
+        // the same cache and table with caching enabled must not go on serving the rows it changed.
         private async Task InvalidateCacheAsync()
         {
-            if (!_options.Enabled) return;
 
             // SH-H005: the prefix carries the same scope the keys do. The two MUST move together — a
             // scoped key with an unscoped prefix would over-invalidate (harmless), but an unscoped key

@@ -17,6 +17,11 @@ public interface ICache : IDisposable
     /// <summary>
     /// Gets a value from cache, or creates it using the factory and caches the result.
     /// </summary>
+    /// <remarks>
+    /// A cached <c>null</c> is a hit (CR-L036): it is returned as-is and the factory does not run. The return type cannot
+    /// say so for an unconstrained <typeparamref name="T"/>, so when a null may have been cached under the key, ask for a
+    /// nullable <typeparamref name="T"/> (SH-L047, decided by the user 2026-10-18: documented, not changed).
+    /// </remarks>
     Task<T> GetOrSetAsync<T>(string key, Func<CancellationToken, Task<T>> factory, CacheEntryOptions? options = null, CancellationToken ct = default);
 
     /// <summary>

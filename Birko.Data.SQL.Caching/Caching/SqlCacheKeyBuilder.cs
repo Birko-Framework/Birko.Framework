@@ -49,15 +49,19 @@ namespace Birko.Data.SQL.Caching
         /// <param name="orderString">String representation of the order clause, or null.</param>
         /// <param name="limit">Optional limit value.</param>
         /// <param name="offset">Optional offset value.</param>
+        /// <param name="entityType">
+        /// The entity type the read materialises, or null. SH-L053: two types mapped to one table read the same rows
+        /// into different shapes, so a key without the type served one type the other's payload.
+        /// </param>
         /// <returns>A deterministic cache key string.</returns>
-        public static string BuildKey(string scope, string tableName, string? filterString, string? orderString, int? limit, int? offset)
+        public static string BuildKey(string scope, string tableName, string? filterString, string? orderString, int? limit, int? offset, Type? entityType = null)
         {
             var filterHash = string.IsNullOrEmpty(filterString) ? "_" : ComputeHash(filterString!);
             var orderHash = string.IsNullOrEmpty(orderString) ? "_" : ComputeHash(orderString!);
             var limitPart = limit?.ToString() ?? "_";
             var offsetPart = offset?.ToString() ?? "_";
 
-            return $"{GetTablePrefix(scope, tableName)}{filterHash}:{orderHash}:{limitPart}:{offsetPart}";
+            return $"{GetTablePrefix(scope, tableName)}{TypeSegment(entityType)}{filterHash}:{orderHash}:{limitPart}:{offsetPart}";
         }
 
         /// <summary>
@@ -70,11 +74,15 @@ namespace Birko.Data.SQL.Caching
         /// result (four segments after the filter) can produce, and it keeps the table prefix so invalidation
         /// still reaches it.
         /// </remarks>
-        public static string BuildSingleKey(string scope, string tableName, string? filterString)
+        public static string BuildSingleKey(string scope, string tableName, string? filterString, Type? entityType = null)
         {
             var filterHash = string.IsNullOrEmpty(filterString) ? "_" : ComputeHash(filterString!);
-            return $"{GetTablePrefix(scope, tableName)}{filterHash}:one";
+            return $"{GetTablePrefix(scope, tableName)}{TypeSegment(entityType)}{filterHash}:one";
         }
+
+        // After the table prefix, so a write through either type still invalidates both: they share the rows.
+        private static string TypeSegment(Type? entityType)
+            => entityType == null ? string.Empty : "t" + ComputeHash(entityType.AssemblyQualifiedName ?? entityType.FullName ?? entityType.Name) + ":";
 
         /// <summary>
         /// Gets the table-level cache key prefix for invalidation, within one database.

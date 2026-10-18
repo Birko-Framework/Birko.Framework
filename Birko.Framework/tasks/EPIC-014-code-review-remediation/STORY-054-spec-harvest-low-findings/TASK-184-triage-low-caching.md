@@ -3,7 +3,7 @@ id: TASK-184
 parent: STORY-054
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-09
@@ -53,18 +53,18 @@ Remove / RemoveByPrefix / Clear) was likely changed by the same fix: those now a
 
 ## Acceptance criteria
 
-- [ ] All 17 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 17 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
-- [ ] Any behavioural fix is followed by `/specs regen caching`, with the spec diff reviewed as the change's
+- [x] Any behavioural fix is followed by `/specs regen caching`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
 
 ## Out of scope
 
@@ -79,12 +79,29 @@ Remove / RemoveByPrefix / Clear) was likely changed by the same fix: those now a
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A — fully covered by automated tests: a library contract with no UI surface. The Redis tests run live.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-184` — leave empty until then._
+## Outcome (2026-10-18)
+
+**17 findings: 16 confirmed (L049 and L050 found fixed by [[TASK-169]]), 1 narrower (L047), 0 refuted.** Verdicts are in
+the findings file. Decided by the user: a non-positive TTL is refused (L041); Redis stores a null as a hit (L045);
+L047 is documented only.
+
+- **MemoryCache:** the sweep removes any expired entry (L039), and expired entries are removed only if unchanged (L042).
+  Operations after Dispose throw, and Dispose leaves held locks alone (L043, L044). Expiry runs on an optional
+  `TimeProvider` with torn-free last-access ticks (L052).
+- **Options and serializer:** `CacheEntryOptions.Validate` and the factories refuse a non-positive TTL; every backend
+  validates its writes (L041). Priority is documented as carried only (L040). `CacheSerializer` round-trips null (L045);
+  its doc no longer claims pluggability (L046).
+- **Hybrid:** the backfill options are capped (L038), and HybridCache.cs no longer needs ImplicitUsings (L051). Dispose is
+  guarded and once (L043, L044). TASK-169's handed-over race is closed: `SetAsync` bumps the key's generation after L2
+  and writes L1 after the bump, so a read holding the old L2 value cannot leave it in L1.
+- **Redis:** the stampede lock is fenced by a per-call token (L048), and Dispose is guarded and once (L043).
+- **SQL store:** keys name the entity type (L053), and a disabled store still invalidates (L054).
+- **Red check (HEAD production, new members stubbed):** Memory 11 of 13 (2 pins), Hybrid 5 of 7 (pins L049, L050),
+  Redis live 3 (L043, L045, L048), SQL 2 of 2. L041 on Redis and Hybrid is a pin against removing their own call (the
+  refusal also happens further in). L051 is by inspection.
+- **Regression** (live Redis): Caching 57, Hybrid 59, Caching.Redis 47, SQL.Caching 37, Redis 12,
+  BackgroundJobs.Redis 51, MessageQueue.Redis 64, all green. Sandbox builds.

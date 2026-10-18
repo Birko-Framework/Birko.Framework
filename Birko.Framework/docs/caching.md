@@ -34,6 +34,9 @@ if (result.HasValue)
 }
 ```
 
+A stored null is a hit on every backend, Redis included (TASK-184). `GetOrSetAsync` therefore returns a cached null
+without running the factory; use a nullable `T` where a null may be cached.
+
 ### CacheEntryOptions
 
 ```csharp
@@ -43,13 +46,11 @@ var opts = CacheEntryOptions.Absolute(TimeSpan.FromMinutes(10));
 // Sliding expiration (renewed on each access)
 var opts = CacheEntryOptions.Sliding(TimeSpan.FromMinutes(5));
 
-// Priority (NeverRemove survives eviction)
-var opts = new CacheEntryOptions
-{
-    AbsoluteExpiration = TimeSpan.FromHours(1),
-    Priority = CachePriority.NeverRemove
-};
 ```
+
+A zero or negative expiration is refused with `ArgumentOutOfRangeException`, by the factories and by every backend's
+write (`CacheEntryOptions.Validate`). `Priority` is carried but no backend evicts under memory pressure, so it has no
+effect; an expired entry is removed whatever its priority.
 
 ## In-Memory Cache
 
@@ -70,6 +71,8 @@ await cache.RemoveByPrefixAsync("product:");
 ```
 
 `GetOrSetAsync` uses per-key `SemaphoreSlim` to prevent cache stampede (multiple concurrent requests for the same missing key).
+
+Expiry is measured on a `TimeProvider` (optional last constructor argument, default `TimeProvider.System`) using its monotonic timestamps, so a wall-clock step does not move it, and a test can drive it with a fake clock.
 
 ## Redis Cache
 
@@ -92,7 +95,7 @@ var result = await cache.GetAsync<User>("user:42");
 
 ### Redis Features
 
-- **Stampede prevention**: Uses Redis `SET NX` for distributed locking
+- **Stampede prevention**: Uses Redis `SET NX` with a per-call token; only the token's holder releases the lock
 - **Sliding expiration**: Hash metadata tracks last access time
 - **Prefix removal**: Uses `SCAN` for efficient prefix-based invalidation
 - **ClearAsync**: Flushes database or prefix depending on `InstanceName`
@@ -130,7 +133,7 @@ var product = await cache.GetOrSetAsync("product:99",
 ### Hybrid Cache Features
 
 - **L1 TTL capping**: Local entries auto-expire (default 5 min max) to limit cross-node staleness
-- **Write-through**: `SetAsync` writes both tiers in parallel for consistency
+- **Write-through**: `SetAsync` writes both tiers in parallel, then writes L1 again after marking the key changed, so a concurrent read cannot leave the old L2 value in L1
 - **Stampede prevention**: Per-key `SemaphoreSlim` locks in `GetOrSetAsync`
 - **L2 failure resilience**: Graceful fallback to L1 when distributed cache is unavailable
 - **Non-owning**: `HybridCache` does NOT dispose L1/L2 — the caller owns their lifetime
@@ -154,7 +157,9 @@ var product = await cache.GetOrSetAsync("product:99",
 
 ## Serialization
 
-`CacheSerializer` provides static `System.Text.Json` serialization for distributed backends. In-memory cache stores objects directly without serialization.
+`CacheSerializer` provides static `System.Text.Json` serialization for distributed backends (not pluggable). A null is written as JSON `null` and read back as a null hit. In-memory cache stores objects directly without serialization.
+
+Every backend throws `ObjectDisposedException` for an operation after `Dispose`.
 
 ## SQL Query Caching Integration
 
