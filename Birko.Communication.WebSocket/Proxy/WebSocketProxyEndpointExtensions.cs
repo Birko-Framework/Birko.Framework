@@ -18,7 +18,9 @@ namespace Birko.Communication.WebSocket.Proxy
         /// </summary>
         /// <remarks>
         /// The upstream is connected <b>before</b> the client's upgrade is accepted: an upstream that refuses or cannot be
-        /// reached answers the client 502 without upgrading. A request that is not an upgrade gets 400. The endpoint has no
+        /// reached answers the client 502 without upgrading. A request that is not an upgrade gets 400. The client's requested
+        /// sub-protocols are offered upstream in its order, and the client is accepted with the one the upstream selected
+        /// (none when it selected none). The endpoint has no
         /// authentication of its own — chain <c>.RequireAuthorization()</c> on the returned builder. TLS certificates are
         /// validated unless <see cref="WebSocketProxyOptions.DangerousAcceptAnyServerCertificate"/> is set.
         /// </remarks>
@@ -52,6 +54,13 @@ namespace Birko.Communication.WebSocket.Proxy
 
             using var upstream = new ClientWebSocket();
             options.ConfigureUpstream(upstream.Options, credential);
+            // TASK-569: offer the client's sub-protocols upstream, in the client's order, and accept the client with the
+            // one the upstream selected. Without this a client that asked for one (graphql-transport-ws, mqtt, ...) was
+            // accepted with none and refused the handshake.
+            foreach (var protocol in context.WebSockets.WebSocketRequestedProtocols)
+            {
+                upstream.Options.AddSubProtocol(protocol);
+            }
 
             try
             {
@@ -70,7 +79,7 @@ namespace Birko.Communication.WebSocket.Proxy
                 return;
             }
 
-            using var client = await context.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
+            using var client = await context.WebSockets.AcceptWebSocketAsync(upstream.SubProtocol).ConfigureAwait(false);
             await WebSocketRelay.RunAsync(client, upstream, options.BufferSize, options.CloseTimeout, context.RequestAborted).ConfigureAwait(false);
         }
     }

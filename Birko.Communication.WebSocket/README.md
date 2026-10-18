@@ -128,7 +128,7 @@ app.MapWebSocketEndpointNoAuth("/ws/display", DisplayHandler.HandleAsync);
 
 ### Reverse proxy
 
-`MapWebSocketProxy(pattern, upstream, configure)` relays each client connection to an upstream WebSocket server
+`MapWebSocketProxy(pattern, upstream, configure)` relays each client connection to an upstream WebSocket server (the client's requested sub-protocols are offered upstream, and the client gets the one the upstream selected)
 (TASK-542). Frames are forwarded as they arrive, with their type and `EndOfMessage`, so memory stays at one buffer per
 direction. A close is forwarded with its status and description; a side that drops without one leaves the other
 closed with `EndpointUnavailable`.

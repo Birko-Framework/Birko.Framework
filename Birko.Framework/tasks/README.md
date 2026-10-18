@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 26      | —     |
-| todo         | —     | —       | 143   |
+| todo         | —     | —       | 142   |
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 25      | 376   |
+| done         | 2     | 25      | 377   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 97× P2 · 37× P3.
+`todo` by priority: 9× P1 · 97× P2 · 36× P3.
 
 ## In progress now
 
@@ -545,7 +545,7 @@ _None._
   - [x] [TASK-547](EPIC-018-birko-web-core-runtime/TASK-547-sseclient-reconnect-backoff-and-failing-signal.md) SseClient: one retry loop, exponential backoff, and a "reconnection failing" signal (P1)
   - [x] [TASK-581](EPIC-018-birko-web-core-runtime/TASK-581-syncmanager-backoff-cap-dead-letter.md) `SyncManager` retries a failing write every cycle forever: no backoff, no cap, no dead letter (P2) · FEATURE-018
   - [x] [TASK-598](EPIC-018-birko-web-core-runtime/TASK-598-an-action-interrupted-mid-sync-stays-syncing-forever.md) A queued write interrupted mid-sync stays `syncing` forever, invisible to every list and count (P2)
-- **EPIC-019** Birko framework backports from DraCode — in-progress (28/30 tasks done)
+- **EPIC-019** Birko framework backports from DraCode — in-progress (29/30 tasks done)
   - STORY-058 Security / OAuth backports from DraCode — planned (6/6 done)
     - [x] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
     - [x] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)
@@ -571,7 +571,7 @@ _None._
     - [x] [TASK-544](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-544-streaming-fallback-reruns-executed-tools.md) The streaming fallback re-runs tools that already executed (P1)
     - [x] [TASK-546](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-546-consecutive-user-turns-from-hook-injection.md) A hook-injected message after a tool-result turn makes two consecutive user turns (P2)
     - [x] [TASK-554](EPIC-019-birko-backports-from-dracode/STORY-060-koboldlair-ai-runtime-backports/TASK-554-gemini-function-response-carries-a-guid-not-the-function-name.md) GeminiProvider sends a GUID as functionResponse.name, not the function's name (P2)
-  - STORY-061 KoboldLair server backports from DraCode — in-progress (6/8 done)
+  - STORY-061 KoboldLair server backports from DraCode — in-progress (7/8 done)
     - [x] [TASK-536](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-536-websocket-require-authentication-fails-open.md) `MapWebSocketEndpoint(requireAuthentication: true)` accepts anonymous upgrades when no auth service is registered (P1)
     - [x] [TASK-537](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-537-websocket-connection-send-queue-and-framed-receive.md) Birko.Communication.WebSocket: one capped whole-message receive, used by WebSocketServer and offered to handlers (P1)
     - [x] [TASK-538](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-538-background-jobs-hosting-and-di.md) Birko.BackgroundJobs: hosted-service bridges and DI registration (P2)
@@ -579,7 +579,7 @@ _None._
     - [x] [TASK-540](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-540-aspnetcore-sse-result-with-heartbeat.md) Birko.Communication.SSE: an ASP.NET Core minimal-API result with heartbeat and terminal stop (P3)
     - [ ] [TASK-541](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-541-owner-or-admin-access-predicate.md) Birko.Communication.AspNetCore: an owner-or-admin access check usable outside MapOwnedCrud (P3)
     - [x] [TASK-542](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-542-websocket-reverse-proxy-endpoint.md) A WebSocket reverse-proxy endpoint mapper (P3)
-    - [ ] [TASK-569](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-569-websocket-proxy-forwards-subprotocols.md) MapWebSocketProxy drops the client's requested sub-protocols, so a client that asks for one fails its handshake (P3)
+    - [x] [TASK-569](EPIC-019-birko-backports-from-dracode/STORY-061-koboldlair-server-backports/TASK-569-websocket-proxy-forwards-subprotocols.md) MapWebSocketProxy drops the client's requested sub-protocols, so a client that asks for one fails its handshake (P3)
 
 ## Loose tasks
 

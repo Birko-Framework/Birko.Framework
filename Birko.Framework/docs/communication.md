@@ -17,7 +17,7 @@ Hardware communication interfaces (serial ports, device I/O).
 Bluetooth communication (device discovery, pairing, data transfer).
 
 ### Birko.Communication.WebSocket
-WebSocket client/server implementation with middleware support. `MapWebSocketProxy` maps a reverse-proxy endpoint to an upstream WebSocket server — frames relayed as they arrive, close status forwarded, upstream refusal answered 502 before any upgrade, TLS validated by default. `WebSocketCommandRouter` answers birko-web-core `WsClient.request` calls: `{ type, id, data }` routed to a handler by command name, replies `{ id, type: "response" | "error", … }` with the request id on every reply (TASK-539).
+WebSocket client/server implementation with middleware support. `MapWebSocketProxy` maps a reverse-proxy endpoint to an upstream WebSocket server — frames relayed as they arrive, close status forwarded, upstream refusal answered 502 before any upgrade, TLS validated by default, and the client's requested sub-protocols offered upstream in its order, the client accepted with the upstream's choice (TASK-569). `WebSocketCommandRouter` answers birko-web-core `WsClient.request` calls: `{ type, id, data }` routed to a handler by command name, replies `{ id, type: "response" | "error", … }` with the request id on every reply (TASK-539).
 
 ### Birko.Communication.REST
 REST API client with typed requests/responses, authentication, and retry support.

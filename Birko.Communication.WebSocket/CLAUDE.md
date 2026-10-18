@@ -41,7 +41,8 @@ WebSocket communication implementation for real-time bidirectional communication
 
 ### Proxy
 - `MapWebSocketProxy(pattern, upstream, configure)` (TASK-542) — reverse proxy. **Connects upstream before accepting the
-  client** (refusal → 502, no upgrade); relays frame by frame via internal `WebSocketRelay` (type, `EndOfMessage`, close
+  client** (refusal → 502, no upgrade); offers the client's sub-protocols upstream in its order and accepts the client
+  with the upstream's choice (TASK-569; before, a client that asked for one was accepted with none and failed); relays frame by frame via internal `WebSocketRelay` (type, `EndOfMessage`, close
   status/description forwarded; a drop → `EndpointUnavailable`; unfinished handshake → abort after `CloseTimeout`).
   It never reassembles, so it is not a second receive loop. Certificates validated unless
   `DangerousAcceptAnyServerCertificate`; credential as a Bearer header (default) or URL-encoded query. No auth of its own

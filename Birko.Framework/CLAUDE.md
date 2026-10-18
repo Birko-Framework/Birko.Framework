@@ -240,6 +240,10 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### The WebSocket proxy forwards sub-protocols (2026-10-18)
+[[TASK-569]]. `MapWebSocketProxy` offers the client's requested sub-protocols upstream, in the client's order, and
+accepts the client with the upstream's choice. Measured: a client asking for one (`graphql-transport-ws`, `mqtt`) was
+accepted with none, and refused the handshake.
 ### Birko.Communication.SSE.AspNetCore: SSE results with heartbeat and terminal stop (2026-10-18)
 [[TASK-540]]. New project. `SseResults.Stream` streams a `ChannelReader` or `IAsyncEnumerable` as SSE. It sends
 proxy-friendly headers and a `: heartbeat` when idle, and stops after a terminal item. A disconnect ends it, and an owned
