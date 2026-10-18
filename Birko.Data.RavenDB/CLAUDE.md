@@ -261,6 +261,15 @@ Automatic conflict detection with ETag:
 session.Advanced.UseOptimisticConcurrency = true;
 ```
 
+`AsyncRavenDBStore.UpdateIfAsync(guid, condition, update)` (TASK-665) is a compare-and-set built on it: load by id
+(never an index), apply only where `condition` holds, save with the change vector; a `ConcurrencyException` reloads
+and asks again, up to `MaxConditionalUpdateAttempts` (16), then `StoreConcurrencyException`. Returns the written
+document, or `null` when missing or the condition fails. Refused inside a unit of work.
+
+⚠ The store has no native filtered update: `UpdateAsync(filter, PropertyUpdate)` / `UpdateAsync(filter, Action)` are
+the base implementation, an index query (possibly stale) followed by unconditional writes. Use `UpdateIfAsync` where a
+condition must hold at the moment of writing.
+
 ### Time Series
 Built-in time-series data support (RavenDB 5.2+).
 

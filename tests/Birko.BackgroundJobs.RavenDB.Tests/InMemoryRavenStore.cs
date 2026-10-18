@@ -23,6 +23,19 @@ public class InMemoryRavenStore<T> : AsyncRavenDBStore<T> where T : AbstractMode
 
     protected override Task InitCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
 
+    private readonly object _gate = new();
+
+    // TASK-665: the store's compare-and-set, atomic under a lock (the real one saves with the document's change vector).
+    public override Task<T?> UpdateIfAsync(Guid guid, Func<T, bool> condition, Action<T> update, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            if (!_items.TryGetValue(guid, out var item) || !condition(item)) return Task.FromResult<T?>(null);
+            update(item);
+            return Task.FromResult<T?>(item);
+        }
+    }
+
     // AsyncRavenDBStore overrides ReadAsync(Guid) to load from the document store directly
     // (bypassing ReadCoreAsync), so the double must override it too.
     public override Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)

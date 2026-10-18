@@ -297,6 +297,57 @@ public class AsyncRavenDBStore<T>
         await session.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Conflicts <see cref="UpdateIfAsync"/> absorbs before it reports <see cref="StoreConcurrencyException"/>. Each one
+    /// means another writer changed the document, so the condition is evaluated again on what it wrote.
+    /// </summary>
+    public const int MaxConditionalUpdateAttempts = 16;
+
+    /// <summary>
+    /// A compare-and-set on one document (TASK-665): loads it by id — never from an index, which may be stale — applies
+    /// <paramref name="update"/> only when <paramref name="condition"/> holds for the stored document, and saves with
+    /// optimistic concurrency (its change vector), so a write by anyone in between is a conflict, not overwritten. On a
+    /// conflict the document is loaded again and the condition asked again.
+    /// </summary>
+    /// <returns>The document as written, or <c>null</c> when it is missing or the condition does not hold.</returns>
+    /// <exception cref="StoreConcurrencyException">The document kept changing for <see cref="MaxConditionalUpdateAttempts"/> loads.</exception>
+    /// <exception cref="InvalidOperationException">Called inside a unit of work, whose session saves only at commit.</exception>
+    public virtual async Task<T?> UpdateIfAsync(Guid guid, Func<T, bool> condition, Action<T> update, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        ArgumentNullException.ThrowIfNull(update);
+        await EnsureInitializedAsync(ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        if (TransactionContext != null)
+        {
+            throw new InvalidOperationException(
+                "UpdateIfAsync decides and saves at once; a unit of work's session saves only at commit, so it cannot run inside one.");
+        }
+        if (_documentStore == null || guid == Guid.Empty) return null;
+
+        for (var attempt = 1; attempt <= MaxConditionalUpdateAttempts; attempt++)
+        {
+            using var session = _documentStore.OpenAsyncSession();
+            session.Advanced.UseOptimisticConcurrency = true;
+            var item = await session.LoadAsync<T>(IdOf(guid), ct).ConfigureAwait(false);
+            if (item == null || !condition(item)) return null;
+            update(item);
+            try
+            {
+                await session.SaveChangesAsync(ct).ConfigureAwait(false);
+                return item;
+            }
+            catch (Raven.Client.Exceptions.ConcurrencyException)
+            {
+                // Another writer got there first: load what it wrote and ask the condition again.
+            }
+        }
+
+        throw new StoreConcurrencyException(
+            $"Document {guid} of {typeof(T).Name} changed under {MaxConditionalUpdateAttempts} consecutive conditional updates.",
+            applied: 0, conflicts: MaxConditionalUpdateAttempts);
+    }
+
     /// <inheritdoc />
     protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
     {

@@ -98,6 +98,9 @@ before [[TASK-175]].**
   - **Corrected by TASK-662 (2026-10-18):** this said Mongo and Raven passed live too. Their job suites ran on
     in-memory doubles; live tests came with TASK-662, which found the MongoDB queue could not claim on a real server
     (a `$set` of a Guid threw in the store) and fixed it.
+  - **Corrected by TASK-665 (2026-10-18):** on RavenDB the guarded update is not atomic. The store has no native
+    filtered update, so the base runs it as a (possibly stale) index query and an unconditional write; a cancel racing
+    a claim let both win. RavenDB now uses a compare-and-set (`UpdateIfAsync`).
   - **Contract change:** Complete / Fail of a non-Processing job is a no-op on every backend. InMemory, JSON and XML
     were aligned, and 4 tests that completed an unclaimed job now claim it first.
 - **Lock providers:**

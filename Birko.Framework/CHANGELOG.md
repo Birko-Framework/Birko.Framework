@@ -86,6 +86,13 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
 
+## 2026-10-17 — A DateTime keeps its sub-second digits on MySQL and SQL Server
+
+[[TASK-656]]. Measured live: MySQL stored a `DateTime` to the second (`DATETIME`), and SQL Server rounded it to ~3.33 ms
+because SqlClient infers a `datetime` parameter, though the column was `DATETIME2`. Exact-value filters matched nothing and
+writes within a second tied. MySQL columns are now `DATETIME(6)`, and SQL Server binds `DATETIME2`. An existing MySQL
+`DATETIME` column is reported as drift; widening it with `ALTER … MODIFY … DATETIME(6)` is the operator's step.
+
 ## 2026-10-17 — A migration's DropField drops the field; a DropIndex that cannot drop refuses
 
 [[TASK-655]]. Measured live: on MongoDB, RavenDB, Cosmos DB and ElasticSearch `DropField` left every document carrying the

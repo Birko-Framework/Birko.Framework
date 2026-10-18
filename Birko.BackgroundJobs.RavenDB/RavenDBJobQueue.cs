@@ -16,8 +16,6 @@ namespace Birko.BackgroundJobs.RavenDB
     /// </summary>
     public class RavenDBJobQueue : IJobQueue
     {
-        private const int MaxClaimAttempts = 32;
-
         private readonly AsyncRavenDBStore<RavenJobDescriptorModel> _store;
         private readonly RetryPolicy _retryPolicy;
 
@@ -54,130 +52,113 @@ namespace Birko.BackgroundJobs.RavenDB
 
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
         {
-            var pendingStatus = (int)JobStatus.Pending;
-            var scheduledStatus = (int)JobStatus.Scheduled;
-            var processingStatus = (int)JobStatus.Processing;
+            var now = DateTime.UtcNow;
 
-            for (int attempt = 0; attempt < MaxClaimAttempts; attempt++)
+            // TASK-665: each candidate is claimed by a compare-and-set on the document (loaded by id, saved with its
+            // change vector), with eligibility re-checked on what is stored. The candidate query is served by an index
+            // that may be stale, and the claim was a filtered update the base store runs as that same query followed by
+            // an unconditional write, so a job claimed a moment ago was claimed again (measured: a cancel racing a claim
+            // let both win, 3 of 3 runs). A lost race moves on to the next candidate.
+            for (var round = 0; round < MaxClaimRounds; round++)
             {
-                var now = DateTime.UtcNow;
+                var candidates = await ReadCandidatesAsync(now, queueName, cancellationToken).ConfigureAwait(false);
+                if (candidates.Count == 0) return null;
 
-                IEnumerable<RavenJobDescriptorModel> candidates;
-                if (queueName != null)
+                foreach (var candidate in candidates)
                 {
-                    candidates = await _store.ReadAsync(
-                        filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
-                                  && (j.QueueName == null || j.QueueName == queueName),
-                        orderBy: OrderBy<RavenJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-                        limit: 1,
-                        ct: cancellationToken
-                    ).ConfigureAwait(false);
-                }
-                else
-                {
-                    candidates = await _store.ReadAsync(
-                        filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
-                        orderBy: OrderBy<RavenJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-                        limit: 1,
-                        ct: cancellationToken
-                    ).ConfigureAwait(false);
+                    var claimed = await _store.UpdateIfAsync(
+                        candidate.Guid!.Value,
+                        m => IsDue(m, now, queueName),
+                        m =>
+                        {
+                            m.Status = (int)JobStatus.Processing;
+                            m.ClaimToken = Guid.NewGuid();
+                            m.AttemptCount++;
+                            m.LastAttemptAt = now;
+                        },
+                        cancellationToken).ConfigureAwait(false);
+                    if (claimed != null) return claimed.ToDescriptor();
                 }
 
-                var candidate = candidates.FirstOrDefault();
-                if (candidate == null)
-                {
-                    return null;
-                }
-
-                // Conditional claim guarded on the still-eligible status + re-read verify via ClaimToken.
-                // The verify resolves a single winner even under RavenDB last-write-wins: whichever worker
-                // wrote last owns the token, and every worker re-reads the same final token, so exactly one
-                // matches. Job handlers should still be idempotent (documented in the project CLAUDE.md).
-                var claimId = candidate.Guid;
-                var originalStatus = candidate.Status;
-                var claimToken = Guid.NewGuid();
-                var seenAttempts = candidate.AttemptCount;
-
-                await _store.UpdateAsync(
-                    filter: // TASK-158 (SH-M012): Status alone is ABA — a job another worker claimed, ran and failed back to Scheduled
-                    // matched again, and the stale claim ran it inside its backoff with a lower AttemptCount.
-                    j => j.Guid == claimId && j.Status == originalStatus && j.AttemptCount == seenAttempts,
-                    updates: new PropertyUpdate<RavenJobDescriptorModel>()
-                        .Set(j => j.Status, processingStatus)
-                        .Set(j => j.ClaimToken, claimToken)
-                        .Set(j => j.AttemptCount, candidate.AttemptCount + 1)
-                        .Set(j => j.LastAttemptAt, now),
-                    ct: cancellationToken
-                ).ConfigureAwait(false);
-
-                var claimed = await _store.ReadAsync(j => j.Guid == claimId, cancellationToken).ConfigureAwait(false);
-                if (claimed != null && claimed.ClaimToken == claimToken)
-                {
-                    return claimed.ToDescriptor();
-                }
+                if (candidates.Count < ClaimBatch) return null;
             }
 
             return null;
         }
 
-        // TASK-158 (SH-M013): each transition is one guarded native update of the fields it changes. They read the whole
-        // row and wrote it back, so a stale reporter overwrote a newer claim's Status, AttemptCount and ClaimToken, and a
-        // cancel read Pending and then overwrote a claim that landed in between. A full ownership check would need the
-        // claim token on CompleteAsync / FailAsync (an IJobQueue change); the guards close what the API can express.
+        /// <summary>Candidates read per round; every one a round loses to another worker is skipped, not retried.</summary>
+        private const int ClaimBatch = 8;
+
+        /// <summary>Rounds of candidates one dequeue tries before it reports nothing to do.</summary>
+        private const int MaxClaimRounds = 4;
+
+        private static bool IsDue(RavenJobDescriptorModel m, DateTime now, string? queueName)
+            => (m.Status == (int)JobStatus.Pending || (m.Status == (int)JobStatus.Scheduled && m.ScheduledAt != null && m.ScheduledAt <= now))
+                && (queueName == null || m.QueueName == null || m.QueueName == queueName);
+
+        private async Task<List<RavenJobDescriptorModel>> ReadCandidatesAsync(DateTime now, string? queueName, CancellationToken cancellationToken)
+        {
+            var pendingStatus = (int)JobStatus.Pending;
+            var scheduledStatus = (int)JobStatus.Scheduled;
+            // The index may lag: a candidate it returns is only a hint, re-checked on the document by the claim. Two
+            // queries, because the RavenDB LINQ provider cannot translate a `queueName == null ||` term on a captured value.
+            IEnumerable<RavenJobDescriptorModel> candidates = queueName != null
+                ? await _store.ReadAsync(
+                    filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
+                              && (j.QueueName == null || j.QueueName == queueName),
+                    orderBy: OrderBy<RavenJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+                    limit: ClaimBatch,
+                    ct: cancellationToken
+                ).ConfigureAwait(false)
+                : await _store.ReadAsync(
+                    filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
+                    orderBy: OrderBy<RavenJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+                    limit: ClaimBatch,
+                    ct: cancellationToken
+                ).ConfigureAwait(false);
+            return candidates.ToList();
+        }
+
+        // TASK-665: each transition is a compare-and-set on the document, with the condition checked on what is stored.
+        // TASK-158 made them filtered updates, which RavenDB runs as a (possibly stale) query and an unconditional write.
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            var processingStatus = (int)JobStatus.Processing;
-            await _store.UpdateAsync(
-                filter: j => j.Guid == jobId && j.Status == processingStatus,
-                updates: new PropertyUpdate<RavenJobDescriptorModel>()
-                    .Set(j => j.Status, (int)JobStatus.Completed)
-                    .Set(j => j.CompletedAt, DateTime.UtcNow),
-                ct: cancellationToken
-            ).ConfigureAwait(false);
+            await _store.UpdateIfAsync(jobId, m => m.Status == (int)JobStatus.Processing, m =>
+            {
+                m.Status = (int)JobStatus.Completed;
+                m.CompletedAt = DateTime.UtcNow;
+            }, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task FailAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
         {
-            var processingStatus = (int)JobStatus.Processing;
-            var model = await _store.ReadAsync(j => j.Guid == jobId && j.Status == processingStatus, cancellationToken).ConfigureAwait(false);
-            if (model == null) return;
-
-            var attempts = model.AttemptCount;
-            var maxRetries = _retryPolicy.MaxRetriesFor(model.MaxRetries);
-            var now = DateTime.UtcNow;
-            var update = new PropertyUpdate<RavenJobDescriptorModel>().Set(j => j.LastError, error);
-            if (attempts < maxRetries)
-                update = update.Set(j => j.ScheduledAt, now.Add(_retryPolicy.GetDelay(attempts))).Set(j => j.Status, (int)JobStatus.Scheduled);
-            else
-                update = update.Set(j => j.CompletedAt, now).Set(j => j.Status, (int)JobStatus.Dead);
-
-            await _store.UpdateAsync(
-                filter: j => j.Guid == jobId && j.Status == processingStatus && j.AttemptCount == attempts,
-                updates: update,
-                ct: cancellationToken
-            ).ConfigureAwait(false);
+            await _store.UpdateIfAsync(jobId, m => m.Status == (int)JobStatus.Processing, m =>
+            {
+                m.LastError = error;
+                var now = DateTime.UtcNow;
+                if (m.AttemptCount < _retryPolicy.MaxRetriesFor(m.MaxRetries))
+                {
+                    m.ScheduledAt = now.Add(_retryPolicy.GetDelay(m.AttemptCount));
+                    m.Status = (int)JobStatus.Scheduled;
+                }
+                else
+                {
+                    m.CompletedAt = now;
+                    m.Status = (int)JobStatus.Dead;
+                }
+            }, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            var pendingStatus = (int)JobStatus.Pending;
-            var scheduledStatus = (int)JobStatus.Scheduled;
-            var cancelledStatus = (int)JobStatus.Cancelled;
-            // A stamp only this call writes: the store reports no affected-row count, so success is read back. Whole
-            // milliseconds, which every backend stores exactly (MongoDB and Elasticsearch keep nothing finer).
-            var nowMs = DateTime.UtcNow;
-            var stamp = new DateTime(nowMs.Ticks - nowMs.Ticks % TimeSpan.TicksPerMillisecond, DateTimeKind.Utc).AddMilliseconds(System.Random.Shared.Next(0, 1000));
-
-            await _store.UpdateAsync(
-                filter: j => j.Guid == jobId && (j.Status == pendingStatus || j.Status == scheduledStatus),
-                updates: new PropertyUpdate<RavenJobDescriptorModel>()
-                    .Set(j => j.Status, cancelledStatus)
-                    .Set(j => j.CompletedAt, stamp),
-                ct: cancellationToken
-            ).ConfigureAwait(false);
-
-            var after = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
-            return after != null && after.Status == cancelledStatus && after.CompletedAt == stamp;
+            var cancelled = await _store.UpdateIfAsync(jobId,
+                m => m.Status == (int)JobStatus.Pending || m.Status == (int)JobStatus.Scheduled,
+                m =>
+                {
+                    m.Status = (int)JobStatus.Cancelled;
+                    m.CompletedAt = DateTime.UtcNow;
+                }, cancellationToken).ConfigureAwait(false);
+            return cancelled != null;
         }
 
         public async Task<JobDescriptor?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)

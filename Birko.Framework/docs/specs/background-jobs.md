@@ -358,10 +358,11 @@ due members (FIELD-028, fixed by TASK-561 — Redis used to serve an unnamed job
 ### Requirement: Concurrent dequeue claiming differs per backend
 
 The system SHALL prevent two workers from claiming the same job, using a token-verified,
-status-guarded conditional update on SQL, MongoDB, Elasticsearch and RavenDB; a single atomic Lua
+status-guarded conditional update on SQL, MongoDB and Elasticsearch; a single atomic Lua
 script on Redis; an in-process `SemaphoreSlim` on the in-memory, JSON and XML backends; and a
-compare-and-set on the item's ETag (`AsyncCosmosDBStore.UpdateIfAsync`) on Cosmos DB, which re-checks
-eligibility on the item as stored (TASK-661).
+compare-and-set that re-checks eligibility on the stored document on Cosmos DB (the item's ETag,
+`AsyncCosmosDBStore.UpdateIfAsync`, TASK-661) and RavenDB (load by id and optimistic concurrency,
+`AsyncRavenDBStore.UpdateIfAsync`, TASK-665).
 
 #### Scenario: SQL claims via ClaimToken and verifies by re-read
 

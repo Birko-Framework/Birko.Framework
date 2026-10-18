@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### RavenDB job queue claims each job once; the store gains a compare-and-set (2026-10-18)
+[[TASK-665]]. Measured live: a cancel racing a claim let both win (3 of 3 runs), and a job was claimed twice. The
+RavenDB store has no native filtered update, so TASK-158's "guarded" update ran as a possibly stale index query and an
+unconditional write. `AsyncRavenDBStore.UpdateIfAsync` loads by id and saves with optimistic concurrency; the queue's
+claim and transitions use it, as Cosmos does since TASK-661.
 ### Redis job queue: every transition is one script, and priority dominates (2026-10-18)
 [[TASK-663]]. Measured live: a Cancelled, Completed or Dead descriptor was dequeued and run, a cancel raced a claim
 and both won (5 of 5 runs), racing Complete / Fail left a job in two status sets, and priority spanned under 1 ms of
@@ -320,11 +325,6 @@ rollback after it is a no-op, as on every other backend (TASK-325, TASK-578). To
 `GrantRoleTable` no longer declares. Since TASK-641 they grant nothing, so a role renamed in configuration quietly removed
 access. Degraded with the count and up to 50 descriptions, Degraded when the store cannot be read, Healthy with none,
 never Unhealthy. The admin grant is ignored; nothing is revoked.
-### A DateTime keeps its sub-second digits on MySQL and SQL Server (2026-10-17)
-[[TASK-656]]. Measured live: MySQL stored a `DateTime` to the second (`DATETIME`), and SQL Server rounded it to ~3.33 ms
-because SqlClient infers a `datetime` parameter, though the column was `DATETIME2`. Exact-value filters matched nothing and
-writes within a second tied. MySQL columns are now `DATETIME(6)`, and SQL Server binds `DATETIME2`. An existing MySQL
-`DATETIME` column is reported as drift; widening it with `ALTER … MODIFY … DATETIME(6)` is the operator's step.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
