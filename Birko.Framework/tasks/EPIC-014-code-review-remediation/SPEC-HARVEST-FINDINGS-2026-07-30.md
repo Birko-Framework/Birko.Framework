@@ -1123,7 +1123,7 @@ InMemory (reference, line 86), JSON (134) and RavenDB (141) compute `maxRetries 
 
 `../Birko.BackgroundJobs/Core/IJobQueue.cs:53`  ·  _restates a first-pass finding_
 
-**Verdict: CONFIRMED-NARROWER, spawned as [[TASK-664]]** (TASK-158). SQL already reclaims a stale Processing job (`e66eafcd`, TASK-575). MongoDB, ES, Raven, Cosmos, JSON, XML, InMemory and Redis still strand it forever.
+**Verdict: CONFIRMED-NARROWER, spawned as [[TASK-664]]** (TASK-158). SQL already reclaims a stale Processing job (`e66eafcd`, TASK-575). MongoDB, ES, Raven, Cosmos, JSON, XML, InMemory and Redis still strand it forever. **Fixed by TASK-664:** every queue reclaims after its `claimTimeout` (default 30 min), one winner, and buries a budget-spent job as Dead; tests per backend (the server backends also live), all red with reclaim turned off.
 
 If a worker dies between DequeueAsync and Complete/FailAsync (kill, OOM, or on Redis where the Lua script already ZREMed the queue member), the job sits in Status=Processing permanently: no backend's eligibility predicate admits Processing, none implements a lease/visibility timeout, and every PurgeAsync deletes only Completed|Dead|Cancelled with a non-null CompletedAt. The work is silently lost and the row/document/hash leaks forever.
 

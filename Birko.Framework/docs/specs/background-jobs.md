@@ -120,7 +120,7 @@ The system SHALL define the job lifecycle as the `JobStatus` enum `Pending = 0`,
 
 - **Given** a stored job whose status was set to `JobStatus.Failed` by external means
 - **When** `DequeueAsync` runs on any shipped backend
-- **Then** the job is not returned, because every eligibility predicate admits only `Pending`, (`Scheduled` and due) or — on SQL only — (`Processing` and abandoned past the claim timeout)
+- **Then** the job is not returned, because every eligibility predicate admits only `Pending`, (`Scheduled` and due) or (`Processing` and abandoned past the claim timeout, on every backend since TASK-664)
 
 ### Requirement: BackgroundJobs retry-delay computation
 
@@ -253,7 +253,7 @@ queue name, priority, retry budget, status, attempt count, timestamps and serial
 
 The system SHALL return from `DequeueAsync` the single highest-priority, then oldest-enqueued job
 that is either `Pending`, or `Scheduled` with a non-null `ScheduledAt` at or before the current
-time — or, on SQL only, `Processing` past the claim timeout (see the SQL reclaim requirement) — and SHALL
+time — or `Processing` past the claim timeout (see the reclaim requirement) — and SHALL
 return `null` when no such job exists.
 
 #### Scenario: Priority wins over enqueue order
@@ -280,11 +280,11 @@ return `null` when no such job exists.
 - **When** `DequeueAsync()` is called on any store-backed backend
 - **Then** it is not returned, because every filter requires `j.ScheduledAt != null && j.ScheduledAt <= now`
 
-#### Scenario: A Processing job is never re-offered
+#### Scenario: A Processing job is re-offered only after the claim timeout
 
 - **Given** a job left in `Status = Processing` (for example by a worker that crashed)
-- **When** `DequeueAsync()` is called on any backend other than SQL
-- **Then** it is not returned; no backend other than SQL implements a visibility timeout or lease expiry, and `PurgeAsync` does not remove `Processing` jobs either, so the job is stranded permanently
+- **When** `DequeueAsync()` is called on any backend before the claim timeout has passed since its `LastAttemptAt`
+- **Then** it is not returned; after the timeout it is (see the reclaim requirement). Before TASK-664 every backend but SQL stranded it permanently
 
 #### Scenario: Dequeue marks the job Processing and consumes an attempt
 
@@ -404,7 +404,7 @@ compare-and-set that re-checks eligibility on the stored document on Cosmos DB (
 
 - **Given** a job claimed by the Redis dequeue script (its member has been `ZREM`ed from the queue sorted set)
 - **When** the worker dies before calling `CompleteAsync` or `FailAsync`
-- **Then** the job hash remains in `Status = Processing` with no queue-set membership, and nothing re-adds it (reclaim on every backend is [[TASK-664]])
+- **Then** the job hash stays `Processing` and its id stays in `{prefix}:processing:{queue}`, scored by its claim time; once that is older than the claim timeout, the dequeue script puts it back in the ready set as `Scheduled`, or buries it as `Dead` when its attempt budget is spent (TASK-664; it used to be stranded)
 
 #### Scenario: JSON and XML serialise dequeue in-process only
 
@@ -418,20 +418,39 @@ compare-and-set that re-checks eligibility on the stored document on Cosmos DB (
 - **When** they call `DequeueAsync` concurrently
 - **Then** each job is returned to one worker with `AttemptCount = 1`: a claim replaces the item only if its ETag is unchanged, a lost race (412) re-reads it and finds it no longer due, and the worker moves on to the next of up to 8 candidates (measured on the emulator before TASK-661: 6 workers, 6 jobs, 24 claims of 4 jobs)
 
-### Requirement: SQL reclaims a job abandoned in Processing, bounded by its retry budget
+### Requirement: Every backend reclaims a job abandoned in Processing, bounded by its retry budget
 
-The system SHALL, on `SqlJobQueue<DB>` only, additionally treat as a dequeue candidate a job in
-`Processing` whose `LastAttemptAt` is non-null and earlier than `now - claimTimeout`, where
-`claimTimeout` is a constructor argument defaulting to 30 minutes (the default `JobQueueOptions.JobTimeout`),
-and SHALL claim it through the same `ClaimToken` conditional update as any other candidate, except that a
+The system SHALL, on every backend (SQL since TASK-451; InMemory, JSON, XML, MongoDB, Elasticsearch, RavenDB, Cosmos DB
+and Redis since TASK-664), additionally treat as a dequeue candidate a job in `Processing` whose `LastAttemptAt` is
+non-null and earlier than `now - claimTimeout`. `claimTimeout` is an optional constructor argument on every queue,
+resolved by `JobReclaim.Resolve`: `JobReclaim.DefaultClaimTimeout` (30 minutes, also `JobQueueOptions.JobTimeout`'s
+default) when null, and refused (`ArgumentOutOfRangeException`) when zero or negative. `AddBackgroundJobs` gives its
+in-memory queue the processor's `JobTimeout`. Only one worker SHALL win a reclaim: SQL, MongoDB and Elasticsearch
+require the document to be still stale in the claim's filter, Cosmos DB and RavenDB re-check staleness in their
+compare-and-set, Redis decides inside its dequeue script, and InMemory, JSON and XML hold their in-process lock. A
+budget-spent job is buried with `JobReclaim.AbandonedError`, under the same guard. On Redis a reclaimed job returns to
+the ready set as `Scheduled` and is claimed like any other.
+
+On SQL the system SHALL claim it through the same `ClaimToken` conditional update as any other candidate, except that a
 reclaim's filter requires the row to be still stale — `j.Guid == claimId && j.Status == Processing &&
 j.LastAttemptAt != null && j.LastAttemptAt < staleBefore` — rather than merely still `Processing`. When such
 a stale candidate's `AttemptCount` is already `>= RetryPolicy.MaxRetriesFor(MaxRetries)` (the row's own value, or the
 queue's policy when it is null), the system SHALL instead mark it `Dead`, stamp `CompletedAt`, set `LastError` to an
 `"Abandoned: held in Processing for longer than {claimTimeout} after {AttemptCount} attempt(s), and the attempt budget is spent."`
 message, and move on to the next candidate within the same `MaxClaimAttempts` budget; that burial is a
-conditional `PropertyUpdate` under the same still-stale filter, not a write of the whole row. No other backend
-reclaims a `Processing` job.
+conditional `PropertyUpdate` under the same still-stale filter, not a write of the whole row.
+
+#### Scenario: Every backend re-offers an abandoned job once
+
+- **Given** any backend's queue with a 300 ms claim timeout and a job claimed by a worker that then stops
+- **When** `DequeueAsync()` is called at once, then after 600 ms by six concurrent workers
+- **Then** the first call returns `null`, and exactly one of the six gets the job with `AttemptCount = 2` (tests per backend, the five server backends also live; with reclaim turned off every one of them failed)
+
+#### Scenario: An abandoned job with no attempts left is buried on every backend
+
+- **Given** a job with `MaxRetries = 1`, claimed and abandoned
+- **When** `DequeueAsync()` is called after the claim timeout
+- **Then** it returns `null`, and the job is `Dead` with `CompletedAt` stamped and a `LastError` starting `"Abandoned: held in Processing"`
 
 #### Scenario: A job held in Processing past the claim timeout is re-offered
 

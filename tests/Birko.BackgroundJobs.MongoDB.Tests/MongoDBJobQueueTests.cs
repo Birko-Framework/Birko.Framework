@@ -1,3 +1,4 @@
+using System.Linq;
 using Birko.BackgroundJobs;
 using Birko.BackgroundJobs.MongoDB;
 using Birko.BackgroundJobs.MongoDB.Models;
@@ -166,5 +167,40 @@ public class MongoDBJobQueueTests
 
         claims.Should().Be(attempts);
         (await queue.GetAsync(id))!.Status.Should().Be(JobStatus.Dead);
+    }
+
+    // ── TASK-664: a job a dead worker left in Processing is reclaimed after the claim timeout ──
+
+    private static readonly TimeSpan Task664Timeout = TimeSpan.FromMilliseconds(300);
+
+    private static MongoDBJobQueue Task664Queue(RetryPolicy policy) => new(new InMemoryMongoStore<MongoJobDescriptorModel>(), policy, Task664Timeout);
+
+    [Fact]
+    public async Task TASK_664_an_abandoned_job_runs_again_after_the_claim_timeout()
+    {
+        var queue = Task664Queue(new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false });
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+        (await queue.DequeueAsync())!.Guid.Should().Be(id, "claimed by a worker that then dies");
+        (await queue.DequeueAsync()).Should().BeNull("a job claimed just now is not reclaimed");
+        await Task.Delay(Task664Timeout * 2);
+        var again = await queue.DequeueAsync();
+        again.Should().NotBeNull("a job held in Processing past the claim timeout is offered again");
+        again!.Guid.Should().Be(id);
+        again.AttemptCount.Should().Be(2);
+        again.Status.Should().Be(JobStatus.Processing);
+    }
+
+    [Fact]
+    public async Task TASK_664_an_abandoned_job_with_no_attempts_left_is_buried()
+    {
+        var queue = Task664Queue(new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false });
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", MaxRetries = 1 });
+        (await queue.DequeueAsync())!.Guid.Should().Be(id);
+        await Task.Delay(Task664Timeout * 2);
+        (await queue.DequeueAsync()).Should().BeNull("its one attempt is spent");
+        var job = await queue.GetAsync(id);
+        job!.Status.Should().Be(JobStatus.Dead);
+        job.LastError.Should().StartWith("Abandoned: held in Processing");
+        job.CompletedAt.Should().NotBeNull();
     }
 }

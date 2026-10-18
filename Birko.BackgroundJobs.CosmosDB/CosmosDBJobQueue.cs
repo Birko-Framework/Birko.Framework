@@ -17,6 +17,9 @@ public class CosmosDBJobQueue : IJobQueue
     private readonly AsyncCosmosDBStore<CosmosJobDescriptorModel> _store;
     private readonly RetryPolicy _retryPolicy;
 
+    /// <summary>How long a job may stay Processing before it is presumed abandoned (TASK-664; see <see cref="JobReclaim"/>).</summary>
+    private readonly TimeSpan _claimTimeout;
+
     /// <summary>
     /// Gets the underlying store for transaction context access.
     /// </summary>
@@ -25,20 +28,22 @@ public class CosmosDBJobQueue : IJobQueue
     /// <summary>
     /// Creates a new Cosmos DB job queue with settings.
     /// </summary>
-    public CosmosDBJobQueue(Birko.Data.CosmosDB.Stores.Settings settings, RetryPolicy? retryPolicy = null)
+    public CosmosDBJobQueue(Birko.Data.CosmosDB.Stores.Settings settings, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
     {
         _store = new AsyncCosmosDBStore<CosmosJobDescriptorModel>();
         _store.SetSettings(settings);
         _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+        _claimTimeout = JobReclaim.Resolve(claimTimeout);
     }
 
     /// <summary>
     /// Creates a new Cosmos DB job queue with an existing store.
     /// </summary>
-    public CosmosDBJobQueue(AsyncCosmosDBStore<CosmosJobDescriptorModel> store, RetryPolicy? retryPolicy = null)
+    public CosmosDBJobQueue(AsyncCosmosDBStore<CosmosJobDescriptorModel> store, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+        _claimTimeout = JobReclaim.Resolve(claimTimeout);
     }
 
     /// <inheritdoc />
@@ -53,7 +58,10 @@ public class CosmosDBJobQueue : IJobQueue
     public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
-        var results = await ReadCandidatesAsync(now, queueName, ct).ConfigureAwait(false);
+        // TASK-664: a job left Processing longer than the claim timeout is a candidate too, as on SQL. The compare-and-set
+        // re-checks staleness on the stored item, and the winner stamps LastAttemptAt, so one worker reclaims it.
+        var staleBefore = now - _claimTimeout;
+        var results = await ReadCandidatesAsync(now, staleBefore, queueName, ct).ConfigureAwait(false);
 
         // TASK-661 (SH-M001): each candidate is claimed by a conditional write (ETag), re-checked on the item as stored.
         // It was read, mutated and replaced, so concurrent dequeuers all claimed the same job (measured on the emulator:
@@ -62,9 +70,21 @@ public class CosmosDBJobQueue : IJobQueue
         {
             foreach (var candidate in results)
             {
+                if (candidate.Status == (int)JobStatus.Processing && candidate.AttemptCount >= _retryPolicy.MaxRetriesFor(candidate.MaxRetries))
+                {
+                    // Abandoned with no attempts left: buried, under the same staleness condition, never claimed.
+                    await _store.UpdateIfAsync(candidate.Guid!.Value, m => IsStale(m, staleBefore), m =>
+                    {
+                        m.Status = (int)JobStatus.Dead;
+                        m.CompletedAt = now;
+                        m.LastError = JobReclaim.AbandonedError(_claimTimeout, m.AttemptCount);
+                    }, ct).ConfigureAwait(false);
+                    continue;
+                }
+
                 var claimed = await _store.UpdateIfAsync(
                     candidate.Guid!.Value,
-                    m => IsDue(m, now, queueName),
+                    m => IsDue(m, now, staleBefore, queueName),
                     m =>
                     {
                         m.Status = (int)JobStatus.Processing;
@@ -76,7 +96,7 @@ public class CosmosDBJobQueue : IJobQueue
             }
 
             if (results.Count < ClaimBatch) return null;
-            results = await ReadCandidatesAsync(now, queueName, ct).ConfigureAwait(false);
+            results = await ReadCandidatesAsync(now, staleBefore, queueName, ct).ConfigureAwait(false);
             if (results.Count == 0) return null;
         }
 
@@ -89,9 +109,13 @@ public class CosmosDBJobQueue : IJobQueue
     /// <summary>Rounds of candidates one dequeue tries before it reports nothing to do.</summary>
     private const int MaxClaimRounds = 4;
 
-    private static bool IsDue(CosmosJobDescriptorModel m, DateTime now, string? queueName)
-        => (m.Status == (int)JobStatus.Pending || (m.Status == (int)JobStatus.Scheduled && m.ScheduledAt != null && m.ScheduledAt <= now))
+    private static bool IsDue(CosmosJobDescriptorModel m, DateTime now, DateTime staleBefore, string? queueName)
+        => (m.Status == (int)JobStatus.Pending || (m.Status == (int)JobStatus.Scheduled && m.ScheduledAt != null && m.ScheduledAt <= now)
+                || IsStale(m, staleBefore))
             && (queueName == null || m.QueueName == null || m.QueueName == queueName);
+
+    private static bool IsStale(CosmosJobDescriptorModel m, DateTime staleBefore)
+        => m.Status == (int)JobStatus.Processing && m.LastAttemptAt != null && m.LastAttemptAt < staleBefore;
 
     /// <inheritdoc />
     public async Task CompleteAsync(Guid jobId, CancellationToken ct = default)
@@ -141,10 +165,11 @@ public class CosmosDBJobQueue : IJobQueue
         return cancelled != null;
     }
 
-    private async Task<List<CosmosJobDescriptorModel>> ReadCandidatesAsync(DateTime now, string? queueName, CancellationToken ct)
+    private async Task<List<CosmosJobDescriptorModel>> ReadCandidatesAsync(DateTime now, DateTime staleBefore, string? queueName, CancellationToken ct)
     {
         var pendingStatus = (int)JobStatus.Pending;
         var scheduledStatus = (int)JobStatus.Scheduled;
+        var processingStatus = (int)JobStatus.Processing;
         var results = await _store.ReadAsync(
             // Guard ScheduledAt != null (a Scheduled row with a null ScheduledAt is malformed and the
             // null-comparison semantics under the Cosmos SQL translation aren't guaranteed to match
@@ -154,7 +179,8 @@ public class CosmosDBJobQueue : IJobQueue
             // null and BackgroundJobProcessor always dequeues a named queue, so without the middle term no
             // dispatcher-enqueued job ever ran on Cosmos (SH-H001). The serializer writes QueueName: null
             // explicitly, so `= null` matches the stored document.
-            filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
+            filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now)
+                    || (j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore))
                 && (queueName == null || j.QueueName == null || j.QueueName == queueName),
             orderBy: OrderBy<CosmosJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
             limit: ClaimBatch,

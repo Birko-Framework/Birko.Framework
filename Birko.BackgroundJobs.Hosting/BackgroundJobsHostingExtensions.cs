@@ -55,7 +55,8 @@ namespace Birko.BackgroundJobs.Hosting
             configure?.Invoke(options);
 
             services.TryAddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
-            services.TryAddSingleton<IJobQueue>(sp => new InMemoryJobQueue(sp.GetRequiredService<IDateTimeProvider>()));
+            // TASK-664: the queue reclaims a job held longer than the processor's own timeout, so the two move together.
+            services.TryAddSingleton<IJobQueue>(sp => new InMemoryJobQueue(sp.GetRequiredService<IDateTimeProvider>(), claimTimeout: options.Queue.JobTimeout));
             services.TryAddSingleton<IJobExecutor>(sp => new ScopedJobExecutor(sp.GetRequiredService<IServiceScopeFactory>()));
             services.TryAddSingleton(sp => new JobDispatcher(sp.GetRequiredService<IJobQueue>(), sp.GetRequiredService<IDateTimeProvider>()));
             services.AddSingleton(sp => new BackgroundJobProcessor(sp.GetRequiredService<IJobQueue>(), sp.GetRequiredService<IJobExecutor>(), options.Queue));

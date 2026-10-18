@@ -11,6 +11,7 @@
   <ItemGroup>
     <!-- Core -->
     <Compile Include="$(MSBuildThisFileDirectory)Core\IJob.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\JobReclaim.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IJobExecutor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IJobQueue.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IJobLockProvider.cs" />

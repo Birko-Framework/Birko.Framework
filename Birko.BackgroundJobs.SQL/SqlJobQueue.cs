@@ -54,7 +54,7 @@ namespace Birko.BackgroundJobs.SQL
             _store = new AsyncDataBaseBulkStore<DB, JobDescriptorModel>();
             _store.SetSettings(settings);
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
-            _claimTimeout = claimTimeout ?? TimeSpan.FromMinutes(30);
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
         }
 
         /// <summary>
@@ -66,7 +66,7 @@ namespace Birko.BackgroundJobs.SQL
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
-            _claimTimeout = claimTimeout ?? TimeSpan.FromMinutes(30);
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
         }
 
         /// <summary>
@@ -169,8 +169,7 @@ namespace Birko.BackgroundJobs.SQL
                         updates: new PropertyUpdate<JobDescriptorModel>()
                             .Set(j => j.Status, (int)JobStatus.Dead)
                             .Set(j => j.CompletedAt, now)
-                            .Set(j => j.LastError, $"Abandoned: held in Processing for longer than {_claimTimeout} "
-                                + $"after {candidate.AttemptCount} attempt(s), and the attempt budget is spent."),
+                            .Set(j => j.LastError, JobReclaim.AbandonedError(_claimTimeout, candidate.AttemptCount)),
                         ct: cancellationToken
                     ).ConfigureAwait(false);
                     continue;

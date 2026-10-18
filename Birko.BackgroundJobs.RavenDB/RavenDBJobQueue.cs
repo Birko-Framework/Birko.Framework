@@ -19,23 +19,28 @@ namespace Birko.BackgroundJobs.RavenDB
         private readonly AsyncRavenDBStore<RavenJobDescriptorModel> _store;
         private readonly RetryPolicy _retryPolicy;
 
+        /// <summary>How long a job may stay Processing before it is presumed abandoned (TASK-664; see <see cref="JobReclaim"/>).</summary>
+        private readonly TimeSpan _claimTimeout;
+
         /// <summary>
         /// Creates a new RavenDB job queue.
         /// </summary>
-        public RavenDBJobQueue(Birko.Data.RavenDB.Stores.Settings settings, RetryPolicy? retryPolicy = null)
+        public RavenDBJobQueue(Birko.Data.RavenDB.Stores.Settings settings, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
         {
             _store = new AsyncRavenDBStore<RavenJobDescriptorModel>();
             _store.SetSettings(settings);
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
         }
 
         /// <summary>
         /// Creates a new RavenDB job queue from an existing store.
         /// </summary>
-        public RavenDBJobQueue(AsyncRavenDBStore<RavenJobDescriptorModel> store, RetryPolicy? retryPolicy = null)
+        public RavenDBJobQueue(AsyncRavenDBStore<RavenJobDescriptorModel> store, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
         }
 
         /// <summary>
@@ -53,6 +58,9 @@ namespace Birko.BackgroundJobs.RavenDB
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
         {
             var now = DateTime.UtcNow;
+            // TASK-664: a job left Processing longer than the claim timeout is a candidate too, as on SQL. The
+            // compare-and-set re-checks staleness on the stored document, and the winner stamps LastAttemptAt.
+            var staleBefore = now - _claimTimeout;
 
             // TASK-665: each candidate is claimed by a compare-and-set on the document (loaded by id, saved with its
             // change vector), with eligibility re-checked on what is stored. The candidate query is served by an index
@@ -61,14 +69,26 @@ namespace Birko.BackgroundJobs.RavenDB
             // let both win, 3 of 3 runs). A lost race moves on to the next candidate.
             for (var round = 0; round < MaxClaimRounds; round++)
             {
-                var candidates = await ReadCandidatesAsync(now, queueName, cancellationToken).ConfigureAwait(false);
+                var candidates = await ReadCandidatesAsync(now, staleBefore, queueName, cancellationToken).ConfigureAwait(false);
                 if (candidates.Count == 0) return null;
 
                 foreach (var candidate in candidates)
                 {
+                    if (candidate.Status == (int)JobStatus.Processing && candidate.AttemptCount >= _retryPolicy.MaxRetriesFor(candidate.MaxRetries))
+                    {
+                        // Abandoned with no attempts left: buried, under the same staleness condition, never claimed.
+                        await _store.UpdateIfAsync(candidate.Guid!.Value, m => IsStale(m, staleBefore), m =>
+                        {
+                            m.Status = (int)JobStatus.Dead;
+                            m.CompletedAt = now;
+                            m.LastError = JobReclaim.AbandonedError(_claimTimeout, m.AttemptCount);
+                        }, cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+
                     var claimed = await _store.UpdateIfAsync(
                         candidate.Guid!.Value,
-                        m => IsDue(m, now, queueName),
+                        m => IsDue(m, now, staleBefore, queueName),
                         m =>
                         {
                             m.Status = (int)JobStatus.Processing;
@@ -92,26 +112,33 @@ namespace Birko.BackgroundJobs.RavenDB
         /// <summary>Rounds of candidates one dequeue tries before it reports nothing to do.</summary>
         private const int MaxClaimRounds = 4;
 
-        private static bool IsDue(RavenJobDescriptorModel m, DateTime now, string? queueName)
-            => (m.Status == (int)JobStatus.Pending || (m.Status == (int)JobStatus.Scheduled && m.ScheduledAt != null && m.ScheduledAt <= now))
+        private static bool IsDue(RavenJobDescriptorModel m, DateTime now, DateTime staleBefore, string? queueName)
+            => (m.Status == (int)JobStatus.Pending || (m.Status == (int)JobStatus.Scheduled && m.ScheduledAt != null && m.ScheduledAt <= now)
+                    || IsStale(m, staleBefore))
                 && (queueName == null || m.QueueName == null || m.QueueName == queueName);
 
-        private async Task<List<RavenJobDescriptorModel>> ReadCandidatesAsync(DateTime now, string? queueName, CancellationToken cancellationToken)
+        private static bool IsStale(RavenJobDescriptorModel m, DateTime staleBefore)
+            => m.Status == (int)JobStatus.Processing && m.LastAttemptAt != null && m.LastAttemptAt < staleBefore;
+
+        private async Task<List<RavenJobDescriptorModel>> ReadCandidatesAsync(DateTime now, DateTime staleBefore, string? queueName, CancellationToken cancellationToken)
         {
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
+            var processingStatus = (int)JobStatus.Processing;
             // The index may lag: a candidate it returns is only a hint, re-checked on the document by the claim. Two
             // queries, because the RavenDB LINQ provider cannot translate a `queueName == null ||` term on a captured value.
             IEnumerable<RavenJobDescriptorModel> candidates = queueName != null
                 ? await _store.ReadAsync(
-                    filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
+                    filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now)
+                                  || (j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore))
                               && (j.QueueName == null || j.QueueName == queueName),
                     orderBy: OrderBy<RavenJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
                     limit: ClaimBatch,
                     ct: cancellationToken
                 ).ConfigureAwait(false)
                 : await _store.ReadAsync(
-                    filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
+                    filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now)
+                              || (j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore),
                     orderBy: OrderBy<RavenJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
                     limit: ClaimBatch,
                     ct: cancellationToken

@@ -19,11 +19,15 @@ namespace Birko.BackgroundJobs.Processing
         private readonly SemaphoreSlim _lock = new(1, 1);
         private readonly RetryPolicy _retryPolicy;
         private readonly IDateTimeProvider _clock;
+        private readonly TimeSpan _claimTimeout;
 
-        public InMemoryJobQueue(IDateTimeProvider clock, RetryPolicy? retryPolicy = null)
+        /// <param name="claimTimeout">How long a job may stay Processing before it is presumed abandoned and offered
+        /// again (TASK-664); <see cref="JobReclaim.DefaultClaimTimeout"/> when null.</param>
+        public InMemoryJobQueue(IDateTimeProvider clock, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
         {
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
         }
 
         public Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken cancellationToken = default)
@@ -42,24 +46,38 @@ namespace Birko.BackgroundJobs.Processing
             try
             {
                 var now = _clock.UtcNow;
+                var staleBefore = now - _claimTimeout;
 
-                var candidate = _jobs.Values
-                    .Where(j => j.Status == JobStatus.Pending || (j.Status == JobStatus.Scheduled && j.ScheduledAt <= now))
-                    .Where(j => queueName == null || j.QueueName == null || j.QueueName == queueName)
-                    .OrderByDescending(j => j.Priority)
-                    .ThenBy(j => j.EnqueuedAt)
-                    .FirstOrDefault();
-
-                if (candidate == null)
+                while (true)
                 {
-                    return null;
+                    // TASK-664: a job left Processing longer than the claim timeout is offered again, as on SQL.
+                    var candidate = _jobs.Values
+                        .Where(j => j.Status == JobStatus.Pending || (j.Status == JobStatus.Scheduled && j.ScheduledAt <= now)
+                                 || (j.Status == JobStatus.Processing && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore))
+                        .Where(j => queueName == null || j.QueueName == null || j.QueueName == queueName)
+                        .OrderByDescending(j => j.Priority)
+                        .ThenBy(j => j.EnqueuedAt)
+                        .FirstOrDefault();
+
+                    if (candidate == null)
+                    {
+                        return null;
+                    }
+
+                    if (candidate.Status == JobStatus.Processing && candidate.AttemptCount >= _retryPolicy.MaxRetriesFor(candidate.MaxRetries))
+                    {
+                        candidate.LastError = JobReclaim.AbandonedError(_claimTimeout, candidate.AttemptCount);
+                        candidate.CompletedAt = now;
+                        candidate.Status = JobStatus.Dead;
+                        continue;
+                    }
+
+                    candidate.Status = JobStatus.Processing;
+                    candidate.AttemptCount++;
+                    candidate.LastAttemptAt = now;
+
+                    return candidate;
                 }
-
-                candidate.Status = JobStatus.Processing;
-                candidate.AttemptCount++;
-                candidate.LastAttemptAt = now;
-
-                return candidate;
             }
             finally
             {

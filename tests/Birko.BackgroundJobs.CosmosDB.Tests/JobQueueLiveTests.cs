@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Collections.Concurrent;
 using Birko.BackgroundJobs;
 using Birko.BackgroundJobs.CosmosDB;
@@ -129,5 +130,71 @@ public class JobQueueLiveTests(ITestOutputHelper output)
             (await queue.GetAsync(id))!.Status.Should().Be(JobStatus.Dead);
         }
         finally { await DropAsync(store); }
+    }
+
+    // ── TASK-664: a job a dead worker left in Processing is reclaimed after the claim timeout ──
+
+    private static readonly TimeSpan Task664Timeout = TimeSpan.FromMilliseconds(300);
+
+    private CosmosDBJobQueue? Task664Queue(RetryPolicy policy, out AsyncCosmosDBStore<CosmosJobDescriptorModel>? store)
+    {
+        store = Open()?.Store;
+        return store == null ? null : new CosmosDBJobQueue(store, policy, Task664Timeout);
+    }
+
+    [Fact]
+    public async Task TASK_664_an_abandoned_job_runs_again_after_the_claim_timeout()
+    {
+        if (Task664Queue(new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false }, out var store) is not { } queue) return;
+        try
+        {
+            var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+            (await queue.DequeueAsync())!.Guid.Should().Be(id, "claimed by a worker that then dies");
+            (await queue.DequeueAsync()).Should().BeNull("a job claimed just now is not reclaimed");
+            await Task.Delay(Task664Timeout * 2);
+            var again = await queue.DequeueAsync();
+            again.Should().NotBeNull("a job held in Processing past the claim timeout is offered again");
+            again!.Guid.Should().Be(id);
+            again.AttemptCount.Should().Be(2);
+            again.Status.Should().Be(JobStatus.Processing);
+        }
+        finally { await DropAsync(store!); }
+    }
+
+    [Fact]
+    public async Task TASK_664_an_abandoned_job_with_no_attempts_left_is_buried()
+    {
+        if (Task664Queue(new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false }, out var store) is not { } queue) return;
+        try
+        {
+            var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", MaxRetries = 1 });
+            (await queue.DequeueAsync())!.Guid.Should().Be(id);
+            await Task.Delay(Task664Timeout * 2);
+            (await queue.DequeueAsync()).Should().BeNull("its one attempt is spent");
+            var job = await queue.GetAsync(id);
+            job!.Status.Should().Be(JobStatus.Dead);
+            job.LastError.Should().StartWith("Abandoned: held in Processing");
+            job.CompletedAt.Should().NotBeNull();
+        }
+        finally { await DropAsync(store!); }
+    }
+
+    [Fact]
+    public async Task TASK_664_racing_workers_reclaim_an_abandoned_job_once()
+    {
+        if (Task664Queue(new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false }, out var store) is not { } queue) return;
+        try
+        {
+            var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+            (await queue.DequeueAsync())!.Guid.Should().Be(id);
+            await Task.Delay(Task664Timeout * 2);
+            using var start = new System.Threading.ManualResetEventSlim(false);
+            var workers = System.Linq.Enumerable.Range(0, 6).Select(_ => Task.Run(async () => { start.Wait(); return await queue.DequeueAsync(); })).ToArray();
+            start.Set();
+            var got = await Task.WhenAll(workers);
+            got.Count(j => j != null).Should().Be(1, "one worker wins the reclaim");
+            (await queue.GetAsync(id))!.AttemptCount.Should().Be(2);
+        }
+        finally { await DropAsync(store!); }
     }
 }

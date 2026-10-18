@@ -71,6 +71,11 @@ Pending -> Scheduled -> Processing -> Completed
                                    -> Cancelled
 ```
 
+A job whose worker dies stays `Processing`. Every queue offers it again once it has been held longer than the queue's
+`claimTimeout` (a constructor argument, default 30 minutes, the same as `JobQueueOptions.JobTimeout`), and buries it as
+`Dead` when its attempts are spent. If you raise `JobTimeout`, raise the queue's `claimTimeout` too, or a slow job is
+handed to a second worker. Jobs should be idempotent for that reason.
+
 ## Defining Jobs
 
 ```csharp

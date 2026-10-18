@@ -21,6 +21,9 @@ namespace Birko.BackgroundJobs.JSON
         private readonly RetryPolicy _retryPolicy;
         private readonly IDateTimeProvider _clock;
 
+        /// <summary>How long a job may stay Processing before it is presumed abandoned (TASK-664; see <see cref="JobReclaim"/>).</summary>
+        private readonly TimeSpan _claimTimeout;
+
         // TASK-158 (SH-M021): one store and one gate per file, shared by every queue on that file in the process. Each
         // queue used to keep its own snapshot of the file and its own dequeue lock, so a second queue on the same file
         // (two hosted services, a queue and a schema helper) overwrote the first one's jobs on save, and both could claim
@@ -34,7 +37,7 @@ namespace Birko.BackgroundJobs.JSON
         /// <summary>
         /// Creates a new JSON job queue.
         /// </summary>
-        public JsonJobQueue(Birko.Configuration.Settings settings, IDateTimeProvider clock, RetryPolicy? retryPolicy = null)
+        public JsonJobQueue(Birko.Configuration.Settings settings, IDateTimeProvider clock, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
         {
             ArgumentNullException.ThrowIfNull(settings);
             var file = System.IO.Path.GetFullPath(System.IO.Path.Combine(settings.Location ?? string.Empty, settings.Name ?? string.Empty));
@@ -48,17 +51,19 @@ namespace Birko.BackgroundJobs.JSON
             _gate = shared.Gate;
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
         }
 
         /// <summary>
         /// Creates a new JSON job queue from an existing store.
         /// </summary>
-        public JsonJobQueue(AsyncJsonStore<JsonJobDescriptorModel> store, IDateTimeProvider clock, RetryPolicy? retryPolicy = null)
+        public JsonJobQueue(AsyncJsonStore<JsonJobDescriptorModel> store, IDateTimeProvider clock, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _gate = StoreGates.GetValue(store, _ => new SemaphoreSlim(1, 1));
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
         }
 
         /// <summary>
@@ -94,42 +99,60 @@ namespace Birko.BackgroundJobs.JSON
                 var now = _clock.UtcNow;
                 var pendingStatus = (int)JobStatus.Pending;
                 var scheduledStatus = (int)JobStatus.Scheduled;
+                var processingStatus = (int)JobStatus.Processing;
+                // TASK-664: a job left Processing longer than the claim timeout is offered again, as on SQL. The gate
+                // serialises every operation on the file, so no further guard is needed in-process.
+                var staleBefore = now - _claimTimeout;
 
-                IEnumerable<JsonJobDescriptorModel> candidates;
-
-                if (queueName != null)
+                while (true)
                 {
-                    candidates = await _store.ReadAsync(
-                        filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
-                                  && (j.QueueName == null || j.QueueName == queueName),
-                        orderBy: OrderBy<JsonJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-                        limit: 1,
-                        ct: cancellationToken
-                    ).ConfigureAwait(false);
+                    IEnumerable<JsonJobDescriptorModel> candidates;
+
+                    if (queueName != null)
+                    {
+                        candidates = await _store.ReadAsync(
+                            filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now)
+                                       || (j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore))
+                                      && (j.QueueName == null || j.QueueName == queueName),
+                            orderBy: OrderBy<JsonJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+                            limit: 1,
+                            ct: cancellationToken
+                        ).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        candidates = await _store.ReadAsync(
+                            filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now)
+                                      || (j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore),
+                            orderBy: OrderBy<JsonJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+                            limit: 1,
+                            ct: cancellationToken
+                        ).ConfigureAwait(false);
+                    }
+
+                    var candidate = candidates.FirstOrDefault();
+                    if (candidate == null)
+                    {
+                        return null;
+                    }
+
+                    if (candidate.Status == processingStatus && candidate.AttemptCount >= _retryPolicy.MaxRetriesFor(candidate.MaxRetries))
+                    {
+                        candidate.LastError = JobReclaim.AbandonedError(_claimTimeout, candidate.AttemptCount);
+                        candidate.CompletedAt = now;
+                        candidate.Status = (int)JobStatus.Dead;
+                        await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    candidate.Status = (int)JobStatus.Processing;
+                    candidate.AttemptCount++;
+                    candidate.LastAttemptAt = _clock.UtcNow;
+
+                    await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
+
+                    return candidate.ToDescriptor();
                 }
-                else
-                {
-                    candidates = await _store.ReadAsync(
-                        filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
-                        orderBy: OrderBy<JsonJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-                        limit: 1,
-                        ct: cancellationToken
-                    ).ConfigureAwait(false);
-                }
-
-                var candidate = candidates.FirstOrDefault();
-                if (candidate == null)
-                {
-                    return null;
-                }
-
-                candidate.Status = (int)JobStatus.Processing;
-                candidate.AttemptCount++;
-                candidate.LastAttemptAt = _clock.UtcNow;
-
-                await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
-
-                return candidate.ToDescriptor();
             }
             finally
             {

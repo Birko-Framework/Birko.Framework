@@ -23,6 +23,9 @@ namespace Birko.BackgroundJobs.Redis
         private readonly ISerializer _serializer;
         private readonly bool _ownsConnection;
 
+        /// <summary>How long a job may stay Processing before it is presumed abandoned (TASK-664; see <see cref="JobReclaim"/>).</summary>
+        private readonly TimeSpan _claimTimeout;
+
         private string KeyPrefix => _settings.KeyPrefix ?? "birko:jobs";
 
         /// <summary>
@@ -64,10 +67,14 @@ namespace Birko.BackgroundJobs.Redis
             end
         ";
 
-        // Dequeue (CR-M025, FIELD-028, TASK-663). KEYS: [1] named delayed, [2] named ready, [3] unnamed delayed,
-        // [4] unnamed ready. ARGV: [1] prefix, [2] Pending int, [3] Scheduled int, [4] Processing int, [5] now threshold,
-        // [6] LastAttemptAt ticks, [7] "1" when the unnamed keys are different keys that must also be read, [8] how many
-        // ready unnamed members to inspect, [9] how many due members to promote per key.
+        // Dequeue (CR-M025, FIELD-028, TASK-663, TASK-664). KEYS: [1] named delayed, [2] named ready, [3] unnamed delayed,
+        // [4] unnamed ready, [5] named processing, [6] unnamed processing. ARGV: [1] prefix, [2] Pending int, [3] Scheduled
+        // int, [4] Processing int, [5] now threshold, [6] LastAttemptAt ticks, [7] "1" when the unnamed keys are different
+        // keys that must also be read, [8] how many ready unnamed members to inspect, [9] how many due members to promote
+        // per key, [10] stale threshold, [11] the policy's MaxRetries, [12] the abandoned-error template, [13] Dead int.
+        // TASK-664: a member of a processing set claimed before the stale threshold was abandoned by its worker. It goes
+        // back to READY as Scheduled, or is buried as Dead when its attempt budget is spent (the job's MaxRetries, or the
+        // policy's when the job sets none). A member whose job is no longer Processing is dropped.
         // A member whose hash is gone or no longer runnable (cancelled, or enqueued as Completed / Dead / Processing) is
         // dropped from READY, never claimed (SH-M014). An unnamed job shares the `default` keys with jobs explicitly named
         // "default", which must stay on their queue, so only members whose hash carries no QueueName qualify there.
@@ -77,6 +84,31 @@ namespace Birko.BackgroundJobs.Redis
             local scan = tonumber(ARGV[8])
             local promoteLimit = tonumber(ARGV[9])
             local readUnnamed = ARGV[7] == '1'
+            local function reclaim(processingKey, readyKey)
+                local stale = redis.call('ZRANGEBYSCORE', processingKey, '-inf', '(' .. ARGV[10], 'LIMIT', 0, promoteLimit)
+                for i = 1, #stale do
+                    local id = stale[i]
+                    local jobKey = prefix .. ':job:' .. id
+                    redis.call('ZREM', processingKey, id)
+                    if redis.call('HGET', jobKey, 'Status') == ARGV[4] then
+                        local attempts = tonumber(redis.call('HGET', jobKey, 'AttemptCount') or '0')
+                        local max = redis.call('HGET', jobKey, 'MaxRetries')
+                        if not max or max == '' then max = ARGV[11] end
+                        redis.call('SREM', prefix .. ':status:' .. ARGV[4], id)
+                        if attempts >= tonumber(max) then
+                            local message = string.gsub(ARGV[12], '{attempts}', tostring(attempts))
+                            redis.call('HSET', jobKey, 'Status', ARGV[13], 'CompletedAt', ARGV[6], 'LastError', message)
+                            redis.call('SADD', prefix .. ':status:' .. ARGV[13], id)
+                        else
+                            redis.call('HSET', jobKey, 'Status', ARGV[3], 'ScheduledAt', ARGV[6])
+                            redis.call('SADD', prefix .. ':status:' .. ARGV[3], id)
+                            redis.call('ZADD', readyKey, rank(jobKey), id)
+                        end
+                    end
+                end
+            end
+            reclaim(KEYS[5], KEYS[2])
+            if readUnnamed then reclaim(KEYS[6], KEYS[4]) end
             promote(KEYS[1], KEYS[2], now, prefix, promoteLimit)
             if readUnnamed then promote(KEYS[3], KEYS[4], now, prefix, promoteLimit) end
 
@@ -99,11 +131,13 @@ namespace Birko.BackgroundJobs.Redis
 
             local id, score = best(KEYS[2], false)
             local readyKey = KEYS[2]
+            local processingKey = KEYS[5]
             if readUnnamed then
                 local uid, uscore = best(KEYS[4], true)
                 if uid and (score == nil or uscore < score) then
                     id = uid
                     readyKey = KEYS[4]
+                    processingKey = KEYS[6]
                 end
             end
             if id == nil then return nil end
@@ -115,6 +149,7 @@ namespace Birko.BackgroundJobs.Redis
             local attempt = tonumber(redis.call('HGET', jobKey, 'AttemptCount') or '0') + 1
             redis.call('HSET', jobKey, 'Status', ARGV[4], 'AttemptCount', attempt, 'LastAttemptAt', ARGV[6])
             redis.call('SADD', prefix .. ':status:' .. ARGV[4], id)
+            redis.call('ZADD', processingKey, now, id)
             return id
         ";
 
@@ -140,6 +175,9 @@ namespace Birko.BackgroundJobs.Redis
         // KEYS: [1] job hash. ARGV: [1] prefix, [2] id, [3] Processing int, [4] Completed int, [5] CompletedAt ticks.
         private const string CompleteScript = @"
             if redis.call('HGET', KEYS[1], 'Status') ~= ARGV[3] then return 0 end
+            local q = redis.call('HGET', KEYS[1], 'QueueName')
+            if not q or q == '' then q = 'default' end
+            redis.call('ZREM', ARGV[1] .. ':processing:' .. q, ARGV[2])
             redis.call('SREM', ARGV[1] .. ':status:' .. ARGV[3], ARGV[2])
             redis.call('HSET', KEYS[1], 'Status', ARGV[4], 'CompletedAt', ARGV[5])
             redis.call('SADD', ARGV[1] .. ':status:' .. ARGV[4], ARGV[2])
@@ -153,12 +191,13 @@ namespace Birko.BackgroundJobs.Redis
         private const string FailScript = @"
             if redis.call('HGET', KEYS[1], 'Status') ~= ARGV[3] then return 0 end
             if redis.call('HGET', KEYS[1], 'AttemptCount') ~= ARGV[4] then return 0 end
+            local q = redis.call('HGET', KEYS[1], 'QueueName')
+            if not q or q == '' then q = 'default' end
+            redis.call('ZREM', ARGV[1] .. ':processing:' .. q, ARGV[2])
             redis.call('SREM', ARGV[1] .. ':status:' .. ARGV[3], ARGV[2])
             redis.call('HSET', KEYS[1], 'Status', ARGV[6], 'LastError', ARGV[5], ARGV[7], ARGV[8])
             redis.call('SADD', ARGV[1] .. ':status:' .. ARGV[6], ARGV[2])
             if ARGV[9] ~= '' then
-                local q = redis.call('HGET', KEYS[1], 'QueueName')
-                if not q or q == '' then q = 'default' end
                 redis.call('ZADD', ARGV[1] .. ':queue:' .. q, ARGV[9], ARGV[2])
             end
             return 1
@@ -188,12 +227,13 @@ namespace Birko.BackgroundJobs.Redis
         /// </summary>
         /// <param name="settings">Redis connection settings.</param>
         /// <param name="retryPolicy">Default retry policy for failed jobs.</param>
-        public RedisJobQueue(RedisSettings settings, RetryPolicy? retryPolicy = null, ISerializer? serializer = null)
+        public RedisJobQueue(RedisSettings settings, RetryPolicy? retryPolicy = null, ISerializer? serializer = null, TimeSpan? claimTimeout = null)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _connectionManager = new RedisConnectionManager(settings);
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
             _serializer = serializer ?? new SystemJsonSerializer();
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
             _ownsConnection = true;
         }
 
@@ -204,12 +244,13 @@ namespace Birko.BackgroundJobs.Redis
         /// <param name="settings">Redis settings (for key prefix configuration).</param>
         /// <param name="retryPolicy">Default retry policy for failed jobs.</param>
         /// <param name="serializer">Serializer for metadata. Defaults to SystemJsonSerializer.</param>
-        public RedisJobQueue(RedisConnectionManager connectionManager, RedisSettings settings, RetryPolicy? retryPolicy = null, ISerializer? serializer = null)
+        public RedisJobQueue(RedisConnectionManager connectionManager, RedisSettings settings, RetryPolicy? retryPolicy = null, ISerializer? serializer = null, TimeSpan? claimTimeout = null)
         {
             _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
             _serializer = serializer ?? new SystemJsonSerializer();
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
             _ownsConnection = false;
         }
 
@@ -247,15 +288,22 @@ namespace Birko.BackgroundJobs.Redis
             var db = _connectionManager.GetDatabase();
             var readUnnamed = GetQueueKey(queueName) != GetQueueKey(null);
             // The threshold is on the SAME scale as the delayed score (CR-C02).
-            var now = GetDequeueThreshold(DateTime.UtcNow);
+            var utcNow = DateTime.UtcNow;
+            var now = GetDequeueThreshold(utcNow);
 
             var result = await db.ScriptEvaluateAsync(
                 DequeueScript,
-                new RedisKey[] { GetQueueKey(queueName), GetReadyKey(queueName), GetQueueKey(null), GetReadyKey(null) },
+                new RedisKey[]
+                {
+                    GetQueueKey(queueName), GetReadyKey(queueName), GetQueueKey(null), GetReadyKey(null),
+                    GetProcessingKey(queueName), GetProcessingKey(null),
+                },
                 new RedisValue[]
                 {
                     KeyPrefix, (int)JobStatus.Pending, (int)JobStatus.Scheduled, (int)JobStatus.Processing, now,
-                    DateTime.UtcNow.Ticks, readUnnamed ? "1" : "0", UnnamedScanLimit, PromoteLimit,
+                    utcNow.Ticks, readUnnamed ? "1" : "0", UnnamedScanLimit, PromoteLimit,
+                    GetDequeueThreshold(utcNow - _claimTimeout), _retryPolicy.MaxRetries, JobReclaim.AbandonedErrorTemplate(_claimTimeout),
+                    (int)JobStatus.Dead,
                 }
             ).ConfigureAwait(false);
 
@@ -438,6 +486,12 @@ namespace Birko.BackgroundJobs.Redis
 
         private string GetStatusKey(JobStatus status) =>
             $"{KeyPrefix}:status:{(int)status}";
+
+        /// <summary>The claimed jobs of a queue, scored by claim time, so an abandoned one can be found (TASK-664).</summary>
+        private string GetProcessingKey(string? queueName) =>
+            queueName != null
+                ? $"{KeyPrefix}:processing:{queueName}"
+                : $"{KeyPrefix}:processing:default";
 
         /// <summary>The ready set of a queue: due jobs ranked by priority, then age (TASK-663).</summary>
         private string GetReadyKey(string? queueName) =>

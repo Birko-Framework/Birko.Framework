@@ -86,6 +86,13 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
 
+## 2026-10-17 — Birko.Health.Security.Grants: a health check for grants that grant nothing
+
+[[TASK-654]]. New project. `StaleGrantHealthCheck(store, table)` reports the stored grants whose role or resource type the
+`GrantRoleTable` no longer declares. Since TASK-641 they grant nothing, so a role renamed in configuration quietly removed
+access. Degraded with the count and up to 50 descriptions, Degraded when the store cannot be read, Healthy with none,
+never Unhealthy. The admin grant is ignored; nothing is revoked.
+
 ## 2026-10-17 — A DateTime keeps its sub-second digits on MySQL and SQL Server
 
 [[TASK-656]]. Measured live: MySQL stored a `DateTime` to the second (`DATETIME`), and SQL Server rounded it to ~3.33 ms

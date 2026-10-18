@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Every job queue reclaims a job its worker abandoned (2026-10-18)
+[[TASK-664]]. Only SQL did: on the eight other backends a worker that died between dequeue and complete left the job
+Processing forever. Each queue now takes a `claimTimeout` (default 30 min, `JobReclaim.DefaultClaimTimeout`) and offers
+such a job again, to one worker, or buries it as Dead when its attempts are spent. On Redis claimed jobs are kept in a
+`processing:{queue}` set for this.
 ### RavenDB job queue claims each job once; the store gains a compare-and-set (2026-10-18)
 [[TASK-665]]. Measured live: a cancel racing a claim let both win (3 of 3 runs), and a job was claimed twice. The
 RavenDB store has no native filtered update, so TASK-158's "guarded" update ran as a possibly stale index query and an
@@ -320,11 +325,6 @@ written as plain values. Birko's own client was unaffected.
 [[TASK-658]]. Measured live: after a cluster-wide conflict the unit of work stayed active and every retry hit the same
 conflict, and after a cancelled commit a retry wrote the changes late. A failed commit now releases the session, and the
 rollback after it is a no-op, as on every other backend (TASK-325, TASK-578). To retry, begin again.
-### Birko.Health.Security.Grants: a health check for grants that grant nothing (2026-10-17)
-[[TASK-654]]. New project. `StaleGrantHealthCheck(store, table)` reports the stored grants whose role or resource type the
-`GrantRoleTable` no longer declares. Since TASK-641 they grant nothing, so a role renamed in configuration quietly removed
-access. Degraded with the count and up to 50 descriptions, Degraded when the store cannot be read, Healthy with none,
-never Unhealthy. The admin grant is ignored; nothing is revoked.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

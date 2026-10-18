@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.BackgroundJobs.MongoDB.Models;
@@ -21,23 +22,28 @@ namespace Birko.BackgroundJobs.MongoDB
         private readonly AsyncMongoDBStore<MongoJobDescriptorModel> _store;
         private readonly RetryPolicy _retryPolicy;
 
+        /// <summary>How long a job may stay Processing before it is presumed abandoned (TASK-664; see <see cref="JobReclaim"/>).</summary>
+        private readonly TimeSpan _claimTimeout;
+
         /// <summary>
         /// Creates a new MongoDB job queue.
         /// </summary>
-        public MongoDBJobQueue(Birko.Data.MongoDB.Stores.Settings settings, RetryPolicy? retryPolicy = null)
+        public MongoDBJobQueue(Birko.Data.MongoDB.Stores.Settings settings, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
         {
             _store = new AsyncMongoDBStore<MongoJobDescriptorModel>();
             _store.SetSettings(settings);
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
         }
 
         /// <summary>
         /// Creates a new MongoDB job queue from an existing store.
         /// </summary>
-        public MongoDBJobQueue(AsyncMongoDBStore<MongoJobDescriptorModel> store, RetryPolicy? retryPolicy = null)
+        public MongoDBJobQueue(AsyncMongoDBStore<MongoJobDescriptorModel> store, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _claimTimeout = JobReclaim.Resolve(claimTimeout);
         }
 
         /// <summary>
@@ -61,12 +67,16 @@ namespace Birko.BackgroundJobs.MongoDB
             for (int attempt = 0; attempt < MaxClaimAttempts; attempt++)
             {
                 var now = DateTime.UtcNow;
+                // TASK-664: a job left Processing by a worker that died is offered again once held longer than the
+                // claim timeout, as on SQL (TASK-451); before, it was stranded forever.
+                var staleBefore = now - _claimTimeout;
 
                 IEnumerable<MongoJobDescriptorModel> candidates;
                 if (queueName != null)
                 {
                     candidates = await _store.ReadAsync(
-                        filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
+                        filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now)
+                                   || (j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore))
                                   && (j.QueueName == null || j.QueueName == queueName),
                         orderBy: OrderBy<MongoJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
                         limit: 1,
@@ -76,7 +86,8 @@ namespace Birko.BackgroundJobs.MongoDB
                 else
                 {
                     candidates = await _store.ReadAsync(
-                        filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
+                        filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now)
+                                  || (j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore),
                         orderBy: OrderBy<MongoJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
                         limit: 1,
                         ct: cancellationToken
@@ -97,10 +108,30 @@ namespace Birko.BackgroundJobs.MongoDB
                 var claimToken = Guid.NewGuid();
                 var seenAttempts = candidate.AttemptCount;
 
+                // TASK-664 (TASK-575 on SQL): a reclaim must require the job to be STILL stale. A reclaim writes Processing
+                // over Processing, so a status guard alone matched a second worker's identical update too; the winner sets
+                // LastAttemptAt to now, so the stale condition admits one reclaim. A job abandoned with no attempts left
+                // is buried as Dead under the same guard, so a slow worker's completion is never overwritten.
+                var reclaim = originalStatus == processingStatus;
+                Expression<Func<MongoJobDescriptorModel, bool>> stillEligible = reclaim
+                    ? j => j.Guid == claimId && j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore
+                    : j => j.Guid == claimId && j.Status == originalStatus && j.AttemptCount == seenAttempts;
+
+                if (reclaim && candidate.AttemptCount >= _retryPolicy.MaxRetriesFor(candidate.MaxRetries))
+                {
+                    await _store.UpdateAsync(
+                        filter: stillEligible,
+                        updates: new PropertyUpdate<MongoJobDescriptorModel>()
+                            .Set(j => j.Status, (int)JobStatus.Dead)
+                            .Set(j => j.CompletedAt, now)
+                            .Set(j => j.LastError, JobReclaim.AbandonedError(_claimTimeout, candidate.AttemptCount)),
+                        ct: cancellationToken
+                    ).ConfigureAwait(false);
+                    continue;
+                }
+
                 await _store.UpdateAsync(
-                    filter: // TASK-158 (SH-M012): Status alone is ABA — a job another worker claimed, ran and failed back to Scheduled
-                    // matched again, and the stale claim ran it inside its backoff with a lower AttemptCount.
-                    j => j.Guid == claimId && j.Status == originalStatus && j.AttemptCount == seenAttempts,
+                    filter: stillEligible, // TASK-158 (SH-M012) / TASK-664: see stillEligible above
                     updates: new PropertyUpdate<MongoJobDescriptorModel>()
                         .Set(j => j.Status, processingStatus)
                         .Set(j => j.ClaimToken, claimToken)

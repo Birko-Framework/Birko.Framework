@@ -34,9 +34,10 @@ namespace Birko.BackgroundJobs
 
         /// <summary>
         /// Maximum time a single job is allowed to run before being cancelled.
-        /// Default is 30 minutes.
+        /// Default is 30 minutes, the queues' default claim timeout (<see cref="JobReclaim.DefaultClaimTimeout"/>): a job
+        /// held longer than that is presumed abandoned and offered again, so raising this needs the queue's raised too.
         /// </summary>
-        public TimeSpan JobTimeout { get; set; } = TimeSpan.FromMinutes(30);
+        public TimeSpan JobTimeout { get; set; } = JobReclaim.DefaultClaimTimeout;
 
         /// <summary>
         /// How long to keep completed/dead jobs before they are eligible for purging.

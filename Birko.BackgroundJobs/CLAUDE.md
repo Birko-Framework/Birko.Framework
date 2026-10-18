@@ -14,6 +14,7 @@ Birko.BackgroundJobs/
 │   ├── IJobQueue.cs               - Job storage: enqueue, dequeue, complete, fail, cancel, purge
 │   ├── JobContext.cs              - Runtime context (JobGuid, AttemptNumber, EnqueuedAt, Metadata)
 │   ├── JobDescriptor.cs          - Full job description (type, input, status, retries, priority)
+│   ├── JobReclaim.cs             - Claim timeout default/validation and the abandoned-job error (TASK-664)
 │   ├── JobQueueOptions.cs        - Processor config (concurrency, polling, timeout, retention); overrides RetryPolicy defaults to 30s base / 1h max
 │   ├── JobResult.cs              - Execution result (Success/Failed, Duration, Error)
 │   └── JobStatus.cs              - Lifecycle enum: Pending→Scheduled→Processing→Completed/Failed/Dead/Cancelled
@@ -147,4 +148,8 @@ Tests should be created in `Birko.BackgroundJobs.Tests` covering:
 - `IJobLockProvider` implementations hold one lock name per provider (another name throws). Use a provider per lock.
 - `JobDescriptor.MaxRetries` is `int?` (TASK-662): `null` = the queue's `RetryPolicy`, `0` = no retry. Every queue asks
   `RetryPolicy.MaxRetriesFor(job.MaxRetries)`; never compare `AttemptCount` with the job's value directly.
+- Every queue reclaims a job held in Processing longer than its `claimTimeout` (constructor argument, default
+  `JobReclaim.DefaultClaimTimeout` = 30 min = `JobQueueOptions.JobTimeout`'s default), one winner per reclaim, and
+  buries it as Dead with `JobReclaim.AbandonedError` when its budget is spent (TASK-664). A host that raises
+  `JobTimeout` must raise the queue's `claimTimeout`; `AddBackgroundJobs` does that for its in-memory queue.
 
