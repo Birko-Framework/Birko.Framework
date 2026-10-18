@@ -150,6 +150,28 @@ app.MapWebSocketProxy("/dragon", new Uri("wss://server.example/dragon"), o =>
 }).RequireAuthorization();
 ```
 
+## Command router (request / response)
+
+`WebSocketCommandRouter` is the server half of birko-web-core's `WsClient.request` (TASK-539). It answers
+`{ type, id, data }` with `{ id, type: "response", data, timestamp }` or `{ id, type: "error", error, timestamp }`:
+
+```csharp
+var router = new WebSocketCommandRouter(new WebSocketCommandRouterOptions(), logger)
+    .Map("get_stats", (ctx, ct) => stats.GetAsync(ct))
+    .Map<ProjectRef>("get_project", (data, ctx, ct) => projects.GetAsync(data!.Id, ct));
+
+app.Map("/ws", async http => { using var socket = await http.WebSockets.AcceptWebSocketAsync(); await router.RunAsync(socket); });
+```
+
+- Every reply carries the request id when one was sent, including the error replies (unknown command, unreadable
+  `data`, a failing handler), so a correlating client fails at once instead of waiting out its timeout.
+- An unexpected exception's message is logged, not sent (`Command 'x' failed.`), unless `ExposeExceptionMessages`; throw
+  `WebSocketCommandException` to fail with a message for the client.
+- `CommandField` (default `type`, as WsClient sends) and `IdField` (default `id`) are configurable, e.g. `command` for
+  a client sending `{ command, id, data }`.
+- `RunAsync` reads whole messages with `ReceiveMessageAsync` and handles requests concurrently; it returns once the socket
+  closes and every started request has replied.
+
 ## API Reference
 
 ### Classes

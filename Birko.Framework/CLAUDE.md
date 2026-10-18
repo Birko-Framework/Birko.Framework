@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### WebSocketCommandRouter: the server half of WsClient.request (2026-10-18)
+[[TASK-539]]. New in Birko.Communication.WebSocket. It routes `{ type, id, data }` to a handler by command name and
+replies `response` or `error`. Every reply carries the request id, including errors (DraCode's dropped it, so clients
+timed out). `RunAsync` handles requests concurrently over the capped receive. An exception's message is not sent
+unless `ExposeExceptionMessages`.
 ### OAuth server stores ship, and single use is enforced by the store (2026-10-18)
 [[TASK-518]]. New `Birko.Security.OAuth.Server.InMemory` and `.SqLite` provide all five stores and a DI extension.
 SQLite keeps client lists and refresh claims as JSON columns. Measured: concurrent redemptions of one code or one refresh
@@ -326,11 +331,6 @@ could not claim on a real server. Details: CHANGELOG.
 - `CompleteAsync` / `FailAsync` now act only on a claimed job, as guarded updates.
 - A stopped processor still records a finished job, and one failed enqueue no longer kills the scheduler.
 - Lock providers refuse a second name, and SQL unlocks on dispose (a pooled MySQL session kept the lock).
-### Birko.BackgroundJobs.Hosting: AddBackgroundJobs and the hosted services (2026-10-18)
-[[TASK-538]]. New project, from Symbio's version. `AddBackgroundJobs` is idempotent and keyed on the processor, so a
-durable queue registered first is kept. `AddRecurringJob<TJob>` reaches the scheduler that runs. A follower node still
-runs its loop and takes over. Each job resolves from its own DI scope, and shutdown waits only as long as the host
-allows. Symbio's three lessons are tests.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

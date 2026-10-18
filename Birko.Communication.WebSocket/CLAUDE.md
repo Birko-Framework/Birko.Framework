@@ -29,6 +29,9 @@ WebSocket communication implementation for real-time bidirectional communication
 - No send queue: concurrent `SendAsync` on one socket is serialized by .NET 10's `ManagedWebSocket` — measured in
   TASK-537 and pinned by `ConcurrentSendsOnOneSocket_AllArriveIntact`. If that test goes red, a per-socket gate is the fix
 
+- `WebSocketCommandRouter` — `{ type, id, data }` request / response by command name, the server half of WsClient.request
+  (TASK-539). Every reply echoes the id; exception messages are not sent unless `ExposeExceptionMessages`
+
 ### Middleware
 - ASP.NET Core middleware for WebSocket
 - `MapWebSocketEndpoint` / legacy `MapWebSocket` — `requireAuthentication` (default true) is the **static-token** check;

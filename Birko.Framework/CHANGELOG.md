@@ -71,6 +71,13 @@ PostgreSQL / TimescaleDB `ALTER COLUMN "MaxRetries" DROP NOT NULL`, SQLite a tab
 under driver 3.x, so the MongoDB job queue could not claim a job on a real server (its tests ran on an in-memory
 double). A set value is now written with the member's own serializer; a null is `BsonNull`. Measured live.
 
+## 2026-10-18 — Birko.BackgroundJobs.Hosting: AddBackgroundJobs and the hosted services
+
+[[TASK-538]]. New project, from Symbio's version. `AddBackgroundJobs` is idempotent and keyed on the processor, so a
+durable queue registered first is kept. `AddRecurringJob<TJob>` reaches the scheduler that runs. A follower node still
+runs its loop and takes over. Each job resolves from its own DI scope, and shutdown waits only as long as the host
+allows. Symbio's three lessons are tests.
+
 ## 2026-10-18 — LLM provider and agent low-finding triage
 
 [[TASK-173]]. 31 low findings: 27 confirmed, 4 refuted; 22 fixed, 3 already fixed, 1 spawned ([[TASK-660]]: telling a
