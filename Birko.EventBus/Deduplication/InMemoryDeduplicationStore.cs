@@ -47,6 +47,8 @@ namespace Birko.EventBus.Deduplication
 
         public Task MarkProcessedAsync(Guid eventId, CancellationToken cancellationToken = default)
         {
+            // SH-L127: the TTL sweep runs from every member, so a caller using only Exists / Mark is bounded too.
+            CleanupIfNeeded();
             _processed[eventId] = _clock.UtcNow;
             return Task.CompletedTask;
         }

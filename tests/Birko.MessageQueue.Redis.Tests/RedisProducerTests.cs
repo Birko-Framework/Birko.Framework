@@ -32,7 +32,7 @@ namespace Birko.MessageQueue.Redis.Tests
             var (db, captured) = MockDb();
             var producer = new RedisProducer(() => db.Object, new JsonMessageSerializer(), new RedisStreamSettings());
 
-            await producer.SendAsync("dest", message: new QueueMessage { Body = "hi", PayloadType = "T", Priority = 3 });
+            await producer.SendAsync("dest", message: new QueueMessage { Body = "hi", PayloadType = "T" });
 
             captured()!.Select(e => e.Name.ToString()).Should().BeEquivalentTo(new[] { "message" });
         }
@@ -56,14 +56,14 @@ namespace Birko.MessageQueue.Redis.Tests
             var serializer = new JsonMessageSerializer();
             var producer = new RedisProducer(() => db.Object, serializer, new RedisStreamSettings());
 
-            await producer.SendAsync("dest", message: new QueueMessage { Body = "hi", PayloadType = "T", Priority = 7 });
+            await producer.SendAsync("dest", message: new QueueMessage { Body = "hi", PayloadType = "T" } /* TASK-174: a non-zero Priority is refused (SH-L109) */);
 
             var messageField = captured()!.First(e => e.Name == "message").Value.ToString();
             var parsed = serializer.Deserialize<QueueMessage>(messageField);
             parsed.Should().NotBeNull();
             parsed!.Body.Should().Be("hi");
             parsed.PayloadType.Should().Be("T");
-            parsed.Priority.Should().Be(7);
+            parsed.Priority.Should().Be(0);
         }
 
         [Fact]

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Time;
 
 namespace Birko.EventBus.Outbox.Stores
 {
@@ -16,15 +17,20 @@ namespace Birko.EventBus.Outbox.Stores
         private readonly ConcurrentDictionary<Guid, OutboxEntry> _entries = new();
         private readonly object _claimLock = new();
         private readonly TimeSpan _staleClaimTimeout;
+        private readonly IDateTimeProvider _clock;
 
         /// <summary>
         /// Creates the store. <paramref name="staleClaimTimeout"/> is how long an entry may stay in
         /// <see cref="OutboxStatus.Publishing"/> before a subsequent <see cref="GetPendingAsync"/>
         /// reclaims it (recovery from a crashed processor). Defaults to 5 minutes.
         /// </summary>
-        public InMemoryOutboxStore(TimeSpan? staleClaimTimeout = null)
+        /// <param name="staleClaimTimeout">How long a claim may be held before it is reclaimed.</param>
+        /// <param name="clock">Stamps ClaimedAt / PublishedAt and judges staleness (SH-L123: it used DateTime.UtcNow,
+        /// while the processor's retention cutoff used its injected clock). Defaults to the system clock.</param>
+        public InMemoryOutboxStore(TimeSpan? staleClaimTimeout = null, IDateTimeProvider? clock = null)
         {
             _staleClaimTimeout = staleClaimTimeout ?? TimeSpan.FromMinutes(5);
+            _clock = clock ?? new SystemDateTimeProvider();
         }
 
         public Task SaveAsync(OutboxEntry entry, CancellationToken cancellationToken = default)
@@ -41,7 +47,7 @@ namespace Birko.EventBus.Outbox.Stores
             // processor that crashed mid-publish) are reclaimed after _staleClaimTimeout.
             lock (_claimLock)
             {
-                var now = DateTime.UtcNow;
+                var now = _clock.UtcNow;
 
                 foreach (var stale in _entries.Values.Where(e =>
                     e.Status == OutboxStatus.Publishing &&
@@ -69,11 +75,18 @@ namespace Birko.EventBus.Outbox.Stores
 
         public Task MarkPublishedAsync(Guid entryId, CancellationToken cancellationToken = default)
         {
-            if (_entries.TryGetValue(entryId, out var entry))
+            // SH-L122: under the claim lock, as every touch of an entry's state is.
+            // SH-L121 (waived): an unknown id stays a no-op. SqlOutboxStore does the same, IOutboxStore declares no
+            // result, and CleanupAsync removes only Published / Failed entries, so a claimed (Publishing) entry cannot
+            // vanish under the processor between its claim and its mark.
+            lock (_claimLock)
             {
-                entry.Status = OutboxStatus.Published;
-                entry.PublishedAt = DateTime.UtcNow;
-                entry.ClaimedAt = null;
+                if (_entries.TryGetValue(entryId, out var entry))
+                {
+                    entry.Status = OutboxStatus.Published;
+                    entry.PublishedAt = _clock.UtcNow;
+                    entry.ClaimedAt = null;
+                }
             }
 
             return Task.CompletedTask;
@@ -81,13 +94,16 @@ namespace Birko.EventBus.Outbox.Stores
 
         public Task MarkFailedAsync(Guid entryId, string error, int maxAttempts, CancellationToken cancellationToken = default)
         {
-            if (_entries.TryGetValue(entryId, out var entry))
+            lock (_claimLock)
             {
-                entry.Attempts++;
-                entry.LastError = error;
-                entry.ClaimedAt = null;
-                // Honor the configured cap instead of a hardcoded 5 (CR-H115).
-                entry.Status = entry.Attempts >= maxAttempts ? OutboxStatus.Failed : OutboxStatus.Pending;
+                if (_entries.TryGetValue(entryId, out var entry))
+                {
+                    entry.Attempts++;
+                    entry.LastError = error;
+                    entry.ClaimedAt = null;
+                    // Honor the configured cap instead of a hardcoded 5 (CR-H115).
+                    entry.Status = entry.Attempts >= maxAttempts ? OutboxStatus.Failed : OutboxStatus.Pending;
+                }
             }
 
             return Task.CompletedTask;
@@ -95,15 +111,18 @@ namespace Birko.EventBus.Outbox.Stores
 
         public Task CleanupAsync(DateTime cutoffDate, CancellationToken cancellationToken = default)
         {
-            var toRemove = _entries.Values
-                .Where(e => (e.Status == OutboxStatus.Published || e.Status == OutboxStatus.Failed)
-                    && e.CreatedAt < cutoffDate)
-                .Select(e => e.Guid)
-                .ToList();
-
-            foreach (var id in toRemove)
+            lock (_claimLock)
             {
-                _entries.TryRemove(id, out _);
+                var toRemove = _entries.Values
+                    .Where(e => (e.Status == OutboxStatus.Published || e.Status == OutboxStatus.Failed)
+                        && e.CreatedAt < cutoffDate)
+                    .Select(e => e.Guid)
+                    .ToList();
+
+                foreach (var id in toRemove)
+                {
+                    _entries.TryRemove(id, out _);
+                }
             }
 
             return Task.CompletedTask;
@@ -114,7 +133,10 @@ namespace Birko.EventBus.Outbox.Stores
         /// </summary>
         public IReadOnlyList<OutboxEntry> GetAll()
         {
-            return _entries.Values.ToList();
+            lock (_claimLock)
+            {
+                return _entries.Values.ToList();
+            }
         }
     }
 }

@@ -177,7 +177,9 @@ var options = new ConsumerOptions
 ```
 
 A transport refuses an option it cannot honour (`NotSupportedException`) rather than ignoring it. MQTT has no
-ManualAck, FromBeginning, GroupId or requeue; MQTT and Redis have no `Delay`. A new Redis consumer group starts at
+ManualAck, FromBeginning, GroupId or requeue; MQTT and Redis have no `Delay`; MQTT and in-memory have no
+`TimeToLive`; no transport supports a non-zero `Priority` or a non-default `PrefetchCount` yet (TASK-668). A
+redelivered message carries an `x-delivery-count` header on Redis and in-memory. A new Redis consumer group starts at
 the stream's tail unless `FromBeginning` is set, so a message published before the group exists is not delivered to it.
 Each consumer has an `OnHandlerError` hook (in-memory, MQTT, Redis) through which a failing handler is reported.
 

@@ -22,7 +22,12 @@ namespace Birko.EventBus.Local
         private readonly EventPipeline _pipeline;
         private readonly IReadOnlyList<IEventEnricher> _enrichers;
         private readonly ConcurrentDictionary<Type, List<object>> _subscriptions = new();
-        private bool _disposed;
+        private volatile bool _disposed;
+
+        // SH-L118: Subscribe and Dispose take this lock, so a subscribe either lands before the bus is disposed (and its
+        // handle then reports inactive) or throws ObjectDisposedException. Unsynchronised, a Subscribe could add its
+        // handler to a list Dispose had just cleared away, and hand back a handle reporting active that received nothing.
+        private readonly object _lifecycle = new();
 
         /// <summary>
         /// Creates a new in-process event bus.
@@ -89,13 +94,16 @@ namespace Birko.EventBus.Local
         /// <inheritdoc />
         public IEventSubscription Subscribe<TEvent>(IEventHandler<TEvent> handler) where TEvent : IEvent
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-
             var eventType = typeof(TEvent);
-            var handlers = _subscriptions.GetOrAdd(eventType, _ => []);
-            lock (handlers)
+            List<object> handlers;
+            lock (_lifecycle)
             {
-                handlers.Add(handler);
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                handlers = _subscriptions.GetOrAdd(eventType, _ => []);
+                lock (handlers)
+                {
+                    handlers.Add(handler);
+                }
             }
 
             return new InProcessEventSubscription(eventType, () =>
@@ -104,7 +112,7 @@ namespace Birko.EventBus.Local
                 {
                     handlers.Remove(handler);
                 }
-            });
+            }, () => _disposed);
         }
 
         private List<IEventHandler<TEvent>> GetHandlers<TEvent>(IServiceProvider? serviceProvider) where TEvent : IEvent
@@ -186,7 +194,10 @@ namespace Birko.EventBus.Local
                         semaphore.Release();
                     }
                 }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                // SH-L117: only the follow-on cancellation of OUR Stop-mode cts is swallowed. The filter used to be just
+                // "not the caller's token", which in Continue mode (where cts is never cancelled) also swallowed a
+                // handler's own OperationCanceledException (an internal timeout) without reporting it.
+                catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
                 {
                     // Aborted by our Stop-mode cancellation (not the caller's token) — the real cause is
                     // captured in firstStopError and rethrown after WhenAll; swallow this follow-on OCE.
@@ -216,8 +227,11 @@ namespace Birko.EventBus.Local
 
         public void Dispose()
         {
-            _disposed = true;
-            _subscriptions.Clear();
+            lock (_lifecycle)
+            {
+                _disposed = true;
+                _subscriptions.Clear();
+            }
         }
 
         private sealed class InProcessEventSubscription : IEventSubscription
@@ -227,14 +241,18 @@ namespace Birko.EventBus.Local
             // Interlocked check-and-clear; a plain bool check-then-set let two concurrent Dispose
             // calls both pass the guard and invoke _unsubscribe twice.
             private int _isActive = 1;
+            private readonly Func<bool> _busDisposed;
 
             public Type EventType { get; }
-            public bool IsActive => Volatile.Read(ref _isActive) == 1;
 
-            public InProcessEventSubscription(Type eventType, Action unsubscribe)
+            /// <summary>False once disposed, or once the bus is (SH-L118: a disposed bus delivers to no handle).</summary>
+            public bool IsActive => Volatile.Read(ref _isActive) == 1 && !_busDisposed();
+
+            public InProcessEventSubscription(Type eventType, Action unsubscribe, Func<bool> busDisposed)
             {
                 EventType = eventType;
                 _unsubscribe = unsubscribe;
+                _busDisposed = busDisposed;
             }
 
             public void Dispose()

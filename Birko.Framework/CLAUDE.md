@@ -240,6 +240,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Messaging options no transport honours are refused until implemented (2026-10-18)
+[[TASK-174]]. 29 low findings. Decided by the user, until [[TASK-668]] implements them, these throw:
+- `TimeToLive` on MQTT and in-memory, a non-zero `Priority`, and a non-default `PrefetchCount`.
+- The distributed bus's `RetryPolicy` / `DeadLetterOptions` (now null by default).
+
+Redeliveries carry `x-delivery-count`; `RedisConsumer.PollError` is public; any event can carry correlation through
+`ICorrelatedEvent`.
 ### Event bus and messaging: transports refuse what they cannot do; dedup retries failures (2026-10-18)
 [[TASK-155]]. 24 medium findings. Decided by the user:
 - A new Redis group starts at the stream's tail unless `FromBeginning`.
@@ -322,11 +329,6 @@ tool_result. Measured: `MessageText.From` read a `JsonElement` content (a plain 
 The caller's cancellation throws. `RunCommandTool` uses it, and a cancelled command no longer reports "timed out". New
 `Birko.VersionControl.Git`: `GitService` and the git agent tools. Its merge check (`git merge-tree`, git 2.38+) never
 touches the working tree, as DraCode's trial merge did.
-### KeyedEventBroadcaster: live per-key event streams (2026-10-17)
-[[TASK-533]]. New in Birko.EventBus, for streaming a run's events to SSE and WebSocket clients. `Publish` never blocks.
-Each subscriber has a bounded drop-oldest buffer and counts what it dropped, and every event carries a per-key sequence.
-Measured: DraCode's version could deliver sequence 6 before 5 under concurrent publishers (red 3/3); it now writes
-under the lock.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

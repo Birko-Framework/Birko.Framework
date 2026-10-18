@@ -11,7 +11,7 @@ namespace Birko.MessageQueue.Redis
     {
         private readonly RedisConsumer _consumer;
         private readonly Guid _subscriptionId;
-        private bool _unsubscribed;
+        private int _released;
 
         public string Destination { get; }
 
@@ -21,7 +21,7 @@ namespace Birko.MessageQueue.Redis
         /// unexpected fault removes its registration, so this now correctly reports false instead of
         /// staying true while the subscription silently processes nothing.
         /// </summary>
-        public bool IsActive => !_unsubscribed && _consumer.IsSubscriptionActive(_subscriptionId);
+        public bool IsActive => Volatile.Read(ref _released) == 0 && _consumer.IsSubscriptionActive(_subscriptionId);
 
         internal RedisSubscription(RedisConsumer consumer, string destination, Guid subscriptionId)
         {
@@ -32,20 +32,18 @@ namespace Birko.MessageQueue.Redis
 
         public Task UnsubscribeAsync(CancellationToken cancellationToken = default)
         {
-            if (!_unsubscribed)
-            {
-                _consumer.RemoveSubscription(_subscriptionId);
-                _unsubscribed = true;
-            }
+            Release();
             return Task.CompletedTask;
         }
 
-        public void Dispose()
+        public void Dispose() => Release();
+
+        // SH-L115: one release, however many callers race to it (as InProcessEventSubscription since CR-L250).
+        private void Release()
         {
-            if (!_unsubscribed)
+            if (Interlocked.Exchange(ref _released, 1) == 0)
             {
                 _consumer.RemoveSubscription(_subscriptionId);
-                _unsubscribed = true;
             }
         }
     }

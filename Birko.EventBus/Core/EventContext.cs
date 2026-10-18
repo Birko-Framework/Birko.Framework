@@ -17,7 +17,7 @@ namespace Birko.EventBus
         /// <summary>
         /// Source module or component that raised the event.
         /// </summary>
-        public string Source { get; init; } = null!;
+        public string Source { get; init; } = string.Empty; // SH-L125: not null! — a deserialized context may lack it
 
         /// <summary>
         /// Correlation ID for tracing related operations.
@@ -48,7 +48,7 @@ namespace Birko.EventBus
             {
                 EventGuid = @event.EventGuid,
                 Source = @event.Source,
-                CorrelationGuid = @event is EventBase eb ? eb.CorrelationGuid : null,
+                CorrelationGuid = @event is ICorrelatedEvent correlated ? correlated.CorrelationGuid : null, // SH-L124
                 TenantGuid = tenantGuid,
                 DeliveryCount = deliveryCount,
                 Metadata = metadata ?? new Dictionary<string, string>()

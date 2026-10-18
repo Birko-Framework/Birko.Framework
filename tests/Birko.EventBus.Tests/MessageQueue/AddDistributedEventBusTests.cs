@@ -52,8 +52,10 @@ namespace Birko.EventBus.Tests.MessageQueue
         }
 
         [Fact]
-        public void AddDistributedEventBus_AutoSubscribeFalse_DoesNotRegisterHostedService()
+        public void AddDistributedEventBus_AutoSubscribeFalse_StillRegistersTheHostedService_WhichReadsTheFlagAtStart()
         {
+            // TASK-174 (SH-L112) inverted this: the hosted service is always registered and StartAsync reads AutoSubscribe,
+            // so a change to the registered options before the host starts is honoured. Deciding at registration ignored it.
             var services = ServicesWithQueue();
 
             services.AddDistributedEventBus(o => o.AutoSubscribe = false);
@@ -61,7 +63,7 @@ namespace Birko.EventBus.Tests.MessageQueue
             using var provider = services.BuildServiceProvider();
             provider.GetServices<IHostedService>()
                 .OfType<DistributedEventBusHostedService>()
-                .Should().BeEmpty();
+                .Should().ContainSingle();
         }
     }
 }

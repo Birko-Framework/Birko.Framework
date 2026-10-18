@@ -12,6 +12,7 @@
     <!-- Core -->
     <Compile Include="$(MSBuildThisFileDirectory)Core\IEvent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\EventBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ICorrelatedEvent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\EventContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IEventHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IEventBus.cs" />

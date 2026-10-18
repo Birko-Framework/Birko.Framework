@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-18 11:23. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-18 11:38. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -17,12 +17,12 @@ which this regeneration never touches._
 | in-progress  | 8     | 11      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 25      | 363   |
+| done         | 2     | 25      | 364   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 103× P2 · 42× P3.
+`todo` by priority: 9× P1 · 102× P2 · 43× P3.
 
 ## In progress now
 
@@ -168,7 +168,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (221/280 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (222/281 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -434,9 +434,9 @@ _None._
     - [x] [TASK-665](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-665-ravendb-job-queue-transitions-are-not-atomic.md) The RavenDB job queue's guarded claim and transitions are a read-then-write over a stale index (P2) · FEATURE-014
     - [x] [TASK-666](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-666-view-rebuild-takes-cached-field-by-column-name.md) A SQL view built concurrently takes a cached field by source column name and loses its aggregate (P2) · FEATURE-014
     - [x] [TASK-667](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-667-elasticsearch-job-transitions-match-a-stale-index.md) Elasticsearch job transitions match a stale search index, so an outcome reported right after the claim is dropped (P1) · FEATURE-014
-  - STORY-054 Spec-harvest — low findings — planned (2/25 done)
+  - STORY-054 Spec-harvest — low findings — planned (3/26 done)
     - [x] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2) · FEATURE-014
-    - [ ] [TASK-174](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-174-triage-low-event-bus-and-messaging.md) Triage the 29 low spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014
+    - [x] [TASK-174](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-174-triage-low-event-bus-and-messaging.md) Triage the 29 low spec-harvest findings in `event-bus-and-messaging` (P2) · FEATURE-014
     - [x] [TASK-175](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-175-triage-low-background-jobs.md) Triage the 24 low spec-harvest findings in `background-jobs` (P2) · FEATURE-014
     - [ ] [TASK-176](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-176-triage-low-security-and-authorization.md) Triage the 23 low spec-harvest findings in `security-and-authorization` (P2) · FEATURE-014
     - [ ] [TASK-177](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-177-triage-low-data-sync.md) Triage the 23 low spec-harvest findings in `data-sync` (P2) · FEATURE-014
@@ -460,6 +460,7 @@ _None._
     - [ ] [TASK-326](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-326-fix-low-core-model-contracts.md) Fix the 1 verified low finding in `core-model-contracts` (P2) · FEATURE-014
     - [ ] [TASK-327](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-327-fix-low-unit-of-work-and-transactions.md) Fix the 3 verified low findings in `unit-of-work-and-transactions` (P2) · FEATURE-014
     - [ ] [TASK-660](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-660-agent-run-outcome-is-indistinguishable.md) A run's outcome cannot be told apart: success, LLM failure, not configured and exhaustion all return a conversation (P3) · FEATURE-014
+    - [ ] [TASK-668](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-668-implement-messaging-options-refused-at-task-174.md) Implement the messaging options TASK-174 refuses: TimeToLive, PrefetchCount, retry / dead-letter, Priority (P3) · FEATURE-014
   - STORY-055 Spec-harvest — the three unrated areas — done (1/1 done) (done)
     - [x] [TASK-195](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/TASK-195-rate-id-and-fold-the-16-recovered-findings.md) Rate, ID and fold the 16 recovered findings into the severity backlog (P1) · FEATURE-014
 - **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (14/26 tasks done)

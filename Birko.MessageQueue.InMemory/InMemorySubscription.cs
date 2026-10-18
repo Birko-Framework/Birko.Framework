@@ -13,7 +13,8 @@ namespace Birko.MessageQueue.InMemory
         private readonly Guid _subscriberId;
 
         public string Destination { get; }
-        public bool IsActive { get; private set; } = true;
+        private int _released;
+        public bool IsActive => Volatile.Read(ref _released) == 0;
 
         internal InMemorySubscription(InMemoryChannel channel, string destination, Guid subscriberId)
         {
@@ -24,20 +25,18 @@ namespace Birko.MessageQueue.InMemory
 
         public Task UnsubscribeAsync(CancellationToken cancellationToken = default)
         {
-            if (IsActive)
-            {
-                _channel.RemoveSubscriber(Destination, _subscriberId);
-                IsActive = false;
-            }
+            Release();
             return Task.CompletedTask;
         }
 
-        public void Dispose()
+        public void Dispose() => Release();
+
+        // SH-L115: one release, however many callers race to it (as InProcessEventSubscription since CR-L250).
+        private void Release()
         {
-            if (IsActive)
+            if (Interlocked.Exchange(ref _released, 1) == 0)
             {
                 _channel.RemoveSubscriber(Destination, _subscriberId);
-                IsActive = false;
             }
         }
     }

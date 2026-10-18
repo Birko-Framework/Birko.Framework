@@ -24,7 +24,7 @@ namespace Birko.MessageQueue.Mqtt
         // DisconnectAsync, and Dispose can otherwise race, disposing a CTS another path is using or leaking
         // the previous one when it's replaced.
         private readonly object _reconnectLock = new();
-        private bool _disposed;
+        private volatile bool _disposed; // SH-L116
 
         public IMessageProducer Producer => _producer;
         public IMessageConsumer Consumer => _consumer;

@@ -14,7 +14,7 @@ namespace Birko.EventBus.Enrichment
         {
             if (context.CorrelationGuid == null)
             {
-                context.CorrelationGuid = @event is EventBase eb && eb.CorrelationGuid.HasValue
+                context.CorrelationGuid = @event is ICorrelatedEvent eb && eb.CorrelationGuid.HasValue // TASK-174 (SH-L124): any correlated event
                     ? eb.CorrelationGuid
                     : Guid.NewGuid();
             }

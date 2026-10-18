@@ -7,7 +7,7 @@ namespace Birko.EventBus
     /// Base record for events. Provides EventId, OccurredAt, CorrelationId, and Source.
     /// Derive concrete events as sealed records for immutability.
     /// </summary>
-    public abstract record EventBase : IEvent
+    public abstract record EventBase : ICorrelatedEvent
     {
         /// <summary>
         /// Default clock used when no explicit provider is supplied.

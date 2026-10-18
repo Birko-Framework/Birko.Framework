@@ -23,7 +23,7 @@ namespace Birko.MessageQueue.Mqtt
         // first, which stopped receiving while its subscription still reported IsActive.
         private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, Func<QueueMessage, CancellationToken, Task>>> _handlers = new();
         private readonly object _handlersLock = new(); // adding to and emptying a filter's handlers are one step each
-        private bool _disposed;
+        private volatile bool _disposed; // SH-L116
         private bool _eventAttached;
         private readonly object _eventAttachLock = new(); // CR-M203: guards the _eventAttached check-and-set
 
@@ -145,7 +145,7 @@ namespace Birko.MessageQueue.Mqtt
         /// <summary>
         /// SH-M107: the options MQTT cannot honour are refused instead of dropped. Acknowledgement is the protocol's (QoS),
         /// so ManualAck has nothing to drive; a subscription receives only what is published after it, so FromBeginning
-        /// cannot be met; and a consumer group is not part of this transport. PrefetchCount has no effect and is ignored.
+        /// cannot be met; a consumer group is not part of this transport; and PrefetchCount is not bounded (SH-L110).
         /// </summary>
         private static void RefuseUnsupported(ConsumerOptions? options)
         {
@@ -156,6 +156,7 @@ namespace Birko.MessageQueue.Mqtt
                 throw new NotSupportedException("An MQTT subscription receives only messages published after it; FromBeginning is not supported.");
             if (options.GroupId != null)
                 throw new NotSupportedException("The MQTT transport has no consumer groups; GroupId is not supported.");
+            TransportSupport.RefusePrefetch(options, "MQTT"); // SH-L110
         }
 
         /// <summary>
@@ -261,7 +262,8 @@ namespace Birko.MessageQueue.Mqtt
                 {
                     try
                     {
-                        await handler(message, CancellationToken.None).ConfigureAwait(false);
+                        // SH-L105: each handler gets its own copy, so one handler's change does not reach the next.
+                        await handler(message.Copy(), CancellationToken.None).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {

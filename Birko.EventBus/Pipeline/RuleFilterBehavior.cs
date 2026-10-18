@@ -21,7 +21,8 @@ public class RuleFilterBehavior : IEventPipelineBehavior
     /// </summary>
     public RuleFilterBehavior(RuleSet ruleSet, IRuleEvaluator? evaluator = null)
     {
-        _ruleSet = ruleSet;
+        // SH-L126: refused at wiring time; a null rule set surfaced as an NRE inside an unrelated publish.
+        _ruleSet = ruleSet ?? throw new ArgumentNullException(nameof(ruleSet));
         _evaluator = evaluator ?? new RuleEvaluator();
     }
 
@@ -34,7 +35,7 @@ public class RuleFilterBehavior : IEventPipelineBehavior
         Func<IEvent, EventContext, IRuleContext> contextFactory,
         IRuleEvaluator? evaluator = null)
     {
-        _ruleSet = ruleSet;
+        _ruleSet = ruleSet ?? throw new ArgumentNullException(nameof(ruleSet)); // SH-L126
         _evaluator = evaluator ?? new RuleEvaluator();
         _contextFactory = contextFactory;
     }

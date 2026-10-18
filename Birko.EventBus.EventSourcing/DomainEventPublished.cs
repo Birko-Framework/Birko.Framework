@@ -23,12 +23,12 @@ namespace Birko.EventBus.EventSourcing
         /// <summary>
         /// The domain event type descriptor (e.g., "Created", "Updated", "Deleted").
         /// </summary>
-        public string DomainEventType { get; init; } = null!;
+        public string DomainEventType { get; init; } = string.Empty; // SH-L125: the parameterless ctor left it null
 
         /// <summary>
         /// The serialized event data from the domain event.
         /// </summary>
-        public string EventData { get; init; } = null!;
+        public string EventData { get; init; } = string.Empty; // SH-L125
 
         /// <summary>
         /// Optional metadata from the domain event.

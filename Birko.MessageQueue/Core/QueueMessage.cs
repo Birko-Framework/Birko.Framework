@@ -38,6 +38,24 @@ namespace Birko.MessageQueue
         public TimeSpan? Delay { get; set; }
 
         /// <summary>
+        /// A copy that shares no mutable state with this message, headers included (SH-L105: a transport handing one
+        /// instance to several handlers let one handler's change reach the next).
+        /// </summary>
+        public QueueMessage Copy()
+        {
+            var copy = (QueueMessage)MemberwiseClone();
+            copy.Headers = new MessageHeaders
+            {
+                CorrelationId = Headers.CorrelationId,
+                ReplyTo = Headers.ReplyTo,
+                ContentType = Headers.ContentType,
+                GroupId = Headers.GroupId,
+                Custom = new System.Collections.Generic.Dictionary<string, string>(Headers.Custom),
+            };
+            return copy;
+        }
+
+        /// <summary>
         /// Optional message expiration (time-to-live).
         /// </summary>
         public TimeSpan? TimeToLive { get; set; }

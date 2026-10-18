@@ -17,12 +17,12 @@ namespace Birko.EventBus.MessageQueue
         /// <summary>
         /// Assembly-qualified type name of the event (for deserialization).
         /// </summary>
-        public string EventType { get; set; } = null!;
+        public string EventType { get; set; } = string.Empty; // SH-L125: a missing field deserializes to this, never to a null typed as non-null
 
         /// <summary>
         /// Source module or component that raised the event.
         /// </summary>
-        public string Source { get; set; } = null!;
+        public string Source { get; set; } = string.Empty; // SH-L125: a missing field deserializes to this, never to a null typed as non-null
 
         /// <summary>
         /// When the event occurred (UTC).
@@ -42,7 +42,7 @@ namespace Birko.EventBus.MessageQueue
         /// <summary>
         /// Serialized event payload (JSON).
         /// </summary>
-        public string Payload { get; set; } = null!;
+        public string Payload { get; set; } = string.Empty; // SH-L125: a missing field deserializes to this, never to a null typed as non-null
 
         /// <summary>
         /// Additional metadata headers.

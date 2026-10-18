@@ -37,10 +37,9 @@ namespace Birko.EventBus.MessageQueue
             });
             services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<DistributedEventBus>());
 
-            if (options.AutoSubscribe)
-            {
-                services.AddSingleton<IHostedService, DistributedEventBusHostedService>();
-            }
+            // SH-L112: always registered; StartAsync reads AutoSubscribe when the host starts, so a change to the
+            // registered options before then is honoured. Deciding here, at registration, ignored it.
+            services.AddSingleton<IHostedService, DistributedEventBusHostedService>();
 
             return services;
         }

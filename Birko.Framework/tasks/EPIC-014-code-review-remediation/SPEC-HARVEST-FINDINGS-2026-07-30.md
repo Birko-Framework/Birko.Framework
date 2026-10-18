@@ -5113,11 +5113,15 @@ Calling AddTagService twice (a common outcome when two composition-root modules 
 
 `../Birko.MessageQueue.Redis/RedisConsumer.cs:31`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). `RedisConsumer.PollError` is public. Red on HEAD (reflection on the accessor).
+
 `internal event EventHandler<Exception>? PollError` — application code in another assembly cannot subscribe. Both the per-iteration fault path (line 280) and the loop-terminating path (line 178) report exclusively through it, so a serializer exception on every entry, or a subscription that died at startup, produces no observable signal; the only detection is polling RedisSubscription.IsActive. MqttConsumer exposes the equivalent hook (OnHandlerError) publicly.
 
 #### SH-L103 — Redis TTL check never expires an entry written by a foreign producer
 
 `../Birko.MessageQueue.Redis/RedisConsumer.cs:311`
+
+**Verdict: CONFIRMED, fixed** (TASK-174). With no `created_at`, `CreatedAt` comes from the stream id's millisecond part (Redis's append time), so a TimeToLive expires a foreign producer's entry. Red on HEAD live (an entry appended at id 1000-0 with a 1 s TTL was delivered).
 
 The expiry test is `DateTimeOffset.UtcNow - message.CreatedAt > ttlMs`. In the field-fallback parse path (ParseStreamEntry line 451) CreatedAt is only set when a `created_at` field is present; otherwise QueueMessage's initializer stamps DateTimeOffset.UtcNow at PARSE time, making elapsed ≈ 0. An entry carrying ttl_ms but no created_at is therefore treated as fresh no matter how old it is.
 
@@ -5125,11 +5129,15 @@ The expiry test is `DateTimeOffset.UtcNow - message.CreatedAt > ttlMs`. In the f
 
 `../Birko.MessageQueue.Redis/RedisConsumer.cs:60`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). `SubscribeAsync` is no longer `async` (returns `Task.FromResult`), and its remarks say the poll loop and group creation start in the background, with failures retried or reported through the now-public `PollError` (SH-L102). No test: the observable contract did not change.
+
 Declared `async Task<ISubscription>` but contains no await (CS1998), and it fires the poll loop with `_ = Task.Run(...)` at line 96. The awaited call completes before EnsureConsumerGroupAsync has run, so the caller cannot know when the consumer group exists or the loop is polling; a group-creation failure surfaces only later through the internal PollError.
 
 #### SH-L105 — MQTT dispatch shares one mutable QueueMessage instance across every matching filter
 
 `../Birko.MessageQueue.MQTT/MqttConsumer.cs:202`
+
+**Verdict: CONFIRMED, fixed** (TASK-174). Each MQTT handler gets `QueueMessage.Copy()` (headers included). Red on HEAD with an order-independent test (each handler records, then mutates); the first version of the test depended on dispatch order and passed on HEAD, so it was rewritten.
 
 OnMessageReceivedAsync builds one QueueMessage (line 168) and passes that same reference to every filter whose pattern matches, sequentially. A handler that mutates Headers.Custom, Body or PayloadType changes what the next handler sees, and the reused Id means two handlers cannot be distinguished for ack tracking.
 
@@ -5137,11 +5145,15 @@ OnMessageReceivedAsync builds one QueueMessage (line 168) and passes that same r
 
 `../Birko.MessageQueue.MQTT/MqttSettings.cs:146`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). `MqttSettings.LoadFrom(Settings)` falls back to `base.LoadFrom(data)` for other settings. Red on HEAD.
+
 `public override void LoadFrom(Settings data) { if (data is MqttSettings mqttData) LoadFrom(mqttData); }` — no else branch and no call to base.LoadFrom(data). Passing a plain Settings (or any non-MQTT descendant) copies not even Location/Name, and the call reports success, so a configuration load that silently did nothing is indistinguishable from one that worked.
 
 #### SH-L107 — MqttSettings host constructor passes null! into non-nullable RemoteSettings parameters
 
 `../Birko.MessageQueue.MQTT/MqttSettings.cs:98`
+
+**Verdict: CONFIRMED, fixed** (TASK-174). The host constructor passes `string.Empty`; credentials are checked with `IsNullOrEmpty`, so nothing else changes. Red on HEAD.
 
 `: base(host, null!, username ?? null!, password ?? null!, port, useSsl)` forces three nulls through parameters the base declares non-nullable. The project bans CS8600-CS8625; this suppresses the diagnostic rather than fixing it, and any base-class code dereferencing Name/UserName/Password now NREs at a call site the compiler was told was safe.
 
@@ -5149,11 +5161,15 @@ OnMessageReceivedAsync builds one QueueMessage (line 168) and passes that same r
 
 `../Birko.MessageQueue/Core/QueueMessage.cs:43`
 
+**Verdict: CONFIRMED, fixed by refusal** (TASK-174; decided by the user 2026-10-18: refuse until implemented, then implement in [[TASK-668]]). A `TimeToLive` is refused on MQTT and in-memory (`TransportSupport.RefuseTimeToLive`); Redis honours it. Red on HEAD: 2 tests.
+
 Grep shows TimeToLive is read only in RedisProducer.cs:61-64 (written as ttl_ms) and enforced only in RedisConsumer.ProcessEntryAsync. The in-memory channel and MQTT producer/consumer ignore it entirely, so an expired message is still delivered to handlers on two of the three backends with no indication the TTL was dropped.
 
 #### SH-L109 — QueueMessage.Priority is parsed but never affects ordering on any backend
 
 `../Birko.MessageQueue/Core/QueueMessage.cs:48`
+
+**Verdict: CONFIRMED, fixed by refusal** (TASK-174; decided by the user 2026-10-18: refuse until implemented, then implement in [[TASK-668]]). A non-zero `Priority` is refused on all three transports. Red on HEAD: 3 tests. Two Redis producer tests that set a priority only to check the round-trip now use 0.
 
 Documented as "higher = more urgent". Grep finds exactly one read in the area: RedisConsumer.cs:489, which copies it back onto the parsed message. The in-memory bounded channel is strict FIFO, Redis streams are append-ordered and MQTT drops the field, so a caller setting Priority = 10 gets ordinary FIFO delivery. Dead configuration.
 
@@ -5161,11 +5177,15 @@ Documented as "higher = more urgent". Grep finds exactly one read in the area: R
 
 `../Birko.MessageQueue/Core/ConsumerOptions.cs:17`
 
+**Verdict: CONFIRMED, fixed by refusal** (TASK-174; decided by the user 2026-10-18: refuse until implemented, then implement in [[TASK-668]]). A non-default `PrefetchCount` is refused at subscribe on all three transports (MQTT no longer ignores it, a TASK-155 note reversed). Red on HEAD: 3 tests.
+
 Grep over Birko.MessageQueue*, Birko.EventBus* finds only the declaration. In-memory dispatches one message at a time from the channel, Redis uses RedisStreamSettings.ReadCount instead, and MQTT ignores ConsumerOptions wholesale. The documented "maximum number of unacknowledged messages" is enforced nowhere.
 
 #### SH-L111 — MessageHeaders.ReplyTo and GroupId are never read by any producer or consumer
 
 `../Birko.MessageQueue/Core/MessageHeaders.cs:18`
+
+**Verdict: CONFIRMED-NARROWER, kept** (TASK-174, decided by the user). Every producer carries the headers on the wire, so ReplyTo / GroupId are available to an application (request-reply over ReplyTo works today); what is absent is built-in request-reply and per-group ordering, which nothing promises beyond the property docs. No change.
 
 ReplyTo is documented for the "request-reply pattern" and GroupId (line 28) for "ordered delivery within a group". Grep finds no read of either outside the declarations; the three producers copy Headers wholesale onto the wire and no consumer inspects them. Both are dead configuration promising delivery semantics the area does not implement.
 
@@ -5173,11 +5193,15 @@ ReplyTo is documented for the "request-reply pattern" and GroupId (line 28) for 
 
 `../Birko.EventBus.MessageQueue/DistributedEventBusServiceCollectionExtensions.cs:36`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). The hosted service is always registered; `StartAsync` reads `AutoSubscribe`, so a change to the registered options before start is honoured. Red on HEAD; the CR-L258 test pinning "not registered when false" was inverted.
+
 `if (options.AutoSubscribe) services.AddSingleton<IHostedService, DistributedEventBusHostedService>();` runs against the local options object during registration. The same instance is registered as a singleton (line 27), so a consumer that later resolves DistributedEventBusOptions and sets AutoSubscribe = true gets no hosted service at all and silently receives nothing, while StartAsync's own AutoSubscribe check (hosted service line 31) implies the flag is honoured at runtime.
 
 #### SH-L113 — x-delivery-count is never produced, so EventContext.DeliveryCount is always 1
 
 `../Birko.EventBus.MessageQueue/DistributedEventBus.cs:171`
+
+**Verdict: CONFIRMED, fixed** (TASK-174). Redis's reclaim path reads the entry's delivery count from the PEL (`XPENDING`) and sets `x-delivery-count`; an in-memory requeue increments it. MQTT still reports 1 (it has no redelivery count). Red on HEAD: Redis live and in-memory.
 
 The delivery callback reads Headers.Custom["x-delivery-count"] to populate DeliveryCount, but grep over the whole framework finds no writer of that key — none of the in-memory, MQTT or Redis producers or consumers sets it. A handler (or RuleFilterBehavior, which exposes DeliveryCount in its rule context at RuleFilterBehavior.cs:68) can never distinguish a first attempt from a redelivery, even on Redis where redelivery genuinely happens.
 
@@ -5185,11 +5209,15 @@ The delivery callback reads Headers.Custom["x-delivery-count"] to populate Deliv
 
 `../Birko.EventBus.MessageQueue/DistributedEventBusOptions.cs:35`
 
+**Verdict: CONFIRMED, fixed by refusal** (TASK-174; decided by the user 2026-10-18: refuse until implemented, then implement in [[TASK-668]]). `DistributedEventBusOptions.RetryPolicy` / `DeadLetterOptions` default to null and a non-null value is refused by the bus constructor. Red on HEAD. Noted for TASK-668: the option's `RetryPolicy` resolves to `Birko.RetryPolicy` (Contracts), not `Birko.MessageQueue.Retry.RetryPolicy`, despite the `using`.
+
 Both default to non-null values (RetryPolicy.Default, new DeadLetterOptions{Enabled=true}) and their XML docs admit the bus does not read them. Nor does any in-area transport: grep finds no read of RetryPolicy.GetDelay or DeadLetterOptions.GetDeadLetterDestination anywhere. The defaults advertise 3 retries and an enabled DLQ that, for the in-memory and MQTT backends, do not exist at all.
 
 #### SH-L115 — DistributedEventSubscription.Dispose guard is a non-atomic bool, unlike the in-process one
 
 `../Birko.EventBus.MessageQueue/DistributedEventBus.cs:302`
+
+**Verdict: CONFIRMED, fixed** (TASK-174). `DistributedEventSubscription`, `InMemorySubscription` and `RedisSubscription` release with `Interlocked.Exchange`, as `InProcessEventSubscription` and (since TASK-155) `MqttSubscription`. The concurrent-dispose test passes on HEAD too (the race did not reproduce): a pin.
 
 `if (!_isActive) return; _isActive = false; _unsubscribe();` on a plain non-volatile bool. Two concurrent Dispose calls can both pass and both invoke the unsubscribe action. InProcessEventSubscription was fixed for exactly this under CR-L250 using Interlocked.Exchange (InProcessEventBus.cs:235); the same guard in InMemorySubscription, MqttSubscription and RedisSubscription was left unconverted, so four subscription types diverge on one contract.
 
@@ -5197,11 +5225,15 @@ Both default to non-null values (RetryPolicy.Default, new DeadLetterOptions{Enab
 
 `../Birko.EventBus.MessageQueue/DistributedEventBus.cs:29`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). `_disposed` is volatile in RedisConsumer, MqttConsumer, MqttMessageQueue, InMemoryConsumer, InMemoryChannel, OutboxEventBus and InProcessEventBus; DistributedEventBus's Dispose / DisposeAsync race to one teardown through `Interlocked.Exchange`. By inspection (a memory-model race).
+
 `private bool _disposed;` is read by ObjectDisposedException.ThrowIf in PublishAsync/Subscribe/SubscribeToTransportAsync and written by Dispose/DisposeAsync with no volatile or lock. Same pattern in InProcessEventBus.cs:24, OutboxEventBus.cs:21, InMemoryChannel.cs:18, MqttConsumer.cs:23, MqttMessageQueue.cs:27, RedisConsumer.cs:23. Dispose and DisposeAsync can also both pass the `if (_disposed) return` check and each unsubscribe every queue subscription.
 
 #### SH-L117 — Parallel dispatch swallows a handler's OperationCanceledException even in Continue mode
 
 `../Birko.EventBus/Local/InProcessEventBus.cs:180`
+
+**Verdict: CONFIRMED, fixed** (TASK-174). The parallel dispatch swallows an OperationCanceledException only when its own Stop-mode token source was cancelled, so a handler's own cancellation in Continue mode is reported. Red on HEAD.
 
 `catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)` is meant to absorb the follow-on cancellation from Stop-mode's cts.Cancel(). In Continue mode cts.Cancel() is never called, so the filter instead absorbs a genuine OCE thrown by a handler's own internal timeout: OnHandlerError is not invoked, firstStopError is not set, and the failure is completely unobservable. The sequential path (line 141) reports the same exception through OnHandlerError.
 
@@ -5209,11 +5241,15 @@ Both default to non-null values (RetryPolicy.Default, new DeadLetterOptions{Enab
 
 `../Birko.EventBus/Local/InProcessEventBus.cs:86`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). Subscribe and Dispose share a lifecycle lock, and an issued handle reports inactive once the bus is disposed. Red on HEAD.
+
 Subscribe does `_subscriptions.GetOrAdd(eventType, _ => [])` and closes over the returned List. Dispose (line 211) calls _subscriptions.Clear() with no synchronisation against that. A Subscribe that obtained the list just before the Clear adds its handler to a list no longer reachable from the dictionary, so GetHandlers never finds it — yet the returned IEventSubscription reports IsActive == true. Previously-issued handles also keep reporting IsActive after Dispose.
 
 #### SH-L119 — OutboxProcessor re-resolves and re-closes the generic PublishAsync via reflection for every entry
 
 `../Birko.EventBus.Outbox/Publishing/OutboxProcessor.cs:154`
+
+**Verdict: CONFIRMED, fixed** (TASK-174). The closed `PublishAsync` is cached per event type. Pinned (behaviour unchanged).
 
 PublishEventAsync calls typeof(IEventBus).GetMethod(nameof(PublishAsync)).MakeGenericMethod(@event.GetType()) for each of up to BatchSize (default 100) entries per poll (default every 5 s), with no per-type cache. MakeGenericMethod plus Invoke per entry dominates the loop's cost and is trivially cacheable in a ConcurrentDictionary<Type, MethodInfo>.
 
@@ -5221,11 +5257,15 @@ PublishEventAsync calls typeof(IEventBus).GetMethod(nameof(PublishAsync)).MakeGe
 
 `../Birko.EventBus.Outbox/Publishing/OutboxEventBus.cs:75`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). `OutboxEventBus.Subscribe` throws `ObjectDisposedException` after Dispose. Red on HEAD.
+
 PublishAsync guards with ObjectDisposedException.ThrowIf(_disposed, this) but Subscribe does not, and Dispose (line 93) disposes the inner bus. Calling Subscribe after Dispose forwards to a disposed InProcessEventBus/DistributedEventBus, whose own guard throws ObjectDisposedException naming the INNER type — a confusing error; for an inner implementation without a guard, a silently dead subscription.
 
 #### SH-L121 — InMemoryOutboxStore marks an unknown entry id as a silent success
 
 `../Birko.EventBus.Outbox/Stores/InMemoryOutboxStore.cs:70`
+
+**Verdict: CONFIRMED-NARROWER, waived** (TASK-174). `SqlOutboxStore` (lines ~169/192) also returns silently for an unknown id, `IOutboxStore` declares no result, and `CleanupAsync` removes only Published / Failed entries, so a claimed (Publishing) entry cannot vanish between claim and mark. The reason is recorded in `InMemoryOutboxStore`.
 
 MarkPublishedAsync and MarkFailedAsync (line 82) both do `if (_entries.TryGetValue(...))` with no else, returning Task.CompletedTask either way, and IOutboxStore declares no return value. The caller cannot distinguish "marked published" from "the entry vanished": an entry removed by a concurrent CleanupAsync, or a wrong id from a store bug, is reported as published and the processor counts it as processed.
 
@@ -5233,11 +5273,15 @@ MarkPublishedAsync and MarkFailedAsync (line 82) both do `if (_entries.TryGetVal
 
 `../Birko.EventBus.Outbox/Stores/InMemoryOutboxStore.cs:98`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). Mark*, Cleanup and GetAll take the store's claim lock. Pinned (a race test cannot fail deterministically).
+
 GetPendingAsync mutates Status/ClaimedAt on shared OutboxEntry objects under _claimLock, but CleanupAsync (98) and GetAll (117) enumerate _entries.Values and read those same fields with no lock, and MarkPublishedAsync/MarkFailedAsync mutate them unlocked too. A cleanup pass concurrent with a claim can observe a torn Status/CreatedAt pair; the returned entries are also live references the caller can mutate.
 
 #### SH-L123 — Outbox timestamps bypass IDateTimeProvider while the processor's cutoff uses it
 
 `../Birko.EventBus.Outbox/Core/OutboxEntry.cs:59`
+
+**Verdict: CONFIRMED, fixed** (TASK-174). `InMemoryOutboxStore` and `OutboxEventBus` take an optional `IDateTimeProvider` (trailing parameter, existing callers unaffected) for CreatedAt, ClaimedAt, PublishedAt and staleness. Red on HEAD (with the clock parameters stubbed as ignored).
 
 OutboxEntry.CreatedAt initialises from DateTime.UtcNow and InMemoryOutboxStore uses DateTime.UtcNow for ClaimedAt/PublishedAt (lines 44, 75), while OutboxProcessor computes its retention cutoff from the injected IDateTimeProvider (OutboxProcessor.cs:128) and EventBase uses the replaceable DefaultClock. With a TestDateTimeProvider the two clocks disagree, so retention and stale-claim reclaim cannot be exercised deterministically and a shifted clock prunes or spares the wrong rows.
 
@@ -5245,11 +5289,15 @@ OutboxEntry.CreatedAt initialises from DateTime.UtcNow and InMemoryOutboxStore u
 
 `../Birko.EventBus/Core/EventContext.cs:51`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). New `ICorrelatedEvent`, implemented by `EventBase`; `EventContext.From` reads correlation from any event implementing it. Red on HEAD.
+
 `CorrelationId = @event is EventBase eb ? eb.CorrelationId : null`. IEventBus and IEventHandler are constrained on IEvent, not EventBase, so a legitimate event implementing IEvent directly — even one declaring its own CorrelationId — is silently assigned a null correlation. CorrelationEventEnricher then generates a fresh Guid (CorrelationEventEnricher.cs:19), so the trace is broken rather than obviously missing.
 
 #### SH-L125 — null! is used for properties the deserialization paths genuinely leave null
 
 `../Birko.EventBus/Core/EventContext.cs:20`
+
+**Verdict: CONFIRMED, fixed** (TASK-174). `= null!` replaced by `string.Empty` on EventContext.Source, EventEnvelope.EventType / Source / Payload, OutboxEntry.EventType / Payload / Source and DomainEventPublished.DomainEventType / EventData. Red on HEAD: 2 tests.
 
 EventContext.Source, EventEnvelope.EventType/Source/Payload (EventEnvelope.cs:20,25,45), OutboxEntry.EventType/Payload/Source (OutboxEntry.cs:24,29,34) and DomainEventPublished.DomainEventType/EventData (DomainEventPublished.cs:26,31) are all `= null!`. DomainEventPublished has an explicit parameterless deserialization ctor (line 70) leaving both null, and a JSON envelope missing a field deserializes to null too — the `!` asserts non-null on values the code path is documented to leave null.
 
@@ -5257,11 +5305,15 @@ EventContext.Source, EventEnvelope.EventType/Source/Payload (EventEnvelope.cs:20
 
 `../Birko.EventBus/Pipeline/RuleFilterBehavior.cs:22`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). Both `RuleFilterBehavior` constructors throw `ArgumentNullException` for a null rule set. Red on HEAD.
+
 Both constructors assign `_ruleSet = ruleSet` with no ArgumentNullException guard (contrast DeduplicationBehavior.cs:18). A null rule set surfaces as a NullReferenceException inside HandleAsync at `_ruleSet.IsEnabled` (line 44) — i.e. inside the pipeline during a publish, aborting the publish of an unrelated event rather than failing at wiring time.
 
 #### SH-L127 — InMemoryDeduplicationStore grows without bound when only MarkProcessedAsync is used
 
 `../Birko.EventBus/Deduplication/InMemoryDeduplicationStore.cs:41`
+
+**Verdict: CONFIRMED, fixed** (TASK-174). `MarkProcessedAsync` runs the TTL sweep too. Red on HEAD.
 
 CleanupIfNeeded is invoked from ExistsAsync (37) and TryMarkProcessedAsync (53) but not from MarkProcessedAsync, a first-class IDeduplicationStore member. A caller using the documented Exists/Mark pair without ever hitting TryMark never triggers the TTL sweep, so the ConcurrentDictionary retains every event id for the process lifetime despite the configured TTL.
 
@@ -5269,17 +5321,23 @@ CleanupIfNeeded is invoked from ExistsAsync (37) and TryMarkProcessedAsync (53) 
 
 `../Birko.EventBus/Routing/DefaultTopicConvention.cs:30`
 
+**Verdict: CONFIRMED-NARROWER, documented** (TASK-174). Routing uses `GetTopic(Type)` by design: a subscription has only the type, so a per-instance topic could not be subscribed to. The XML docs on `ITopicConvention.GetTopic(IEvent)` and `DefaultTopicConvention` now say the instance overload does not decide routing. No behaviour change.
+
 GetTopic(IEvent) returns "{source}.{kebab-name}" — a different topic from GetTopic(Type)'s "events.{kebab-name}". DistributedEventBus routes publishes with GetTopic(@event.GetType()) (DistributedEventBus.cs:81) and subscribes with GetTopic(typeof(TEvent)) (line 143), so the instance overload never decides routing. A consumer implementing ITopicConvention.GetTopic(IEvent) for per-source routing has it silently ignored.
 
 #### SH-L129 — AttributeTopicConvention.GetTopic(IEvent) bypasses its own cache on the attribute-less path
 
 `../Birko.EventBus/Routing/AttributeTopicConvention.cs:33`
 
+**Verdict: CONFIRMED, fixed** (TASK-174). The attribute-less instance path is cached per type. Pinned (results unchanged).
+
 The instance overload calls type.GetCustomAttribute<TopicAttribute>() on every invocation before deciding, and for the common attribute-less case delegates to _fallback.GetTopic(@event), which never touches _cache. The ConcurrentDictionary added to avoid per-publish reflection therefore does nothing for the instance path — a reflection lookup per publish, the exact cost CR-L253 removed on the sibling convention.
 
 #### SH-L130 — InMemoryChannel drops in-flight messages and disposes a CTS the dispatch loop still holds
 
 `../Birko.MessageQueue.InMemory/InMemoryChannel.cs:119`
+
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-174). `RemoveSubscriber` only cancels; the dispatch loop disposes its own token source when it stops, so a handler still running is never handed a disposed source. The "lost" message is one the loop had taken when the last subscriber left, so there is no one to deliver it to (in-memory delivery is at-most-once). By inspection.
 
 When the last subscriber leaves, RemoveSubscriber calls cts.Cancel() then cts.Dispose() immediately while the dispatch loop may be awaiting handler(message, ct) at line 147. The message the loop already drained from the channel is neither delivered to the remaining subscribers nor written back, so it is lost with no record; and a handler passing that disposed token to an API requiring registration sees ObjectDisposedException rather than clean cancellation.
 

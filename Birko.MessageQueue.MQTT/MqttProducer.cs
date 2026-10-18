@@ -40,6 +40,11 @@ namespace Birko.MessageQueue.Mqtt
             {
                 throw new NotSupportedException("The MQTT transport cannot delay a message; send it without Delay, or delay it before sending.");
             }
+            if (message != null)
+            {
+                TransportSupport.RefuseTimeToLive(message, "MQTT"); // SH-L108
+                TransportSupport.RefusePriority(message, "MQTT");   // SH-L109
+            }
 
             ObjectDisposedException.ThrowIf(_disposed, this);
 

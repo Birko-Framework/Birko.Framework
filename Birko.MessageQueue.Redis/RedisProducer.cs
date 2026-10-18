@@ -41,6 +41,10 @@ namespace Birko.MessageQueue.Redis
             {
                 throw new NotSupportedException("The Redis transport cannot delay a message; send it without Delay, or delay it before sending.");
             }
+            if (message != null)
+            {
+                TransportSupport.RefusePriority(message, "Redis"); // SH-L109
+            }
 
             ObjectDisposedException.ThrowIf(_disposed, this);
             cancellationToken.ThrowIfCancellationRequested(); // CR-M206: StackExchange.Redis has no per-call token; gate on entry

@@ -95,7 +95,8 @@ namespace Birko.MessageQueue.Mqtt
         /// <param name="password">The authentication password.</param>
         /// <param name="useSsl">Whether to use TLS.</param>
         public MqttSettings(string host, int port = 1883, string? username = null, string? password = null, bool useSsl = false)
-            : base(host, null!, username ?? null!, password ?? null!, port, useSsl)
+            // SH-L107: empty, not null! — the base declares these non-nullable; no credentials is IsNullOrEmpty either way.
+            : base(host, string.Empty, username ?? string.Empty, password ?? string.Empty, port, useSsl)
         {
         }
 
@@ -148,7 +149,12 @@ namespace Birko.MessageQueue.Mqtt
             if (data is MqttSettings mqttData)
             {
                 LoadFrom(mqttData);
+                return;
             }
+
+            // SH-L106: any other settings still contribute what they carry (location, name, credentials); this copied
+            // nothing and reported success.
+            base.LoadFrom(data);
         }
 
         #endregion

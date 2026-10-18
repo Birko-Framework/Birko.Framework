@@ -145,8 +145,10 @@ require each concrete event to supply `Source` via an abstract override.
 ### Requirement: EventContext construction from an event
 
 The system SHALL build an `EventContext` from an `IEvent` via `EventContext.From`, copying `EventGuid`
-and `Source`, copying `CorrelationGuid` **only when the event is an `EventBase`** (otherwise null),
-defaulting `DeliveryCount` to 1 and `Metadata` to an empty dictionary when none is supplied.
+and `Source`, copying `CorrelationGuid` from any event that implements `ICorrelatedEvent`
+(`Guid? CorrelationGuid`, implemented by `EventBase`; otherwise null), defaulting `DeliveryCount` to 1
+and `Metadata` to an empty dictionary when none is supplied. `EventContext.Source` SHALL default to
+`string.Empty`, never null.
 
 #### Scenario: Event derives from EventBase with a correlation id
 
@@ -156,10 +158,17 @@ defaulting `DeliveryCount` to 1 and `Metadata` to an empty dictionary when none 
 
 #### Scenario: Event implements IEvent directly
 
-- **Given** a type that implements `IEvent` without deriving from `EventBase`, even if it declares its
-  own `CorrelationGuid` property
+- **Given** a type that implements `IEvent` and `ICorrelatedEvent` without deriving from `EventBase`
 - **When** `EventContext.From(@event)` is called
-- **Then** `context.CorrelationGuid` is null
+- **Then** `context.CorrelationGuid` equals the event's `CorrelationGuid`; a type implementing only
+  `IEvent` yields null (SH-L124; only an `EventBase` was read, so a direct `IEvent` implementation's
+  correlation id was dropped)
+
+#### Scenario: Context constructed without a source
+
+- **Given** an `EventContext` created without setting `Source`
+- **When** `Source` is read
+- **Then** it is `string.Empty` (SH-L125; it was declared `null!` and read null)
 
 #### Scenario: Tenant is never inferred
 
@@ -277,7 +286,10 @@ handler (`ErrorHandlingMode.Continue`, the default) or rethrow and abandon the r
 The system SHALL, when `MaxConcurrency > 1`, launch all handler tasks eagerly gated by a
 `SemaphoreSlim(MaxConcurrency)`, and in `ErrorHandlingMode.Stop` cancel a linked
 `CancellationTokenSource` on the first handler failure so queued handlers abort, finally rethrowing
-the first captured failure via `ExceptionDispatchInfo` after `Task.WhenAll`.
+the first captured failure via `ExceptionDispatchInfo` after `Task.WhenAll`. An
+`OperationCanceledException` SHALL be swallowed only when that Stop-mode token source was cancelled
+(and the caller's token was not); any other handler failure, including a handler's own
+`OperationCanceledException`, SHALL be handled as a failure.
 
 #### Scenario: Four handlers with MaxConcurrency 2
 
@@ -301,10 +313,23 @@ the first captured failure via `ExceptionDispatchInfo` after `Task.WhenAll`.
 - **Then** the `OperationCanceledException` is **not** swallowed (the filter requires
   `!cancellationToken.IsCancellationRequested`) and surfaces from `Task.WhenAll`
 
+#### Scenario: A handler throws its own OperationCanceledException in Continue mode
+
+- **Given** `MaxConcurrency > 1`, `ErrorHandling = Continue`, and a handler that throws
+  `OperationCanceledException` from an internal timeout while neither the bus's token source nor the
+  caller's token is cancelled
+- **When** the event is published
+- **Then** the failure is reported through `OnHandlerError` and the other handlers run (SH-L117; any
+  `OperationCanceledException` was swallowed unreported)
+
 ### Requirement: Event subscriptions are disposable and idempotent
 
 The system SHALL return an `IEventSubscription` from `Subscribe` that reports its `EventType` and
-`IsActive`, and whose `Dispose` removes the handler exactly once.
+`IsActive`, and whose `Dispose` removes the handler exactly once, even under concurrent calls. The
+transport subscriptions (`InMemorySubscription`, `RedisSubscription`, `MqttSubscription`) SHALL make
+`Dispose`/`UnsubscribeAsync` idempotent the same way, via `Interlocked`. `InProcessEventBus` SHALL
+serialize `Subscribe` and `Dispose`, throw `ObjectDisposedException` from `Subscribe` after disposal,
+and report `IsActive == false` on every issued subscription once the bus is disposed.
 
 #### Scenario: In-process subscription disposed twice concurrently
 
@@ -317,16 +342,30 @@ The system SHALL return an `IEventSubscription` from `Subscribe` that reports it
 
 - **Given** a `DistributedEventBus` subscription
 - **When** `Dispose()` is called from two threads simultaneously
-- **Then** the guard is a plain non-atomic `bool` check-then-set, so both callers can pass it and the
-  unsubscribe action can run twice (`List.Remove` making the second a no-op) — unlike the in-process
-  subscription
+- **Then** the unsubscribe action runs exactly once (an `Interlocked` guard, as on the in-process
+  subscription) and `IsActive` reports false (SH-L115; the guard was a plain non-atomic `bool`
+  check-then-set, so both callers could pass it and the unsubscribe action could run twice)
+
+#### Scenario: Transport subscription disposed concurrently
+
+- **Given** an `InMemorySubscription`, `RedisSubscription` or `MqttSubscription`
+- **When** `Dispose()` or `UnsubscribeAsync()` is called from two threads simultaneously
+- **Then** the teardown runs exactly once (SH-L115; a non-atomic check let both callers tear down)
 
 #### Scenario: Bus disposed while subscriptions are live
 
 - **Given** an `InProcessEventBus` with active subscriptions
 - **When** `Dispose()` is called
-- **Then** `_disposed` is set and the subscription dictionary is cleared; the previously returned
-  `IEventSubscription` handles still report `IsActive == true`
+- **Then** the subscription dictionary is cleared and the previously returned `IEventSubscription`
+  handles report `IsActive == false` (SH-L118; they still reported `IsActive == true`)
+
+#### Scenario: Subscribe races or follows disposal
+
+- **Given** an `InProcessEventBus`
+- **When** `Subscribe` is called concurrently with, or after, `Dispose()`
+- **Then** the two are serialized: a `Subscribe` after disposal throws `ObjectDisposedException`, and no
+  handler is added to a cleared bus (SH-L118; unsynchronised, a `Subscribe` could add a handler after
+  the clear and report an active subscription on a disposed bus)
 
 ### Requirement: A keyed live broadcaster never blocks the publisher and keeps each subscriber in order
 
@@ -392,8 +431,9 @@ redelivery runs the handlers again.
 ### Requirement: In-memory deduplication expiry is swept lazily under a claimed interval
 
 The system SHALL retain processed `EventGuid`s in `InMemoryDeduplicationStore` for a TTL (default 1
-hour) and SHALL sweep entries older than `now - ttl` at most once per 5-minute interval, with the
-sweep slot claimed atomically via `Interlocked.CompareExchange`.
+hour) and SHALL sweep entries older than `now - ttl` at most once per 5-minute interval, from
+`ExistsAsync`, `TryMarkProcessedAsync` and `MarkProcessedAsync`, with the sweep slot claimed atomically
+via `Interlocked.CompareExchange`.
 
 #### Scenario: Entry older than the TTL
 
@@ -414,24 +454,25 @@ sweep slot claimed atomically via `Interlocked.CompareExchange`.
 - **Then** only the thread whose `CompareExchange` succeeds performs the sweep; the others return
   immediately
 
-#### Scenario: MarkProcessedAsync does not sweep
+#### Scenario: MarkProcessedAsync also sweeps
 
 - **Given** only `MarkProcessedAsync` is ever called (never `Exists`/`TryMark`)
-- **When** entries age past the TTL
-- **Then** no cleanup ever runs — the sweep is only triggered from `ExistsAsync` and
-  `TryMarkProcessedAsync`
+- **When** entries age past the TTL and the sweep interval has elapsed
+- **Then** the next `MarkProcessedAsync` runs the sweep and the expired entries are removed (SH-L127;
+  the sweep was triggered only from `ExistsAsync` and `TryMarkProcessedAsync`, so the store grew
+  without bound)
 
 ### Requirement: Correlation enrichment fills the context but never the event
 
 The system SHALL, in `CorrelationEventEnricher`, leave a non-null `context.CorrelationGuid` untouched,
-otherwise copy the event's `EventBase.CorrelationGuid` when it has a value, and otherwise generate a
-fresh `Guid`.
+otherwise copy the `CorrelationGuid` of an event implementing `ICorrelatedEvent` (as `EventBase` does) when
+it has a value, and otherwise generate a fresh `Guid`.
 
 #### Scenario: Event carries a correlation id
 
-- **Given** an `EventBase` event with `CorrelationGuid` set and a context whose `CorrelationGuid` is null
+- **Given** an `ICorrelatedEvent` (an `EventBase`, or any event implementing the interface) with `CorrelationGuid` set and a context whose `CorrelationGuid` is null
 - **When** the enricher runs
-- **Then** the context adopts the event's value
+- **Then** the context adopts the event's value (SH-L124; only an `EventBase` was read, so a plain event's correlation was replaced by a fresh `Guid` and the trace broke)
 
 #### Scenario: Neither event nor context carries one
 
@@ -478,11 +519,20 @@ handlers.
 - **When** the default rule context is built
 - **Then** the indexer is skipped and the throwing property is omitted; construction succeeds
 
+#### Scenario: Constructed with a null rule set
+
+- **Given** a null `RuleSet`
+- **When** either `RuleFilterBehavior` constructor is invoked
+- **Then** `ArgumentNullException` is thrown naming `ruleSet` (SH-L126; one constructor accepted null and
+  the behaviour failed later with `NullReferenceException` at the first publish)
+
 ### Requirement: Topic naming for transport routing
 
 The system SHALL derive a topic from an event type by kebab-casing the type name under the `events.`
 prefix (`DefaultTopicConvention.GetTopic(Type)`), and from an event *instance* by prefixing with the
-lower-cased `Source` when it is non-empty (`GetTopic(IEvent)`).
+lower-cased `Source` when it is non-empty (`GetTopic(IEvent)`). Routing SHALL use `GetTopic(Type)`
+only; the instance overload `GetTopic(IEvent)` does not decide routing, as `ITopicConvention`
+documents.
 
 #### Scenario: Type-based topic
 
@@ -494,7 +544,9 @@ lower-cased `Source` when it is non-empty (`GetTopic(IEvent)`).
 
 - **Given** an `OrderPlaced` instance whose `Source` is `"Sales"`
 - **When** `DefaultTopicConvention.GetTopic(@event)` is called
-- **Then** the result is `"sales.order-placed"` — a different topic from the type-based form
+- **Then** the result is `"sales.order-placed"` — a different topic from the type-based form, which no
+  bus uses for routing (SH-L128; the interface did not say which overload routes, so a custom
+  convention could implement only the instance overload and see it ignored)
 
 #### Scenario: Attribute overrides the convention
 
@@ -508,7 +560,8 @@ lower-cased `Source` when it is non-empty (`GetTopic(IEvent)`).
 - **When** `AttributeTopicConvention.GetTopic(@event)` is called
 - **Then** it delegates to `DefaultTopicConvention.GetTopic(@event)` and returns the source-prefixed
   `"sales.order-placed"`, agreeing with the default convention rather than the interface's
-  type-delegating default
+  type-delegating default; whether the type carries `[Topic]` is looked up once per type and cached
+  (SH-L129; the attribute was reflected on every instance call)
 
 #### Scenario: Topic attribute constructed with null
 
@@ -530,6 +583,12 @@ envelope as a `QueueMessage` to `TopicConvention.GetTopic(@event.GetType())`.
 - **Then** one `QueueMessage` is sent to `"events.order-placed"` whose `PayloadType` is
   `typeof(EventEnvelope).AssemblyQualifiedName`, whose `Headers.CorrelationId` is the context
   correlation id as a string, and whose `Headers.ContentType` is the serializer's content type
+
+#### Scenario: Envelope constructed without values
+
+- **Given** an `EventEnvelope` created by its parameterless constructor (as a deserializer does)
+- **When** `EventType`, `Source` or `Payload` is read before being set
+- **Then** each is `string.Empty`, never null (SH-L125; they were declared `null!` and read null)
 
 #### Scenario: Publish-side pipeline is not executed
 
@@ -613,12 +672,14 @@ it SHALL throw `InvalidOperationException`, so the transport redelivers the mess
 
 #### Scenario: Delivery count header present
 
-- **Given** any message delivered over the in-memory, MQTT or Redis transport
+- **Given** a message redelivered by a Redis reclaim (`XAUTOCLAIM`) or requeued by an in-memory
+  `RejectAsync(requeue: true)`
 - **When** the message is delivered
-- **Then** `context.DeliveryCount` is 1 — the callback reads the custom header `x-delivery-count` (its
-  parsed value when present, 1 when missing or unparseable), but no producer or consumer in the
-  framework ever writes that key, so a handler cannot distinguish a redelivery from a first attempt
-  even on Redis where redelivery genuinely happens
+- **Then** `context.DeliveryCount` is the transport's count — the callback reads the custom header
+  `x-delivery-count` (its parsed value when present, 1 when missing or unparseable), which a Redis
+  reclaim sets from the entry's PEL delivery count (`XPENDING`) and an in-memory requeue increments
+  (a missing header counting as 1); a first delivery, and every MQTT delivery, reports 1 (SH-L113; no
+  producer or consumer wrote that key, so a handler could not tell a redelivery from a first attempt)
 
 #### Scenario: No handler registered for the event type
 
@@ -673,16 +734,20 @@ policy.
 
 #### Scenario: Retry options set on the bus
 
-- **Given** `DistributedEventBusOptions.RetryPolicy` and `DeadLetterOptions` are configured
-- **When** a delivery fails
-- **Then** `DistributedEventBus` never reads those properties; only transport-level configuration
-  (`ConsumerOptions`, provider settings) affects retry and dead-lettering
+- **Given** `DistributedEventBusOptions.RetryPolicy` or `DeadLetterOptions` is set to a non-null value
+  (both default to null)
+- **When** the `DistributedEventBus` is constructed
+- **Then** `NotSupportedException` is thrown; only transport-level configuration (`ConsumerOptions`,
+  provider settings) affects retry and dead-lettering (SH-L114, decided by the user: refuse until
+  implemented in TASK-668; both had non-null defaults the bus never read, so configuring them silently
+  did nothing)
 
 ### Requirement: Distributed bus disposal unsubscribes synchronously or asynchronously
 
 The system SHALL dispose each transport `ISubscription` synchronously in `Dispose()` and await
 `UnsubscribeAsync` on each in `DisposeAsync()`, clearing the manual-handler dictionary in both cases,
-and SHALL make both paths no-ops after the first.
+and SHALL make both paths no-ops after the first, `Dispose` and `DisposeAsync` racing to a single
+teardown.
 
 #### Scenario: Synchronous disposal
 
@@ -701,6 +766,13 @@ and SHALL make both paths no-ops after the first.
 - **Given** a bus already disposed
 - **When** `Dispose()` or `DisposeAsync()` is called again
 - **Then** it returns immediately without touching subscriptions
+
+#### Scenario: Dispose and DisposeAsync called concurrently
+
+- **Given** a bus with live transport subscriptions
+- **When** `Dispose()` and `DisposeAsync()` are called from two threads at once
+- **Then** exactly one of them tears the subscriptions down and the other returns (SH-L116; a
+  non-atomic flag let both pass and dispose each subscription twice)
 
 ### Requirement: Automatic transport subscription from DI-registered handlers
 
@@ -742,9 +814,10 @@ which under `ValidateScopes` threw at startup for any handler with a scoped depe
 
 The system SHALL, in `AddDistributedEventBus`, register `DistributedEventBus` as its own singleton and
 map `IEventBus` to that instance; `DistributedEventBusHostedService` SHALL take the `DistributedEventBus`
-itself in its constructor (null throwing `ArgumentNullException`), never cast the resolved `IEventBus`,
-and SHALL run the auto subscriber on `StartAsync` only when `DistributedEventBusOptions.AutoSubscribe`
-is true.
+itself in its constructor (null throwing `ArgumentNullException`), never cast the resolved `IEventBus`.
+`AddDistributedEventBus` SHALL always register `DistributedEventBusHostedService`, which SHALL read
+`DistributedEventBusOptions.AutoSubscribe` in `StartAsync` and run the auto subscriber only when it is
+true.
 
 #### Scenario: Distributed bus registered alone
 
@@ -756,8 +829,16 @@ is true.
 
 - **Given** `AddDistributedEventBus(o => o.AutoSubscribe = false)`
 - **When** the host starts
-- **Then** no `IHostedService` was registered at all, and even if constructed, `StartAsync` returns
-  immediately
+- **Then** the hosted service is registered and its `StartAsync` returns immediately without
+  subscribing
+
+#### Scenario: Options changed after registration, before start
+
+- **Given** `AddDistributedEventBus(o => o.AutoSubscribe = false)` and the registered
+  `DistributedEventBusOptions` instance later set to `AutoSubscribe = true` before the host starts
+- **When** the host starts
+- **Then** `AutoSubscriber.SubscribeAllAsync` runs (SH-L112; the hosted service was registered only when
+  `AutoSubscribe` was true at registration, so a later change was ignored)
 
 #### Scenario: Outbox decorator applied over the distributed bus
 
@@ -772,8 +853,11 @@ is true.
 
 The system SHALL, in `OutboxEventBus.PublishAsync`, run enrichers and then save an `OutboxEntry`
 (new `Guid`, the event's `EventGuid`, assembly-qualified `EventType`, serialized `Payload`, `Source`,
-context `CorrelationGuid`/`TenantGuid`, copied `Headers`, `Status = Pending`) to the `IOutboxStore`
-without invoking the inner bus, and SHALL delegate `Subscribe` to the inner bus.
+context `CorrelationGuid`/`TenantGuid`, copied `Headers`, `Status = Pending`, `CreatedAt` from the
+optional `IDateTimeProvider` passed to the constructor, else the system clock) to the `IOutboxStore`
+without invoking the inner bus, and SHALL delegate `Subscribe` to the inner bus, throwing
+`ObjectDisposedException` from both after `Dispose`. `OutboxEntry.EventType`, `Payload` and `Source`
+SHALL default to `string.Empty`, never null.
 
 #### Scenario: Event published through the outbox decorator
 
@@ -800,12 +884,34 @@ without invoking the inner bus, and SHALL delegate `Subscribe` to the inner bus.
 - **When** `Dispose()` is called
 - **Then** the inner bus is disposed as well, once
 
+#### Scenario: Subscribing after disposal
+
+- **Given** a disposed `OutboxEventBus`
+- **When** `Subscribe(handler)` is called
+- **Then** `ObjectDisposedException` naming the outbox bus is thrown (SH-L120; the call was forwarded to
+  the disposed inner bus)
+
+#### Scenario: Entry stamped by a substituted clock
+
+- **Given** an `OutboxEventBus` constructed with an `IDateTimeProvider` returning a fixed time
+- **When** an event is published
+- **Then** the saved entry's `CreatedAt` is that fixed time (SH-L123; it read `DateTime.UtcNow`, so it
+  could disagree with the processor's retention clock)
+
+#### Scenario: Entry constructed without values
+
+- **Given** an `OutboxEntry` created by its parameterless constructor
+- **When** `EventType`, `Payload` or `Source` is read before being set
+- **Then** each is `string.Empty` (SH-L125; they were declared `null!` and read null)
+
 ### Requirement: Outbox batch processing publishes, marks, and never aborts the batch on one bad entry
 
 The system SHALL, in `OutboxProcessor.ProcessBatchAsync`, fetch up to `BatchSize` pending entries,
 and for each: mark it failed when its `EventType` cannot be resolved or its payload cannot be
 deserialized to `IEvent`, otherwise publish it through the inner bus (reflectively, as the concrete
-event type) inside the scope reconstructed by `IEventScopeAccessor` and mark it published; any
+event type, through a closed `PublishAsync` `MethodInfo` built once per event type and cached —
+SH-L119; it was rebuilt for every entry) inside the scope reconstructed by `IEventScopeAccessor` and
+mark it published; any
 exception SHALL be unwrapped from `TargetInvocationException` and recorded via `MarkFailedAsync` with
 the configured `MaxAttempts`. Every entry — succeeded or failed — SHALL count toward the returned
 processed count. An `OperationCanceledException` raised while the processing token is cancelled SHALL
@@ -925,7 +1031,9 @@ breaking out on cancellation, and delaying `PollingInterval` between iterations.
 The system SHALL, in `InMemoryOutboxStore.GetPendingAsync`, under a lock: return `Publishing` entries
 whose `ClaimedAt` is null or older than the stale-claim timeout (default 5 minutes) to `Pending`, then
 take up to `batchSize` `Pending` entries ordered by `CreatedAt`, flipping each to `Publishing` with
-`ClaimedAt = now` before returning them.
+`ClaimedAt = now` before returning them. `MarkPublishedAsync`, `MarkFailedAsync`, `CleanupAsync` and
+`GetAll` SHALL take the same lock, and `now` (for `ClaimedAt`, `PublishedAt` and the staleness test) SHALL come from the optional `IDateTimeProvider` passed to the constructor, else the
+system clock.
 
 #### Scenario: Two processors poll concurrently
 
@@ -957,6 +1065,21 @@ take up to `batchSize` `Pending` entries ordered by `CreatedAt`, flipping each t
 - **Given** an id not present in the store
 - **When** `MarkPublishedAsync` or `MarkFailedAsync` is called
 - **Then** the call completes successfully with no effect
+
+#### Scenario: Marking concurrently with a claim
+
+- **Given** a processor marking an entry while another caller runs `GetPendingAsync` or `CleanupAsync`
+- **When** both touch the same entry
+- **Then** they run one after the other under the claim lock, so no entry's status, `Attempts` or
+  `ClaimedAt` is torn (SH-L122; `Mark*`, `CleanupAsync` and `GetAll` ran outside the lock)
+
+#### Scenario: Staleness judged by a substituted clock
+
+- **Given** an `InMemoryOutboxStore` constructed with an `IDateTimeProvider` and an entry claimed at that
+  clock's time
+- **When** the clock advances past the stale-claim timeout and `GetPendingAsync` runs
+- **Then** the entry is reclaimed, and `ClaimedAt`/`PublishedAt` carry that clock's times (SH-L123; the
+  store read `DateTime.UtcNow`, so a test or a host clock could not drive it)
 
 ### Requirement: Outbox DI wiring unwraps the decorator so the processor publishes through the real bus
 
@@ -1067,7 +1190,7 @@ with the domain event's `OccurredAt` and `EventGuid`; `Source` SHALL always be `
 - **Given** the parameterless constructor is used (for deserialization)
 - **When** the instance is created
 - **Then** `EventGuid`/`OccurredAt` take the `EventBase` defaults and `DomainEventType`/`EventData`
-  remain null until set
+  are `string.Empty` until set (SH-L125; they were declared `null!` and remained null until set)
 
 ### Requirement: Event replay re-publishes stored events and reports the count
 
@@ -1187,9 +1310,11 @@ being reported through `InMemoryConsumer.OnHandlerError` (a throwing hook swallo
 
 #### Scenario: Last subscriber removed then re-added
 
-- **Given** the only subscription is disposed, cancelling and disposing the dispatch CTS
+- **Given** the only subscription is disposed, so `RemoveSubscriber` cancels the dispatch CTS and the
+  stopping dispatch loop disposes it
 - **When** a new subscriber is added for that destination
-- **Then** a fresh dispatch loop is started under the lock
+- **Then** a fresh dispatch loop is started under the lock (SH-L130; `RemoveSubscriber` also disposed the
+  token source while the loop could still be reading its token)
 
 ### Requirement: Delayed send is in-memory only and best-effort
 
@@ -1237,6 +1362,47 @@ of that detached task. `MqttProducer.SendAsync` and `RedisProducer.SendAsync` SH
 - **When** `SendAsync` is awaited
 - **Then** the write to the channel is awaited inline and failures propagate to the caller
 
+### Requirement: Transports refuse message and consumer options they do not honour
+
+The system SHALL refuse, through the static `Birko.MessageQueue.TransportSupport` and with a
+`NotSupportedException` naming the option and the transport, raised at the call that asked for it:
+a `QueueMessage.TimeToLive` on the MQTT and in-memory producers (the Redis producer honours it); a
+non-zero `QueueMessage.Priority` on the in-memory, MQTT and Redis producers; and a non-default
+`ConsumerOptions.PrefetchCount` at `SubscribeAsync` on the in-memory, MQTT and Redis consumers. Each
+refusal stands until the feature is implemented (TASK-668). The `ReplyTo` and `GroupId` message headers
+SHALL be carried on the wire with no built-in semantics.
+
+#### Scenario: Time-to-live on a transport that does not expire messages
+
+- **Given** a `QueueMessage` with `TimeToLive` set
+- **When** it is sent through `MqttProducer.SendAsync` or `InMemoryProducer.SendAsync`
+- **Then** `NotSupportedException` is thrown and nothing is sent; through `RedisProducer` the message is
+  sent with a `ttl_ms` field (SH-L108, decided by the user: refuse until implemented; the TTL was
+  silently ignored and the message never expired)
+
+#### Scenario: Priority on any transport
+
+- **Given** a `QueueMessage` with a non-zero `Priority`
+- **When** it is sent through the in-memory, MQTT or Redis producer
+- **Then** `NotSupportedException` is thrown and nothing is sent; `Priority = 0` sends normally (SH-L109,
+  decided by the user: refuse until implemented; no transport ordered by priority and the value was
+  silently ignored)
+
+#### Scenario: Prefetch count on any transport
+
+- **Given** `ConsumerOptions` with a `PrefetchCount` other than its default
+- **When** `SubscribeAsync` is called on the in-memory, MQTT or Redis consumer
+- **Then** `NotSupportedException` is thrown and no subscription is created (SH-L110, decided by the
+  user: refuse until implemented; no transport bounded unacknowledged messages and the value was
+  silently ignored)
+
+#### Scenario: Reply-to and group headers
+
+- **Given** a message whose `Headers.ReplyTo` or `Headers.GroupId` is set
+- **When** it is sent and received on any of the three transports
+- **Then** the header values travel with the message's headers (on MQTT, only as MQTT5 user properties),
+  and no transport acts on them (SH-L111; unchanged — documented as carried-only)
+
 ### Requirement: Acknowledgment semantics differ per transport
 
 The system SHALL implement `ConsumerOptions.AckMode` per backend: the in-memory consumer tracks
@@ -1263,7 +1429,9 @@ id was delivered as — and only when a consumer group is in use.
 
 - **Given** a manual-ack message still tracked as pending
 - **When** `RejectAsync(id, requeue: true)` is called
-- **Then** the message is written back to its originating destination and redelivered
+- **Then** the message is written back to its originating destination and redelivered with its
+  `x-delivery-count` header incremented (a missing header counting as 1, so the first redelivery
+  carries 2) (SH-L113; the header was never written, so a redelivery looked like a first delivery)
 
 #### Scenario: In-memory reject without requeue
 
@@ -1282,9 +1450,9 @@ id was delivered as — and only when a consumer group is in use.
 - **Given** an `MqttConsumer`
 - **When** `SubscribeAsync` is called with `ConsumerOptions` carrying `AckMode = ManualAck`,
   `FromBeginning = true` or a `GroupId`, or `RejectAsync(requeue: true)` is called
-- **Then** `NotSupportedException` is thrown; `PrefetchCount` has no effect and is ignored (SH-M107,
-  decided by the user: refuse loudly; those options were silently ignored and the requeue reported
-  success while nothing was redelivered)
+- **Then** `NotSupportedException` is thrown (SH-M107, decided by the user: refuse loudly; those options
+  were silently ignored and the requeue reported success while nothing was redelivered); a non-default
+  `PrefetchCount` is refused the same way (SH-L110; it had no effect and was ignored)
 
 #### Scenario: Redis auto-ack in a consumer group
 
@@ -1364,6 +1532,14 @@ every entry a read returned, including one that is unparseable or expired.
 - **Then** the reclaim runs after the next non-empty batch and the failed entry is redelivered
   (SH-M101; the reclaim ran only after an empty poll, so on a busy stream it never ran)
 
+#### Scenario: A reclaimed entry carries its delivery count
+
+- **Given** a consumer-group entry whose handler failed once and which the reclaim pass picks up
+- **When** it is redelivered
+- **Then** the message's `x-delivery-count` header is the entry's delivery count from the Pending
+  Entries List (`XPENDING`), 2 for the first redelivery (SH-L113; nothing wrote the header, so every
+  delivery looked like the first)
+
 #### Scenario: Reclaim disabled
 
 - **Given** `PendingRetryMilliseconds = 0`
@@ -1407,6 +1583,14 @@ every entry a read returned, including one that is unparseable or expired.
 - **When** the entry is processed
 - **Then** the handler is not invoked and the entry is acknowledged and skipped
 
+#### Scenario: Old foreign entry with a TTL and no created_at
+
+- **Given** an entry written by a foreign producer with `body` and `ttl_ms` but no `created_at` field,
+  appended longer ago than that TTL
+- **When** the entry is processed
+- **Then** `CreatedAt` is the stream id's millisecond part (when Redis appended it), so the entry is
+  expired and skipped (SH-L103; `CreatedAt` was the parse time, so such an entry never expired)
+
 #### Scenario: Two subscriptions on one destination in one group
 
 - **Given** a configured `ConsumerName` and two subscriptions to the same destination
@@ -1424,9 +1608,26 @@ every entry a read returned, including one that is unparseable or expired.
 ### Requirement: Redis poll-loop faults are surfaced and reflected in subscription liveness
 
 The system SHALL report a non-cancellation, non-`RedisException` per-iteration fault through the
-internal `PollError` event and keep polling after a 2-second backoff, retry after 2 seconds on a
-`RedisException`, and on a fault that terminates the loop report it and remove the subscription so
-`RedisSubscription.IsActive` becomes false.
+public `RedisConsumer.PollError` event and keep polling after a 2-second backoff, retry after 2 seconds
+on a `RedisException`, and on a fault that terminates the loop report it and remove the subscription
+so `RedisSubscription.IsActive` becomes false. `RedisConsumer.SubscribeAsync` SHALL return once the
+subscription is registered; its poll loop, and consumer-group creation on the first poll, SHALL start
+in the background.
+
+#### Scenario: Application observes poll faults
+
+- **Given** an application subscribed to `RedisConsumer.PollError`
+- **When** a poll iteration faults or the loop terminates
+- **Then** the subscriber receives the exception (SH-L102; the event was internal, so an application
+  could not observe a subscription that died or an entry that failed every poll)
+
+#### Scenario: Subscribing does not wait for setup
+
+- **Given** a `RedisConsumer`
+- **When** `SubscribeAsync` is called
+- **Then** it returns a completed task with the registered subscription before the consumer group is
+  created, and setup proceeds in the poll loop (SH-L104; the method was declared `async` with nothing to
+  await)
 
 #### Scenario: One poisoned entry
 
@@ -1461,7 +1662,8 @@ The system SHALL write one `message` field holding the serialized `QueueMessage`
 field when `TimeToLive` is set) with optional approximate `MAXLEN` trimming, and SHALL parse an entry
 by preferring `message` and falling back to per-field parsing (`body`, `id`, `payload_type`,
 `headers`, `created_at`, `priority`) when `message` is absent or undeserializable, returning null when
-even `body` is missing.
+even `body` is missing. When `created_at` is absent, `CreatedAt` SHALL be the stream entry id's
+millisecond part (the Redis append time).
 
 #### Scenario: Round-trip through the Birko producer
 
@@ -1473,7 +1675,8 @@ even `body` is missing.
 
 - **Given** a stream entry with only a `body` field
 - **When** it is parsed
-- **Then** a `QueueMessage` with that body and default id/headers is produced
+- **Then** a `QueueMessage` with that body and default id/headers is produced, whose `CreatedAt` is the
+  stream id's millisecond part (SH-L103; it was the parse time)
 
 #### Scenario: Entry with neither message nor body
 
@@ -1565,7 +1768,9 @@ level, and match a topic against a filter level by level with MQTT wildcard sema
 The system SHALL attach the MQTTnet message-received handler exactly once (double-checked under a
 lock), re-issue a broker SUBSCRIBE for every registered filter on each client `Connected` event
 (best-effort, swallowing failures), and dispatch each received message to every handler of every
-registered filter that matches, isolating handler exceptions behind the optional `OnHandlerError` hook.
+registered filter that matches, handing each handler its own `QueueMessage.Copy()` (a public method
+that shares no mutable state, headers included) and isolating handler exceptions behind the optional
+`OnHandlerError` hook.
 
 #### Scenario: Concurrent first subscriptions
 
@@ -1612,6 +1817,15 @@ registered filter that matches, isolating handler exceptions behind the optional
 - **Given** any MQTT subscription
 - **When** a message is dispatched
 - **Then** the handler is invoked with `CancellationToken.None`
+
+#### Scenario: One handler changes the message
+
+- **Given** two handlers matching one received message, the first of which changes the message's body
+  or a header
+- **When** the message is dispatched
+- **Then** the second handler receives the message as received, because each handler gets its own
+  `QueueMessage.Copy()` (SH-L105; all handlers shared one instance, so one handler's change reached the
+  next)
 
 ### Requirement: MQTT message metadata travels as MQTT5 user properties
 
@@ -1718,9 +1932,11 @@ failures by `Dispose`.
 
 #### Scenario: Unsubscribe twice
 
-- **Given** an already-unsubscribed subscription
+- **Given** an already-unsubscribed subscription, or two callers releasing it concurrently
 - **When** `UnsubscribeAsync` or `Dispose` is called again
-- **Then** it returns immediately without issuing another broker call
+- **Then** it returns immediately without issuing another broker call — the release is claimed with
+  `Interlocked`, so exactly one caller tears down (SH-L115; a non-atomic check let two concurrent
+  callers both release)
 
 ### Requirement: Message payload serialization is pluggable with a JSON default
 
@@ -1912,7 +2128,8 @@ set, otherwise the source destination with `Suffix` (default `".dlq"`) appended.
 
 The system SHALL compose `MqttSettings.GetId()` as the base remote-settings id plus `":"` and the
 `ClientId` (or `"auto"` when null), and SHALL copy MQTT-specific fields in `LoadFrom(MqttSettings)`
-while sharing `ClientCertificate` and `LastWill` by reference.
+while sharing `ClientCertificate` and `LastWill` by reference; `LoadFrom(Settings)` with any other
+settings type SHALL fall back to the base `LoadFrom`.
 
 #### Scenario: Default settings identity
 
@@ -1931,7 +2148,16 @@ while sharing `ClientCertificate` and `LastWill` by reference.
 
 - **Given** a plain `Settings` (or any non-`MqttSettings`) instance
 - **When** `LoadFrom(Settings)` is called
-- **Then** nothing is copied at all — not even the base location/name — and the call reports success
+- **Then** it falls back to the base `LoadFrom`, so what that instance carries (location, name, and for
+  password or remote settings the credentials) is copied and the MQTT-specific options are left as
+  they were (SH-L106; nothing was copied at all and the call reported success)
+
+#### Scenario: Host constructor without credentials
+
+- **Given** `new MqttSettings("broker.local")` with no username or password
+- **When** `Name`, `UserName` and `Password` are read
+- **Then** each is `string.Empty`, never null (SH-L107; the constructor passed `null!` for the
+  non-nullable base members)
 
 ### Requirement: DI registration surface for the event bus
 

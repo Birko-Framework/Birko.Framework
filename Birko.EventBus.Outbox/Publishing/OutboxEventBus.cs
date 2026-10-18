@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Birko.EventBus.Enrichment;
 using Birko.MessageQueue.Serialization;
+using Birko.Time;
 
 namespace Birko.EventBus.Outbox.Publishing
 {
@@ -18,7 +19,8 @@ namespace Birko.EventBus.Outbox.Publishing
         private readonly IOutboxStore _store;
         private readonly IMessageSerializer _serializer;
         private readonly IReadOnlyList<IEventEnricher> _enrichers;
-        private bool _disposed;
+        private volatile bool _disposed; // SH-L116: written by Dispose, read by every other thread
+        private readonly IDateTimeProvider _clock;
 
         /// <summary>
         /// Creates a new outbox event bus decorator.
@@ -27,12 +29,16 @@ namespace Birko.EventBus.Outbox.Publishing
         /// <param name="store">The outbox persistence store.</param>
         /// <param name="serializer">Serializer for event payloads. Defaults to JsonMessageSerializer.</param>
         /// <param name="enrichers">Event enrichers to run before persisting.</param>
+        /// <param name="clock">Stamps each entry's CreatedAt (SH-L123), so it agrees with the processor's retention
+        /// cutoff when both are given the same clock. Defaults to the system clock.</param>
         public OutboxEventBus(
             IEventBus inner,
             IOutboxStore store,
             IMessageSerializer? serializer = null,
-            IEnumerable<IEventEnricher>? enrichers = null)
+            IEnumerable<IEventEnricher>? enrichers = null,
+            IDateTimeProvider? clock = null)
         {
+            _clock = clock ?? new SystemDateTimeProvider();
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _serializer = serializer ?? new JsonMessageSerializer();
@@ -63,7 +69,8 @@ namespace Birko.EventBus.Outbox.Publishing
                 Source = @event.Source,
                 CorrelationGuid = context.CorrelationGuid,
                 TenantGuid = context.TenantGuid,
-                Headers = new Dictionary<string, string>(context.Metadata)
+                Headers = new Dictionary<string, string>(context.Metadata),
+                CreatedAt = _clock.UtcNow
             };
 
             await _store.SaveAsync(entry, cancellationToken).ConfigureAwait(false);
@@ -74,6 +81,8 @@ namespace Birko.EventBus.Outbox.Publishing
         /// </summary>
         public IEventSubscription Subscribe<TEvent>(IEventHandler<TEvent> handler) where TEvent : IEvent
         {
+            // SH-L120: refused here, naming this bus; it forwarded to the disposed inner bus.
+            ObjectDisposedException.ThrowIf(_disposed, this);
             return _inner.Subscribe(handler);
         }
 

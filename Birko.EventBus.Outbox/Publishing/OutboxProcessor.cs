@@ -156,12 +156,15 @@ namespace Birko.EventBus.Outbox.Publishing
             return true;
         }
 
+        // SH-L119: the closed PublishAsync<TEvent> per event type, built once. It was resolved and closed by reflection
+        // for every entry of every batch.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, System.Reflection.MethodInfo> PublishMethods = new();
+        private static readonly System.Reflection.MethodInfo OpenPublish = typeof(IEventBus).GetMethod(nameof(IEventBus.PublishAsync))!;
+
         private Task PublishEventAsync(IEvent @event, CancellationToken cancellationToken)
         {
             // Use reflection to call PublishAsync<TEvent> with the correct type
-            var method = typeof(IEventBus)
-                .GetMethod(nameof(IEventBus.PublishAsync))!
-                .MakeGenericMethod(@event.GetType());
+            var method = PublishMethods.GetOrAdd(@event.GetType(), static t => OpenPublish.MakeGenericMethod(t));
 
             try
             {

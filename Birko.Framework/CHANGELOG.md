@@ -4,6 +4,20 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — Event bus and messaging low triage: unused options refused until implemented
+
+[[TASK-174]]. 29 low findings. **Decided by the user:** options no transport honours are refused
+(`NotSupportedException`, through the new `Birko.MessageQueue.TransportSupport`) and will be implemented in
+[[TASK-668]]: `QueueMessage.TimeToLive` on MQTT and in-memory (Redis honours it), a non-zero `QueueMessage.Priority`
+anywhere, a non-default `ConsumerOptions.PrefetchCount` anywhere, and `DistributedEventBusOptions.RetryPolicy` /
+`DeadLetterOptions` (now `null` by default; the bus constructor refuses a value). No consumer repo set any of them.
+
+**Breaking, compile-time:** `DistributedEventBusOptions.RetryPolicy` and `DeadLetterOptions` are nullable.
+**Behaviour:** `AddDistributedEventBus` always registers its hosted service (it reads `AutoSubscribe` at start); a
+redelivery now carries `x-delivery-count` (Redis reclaim, in-memory requeue), so `EventContext.DeliveryCount` is real;
+`RedisConsumer.PollError` is public; MQTT handlers each get a copy of the message; `ICorrelatedEvent` lets any event
+carry correlation; `InMemoryOutboxStore` / `OutboxEventBus` take an optional clock.
+
 ## 2026-10-18 — Event bus and messaging triage: transports refuse what they cannot honour, dedup is at-least-once
 
 [[TASK-155]]. 24 medium findings in `event-bus-and-messaging`. Four decisions by the user change what consumers see:
@@ -56,6 +70,13 @@ PostgreSQL / TimescaleDB `ALTER COLUMN "MaxRetries" DROP NOT NULL`, SQLite a tab
 **Fixed on the way (MongoDB):** `PropertyUpdate.Set` of a `Guid` threw "System.Guid cannot be mapped to a BsonValue"
 under driver 3.x, so the MongoDB job queue could not claim a job on a real server (its tests ran on an in-memory
 double). A set value is now written with the member's own serializer; a null is `BsonNull`. Measured live.
+
+## 2026-10-17 — KeyedEventBroadcaster: live per-key event streams
+
+[[TASK-533]]. New in Birko.EventBus, for streaming a run's events to SSE and WebSocket clients. `Publish` never blocks.
+Each subscriber has a bounded drop-oldest buffer and counts what it dropped, and every event carries a per-key sequence.
+Measured: DraCode's version could deliver sequence 6 before 5 under concurrent publishers (red 3/3); it now writes
+under the lock.
 
 ## 2026-10-17 — FieldCipher and InMemorySecretProvider in Birko.Security
 

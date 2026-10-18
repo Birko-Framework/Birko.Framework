@@ -16,7 +16,7 @@ namespace Birko.MessageQueue.InMemory
         // CR-M202: track the originating destination alongside the message so RejectAsync(requeue:true)
         // can write it back to the right channel instead of silently discarding it.
         private readonly ConcurrentDictionary<Guid, (string Destination, QueueMessage Message)> _pendingAck = new();
-        private bool _disposed;
+        private volatile bool _disposed; // SH-L116
 
         // SH-M111: the channel subscribers this consumer registered, removed on Dispose. They stayed on the shared
         // channel, so a disposed consumer kept receiving (and its handlers' Ack / Reject then threw ObjectDisposed).
@@ -39,6 +39,7 @@ namespace Birko.MessageQueue.InMemory
         public Task<ISubscription> SubscribeAsync(string destination, Func<QueueMessage, CancellationToken, Task> handler, ConsumerOptions? options = null, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            TransportSupport.RefusePrefetch(options, "in-memory"); // SH-L110
             var opts = options ?? new ConsumerOptions();
 
             Func<QueueMessage, CancellationToken, Task> wrappedHandler = async (message, ct) =>
@@ -100,6 +101,9 @@ namespace Birko.MessageQueue.InMemory
 
             if (_pendingAck.TryRemove(messageId, out var entry) && requeue)
             {
+                // SH-L113: a requeued message is a redelivery; the x-delivery-count header counts it.
+                var delivered = entry.Message.Headers.Custom.TryGetValue("x-delivery-count", out var seen) && int.TryParse(seen, out var n) ? n : 1;
+                entry.Message.Headers.Custom["x-delivery-count"] = (delivered + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 // CR-M202: re-deliver by writing the message back to its originating channel (the
                 // destination is now tracked with the pending entry). Previously requeue:true was a
                 // silent no-op — identical to discard — causing message loss for poison-message handling.

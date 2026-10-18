@@ -38,7 +38,7 @@ namespace Birko.EventBus.MessageQueue
         public event Action<QueueMessage, string>? MessageDropped;
         private readonly ConcurrentDictionary<Type, List<object>> _subscriptions = new();
         private readonly ConcurrentBag<ISubscription> _queueSubscriptions = new();
-        private bool _disposed;
+        private int _disposed; // SH-L116: Dispose and DisposeAsync race to one teardown
 
         /// <summary>
         /// Creates a new distributed event bus.
@@ -57,6 +57,13 @@ namespace Birko.EventBus.MessageQueue
         {
             _messageQueue = messageQueue ?? throw new ArgumentNullException(nameof(messageQueue));
             _options = options ?? new DistributedEventBusOptions();
+            // SH-L114 (decided by the user 2026-10-18: refuse until implemented): nothing applies a retry policy or a
+            // dead-letter destination yet, and their non-null defaults advertised 3 retries and an enabled DLQ.
+            if (_options.RetryPolicy != null || _options.DeadLetterOptions != null)
+            {
+                throw new NotSupportedException(
+                    "DistributedEventBusOptions.RetryPolicy and DeadLetterOptions are not applied yet; leave them null. Retry and dead-lettering are the transport's.");
+            }
             _serializer = _options.Serializer ?? new JsonMessageSerializer();
             _pipeline = new EventPipeline(behaviors ?? []);
             _enrichers = enrichers?.ToList() ?? [];
@@ -66,7 +73,7 @@ namespace Birko.EventBus.MessageQueue
         /// <inheritdoc />
         public async Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : IEvent
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
             var context = EventContext.From(@event);
 
@@ -123,7 +130,7 @@ namespace Birko.EventBus.MessageQueue
         /// </remarks>
         public IEventSubscription Subscribe<TEvent>(IEventHandler<TEvent> handler) where TEvent : IEvent
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
             var eventType = typeof(TEvent);
             var handlers = _subscriptions.GetOrAdd(eventType, _ => []);
@@ -150,7 +157,7 @@ namespace Birko.EventBus.MessageQueue
         /// <param name="cancellationToken">Cancellation token.</param>
         public async Task SubscribeToTransportAsync<TEvent>(CancellationToken cancellationToken = default) where TEvent : class, IEvent
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
             var topic = _options.TopicConvention.GetTopic(typeof(TEvent));
 
@@ -289,12 +296,10 @@ namespace Birko.EventBus.MessageQueue
 
         public void Dispose()
         {
-            if (_disposed)
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
             {
                 return;
             }
-
-            _disposed = true;
 
             // CR-M188: dispose synchronously via ISubscription.Dispose() (ISubscription : IDisposable)
             // instead of blocking on the async UnsubscribeAsync — the old .GetAwaiter().GetResult()
@@ -315,12 +320,10 @@ namespace Birko.EventBus.MessageQueue
         /// </summary>
         public async ValueTask DisposeAsync()
         {
-            if (_disposed)
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
             {
                 return;
             }
-
-            _disposed = true;
 
             foreach (var sub in _queueSubscriptions)
             {
@@ -333,10 +336,10 @@ namespace Birko.EventBus.MessageQueue
         private sealed class DistributedEventSubscription : IEventSubscription
         {
             private readonly Action _unsubscribe;
-            private bool _isActive = true;
+            private int _released;
 
             public Type EventType { get; }
-            public bool IsActive => _isActive;
+            public bool IsActive => Volatile.Read(ref _released) == 0;
 
             public DistributedEventSubscription(Type eventType, Action unsubscribe)
             {
@@ -346,13 +349,11 @@ namespace Birko.EventBus.MessageQueue
 
             public void Dispose()
             {
-                if (!_isActive)
+                // SH-L115: one unsubscribe, however many callers race to it (as InProcessEventSubscription since CR-L250).
+                if (Interlocked.Exchange(ref _released, 1) == 0)
                 {
-                    return;
+                    _unsubscribe();
                 }
-
-                _isActive = false;
-                _unsubscribe();
             }
         }
     }

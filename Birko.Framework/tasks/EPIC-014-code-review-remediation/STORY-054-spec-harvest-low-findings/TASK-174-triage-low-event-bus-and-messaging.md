@@ -2,7 +2,7 @@
 id: TASK-174
 parent: STORY-054
 feature: FEATURE-014
-# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+# status: done | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 status: todo
 priority: P2
 assignee: ai
@@ -47,18 +47,18 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 29 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 29 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
-- [ ] Any behavioural fix is followed by `/specs regen event-bus-and-messaging`, with the spec diff reviewed as the change's
+- [x] Any behavioural fix is followed by `/specs regen event-bus-and-messaging`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
 
 ## Out of scope
 
@@ -73,12 +73,38 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A — fully covered by automated tests: a library contract with no UI surface; Redis exercised live.
 
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-174` — leave empty until then._
+
+## Outcome (2026-10-18)
+
+**29 findings: 23 confirmed, 6 narrower (SH-L111, L121, L128, L130, and L104 / L115 with no behaviour test), 0
+refuted.**
+- **Decided by the user:** unused options are refused until implemented (`TransportSupport`), and [[TASK-668]] is
+  spawned to implement them: TimeToLive (MQTT, in-memory), Priority, PrefetchCount, the bus's
+  RetryPolicy / DeadLetterOptions. ReplyTo / GroupId are kept as carried headers (L111).
+- **Waived:** L121 (both outbox stores agree; a claimed entry cannot vanish). **Documented:** L128.
+- **Transport side (this session):**
+  - Redis: L102 public PollError, L103 entry-id time, L104 no false async.
+  - MQTT: L105 per-handler copies, L106 / L107 settings.
+  - Refusals: L108–L110, L114. Bus: L112 AutoSubscribe at start, L113 delivery counts.
+  - L115 / L116 concurrency guards; L125 envelope; L130 token-source ownership.
+- **Bus / outbox side (a fork, reviewed here):**
+  - InProcessEventBus: L117 OCE filter, L118 subscribe / dispose lock.
+  - Outbox: L119 cached MethodInfo, L120 Subscribe guard, L122 locks, L123 clock.
+  - Core: L124 ICorrelatedEvent, L125 initialisers, L126 guard, L127 sweep, L129 cache.
+- **Red on HEAD:** 24 tests, 16 from the transport side and 8 from the fork. The fork stubbed L123's clock parameters
+  as ignored.
+  - Pins that pass either way: L115 concurrent dispose (the race did not reproduce), L119 / L122 and L129 (behaviour
+    unchanged).
+  - The first L105 test depended on dispatch order and passed on HEAD; it was rewritten to be order-independent and
+    is red on HEAD.
+- **Inverted / adjusted tests:**
+  - CR-L258's "AutoSubscribe=false registers no hosted service" (now: registered, flag read at start).
+  - Two Redis producer round-trip tests that set a Priority (now 0).
+- **Test-only:** EventBus.MessageQueue tests import the in-memory transport.
+
+**Regression, live:** all 11 test projects importing a changed project green; Sandbox builds.

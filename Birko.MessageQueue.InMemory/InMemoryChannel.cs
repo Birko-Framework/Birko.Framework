@@ -15,7 +15,7 @@ namespace Birko.MessageQueue.InMemory
     {
         private readonly ConcurrentDictionary<string, DestinationState> _destinations = new();
         private readonly int _capacity;
-        private bool _disposed;
+        private volatile bool _disposed; // SH-L116: written by Dispose, read by every other thread
 
         public InMemoryChannel(int capacity = 1000)
         {
@@ -114,10 +114,12 @@ namespace Birko.MessageQueue.InMemory
 
                     if (state.Subscribers.IsEmpty && state.DispatchCts != null)
                     {
+                        // SH-L130: cancelled here, disposed by the dispatch loop when it has stopped. Disposing it here
+                        // pulled the token from under a handler the loop was still awaiting. A message the loop has
+                        // already taken when the last subscriber leaves has no one left to receive it.
                         var cts = state.DispatchCts;
                         state.DispatchCts = null;
                         cts.Cancel();
-                        cts.Dispose();
                     }
                 }
             }
@@ -130,8 +132,9 @@ namespace Birko.MessageQueue.InMemory
 
         private void StartDispatching(string destination, DestinationState state)
         {
-            state.DispatchCts = new CancellationTokenSource();
-            var ct = state.DispatchCts.Token;
+            var dispatchCts = new CancellationTokenSource();
+            state.DispatchCts = dispatchCts;
+            var ct = dispatchCts.Token;
 
             _ = Task.Run(async () =>
             {
@@ -156,6 +159,10 @@ namespace Birko.MessageQueue.InMemory
                 catch (OperationCanceledException)
                 {
                     // Expected when dispatching is stopped
+                }
+                finally
+                {
+                    dispatchCts.Dispose(); // SH-L130: the loop owns its token source
                 }
             }, ct);
         }

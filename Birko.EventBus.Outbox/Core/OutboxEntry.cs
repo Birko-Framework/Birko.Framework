@@ -21,17 +21,17 @@ namespace Birko.EventBus.Outbox
         /// <summary>
         /// Assembly-qualified type name of the event (for deserialization).
         /// </summary>
-        public string EventType { get; set; } = null!;
+        public string EventType { get; set; } = string.Empty; // SH-L125
 
         /// <summary>
         /// Serialized event payload (JSON).
         /// </summary>
-        public string Payload { get; set; } = null!;
+        public string Payload { get; set; } = string.Empty; // SH-L125
 
         /// <summary>
         /// Source module or component that raised the event.
         /// </summary>
-        public string Source { get; set; } = null!;
+        public string Source { get; set; } = string.Empty; // SH-L125
 
         /// <summary>
         /// Correlation ID for distributed tracing.

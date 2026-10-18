@@ -20,7 +20,7 @@ namespace Birko.MessageQueue.Redis
         private readonly RedisStreamSettings _settings;
         private readonly ConcurrentDictionary<Guid, SubscriptionState> _subscriptions = new();
         private readonly ConcurrentDictionary<Guid, PendingMessage> _pendingAck = new();
-        private bool _disposed;
+        private volatile bool _disposed; // SH-L116: written by Dispose, read by every other thread
 
         /// <summary>
         /// Raised when a subscription's background poll loop hits a non-cancellation error (CR-M207).
@@ -28,7 +28,12 @@ namespace Birko.MessageQueue.Redis
         /// terminates the loop is reported and the subscription is removed (so its <see
         /// cref="RedisSubscription.IsActive"/> flips to false) instead of appearing alive but dead.
         /// </summary>
-        internal event EventHandler<Exception>? PollError;
+        /// <summary>
+        /// Raised when a subscription's poll loop faults (SH-L102: it was internal, so an application could not observe a
+        /// subscription that died or an entry that failed every poll). A fault that ends the loop also deactivates the
+        /// subscription. A throwing handler is not isolated: subscribe with care.
+        /// </summary>
+        public event EventHandler<Exception>? PollError;
 
         /// <summary>
         /// True while the given subscription is still registered (its poll loop has not terminated) and
@@ -65,8 +70,14 @@ namespace Birko.MessageQueue.Redis
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
-        public async Task<ISubscription> SubscribeAsync(string destination, Func<QueueMessage, CancellationToken, Task> handler, ConsumerOptions? options = null, CancellationToken cancellationToken = default)
+        /// <remarks>
+        /// Returns once the subscription is registered; its poll loop then starts in the background, creating the consumer
+        /// group on its first poll. A setup failure is retried (a Redis error) or reported through <see cref="PollError"/>
+        /// (SH-L104: the method was declared async with nothing to await).
+        /// </remarks>
+        public Task<ISubscription> SubscribeAsync(string destination, Func<QueueMessage, CancellationToken, Task> handler, ConsumerOptions? options = null, CancellationToken cancellationToken = default)
         {
+            TransportSupport.RefusePrefetch(options, "Redis");
             ObjectDisposedException.ThrowIf(_disposed, this);
 
             if (string.IsNullOrEmpty(destination))
@@ -104,7 +115,7 @@ namespace Birko.MessageQueue.Redis
             _ = Task.Run(() => PollLoopAsync(subscriptionId, state), cts.Token);
 
             ISubscription subscription = new RedisSubscription(this, destination, subscriptionId);
-            return subscription;
+            return Task.FromResult(subscription);
         }
 
         public Task<ISubscription> SubscribeAsync<T>(string destination, IMessageHandler<T> handler, ConsumerOptions? options = null, CancellationToken cancellationToken = default) where T : class
@@ -335,7 +346,7 @@ namespace Birko.MessageQueue.Redis
         /// Entries List so it can be reclaimed/redelivered. Shared by the live poll and the
         /// pending-entry reclaim path so both behave identically.
         /// </summary>
-        private async Task ProcessEntryAsync(IDatabase db, SubscriptionState state, StreamEntry entry, bool useConsumerGroup, CancellationToken ct)
+        private async Task ProcessEntryAsync(IDatabase db, SubscriptionState state, StreamEntry entry, bool useConsumerGroup, CancellationToken ct, int? deliveryCount = null)
         {
             // Without a group the read position is ours, and it moves past every entry the read returned —
             // including one that is unparseable or expired. Advancing only after a delivered entry re-read such
@@ -349,6 +360,10 @@ namespace Birko.MessageQueue.Redis
             if (message == null)
             {
                 return;
+            }
+            if (deliveryCount is { } count)
+            {
+                message.Headers.Custom["x-delivery-count"] = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
 
             // Check TTL
@@ -460,7 +475,12 @@ namespace Birko.MessageQueue.Redis
                     break;
                 }
 
-                await ProcessEntryAsync(db, state, entry, useConsumerGroup: true, ct).ConfigureAwait(false);
+                // SH-L113: a reclaimed entry is a redelivery; its delivery count (from the PEL) reaches the handler as the
+                // x-delivery-count header, which EventContext.DeliveryCount reads. Nothing wrote that header, so every
+                // delivery looked like the first.
+                var pending = await db.StreamPendingMessagesAsync(state.StreamKey, state.ConsumerGroup!, 1, RedisValue.Null, entry.Id, entry.Id).ConfigureAwait(false);
+                var deliveries = pending.Length > 0 ? pending[0].DeliveryCount : (int?)null;
+                await ProcessEntryAsync(db, state, entry, useConsumerGroup: true, ct, deliveries).ConfigureAwait(false);
             }
         }
 
@@ -555,6 +575,12 @@ namespace Birko.MessageQueue.Redis
             {
                 queueMessage.CreatedAt = DateTimeOffset.FromUnixTimeMilliseconds(ms);
             }
+            else if (EntryTime(entry.Id) is { } appended)
+            {
+                // SH-L103: an entry from another producer has no created_at. The stream id's millisecond part is when Redis
+                // appended it; CreatedAt was the parse time instead, so a TimeToLive never expired such an entry.
+                queueMessage.CreatedAt = appended;
+            }
 
             if (values.TryGetValue("priority", out var priority) && int.TryParse(priority.ToString(), out var prio))
             {
@@ -562,6 +588,14 @@ namespace Birko.MessageQueue.Redis
             }
 
             return queueMessage;
+        }
+
+        /// <summary>The append time a stream entry id carries ("&lt;ms&gt;-&lt;seq&gt;"), or null when it is not one.</summary>
+        private static DateTimeOffset? EntryTime(RedisValue entryId)
+        {
+            var id = entryId.ToString();
+            var dash = id.IndexOf('-');
+            return dash > 0 && long.TryParse(id.AsSpan(0, dash), out var ms) ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : null;
         }
 
         private static async Task EnsureConsumerGroupAsync(IDatabase db, string streamKey, string groupName, bool fromBeginning)

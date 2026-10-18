@@ -32,7 +32,7 @@ namespace Birko.EventBus.MessageQueue
         /// that choose to honor it; the bus itself does not read it, so setting it alone changes nothing.
         /// Configure retry at the transport to guarantee it takes effect.
         /// </remarks>
-        public RetryPolicy RetryPolicy { get; set; } = RetryPolicy.Default;
+        public RetryPolicy? RetryPolicy { get; set; }
 
         /// <summary>
         /// Dead letter queue options for events that exhaust retries.
@@ -42,7 +42,7 @@ namespace Birko.EventBus.MessageQueue
         /// whose callback keeps faulting is routed to the provider's DLQ). <see cref="DistributedEventBus"/>
         /// does not consume this property directly; configure the DLQ at the transport/provider.
         /// </remarks>
-        public DeadLetterOptions DeadLetterOptions { get; set; } = new();
+        public DeadLetterOptions? DeadLetterOptions { get; set; }
 
         /// <summary>
         /// Consumer options for subscriptions (ack mode, prefetch, consumer group).

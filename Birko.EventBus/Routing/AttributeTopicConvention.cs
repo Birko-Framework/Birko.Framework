@@ -12,6 +12,7 @@ namespace Birko.EventBus.Routing
     {
         private readonly DefaultTopicConvention _fallback = new();
         private readonly ConcurrentDictionary<Type, string> _cache = new();
+        private readonly ConcurrentDictionary<Type, bool> _hasAttribute = new();
 
         /// <inheritdoc />
         public string GetTopic(Type eventType)
@@ -32,9 +33,11 @@ namespace Birko.EventBus.Routing
         /// </summary>
         public string GetTopic(IEvent @event)
         {
+            // SH-L129: whether the type carries [Topic] is looked up once per type; it was reflected on every call,
+            // and the attribute-less path never reached the cache. The result is unchanged.
             var type = @event.GetType();
-            var attr = type.GetCustomAttribute<TopicAttribute>();
-            return attr != null ? GetTopic(type) : _fallback.GetTopic(@event);
+            var attributed = _hasAttribute.GetOrAdd(type, static t => t.GetCustomAttribute<TopicAttribute>() != null);
+            return attributed ? GetTopic(type) : _fallback.GetTopic(@event);
         }
     }
 }
