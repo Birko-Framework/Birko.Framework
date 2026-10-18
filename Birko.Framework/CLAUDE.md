@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### OAuth server stores ship, and single use is enforced by the store (2026-10-18)
+[[TASK-518]]. New `Birko.Security.OAuth.Server.InMemory` and `.SqLite` provide all five stores and a DI extension.
+SQLite keeps client lists and refresh claims as JSON columns. Measured: concurrent redemptions of one code or one refresh
+token each issued several pairs. New `TryRedeemAsync` / `TryRevokeAsync` claim atomically in the shipped stores; custom
+stores keep a read-check-write default. A lost rotation fails only that request (decided by the user).
 ### OAuth server issues tokens for a federated sign-in (2026-10-18)
 [[TASK-517]]. `TokenEndpointHandler.IssueForSubjectAsync(clientId, subject, scope, claims)` gives a subject who signed in
 elsewhere (e.g. `github:42`) the server's own token pair. The refresh token renews through the normal grant, with
@@ -326,12 +331,6 @@ could not claim on a real server. Details: CHANGELOG.
 durable queue registered first is kept. `AddRecurringJob<TJob>` reaches the scheduler that runs. A follower node still
 runs its loop and takes over. Each job resolves from its own DI scope, and shutdown waits only as long as the host
 allows. Symbio's three lessons are tests.
-### LLM provider and agent low-finding triage (2026-10-18)
-[[TASK-173]]. 31 low findings: 27 confirmed, 4 refuted; 22 fixed, 3 already fixed, 1 spawned ([[TASK-660]]: telling a
-run's outcomes apart).
-- SSE parsing follows the grammar, and a negative retry count still sends once.
-- The agent refuses zero iterations and counts a response once.
-- Tools resolve paths one way, report no matches explicitly, and keep a timed-out command's output.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -16,6 +16,26 @@ public interface IRefreshTokenStore : IAsyncStore<RefreshTokenRecord>
         => ReadAsync(r => r.TokenHash == tokenHash, ct);
 
     /// <summary>
+    /// Revokes the record if, and only if, it is not revoked yet. Returns false when it already was (or no longer
+    /// exists). Rotation uses it to claim the presented token: two concurrent refreshes with one token must not both
+    /// get a new pair (TASK-518). On true, <paramref name="record"/>.Revoked is set.
+    /// </summary>
+    /// <remarks>
+    /// The default re-reads the stored record by its Guid and writes it back: NOT atomic. Override it with a
+    /// conditional update wherever the store can express one.
+    /// </remarks>
+    async Task<bool> TryRevokeAsync(RefreshTokenRecord record, CancellationToken ct = default)
+    {
+        if (record.Guid is not { } guid) return false;
+        var current = await ReadAsync(guid, ct).ConfigureAwait(false);
+        if (current == null || current.Revoked) return false;
+        current.Revoked = true;
+        await UpdateAsync(current, ct: ct).ConfigureAwait(false);
+        record.Revoked = true;
+        return true;
+    }
+
+    /// <summary>
     /// CR-L350: Revokes every not-yet-revoked refresh token belonging to the given
     /// (<paramref name="clientId"/>, <paramref name="userId"/>) family. Used for RFC 6819 §5.2.2.3 /
     /// OAuth 2.1 refresh-token reuse detection — presenting an already-rotated (revoked) token signals

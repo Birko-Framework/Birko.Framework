@@ -93,7 +93,10 @@ Only 4 projitems-level import chains exist:
            ├──► Security.BCrypt, Security.Jwt, Security.NFC
            ├──► Security.Vault (← Security, Serialization)
            ├──► Security.AzureKeyVault (← Security, Serialization)
-           └──► Security.AspNetCore (← Security, Security.Jwt, Data.Tenant)
+           ├──► Security.AspNetCore (← Security, Security.Jwt, Data.Tenant)
+           └──► Security.OAuth.Server (← Security, Data.Stores, Time.Abstractions)
+                  ├──► OAuth.Server.InMemory (← Data.InMemory)
+                  └──► OAuth.Server.SqLite (← Data.SQL.SqLite)
 ```
 
 ---
@@ -256,6 +259,9 @@ Only 4 projitems-level import chains exist:
 | **Birko.Security.Vault** | Birko.Security, Birko.Serialization |
 | **Birko.Security.AzureKeyVault** | Birko.Security, Birko.Serialization |
 | **Birko.Security.NFC** | Birko.Security |
+| **Birko.Security.OAuth.Server** | Birko.Configuration, Birko.Security, Birko.Data.Core, Birko.Data.Stores, Birko.Time.Abstractions |
+| **Birko.Security.OAuth.Server.InMemory** | Birko.Security.OAuth.Server, Birko.Data.InMemory; Microsoft.Extensions.DependencyInjection (consumer-supplied) |
+| **Birko.Security.OAuth.Server.SqLite** | Birko.Security.OAuth.Server, Birko.Data.SQL.SqLite; Microsoft.Extensions.DependencyInjection (consumer-supplied) |
 
 ## Storage
 

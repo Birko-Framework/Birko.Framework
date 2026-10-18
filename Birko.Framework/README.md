@@ -274,6 +274,8 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.AzureKeyVault | Azure Key Vault secret provider (OAuth2, REST API) |
 | Birko.Security.NFC | NFC-based authentication (tag-to-user mapping, JWT integration) |
 | Birko.Security.OAuth.Server | OAuth2 authorization server (token/authorize/device/registration endpoints; client-credentials, authcode+PKCE, refresh, device-code; persists via Birko.Data.Stores) |
+| Birko.Security.OAuth.Server.InMemory | In-memory OAuth server stores + `AddOAuthServerInMemoryStores` |
+| Birko.Security.OAuth.Server.SqLite | SQLite OAuth server stores (atomic code redemption and refresh rotation) + `AddOAuthServerSqLiteStores` |
 | Birko.Security.Grants | Per-resource access grants (role → action table, owners / editors / viewers on one resource or a whole type, tenant-scoped; share + no-escalation + last-owner rules; email invitations redeemed on verified sign-in; bootstrap admins by provider:subject; persists via Birko.Data.Stores) |
 | Birko.Security.Grants.AspNetCore | ASP.NET Core for grants: `RequireGrant` endpoint filter (404 vs 403 by visibility), grant-aware permission resolver, `AddBirkoGrants` DI |
 | Birko.Security.Grants.SQL | SQL schema for grants: fluent mappings, a store pair for any SQL provider, the lookup indexes |
@@ -344,7 +346,9 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.BCrypt.Tests | BCrypt password hashing tests |
 | Birko.Security.Vault.Tests | Vault secret provider tests |
 | Birko.Security.AzureKeyVault.Tests | Azure Key Vault secret provider tests |
-| Birko.Security.OAuth.Server.Tests | OAuth2 authorization server tests (43 tests; all four grant types + PKCE/consent/registration paths) |
+| Birko.Security.OAuth.Server.Tests | OAuth2 authorization server tests (60 tests; all four grant types + PKCE/consent/registration paths, federated issue) |
+| Birko.Security.OAuth.Server.InMemory.Tests | In-memory OAuth stores against the shared store contract (14 tests) |
+| Birko.Security.OAuth.Server.SqLite.Tests | SQLite OAuth stores against the shared store contract, persistence across instances, DI (20 tests) |
 | Birko.Security.Grants.Tests | Per-resource grants and ASP.NET companion tests (177 tests; role table, CanAsync, grant/revoke rules, last owner under concurrency, tenant scope, listing, invitations (verified-only, single use), bootstrap and last admin) |
 | Birko.Security.Grants.SQL.Tests | Grants on SQLite (24 tests; schema, round trips, lookup indexes, lookup parity with InMemory, the invitation claim across instances, the PropertyUpdate path) |
 | Birko.Rules.Tests | Rule engine tests (core types, contexts, evaluator) |

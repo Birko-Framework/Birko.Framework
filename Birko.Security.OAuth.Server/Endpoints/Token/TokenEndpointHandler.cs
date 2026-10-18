@@ -211,14 +211,10 @@ public class TokenEndpointHandler
             throw new OAuthServerException(OAuthErrorCodes.InvalidGrant, "PKCE is required for public clients.");
         }
 
-        // CR-L351: single-use is enforced by this read (line above) / check (code.Used) / set-and-persist
-        // sequence, which is NOT atomic on its own. Two concurrent /token requests presenting the same code
-        // can both pass the !Used check before either persists Used=true and both be issued tokens. Safe
-        // single-use therefore relies on IAuthorizationCodeStore.UpdateAsync being an atomic conditional
-        // update (see the interface docs) — the reference InMemory/JSON stores are last-write-wins and carry
-        // this TOCTOU window; SQL/document backends should claim the code with a conditional update.
-        code.Used = true;
-        await _codes.UpdateAsync(code, ct: ct).ConfigureAwait(false);
+        // CR-L351 / TASK-518: the claim is the store's, so it can be atomic. The read-check-write that used to be here
+        // let two concurrent redemptions of one code both be issued tokens; the loser now gets invalid_grant.
+        if (!await _codes.TryRedeemAsync(code, ct).ConfigureAwait(false))
+            throw new OAuthServerException(OAuthErrorCodes.InvalidGrant, "Authorization code is invalid or expired.");
 
         return await IssueTokenPairAsync(client.ClientId, code.UserId, code.Scope, null, ct).ConfigureAwait(false);
     }
@@ -248,8 +244,15 @@ public class TokenEndpointHandler
 
         if (_settings.RotateRefreshTokens)
         {
-            record.Revoked = true;
-            await _refreshes.UpdateAsync(record, ct: ct).ConfigureAwait(false);
+            // TASK-518: rotation claims the presented token, so two concurrent refreshes of it cannot both issue a pair.
+            // The loser only fails (decided by the user 2026-10-18): it read the token while it was still valid, so this
+            // is two holders racing (two tabs refreshing together), not a replay, and revoking the family would sign the
+            // winner out too. A request that reads the token after the rotation committed takes the reuse path above and
+            // does revoke the family: from the server's side it is indistinguishable from a replay.
+            if (!await _refreshes.TryRevokeAsync(record, ct).ConfigureAwait(false))
+            {
+                throw new OAuthServerException(OAuthErrorCodes.InvalidGrant, "Refresh token is invalid or expired.");
+            }
             return await IssueTokenPairAsync(client.ClientId, record.UserId, scope, record.Claims, ct).ConfigureAwait(false);
         }
 

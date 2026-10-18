@@ -24,8 +24,8 @@ Birko.Security.OAuth.Server/
 │   └── ConsentRecord.cs            — prior user consent per (client, scope)
 ├── Stores/                         — IAsyncStore<T> subinterfaces with named lookups
 │   ├── IOAuthClientStore.cs        — GetByClientIdAsync
-│   ├── IAuthorizationCodeStore.cs  — GetByCodeAsync
-│   ├── IRefreshTokenStore.cs       — GetByHashAsync
+│   ├── IAuthorizationCodeStore.cs  — GetByCodeAsync, TryRedeemAsync (the single-use claim)
+│   ├── IRefreshTokenStore.cs       — GetByHashAsync, TryRevokeAsync (rotation's claim), RevokeFamilyAsync
 │   ├── IDeviceCodeStore.cs         — GetByDeviceCodeAsync / GetByUserCodeAsync
 │   └── IConsentStore.cs            — GetAsync(userId, clientId)
 ├── Endpoints/
@@ -101,6 +101,11 @@ app.MapPost("/token", async (HttpRequest req) =>
 ## Patterns
 - Token endpoint dispatch is a `switch` on `grant_type` — each branch is `HandleXxxAsync(client, request, ct)` and any protocol violation throws `OAuthServerException(ErrorCodes.X, "…")`. The host maps the exception to RFC 6749 §5.2 JSON via `TokenErrorResponse.From(ex)`.
 - `IAsyncStore<T>` is the only persistence contract — any backend that implements it works. Tests use `InMemoryStore<T>`.
+  Shipped implementations live in companions: `Birko.Security.OAuth.Server.InMemory` and `.SqLite` (TASK-518).
+- Single use is claimed by the store: `TryRedeemAsync` (codes) and `TryRevokeAsync` (refresh rotation). Their default
+  implementations are read-check-write (a race between concurrent requests, measured red 3/3 at TASK-518 through the
+  old handler path); the shipped stores override them atomically. A lost rotation fails only that request (`invalid_grant`, no family
+  revoke; decided by the user); a token read after its rotation committed is reuse and revokes the family.
 - `OAuthClient.ClientType` is immutable post-creation. Changing public ↔ confidential would invalidate stored hash/PKCE assumptions.
 - Stored secrets are SHA-256 hashed (not PBKDF2/bcrypt) — they're high-entropy random values issued by the server, so a per-request constant-time SHA-256 compare is sufficient. Verification uses `CryptographicOperations.FixedTimeEquals`.
 - Refresh tokens are stored as hashes too — the plaintext only exists transiently in `TokenResponse.RefreshToken` and in client memory.

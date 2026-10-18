@@ -593,6 +593,23 @@ You supply implementations of five interfaces — any `IAsyncStore<T>` backend w
 - `IDeviceCodeStore` — in-flight RFC 8628 device-code requests
 - `IConsentStore` — prior user-consent records (used to skip the consent UI on repeat visits)
 
+Two companions ship all five (TASK-518), each with a DI extension that registers one shared instance per store:
+
+```csharp
+services.AddOAuthServerInMemoryStores();                  // Birko.Security.OAuth.Server.InMemory — nothing persists
+services.AddOAuthServerSqLiteStores("data/oauth.db");     // Birko.Security.OAuth.Server.SqLite — tables oauth_*, created on first use
+```
+
+Single use is the store's job. `IAuthorizationCodeStore.TryRedeemAsync` claims a code and `IRefreshTokenStore.TryRevokeAsync`
+claims a refresh token on rotation; the token endpoint answers `invalid_grant` to the loser. A lost rotation only
+fails that request (decided by the user, TASK-518): two tabs refreshing together are not a replay, and the winner's new
+pair stays valid. A request that reads the token after its rotation committed sees it revoked, which is reuse, and
+revokes the family; the server cannot tell that late tab from a replay, so an app should refresh from one place
+(birko-web-shell's `createAuthSession` shares one refresh per tab). The shipped stores make both claims atomic: a conditional update on SQLite,
+a lock in memory. The interfaces' default implementations are a read-check-write and only safe for one caller, so a
+custom store should override them. A store must also persist `RefreshTokenRecord.Claims` (TASK-517); the SQLite store
+keeps it, and `OAuthClient`'s collections, in JSON columns.
+
 Tokens use whatever `ITokenProvider` you supply — typically `JwtTokenProvider` from `Birko.Security.Jwt`.
 
 ### Dynamic client registration

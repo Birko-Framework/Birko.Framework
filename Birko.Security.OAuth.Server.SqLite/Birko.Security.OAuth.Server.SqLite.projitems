@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>1a2d4711-7ac7-4448-8e60-ddfb573eb18a</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Security.OAuth.Server.SqLite</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\OAuthClientEntity.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\RefreshTokenEntity.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\SqLiteOAuthTables.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\SqLiteOAuthScalarStores.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\SqLiteOAuthClientStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\SqLiteRefreshTokenStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\OAuthServerSqLiteServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
