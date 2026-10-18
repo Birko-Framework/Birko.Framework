@@ -107,6 +107,7 @@ ASP.NET Core minimal-API helpers (requires the `Microsoft.AspNetCore.App` shared
 - **`MapOwnedCrud<TModel, TRequest, TRepo>(routeBase, mapping)`** — registers the four owner-scoped routes under a base path, resolving `TRepo` per request from DI; list endpoints are out of scope by design
 - **`OwnedCrudResults`** — host-free (unit-testable) guard functions: `ReadOwned` (404 absent/foreign), `CreateClash` (409 own vs 404 foreign id), `RequireOwned` (PUT/DELETE gate) — the 404-vs-409 core that never leaks a foreign entity's existence
 - **`OwnedCrudMapping<TModel, TRequest, TRepo>`** — per-resource config of `required` delegates (Owner/Read/Create/Update/Delete/OwnerOf/ToDto/Build/Apply; optional Validate/RequestGuid/Label)
+- **`OwnerAccess.CanAccess(caller, owner, seesEverything)`** — the one owner-or-admin rule (TASK-541), for hand-written endpoints too (string ids, nested resources): a caller who sees everything passes; otherwise both identities must be present and equal (Guid, or ordinal string). A denied caller is answered **404, not 403** (rule 65: owned data is private). `OwnedCrudResults` decides through it
 
 ### Birko.Communication.IR
 Consumer infrared (38 kHz modulated) communication for remote control — **not** IrDA/IrCOMM (see `Birko.Communication.Hardware.Ports.Infraport` for serial IrCOMM):

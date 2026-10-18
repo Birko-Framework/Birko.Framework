@@ -12,7 +12,8 @@ Birko.Security.AspNetCore/
 ├── User/
 │   ├── ICurrentUser.cs              - Authenticated user interface (UserGuid, Email, TenantGuid, Roles, Permissions, IsAuthenticated, GetClaim)
 │   ├── ClaimMappingOptions.cs       - Configuration for mapping JWT claim types to ICurrentUser properties
-│   └── ClaimsCurrentUser.cs         - Resolves ICurrentUser from HttpContext JWT claims
+│   ├── ClaimsCurrentUser.cs         - Resolves ICurrentUser from HttpContext JWT claims
+│   └── CurrentUserOwnerAccessExtensions.cs - user.CanAccess(owner, viewAll?) / SeesEverything over OwnerAccess (TASK-541)
 ├── Authentication/
 │   ├── JwtClaimNames.cs             - Standard claim name constants (sub, email, tenant_id, role, permission)
 │   ├── JwtAuthenticationOptions.cs  - JWT Bearer configuration (Secret, Issuer, Audience, Expiration, ClockSkew, Claims mapping)
@@ -40,6 +41,8 @@ Birko.Security.AspNetCore/
 - **Birko.Security** (imports projitems — provides IPermissionChecker, ITokenProvider)
 - **Birko.Security.Jwt** (imports projitems — provides JwtTokenProvider, TokenOptions, TokenResult)
 - **Birko.Data.Tenant** (imports projitems — provides ITenantContext)
+- **Birko.Communication.AspNetCore** (imports projitems — provides OwnerAccess, the one owner-or-admin rule; TASK-541,
+  decided by the user: every importer of this project imports it too)
 - **Microsoft.AspNetCore.Authentication.JwtBearer** NuGet — added by consuming project
 
 ## Key Design Decisions

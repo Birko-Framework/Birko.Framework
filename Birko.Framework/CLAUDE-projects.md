@@ -60,6 +60,10 @@ Birko.Health (IHealthCheck, HealthCheckResult, HealthCheckRunner — zero deps)
   -> Birko.Health.Security.Grants (StaleGrantHealthCheck) + Birko.Security.Grants
      (a per-dependency sibling, like .Redis and .Azure, so the Health leaf stays dependency-free)
 
+Birko.Communication.AspNetCore (MapOwnedCrud, OwnedCrudResults, OwnerAccess — no Birko deps)
+  -> Birko.Security.AspNetCore (ICurrentUser.CanAccess over OwnerAccess, TASK-541): every importer of
+     Security.AspNetCore also imports Communication.AspNetCore (decided by the user 2026-10-18)
+
 Birko.Security.Grants (GrantRoleTable, ResourceGrant, IResourceGrantStore, IGrantService — per-resource grants)
   <- Birko.Data.Core + Birko.Data.Stores + Birko.Time.Abstractions only: no ASP.NET, no Birko.Models.Users
      (the host maps its login to a user Guid)
@@ -161,7 +165,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Communication.Camera** - Camera frame capture (FFmpeg-based JPEG snapshots)
 - **Birko.Communication.IR** - Consumer IR (38 kHz, NEC/Samsung/RC5, pluggable transports)
 - **Birko.Communication.NFC** - NFC/RFID tag reading (ISO 14443A, NDEF, pluggable transports)
-- **Birko.Communication.AspNetCore** - ASP.NET Core minimal-API helpers (owner-scoped CRUD skeleton: MapOwnedCrud, OwnedCrudResults, OwnedCrudMapping)
+- **Birko.Communication.AspNetCore** - ASP.NET Core minimal-API helpers (owner-scoped CRUD skeleton: MapOwnedCrud, OwnedCrudResults, OwnedCrudMapping; OwnerAccess — the one owner-or-admin rule)
 - **Birko.Communication.SSE.AspNetCore** - Server-Sent Events as a minimal-API result (SseResults.Stream over a ChannelReader / IAsyncEnumerable: heartbeat, terminal stop, proxy-friendly headers, disconnect ends the loop)
 
 ## Messaging

@@ -46,6 +46,19 @@ message id; MQTT keeps several handlers per filter and releases them properly, a
 subscriber no longer stops reconnect; the in-memory transport keeps a failed ManualAck message requeueable, removes a
 disposed consumer's handlers, and a delayed send outlives the caller's token (an already-cancelled call now throws).
 
+## 2026-10-18 — A SQL view built concurrently keeps its aggregates
+
+[[TASK-666]]. Seen on CI: a view loaded by several threads at once could render `COUNT(Orders.Guid) AS OrderCount` as
+`"Orders".Guid AS CustomerId`, because a build took a field from the cache by source column name while another build
+had just filled it. Every build now comes from the view's attributes alone.
+
+## 2026-10-18 — Every job queue reclaims a job its worker abandoned
+
+[[TASK-664]]. Only SQL did: on the eight other backends a worker that died between dequeue and complete left the job
+Processing forever. Each queue now takes a `claimTimeout` (default 30 min, `JobReclaim.DefaultClaimTimeout`) and offers
+such a job again, to one worker, or buries it as Dead when its attempts are spent. On Redis claimed jobs are kept in a
+`processing:{queue}` set for this.
+
 ## 2026-10-18 — RavenDB job queue claims each job once; the store gains a compare-and-set
 
 [[TASK-665]]. Measured live: a cancel racing a claim let both win (3 of 3 runs), and a job was claimed twice. The

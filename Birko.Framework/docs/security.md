@@ -253,6 +253,12 @@ public class MyService(ICurrentUser currentUser)
 
 `ClaimsCurrentUser` reads claims from `HttpContext` automatically.
 
+For owned resources, `currentUser.CanAccess(ownerId, viewAllPermission)` (Guid or string owner) applies the one
+owner-or-admin rule, `OwnerAccess` from Birko.Communication.AspNetCore (TASK-541). The user sees everything with `*` or
+the named view-all permission; otherwise its `UserGuid` must equal the owner, and a missing identity on either side
+never matches. Answer a denied caller 404, not 403 (owned data is private, rule 65). This makes Birko.Communication.AspNetCore
+a dependency: import its projitems alongside Birko.Security.AspNetCore.
+
 ### Permission-Based Authorization
 
 #### Claims Permission Checker

@@ -10,6 +10,7 @@ ASP.NET Core minimal-API helpers for the Birko Framework. Its one feature today 
 
 ## Components
 
+- **`OwnerAccess`** (`OwnedCrud/OwnerAccess.cs`, TASK-541) — **the one owner-or-admin rule**: `CanAccess(caller, owner, seesEverything = false)` for `Guid?` and `string?` identities. A caller who sees everything passes; otherwise both identities must be present (non-null, non-empty) and equal (ordinal for strings). A denied caller is answered **404, not 403** (rule 65). `OwnedCrudResults` decides through it; hand-written endpoints (string ids, nested resources) should too. Identities are values, not `ICurrentUser`, so this project keeps no Birko.Security.AspNetCore dependency: pass `user.UserGuid` and the app's view-all check.
 - **`OwnedCrudResults`** (`OwnedCrud/OwnedCrudResults.cs`) — static, host-free guard functions returning `IResult` (or `null` = "proceed"), unit-testable without a web host. This is the error-prone core (404-vs-409 disambiguation, "don't leak a foreign entity's existence"):
   - `ReadOwned` — GET `/{id}`: 404 when absent or owned by someone else, else 200 + DTO.
   - `CreateClash` — POST id-clash guard for an optional client-supplied id: 409 when it's the caller's, 404 when it's a foreign entity's, `null` to proceed.

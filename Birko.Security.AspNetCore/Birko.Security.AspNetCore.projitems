@@ -42,6 +42,7 @@
   <ItemGroup>
     <!-- User -->
     <Compile Include="$(MSBuildThisFileDirectory)User/ICurrentUser.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)User/CurrentUserOwnerAccessExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)User/ClaimMappingOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)User/ClaimsCurrentUser.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)User/ResolvedPermissionsCurrentUser.cs" />

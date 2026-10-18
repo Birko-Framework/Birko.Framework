@@ -17,7 +17,7 @@ namespace Birko.Communication.AspNetCore
         public static IResult ReadOwned<TModel>(TModel? entity, Guid owner, Func<TModel, Guid?> ownerOf, Func<TModel, object> toDto)
             where TModel : class
         {
-            if (entity is null || ownerOf(entity) != owner)
+            if (entity is null || !OwnerAccess.CanAccess(owner, ownerOf(entity)))
             {
                 return Results.NotFound();
             }
@@ -36,7 +36,7 @@ namespace Birko.Communication.AspNetCore
             {
                 return null;
             }
-            return ownerOf(clash) == owner
+            return OwnerAccess.CanAccess(owner, ownerOf(clash))
                 ? Results.Conflict(new { error = $"A {label} with this id already exists." })
                 : Results.NotFound();
         }
@@ -48,7 +48,7 @@ namespace Birko.Communication.AspNetCore
         public static IResult? RequireOwned<TModel>(TModel? entity, Guid owner, Func<TModel, Guid?> ownerOf, out TModel owned)
             where TModel : class
         {
-            if (entity is null || ownerOf(entity) != owner)
+            if (entity is null || !OwnerAccess.CanAccess(owner, ownerOf(entity)))
             {
                 owned = null!;
                 return Results.NotFound();

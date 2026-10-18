@@ -23,6 +23,7 @@
        project alongside this one already has the reference, and declaring it here would break every
        such consumer at once. -->
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)OwnedCrud\OwnerAccess.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OwnedCrud\OwnedCrudResults.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OwnedCrud\OwnedCrudMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OwnedCrud\OwnedCrudEndpointExtensions.cs" />

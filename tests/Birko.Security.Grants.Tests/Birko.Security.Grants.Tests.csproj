@@ -33,6 +33,7 @@
   <Import Project="..\..\Birko.Data.Tenant\Birko.Data.Tenant.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Security\Birko.Security.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Security.Jwt\Birko.Security.Jwt.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Communication.AspNetCore\Birko.Communication.AspNetCore.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Security.AspNetCore\Birko.Security.AspNetCore.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Security.Grants.AspNetCore\Birko.Security.Grants.AspNetCore.projitems" Label="Shared" />
 

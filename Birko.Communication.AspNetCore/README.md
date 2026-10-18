@@ -7,6 +7,7 @@ ASP.NET Core minimal-API helpers for the Birko Framework. Ships the **owner-scop
 
 ## Components
 
+- **OwnedCrud/OwnerAccess.cs** — `OwnerAccess.CanAccess(caller, owner, seesEverything)`: the one owner-or-admin rule (Guid or string identities; a missing identity never matches; a denied caller gets 404, not 403). Use it in hand-written endpoints; `OwnedCrudResults` uses it too.
 - **OwnedCrud/OwnedCrudResults.cs** — the owner-scoping guard logic as **pure, host-free functions** (unit-testable without a web host). `ReadOwned` (404 when absent/foreign, else 200 + DTO), `CreateClash` (409 when the client-supplied id is the caller's, 404 when it's someone else's — never leak a foreign entity's existence), `RequireOwned` (PUT/DELETE gate yielding the owned entity or a 404). This is the error-prone core.
 - **OwnedCrudMapping.cs** — `OwnedCrudMapping<TModel, TRequest, TRepo>`: the per-resource configuration. Everything domain-specific — `Owner`, `Read`, `Create`, `Update`, `Delete`, `OwnerOf`, `ToDto`, `Build`, `Apply`, optional `Validate` / `RequestGuid`, and a human `Label` — is supplied here via `required` init-only delegates.
 - **OwnedCrud/OwnedCrudEndpointExtensions.cs** — `MapOwnedCrud<TModel, TRequest, TRepo>(routeBase, mapping)`: registers the four owner-scoped routes under a base path, resolving `TRepo` per request from DI. A thin wiring layer over `OwnedCrudResults` + the supplied mapping. List endpoints are intentionally out of scope (their shapes vary too much) — map those directly.

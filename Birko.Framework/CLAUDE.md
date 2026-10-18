@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### OwnerAccess: one owner-or-admin rule; Security.AspNetCore imports Communication.AspNetCore (2026-10-18)
+[[TASK-541]]. `OwnerAccess.CanAccess(caller, owner, seesEverything)` covers Guid and string owners; a missing identity
+never matches, and a denial is 404. `OwnedCrudResults` decides through it, and `ICurrentUser.CanAccess(owner, viewAll)`
+wraps it. **Breaking for aggregators:** importing Birko.Security.AspNetCore now also needs Birko.Communication.AspNetCore
+(decided by the user). Symbio, DraCode, FisData.Stock.Angular and GrantsSmoke must add it.
 ### The WebSocket proxy forwards sub-protocols (2026-10-18)
 [[TASK-569]]. `MapWebSocketProxy` offers the client's requested sub-protocols upstream, in the client's order, and
 accepts the client with the upstream's choice. Measured: a client asking for one (`graphql-transport-ws`, `mqtt`) was
@@ -324,15 +329,6 @@ The outbox over the distributed bus now starts. Details: CHANGELOG.
 match the search index, so a job completed or failed within ~1 s of its claim was still indexed Pending and the outcome
 was dropped; Cancel cancelled a running job. `AsyncElasticSearchStore.UpdateIfAsync` (realtime GET, write conditioned
 on `_seq_no`) now carries the claim and every transition, and `GetAsync` reads realtime.
-### A SQL view built concurrently keeps its aggregates (2026-10-18)
-[[TASK-666]]. Seen on CI: a view loaded by several threads at once could render `COUNT(Orders.Guid) AS OrderCount` as
-`"Orders".Guid AS CustomerId`, because a build took a field from the cache by source column name while another build
-had just filled it. Every build now comes from the view's attributes alone.
-### Every job queue reclaims a job its worker abandoned (2026-10-18)
-[[TASK-664]]. Only SQL did: on the eight other backends a worker that died between dequeue and complete left the job
-Processing forever. Each queue now takes a `claimTimeout` (default 30 min, `JobReclaim.DefaultClaimTimeout`) and offers
-such a job again, to one worker, or buries it as Dead when its attempts are spent. On Redis claimed jobs are kept in a
-`processing:{queue}` set for this.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
