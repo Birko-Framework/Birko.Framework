@@ -732,15 +732,29 @@ policy.
   pending so `RejectAsync(requeue: true)` redelivers it (SH-M109/SH-M110; the dispatch loop discarded the
   fault unobserved, so the rethrow had no observable effect on this backend)
 
-#### Scenario: Retry options set on the bus
+#### Scenario: Retry and dead-letter on a transport that can count deliveries
 
-- **Given** `DistributedEventBusOptions.RetryPolicy` or `DeadLetterOptions` is set to a non-null value
-  (both default to null)
-- **When** the `DistributedEventBus` is constructed
-- **Then** `NotSupportedException` is thrown; only transport-level configuration (`ConsumerOptions`,
-  provider settings) affects retry and dead-lettering (SH-L114, decided by the user: refuse until
-  implemented in TASK-668; both had non-null defaults the bus never read, so configuring them silently
-  did nothing)
+- **Given** `DistributedEventBusOptions.RetryPolicy` (the shared `Birko.RetryPolicy`) and/or `DeadLetterOptions`
+  set (both default to null; `DeadLetterOptions` alone bounds retries with `Birko.RetryPolicy.Default`), over a
+  transport whose `IRedeliveryCapability` reports `Resend` (in-memory) or `Redelivered` (Redis with a consumer
+  group and `PendingRetryMilliseconds` above 0)
+- **When** a delivery's dispatch keeps failing
+- **Then** it is retried while its `x-delivery-count` is at most `MaxRetries`: on in-memory as a re-send of a
+  copy with the count incremented and `Delay = RetryPolicy.GetDelay(count)`; on Redis by letting the delivery
+  fault, so the transport reclaims the pending entry (its delay is `PendingRetryMilliseconds`, not the policy's)
+- **And** once the count passes `MaxRetries` a copy is sent to `DeadLetterOptions.GetDeadLetterDestination(topic)`
+  (`{topic}.dlq` by default) with `x-original-destination` and `x-dead-letter-reason`, and the delivery completes
+  (acknowledged); with no enabled dead-letter options it is dropped and reported through `MessageDropped`
+  (TASK-668, implementing what SH-L114 refused; measured: three deliveries then the DLQ in memory, two then the
+  DLQ live on Redis)
+
+#### Scenario: Retry options on a transport that cannot count deliveries
+
+- **Given** `RetryPolicy` or `DeadLetterOptions` set
+- **When** the `DistributedEventBus` is constructed over a transport without `IRedeliveryCapability` (MQTT), or
+  one reporting `None` (Redis without a consumer group, or with reclaim off)
+- **Then** `NotSupportedException` is thrown, since the rule would never fire (SH-L114's refusal, kept where it
+  still applies; a negative `MaxRetries` is `ArgumentOutOfRangeException`)
 
 ### Requirement: Distributed bus disposal unsubscribes synchronously or asynchronously
 
@@ -1362,39 +1376,51 @@ of that detached task. `MqttProducer.SendAsync` and `RedisProducer.SendAsync` SH
 - **When** `SendAsync` is awaited
 - **Then** the write to the channel is awaited inline and failures propagate to the caller
 
-### Requirement: Transports refuse message and consumer options they do not honour
+### Requirement: Transports honour message and consumer options or refuse them
 
-The system SHALL refuse, through the static `Birko.MessageQueue.TransportSupport` and with a
-`NotSupportedException` naming the option and the transport, raised at the call that asked for it:
-a `QueueMessage.TimeToLive` on the MQTT and in-memory producers (the Redis producer honours it); a
-non-zero `QueueMessage.Priority` on the in-memory, MQTT and Redis producers; and a non-default
-`ConsumerOptions.PrefetchCount` at `SubscribeAsync` on the in-memory, MQTT and Redis consumers. Each
-refusal stands until the feature is implemented (TASK-668). The `ReplyTo` and `GroupId` message headers
-SHALL be carried on the wire with no built-in semantics.
+The system SHALL honour, or refuse through the static `Birko.MessageQueue.TransportSupport` with a
+`NotSupportedException` naming the option and the transport at the call that asked for it (TASK-174's
+refusals, lifted by TASK-668 where a transport honours the option):
 
-#### Scenario: Time-to-live on a transport that does not expire messages
+- `QueueMessage.TimeToLive`, counted from `CreatedAt`: honoured by Redis (a `ttl_ms` field, expired entries
+  acknowledged and skipped) and in-memory (an expired message is dropped at dispatch, measured on
+  `InMemoryMessageQueueOptions.Clock`); on MQTT sent as the MQTT 5 message expiry interval when the client's
+  connection is MQTT 5 (`MqttSettings.ProtocolVersion = V500`), refused on MQTT 3.1.1 and refused unless it is a
+  whole number of seconds from 1 (the interval counts whole seconds, and 0 means "never expires").
+- `ConsumerOptions.PrefetchCount` (at least 1, else `ArgumentOutOfRangeException`): on Redis an explicit value
+  is the read batch, i.e. the entries the subscription holds delivered-but-unacknowledged in the stream's
+  pending list (the default 1 leaves `RedisStreamSettings.ReadCount` in charge); on in-memory it is the number of
+  the subscription's handlers in flight at once (the default 1 is one at a time); refused on MQTT, whose receive
+  maximum is a per-connection CONNECT property, not per subscription.
+- a non-zero `QueueMessage.Priority`: refused on every current transport (decided by the user 2026-10-18: kept
+  for a transport that can order by it, such as RabbitMQ).
+
+The `ReplyTo` and `GroupId` message headers SHALL be carried on the wire with no built-in semantics.
+
+#### Scenario: Time-to-live
 
 - **Given** a `QueueMessage` with `TimeToLive` set
-- **When** it is sent through `MqttProducer.SendAsync` or `InMemoryProducer.SendAsync`
-- **Then** `NotSupportedException` is thrown and nothing is sent; through `RedisProducer` the message is
-  sent with a `ttl_ms` field (SH-L108, decided by the user: refuse until implemented; the TTL was
-  silently ignored and the message never expired)
+- **When** it is sent through `InMemoryProducer` and its TTL passes before dispatch
+- **Then** it is delivered to no subscriber, while a message within its TTL is delivered (TASK-668)
+- **And** through `RedisProducer` it is sent with a `ttl_ms` field and skipped once expired; through `MqttProducer`
+  on an MQTT 5 connection it carries `MessageExpiryInterval` in seconds; on MQTT 3.1.1, or for a TTL under a
+  second or not in whole seconds, `NotSupportedException` is thrown and nothing is published (SH-L108)
 
 #### Scenario: Priority on any transport
 
 - **Given** a `QueueMessage` with a non-zero `Priority`
 - **When** it is sent through the in-memory, MQTT or Redis producer
 - **Then** `NotSupportedException` is thrown and nothing is sent; `Priority = 0` sends normally (SH-L109,
-  decided by the user: refuse until implemented; no transport ordered by priority and the value was
-  silently ignored)
+  decided by the user: refused until a transport that orders by priority exists)
 
-#### Scenario: Prefetch count on any transport
+#### Scenario: Prefetch count
 
-- **Given** `ConsumerOptions` with a `PrefetchCount` other than its default
-- **When** `SubscribeAsync` is called on the in-memory, MQTT or Redis consumer
-- **Then** `NotSupportedException` is thrown and no subscription is created (SH-L110, decided by the
-  user: refuse until implemented; no transport bounded unacknowledged messages and the value was
-  silently ignored)
+- **Given** `ConsumerOptions` with `PrefetchCount = 3`
+- **When** `SubscribeAsync` is called on the Redis consumer of a consumer group, or the in-memory consumer
+- **Then** the Redis subscription holds at most 3 entries pending at once (measured live with `ReadCount = 5`),
+  and the in-memory subscription runs at most 3 handlers at once (TASK-668)
+- **And** on the MQTT consumer `NotSupportedException` is thrown and no subscription is created (SH-L110); a
+  `PrefetchCount` below 1 is `ArgumentOutOfRangeException` on Redis and in-memory
 
 #### Scenario: Reply-to and group headers
 
@@ -1452,7 +1478,7 @@ id was delivered as — and only when a consumer group is in use.
   `FromBeginning = true` or a `GroupId`, or `RejectAsync(requeue: true)` is called
 - **Then** `NotSupportedException` is thrown (SH-M107, decided by the user: refuse loudly; those options
   were silently ignored and the requeue reported success while nothing was redelivered); a non-default
-  `PrefetchCount` is refused the same way (SH-L110; it had no effect and was ignored)
+  `PrefetchCount` is refused the same way (SH-L110, kept at TASK-668: MQTT's receive maximum is per connection)
 
 #### Scenario: Redis auto-ack in a consumer group
 

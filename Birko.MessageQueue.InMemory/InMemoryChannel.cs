@@ -15,12 +15,17 @@ namespace Birko.MessageQueue.InMemory
     {
         private readonly ConcurrentDictionary<string, DestinationState> _destinations = new();
         private readonly int _capacity;
+        private readonly TimeProvider _clock;
         private volatile bool _disposed; // SH-L116: written by Dispose, read by every other thread
 
-        public InMemoryChannel(int capacity = 1000)
+        public InMemoryChannel(int capacity = 1000, TimeProvider? clock = null)
         {
             _capacity = capacity;
+            _clock = clock ?? TimeProvider.System;
         }
+
+        /// <summary>TASK-668: a message past its <see cref="QueueMessage.TimeToLive"/> is dropped, not delivered.</summary>
+        private bool Expired(QueueMessage message) => TransportSupport.IsExpired(message, _clock.GetUtcNow());
 
         /// <summary>
         /// Writes a message to a destination, delivering to all active subscribers.
@@ -52,7 +57,11 @@ namespace Birko.MessageQueue.InMemory
                 cts.CancelAfter(timeout.Value);
                 try
                 {
-                    return await state.Channel.Reader.ReadAsync(cts.Token).ConfigureAwait(false);
+                    while (true)
+                    {
+                        var read = await state.Channel.Reader.ReadAsync(cts.Token).ConfigureAwait(false);
+                        if (!Expired(read)) return read;
+                    }
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
@@ -60,9 +69,9 @@ namespace Birko.MessageQueue.InMemory
                 }
             }
 
-            if (state.Channel.Reader.TryRead(out var message))
+            while (state.Channel.Reader.TryRead(out var message))
             {
-                return message;
+                if (!Expired(message)) return message;
             }
 
             return null;
@@ -77,7 +86,7 @@ namespace Birko.MessageQueue.InMemory
         /// destination — the dispatch loop drains the channel, so a pull caller on the same destination
         /// would see its messages consumed by the loop.
         /// </remarks>
-        public Guid AddSubscriber(string destination, Func<QueueMessage, CancellationToken, Task> handler)
+        public Guid AddSubscriber(string destination, Func<QueueMessage, CancellationToken, Task> handler, int maxInFlight = 1)
         {
             var state = GetOrCreateDestination(destination);
             var id = Guid.NewGuid();
@@ -89,7 +98,7 @@ namespace Birko.MessageQueue.InMemory
             // one subscriber exists (which is true right after this TryAdd).
             lock (state.SyncRoot)
             {
-                state.Subscribers.TryAdd(id, handler);
+                state.Subscribers.TryAdd(id, new Subscriber(handler, maxInFlight));
                 if (state.DispatchCts == null)
                 {
                     StartDispatching(destination, state);
@@ -142,17 +151,24 @@ namespace Birko.MessageQueue.InMemory
                 {
                     await foreach (var message in state.Channel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
                     {
-                        var subscribers = state.Subscribers.Values;
-                        foreach (var handler in subscribers)
+                        if (Expired(message))
                         {
-                            try
+                            continue; // TASK-668: past its TimeToLive, so delivered to no one
+                        }
+
+                        var subscribers = state.Subscribers.Values;
+                        foreach (var subscriber in subscribers)
+                        {
+                            if (subscriber.Gate == null)
                             {
-                                await handler(message, ct).ConfigureAwait(false);
+                                await RunHandlerAsync(subscriber, message, ct).ConfigureAwait(false);
+                                continue;
                             }
-                            catch
-                            {
-                                // Individual handler failure should not stop other subscribers
-                            }
+
+                            // TASK-668: a PrefetchCount above 1 runs up to that many of this subscriber's handlers at
+                            // once; the loop waits for a free slot, so no more than that are ever in flight.
+                            await subscriber.Gate.WaitAsync(ct).ConfigureAwait(false);
+                            _ = RunGatedAsync(subscriber, message, ct);
                         }
                     }
                 }
@@ -172,6 +188,44 @@ namespace Birko.MessageQueue.InMemory
         /// <see cref="CancellationTokenSource"/> and completes its channel writer, so no
         /// dispatch tasks or CTS handles leak when the owning queue is disposed.
         /// </summary>
+        private static async Task RunHandlerAsync(Subscriber subscriber, QueueMessage message, CancellationToken ct)
+        {
+            try
+            {
+                await subscriber.Handler(message, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Individual handler failure should not stop other subscribers
+            }
+        }
+
+        private static async Task RunGatedAsync(Subscriber subscriber, QueueMessage message, CancellationToken ct)
+        {
+            try
+            {
+                await RunHandlerAsync(subscriber, message, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                subscriber.Gate!.Release();
+            }
+        }
+
+        internal sealed class Subscriber
+        {
+            public Subscriber(Func<QueueMessage, CancellationToken, Task> handler, int maxInFlight)
+            {
+                Handler = handler;
+                Gate = maxInFlight > 1 ? new SemaphoreSlim(maxInFlight, maxInFlight) : null;
+            }
+
+            public Func<QueueMessage, CancellationToken, Task> Handler { get; }
+
+            /// <summary>Bounds this subscriber's handlers in flight; null for one at a time (awaited by the loop).</summary>
+            public SemaphoreSlim? Gate { get; }
+        }
+
         public void Dispose()
         {
             if (_disposed)
@@ -205,7 +259,7 @@ namespace Birko.MessageQueue.InMemory
         internal class DestinationState
         {
             public Channel<QueueMessage> Channel { get; }
-            public ConcurrentDictionary<Guid, Func<QueueMessage, CancellationToken, Task>> Subscribers { get; } = new();
+            public ConcurrentDictionary<Guid, Subscriber> Subscribers { get; } = new();
             public CancellationTokenSource? DispatchCts { get; set; }
 
             /// <summary>CR-L285: guards the dispatch-loop start/stop transition against the subscriber count.</summary>

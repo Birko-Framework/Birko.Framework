@@ -35,6 +35,9 @@ InMemoryMessageQueue
 - When subscribers exist, a dispatch loop reads from the channel and invokes all handlers
 - When no subscribers, messages buffer in the channel for later consumption
 - `InMemoryProducer` handles delayed messages via `Task.Delay` before writing
+- `TimeToLive` (TASK-668): an expired message (from `CreatedAt`, on `InMemoryMessageQueueOptions.Clock`) is dropped at dispatch and by `ReadAsync`
+- `PrefetchCount` (TASK-668): above 1, up to that many of a subscription's handlers run at once (a `SemaphoreSlim` per subscriber; the loop waits for a slot); 1 (default) is awaited in the loop, one at a time
+- `IRedeliveryCapability` = `Resend`: no redelivery of a failed delivery, so the distributed bus retries by a delayed re-send
 
 ## Dependencies
 - **Birko.MessageQueue** — Core interfaces

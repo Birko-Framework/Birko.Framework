@@ -73,6 +73,13 @@ namespace Birko.MessageQueue.Mqtt
         /// </summary>
         public MqttQualityOfService DefaultQualityOfService { get; set; } = MqttQualityOfService.AtLeastOnce;
 
+        /// <summary>
+        /// The protocol version to connect with. Default <see cref="MqttProtocol.V311"/>. <see cref="MqttProtocol.V500"/>
+        /// is what lets a <see cref="QueueMessage.TimeToLive"/> be honoured (the MQTT 5 message expiry interval); on
+        /// MQTT 3.1.1 it is refused (TASK-668).
+        /// </summary>
+        public MqttProtocol ProtocolVersion { get; set; } = MqttProtocol.V311;
+
         #endregion
 
         #region Constructors
@@ -141,6 +148,7 @@ namespace Birko.MessageQueue.Mqtt
                 MaxReconnectAttempts = data.MaxReconnectAttempts;
                 LastWill = data.LastWill;
                 DefaultQualityOfService = data.DefaultQualityOfService;
+                ProtocolVersion = data.ProtocolVersion;
             }
         }
 

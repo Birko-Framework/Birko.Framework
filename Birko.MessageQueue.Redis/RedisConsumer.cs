@@ -77,8 +77,11 @@ namespace Birko.MessageQueue.Redis
         /// </remarks>
         public Task<ISubscription> SubscribeAsync(string destination, Func<QueueMessage, CancellationToken, Task> handler, ConsumerOptions? options = null, CancellationToken cancellationToken = default)
         {
-            TransportSupport.RefusePrefetch(options, "Redis");
             ObjectDisposedException.ThrowIf(_disposed, this);
+            // TASK-668: an explicit PrefetchCount is the read batch, i.e. how many entries this subscription holds
+            // delivered-but-unacknowledged in the stream's pending list at once. The default 1 leaves
+            // RedisStreamSettings.ReadCount in charge, as before.
+            var prefetch = TransportSupport.PrefetchOf(options);
 
             if (string.IsNullOrEmpty(destination))
             {
@@ -106,7 +109,8 @@ namespace Birko.MessageQueue.Redis
                 ConsumerName = consumerName,
                 Handler = handler,
                 Options = opts,
-                Cts = cts
+                Cts = cts,
+                ReadCount = prefetch != new ConsumerOptions().PrefetchCount ? prefetch : _settings.ReadCount
             };
 
             _subscriptions.TryAdd(subscriptionId, state);
@@ -249,7 +253,7 @@ namespace Birko.MessageQueue.Redis
                             state.ConsumerGroup!,
                             state.ConsumerName,
                             position,
-                            count: _settings.ReadCount
+                            count: state.ReadCount
                         ).ConfigureAwait(false);
                     }
                     else
@@ -266,7 +270,7 @@ namespace Birko.MessageQueue.Redis
                         entries = await db.StreamReadAsync(
                             state.StreamKey,
                             state.LastReadId,
-                            count: _settings.ReadCount
+                            count: state.ReadCount
                         ).ConfigureAwait(false);
                     }
 
@@ -461,7 +465,7 @@ namespace Birko.MessageQueue.Redis
                 state.ConsumerName,
                 _settings.PendingRetryMilliseconds,
                 "0-0",
-                count: _settings.ReadCount).ConfigureAwait(false);
+                count: state.ReadCount).ConfigureAwait(false);
 
             if (result.IsNull || result.ClaimedEntries == null || result.ClaimedEntries.Length == 0)
             {
@@ -494,7 +498,7 @@ namespace Birko.MessageQueue.Redis
                     state.ConsumerGroup!,
                     state.ConsumerName,
                     startId,
-                    count: _settings.ReadCount
+                    count: state.ReadCount
                 ).ConfigureAwait(false);
 
                 if (entries == null || entries.Length == 0)
@@ -653,6 +657,9 @@ namespace Birko.MessageQueue.Redis
             public required ConsumerOptions Options { get; set; }
             public required CancellationTokenSource Cts { get; set; }
             public string? LastReadId { get; set; }
+
+            /// <summary>Entries read (and reclaimed) per call: an explicit PrefetchCount, else ReadCount (TASK-668).</summary>
+            public required int ReadCount { get; set; }
         }
 
         private class PendingMessage

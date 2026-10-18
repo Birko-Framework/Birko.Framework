@@ -22,6 +22,8 @@ Core message queue abstractions for the Birko Framework. Provides interfaces for
 | MessageHeaders.cs | Metadata (CorrelationGuid, ReplyTo, ContentType, GroupId, Custom dictionary) |
 | MessageContext.cs | Runtime context for handlers (Message, Destination, Consumer, DeliveryCount) |
 | ConsumerOptions.cs | Subscription config (AckMode, PrefetchCount, GroupId, FromBeginning) |
+| TransportSupport.cs | The refusals for options a transport cannot honour, and `PrefetchOf` / `IsExpired`; which transport honours what is in its remarks (TASK-668) |
+| IRedeliveryCapability.cs | How a transport handles a failed delivery (`None` / `Redelivered` / `Resend`); read by the distributed bus's retry rule (TASK-668) |
 | MessageAckMode.cs | Enum: AutoAck, ManualAck |
 | MessageFingerprint.cs | SHA256 content fingerprinting for deduplication |
 

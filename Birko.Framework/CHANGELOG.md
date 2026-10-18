@@ -46,6 +46,13 @@ message id; MQTT keeps several handlers per filter and releases them properly, a
 subscriber no longer stops reconnect; the in-memory transport keeps a failed ManualAck message requeueable, removes a
 disposed consumer's handlers, and a delayed send outlives the caller's token (an already-cancelled call now throws).
 
+## 2026-10-18 — Elasticsearch job queue records an outcome reported right after the claim
+
+[[TASK-667]]. **Regression from TASK-158**, measured live: its guarded transitions were `update_by_query` calls, which
+match the search index, so a job completed or failed within ~1 s of its claim was still indexed Pending and the outcome
+was dropped; Cancel cancelled a running job. `AsyncElasticSearchStore.UpdateIfAsync` (realtime GET, write conditioned
+on `_seq_no`) now carries the claim and every transition, and `GetAsync` reads realtime.
+
 ## 2026-10-18 — A SQL view built concurrently keeps its aggregates
 
 [[TASK-666]]. Seen on CI: a view loaded by several threads at once could render `COUNT(Orders.Guid) AS OrderCount` as

@@ -30,6 +30,8 @@ Redis Streams implementation of Birko.MessageQueue interfaces. Provides persiste
 - Manual ack via `XACK`, auto-ack on handler success
 - Pending entry recovery when `FromBeginning = true`
 - TTL enforcement (expired messages auto-acked and skipped)
+- `PrefetchCount` (TASK-668): an explicit value is the read (and reclaim) batch, i.e. entries pending for the subscription at once; the default 1 keeps `RedisStreamSettings.ReadCount`
+- `IRedeliveryCapability` = `Redelivered` with a consumer group (GroupId or settings) and `PendingRetryMilliseconds` > 0, else `None`
 
 ### RedisSubscription.cs
 - Implements `ISubscription`

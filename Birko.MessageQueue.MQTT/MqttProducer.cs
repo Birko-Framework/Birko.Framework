@@ -40,9 +40,10 @@ namespace Birko.MessageQueue.Mqtt
             {
                 throw new NotSupportedException("The MQTT transport cannot delay a message; send it without Delay, or delay it before sending.");
             }
+            uint? expirySeconds = null;
             if (message != null)
             {
-                TransportSupport.RefuseTimeToLive(message, "MQTT"); // SH-L108
+                expirySeconds = MessageExpiryInterval(message);
                 TransportSupport.RefusePriority(message, "MQTT");   // SH-L109
             }
 
@@ -59,6 +60,11 @@ namespace Birko.MessageQueue.Mqtt
                 .WithQualityOfServiceLevel(ToMqttQos(_options.DefaultQualityOfService))
                 .WithRetainFlag(false);
 
+            if (expirySeconds is { } seconds)
+            {
+                builder.WithMessageExpiryInterval(seconds);
+            }
+
             // Carry QueueMessage metadata as MQTT5 user properties so a typed publish/subscribe
             // round-trip preserves PayloadType + Headers (parity with the Redis / InMemory backends).
             // NOTE: user properties are an MQTT5 feature — on an MQTT 3.1.1 connection the broker
@@ -74,6 +80,30 @@ namespace Birko.MessageQueue.Mqtt
             }
 
             await _client.PublishAsync(builder.Build(), cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// TASK-668: a TimeToLive is the MQTT 5 message expiry interval, which the broker enforces. It is refused on an
+        /// MQTT 3.1.1 connection (no expiry exists there; SH-L108), and unless it is a whole number of seconds from 1 up,
+        /// since the interval counts whole seconds and 0 would mean "never expires".
+        /// </summary>
+        private uint? MessageExpiryInterval(QueueMessage message)
+        {
+            if (message.TimeToLive is not { } ttl)
+            {
+                return null;
+            }
+            if (_client.Options?.ProtocolVersion != MQTTnet.Formatter.MqttProtocolVersion.V500)
+            {
+                TransportSupport.RefuseTimeToLive(message, "MQTT 3.1.1",
+                    "An MQTT 5 connection (MqttSettings.ProtocolVersion = V500) sends it as the message expiry interval.");
+            }
+            if (ttl.Ticks % TimeSpan.TicksPerSecond != 0 || ttl < TimeSpan.FromSeconds(1) || ttl.TotalSeconds > uint.MaxValue)
+            {
+                throw new NotSupportedException(
+                    $"MQTT expires messages in whole seconds; a TimeToLive of {ttl} cannot be sent exactly. Use a whole number of seconds from 1.");
+            }
+            return (uint)ttl.TotalSeconds;
         }
 
         public async Task SendAsync<T>(string destination, T payload, MessageHeaders? headers = null, CancellationToken cancellationToken = default) where T : class

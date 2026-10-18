@@ -20,6 +20,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Core\MessageContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\ConsumerOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\TransportSupport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IRedeliveryCapability.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\MessageAckMode.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\MessageFingerprint.cs" />
     <!-- Patterns -->

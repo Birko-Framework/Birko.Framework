@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Messaging options TASK-174 refused are honoured where a transport can (2026-10-18)
+[[TASK-668]].
+- TimeToLive works in memory and on MQTT 5 (new `MqttSettings.ProtocolVersion`).
+- PrefetchCount is Redis's read batch and in-memory's handlers in flight; MQTT still refuses it.
+- The distributed bus applies `RetryPolicy` and `DeadLetterOptions` through the new `IRedeliveryCapability`: a re-send in
+  memory, a reclaim on Redis. MQTT refuses them, and Priority stays refused (decided by the user).
 ### OwnerAccess: one owner-or-admin rule; Security.AspNetCore imports Communication.AspNetCore (2026-10-18)
 [[TASK-541]]. `OwnerAccess.CanAccess(caller, owner, seesEverything)` covers Guid and string owners; a missing identity
 never matches, and a denial is 404. `OwnedCrudResults` decides through it, and `ICurrentUser.CanAccess(owner, viewAll)`
@@ -324,11 +330,6 @@ The outbox over the distributed bus now starts. Details: CHANGELOG.
 - Executor and scheduler: the executor checks a stored job type before building it, and a sub-second recurring job
   fires at its rate.
 - PostgreSQL locks wait for the timeout, and a derived connector (e.g. TimescaleDB) now locks.
-### Elasticsearch job queue records an outcome reported right after the claim (2026-10-18)
-[[TASK-667]]. **Regression from TASK-158**, measured live: its guarded transitions were `update_by_query` calls, which
-match the search index, so a job completed or failed within ~1 s of its claim was still indexed Pending and the outcome
-was dropped; Cancel cancelled a running job. `AsyncElasticSearchStore.UpdateIfAsync` (realtime GET, write conditioned
-on `_seq_no`) now carries the claim and every transition, and `GetAsync` reads realtime.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

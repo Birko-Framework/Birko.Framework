@@ -18,6 +18,7 @@ MQTT message queue implementation using MQTTnet. For IoT device communication, s
 | MqttSubscription.cs | ISubscription — unsubscribes from MQTT topic on dispose |
 | MqttSettings.cs | Connection settings extending RemoteSettings (host, port, TLS, credentials, keepalive, reconnect, LWT) |
 | MqttQualityOfService.cs | Enum: AtMostOnce (0), AtLeastOnce (1), ExactlyOnce (2) |
+| MqttProtocol.cs | Enum: V311 (default), V500 — `MqttSettings.ProtocolVersion`, passed to the CONNECT (TASK-668) |
 | MqttLastWill.cs | LWT config (topic, payload, QoS, retain) |
 | MqttTopic.cs | Static topic utilities — validation and wildcard matching (+/#) |
 
@@ -45,6 +46,8 @@ MqttMessageQueue
 - **MQTTnet** — MQTT client (NuGet, referenced by consuming project)
 
 ## Important Notes
+- **TimeToLive (TASK-668):** on an MQTT 5 connection (`MqttSettings.ProtocolVersion = V500`, read back from `IMqttClient.Options`) it is sent as the message expiry interval in whole seconds; refused on MQTT 3.1.1 and for a TTL under a second or not in whole seconds (0 would mean "never expires").
+- **PrefetchCount stays refused:** the MQTT 5 receive maximum is a CONNECT property, per connection, so it cannot bound one subscription. No `IRedeliveryCapability` either (every delivery reports count 1), so the distributed bus refuses a retry policy over MQTT.
 - Consuming project must add `<PackageReference Include="MQTTnet" />` to its .csproj
 - MQTTnet v4+ API is used (MqttClientFactory, MqttApplicationMessageBuilder, event-based handlers)
 - Topic validation: publish topics cannot contain wildcards; subscribe filters can use `+` and `#`

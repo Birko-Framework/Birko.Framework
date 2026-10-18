@@ -70,7 +70,10 @@ namespace Birko.MessageQueue.Mqtt
                 .WithClientId(_options.ClientId ?? $"birko-{Guid.NewGuid():N}")
                 .WithCleanSession(_options.CleanSession)
                 .WithKeepAlivePeriod(_options.KeepAlive)
-                .WithTimeout(_options.ConnectionTimeout);
+                .WithTimeout(_options.ConnectionTimeout)
+                .WithProtocolVersion(_options.ProtocolVersion == MqttProtocol.V500
+                    ? MQTTnet.Formatter.MqttProtocolVersion.V500
+                    : MQTTnet.Formatter.MqttProtocolVersion.V311);
 
             if (!string.IsNullOrEmpty(_options.UserName))
             {

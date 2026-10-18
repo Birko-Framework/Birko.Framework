@@ -11,7 +11,7 @@ namespace Birko.MessageQueue.Redis
     /// Uses Redis Streams (XADD/XREAD/XREADGROUP) for persistent, ordered messaging
     /// with consumer group support, acknowledgment (XACK), and automatic trimming (XTRIM).
     /// </summary>
-    public class RedisStreamQueue : IMessageQueue
+    public class RedisStreamQueue : IMessageQueue, IRedeliveryCapability
     {
         private readonly RedisConnectionManager _connectionManager;
         private readonly RedisStreamSettings _settings;
@@ -21,6 +21,17 @@ namespace Birko.MessageQueue.Redis
         public IMessageProducer Producer { get; }
         public IMessageConsumer Consumer { get; }
         public bool IsConnected => _connectionManager.IsConnected;
+
+        /// <summary>
+        /// <see cref="RedeliveryMode.Redelivered"/> when the subscription reads through a consumer group (its GroupId, else
+        /// <see cref="RedisStreamSettings.ConsumerGroup"/>) and reclaim is on (<see cref="RedisStreamSettings.PendingRetryMilliseconds"/>
+        /// above 0): a failed entry stays pending and is redelivered with its delivery count. Without a group nothing is
+        /// pending, so nothing comes back: <see cref="RedeliveryMode.None"/> (TASK-668).
+        /// </summary>
+        public RedeliveryMode GetRedeliveryMode(ConsumerOptions? options)
+            => (options?.GroupId ?? _settings.ConsumerGroup) != null && _settings.PendingRetryMilliseconds > 0
+                ? RedeliveryMode.Redelivered
+                : RedeliveryMode.None;
 
         /// <summary>
         /// Creates a new Redis Streams message queue with connection settings.

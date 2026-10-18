@@ -170,16 +170,24 @@ public interface IReceiver : IMessageConsumer
 var options = new ConsumerOptions
 {
     AckMode = MessageAckMode.ManualAck,  // AutoAck or ManualAck
-    PrefetchCount = 10,                   // Unacked message limit (0 = unlimited)
+    PrefetchCount = 10,                   // Redis: read batch; in-memory: handlers in flight (at least 1)
     GroupId = "order-processors",          // Consumer group for load balancing
     FromBeginning = false                  // Start from latest (true = replay all)
 };
 ```
 
 A transport refuses an option it cannot honour (`NotSupportedException`) rather than ignoring it. MQTT has no
-ManualAck, FromBeginning, GroupId or requeue; MQTT and Redis have no `Delay`; MQTT and in-memory have no
-`TimeToLive`; no transport supports a non-zero `Priority` or a non-default `PrefetchCount` yet (TASK-668). A
-redelivered message carries an `x-delivery-count` header on Redis and in-memory. A new Redis consumer group starts at
+ManualAck, FromBeginning, GroupId or requeue, and MQTT and Redis have no `Delay`. Which transport honours what
+(TASK-668):
+
+| Option | Redis | In-memory | MQTT |
+|---|---|---|---|
+| `TimeToLive` | honoured (`ttl_ms`; expired entries skipped) | honoured (dropped at dispatch; clock: `InMemoryMessageQueueOptions.Clock`) | MQTT 5 only (`MqttSettings.ProtocolVersion = V500`): message expiry interval, whole seconds from 1; refused on 3.1.1 |
+| `PrefetchCount` | the read batch: entries pending at once (default 1 keeps `ReadCount`) | handlers in flight at once | refused: the receive maximum is per connection |
+| `Priority` (non-zero) | refused | refused | refused (kept for a transport that orders by it, such as RabbitMQ) |
+| Bus `RetryPolicy` / `DeadLetterOptions` | with a consumer group and `PendingRetryMilliseconds` above 0 | yes (delayed re-send) | refused (no delivery count) |
+
+A redelivered message carries an `x-delivery-count` header on Redis and in-memory. A new Redis consumer group starts at
 the stream's tail unless `FromBeginning` is set, so a message published before the group exists is not delivered to it.
 Each consumer has an `OnHandlerError` hook (in-memory, MQTT, Redis) through which a failing handler is reported.
 
@@ -263,6 +271,14 @@ var policy = new RetryPolicy
 Built-in presets:
 - `RetryPolicy.Default` — 3 retries, 5s base, 5min max, exponential
 - `RetryPolicy.None` — No retries
+
+The `DistributedEventBus` applies them (TASK-668): `DistributedEventBusOptions.RetryPolicy` is the shared
+`Birko.RetryPolicy`. A failed delivery is retried while its `x-delivery-count` is at most `MaxRetries`, then sent to the
+dead-letter destination with `x-original-destination` and `x-dead-letter-reason` headers (or, without
+`DeadLetterOptions`, dropped and reported through `MessageDropped`). On in-memory a retry is a re-send delayed by
+`GetDelay(count)`; on Redis the transport redelivers the pending entry after `PendingRetryMilliseconds` (the policy's
+delay does not apply). A transport that cannot count deliveries (MQTT, Redis without a consumer group) refuses the
+options when the bus is constructed. A transport reports this through `IRedeliveryCapability`.
 
 ### DeadLetterOptions
 
@@ -362,16 +378,16 @@ headers.Custom["version"] = "2";
 await queue.Producer.SendAsync("orders.created", order, headers);
 ```
 
-### Priority and Delayed Messages
+### Delayed and Expiring Messages
 
 ```csharp
 var message = new QueueMessage
 {
     Body = serializer.Serialize(payload),
-    Priority = 10,                              // High priority
-    Delay = TimeSpan.FromMinutes(5),            // Visible after 5 minutes
-    TimeToLive = TimeSpan.FromHours(1)          // Expires after 1 hour
+    Delay = TimeSpan.FromMinutes(5),            // Visible after 5 minutes (in-memory only)
+    TimeToLive = TimeSpan.FromHours(1)          // Expires 1 hour after CreatedAt (see the table above)
 };
+// Priority stays 0: a non-zero value is refused by every current transport.
 
 await queue.Producer.SendAsync("notifications", message);
 ```

@@ -39,7 +39,9 @@ namespace Birko.MessageQueue.InMemory
         public Task<ISubscription> SubscribeAsync(string destination, Func<QueueMessage, CancellationToken, Task> handler, ConsumerOptions? options = null, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            TransportSupport.RefusePrefetch(options, "in-memory"); // SH-L110
+            // TASK-668: PrefetchCount is how many of this subscription's handlers run at once (the default 1 is one
+            // message at a time, as before).
+            var prefetch = TransportSupport.PrefetchOf(options);
             var opts = options ?? new ConsumerOptions();
 
             Func<QueueMessage, CancellationToken, Task> wrappedHandler = async (message, ct) =>
@@ -67,7 +69,7 @@ namespace Birko.MessageQueue.InMemory
                 }
             };
 
-            var subscriberId = _channel.AddSubscriber(destination, wrappedHandler);
+            var subscriberId = _channel.AddSubscriber(destination, wrappedHandler, prefetch);
             _subscribers[subscriberId] = destination;
             ISubscription subscription = new InMemorySubscription(_channel, destination, subscriberId);
             return Task.FromResult(subscription);

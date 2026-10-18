@@ -29,5 +29,13 @@
   <Import Project="..\..\Birko.MessageQueue.InMemory\Birko.MessageQueue.InMemory.projitems" Label="Shared" />
   <Import Project="..\..\Birko.EventBus.MessageQueue\Birko.EventBus.MessageQueue.projitems" Label="Shared" />
   <Import Project="..\..\Birko.EventBus.Outbox\Birko.EventBus.Outbox.projitems" Label="Shared" />
+  <!-- TASK-668: the bus's retry and dead-letter run live against the Redis transport too. -->
+  <Import Project="..\..\Birko.Time\Birko.Time.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Models\Birko.Models.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Redis\Birko.Redis.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.MessageQueue.Redis\Birko.MessageQueue.Redis.projitems" Label="Shared" />
 
 </Project>

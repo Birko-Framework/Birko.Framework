@@ -9,7 +9,7 @@ namespace Birko.MessageQueue.InMemory
     /// In-memory message queue implementation using System.Threading.Channels.
     /// Suitable for testing and development. Messages are lost on process restart.
     /// </summary>
-    public class InMemoryMessageQueue : IMessageQueue
+    public class InMemoryMessageQueue : IMessageQueue, IRedeliveryCapability
     {
         private readonly InMemoryChannel _channel;
         private bool _disposed;
@@ -24,9 +24,14 @@ namespace Birko.MessageQueue.InMemory
         /// <param name="serializer">Message serializer. Defaults to JsonMessageSerializer.</param>
         /// <param name="channelCapacity">Maximum buffered messages per destination. Default is 1000.</param>
         public InMemoryMessageQueue(IMessageSerializer? serializer = null, int channelCapacity = 1000)
+            : this(serializer, channelCapacity, null)
+        {
+        }
+
+        private InMemoryMessageQueue(IMessageSerializer? serializer, int channelCapacity, TimeProvider? clock)
         {
             var ser = serializer ?? new JsonMessageSerializer();
-            _channel = new InMemoryChannel(channelCapacity);
+            _channel = new InMemoryChannel(channelCapacity, clock);
             Producer = new InMemoryProducer(_channel, ser);
             Consumer = new InMemoryConsumer(_channel, ser);
         }
@@ -39,9 +44,15 @@ namespace Birko.MessageQueue.InMemory
         // CR-L283: wire InMemoryMessageQueueOptions in (it was documented as the config surface but never
         // consumed) by delegating to the raw-capacity ctor.
         public InMemoryMessageQueue(InMemoryMessageQueueOptions options, IMessageSerializer? serializer = null)
-            : this(serializer, (options ?? throw new ArgumentNullException(nameof(options))).ChannelCapacity)
+            : this(serializer, (options ?? throw new ArgumentNullException(nameof(options))).ChannelCapacity, options.Clock)
         {
         }
+
+        /// <summary>
+        /// <see cref="RedeliveryMode.Resend"/>: this transport does not redeliver a failed delivery, but it honours a re-send
+        /// with a <see cref="QueueMessage.Delay"/>, which is how a retry rule above it retries (TASK-668).
+        /// </summary>
+        public RedeliveryMode GetRedeliveryMode(ConsumerOptions? options) => RedeliveryMode.Resend;
 
         public Task ConnectAsync(CancellationToken cancellationToken = default)
         {

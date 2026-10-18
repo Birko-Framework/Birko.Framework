@@ -45,15 +45,30 @@ public class Task174DistributedBusTests
     }
 
     [Fact]
-    public void SH_L114_a_retry_policy_or_dead_letter_options_are_refused_until_applied()
+    public void SH_L114_retry_and_dead_letter_are_off_by_default_and_refused_where_deliveries_cannot_be_counted()
     {
-        new DistributedEventBusOptions().RetryPolicy.Should().BeNull("nothing applies one, so none is advertised");
+        // Inverted at TASK-668, which implements them: refused only on a transport that cannot say how a failed delivery
+        // comes back (no IRedeliveryCapability); in-memory accepts them (Task668BusRetryTests).
+        new DistributedEventBusOptions().RetryPolicy.Should().BeNull("off unless asked for");
         new DistributedEventBusOptions().DeadLetterOptions.Should().BeNull();
 
-        var withRetry = () => new DistributedEventBus(new InMemoryMessageQueue(), new DistributedEventBusOptions { RetryPolicy = new global::Birko.RetryPolicy() });
+        using var inner = new InMemoryMessageQueue();
+        var withRetry = () => new DistributedEventBus(new UncountedQueue(inner), new DistributedEventBusOptions { RetryPolicy = new global::Birko.RetryPolicy() });
         withRetry.Should().Throw<NotSupportedException>();
-        var withDlq = () => new DistributedEventBus(new InMemoryMessageQueue(), new DistributedEventBusOptions { DeadLetterOptions = new global::Birko.MessageQueue.Retry.DeadLetterOptions() });
+        var withDlq = () => new DistributedEventBus(new UncountedQueue(inner), new DistributedEventBusOptions { DeadLetterOptions = new global::Birko.MessageQueue.Retry.DeadLetterOptions() });
         withDlq.Should().Throw<NotSupportedException>();
+        new DistributedEventBus(new InMemoryMessageQueue(), new DistributedEventBusOptions { RetryPolicy = new global::Birko.RetryPolicy() }).Dispose();
+    }
+
+    /// <summary>A transport that does not implement IRedeliveryCapability.</summary>
+    private sealed class UncountedQueue(InMemoryMessageQueue inner) : IMessageQueue
+    {
+        public IMessageProducer Producer => inner.Producer;
+        public IMessageConsumer Consumer => inner.Consumer;
+        public bool IsConnected => inner.IsConnected;
+        public Task ConnectAsync(CancellationToken cancellationToken = default) => inner.ConnectAsync(cancellationToken);
+        public Task DisconnectAsync(CancellationToken cancellationToken = default) => inner.DisconnectAsync(cancellationToken);
+        public void Dispose() { }
     }
 
     [Fact]

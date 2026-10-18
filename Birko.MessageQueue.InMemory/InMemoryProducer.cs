@@ -35,7 +35,7 @@ namespace Birko.MessageQueue.InMemory
         public async Task SendAsync(string destination, QueueMessage message, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            TransportSupport.RefuseTimeToLive(message, "in-memory"); // SH-L108
+            // TimeToLive is honoured since TASK-668: the channel drops an expired message at dispatch.
             TransportSupport.RefusePriority(message, "in-memory");   // SH-L109
 
             if (message.Delay.HasValue)

@@ -156,7 +156,9 @@ namespace Birko.MessageQueue.Mqtt
                 throw new NotSupportedException("An MQTT subscription receives only messages published after it; FromBeginning is not supported.");
             if (options.GroupId != null)
                 throw new NotSupportedException("The MQTT transport has no consumer groups; GroupId is not supported.");
-            TransportSupport.RefusePrefetch(options, "MQTT"); // SH-L110
+            // SH-L110, kept at TASK-668: MQTT 5's receive maximum is a CONNECT property, one per connection, shared by
+            // every subscription on it, so a per-subscription PrefetchCount cannot be honoured.
+            TransportSupport.RefusePrefetch(options, "MQTT", "MQTT's receive maximum is per connection, not per subscription.");
         }
 
         /// <summary>

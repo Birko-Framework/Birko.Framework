@@ -22,26 +22,30 @@ namespace Birko.EventBus.MessageQueue
         public IMessageSerializer? Serializer { get; set; }
 
         /// <summary>
-        /// Retry policy for failed event deliveries.
+        /// How many times a failed event delivery is retried, and with what delay. Null (the default) leaves a failed
+        /// delivery to the transport alone (TASK-668).
         /// </summary>
         /// <remarks>
-        /// CR-M187: retry is <b>delegated to the underlying <see cref="IMessageQueue"/> transport</b>, not
-        /// applied by <see cref="DistributedEventBus"/>. The consumer dispatch callback faults when a
-        /// handler throws (see the CR-H114 handling), and the transport re-delivers per its own configuration
-        /// (<see cref="ConsumerOptions"/> / provider settings). This property is carried for provider adapters
-        /// that choose to honor it; the bus itself does not read it, so setting it alone changes nothing.
-        /// Configure retry at the transport to guarantee it takes effect.
+        /// The framework's shared <see cref="global::Birko.RetryPolicy"/> (Birko.Contracts), named in full: the
+        /// <c>Birko.MessageQueue.Retry</c> namespace imported here has a type of the same name, and the enclosing
+        /// <c>Birko</c> namespace won the lookup silently (decided by the user 2026-10-18: this one).
+        /// <para>
+        /// A delivery is retried while its <c>x-delivery-count</c> is at most <see cref="global::Birko.RetryPolicy.MaxRetries"/>;
+        /// after that it is dead-lettered (<see cref="DeadLetterOptions"/>) or, with none, dropped and reported through
+        /// <see cref="DistributedEventBus.MessageDropped"/>. How the retry happens depends on the transport
+        /// (<see cref="IRedeliveryCapability"/>): Redis with a consumer group redelivers the pending entry itself, after its
+        /// <c>PendingRetryMilliseconds</c> (the policy's delay is not applied there); in-memory gets a re-send with the
+        /// policy's delay. A transport that cannot count deliveries (MQTT) refuses the option at construction.
+        /// </para>
         /// </remarks>
-        public RetryPolicy? RetryPolicy { get; set; }
+        public global::Birko.RetryPolicy? RetryPolicy { get; set; }
 
         /// <summary>
-        /// Dead letter queue options for events that exhaust retries.
+        /// Where an event goes once its retries are spent: <see cref="DeadLetterOptions.GetDeadLetterDestination"/> of the
+        /// event's topic (<c>{topic}.dlq</c> by default). Null (the default) drops it with a
+        /// <see cref="DistributedEventBus.MessageDropped"/> report instead. Set without a <see cref="RetryPolicy"/>,
+        /// <see cref="global::Birko.RetryPolicy.Default"/> bounds the retries (TASK-668).
         /// </summary>
-        /// <remarks>
-        /// CR-M187: like <see cref="RetryPolicy"/>, dead-lettering is delegated to the transport (a delivery
-        /// whose callback keeps faulting is routed to the provider's DLQ). <see cref="DistributedEventBus"/>
-        /// does not consume this property directly; configure the DLQ at the transport/provider.
-        /// </remarks>
         public DeadLetterOptions? DeadLetterOptions { get; set; }
 
         /// <summary>

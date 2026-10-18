@@ -46,13 +46,12 @@ namespace Birko.MessageQueue.Redis.Tests
         }
 
         [Fact]
-        public async Task SH_L109_SH_L110_priority_and_prefetch_are_refused_until_implemented()
+        public async Task SH_L109_priority_is_refused()
         {
+            // SH-L110's PrefetchCount refusal was lifted by TASK-668 (it is the read batch now; Task668RedisTests).
             using var queue = new RedisStreamQueue(new RedisStreamSettings("localhost"));
             var send = () => queue.Producer.SendAsync("d", new QueueMessage { Body = "x", Priority = 5 }, CancellationToken.None);
             await send.Should().ThrowAsync<NotSupportedException>();
-            var subscribe = () => queue.Consumer.SubscribeAsync("d", (_, _) => Task.CompletedTask, new ConsumerOptions { PrefetchCount = 10 });
-            await subscribe.Should().ThrowAsync<NotSupportedException>();
         }
 
         [Fact]

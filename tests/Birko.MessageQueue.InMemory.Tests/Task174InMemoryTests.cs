@@ -15,23 +15,14 @@ namespace Birko.MessageQueue.InMemory.Tests;
 /// </summary>
 public class Task174InMemoryTests
 {
-    [Theory]
-    [InlineData("ttl")]
-    [InlineData("priority")]
-    public async Task SH_L108_SH_L109_a_message_option_the_transport_cannot_honour_is_refused(string option)
-    {
-        using var queue = new InMemoryMessageQueue();
-        var message = option == "ttl" ? new QueueMessage { Body = "x", TimeToLive = TimeSpan.FromSeconds(5) } : new QueueMessage { Body = "x", Priority = 3 };
-        var send = () => queue.Producer.SendAsync("d", message, CancellationToken.None);
-        await send.Should().ThrowAsync<NotSupportedException>();
-    }
-
+    // SH-L108 (TimeToLive) and SH-L110 (PrefetchCount) were refused here until TASK-668 implemented them; their tests
+    // were inverted into Task668InMemoryTests. Priority stays refused (decided by the user 2026-10-18).
     [Fact]
-    public async Task SH_L110_a_prefetch_count_is_refused()
+    public async Task SH_L109_a_priority_is_refused()
     {
         using var queue = new InMemoryMessageQueue();
-        var subscribe = () => queue.Consumer.SubscribeAsync("d", (_, _) => Task.CompletedTask, new ConsumerOptions { PrefetchCount = 10 });
-        await subscribe.Should().ThrowAsync<NotSupportedException>();
+        var send = () => queue.Producer.SendAsync("d", new QueueMessage { Body = "x", Priority = 3 }, CancellationToken.None);
+        await send.Should().ThrowAsync<NotSupportedException>();
     }
 
     [Fact]
