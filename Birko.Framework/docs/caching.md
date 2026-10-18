@@ -150,7 +150,7 @@ var product = await cache.GetOrSetAsync("product:99",
 | `L1DefaultExpiration` | 30 seconds | Default TTL for L1 entries when no options are specified |
 | `L1MaxExpiration` | 5 minutes | Maximum absolute TTL for L1 entries. Set to `null` to use original options |
 | `WriteThrough` | `true` | Write both tiers in parallel (`true`) or L2-first then L1 (`false`) |
-| `FallbackToL1OnL2Failure` | `true` | Silently fall back to L1 when L2 throws an exception |
+| `FallbackToL1OnL2Failure` | `true` | Fall back to L1 when L2 throws; the caller's own cancellation still propagates (TASK-169) |
 
 ## Serialization
 
@@ -158,56 +158,42 @@ var product = await cache.GetOrSetAsync("product:99",
 
 ## SQL Query Caching Integration
 
-Birko.Data.SQL provides a caching decorator that integrates with the caching layer to cache SQL query results with automatic invalidation on writes.
+`Birko.Data.SQL.Caching` provides `CachedAsyncDataBaseBulkStore<DB, T>`, an `AsyncDataBaseBulkStore<DB, T>` subclass that caches read results in any `ICache` and invalidates them on writes.
 
 ### CachedAsyncDataBaseBulkStore
-
-Wraps any `AsyncDataBaseBulkStore` to add transparent read caching:
 
 ```csharp
 using Birko.Data.SQL.Stores;
 using Birko.Data.SQL.Caching;
 
-var cacheOptions = new SqlCacheOptions
-{
-    DefaultExpiration = TimeSpan.FromMinutes(10),
-    KeyPrefix = "customers"
-};
+var store = new CachedAsyncDataBaseBulkStore<PostgreSQLConnector, Customer>(
+    cache, new SqlCacheOptions { DefaultExpiration = TimeSpan.FromMinutes(10) });
+store.SetSettings(settings);
 
-var innerStore = new AsyncPostgreSQLBulkStore<Customer>();
-var cachedStore = new CachedAsyncDataBaseBulkStore<NpgsqlConnection, Customer>(
-    innerStore, cache, cacheOptions);
-
-// Reads are cached automatically
-var customer = await cachedStore.ReadAsync(customerId);
-
-// Writes invalidate affected cache entries
-await cachedStore.CreateAsync(newCustomer);
-await cachedStore.UpdateAsync(existingCustomer);
-await cachedStore.DeleteAsync(customer);
+var customers = await store.ReadAsync(x => x.Country == "SK"); // cached
+await store.CreateAsync(newCustomer);                           // invalidates the table's cached reads
 ```
 
-### Cache Key Generation
+### What is cached
 
-`SqlCacheKeyBuilder` produces deterministic cache keys from:
-- Entity type name
-- Query filter expressions
-- Pagination parameters (limit, offset)
-- Sort expressions
+- The cache holds a **JSON copy** of the row or rows (TASK-169), never the instances a caller was handed. A caller mutating a returned entity or list does not change what the next caller reads, and the in-memory and Redis caches behave the same. A type with a mapped property lacking a public getter or setter is not cached (the copy would lose it).
+- A single-result read that finds nothing is cached as a miss (`null`), on every backend.
+- The single-result read and a collection read have different keys (`SqlCacheKeyBuilder.BuildSingleKey` / `BuildKey`).
+- A read inside a transaction (the store's `TransactionContext` or an ambient `SqlUnitOfWork`) neither reads nor fills the cache, so uncommitted rows are never served to other callers.
+- A filter that cannot be described by value (SH-H004) bypasses the cache.
 
-### Invalidation Strategy
+### Keys and invalidation
 
-Write operations (`CreateAsync`, `UpdateAsync`, `DeleteAsync`) automatically invalidate:
-- The specific entity key (by ID)
-- Prefix-based invalidation of list/query caches for the entity type
+Keys are `sql:{database id}:{table}:…`, so stores on different databases sharing one cache never see each other's rows. Every write (single and collection Create / Update / Delete, filter `UpdateAsync` / `DeleteAsync`, and `DestroyAsync`) removes the table's prefix afterwards. Invalidation does not take the caller's token, so a token cancelled after the write cannot skip it, and it also runs when the write throws.
+
+⚠ Inside a transaction the invalidation runs before the commit, so a reader outside the transaction can cache the pre-commit rows in between ([TASK-669](../tasks/EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-669-sql-cache-invalidates-before-commit.md)).
 
 ### Configuration
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `DefaultExpiration` | 10 minutes | TTL for cached query results |
-| `KeyPrefix` | Entity type name | Prefix for all cache keys of this store |
-| `InvalidateOnWrite` | `true` | Automatically invalidate cache on write operations |
+| `DefaultExpiration` | 5 minutes | Absolute TTL of a cached read |
+| `Enabled` | `true` | `false` passes every read straight to the database |
 
 ## See Also
 

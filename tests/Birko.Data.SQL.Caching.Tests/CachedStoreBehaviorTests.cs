@@ -22,7 +22,7 @@ namespace Birko.Data.SQL.Caching.Tests;
 /// caching behavior of CachedAsyncDataBaseBulkStore itself: cache hit (a stale result is served
 /// after an out-of-band delete), write-through invalidation, and Enabled=false passthrough.
 /// </summary>
-public class CachedStoreBehaviorTests : IDisposable
+public partial class CachedStoreBehaviorTests : IDisposable
 {
     private readonly string _root;
     private readonly SqLiteSettings _settings;

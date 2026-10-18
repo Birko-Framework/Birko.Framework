@@ -20,6 +20,17 @@ public sealed class HybridCache : ICache
     private bool _disposed;
 
     /// <summary>
+    /// Invalidation generations, striped by key hash (SH-M048). A removal bumps the key's stripe between
+    /// its L2 and its L1 removal; an L1 backfill from L2 captures the generation before reading L2 and
+    /// withdraws its backfill if the generation moved. Striping keeps the memory fixed; a collision only
+    /// costs a skipped backfill (the next read goes to L2), never a stale one.
+    /// </summary>
+    private readonly int[] _generations = new int[256];
+
+    /// <summary>Bumped by prefix removal and clear, which may touch any stripe.</summary>
+    private int _epoch;
+
+    /// <summary>
     /// A per-key stampede lock with a reference count so it can be removed once no caller holds
     /// or awaits it — otherwise <see cref="_locks"/> would grow unbounded, one entry per distinct
     /// key, for the process lifetime (CR-H013).
@@ -51,12 +62,13 @@ public sealed class HybridCache : ICache
             return l1Result;
 
         // Fall back to L2
+        var generation = CaptureGeneration(key);
         CacheResult<T> l2Result;
         try
         {
             l2Result = await _l2.GetAsync<T>(key, ct);
         }
-        catch when (_options.FallbackToL1OnL2Failure)
+        catch (Exception ex) when (IsL2FailureToAbsorb(ex, ct))
         {
             return CacheResult<T>.Miss();
         }
@@ -70,7 +82,7 @@ public sealed class HybridCache : ICache
         // through GetL1Options(options); the two read paths can therefore give the same key different L1
         // TTLs (CR-L038, documented as intended).
         var l1Options = GetL1Options(null);
-        await _l1.SetAsync(key, l2Result.Value, l1Options, ct);
+        await BackfillL1Async(key, l2Result.Value, l1Options, generation, ct);
 
         return l2Result;
     }
@@ -90,7 +102,7 @@ public sealed class HybridCache : ICache
             {
                 await _l2.SetAsync(key, value, options, ct);
             }
-            catch when (_options.FallbackToL1OnL2Failure)
+            catch (Exception ex) when (IsL2FailureToAbsorb(ex, ct))
             {
                 // Fallback enabled: tolerate the L2 failure (L1 still observed in finally).
             }
@@ -106,11 +118,7 @@ public sealed class HybridCache : ICache
             {
                 await _l2.SetAsync(key, value, options, ct);
             }
-            catch when (!_options.FallbackToL1OnL2Failure)
-            {
-                throw;
-            }
-            catch
+            catch (Exception ex) when (IsL2FailureToAbsorb(ex, ct))
             {
                 // L2 failed, still populate L1
             }
@@ -121,17 +129,24 @@ public sealed class HybridCache : ICache
 
     public async Task RemoveAsync(string key, CancellationToken ct = default)
     {
-        // Remove from L1 immediately, then L2
-        var l1Task = _l1.RemoveAsync(key, ct);
-
+        // L2 first, then the generation, then L1 (SH-M048). Removing both at once let a concurrent read miss
+        // the cleared L1, read the value still in L2 and write it back into L1 for L1DefaultExpiration. In this
+        // order a read either finds L2 already empty or backfills L1 under the old generation, and that
+        // backfill is removed by the L1 removal below or withdrawn by the read itself (BackfillL1Async).
         try
         {
-            var l2Task = _l2.RemoveAsync(key, ct);
-            await Task.WhenAll(l1Task, l2Task);
+            await _l2.RemoveAsync(key, ct);
         }
-        catch when (_options.FallbackToL1OnL2Failure)
+        catch (Exception ex) when (IsL2FailureToAbsorb(ex, ct))
         {
-            await l1Task;
+            // L2 unavailable: the local copy is still removed below.
+        }
+        finally
+        {
+            Interlocked.Increment(ref _generations[Stripe(key)]);
+            // Uncancellable on purpose: dropping a local copy is always safe, and a cancelled caller must not
+            // leave L1 serving a value whose L2 removal already went through.
+            await _l1.RemoveAsync(key, CancellationToken.None);
         }
     }
 
@@ -144,7 +159,7 @@ public sealed class HybridCache : ICache
         {
             return await _l2.ExistsAsync(key, ct);
         }
-        catch when (_options.FallbackToL1OnL2Failure)
+        catch (Exception ex) when (IsL2FailureToAbsorb(ex, ct))
         {
             return false;
         }
@@ -158,18 +173,20 @@ public sealed class HybridCache : ICache
             return l1Result.Value!;
 
         // Check L2
+        var generation = CaptureGeneration(key);
+        var l2Hit = CacheResult<T>.Miss();
         try
         {
-            var l2Result = await _l2.GetAsync<T>(key, ct);
-            if (l2Result.HasValue)
-            {
-                await _l1.SetAsync(key, l2Result.Value, GetL1Options(options), ct);
-                return l2Result.Value!;
-            }
+            l2Hit = await _l2.GetAsync<T>(key, ct);
         }
-        catch when (_options.FallbackToL1OnL2Failure)
+        catch (Exception ex) when (IsL2FailureToAbsorb(ex, ct))
         {
             // L2 unavailable, proceed to factory
+        }
+        if (l2Hit.HasValue)
+        {
+            await BackfillL1Async(key, l2Hit.Value, GetL1Options(options), generation, ct);
+            return l2Hit.Value!;
         }
 
         // Per-key lock to prevent cache stampede. Reference-counted so the entry is removed once
@@ -218,32 +235,65 @@ public sealed class HybridCache : ICache
 
     public async Task RemoveByPrefixAsync(string prefix, CancellationToken ct = default)
     {
-        var l1Task = _l1.RemoveByPrefixAsync(prefix, ct);
-
+        // Same order as RemoveAsync (SH-M048), with the epoch standing in for every stripe.
         try
         {
-            var l2Task = _l2.RemoveByPrefixAsync(prefix, ct);
-            await Task.WhenAll(l1Task, l2Task);
+            await _l2.RemoveByPrefixAsync(prefix, ct);
         }
-        catch when (_options.FallbackToL1OnL2Failure)
+        catch (Exception ex) when (IsL2FailureToAbsorb(ex, ct))
         {
-            await l1Task;
+            // L2 unavailable: the local copies are still removed below.
+        }
+        finally
+        {
+            Interlocked.Increment(ref _epoch);
+            await _l1.RemoveByPrefixAsync(prefix, CancellationToken.None);
         }
     }
 
     public async Task ClearAsync(CancellationToken ct = default)
     {
-        var l1Task = _l1.ClearAsync(ct);
-
+        // Same order as RemoveAsync (SH-M048), with the epoch standing in for every stripe.
         try
         {
-            var l2Task = _l2.ClearAsync(ct);
-            await Task.WhenAll(l1Task, l2Task);
+            await _l2.ClearAsync(ct);
         }
-        catch when (_options.FallbackToL1OnL2Failure)
+        catch (Exception ex) when (IsL2FailureToAbsorb(ex, ct))
         {
-            await l1Task;
+            // L2 unavailable: the local copies are still removed below.
         }
+        finally
+        {
+            Interlocked.Increment(ref _epoch);
+            await _l1.ClearAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Whether an L2 failure is absorbed under <see cref="HybridCacheOptions.FallbackToL1OnL2Failure"/>. The
+    /// caller's own cancellation never is (SH-M037): absorbed, a cancelled read looked like a miss and a
+    /// cancelled Remove or Clear reported success without having run.
+    /// </summary>
+    private bool IsL2FailureToAbsorb(Exception ex, CancellationToken ct) =>
+        _options.FallbackToL1OnL2Failure && !(ex is OperationCanceledException && ct.IsCancellationRequested);
+
+    private static int Stripe(string key) => (key.GetHashCode() & int.MaxValue) % 256;
+
+    private (int Epoch, int Stripe) CaptureGeneration(string key) =>
+        (Volatile.Read(ref _epoch), Volatile.Read(ref _generations[Stripe(key)]));
+
+    /// <summary>
+    /// Writes an L2 hit into L1, then withdraws it if a removal ran since <paramref name="generation"/> was
+    /// captured (before the L2 read). Checking after the write is what closes the window: a removal whose
+    /// L1 removal came first bumped the generation before it, so the check sees the change (SH-M048).
+    /// </summary>
+    private async Task BackfillL1Async<T>(string key, T value, CacheEntryOptions l1Options, (int Epoch, int Stripe) generation, CancellationToken ct)
+    {
+        if (CaptureGeneration(key) != generation)
+            return;
+        await _l1.SetAsync(key, value, l1Options, ct);
+        if (CaptureGeneration(key) != generation)
+            await _l1.RemoveAsync(key, CancellationToken.None);
     }
 
     /// <summary>

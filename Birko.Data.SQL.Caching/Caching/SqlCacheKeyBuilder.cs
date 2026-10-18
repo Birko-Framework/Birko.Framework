@@ -61,6 +61,22 @@ namespace Birko.Data.SQL.Caching
         }
 
         /// <summary>
+        /// Builds the cache key of a <b>single-result</b> read.
+        /// </summary>
+        /// <remarks>
+        /// SH-M036: the single read used to call <see cref="BuildKey"/> with limit 1, which is the key of a
+        /// collection read with no order, limit 1 and no offset — one key holding an entity or a list depending
+        /// on which read wrote it last. The single key ends in <c>:one</c>, which no <see cref="BuildKey"/>
+        /// result (four segments after the filter) can produce, and it keeps the table prefix so invalidation
+        /// still reaches it.
+        /// </remarks>
+        public static string BuildSingleKey(string scope, string tableName, string? filterString)
+        {
+            var filterHash = string.IsNullOrEmpty(filterString) ? "_" : ComputeHash(filterString!);
+            return $"{GetTablePrefix(scope, tableName)}{filterHash}:one";
+        }
+
+        /// <summary>
         /// Gets the table-level cache key prefix for invalidation, within one database.
         /// All cache keys for a given (scope, table) pair start with this prefix.
         /// </summary>

@@ -45,6 +45,12 @@ silently dropped is one the next sweep re-raises and someone re-litigates from s
 what the code *does*, defects included, which is exactly what let it find them. So a behavioural fix leaves
 `docs/specs/caching.md` lying until `/specs regen caching` runs, and **that spec diff is the fix's evidence**.
 
+**Added by [[TASK-169]] (not a harvested finding):** SH-M048's fix bumps a per-key generation on removal only, so a
+`HybridCache.GetAsync` that read the OLD value from L2 can still backfill L1 after a concurrent `SetAsync` wrote the new
+value there (served stale for up to `L1DefaultExpiration`). Closing it means Set also writes L2, bumps, then L1, which
+gives up the parallel write. Reproduce, then fix or waive with the measurement. SH-L049 (unobserved `l1Task` on
+Remove / RemoveByPrefix / Clear) was likely changed by the same fix: those now always clear L1 after L2.
+
 ## Acceptance criteria
 
 - [ ] All 17 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,

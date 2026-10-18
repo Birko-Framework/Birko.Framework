@@ -1371,11 +1371,15 @@ The fallback persists the entire entity as read (Update(item) at line 80), not j
 
 `../Birko.Data.SQL.Caching/Stores/CachedAsyncDataBaseBulkStore.cs:62`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-169). `CachedAsyncDataBaseBulkStore.ReadCoreAsync` stored the single read's `null` through `ICache.SetAsync`, and a serializing cache (`CacheSerializer` → `SystemJsonSerializer`, `ThrowIfNull`) threw out of the read. The store now caches a JSON string, and a not-found row is the string `null`, on every backend. Red on HEAD (a cache double that serializes as RedisCache does).
+
 ReadCoreAsync unconditionally calls _cache.SetAsync(key, result) even when result is null (negative caching). MemoryCache stores that as a legitimate hit, but RedisCache.SetAsync -> CacheSerializer.Serialize -> SystemJsonSerializer.SerializeToBytes begins with ArgumentNullException.ThrowIfNull. On a RedisCache or Hybrid(L2=Redis), every single-result read whose filter matches no row throws out of the store instead of returning null.
 
 #### SH-M036 — Single-result and limit-1 collection reads collide on one cache key with incompatible payloads
 
 `../Birko.Data.SQL.Caching/Stores/CachedAsyncDataBaseBulkStore.cs:52`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-169). The single read used `BuildKey(…, null, 1, null)`, the key of a limit-1 collection read with no order or offset. New `SqlCacheKeyBuilder.BuildSingleKey` (`…:one`, same table prefix). Red on HEAD: the serializing double threw `JsonException` reading a list as an entity; key test red with the builder stubbed to the old key.
 
 The single overload builds BuildKey(table, filter, null, 1, null) and stores a T; the collection overload with orderBy==null, limit==1, offset==null builds the identical string and stores a List<T>. On MemoryCache the mismatch degrades to Miss (churn); on RedisCache GetAsync<T> over a stored JSON array (or GetAsync<List<T>> over a stored object) throws JsonException out of the read path.
 
@@ -1383,11 +1387,15 @@ The single overload builds BuildKey(table, filter, null, 1, null) and stores a T
 
 `../Birko.Caching.Hybrid/HybridCache.cs:59`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-169). `HybridCache.cs:59` and every other L2 fallback was an untyped `catch when (FallbackToL1OnL2Failure)`, so the caller's own cancellation became a miss, `false` or a silent success. All eight catches go through `IsL2FailureToAbsorb(ex, ct)`: any failure is still absorbed except an `OperationCanceledException` while the caller's token is cancelled (a driver's own timeout is still absorbed). Red on HEAD: 6 of 7 operations; GetOrSet is a pin (HEAD threw there too, from the key lock's `WaitAsync(ct)`), as is the driver-timeout case.
+
 `catch when (_options.FallbackToL1OnL2Failure)` has no exception type and the flag defaults to true. An OperationCanceledException raised by the caller's own token inside _l2.GetAsync/ExistsAsync/RemoveAsync/RemoveByPrefixAsync/ClearAsync is caught and turned into Miss()/false/silent success, so a cancelled operation is indistinguishable from a normal miss and Remove/Clear report success without having run.
 
 #### SH-M038 — MemoryCache leaks a KeyLock refcount (and its semaphore) when WaitAsync throws
 
 `../Birko.Caching/Memory/MemoryCache.cs:104`
+
+**Verdict: CONFIRMED, fixed** (TASK-169). `MemoryCache.cs:104` awaited `WaitAsync` outside the try after `AcquireKeyLock`, so a cancelled wait never released its reference and the lock was never retired. A failed wait now calls `ReleaseKeyLock` and rethrows, without releasing a semaphore it never acquired. Red on HEAD (`_locks.Count` stayed 1).
 
 AcquireKeyLock increments Refs, then `await keyLock.Semaphore.WaitAsync(ct)` runs OUTSIDE the try/finally. If the token is cancelled while waiting (or the semaphore was disposed by Dispose()), the exception propagates and ReleaseKeyLock is never called: Refs never returns to 0, so the lock is never marked Removed, never removed from _locks and its SemaphoreSlim is never disposed. One cancelled GetOrSetAsync per key permanently pins an entry — defeating the CR-M030 bounded-map fix. HybridCache's equivalent finally is unconditional and does not leak.
 
@@ -1395,11 +1403,15 @@ AcquireKeyLock increments Refs, then `await keyLock.Semaphore.WaitAsync(ct)` run
 
 `../Birko.Caching/Memory/MemoryCache.cs:55`
 
+**Verdict: CONFIRMED, fixed** (TASK-169). `MemoryCache.cs:55` returned `Hit(default)` for a stored null whatever `T` was asked. `MemoryCacheEntry.StoredType` records the `T` of the `SetAsync`, and a null hits only when the requested type is assignable from it; otherwise it is a miss. Red on HEAD: 2 (an `int` / `List<int>` read, GetOrSet's factory); CR-L036 kept as a pin (a null hits as its own type and as `object`).
+
 GetAsync tests `entry.Value is null` BEFORE the `is T` type test and returns Hit(default!). So after the single-result read caches a null under a key (line 62 of the cached store), a collection read for the same colliding key does GetAsync<List<T>>, gets HasValue==true with Value==null, and returns `Enumerable.Empty<T>()` (cached store line 89) — a query over a table that does contain matching rows reports no rows, with no error and no database round-trip, for the whole 5-minute TTL. Distinct from the key-collision finding: the defect is the type-blind null branch.
 
 #### SH-M040 — Stale Redis __meta hash from an earlier sliding write hijacks a later entry's expiration policy
 
 `../Birko.Caching.Redis/RedisCache.cs:82`
+
+**Verdict: CONFIRMED, fixed** (TASK-169). `RedisCache.cs:88`: a non-sliding `SetAsync` left the previous sliding entry's `__meta` hash, so the next read re-expired the key to the old window. It now deletes the meta key. Red on HEAD live (after an `Absolute(1h)` overwrite and one read the TTL was at most 5 min).
 
 SetAsync writes the `__meta` hash only when SlidingExpiration is set and never deletes an existing one. Write k with Sliding(5m) (meta {sliding:300, absoluteDeadline:-1}, meta TTL 5m), then overwrite k with Absolute(1h): the value gets a 1h TTL but the meta survives, so the next GetAsync calls RefreshSlidingExpirationAsync, sees sliding=300/deadline=-1 and re-expires the value to 5 minutes on every read — the entry silently behaves as the old sliding policy forever. With a stale deadline already past, the same path DELETES the freshly written key on its first read.
 
@@ -1407,11 +1419,15 @@ SetAsync writes the `__meta` hash only when SlidingExpiration is set and never d
 
 `../Birko.Caching.Redis/RedisCache.cs:163`
 
+**Verdict: found fixed** by SH-H006: `RedisCache.EscapeGlob` escapes the prefix before the SCAN pattern. No change; live pin (`RemoveByPrefixAsync("a*")` removes `a*b` and keeps `aXb`).
+
 RemoveByPrefixAsync builds `pattern: $"{fullPrefix}*"` with no escaping of glob metacharacters, while MemoryCache does a literal StartsWith(prefix, Ordinal). A caller prefix containing `*`, `?`, `[` or `\` (e.g. "user:*:sessions") therefore deletes a much wider key set on Redis than on memory — same ICache call, different (destructive) blast radius per backend.
 
 #### SH-M042 — RedisCache mixes two database indexes: the manager's for data, settings.Database for SCAN and FLUSHDB
 
 `../Birko.Caching.Redis/RedisCache.cs:163`
+
+**Verdict: CONFIRMED, fixed** (TASK-169). SCAN and FLUSH used `_settings.Database`, data operations the connection manager's database. Both now use `GetDatabase().Database`. Red on HEAD live (a shared manager on db 0 with settings naming db 5: the prefix removal removed nothing).
 
 All data operations use _connectionManager.GetDatabase(), which binds the index captured by RedisConnectionManager, but RemoveByPrefixAsync passes `database: _settings.Database` to KeysAsync and ClearAsync flushes _settings.Database. With the shared-manager constructor (line 43) the two RedisSettings need not agree, so invalidation scans a database the cache never wrote (silent no-op — RemoveByPrefixAsync reports success having deleted nothing, leaving the SQL query cache stale) and ClearAsync FLUSHDBs an unrelated database.
 
@@ -1419,11 +1435,15 @@ All data operations use _connectionManager.GetDatabase(), which binds the index 
 
 `../Birko.Caching.Redis/RedisCache.cs:156`
 
+**Verdict: CONFIRMED, fixed by construction** (TASK-169). Prefix removal, `ClearAsync` and `FlushDatabaseAsync` used `endpoints[0]` only. New `RedisConnectionManager.GetServers()` (Birko.Redis) returns every primary; they iterate it, skip replicas, keep a disconnected primary so the call fails rather than skipping a shard, and split a cluster delete batch by hash slot (a cross-slot DEL fails with CROSSSLOT). Live pin on a single node only; no multi-node server was available, so the multi-node path is unmeasured.
+
 Both RemoveByPrefixAsync and ClearAsync obtain a single IServer (RedisConnectionManager.GetServer() returns multiplexer.GetServer(endpoints[0])). On a multi-node/cluster deployment the SCAN only enumerates that node's keyspace and FlushDatabaseAsync only clears that node, so entries on the other shards survive a table invalidation and keep being served, while the call completes successfully.
 
 #### SH-M044 — Cache invalidation runs before commit and uncommitted rows are cached under globally shared keys
 
 `../Birko.Data.SQL.Caching/Stores/CachedAsyncDataBaseBulkStore.cs:107`
+
+**Verdict: CONFIRMED, fixed in part; the rest spawned as [[TASK-669]]** (TASK-169). (b) A read inside a transaction (the store's `TransactionContext` or an ambient `SqlUnitOfWork`, the test `AtomicallyAsync` uses) neither reads nor fills the cache now, so uncommitted rows are never cached. Red on HEAD on both paths: a rolled-back row was served after the rollback. (a) Invalidation still runs before the commit; there is no commit hook to run it after (TASK-669).
 
 The store inherits IAsyncTransactionalStore/SetTransactionContext, so its writes can be inside an outer SqlUnitOfWork transaction, yet InvalidateCacheAsync fires immediately after the base write. Two consequences: (a) a concurrent reader can repopulate the cache with the pre-commit state right after the invalidation, and that stale entry then survives the commit for the whole TTL; (b) a read issued after a write inside the transaction caches UNCOMMITTED rows under a key with no session identity, so other callers read rows that a rollback later erases.
 
@@ -1431,11 +1451,15 @@ The store inherits IAsyncTransactionalStore/SetTransactionContext, so its writes
 
 `../Birko.Data.SQL.Caching/Stores/CachedAsyncDataBaseBulkStore.cs:175`
 
+**Verdict: CONFIRMED, fixed** (TASK-169). Every write runs through `WriteThenInvalidateAsync`, which invalidates with `CancellationToken.None`, and also when the write threw (a write may have changed rows before failing; an invalidation failure there is swallowed so the write's exception surfaces). Red on HEAD (the invalidation received the caller's cancellable token).
+
 Every write override awaits base.*Async(...) and then InvalidateCacheAsync(ct). Both MemoryCache.RemoveByPrefixAsync and RedisCache.RemoveByPrefixAsync begin with ct.ThrowIfCancellationRequested(), so if the token is cancelled after the row was written the invalidation throws before removing anything — the write is durable but the cached reads for that table keep serving pre-write rows until DefaultExpiration. RedisCache also aborts mid-SCAN (line 165), dropping the buffered partial batch, giving a half-invalidated table.
 
 #### SH-M046 — DestroyAsync (DROP TABLE) is not overridden, so the cache keeps serving rows of a dropped table
 
 `../Birko.Data.SQL.Caching/Stores/CachedAsyncDataBaseBulkStore.cs:20`
+
+**Verdict: CONFIRMED, fixed** (TASK-169). Since TASK-163 DROP TABLE runs through `DestroyCoreAsync`, which the store did not override. It does now, and invalidates. Red on HEAD (rows of the dropped table were served).
 
 AsyncDataBaseStore.DestroyAsync is public virtual and issues DROP TABLE directly through the connector, bypassing the *Core template. CachedAsyncDataBaseBulkStore overrides the six *Core writes plus UpdateAsync(filter,PropertyUpdate)/DeleteAsync(filter) but not DestroyAsync, so after a Destroy the sql:{table}: entries survive and every cached read returns rows from a table that no longer exists — the exact class of gap the CR-C16 comment at line 146 was written about.
 
@@ -1443,11 +1467,15 @@ AsyncDataBaseStore.DestroyAsync is public virtual and issues DROP TABLE directly
 
 `../Birko.Data.SQL.Caching/Stores/CachedAsyncDataBaseBulkStore.cs:92`
 
+**Verdict: CONFIRMED, fixed** (TASK-169). Both reads cache a JSON copy (own options: null properties are written, so an initializer cannot replace a NULL column) and deserialize a fresh instance per hit, so MemoryCache and Redis behave the same. A type with a mapped property lacking a public getter or setter is not cached at all (the copy would drop it). Red on HEAD (a caller's mutation of the returned entity and list reached the next caller).
+
 The collection overload caches the materialized List<T> instance and returns that same instance to every subsequent hit (MemoryCache stores object references, no cloning); the single overload does the same with the entity. Any caller that mutates a returned entity, or casts the IEnumerable<T> back to List<T> and adds/removes, silently rewrites what the cache serves to all other callers. The framework's own ICopyable exists for this and is unused here. On a Redis backend the same code path round-trips through JSON and does NOT share state — so the two backends differ observably.
 
 #### SH-M048 — HybridCache.RemoveAsync lets a concurrent read re-backfill L1 from L2 during the removal
 
 `../Birko.Caching.Hybrid/HybridCache.cs:125`
+
+**Verdict: CONFIRMED, fixed** (TASK-169). `HybridCache.cs:125` removed L1 and L2 concurrently, so a read could backfill L1 from L2 in between. Removal is now L2, then a generation bump, then L1 (not cancellable); a read notes the generation before L2 and backs out its L1 write if it changed. Counters are 256 stripes plus an epoch for prefix-remove and clear, so memory is bounded (a stripe collision skips a backfill). Red on HEAD: 3 (gated fakes); 1 pin (a normal backfill still happens). Not covered: the same race with a concurrent `SetAsync` (a stale backfill over a fresh Set), handed to [[TASK-184]].
 
 RemoveAsync starts the L1 removal and the L2 removal without ordering or a tombstone. A concurrent GetAsync that misses L1 (just cleared) reads the value still present in L2 and writes it back into L1 (line 73); the L2 delete then completes, leaving L1 holding a value for a key the caller explicitly removed, served for up to L1DefaultExpiration.
 

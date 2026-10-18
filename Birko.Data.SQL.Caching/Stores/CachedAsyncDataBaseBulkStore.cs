@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -94,10 +95,55 @@ namespace Birko.Data.SQL.Stores
 
         #region Cached Read Operations
 
+        /// <summary>
+        /// Serializer options for the cached form of a row. Not <c>CacheSerializer</c>'s: those drop a null
+        /// property, and a model whose property has an initializer would then read back the initializer's value
+        /// where the row held NULL.
+        /// </summary>
+        private static readonly JsonSerializerOptions CachedRowJson = new();
+
+        /// <summary>
+        /// Whether every mapped column survives the JSON round-trip the cache stores (a public getter and setter).
+        /// </summary>
+        /// <remarks>
+        /// SH-M047: the cache now holds a JSON copy, never the entity or list a caller was handed. A mapped
+        /// property the serializer cannot write back would come out of the cache silently reset, so a type with one
+        /// is not cached at all (rule 41: refuse rather than drop). Read lazily, for the same reason as
+        /// <see cref="CacheScope"/>: the mapping may be registered after the store is constructed.
+        /// </remarks>
+        private bool RowsRoundTrip => _rowsRoundTrip ??= ComputeRowsRoundTrip();
+        private bool? _rowsRoundTrip;
+
+        private static bool ComputeRowsRoundTrip()
+        {
+            var table = SQL.DataBase.TryLoadTable(typeof(T));
+            if (table?.Fields == null) return false;
+            return table.Fields.Values.All(f => f.Property?.GetGetMethod() != null && f.Property.GetSetMethod() != null);
+        }
+
+        /// <summary>
+        /// Whether this call flow is inside a transaction on this store's database: the store's own transaction
+        /// context or an ambient one (a <c>SqlUnitOfWork</c>, a bulk write's own boundary).
+        /// </summary>
+        /// <remarks>
+        /// SH-M044: a read inside a transaction may see that transaction's uncommitted rows, and the cache key has
+        /// no session identity, so caching it served rows to every other caller that a rollback then erased. Such a
+        /// read neither consults nor fills the cache. The same test <c>AtomicallyAsync</c> uses decides it.
+        /// </remarks>
+        private bool InTransaction
+            => Connector != null
+               && (TransactionContext != null || AmbientSqlTransaction.Find(Connector.Settings.GetId()) != null);
+
+        private bool UseReadCache => _options.Enabled && !_bypassReadCache.Value && !InTransaction && RowsRoundTrip;
+
         /// <inheritdoc />
+        /// <remarks>
+        /// SH-M035: a row that is not found is cached as the JSON <c>null</c>, so a backend that refuses to store a
+        /// null value (Redis, a Redis-backed hybrid) caches the miss instead of throwing out of the read.
+        /// </remarks>
         protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
-            if (!_options.Enabled || _bypassReadCache.Value)
+            if (!UseReadCache)
             {
                 return await base.ReadCoreAsync(filter, ct);
             }
@@ -111,17 +157,17 @@ namespace Birko.Data.SQL.Stores
                 return await base.ReadCoreAsync(filter, ct);
             }
 
-            var key = SqlCacheKeyBuilder.BuildKey(CacheScope, _tableName, filterString, null, 1, null);
+            var key = SqlCacheKeyBuilder.BuildSingleKey(CacheScope, _tableName, filterString);
 
-            var cached = await _cache.GetAsync<T>(key, ct);
-            if (cached.HasValue)
+            var cached = await _cache.GetAsync<string>(key, ct);
+            if (cached.HasValue && cached.Value != null)
             {
-                return cached.Value;
+                return JsonSerializer.Deserialize<T>(cached.Value, CachedRowJson);
             }
 
             var result = await base.ReadCoreAsync(filter, ct);
 
-            await _cache.SetAsync(key, result, CreateEntryOptions(), ct);
+            await _cache.SetAsync(key, JsonSerializer.Serialize(result, CachedRowJson), CreateEntryOptions(), ct);
 
             return result;
         }
@@ -134,7 +180,7 @@ namespace Birko.Data.SQL.Stores
             int? offset = null,
             CancellationToken ct = default)
         {
-            if (!_options.Enabled || _bypassReadCache.Value)
+            if (!UseReadCache)
             {
                 return await base.ReadCoreAsync(filter, orderBy, limit, offset, ct);
             }
@@ -151,15 +197,15 @@ namespace Birko.Data.SQL.Stores
                 : null;
             var key = SqlCacheKeyBuilder.BuildKey(CacheScope, _tableName, filterString, orderString, limit, offset);
 
-            var cached = await _cache.GetAsync<List<T>>(key, ct);
-            if (cached.HasValue)
+            var cached = await _cache.GetAsync<string>(key, ct);
+            if (cached.HasValue && cached.Value != null)
             {
-                return cached.Value ?? Enumerable.Empty<T>();
+                return JsonSerializer.Deserialize<List<T>>(cached.Value, CachedRowJson) ?? new List<T>();
             }
 
             var result = (await base.ReadCoreAsync(filter, orderBy, limit, offset, ct)).ToList();
 
-            await _cache.SetAsync(key, result, CreateEntryOptions(), ct);
+            await _cache.SetAsync(key, JsonSerializer.Serialize(result, CachedRowJson), CreateEntryOptions(), ct);
 
             return result;
         }
@@ -171,44 +217,49 @@ namespace Birko.Data.SQL.Stores
         /// <inheritdoc />
         protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
-            var result = await base.CreateCoreAsync(data, processDelegate, ct);
-            await InvalidateCacheAsync(ct);
+            var result = Guid.Empty;
+            await WriteThenInvalidateAsync(async () => result = await base.CreateCoreAsync(data, processDelegate, ct));
             return result;
         }
 
         /// <inheritdoc />
         protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
-            await base.UpdateCoreAsync(data, processDelegate, ct);
-            await InvalidateCacheAsync(ct);
+            await WriteThenInvalidateAsync(() => base.UpdateCoreAsync(data, processDelegate, ct));
         }
 
         /// <inheritdoc />
         protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
         {
-            await base.DeleteCoreAsync(data, ct);
-            await InvalidateCacheAsync(ct);
+            await WriteThenInvalidateAsync(() => base.DeleteCoreAsync(data, ct));
         }
 
         /// <inheritdoc />
         protected override async Task CreateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
-            await base.CreateCoreAsync(data, storeDelegate, ct);
-            await InvalidateCacheAsync(ct);
+            await WriteThenInvalidateAsync(() => base.CreateCoreAsync(data, storeDelegate, ct));
         }
 
         /// <inheritdoc />
         protected override async Task UpdateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
-            await base.UpdateCoreAsync(data, storeDelegate, ct);
-            await InvalidateCacheAsync(ct);
+            await WriteThenInvalidateAsync(() => base.UpdateCoreAsync(data, storeDelegate, ct));
         }
 
         /// <inheritdoc />
         protected override async Task DeleteCoreAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
-            await base.DeleteCoreAsync(data, ct);
-            await InvalidateCacheAsync(ct);
+            await WriteThenInvalidateAsync(() => base.DeleteCoreAsync(data, ct));
+        }
+
+        /// <inheritdoc />
+        /// <remarks>
+        /// SH-M046: a dropped table's rows used to stay cached, because DROP TABLE runs through this seam and this
+        /// class did not override it.
+        /// </remarks>
+        protected override async Task DestroyCoreAsync(CancellationToken ct = default)
+        {
+            await WriteThenInvalidateAsync(() => base.DestroyCoreAsync(ct));
         }
 
         // The filter-based native write methods below bypass the *Core template (they issue the write
@@ -260,22 +311,56 @@ namespace Birko.Data.SQL.Stores
         /// <inheritdoc />
         public override async Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
         {
-            await base.UpdateAsync(filter, updates, ct);
-            await InvalidateCacheAsync(ct);
+            await WriteThenInvalidateAsync(() => base.UpdateAsync(filter, updates, ct));
         }
 
         /// <inheritdoc />
         public override async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
         {
-            await base.DeleteAsync(filter, ct);
-            await InvalidateCacheAsync(ct);
+            await WriteThenInvalidateAsync(() => base.DeleteAsync(filter, ct));
         }
 
         #endregion
 
         #region Private Helpers
 
-        private async Task InvalidateCacheAsync(CancellationToken ct)
+        /// <summary>
+        /// Runs a write, then invalidates this table's cached reads — also when the write threw.
+        /// </summary>
+        /// <remarks>
+        /// SH-M045: invalidation used to take the caller's token, so a token cancelled after the row was written
+        /// skipped it (both caches check the token first) and the table's cached reads served the pre-write rows
+        /// until they expired. Once a write may have reached the table, invalidation is not cancellable: it runs with
+        /// <see cref="CancellationToken.None"/>. A write that threw may still have changed rows (a bulk write outside
+        /// a transaction stops part-way), so it invalidates too; an invalidation failure there is swallowed, because
+        /// the write's own exception is the one the caller needs. Invalidating more than necessary costs a miss.
+        /// <para>
+        /// ⚠ Inside a transaction this still runs before the commit, so a reader outside the transaction can cache
+        /// the pre-commit rows between the invalidation and the commit (SH-M044, the half spawned as TASK-669).
+        /// </para>
+        /// </remarks>
+        private async Task WriteThenInvalidateAsync(Func<Task> write)
+        {
+            try
+            {
+                await write().ConfigureAwait(false);
+            }
+            catch
+            {
+                try
+                {
+                    await InvalidateCacheAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Deliberately swallowed: see remarks.
+                }
+                throw;
+            }
+            await InvalidateCacheAsync().ConfigureAwait(false);
+        }
+
+        private async Task InvalidateCacheAsync()
         {
             if (!_options.Enabled) return;
 
@@ -284,7 +369,7 @@ namespace Birko.Data.SQL.Stores
             // with a scoped prefix would leave entries nothing ever removes, which is worse than the
             // cross-database leak being fixed.
             var prefix = SqlCacheKeyBuilder.GetTablePrefix(CacheScope, _tableName);
-            await _cache.RemoveByPrefixAsync(prefix, ct);
+            await _cache.RemoveByPrefixAsync(prefix, CancellationToken.None);
         }
 
         private CacheEntryOptions CreateEntryOptions()

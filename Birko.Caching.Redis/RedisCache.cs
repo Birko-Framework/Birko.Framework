@@ -96,6 +96,13 @@ public sealed class RedisCache : ICache
             ]);
             await db.KeyExpireAsync(GetMetaKey(fullKey), expiry);
         }
+        else
+        {
+            // A meta hash left by an earlier sliding write of this key would go on driving the new entry's
+            // expiry: every read re-expired it to the old sliding window, or deleted it once the old deadline
+            // had passed (SH-M040). The policy belongs to the entry, so a non-sliding write removes it.
+            await db.KeyDeleteAsync(GetMetaKey(fullKey));
+        }
     }
 
     public async Task RemoveAsync(string key, CancellationToken ct = default)
@@ -160,6 +167,8 @@ public sealed class RedisCache : ICache
         ct.ThrowIfCancellationRequested();
         // Report the argument the caller actually passed: null and "" both normalise to the same empty scope,
         // and an operator grepping logs for their own call must be able to find it.
+        // The refusal names the settings' database, not GetDatabase().Database (what SH-M042 scans): reading that would
+        // open the connection, and the refusal happens before any connection is opened.
         var operation = $"{nameof(RemoveByPrefixAsync)}({(prefix is null ? "null" : "\"\"")})";
         var pattern = ResolveOwnedKeyPattern(_settings.KeyPrefix, prefix ?? string.Empty)
             ?? throw new WholeDatabaseDeleteException(operation, _settings.Database);
@@ -209,8 +218,11 @@ public sealed class RedisCache : ICache
     public async Task FlushDatabaseAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        var server = _connectionManager.GetServer();
-        await server.FlushDatabaseAsync(_settings.Database);
+        // The database the cache writes to, on every primary (SH-M042, SH-M043): settings.Database could name
+        // another index than the shared connection manager's, and one endpoint left the other shards intact.
+        var database = _connectionManager.GetDatabase().Database;
+        foreach (var server in _connectionManager.GetServers())
+            await server.FlushDatabaseAsync(database);
     }
 
     /// <summary>
@@ -286,22 +298,43 @@ public sealed class RedisCache : ICache
     private async Task RemoveByPatternAsync(string pattern, CancellationToken ct)
     {
         var db = _connectionManager.GetDatabase();
-        var server = _connectionManager.GetServer();
+        // Scan the index the data path writes to (SH-M042: settings.Database could differ from the shared
+        // connection manager's, so the scan found nothing and reported success), on every primary
+        // (SH-M043: one endpoint left the keys on every other cluster shard in place).
+        foreach (var server in _connectionManager.GetServers())
+            await RemoveByPatternAsync(db, server, pattern, ct);
+    }
 
+    private static async Task RemoveByPatternAsync(IDatabase db, IServer server, string pattern, CancellationToken ct)
+    {
+        // A multi-key DEL must stay within one hash slot on a cluster (CROSSSLOT otherwise), so there a batch
+        // is split by slot; a standalone server takes the batch whole.
+        var cluster = server.ServerType == ServerType.Cluster;
         const int batchSize = 512;
         var batch = new List<RedisKey>(batchSize);
-        await foreach (var key in server.KeysAsync(pattern: pattern, database: _settings.Database))
+        await foreach (var key in server.KeysAsync(pattern: pattern, database: db.Database))
         {
             ct.ThrowIfCancellationRequested();
             batch.Add(key);
             if (batch.Count >= batchSize)
             {
-                await db.KeyDeleteAsync(batch.ToArray());
+                await DeleteAsync(db, batch, cluster);
                 batch.Clear();
             }
         }
         if (batch.Count > 0)
-            await db.KeyDeleteAsync(batch.ToArray());
+            await DeleteAsync(db, batch, cluster);
+    }
+
+    private static async Task DeleteAsync(IDatabase db, List<RedisKey> keys, bool cluster)
+    {
+        if (!cluster)
+        {
+            await db.KeyDeleteAsync(keys.ToArray());
+            return;
+        }
+        foreach (var slot in keys.GroupBy(k => db.Multiplexer.HashSlot(k)))
+            await db.KeyDeleteAsync(slot.ToArray());
     }
 
     private string GetFullKey(string key) => ComposeKey(_settings.KeyPrefix, key);

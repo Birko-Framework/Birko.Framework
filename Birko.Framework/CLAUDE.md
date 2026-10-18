@@ -240,6 +240,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Caching triage: the SQL cache hands out copies; Redis and Hybrid fixes (2026-10-18)
+[[TASK-169]]. 14 medium findings: 13 confirmed, 1 found fixed. One half was spawned as [[TASK-669]].
+- `CachedAsyncDataBaseBulkStore` caches a JSON copy and caches a not-found row on Redis too.
+- Reads inside a transaction bypass that cache, and every write, including `DestroyAsync`, invalidates even when
+  cancelled. Invalidating after the commit is TASK-669.
+- HybridCache lets the caller's cancellation through, and a removed key is not backfilled from L2.
+- Redis scans its own database on every primary (`RedisConnectionManager.GetServers()`).
 ### Messaging options no transport honours are refused until implemented (2026-10-18)
 [[TASK-174]]. 29 low findings. Decided by the user, until [[TASK-668]] implements them, these throw:
 - `TimeToLive` on MQTT and in-memory, a non-zero `Priority`, and a non-default `PrefetchCount`.
@@ -324,11 +331,6 @@ run's outcomes apart).
 [[TASK-535]]. `ConversationCheckpoint` saves a conversation and restores it in the agent's in-memory shapes, so
 `ResumeAsync` sends it as it would a live one. `ConversationTrimmer` keeps the first user message and never orphans a
 tool_result. Measured: `MessageText.From` read a `JsonElement` content (a plain deserializer's output) as ""; it reads it now.
-### One process runner; Birko.VersionControl.Git with agent git tools (2026-10-17)
-[[TASK-534]]. `Birko.Helpers.ProcessRunner` drains stdout and stderr together and kills the process tree on a timeout.
-The caller's cancellation throws. `RunCommandTool` uses it, and a cancelled command no longer reports "timed out". New
-`Birko.VersionControl.Git`: `GitService` and the git agent tools. Its merge check (`git merge-tree`, git 2.38+) never
-touches the working tree, as DraCode's trial merge did.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -3,7 +3,7 @@ id: TASK-169
 parent: STORY-053
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-09
@@ -47,18 +47,18 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 14 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 14 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
-- [ ] Any behavioural fix is followed by `/specs regen caching`, with the spec diff reviewed as the change's
+- [x] Any behavioural fix is followed by `/specs regen caching`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
 
 ## Out of scope
 
@@ -73,12 +73,28 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A — fully covered by automated tests: a library contract with no UI surface. The Redis tests run live.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-169` — leave empty until then._
+## Outcome (2026-10-18)
+
+**14 findings: 13 confirmed, 1 found fixed (SH-M041, by SH-H006's `EscapeGlob`), 0 refuted.** All 13 fixed here except
+SH-M044's after-commit half, spawned as [[TASK-669]]. Verdicts are in the findings file.
+
+- **Cache backends.** HybridCache lets the caller's cancellation through (M037). Its removal goes L2, then a generation
+  bump, then L1, so a concurrent read cannot backfill a removed key (M048). MemoryCache: a cancelled lock wait releases
+  its reference (M038), and a stored null hits only for a compatible type (M039). Redis drops a stale `__meta` (M040),
+  scans and flushes the database it writes to (M042), and works across every primary through the new
+  `RedisConnectionManager.GetServers()` (M043; multi-node unmeasured, no cluster available).
+- **SQL cached store.** It caches a JSON copy, never a shared instance (M047), and a not-found row is cached as `null` on
+  every backend (M035). Single and collection reads have distinct keys (`BuildSingleKey`, M036). Reads inside a
+  transaction bypass the cache (M044, read half). Every write invalidates with no token, and also when it threw (M045),
+  and so does `DestroyAsync` (M046).
+- **Red check (HEAD production, new members stubbed: `BuildSingleKey` as the old key, `GetServers` as one server):**
+  red: SQL store 8/8, Memory 3, Hybrid 9 (M037 6, M048 3), Redis live 2 (M040, M042). Pins: Hybrid GetOrSet cancellation, driver timeout still
+  absorbed, normal backfill; Memory CR-L036 stored-null hit; Redis M041 glob and M043 server list.
+- **Regression** (live Redis): Caching 44, Hybrid 51, Redis cache 43, Birko.Redis 12, BackgroundJobs.Redis 51,
+  MessageQueue.Redis 64, SQL.Caching 35, all green. Sandbox builds.
+- **Handed to [[TASK-184]]:** the same backfill race against a concurrent `SetAsync` (not a harvested finding).
+- **Docs:** `docs/caching.md` § SQL Query Caching described a constructor and options that do not exist; rewritten.

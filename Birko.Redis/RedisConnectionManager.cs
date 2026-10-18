@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using StackExchange.Redis;
 
@@ -64,6 +65,24 @@ namespace Birko.Redis
             var multiplexer = _connection.Value;
             var endpoints = multiplexer.GetEndPoints();
             return multiplexer.GetServer(endpoints[0]);
+        }
+
+        /// <summary>
+        /// Gets every primary server of the connection, for keyspace-wide operations (SCAN, FLUSHDB) that must
+        /// reach every shard of a cluster — <see cref="GetServer"/> returns one endpoint only. Replicas are
+        /// left out (they refuse writes); a primary that is not connected is kept, so an operation on it
+        /// fails loudly instead of skipping that shard's keys.
+        /// </summary>
+        public IReadOnlyList<IServer> GetServers()
+        {
+            var servers = _connection.Value.GetServers();
+            var primaries = new List<IServer>(servers.Length);
+            foreach (var server in servers)
+            {
+                if (!server.IsReplica)
+                    primaries.Add(server);
+            }
+            return primaries;
         }
 
         /// <summary>

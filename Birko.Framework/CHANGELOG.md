@@ -71,6 +71,13 @@ PostgreSQL / TimescaleDB `ALTER COLUMN "MaxRetries" DROP NOT NULL`, SQLite a tab
 under driver 3.x, so the MongoDB job queue could not claim a job on a real server (its tests ran on an in-memory
 double). A set value is now written with the member's own serializer; a null is `BsonNull`. Measured live.
 
+## 2026-10-17 — One process runner; Birko.VersionControl.Git with agent git tools
+
+[[TASK-534]]. `Birko.Helpers.ProcessRunner` drains stdout and stderr together and kills the process tree on a timeout.
+The caller's cancellation throws. `RunCommandTool` uses it, and a cancelled command no longer reports "timed out". New
+`Birko.VersionControl.Git`: `GitService` and the git agent tools. Its merge check (`git merge-tree`, git 2.38+) never
+touches the working tree, as DraCode's trial merge did.
+
 ## 2026-10-17 — KeyedEventBroadcaster: live per-key event streams
 
 [[TASK-533]]. New in Birko.EventBus, for streaming a run's events to SSE and WebSocket clients. `Publish` never blocks.

@@ -51,9 +51,14 @@ public sealed class MemoryCache : ICache
             entry.LastAccessedAt = DateTime.UtcNow;
             // Degrade a type mismatch to a Miss rather than throwing InvalidCastException on the
             // unchecked (T)entry.Value! cast (a shared key read with different T is a real foot-gun
-            // for a general-purpose cache). A stored null is a legitimate hit (CR-L036).
+            // for a general-purpose cache). A stored null is a legitimate hit (CR-L036) — but only for a
+            // T the null was stored as: a null has no runtime type to test, so the entry remembers the
+            // T it was written with, and a read as an unrelated T is a Miss like any other mismatch
+            // (SH-M039: a null cached by a single-entity read answered a List<T> read as "no rows").
             if (entry.Value is null)
-                return Task.FromResult(CacheResult<T>.Hit(default!));
+                return Task.FromResult(typeof(T).IsAssignableFrom(entry.StoredType)
+                    ? CacheResult<T>.Hit(default!)
+                    : CacheResult<T>.Miss());
             return Task.FromResult(entry.Value is T typed
                 ? CacheResult<T>.Hit(typed)
                 : CacheResult<T>.Miss());
@@ -65,7 +70,7 @@ public sealed class MemoryCache : ICache
     public Task SetAsync<T>(string key, T value, CacheEntryOptions? options = null, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        var entry = new MemoryCacheEntry(value, options ?? CacheEntryOptions.Default);
+        var entry = new MemoryCacheEntry(value, typeof(T), options ?? CacheEntryOptions.Default);
         _entries[key] = entry;
         return Task.CompletedTask;
     }
@@ -101,7 +106,18 @@ public sealed class MemoryCache : ICache
         // Per-key lock to prevent cache stampede. Acquire a live (non-removed) KeyLock, retrying if
         // we happened to grab one that a concurrent last-releaser is retiring.
         var keyLock = AcquireKeyLock(key);
-        await keyLock.Semaphore.WaitAsync(ct);
+        try
+        {
+            // Inside the try: a wait that is cancelled (or meets a disposed semaphore) must still give its
+            // reference back, or the lock is never retired and the CR-M030 bound is gone (SH-M038).
+            await keyLock.Semaphore.WaitAsync(ct);
+        }
+        catch
+        {
+            ReleaseKeyLock(key, keyLock);
+            throw;
+        }
+
         try
         {
             // Double-check after acquiring lock
