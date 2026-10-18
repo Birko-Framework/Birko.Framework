@@ -91,8 +91,8 @@ namespace Birko.Data.SQL.Tables
                         + "Two view fields resolved to one key; the second would previously have been "
                         + "dropped with no column, no error and no log entry, reading back as default(T).");
                 }
-                // else: an idempotent re-add of a field already present. Three paths do this legitimately —
-                // LoadView's `_fieldsCache` reuse branch, its multi-LoadField loop, and (the one that makes
+                // else: an idempotent re-add of a field already present. Two paths do this legitimately —
+                // LoadView's multi-LoadField loop and (the one that makes
                 // reference equality useless here) its outer `foreach (ViewAttribute attr in attrs)` loop:
                 // ViewAttribute is AllowMultiple = true, so a three-table view re-runs the whole per-property
                 // field loop and re-presents every field as a FRESH AbstractField instance.

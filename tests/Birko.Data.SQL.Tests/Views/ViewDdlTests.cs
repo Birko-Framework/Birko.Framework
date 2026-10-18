@@ -179,7 +179,7 @@ namespace Birko.Data.SQL.Tests.Views
 
         #region Test Connectors
 
-        private class TestViewConnector : AbstractConnectorBase
+        internal class TestViewConnector : AbstractConnectorBase
         {
             public TestViewConnector(PasswordSettings settings) : base(settings) { }
             public string TestBuildViewSelectSql(Tables.View view) => BuildViewSelectSql(view);

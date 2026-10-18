@@ -498,6 +498,20 @@ missing public instance view property, or a `Count(*)` whose base table has no f
 - **When** its DDL is generated
 - **Then** each column is aliased by its own view property, so the view has two distinct output names. Aliasing only aggregates left both under the source column name — one duplicated identifier, which the persistent read (selecting by name) bound twice to the first column, and which MSSql and PostgreSQL reject outright at `CREATE VIEW`
 
+### Requirement: An attribute-declared SQL view is built from its attributes alone
+
+The system SHALL build `DataBase.LoadView(viewType)` from the type's `[View]` and `[ViewField]` / aggregate attributes
+alone, so concurrent first loads of one view type all build the same view. It SHALL NOT take a view field from the
+field cache by source column name (TASK-666: a build that ran while a concurrent one had cached its fields took
+`COUNT(Orders.Guid) AS OrderCount` as the first cached field named `Guid`, rendering `"Orders".Guid AS CustomerId`;
+seen on CI after `ViewCacheConcurrencyTests`' 64 concurrent first loads).
+
+#### Scenario: A rebuild while the fields are cached keeps the aggregate
+
+- **Given** a view with `[ViewField(Customer, Guid)] CustomerId` and `[CountField(Order, Guid)] OrderCount`, loaded once (its fields are cached) and then dropped from the view cache
+- **When** `LoadView` builds it again
+- **Then** its select SQL contains `COUNT(` and `AS OrderCount`, never `"Orders".Guid AS CustomerId`
+
 ### Requirement: SQL view store execution
 
 The system SHALL execute SQL view queries through the connector, preferring genuine async

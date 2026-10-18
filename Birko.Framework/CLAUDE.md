@@ -240,6 +240,10 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### A SQL view built concurrently keeps its aggregates (2026-10-18)
+[[TASK-666]]. Seen on CI: a view loaded by several threads at once could render `COUNT(Orders.Guid) AS OrderCount` as
+`"Orders".Guid AS CustomerId`, because a build took a field from the cache by source column name while another build
+had just filled it. Every build now comes from the view's attributes alone.
 ### Every job queue reclaims a job its worker abandoned (2026-10-18)
 [[TASK-664]]. Only SQL did: on the eight other backends a worker that died between dequeue and complete left the job
 Processing forever. Each queue now takes a `claimTimeout` (default 30 min, `JobReclaim.DefaultClaimTimeout`) and offers
@@ -321,10 +325,6 @@ both interfaces take a `CancellationToken`, and `GetTotalSpendAsync` adds a prov
 `DeleteDocuments` and `CopyData` threw on their first read, because they typed results as `JsonElement`. Reads now stream and
 parse with System.Text.Json. `CopyData` upserts each document's raw JSON (exact, and checked), and a renamed value is
 written as plain values. Birko's own client was unaffected.
-### A failed RavenDB commit ends the unit of work (2026-10-17)
-[[TASK-658]]. Measured live: after a cluster-wide conflict the unit of work stayed active and every retry hit the same
-conflict, and after a cancelled commit a retry wrote the changes late. A failed commit now releases the session, and the
-rollback after it is a no-op, as on every other backend (TASK-325, TASK-578). To retry, begin again.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

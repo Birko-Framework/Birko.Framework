@@ -173,12 +173,10 @@ namespace Birko.Data.SQL
                                     var table = LoadTable(fieldAttr.ModelType);
                                     if (table != null)
                                     {
-                                        string name = !string.IsNullOrEmpty(fieldAttr.ModelProperyName) ? fieldAttr.ModelProperyName : field.Name;
-                                        if (_fieldsCache.ContainsKey(type) && _fieldsCache[type].Any(x => x.Name == name))
-                                        {
-                                            view.AddField(table.Name, table.Type, _fieldsCache[type].FirstOrDefault(x => x.Name == name)!);
-                                        }
-                                        else
+                                        // TASK-666: every build is computed from the attributes alone. A branch here took the field
+                                        // by SOURCE column name from `_fieldsCache[type]`, which a concurrent build of the same view
+                                        // had just filled (below), so COUNT(Orders.Guid) AS OrderCount became the first field named
+                                        // Guid — Customers' CustomerId — re-pointed at Orders (CI, after 64 concurrent first loads).
                                         {
                                             var tableField = table.GetFieldByPropertyName(fieldAttr.ModelProperyName!);
                                             if (tableField != null)
