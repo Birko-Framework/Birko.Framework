@@ -111,7 +111,7 @@ public class RavenDBJobQueueTests
         await queue.FailAsync(deadId, "dead");
 
         // A completed job — should be purged.
-        var doneId = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+        var doneId = await EnqueueAndDequeue(queue, maxRetries: 3); // only a claimed job is completed (TASK-158)
         await queue.CompleteAsync(doneId);
 
         // A retryable (Scheduled) job — must NOT be purged.

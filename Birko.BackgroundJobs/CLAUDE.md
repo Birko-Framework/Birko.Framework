@@ -138,3 +138,11 @@ Tests should be created in `Birko.BackgroundJobs.Tests` covering:
 - Concurrent processing
 - Recurring job scheduling
 - Serialization round-trips
+
+## Queue contract notes (TASK-158)
+- `CompleteAsync` / `FailAsync` act only on a **Processing** job (claimed by `DequeueAsync`); on any other status they do
+  nothing, on every backend. Store-backed queues write each transition as one guarded native update.
+- `BackgroundJobProcessor` writes a job's outcome even after `Stop()`, and raises `JobOutcomeNotRecorded` when the write
+  fails. `RecurringJobScheduler` raises `EnqueueFailed` and keeps running. Both events ignore a throwing subscriber.
+- `IJobLockProvider` implementations hold one lock name per provider (another name throws). Use a provider per lock.
+

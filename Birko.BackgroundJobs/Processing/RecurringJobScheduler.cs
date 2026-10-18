@@ -108,6 +108,12 @@ namespace Birko.BackgroundJobs.Processing
         }
 
         /// <summary>
+        /// Raised when enqueuing a due recurring job failed (TASK-158, SH-M007): its name and the exception. The job is
+        /// tried again on the next tick. A throwing handler is ignored.
+        /// </summary>
+        public event Action<string, Exception>? EnqueueFailed;
+
+        /// <summary>
         /// Whether this scheduler is currently entitled to enqueue.
         /// </summary>
         /// <remarks>
@@ -197,7 +203,28 @@ namespace Birko.BackgroundJobs.Processing
                                     Metadata = { ["recurring.name"] = def.Name }
                                 };
 
-                                await _queue.EnqueueAsync(descriptor, cancellationToken).ConfigureAwait(false);
+                                // SH-M007: one failed enqueue (a connection blip, a 429) ended the loop, and every recurring
+                                // job with it, until a restart. It is reported, NextRunAt stays, and the next tick retries.
+                                try
+                                {
+                                    await _queue.EnqueueAsync(descriptor, cancellationToken).ConfigureAwait(false);
+                                }
+                                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                                {
+                                    break;
+                                }
+                                catch (Exception ex)
+                                {
+                                    try
+                                    {
+                                        EnqueueFailed?.Invoke(def.Name, ex);
+                                    }
+                                    catch
+                                    {
+                                        // A diagnostic channel must survive its own subscriber (rule 25).
+                                    }
+                                    continue;
+                                }
                                 def.NextRunAt = now.Add(def.Interval);
                                 def.LastRunAt = now;
                             }

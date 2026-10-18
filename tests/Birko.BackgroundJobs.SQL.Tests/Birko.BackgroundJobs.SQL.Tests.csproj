@@ -35,6 +35,8 @@
        lock. SQLite has none (SqlJobLockProvider returns false there by design), so PostgreSQL is the only
        way this project can test what it claims to test. -->
   <Import Project="..\..\Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Models\Birko.Models.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />

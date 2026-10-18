@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Linq;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -125,6 +127,7 @@ public class XmlJobQueueTests : IDisposable
     {
         var queue = NewQueue();
         var doneId = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+        await queue.DequeueAsync(); // only a claimed job is completed (TASK-158)
         await queue.CompleteAsync(doneId);
 
         _clock.Advance(TimeSpan.FromDays(2));
@@ -133,4 +136,41 @@ public class XmlJobQueueTests : IDisposable
         purged.Should().Be(1);
         (await queue.GetAsync(doneId)).Should().BeNull();
     }
+
+    // ── TASK-158 (SH-M021): two queues on one file share it ──
+
+    [Fact]
+    public async Task Two_queues_on_one_file_do_not_overwrite_each_others_jobs()
+    {
+        var a = NewQueue();
+        var b = NewQueue();
+        await a.EnqueueAsync(new JobDescriptor { JobType = "j1" });
+        await b.EnqueueAsync(new JobDescriptor { JobType = "j2" });
+        await a.EnqueueAsync(new JobDescriptor { JobType = "j3" });
+
+        // A store of its own reads the file as another process would.
+        var fresh = new Birko.Data.XML.Stores.AsyncXmlStore<Birko.BackgroundJobs.XML.Models.XmlJobDescriptorModel>();
+        fresh.SetSettings(new Birko.Configuration.Settings(_location, "jobs"));
+        var onDisk = await new XmlJobQueue(fresh, _clock).GetByStatusAsync(JobStatus.Pending);
+
+        onDisk.Select(j => j.JobType).Should().BeEquivalentTo(new[] { "j1", "j2", "j3" });
+    }
+
+    [Fact]
+    public async Task Two_queues_on_one_file_never_claim_the_same_job()
+    {
+        var a = NewQueue();
+        var b = NewQueue();
+        for (var i = 0; i < 20; i++) await a.EnqueueAsync(new JobDescriptor { JobType = "j" + i });
+
+        var claimed = new ConcurrentBag<Guid>();
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(w => Task.Run(async () =>
+        {
+            var q = w % 2 == 0 ? a : b;
+            while (await q.DequeueAsync() is { } job) claimed.Add(job.Guid);
+        })));
+
+        claimed.Should().HaveCount(20).And.OnlyHaveUniqueItems();
+    }
+
 }

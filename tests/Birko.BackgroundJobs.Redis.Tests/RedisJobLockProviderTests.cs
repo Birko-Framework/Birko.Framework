@@ -202,4 +202,49 @@ public class RedisJobLockProviderTests
             "acquireTimeout is a wait now, not the lock's lifetime — SET NX does not block so it polls");
         waited.Should().BeLessThan(TimeSpan.FromSeconds(4), "and it must give up rather than hang");
     }
+
+    // ---- TASK-158 ------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task SH_M006_a_provider_holding_one_lock_refuses_to_claim_another_name()
+    {
+        if (LiveSettings() is not { } settings) return;
+        await using var p = new RedisJobLockProvider(settings);
+        (await p.TryAcquireAsync("a", TimeSpan.Zero)).Should().BeTrue();
+        (await p.TryAcquireAsync("a", TimeSpan.Zero)).Should().BeTrue("re-acquiring the held name is idempotent");
+
+        var other = async () => await p.TryAcquireAsync("b", TimeSpan.Zero);
+        await other.Should().ThrowAsync<InvalidOperationException>().WithMessage("*'a'*");
+
+        await using var second = new RedisJobLockProvider(settings);
+        (await second.TryAcquireAsync("b", TimeSpan.Zero)).Should().BeTrue("b was never taken");
+    }
+
+    [Fact]
+    public async Task SH_M006_releasing_a_name_the_provider_does_not_hold_keeps_the_lock_it_holds()
+    {
+        if (LiveSettings() is not { } settings) return;
+        await using var p = new RedisJobLockProvider(settings);
+        await p.TryAcquireAsync("a", TimeSpan.Zero);
+
+        await p.ReleaseAsync("b");
+
+        p.IsLocked.Should().BeTrue();
+        await using var second = new RedisJobLockProvider(settings);
+        (await second.TryAcquireAsync("a", TimeSpan.Zero)).Should().BeFalse("a is still held");
+    }
+
+    [Fact]
+    public async Task SH_M020_a_holder_that_cannot_renew_stops_claiming_the_lock_once_its_lease_has_lapsed()
+    {
+        if (LiveSettings() is not { } settings) return;
+        var connection = new RedisConnectionManager(settings);
+        await using var p = new RedisJobLockProvider(connection, settings);
+        (await p.TryAcquireAsync("a", TimeSpan.Zero, TimeSpan.FromMilliseconds(600))).Should().BeTrue();
+
+        connection.Dispose(); // every renewal now throws: the holder is cut off from Redis
+        await Task.Delay(TimeSpan.FromMilliseconds(1200));
+
+        p.IsLocked.Should().BeFalse("the lease has certainly expired on the server, so another node may hold the lock now");
+    }
 }

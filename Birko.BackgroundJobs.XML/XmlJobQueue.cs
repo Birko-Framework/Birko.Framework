@@ -22,18 +22,31 @@ namespace Birko.BackgroundJobs.XML
         private readonly RetryPolicy _retryPolicy;
         private readonly IDateTimeProvider _clock;
 
-        // Serializes the read-claim-update in DequeueAsync so two worker tasks in the same process
-        // cannot claim the same job (CR-M029) — mirrors the reference InMemoryJobQueue. The file
-        // store has no compare-and-swap, so cross-process concurrency remains unsupported by design.
-        private readonly SemaphoreSlim _dequeueLock = new(1, 1);
+        // TASK-158 (SH-M021): one store and one gate per file, shared by every queue on that file in the process. Each
+        // queue used to keep its own snapshot of the file and its own dequeue lock, so a second queue on the same file
+        // (two hosted services, a queue and a schema helper) overwrote the first one's jobs on save, and both could claim
+        // the same job. Every operation runs under the gate: the store's rows are a plain Dictionary. Separate
+        // processes on one file remain unsupported — the file has no compare-and-swap.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (AsyncXmlStore<XmlJobDescriptorModel> Store, SemaphoreSlim Gate)> SharedFiles =
+            new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<AsyncXmlStore<XmlJobDescriptorModel>, SemaphoreSlim> StoreGates = new();
+        private readonly SemaphoreSlim _gate;
 
         /// <summary>
         /// Creates a new XML job queue.
         /// </summary>
         public XmlJobQueue(Birko.Configuration.Settings settings, IDateTimeProvider clock, RetryPolicy? retryPolicy = null)
         {
-            _store = new AsyncXmlStore<XmlJobDescriptorModel>();
-            _store.SetSettings(settings);
+            ArgumentNullException.ThrowIfNull(settings);
+            var file = System.IO.Path.GetFullPath(System.IO.Path.Combine(settings.Location ?? string.Empty, settings.Name ?? string.Empty));
+            var shared = SharedFiles.GetOrAdd(file, _ =>
+            {
+                var store = new AsyncXmlStore<XmlJobDescriptorModel>();
+                store.SetSettings(settings);
+                return (store, new SemaphoreSlim(1, 1));
+            });
+            _store = shared.Store;
+            _gate = shared.Gate;
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
         }
@@ -44,6 +57,7 @@ namespace Birko.BackgroundJobs.XML
         public XmlJobQueue(AsyncXmlStore<XmlJobDescriptorModel> store, IDateTimeProvider clock, RetryPolicy? retryPolicy = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
+            _gate = StoreGates.GetValue(store, _ => new SemaphoreSlim(1, 1));
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
         }
@@ -55,6 +69,19 @@ namespace Birko.BackgroundJobs.XML
 
         public async Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken cancellationToken = default)
         {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await EnqueueCoreAsync(descriptor, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        private async Task<Guid> EnqueueCoreAsync(JobDescriptor descriptor, CancellationToken cancellationToken)
+        {
             var model = XmlJobDescriptorModel.FromDescriptor(descriptor);
             var id = await _store.CreateAsync(model, ct: cancellationToken).ConfigureAwait(false);
             return id;
@@ -62,7 +89,7 @@ namespace Birko.BackgroundJobs.XML
 
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
         {
-            await _dequeueLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 var now = _clock.UtcNow;
@@ -107,14 +134,28 @@ namespace Birko.BackgroundJobs.XML
             }
             finally
             {
-                _dequeueLock.Release();
+                _gate.Release();
             }
         }
 
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await CompleteCoreAsync(jobId, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        private async Task CompleteCoreAsync(Guid jobId, CancellationToken cancellationToken)
+        {
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
-            if (model == null) return;
+            // TASK-158: only a claimed (Processing) job is completed or failed, as on every store-backed queue.
+            if (model == null || model.Status != (int)JobStatus.Processing) return;
 
             model.Status = (int)JobStatus.Completed;
             model.CompletedAt = _clock.UtcNow;
@@ -124,8 +165,22 @@ namespace Birko.BackgroundJobs.XML
 
         public async Task FailAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
         {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await FailCoreAsync(jobId, error, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        private async Task FailCoreAsync(Guid jobId, string error, CancellationToken cancellationToken)
+        {
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
-            if (model == null) return;
+            // TASK-158: only a claimed (Processing) job is completed or failed, as on every store-backed queue.
+            if (model == null || model.Status != (int)JobStatus.Processing) return;
 
             model.LastError = error;
 
@@ -146,6 +201,19 @@ namespace Birko.BackgroundJobs.XML
 
         public async Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await CancelCoreAsync(jobId, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        private async Task<bool> CancelCoreAsync(Guid jobId, CancellationToken cancellationToken)
+        {
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
 
@@ -165,11 +233,37 @@ namespace Birko.BackgroundJobs.XML
 
         public async Task<JobDescriptor?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await GetCoreAsync(jobId, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        private async Task<JobDescriptor?> GetCoreAsync(Guid jobId, CancellationToken cancellationToken)
+        {
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
             return model?.ToDescriptor();
         }
 
         public async Task<IReadOnlyList<JobDescriptor>> GetByStatusAsync(JobStatus status, int limit = 100, CancellationToken cancellationToken = default)
+        {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await GetByStatusCoreAsync(status, limit, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        private async Task<IReadOnlyList<JobDescriptor>> GetByStatusCoreAsync(JobStatus status, int limit, CancellationToken cancellationToken)
         {
             var statusInt = (int)status;
 
@@ -184,6 +278,19 @@ namespace Birko.BackgroundJobs.XML
         }
 
         public async Task<int> PurgeAsync(TimeSpan olderThan, CancellationToken cancellationToken = default)
+        {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await PurgeCoreAsync(olderThan, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        private async Task<int> PurgeCoreAsync(TimeSpan olderThan, CancellationToken cancellationToken)
         {
             var cutoff = _clock.UtcNow.Subtract(olderThan);
             var completedStatus = (int)JobStatus.Completed;

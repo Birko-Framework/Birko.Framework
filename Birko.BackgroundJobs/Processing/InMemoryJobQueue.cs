@@ -67,19 +67,34 @@ namespace Birko.BackgroundJobs.Processing
             }
         }
 
+        // TASK-158 (SH-M011): the transitions take the lock DequeueAsync reads under. They mutated the shared descriptor
+        // unlocked, and FailAsync wrote Status = Scheduled before ScheduledAt, so a concurrent dequeue could see Scheduled
+        // with the previous, already elapsed ScheduledAt and claim the retry before its backoff.
         public Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            if (_jobs.TryGetValue(jobId, out var descriptor))
+            _lock.Wait(CancellationToken.None);
+            try
             {
-                descriptor.Status = JobStatus.Completed;
-                descriptor.CompletedAt = _clock.UtcNow;
+                // Only a claimed (Processing) job is completed or failed, as on every store-backed queue (TASK-158).
+                if (_jobs.TryGetValue(jobId, out var descriptor) && descriptor.Status == JobStatus.Processing)
+                {
+                    descriptor.CompletedAt = _clock.UtcNow;
+                    descriptor.Status = JobStatus.Completed;
+                }
+            }
+            finally
+            {
+                _lock.Release();
             }
             return Task.CompletedTask;
         }
 
         public Task FailAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
         {
-            if (_jobs.TryGetValue(jobId, out var descriptor))
+            _lock.Wait(CancellationToken.None);
+            try
+            {
+            if (_jobs.TryGetValue(jobId, out var descriptor) && descriptor.Status == JobStatus.Processing)
             {
                 descriptor.LastError = error;
 
@@ -88,28 +103,39 @@ namespace Birko.BackgroundJobs.Processing
                 if (descriptor.AttemptCount < maxRetries)
                 {
                     var delay = _retryPolicy.GetDelay(descriptor.AttemptCount);
-                    descriptor.Status = JobStatus.Scheduled;
                     descriptor.ScheduledAt = _clock.UtcNow.Add(delay);
+                    descriptor.Status = JobStatus.Scheduled;
                 }
                 else
                 {
-                    descriptor.Status = JobStatus.Dead;
                     descriptor.CompletedAt = _clock.UtcNow;
+                    descriptor.Status = JobStatus.Dead;
                 }
+            }
+            }
+            finally
+            {
+                _lock.Release();
             }
             return Task.CompletedTask;
         }
 
         public Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            if (_jobs.TryGetValue(jobId, out var descriptor))
+            _lock.Wait(CancellationToken.None);
+            try
             {
-                if (descriptor.Status == JobStatus.Pending || descriptor.Status == JobStatus.Scheduled)
+                if (_jobs.TryGetValue(jobId, out var descriptor)
+                    && (descriptor.Status == JobStatus.Pending || descriptor.Status == JobStatus.Scheduled))
                 {
-                    descriptor.Status = JobStatus.Cancelled;
                     descriptor.CompletedAt = _clock.UtcNow;
+                    descriptor.Status = JobStatus.Cancelled;
                     return Task.FromResult(true);
                 }
+            }
+            finally
+            {
+                _lock.Release();
             }
             return Task.FromResult(false);
         }

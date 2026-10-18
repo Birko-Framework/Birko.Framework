@@ -151,6 +151,9 @@ public class RecurringSchedulerLeaderElectionTests
         using var ctsA = new CancellationTokenSource();
         using var ctsB = new CancellationTokenSource();
         var runA = a.RunAsync(ctsA.Token);
+        // TASK-158: B starts once A leads. Starting both at once left the first acquisition to a race that a cold run
+        // (JIT, the first pooled connection) could hand to B — observed twice, each time on a run that included a build.
+        for (var i = 0; i < 50 && !a.IsLeader; i++) await Task.Delay(100);
         var runB = b.RunAsync(ctsB.Token);
 
         await Task.Delay(Tick * 2);

@@ -95,9 +95,12 @@ namespace Birko.BackgroundJobs.MongoDB
                 var claimId = candidate.Guid;
                 var originalStatus = candidate.Status;
                 var claimToken = Guid.NewGuid();
+                var seenAttempts = candidate.AttemptCount;
 
                 await _store.UpdateAsync(
-                    filter: j => j.Guid == claimId && j.Status == originalStatus,
+                    filter: // TASK-158 (SH-M012): Status alone is ABA — a job another worker claimed, ran and failed back to Scheduled
+                    // matched again, and the stale claim ran it inside its backoff with a lower AttemptCount.
+                    j => j.Guid == claimId && j.Status == originalStatus && j.AttemptCount == seenAttempts,
                     updates: new PropertyUpdate<MongoJobDescriptorModel>()
                         .Set(j => j.Status, processingStatus)
                         .Set(j => j.ClaimToken, claimToken)
@@ -116,56 +119,64 @@ namespace Birko.BackgroundJobs.MongoDB
             return null;
         }
 
+        // TASK-158 (SH-M013): each transition is one guarded native update of the fields it changes. They read the whole
+        // row and wrote it back, so a stale reporter overwrote a newer claim's Status, AttemptCount and ClaimToken, and a
+        // cancel read Pending and then overwrote a claim that landed in between. A full ownership check would need the
+        // claim token on CompleteAsync / FailAsync (an IJobQueue change); the guards close what the API can express.
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
-            if (model == null) return;
-
-            model.Status = (int)JobStatus.Completed;
-            model.CompletedAt = DateTime.UtcNow;
-
-            await _store.UpdateAsync(model, ct: cancellationToken).ConfigureAwait(false);
+            var processingStatus = (int)JobStatus.Processing;
+            await _store.UpdateAsync(
+                filter: j => j.Guid == jobId && j.Status == processingStatus,
+                updates: new PropertyUpdate<MongoJobDescriptorModel>()
+                    .Set(j => j.Status, (int)JobStatus.Completed)
+                    .Set(j => j.CompletedAt, DateTime.UtcNow),
+                ct: cancellationToken
+            ).ConfigureAwait(false);
         }
 
         public async Task FailAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
         {
-            var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
+            var processingStatus = (int)JobStatus.Processing;
+            var model = await _store.ReadAsync(j => j.Guid == jobId && j.Status == processingStatus, cancellationToken).ConfigureAwait(false);
             if (model == null) return;
 
-            model.LastError = error;
-
-            if (model.AttemptCount < model.MaxRetries)
-            {
-                var delay = _retryPolicy.GetDelay(model.AttemptCount);
-                model.Status = (int)JobStatus.Scheduled;
-                model.ScheduledAt = DateTime.UtcNow.Add(delay);
-            }
+            var attempts = model.AttemptCount;
+            var maxRetries = model.MaxRetries;
+            var now = DateTime.UtcNow;
+            var update = new PropertyUpdate<MongoJobDescriptorModel>().Set(j => j.LastError, error);
+            if (attempts < maxRetries)
+                update = update.Set(j => j.ScheduledAt, now.Add(_retryPolicy.GetDelay(attempts))).Set(j => j.Status, (int)JobStatus.Scheduled);
             else
-            {
-                model.Status = (int)JobStatus.Dead;
-                model.CompletedAt = DateTime.UtcNow;
-            }
+                update = update.Set(j => j.CompletedAt, now).Set(j => j.Status, (int)JobStatus.Dead);
 
-            await _store.UpdateAsync(model, ct: cancellationToken).ConfigureAwait(false);
+            await _store.UpdateAsync(
+                filter: j => j.Guid == jobId && j.Status == processingStatus && j.AttemptCount == attempts,
+                updates: update,
+                ct: cancellationToken
+            ).ConfigureAwait(false);
         }
 
         public async Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
+            var cancelledStatus = (int)JobStatus.Cancelled;
+            // A stamp only this call writes: the store reports no affected-row count, so success is read back. Whole
+            // milliseconds, which every backend stores exactly (MongoDB and Elasticsearch keep nothing finer).
+            var nowMs = DateTime.UtcNow;
+            var stamp = new DateTime(nowMs.Ticks - nowMs.Ticks % TimeSpan.TicksPerMillisecond, DateTimeKind.Utc).AddMilliseconds(System.Random.Shared.Next(0, 1000));
 
-            var model = await _store.ReadAsync(
-                j => j.Guid == jobId && (j.Status == pendingStatus || j.Status == scheduledStatus),
-                cancellationToken
+            await _store.UpdateAsync(
+                filter: j => j.Guid == jobId && (j.Status == pendingStatus || j.Status == scheduledStatus),
+                updates: new PropertyUpdate<MongoJobDescriptorModel>()
+                    .Set(j => j.Status, cancelledStatus)
+                    .Set(j => j.CompletedAt, stamp),
+                ct: cancellationToken
             ).ConfigureAwait(false);
 
-            if (model == null) return false;
-
-            model.Status = (int)JobStatus.Cancelled;
-            model.CompletedAt = DateTime.UtcNow;
-
-            await _store.UpdateAsync(model, ct: cancellationToken).ConfigureAwait(false);
-            return true;
+            var after = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
+            return after != null && after.Status == cancelledStatus && after.CompletedAt == stamp;
         }
 
         public async Task<JobDescriptor?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)

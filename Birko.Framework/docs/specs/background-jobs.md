@@ -1241,3 +1241,31 @@ token source only after the loop ends.
 - **Given** a running job that ignores its token, and a shutdown token that fires after 300 ms
 - **When** the hosted services stop
 - **Then** `StopAsync` returns within the shutdown timeout instead of waiting for the job
+
+### Requirement: Queue transitions are guarded, loops survive their failures, and a lock provider holds one name
+
+The system SHALL (TASK-158):
+- complete or fail only a job that is Processing (a no-op otherwise, on every backend). On SQL, MongoDB, Elasticsearch
+  and RavenDB each transition is one guarded native update of the fields it changes: Fail also requires the attempt
+  count it read, and Cancel requires Pending | Scheduled and returns `true` only when its own stamp reads back.
+- claim a job only if its Status and its AttemptCount are still those the worker read (SH-M012: Status alone is ABA).
+- write a job's outcome with `CancellationToken.None`, raise `JobOutcomeNotRecorded` when the write fails, and stop
+  cleanly when stopped while waiting for a slot.
+- keep the recurring scheduler running when an enqueue fails, raising `EnqueueFailed` and retrying on the next tick.
+- make every queue on one JSON or XML file in a process share one store and one gate.
+- have a lock provider hold one lock name. Re-acquiring it is idempotent, another name throws, and releasing a name it
+  does not hold keeps its lock. The SQL provider unlocks before closing its connection on dispose. The Redis provider's
+  `IsLocked` ends at a local deadline (the last successful renewal plus the lease).
+
+#### Scenario: A stale claim after a reschedule
+
+- **Given** worker B read a due Scheduled job, and worker A then claimed, ran and failed it
+- **When** B's claim is written
+- **Then** it matches nothing (the attempt count moved on), and the job stays Scheduled inside its backoff
+
+#### Scenario: Dispose on a pooled MySQL connection
+
+- **Given** a provider holding `GET_LOCK` that is disposed
+- **When** a provider on another connection pool asks for the same lock
+- **Then** it gets it (an idle pooled session used to keep the lock)
+

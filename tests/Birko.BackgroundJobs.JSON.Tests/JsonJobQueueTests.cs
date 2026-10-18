@@ -150,4 +150,41 @@ public class JsonJobQueueTests : IDisposable
         claimed.Should().HaveCount(jobCount);
         claimed.Distinct().Should().HaveCount(jobCount, "no job may be claimed by more than one worker");
     }
+
+    // ── TASK-158 (SH-M021): two queues on one file share it ──
+
+    [Fact]
+    public async Task Two_queues_on_one_file_do_not_overwrite_each_others_jobs()
+    {
+        var a = NewQueue();
+        var b = NewQueue();
+        await a.EnqueueAsync(new JobDescriptor { JobType = "j1" });
+        await b.EnqueueAsync(new JobDescriptor { JobType = "j2" });
+        await a.EnqueueAsync(new JobDescriptor { JobType = "j3" });
+
+        // A store of its own reads the file as another process would.
+        var fresh = new Birko.Data.JSON.Stores.AsyncJsonStore<Birko.BackgroundJobs.JSON.Models.JsonJobDescriptorModel>();
+        fresh.SetSettings(new Birko.Configuration.Settings(_location, "jobs"));
+        var onDisk = await new JsonJobQueue(fresh, _clock).GetByStatusAsync(JobStatus.Pending);
+
+        onDisk.Select(j => j.JobType).Should().BeEquivalentTo(new[] { "j1", "j2", "j3" });
+    }
+
+    [Fact]
+    public async Task Two_queues_on_one_file_never_claim_the_same_job()
+    {
+        var a = NewQueue();
+        var b = NewQueue();
+        for (var i = 0; i < 20; i++) await a.EnqueueAsync(new JobDescriptor { JobType = "j" + i });
+
+        var claimed = new ConcurrentBag<Guid>();
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(w => Task.Run(async () =>
+        {
+            var q = w % 2 == 0 ? a : b;
+            while (await q.DequeueAsync() is { } job) claimed.Add(job.Guid);
+        })));
+
+        claimed.Should().HaveCount(20).And.OnlyHaveUniqueItems();
+    }
+
 }

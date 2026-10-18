@@ -32,7 +32,10 @@ namespace Birko.BackgroundJobs.Models
             if (string.IsNullOrEmpty(json))
                 return null;
             var result = _serializer.Deserialize<IDictionary<string, string>>(json);
-            return result as Dictionary<string, string> ?? new Dictionary<string, string>(result!);
+            // TASK-158 (SH-M004): JSON "null" deserializes to null, and the copy constructor threw on it inside every
+            // backend's ToDescriptor, so one such row broke Get, Dequeue and GetByStatus.
+            if (result == null) return new Dictionary<string, string>();
+            return result as Dictionary<string, string> ?? new Dictionary<string, string>(result);
         }
     }
 }

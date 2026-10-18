@@ -21,6 +21,10 @@ namespace Birko.BackgroundJobs.SQL
         private DbConnection? _lockConnection;
         private bool _disposed;
 
+        // TASK-158 (SH-M006): the name of the lock held. A provider holds one lock; it answered "true" for any other name
+        // while holding one, and released by whatever name it was given.
+        private string? _heldName;
+
         /// <summary>
         /// Whether a lock is currently held.
         /// </summary>
@@ -71,9 +75,16 @@ namespace Birko.BackgroundJobs.SQL
                     nameof(leaseDuration));
             }
 
+            ArgumentException.ThrowIfNullOrWhiteSpace(lockName);
             if (IsLocked)
             {
-                return true;
+                if (_heldName == lockName)
+                {
+                    return true;
+                }
+                throw new InvalidOperationException(
+                    $"This provider holds the lock '{_heldName}' and cannot take '{lockName}' as well: a provider holds one " +
+                    "lock at a time. Use a provider per lock.");
             }
 
             var dialect = Dialect;
@@ -126,6 +137,10 @@ namespace Birko.BackgroundJobs.SQL
                 {
                     await ReleaseConnectionAsync().ConfigureAwait(false);
                 }
+                else
+                {
+                    _heldName = lockName;
+                }
                 return IsLocked;
             }
             catch
@@ -142,10 +157,23 @@ namespace Birko.BackgroundJobs.SQL
         /// </summary>
         public async Task ReleaseAsync(string lockName, CancellationToken cancellationToken = default)
         {
-            if (!IsLocked || _lockConnection == null)
+            // A name this provider does not hold is not released, and the held lock is kept (SH-M006).
+            if (!IsLocked || _lockConnection == null || _heldName != lockName)
             {
                 return;
             }
+
+            await UnlockAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        // Issues the unlock for the held name and closes the lock connection.
+        private async Task UnlockAsync(CancellationToken cancellationToken)
+        {
+            if (!IsLocked || _lockConnection == null || _heldName == null)
+            {
+                return;
+            }
+            var lockName = _heldName;
 
             try
             {
@@ -175,10 +203,12 @@ namespace Birko.BackgroundJobs.SQL
             }
             catch (DbException)
             {
-                // Lock released when connection closes
+                // The connection is closed below. Closing returns it to the pool, which does not end the session, so this
+                // is only a fallback: the unlock above is what frees the lock (SH-M019).
             }
 
             IsLocked = false;
+            _heldName = null;
             await ReleaseConnectionAsync().ConfigureAwait(false);
         }
 
@@ -233,26 +263,27 @@ namespace Birko.BackgroundJobs.SQL
             }
         }
 
+        // SH-M019: disposing unlocks before closing. Closing returns the connection to the pool, which keeps the session —
+        // and a MySQL GET_LOCK or a session-owned sp_getapplock with it — until the pooled connection is reused or evicted,
+        // so another pool (another process) could not take the lock (measured on MySQL).
         public async ValueTask DisposeAsync()
         {
             if (!_disposed)
             {
                 _disposed = true;
-                IsLocked = false;
-                await ReleaseConnectionAsync().ConfigureAwait(false);
+                try
+                {
+                    await UnlockAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                finally
+                {
+                    IsLocked = false;
+                    _heldName = null;
+                    await ReleaseConnectionAsync().ConfigureAwait(false);
+                }
             }
         }
 
-        public void Dispose()
-        {
-            if (!_disposed)
-            {
-                _disposed = true;
-                IsLocked = false;
-                _lockConnection?.Close();
-                _lockConnection?.Dispose();
-                _lockConnection = null;
-            }
-        }
+        public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 }

@@ -13,7 +13,9 @@ finding-ids: SH-M001 … SH-M428
 
 ## Progress
 
-**312 / 428 closed by this story's tasks.** All 20 of `llm-provider-and-agents` ([[TASK-160]], done 2026-10-18): 19 confirmed,
+**333 / 428 closed by this story's tasks.** All 21 of `background-jobs` ([[TASK-158]], done 2026-10-18): 18 confirmed,
+3 narrower; 12 fixed there (SH-M012 / SH-M013 on SQL, Mongo, ES and Raven), the rest spawned as [[TASK-661]] (Cosmos), [[TASK-662]]
+(nullable `MaxRetries`, decided by the user), [[TASK-663]] (Redis, priority decided by the user), [[TASK-664]] (reclaim everywhere). All 20 of `llm-provider-and-agents` ([[TASK-160]], done 2026-10-18): 19 confirmed,
 1 narrower (`SH-M155`); 18 fixed there, `SH-M152` found fixed by [[TASK-544]], `SH-M169` half fixed by [[TASK-534]]. All 36 of `views-and-aggregation` ([[TASK-151]], done 2026-10-16): all
 confirmed (5 wider), 33 fixed there, 3 found fixed earlier. All 33 of `migrations` ([[TASK-152]], done 2026-10-15): all confirmed
 (2 wider, 2 narrower), 25 fixed there, 8 found fixed earlier. All 15 of `security-and-authorization` ([[TASK-165]], done 2026-10-15): 13

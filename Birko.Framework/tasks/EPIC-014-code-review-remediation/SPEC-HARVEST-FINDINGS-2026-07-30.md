@@ -1091,11 +1091,15 @@ The update branch does `existing.UpdateFromInstance(instance); existing.Workflow
 
 `../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueue.cs:71`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, spawned as [[TASK-661]]** (TASK-158, 2026-10-18). `CosmosDBJobQueue.DequeueAsync` still reads the top candidate, mutates it and calls `UpdateAsync(model)`, with no claim token, guard or retry. The fix needs a conditional write (ETag / patch with a predicate) that `Birko.Data.CosmosDB` does not have yet.
+
 Lines 71-79 read the top candidate, mutate Status/AttemptCount/LastAttemptAt in memory and call `_store.UpdateAsync(model)`. There is no ClaimToken (the model has no such field), no status-guarded conditional update, no MaxClaimAttempts loop and no lock - unlike the four store-backed siblings hardened for CR-H011. Two concurrent workers both return the same JobDescriptor, the job body runs twice, and AttemptCount ends at 1 instead of 2 so the retry budget is wrong too.
 
 #### SH-M002 — CosmosDB CancelAsync applies no status guard and returns true for any existing job
 
 `../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueue.cs:119`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, spawned as [[TASK-661]]** (TASK-158). `CancelAsync` reads by id with no status guard and returns `true` for any existing job; it is fixed with the same conditional write.
 
 Every other backend reads with `j.Guid == jobId && (Status == Pending || Status == Scheduled)` and returns false otherwise; IJobQueue.CancelAsync is documented as 'Cancels a pending or scheduled job'. Cosmos reads by id only, so CancelAsync on a Completed, Processing or Dead job overwrites Status to Cancelled, restamps CompletedAt and reports success. A completed job's terminal record is destroyed, and a running job reports cancelled while it keeps running.
 
@@ -1103,11 +1107,15 @@ Every other backend reads with `j.Guid == jobId && (Status == Pending || Status 
 
 `../Birko.BackgroundJobs.SQL/SqlJobQueue.cs:152`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, spawned as [[TASK-662]]** (TASK-158). SQL (including its reclaim), MongoDB, ES, XML, Cosmos and Redis compare a bare `AttemptCount < MaxRetries`, while InMemory, JSON and Raven fall back to the policy for 0. **Decided by the user:** `MaxRetries` becomes nullable (null = the policy, 0 = no retries). That is a signature change on every backend, so it is its own task.
+
 InMemory (reference, line 86), JSON (134) and RavenDB (141) compute `maxRetries = model.MaxRetries > 0 ? model.MaxRetries : _retryPolicy.MaxRetries`. SQL:152, MongoDB:137, ElasticSearch:138, XML:132, Cosmos:100 and Redis:204 compare the bare `AttemptCount < MaxRetries`. A descriptor built with MaxRetries left at 0 goes to Dead on its first failure on those six, and the RetryPolicy passed to the constructor is silently never consulted - the same defect CR-L025/L029 fixed on the other three.
 
 #### SH-M004 — JobSerializationHelper.DeserializeMetadata throws ArgumentNullException when the JSON yields null
 
 `../Birko.BackgroundJobs/Serialization/JobSerializationHelper.cs:35`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-158). `JobSerializationHelper.DeserializeMetadata` passed a null result (from JSON `"null"`) to the `Dictionary` copy constructor; it now returns an empty dictionary. Red on HEAD (`Task158SerializationTests`).
 
 `result as Dictionary<string,string> ?? new Dictionary<string,string>(result!)` - for a stored metadata string of literal "null" (or any JSON deserializing to null) the `as` yields null and the fallback passes null to the Dictionary copy constructor. Only string.IsNullOrEmpty is guarded, and the `!` suppression is provably wrong. It fires inside ToDescriptor(), so one malformed row makes GetAsync, DequeueAsync and GetByStatusAsync throw on SQL, MongoDB, ElasticSearch, RavenDB and CosmosDB.
 
@@ -1115,11 +1123,15 @@ InMemory (reference, line 86), JSON (134) and RavenDB (141) compute `maxRetries 
 
 `../Birko.BackgroundJobs/Core/IJobQueue.cs:53`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED-NARROWER, spawned as [[TASK-664]]** (TASK-158). SQL already reclaims a stale Processing job (`e66eafcd`, TASK-575). MongoDB, ES, Raven, Cosmos, JSON, XML, InMemory and Redis still strand it forever.
+
 If a worker dies between DequeueAsync and Complete/FailAsync (kill, OOM, or on Redis where the Lua script already ZREMed the queue member), the job sits in Status=Processing permanently: no backend's eligibility predicate admits Processing, none implements a lease/visibility timeout, and every PurgeAsync deletes only Completed|Dead|Cancelled with a non-null CompletedAt. The work is silently lost and the row/document/hash leaks forever.
 
 #### SH-M006 — Both lock providers return true for a lock name they do not hold when already locked
 
 `../Birko.BackgroundJobs.SQL/SqlJobLockProvider.cs:44`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED, fixed** (TASK-158, measured live on PostgreSQL, MySQL, SQL Server and Redis). Both providers returned `true` for any name while holding one, and released by the name passed. They now remember the held name: re-acquiring it stays true, another name throws (a provider holds one lock), and releasing a name not held keeps the lock. Red on HEAD: 6 SQL (2 × 3 dialects) and 2 Redis.
 
 SqlJobLockProvider.TryAcquireAsync (44) and RedisJobLockProvider.TryAcquireAsync (80) early-return true whenever IsLocked is set, without comparing lockName to the held name. A caller holding "queue-a" that asks for "queue-b" is told it owns "queue-b" and enters a critical section nothing guards. SqlJobLockProvider.ReleaseAsync (113) compounds it by building the unlock statement from the passed lockName, so it can issue pg_advisory_unlock/RELEASE_LOCK for a key it never acquired while clearing IsLocked.
 
@@ -1127,11 +1139,15 @@ SqlJobLockProvider.TryAcquireAsync (44) and RedisJobLockProvider.TryAcquireAsync
 
 `../Birko.BackgroundJobs/Processing/RecurringJobScheduler.cs:74`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED, fixed** (TASK-158). An `EnqueueAsync` throw faulted `RecurringJobScheduler.RunAsync`. It is now caught per definition and raised as `EnqueueFailed` (a throwing subscriber is ignored); `NextRunAt` stays, so the next tick retries, and the Hosting bridge logs it. Red on HEAD.
+
 Only the Task.Delay is wrapped in try/catch (80-87). A transient queue error (connection blip, timeout, Cosmos 429) thrown by EnqueueAsync propagates out of RunAsync, so every registered recurring job stops firing until the host restarts. NextRunAt was not advanced for the failing definition and nothing records that runs were missed, so the outage is silent.
 
 #### SH-M008 — A job that succeeded is recorded as failed when the processor is stopped mid-completion
 
 `../Birko.BackgroundJobs/Processing/BackgroundJobProcessor.cs:103`
+
+**Verdict: CONFIRMED, fixed** (TASK-158). `CompleteAsync` took the processor token, so a Stop() during it threw before the write, and the catch recorded a successful job as failed. Outcomes are now written with `CancellationToken.None`. Red on HEAD.
 
 On success ProcessJobAsync calls `_queue.CompleteAsync(descriptor.Id, cancellationToken)` with the processor token. Every store-backed queue funnels through AbstractAsyncStore.EnsureInitializedAsync, which calls ct.ThrowIfCancellationRequested() first, so a Stop() during that call throws OperationCanceledException before anything is written. The catch at 110 then calls FailAsync(id, "Job cancelled due to processor shutdown") - a job whose body completed successfully is rescheduled for a re-run, or marked Dead if it was on its last attempt.
 
@@ -1139,11 +1155,15 @@ On success ProcessJobAsync calls `_queue.CompleteAsync(descriptor.Id, cancellati
 
 `../Birko.BackgroundJobs/Processing/BackgroundJobProcessor.cs:41`
 
+**Verdict: CONFIRMED, fixed** (TASK-158). A throwing `FailAsync` / `CompleteAsync` faulted a job task that `RemoveAll(IsCompleted)` dropped unobserved. Outcome writes are now caught and raised as `JobOutcomeNotRecorded`, which the Hosting bridge logs. Red on HEAD.
+
 `tasks.RemoveAll(t => t.IsCompleted)` removes faulted tasks too (IsCompleted is true for Faulted). If the catch handlers at 116/120 themselves throw - e.g. FailAsync fails because the DB is down - the job task faults, its handle is dropped on the next iteration, and the exception is never observed or logged: the job stays in Processing forever and the operator sees nothing. There is no logging anywhere in this class.
 
 #### SH-M010 — Stop() lets OperationCanceledException escape RunAsync instead of returning cleanly
 
 `../Birko.BackgroundJobs/Processing/BackgroundJobProcessor.cs:43`
+
+**Verdict: CONFIRMED, fixed** (TASK-158). `WaitAsync` on the concurrency semaphore was outside every catch, so Stop() while waiting for a slot threw out of `RunAsync`. It now breaks the loop like the other awaits. Red on HEAD.
 
 `await _concurrencySemaphore.WaitAsync(_cts.Token)` is not inside any catch, unlike the DequeueAsync (46-54) and Task.Delay (59-66) awaits which both handle OCE and break. When Stop() (or the linked token) fires while the loop is waiting for a permit - the normal state at MaxConcurrency - the OCE propagates through the finally and out of RunAsync, faulting the caller's hosted-service task even though the host's own stoppingToken was never cancelled.
 
@@ -1151,11 +1171,15 @@ On success ProcessJobAsync calls `_queue.CompleteAsync(descriptor.Id, cancellati
 
 `../Birko.BackgroundJobs/Processing/InMemoryJobQueue.cs:80`
 
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-158). Complete / Fail / Cancel now take the lock Dequeue reads under, and `ScheduledAt` is written before `Status`. It is reachable only for a retry whose previous `ScheduledAt` had elapsed. Fixed by inspection: the race is too narrow to force deterministically.
+
 DequeueAsync reads Status and ScheduledAt under `_lock`, but FailAsync/CompleteAsync/CancelAsync mutate the shared JobDescriptor with no lock at all. FailAsync writes Status=Scheduled (91) before ScheduledAt (92), so a concurrent dequeue can observe Scheduled with the *previous* (already elapsed) ScheduledAt and claim the job immediately, skipping the backoff and burning AttemptCount. The fields are non-volatile, so the reordering is also permitted by the memory model.
 
 #### SH-M012 — The claim guard is Status-only (ABA), so a rescheduled job can be re-claimed early with a stale AttemptCount
 
 `../Birko.BackgroundJobs.SQL/SqlJobQueue.cs:112`
+
+**Verdict: CONFIRMED, fixed on SQL, MongoDB, ES and RavenDB** (TASK-158). The claim guard was Status-only (ABA). It now also requires the `AttemptCount` the worker read, which every fail-and-reschedule increments. Red on HEAD (SQLite, forced interleaving: B claimed a job inside its backoff, AttemptCount 1 instead of 2). Mongo / ES / Raven take the same code and pass their live suites.
 
 The conditional update is `j.Guid == claimId && j.Status == originalStatus` and sets AttemptCount to the *stale* `candidate.AttemptCount + 1`. Worker B can read a Scheduled candidate, stall while worker A claims (Processing), runs and fails it back to Scheduled, then issue its UPDATE - the WHERE matches again, B's ClaimToken verifies, and B executes the job immediately in defiance of ScheduledAt while rewriting AttemptCount downward, granting extra retries. Identical code at Mongo:99, ES:100, Raven:100.
 
@@ -1163,11 +1187,15 @@ The conditional update is `j.Guid == claimId && j.Status == originalStatus` and 
 
 `../Birko.BackgroundJobs.SQL/SqlJobQueue.cs:136`
 
+**Verdict: CONFIRMED, fixed on SQL, MongoDB, ES and RavenDB; Cosmos in [[TASK-661]], Redis in [[TASK-663]]** (TASK-158). Complete / Fail / Cancel read the whole model and wrote it back. They are now guarded native updates of only the fields they change: Complete and Fail require Processing (and Fail the attempt count read), Cancel requires Pending | Scheduled and confirms by reading back a stamp. Red on HEAD: 3 forced interleavings. **Contract change:** Complete / Fail of a job that is not Processing is a no-op on every backend; InMemory, JSON and XML were aligned, and 4 tests that completed an unclaimed job now claim it first. A full ownership check needs a claim token on `CompleteAsync` / `FailAsync` (an `IJobQueue` change) and is not made.
+
 CompleteAsync/FailAsync/CancelAsync read the whole model, mutate two fields and call `UpdateAsync(model)`, which writes every column including Status, AttemptCount and ClaimToken from the stale snapshot. A double-dispatched worker (see the ES refresh window and the ABA claim above) reporting Complete therefore overwrites the newer claim's Processing/AttemptCount/ClaimToken, so the job currently running is marked Completed and its later FailAsync resurrects it. Same shape in Mongo, ES, Raven, Cosmos, JSON, XML.
 
 #### SH-M014 — Redis dequeue eligibility is score-only with no Status predicate, diverging from every other backend
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:41`
+
+**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): the dequeue script never checks Status.
 
 The Lua script picks any queue member with score <= now and never inspects the hash's Status. Enqueue (108-113) scores from `ScheduledAt ?? EnqueuedAt` regardless of status, so: a descriptor enqueued with Status=Cancelled/Completed/Dead is dequeued and executed on Redis (never on the others); a Scheduled job with ScheduledAt=null is immediately eligible on Redis but permanently ineligible everywhere else; and a Pending job with a future ScheduledAt is deferred on Redis but immediate elsewhere.
 
@@ -1175,11 +1203,15 @@ The Lua script picks any queue member with score <= now and never inspects the h
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:393`
 
+**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158). **Decided by the user:** align Redis with the other backends, so priority strictly dominates among due jobs.
+
 GetQueueScore subtracts at most MaxPriorityBonus = 0.999 score units, and one unit is TimeScale = 1e4 ticks = 0.1 ms. So Priority=999 only outranks a Priority=0 job enqueued less than ~0.1 ms earlier. On every other backend the order is ByDescending(Priority).ThenBy(EnqueuedAt) and priority strictly dominates. The same IJobQueue call therefore drains a mixed-priority queue in FIFO order on Redis and in priority order everywhere else.
 
 #### SH-M016 — Redis enqueue is three non-atomic round trips; a partial failure leaves an unrunnable or phantom job
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:104`
+
+**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): enqueue is three round trips.
 
 EnqueueAsync writes the job hash (104), then the queue sorted set (110), then the status set (113) as three separate commands with no MULTI/Lua. A connection drop or timeout between them leaves a hash with no queue membership - the job is stored, reported by GetAsync, and never dequeued by anyone - or a status-set entry with no queue entry. Nothing reconciles the three keys afterwards, and no other backend can half-enqueue.
 
@@ -1187,11 +1219,15 @@ EnqueueAsync writes the job hash (104), then the queue sorted set (110), then th
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:171`
 
+**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): the status-set moves are four commands, and Fail rewrites the whole hash.
+
 CompleteAsync reads oldStatus (171), SREMs that set (172), HSETs the new status (174) and SADDs the new set (180) as four commands; FailAsync (196-222) and CancelAsync (238-259) are the same shape. A concurrent transition (or a failure between commands) removes the id from a set it is no longer in and leaves it in the one it left, so GetByStatusAsync(Processing) returns Completed/Cancelled jobs and the terminal set misses them - and PurgeAsync, which only walks the status sets, never reclaims those hashes.
 
 #### SH-M018 — Redis CancelAsync has a TOCTOU on the status guard and can cancel a Processing job
 
 `../Birko.BackgroundJobs.Redis/RedisJobQueue.cs:238`
+
+**Verdict: CONFIRMED, spawned as [[TASK-663]]** (TASK-158): Cancel checks the status, then flips it in another round trip.
 
 The guard reads Status via HGET (238), checks Pending|Scheduled (240) and only then flips the hash (253). A concurrent DequeueAsync script can claim the job between those two round trips, so the job is flipped to Cancelled while a worker is executing it and `true` is returned, breaking the documented 'only Pending or Scheduled' contract. The subsequent SREM also targets the stale status set, so the id is left in status:2 as well.
 
@@ -1199,17 +1235,23 @@ The guard reads Status via HGET (238), checks Pending|Scheduled (240) and only t
 
 `../Birko.BackgroundJobs.SQL/SqlJobLockProvider.cs:206`
 
+**Verdict: CONFIRMED, fixed** (TASK-158, measured live on MySQL). Dispose closed the connection without unlocking. Closing returns it to the pool, and an idle pooled session kept `GET_LOCK`, so a provider on another pool (another database, as another process would be) could not take the lock: red on HEAD, 2. In-process reuse did not show it, because the driver resets the session when the same pool hands it out again. Dispose now unlocks first, on every dialect.
+
 DisposeAsync (206) and Dispose (216) only clear IsLocked and close/dispose the connection, relying on the ReleaseAsync comment 'Lock released when connection closes'. With ADO.NET pooling, Close() returns the connection to the pool rather than closing the session, so a MySQL GET_LOCK and an MSSql session-owned sp_getapplock can outlive the provider and block every other worker until the pooled connection is evicted. RedisJobLockProvider runs its safe-release script on both dispose paths.
 
 #### SH-M020 — RedisJobLockProvider keeps IsLocked true after the lock key's TTL expires
 
 `../Birko.BackgroundJobs.Redis/RedisJobLockProvider.cs:96`
 
+**Verdict: CONFIRMED-NARROWER, fixed** (TASK-158, live Redis). TASK-232's heartbeat already dropped `IsLocked` when a renewal found the key gone. What remained: a renewal that throws (Redis unreachable) was swallowed, so `IsLocked` stayed true past the server's expiry. `IsLocked` now also requires a local monotonic deadline (the acquire or last successful renewal, plus the lease). Red on HEAD (connection disposed, `IsLocked` still true after 2× the lease).
+
 TryAcquireAsync sets the key with the caller's `timeout` as the expiry (89-94) and IsLocked = acquired, but nothing tracks the expiry and there is no renewal. Once Redis drops the key another provider acquires it while this one still reports IsLocked == true; a subsequent TryAcquireAsync on the same name then early-returns true at line 80 without contacting Redis. Two workers believe they hold the same lock, and ReleaseAsync's token check silently deletes nothing.
 
 #### SH-M021 — JSON/XML dequeue serialization is instance-private while the store rewrites the whole file, so jobs are lost
 
 `../Birko.BackgroundJobs.JSON/JsonJobQueue.cs:27`
+
+**Verdict: CONFIRMED, fixed** (TASK-158). The JSON and XML queues kept a per-instance store snapshot and lock. Queues on one file now share one store and one gate per file (and per store instance for the store constructor), and every operation runs under it. Red on HEAD: 2 per backend (a fresh reader saw only one queue's jobs; two queues claimed the same job). Separate processes on one file remain unsupported.
 
 `_dequeueLock` is a per-instance SemaphoreSlim, and AbstractAsyncJsonStore keeps all rows in an in-memory `_items` dictionary that SaveDataAsync rewrites as a whole file. Two JsonJobQueue instances in one process (two hosted services, or a queue plus a schema helper) each hold an independent snapshot, so the second save silently discards every job the first added, and both can claim the same job. XmlJobQueue:28 is identical. Only cross-*process* use is documented as unsupported.
 

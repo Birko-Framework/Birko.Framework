@@ -79,6 +79,9 @@ namespace Birko.BackgroundJobs.Hosting
             : base(logger)
         {
             _processor = processor ?? throw new ArgumentNullException(nameof(processor));
+            var log = (ILogger?)logger ?? NullLogger.Instance;
+            _processor.JobOutcomeNotRecorded += (job, ex) =>
+                log.LogError(ex, "The outcome of job {JobId} ({JobType}) could not be recorded; it stays Processing", job.Guid, job.JobType);
         }
 
         protected override Task RunAsync(CancellationToken stoppingToken) => _processor.RunAsync(stoppingToken);
@@ -114,6 +117,8 @@ namespace Birko.BackgroundJobs.Hosting
             _registrations = registrations ?? throw new ArgumentNullException(nameof(registrations));
             _locks = services.GetService<IJobLockProvider>();
             _logger = (ILogger?)logger ?? NullLogger.Instance;
+            _scheduler.EnqueueFailed += (name, ex) =>
+                _logger.LogWarning(ex, "Enqueuing recurring job {Name} failed; it is retried on the next tick", name);
         }
 
         public override Task StartAsync(CancellationToken cancellationToken)

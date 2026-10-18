@@ -2,7 +2,7 @@
 id: TASK-158
 parent: STORY-053
 feature: FEATURE-014
-# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+# status: done | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 status: todo
 priority: P2
 assignee: ai
@@ -47,18 +47,18 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 21 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 21 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
-- [ ] Any behavioural fix is followed by `/specs regen background-jobs`, with the spec diff reviewed as the change's
+- [x] Any behavioural fix is followed by `/specs regen background-jobs`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-053]]'s **Progress** line and `finding-count` reflect this area's closed count
 
 ## Out of scope
 
@@ -73,12 +73,51 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Human test plan
 
-Cannot be written yet: which steps a human adds depends on which findings survive triage. **Resolve this
-section before `/tasks close`** — an absent plan is not an `N/A` one, and defaulting it parks the task on a
-step that may not exist (SKILL.md § Lifecycle). Expected outcome for this area is
-`N/A — fully covered by automated tests`, since it is a library contract with no UI surface; write that
-explicitly with its reason rather than leaving the section as-is.
+N/A — fully covered by automated tests (offline and live on the Docker servers); a library with no UI.
 
-## Implementation plan
+## Resolution (2026-10-18)
 
-_Populated by `/tasks plan TASK-158` — leave empty until then._
+A subagent first mapped all 21 findings against the current code: 19 still present, 2 partly fixed. Each verdict in
+the findings doc names the traced code. **18 confirmed, 3 narrower (SH-M005, M011, M020). 12 fixed here; 9 spawned
+before [[TASK-175]].**
+
+**Two decisions by the user (2026-10-18):** `MaxRetries` becomes nullable (null = the policy, 0 = no retries;
+[[TASK-662]]), and Redis drains by priority like the other backends ([[TASK-663]]).
+
+**Fixed here:**
+- **Loops** (M007–M010, core): outcomes written with `CancellationToken.None`; `JobOutcomeNotRecorded` and
+  `EnqueueFailed` events, guarded against their subscribers and logged by the Hosting bridges; Stop() while waiting
+  for a slot returns cleanly. 5 red on HEAD.
+- **Serializer** (M004): JSON `null` metadata reads as empty. Red on HEAD.
+- **In-process shared state:**
+  - M021: JSON and XML queues on one file share one store and one gate. Red on HEAD, 2 + 2.
+  - M011: InMemory transitions take the lock, and `ScheduledAt` is written before `Status`; fixed by inspection.
+- **Claim and transition guards** (M012, M013) on SQL, MongoDB, ES and RavenDB: the claim also requires the attempt
+  count read; Complete / Fail / Cancel are guarded native updates. Red on HEAD: 4 forced interleavings on SQLite. Mongo,
+  ES and Raven take the same code (one script) and pass their live suites.
+  - **Contract change:** Complete / Fail of a non-Processing job is a no-op on every backend. InMemory, JSON and XML
+    were aligned, and 4 tests that completed an unclaimed job now claim it first.
+- **Lock providers:**
+  - M006 (SQL × 3 dialects, Redis): one held name; another name throws, and releasing a name not held keeps the lock.
+  - M019: SQL unlocks on dispose. Measured on MySQL: an idle pooled session kept `GET_LOCK` from another pool. In-process
+    reuse hid it, because the driver resets on reuse.
+  - M020: the Redis `IsLocked` ends at a local monotonic deadline.
+  - Red on HEAD: 6 + 2 (M019) + 3 (Redis).
+
+**Also caught by the Sandbox build:** `Random.Shared` inside a `Birko.*` namespace resolves to the `Birko.Random`
+namespace where that project is imported, so the four queues use `System.Random.Shared`.
+
+**Spawned:** [[TASK-661]] Cosmos conditional writes (M001, M002, M013 on Cosmos); [[TASK-662]] nullable `MaxRetries`
+(M003); [[TASK-663]] atomic Redis transitions and priority (M014–M018); [[TASK-664]] stale-Processing reclaim on every
+backend (M005).
+
+**Flakes:**
+- The SQL leader-election test `A_stopped_leader_releases_so_the_follower_takes_over` failed twice, each time at its
+  first assertion (`a.IsLeader` false) on a run that included a build. Root cause in the test: it started both
+  schedulers at once and assumed A won the first acquisition, which a cold run (JIT, the first pooled connection) can
+  hand to B. Test-only fix: B starts once A leads. Since then 0/10 targeted and 2/2 cold full runs fail.
+- ES `Racing_dequeuers_hand_each_job_out_once_and_never_throw` is a pre-existing flake: 1/5 on HEAD, 0/5 with this
+  change.
+
+**Regression, live:** all 10 BackgroundJobs suites green: core 105, Hosting 9, JSON 9, XML 9, SQL 50, Redis 31, Mongo
+6, ES 8, Raven 7, Cosmos 9.

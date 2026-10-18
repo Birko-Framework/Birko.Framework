@@ -40,7 +40,16 @@ namespace Birko.BackgroundJobs.Processing
                     // Clean up completed tasks
                     tasks.RemoveAll(t => t.IsCompleted);
 
-                    await _concurrencySemaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
+                    // SH-M010: a stop while waiting for a slot (the normal state at MaxConcurrency) ends the loop like
+                    // every other wait in it; it used to throw out of RunAsync.
+                    try
+                    {
+                        await _concurrencySemaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
 
                     JobDescriptor? descriptor;
                     try
@@ -82,6 +91,12 @@ namespace Birko.BackgroundJobs.Processing
         }
 
         /// <summary>
+        /// Raised when a job's outcome (completed, failed) could not be written to the queue (TASK-158, SH-M009). The job
+        /// then stays Processing in the store. A throwing handler is ignored.
+        /// </summary>
+        public event Action<JobDescriptor, Exception>? JobOutcomeNotRecorded;
+
+        /// <summary>
         /// Stops the processor gracefully.
         /// </summary>
         public void Stop()
@@ -98,14 +113,13 @@ namespace Birko.BackgroundJobs.Processing
 
                 var result = await _executor.ExecuteAsync(descriptor, timeoutCts.Token).ConfigureAwait(false);
 
+                // SH-M008: the job has run, so its outcome is written whatever happens to the processor now. With the
+                // processor's token, a Stop() during CompleteAsync threw before anything was written and the catch below
+                // recorded a job that succeeded as failed.
                 if (result.Success)
-                {
-                    await _queue.CompleteAsync(descriptor.Guid, cancellationToken).ConfigureAwait(false);
-                }
+                    await RecordAsync(descriptor, () => _queue.CompleteAsync(descriptor.Guid, CancellationToken.None)).ConfigureAwait(false);
                 else
-                {
-                    await _queue.FailAsync(descriptor.Guid, result.Error ?? "Unknown error", cancellationToken).ConfigureAwait(false);
-                }
+                    await RecordAsync(descriptor, () => _queue.FailAsync(descriptor.Guid, result.Error ?? "Unknown error", CancellationToken.None)).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -113,15 +127,35 @@ namespace Birko.BackgroundJobs.Processing
                 // last-attempt job goes to Dead). A true no-retry requeue would need a dedicated
                 // IJobQueue.RequeueAsync — the current EnqueueAsync is an insert (CreateAsync) across the
                 // backends, so re-enqueuing the same descriptor id would PK-conflict; deferred (CR-L016).
-                await _queue.FailAsync(descriptor.Guid, "Job cancelled due to processor shutdown", CancellationToken.None).ConfigureAwait(false);
+                await RecordAsync(descriptor, () => _queue.FailAsync(descriptor.Guid, "Job cancelled due to processor shutdown", CancellationToken.None)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                await _queue.FailAsync(descriptor.Guid, ex.Message, CancellationToken.None).ConfigureAwait(false);
+                await RecordAsync(descriptor, () => _queue.FailAsync(descriptor.Guid, ex.Message, CancellationToken.None)).ConfigureAwait(false);
             }
             finally
             {
                 _concurrencySemaphore.Release();
+            }
+        }
+
+        // SH-M009: a failure to write the outcome is reported, never left to fault a task the loop drops unobserved.
+        private async Task RecordAsync(JobDescriptor descriptor, Func<Task> write)
+        {
+            try
+            {
+                await write().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    JobOutcomeNotRecorded?.Invoke(descriptor, ex);
+                }
+                catch
+                {
+                    // A diagnostic channel must survive its own subscriber (rule 25).
+                }
             }
         }
     }

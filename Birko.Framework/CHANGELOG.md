@@ -61,6 +61,13 @@ explicit one such as DraCode's `SqlUsageRepository`), or the implementation is r
 `CostTrackingService.RecordUsageAsync` / `CheckBudgetAsync` / `GetUsageSummaryAsync` / `GetProjectUsageAsync` gained an
 optional `CancellationToken` (source-compatible).
 
+## 2026-10-17 — MongoDB, Cosmos DB and InfluxDB units of work end the boundary on every outcome
+
+[[TASK-578]]. Measured live: MongoDB never disposed its session after a commit or rollback, a refused Cosmos batch threw
+`InvalidOperationException` and a throwing one stayed active, and a failed InfluxDB write kept its points for a retry to
+re-send. Each now releases what it holds, a refused Cosmos batch is a `UnitOfWorkException`, and the rollback after a
+failed commit is a no-op, as on SQL and Elasticsearch. RavenDB: [[TASK-658]].
+
 ## 2026-10-17 — The async SQL model repository takes its connector type
 
 [[TASK-576]]. **Signature change:** `AsyncDataBaseModelRepository<T>` is now `AsyncDataBaseModelRepository<TConnector, T>`,

@@ -44,6 +44,15 @@ namespace Birko.BackgroundJobs.Redis
         private Task? _renewalTask;
         private TimeSpan _lease;
 
+        // TASK-158 (SH-M006): the name held; a provider holds one lock.
+        private string? _heldName;
+
+        // TASK-158 (SH-M020): until when, on this machine's monotonic clock, the lease is known to be ours — the acquire
+        // or the last successful renewal, plus the lease. Renewal exceptions were swallowed, so a holder cut off from
+        // Redis kept IsLocked true past the server's expiry while another node took the lock.
+        private long _validUntil;
+        private volatile bool _held;
+
         /// <summary>
         /// Lease used when the caller does not specify one. Short on purpose: it is renewed on a heartbeat,
         /// so its only job is to bound how long a dead holder's lock lingers.
@@ -113,9 +122,10 @@ namespace Birko.BackgroundJobs.Redis
                     // claiming to hold it rather than renewing something we no longer own.
                     if (kept == 0)
                     {
-                        IsLocked = false;
+                        _held = false;
                         return;
                     }
+                    Interlocked.Exchange(ref _validUntil, LeaseDeadlineFromNow());
                 }
                 catch
                 {
@@ -134,9 +144,17 @@ namespace Birko.BackgroundJobs.Redis
         }
 
         /// <summary>
-        /// Whether a lock is currently held.
+        /// Whether a lock is currently held: acquired, not released, and its lease not yet lapsed by this machine's clock
+        /// (TASK-158). A holder that cannot renew stops claiming the lock once the lease the server would expire is over.
         /// </summary>
-        public bool IsLocked { get; private set; }
+        public bool IsLocked
+        {
+            get => _held && System.Diagnostics.Stopwatch.GetTimestamp() < Interlocked.Read(ref _validUntil);
+            private set => _held = value;
+        }
+
+        private long LeaseDeadlineFromNow()
+            => System.Diagnostics.Stopwatch.GetTimestamp() + (long)(_lease.TotalSeconds * System.Diagnostics.Stopwatch.Frequency);
 
         /// <summary>
         /// Always true: Redis has no session-scoped lock, so this provider offers a renewed lease.
@@ -180,10 +198,25 @@ namespace Birko.BackgroundJobs.Redis
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            ArgumentException.ThrowIfNullOrWhiteSpace(lockName);
 
             if (IsLocked)
             {
-                return true;
+                if (_heldName == lockName)
+                {
+                    return true;
+                }
+                throw new InvalidOperationException(
+                    $"This provider holds the lock '{_heldName}' and cannot take '{lockName}' as well: a provider holds one " +
+                    "lock at a time. Use a provider per lock.");
+            }
+
+            // A lease that lapsed while we were cut off: forget it before acquiring again.
+            if (_held || _renewalCts != null)
+            {
+                StopRenewal();
+                _held = false;
+                _heldName = null;
             }
 
             _lease = leaseDuration ?? DefaultLeaseDuration;
@@ -216,6 +249,11 @@ namespace Birko.BackgroundJobs.Redis
                 }
             }
 
+            if (acquired)
+            {
+                Interlocked.Exchange(ref _validUntil, LeaseDeadlineFromNow());
+                _heldName = lockName;
+            }
             IsLocked = acquired;
             if (acquired)
             {
@@ -237,7 +275,8 @@ namespace Birko.BackgroundJobs.Redis
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!IsLocked || _lockKey == null || _lockToken == null)
+            // A name this provider does not hold is not released, and the held lock is kept (SH-M006).
+            if (!_held || _lockKey == null || _lockToken == null || _heldName != lockName)
             {
                 return;
             }
@@ -246,6 +285,7 @@ namespace Birko.BackgroundJobs.Redis
             await SafeReleaseAsync().ConfigureAwait(false);
 
             IsLocked = false;
+            _heldName = null;
             _lockKey = null;
             _lockToken = null;
         }
@@ -256,7 +296,7 @@ namespace Birko.BackgroundJobs.Redis
             {
                 _disposed = true;
                 StopRenewal();
-                if (IsLocked && _lockKey != null && _lockToken != null)
+                if (_held && _lockKey != null && _lockToken != null)
                 {
                     try
                     {
@@ -281,7 +321,7 @@ namespace Birko.BackgroundJobs.Redis
             {
                 _disposed = true;
                 StopRenewal();
-                if (IsLocked && _lockKey != null && _lockToken != null)
+                if (_held && _lockKey != null && _lockToken != null)
                 {
                     try
                     {

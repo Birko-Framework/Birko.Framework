@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Background-jobs triage: guarded transitions, loops that survive, one lock per provider (2026-10-18)
+[[TASK-158]]. 21 medium findings: 12 fixed and 9 spawned ([[TASK-661]] Cosmos, [[TASK-662]] nullable `MaxRetries`,
+[[TASK-663]] Redis, [[TASK-664]] reclaim).
+- `CompleteAsync` / `FailAsync` now act only on a claimed job, as guarded updates.
+- A stopped processor still records a finished job, and one failed enqueue no longer kills the scheduler.
+- Lock providers refuse a second name, and SQL unlocks on dispose (a pooled MySQL session kept the lock).
 ### Birko.BackgroundJobs.Hosting: AddBackgroundJobs and the hosted services (2026-10-18)
 [[TASK-538]]. New project, from Symbio's version. `AddBackgroundJobs` is idempotent and keyed on the processor, so a
 durable queue registered first is kept. `AddRecurringJob<TJob>` reaches the scheduler that runs. A follower node still
@@ -315,11 +321,6 @@ and InfluxDB `DropIndex` refuse, as their `CreateIndex` does. Cosmos `RenameFiel
 moved the connection to that host, `;Encrypt=False` dropped TLS, and a `;` or quote broke the connection. Every provider
 now composes through its driver's builder, with one producer shared by the settings type and the connector's
 `RemoteSettings` path. Key spellings follow the builders (`Data Source`, `Connect Timeout`, MySQL `SSL Mode`).
-### MongoDB, Cosmos DB and InfluxDB units of work end the boundary on every outcome (2026-10-17)
-[[TASK-578]]. Measured live: MongoDB never disposed its session after a commit or rollback, a refused Cosmos batch threw
-`InvalidOperationException` and a throwing one stayed active, and a failed InfluxDB write kept its points for a retry to
-re-send. Each now releases what it holds, a refused Cosmos batch is a `UnitOfWorkException`, and the rollback after a
-failed commit is a no-op, as on SQL and Elasticsearch. RavenDB: [[TASK-658]].
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
