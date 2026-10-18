@@ -276,8 +276,8 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.OAuth.Server | OAuth2 authorization server (token/authorize/device/registration endpoints; client-credentials, authcode+PKCE, refresh, device-code; persists via Birko.Data.Stores) |
 | Birko.Security.OAuth.Server.InMemory | In-memory OAuth server stores + `AddOAuthServerInMemoryStores` |
 | Birko.Security.OAuth.Server.SqLite | SQLite OAuth server stores (atomic code redemption and refresh rotation) + `AddOAuthServerSqLiteStores` |
-| Birko.Security.Grants | Per-resource access grants (role → action table, owners / editors / viewers on one resource or a whole type, tenant-scoped; share + no-escalation + last-owner rules; email invitations redeemed on verified sign-in; bootstrap admins by provider:subject; persists via Birko.Data.Stores) |
 | Birko.Security.OAuth.Server.AspNetCore | `MapOAuthServer()`: the OAuth server's minimal-API routes with RFC 6749 errors, HTTP Basic, gated registration |
+| Birko.Security.Grants | Per-resource access grants (role → action table, owners / editors / viewers on one resource or a whole type, tenant-scoped; share + no-escalation + last-owner rules; email invitations redeemed on verified sign-in; bootstrap admins by provider:subject; persists via Birko.Data.Stores) |
 | Birko.Security.Grants.AspNetCore | ASP.NET Core for grants: `RequireGrant` endpoint filter (404 vs 403 by visibility), grant-aware permission resolver, `AddBirkoGrants` DI |
 | Birko.Security.Grants.SQL | SQL schema for grants: fluent mappings, a store pair for any SQL provider, the lookup indexes |
 | Birko.BackgroundJobs | Background job processing framework |
@@ -350,8 +350,8 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.OAuth.Server.Tests | OAuth2 authorization server tests (60 tests; all four grant types + PKCE/consent/registration paths, federated issue) |
 | Birko.Security.OAuth.Server.InMemory.Tests | In-memory OAuth stores against the shared store contract (14 tests) |
 | Birko.Security.OAuth.Server.SqLite.Tests | SQLite OAuth stores against the shared store contract, persistence across instances, DI (20 tests) |
-| Birko.Security.Grants.Tests | Per-resource grants and ASP.NET companion tests (177 tests; role table, CanAsync, grant/revoke rules, last owner under concurrency, tenant scope, listing, invitations (verified-only, single use), bootstrap and last admin) |
 | Birko.Security.OAuth.Server.AspNetCore.Tests | OAuth server endpoints over TestServer: each endpoint's success and error shape (13 tests) |
+| Birko.Security.Grants.Tests | Per-resource grants and ASP.NET companion tests (177 tests; role table, CanAsync, grant/revoke rules, last owner under concurrency, tenant scope, listing, invitations (verified-only, single use), bootstrap and last admin) |
 | Birko.Security.Grants.SQL.Tests | Grants on SQLite (24 tests; schema, round trips, lookup indexes, lookup parity with InMemory, the invitation claim across instances, the PropertyUpdate path) |
 | Birko.Rules.Tests | Rule engine tests (core types, contexts, evaluator) |
 | Birko.Data.Processors.Tests | Data processor tests (CSV parser, XML/CSV/ZIP processors, HTTP transport) |
