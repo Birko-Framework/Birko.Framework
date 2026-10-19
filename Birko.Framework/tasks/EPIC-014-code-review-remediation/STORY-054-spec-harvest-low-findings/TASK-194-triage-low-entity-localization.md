@@ -8,7 +8,7 @@ priority: P2
 assignee: ai
 created: 2026-08-09
 depends-on: []
-blocks: []
+blocks: [TASK-679, TASK-680]  # EPIC-021 (Symbio STORY-081): triage before building on Birko.Data.Localization
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
 findings: [SH-L078, SH-L079, SH-L080, SH-L081, SH-L082, SH-L083, SH-L084, SH-L085, SH-L086, SH-L087]
 pr: null
