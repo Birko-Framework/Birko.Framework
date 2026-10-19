@@ -43,12 +43,25 @@ public class LocalizedFieldCondition
     /// Built from the original expression (e.g., x.Name == "Foo" → value == "Foo").
     /// </summary>
     public Func<string?, bool> ValuePredicate { get; init; } = _ => true;
+
+    /// <summary>
+    /// The filter part this condition came from, over the entity parameter: the same test on the <b>base</b>
+    /// (default-culture) column. An entity with no translation for the field is matched by it (SH-M070, TASK-681).
+    /// </summary>
+    public Expression Part { get; init; } = Expression.Constant(false);
+
+    /// <summary>
+    /// The exact values an <c>==</c> or <c>IN</c> condition accepts, so the translation query can select rows by them
+    /// (by <c>ValueHash</c>) instead of reading the whole field; <c>null</c> for every other shape.
+    /// </summary>
+    public IReadOnlyList<string>? Values { get; init; }
 }
 
 /// <summary>
 /// Analyzes an expression tree to split conditions on localizable fields from non-localizable conditions.
 /// Supports: ==, !=, Contains, StartsWith, EndsWith (optionally with a <see cref="StringComparison"/>) on
-/// localizable string properties, against a value, combined with &amp;&amp; (AndAlso) at the top level.
+/// localizable string properties, against a value, and <c>values.Contains(x.Field)</c> (IN, TASK-681), combined with
+/// &amp;&amp; (AndAlso) at the top level.
 /// </summary>
 /// <remarks>
 /// CR-L137: two localized-filter semantics to be aware of:
@@ -59,10 +72,10 @@ public class LocalizedFieldCondition
 /// the inner store as a base-column predicate, so they test the base value, not the translation.
 /// </description></item>
 /// <item><description>
-/// <b><c>!=</c> only matches entities that HAVE a translation row</b> for that field + culture. Entities
-/// lacking a translation are absent from the translation result set and are therefore silently excluded
-/// from a <c>!=</c> match, rather than being treated as "value differs". A fully correct <c>!=</c> would
-/// need the complement of the matching guids over the whole entity set.
+/// <b>An entity without a translation is matched on its base value</b> (TASK-681, SH-M070): every extracted
+/// condition keeps its original <see cref="LocalizedFieldCondition.Part"/>, which the wrappers evaluate on the base
+/// column for exactly the entities that have no translation for that field and culture. CR-L137's "<c>!=</c> only
+/// matches entities that have a translation" no longer holds.
 /// </description></item>
 /// <item><description>
 /// <b>Anything else that reads a localizable field is refused</b> with <see cref="NotSupportedException"/>
@@ -148,7 +161,8 @@ public static class LocalizedExpressionAnalyzer
         throw new NotSupportedException(
             $"A {part.NodeType} filter condition reads the localizable field '{finder.Found}' in a form that cannot be "
             + "translated, so it would test the default-culture value instead of the current culture's. Supported: "
-            + "==, !=, Contains, StartsWith and EndsWith on the field itself against a value, joined by &&.");
+            + "==, !=, Contains, StartsWith and EndsWith on the field itself against a value, and values.Contains(field) (IN), "
+            + "joined by &&.");
     }
 
     private static bool IsNullComparison(Expression part, ParameterExpression param, HashSet<string> localizableFields)
@@ -283,8 +297,47 @@ public static class LocalizedExpressionAnalyzer
 
                 if (predicate != null)
                 {
-                    return new LocalizedFieldCondition { FieldName = fieldName, ValuePredicate = predicate };
+                    return new LocalizedFieldCondition
+                    {
+                        FieldName = fieldName,
+                        ValuePredicate = predicate,
+                        Part = node,
+                        Values = binary.NodeType == ExpressionType.Equal ? new[] { constantValue } : null,
+                    };
                 }
+            }
+        }
+
+        // IN: values.Contains(x.Field) or Enumerable.Contains(values, x.Field) — and, on C# 14, the span overload an
+        // array binds to, unwrapped the way every provider translator unwraps it (rule 47).
+        if (node is MethodCallExpression inCall && inCall.Method.Name == "Contains")
+        {
+            Expression? source = null;
+            Expression? item = null;
+            if (inCall.Object != null && inCall.Arguments.Count == 1)
+            {
+                source = inCall.Object;
+                item = inCall.Arguments[0];
+            }
+            else if (inCall.Object == null && inCall.Arguments.Count == 2)
+            {
+                source = Birko.Data.Expressions.SpanContains.UnwrapSpanConversion(inCall.Arguments[0]);
+                item = inCall.Arguments[1];
+            }
+
+            var inField = item == null ? null : ExtractFieldName(item, param, localizableFields);
+            if (inField != null && source != null && EvaluateExpression(source) is IEnumerable<string?> candidates
+                && ComparesOrdinally(candidates))
+            {
+                var values = candidates.Where(v => v != null).Select(v => v!).Distinct(StringComparer.Ordinal).ToList();
+                var accepted = new HashSet<string>(values, StringComparer.Ordinal);
+                return new LocalizedFieldCondition
+                {
+                    FieldName = inField,
+                    ValuePredicate = v => v != null && accepted.Contains(v),
+                    Part = node,
+                    Values = values,
+                };
             }
         }
 
@@ -313,7 +366,7 @@ public static class LocalizedExpressionAnalyzer
 
                     if (predicate != null)
                     {
-                        return new LocalizedFieldCondition { FieldName = fieldName, ValuePredicate = predicate };
+                        return new LocalizedFieldCondition { FieldName = fieldName, ValuePredicate = predicate, Part = node };
                     }
                 }
             }
@@ -321,6 +374,19 @@ public static class LocalizedExpressionAnalyzer
 
         return null;
     }
+
+    /// <summary>
+    /// Whether an IN source matches ordinally, as the translation lookup (by hash) and its confirmation do. A set with a
+    /// case-insensitive comparer would match differently on the translated side than on the base column, so it is not
+    /// extracted and the condition is refused (rule 41).
+    /// </summary>
+    private static bool ComparesOrdinally(IEnumerable<string?> source)
+        => source switch
+        {
+            HashSet<string?> set => set.Comparer.Equals(EqualityComparer<string?>.Default) || set.Comparer.Equals(StringComparer.Ordinal),
+            SortedSet<string?> => false,
+            _ => true,
+        };
 
     /// <summary>
     /// Tries to extract a (fieldName, constantValue) pair from left/right operands.

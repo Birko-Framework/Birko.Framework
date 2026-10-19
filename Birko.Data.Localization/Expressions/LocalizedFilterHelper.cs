@@ -46,18 +46,6 @@ public static class LocalizedFilterHelper
         return Expression.Lambda<Func<T, bool>>(combined, param);
     }
 
-    /// <summary>
-    /// Combines two filter expressions with AndAlso, rebinding the right expression's parameter.
-    /// </summary>
-    public static Expression<Func<T, bool>> CombineFilters<T>(
-        Expression<Func<T, bool>> left, Expression<Func<T, bool>> right)
-        where T : Data.Models.AbstractModel, ILocalizable
-    {
-        var param = left.Parameters[0];
-        var rightBody = new ParameterReplacer(right.Parameters[0], param).Visit(right.Body);
-        var combined = Expression.AndAlso(left.Body, rightBody);
-        return Expression.Lambda<Func<T, bool>>(combined, param);
-    }
 }
 
 /// <summary>

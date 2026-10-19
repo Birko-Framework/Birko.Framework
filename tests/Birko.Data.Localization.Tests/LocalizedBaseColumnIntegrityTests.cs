@@ -290,6 +290,12 @@ public class LocalizedBaseColumnIntegrityTests
         var target = _bulk.Create(new TestLocalizableModel { Name = EnglishName, Code = "TARGET" });
         var decoy = _bulk.Create(new TestLocalizableModel { Name = SlovakName, Code = "DECOY" });
         SeedSlovakNameTranslation(target);
+        // The decoy has a Slovak name of its own: since TASK-681 an entity WITHOUT one is matched on its base column
+        // (SH-M070), and "Stolicka" there would make it a legitimate match.
+        _translationStore.Create(new EntityTranslationModel
+        {
+            EntityGuid = decoy, EntityType = nameof(TestLocalizableModel), FieldName = "Name", Culture = "sk", Value = "Stol",
+        });
         SwitchToSlovak();
         return (target, decoy);
     }
@@ -345,8 +351,8 @@ public class LocalizedBaseColumnIntegrityTests
     /// <remarks>
     /// The property this repo cares most about (CLAUDE.md § Conventions, the match-all family): routing
     /// a destructive path through <c>RewriteFilter</c> is only safe because a predicate that resolves to
-    /// <b>no</b> translation becomes <c>x =&gt; false</c>, not an absent filter. Before this fix a delete
-    /// never reached the rewriter at all, so nothing pinned it.
+    /// <b>no</b> translation leaves the condition on the base column (TASK-681's fallback), never an absent
+    /// filter. Before SH-H018's fix a delete never reached the rewriter at all, so nothing pinned it.
     /// </remarks>
     [Fact]
     public void A_localized_predicate_matching_no_translation_deletes_nothing_not_everything()

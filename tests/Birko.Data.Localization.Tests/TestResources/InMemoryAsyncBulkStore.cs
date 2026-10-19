@@ -31,6 +31,9 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
     /// <summary>How many filtered collection reads ran — what a test counts to prove a read is batched.</summary>
     public int FilteredReadCalls { get; private set; }
 
+    /// <summary>How many rows the filtered collection reads returned — what proves a lookup did not scan.</summary>
+    public int RowsRead { get; private set; }
+
     public int CreateInstanceCalls { get; private set; }
 
     public Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
@@ -53,7 +56,9 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
         if (filter != null) items = items.Where(filter);
         if (offset.HasValue) items = items.Skip(offset.Value);
         if (limit.HasValue) items = items.Take(limit.Value);
-        return Task.FromResult<IEnumerable<T>>(items.ToList());
+        var result = items.ToList();
+        RowsRead += result.Count;
+        return Task.FromResult<IEnumerable<T>>(result);
     }
 
     public Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)

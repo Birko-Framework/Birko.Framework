@@ -33,6 +33,7 @@ public class LocalizationCustomModelTests
         public string Culture { get; set; } = string.Empty;
         public string Value { get; set; } = string.Empty;
         public DateTime? UpdatedAt { get; set; }
+        public string ValueHash { get; set; } = string.Empty;
     }
 
     private readonly TestEntityLocalizationContext _context = new()
@@ -86,6 +87,7 @@ public class LocalizationCustomModelTests
         string IEntityTranslation.Culture { get => Lang; set => Lang = value; }
         string IEntityTranslation.Value { get; set; } = string.Empty;
         DateTime? IEntityTranslation.UpdatedAt { get; set; }
+        string IEntityTranslation.ValueHash { get; set; } = string.Empty;
     }
 
     [Fact]

@@ -1,12 +1,13 @@
 ---
 area: entity-localization
-generated-at: 4bcfaa2feeacf84830269709d38f50d56d222a0b
+generated-at: d2fcde672bcd30e93edd7317f873a809ccb89daa
 generated-on: 2026-10-19
 sources:
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/LocalizedBulkStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/LocalizedEntityFields.cs
+  - ../Birko.Data.Localization/Decorators/LocalizedFilterResolution.cs
   - ../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/LocalizedTranslationRows.cs
   - ../Birko.Data.Localization/Expressions/LocalizedExpressionVisitor.cs
@@ -16,6 +17,7 @@ sources:
   - ../Birko.Data.Localization/Filters/EntityTranslationFilter.cs
   - ../Birko.Data.Localization/Models/EntityTranslationModel.cs
   - ../Birko.Data.Localization/Models/IEntityTranslation.cs
+  - ../Birko.Data.Localization/Models/LocalizedValueHash.cs
   - ../Birko.Data.Localization/Models/IEntityLocalizationContext.cs
   - ../Birko.Data.Localization/Models/ILocalizable.cs
   - ../Birko.Data.Localization.SQL/LocalizationSqlMappings.cs
@@ -26,7 +28,7 @@ shaped-by: [FEATURE-014]
 # Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
 # task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
-# 2026-10-19 regens (TASK-168, TASK-194, TASK-679, TASK-680): the evidence pass was not re-run; FEATURE-014 is already listed
+# 2026-10-19 regens (TASK-168, TASK-194, TASK-679, TASK-680, TASK-681): the evidence pass was not re-run; FEATURE-014 is already listed
 # (TASK-679 has no feature).
 shaped-by-derived: true
 shaped-by-unresolved: 266
@@ -237,23 +239,57 @@ wrappers return one entity per read and cost one translation read each.
 
 ### Requirement: Filter rewriting for localized field conditions
 
-The system SHALL, on a non-default culture, split a filter into conditions on localizable fields and the
-remaining conditions; resolve the localized conditions against the translation store to a set of entity
-GUIDs; replace them with a GUID-membership predicate; and `AndAlso`-combine that predicate with the
-remaining filter. When the split finds no localized conditions the original filter SHALL be passed through
-unchanged (including `null`).
+The system SHALL, on a non-default culture, split a filter into conditions on localizable fields and the remaining
+conditions, and replace each localized condition *i* with `guid ∈ T_i ∨ (Part_i ∧ guid ∉ H_i)`, all `AndAlso`-combined
+with the remaining filter (one producer, `LocalizedFilterResolution`, for the four wrappers), where:
 
-#### Scenario: Mixed filter is split and recombined
+- `T_i` is the entities whose translation for the field in the culture satisfies the condition — for `==` and `IN`
+  read by `(EntityType, FieldName, Culture, ValueHash IN hashes)` and confirmed by the value in memory, for every other
+  shape read as the field's whole translation slice and tested in memory;
+- `Part_i` is the condition as written, evaluated by the entity store on the **base** column;
+- `H_i` is the entities with a translation for the field in the culture among the base-column candidates (the entity
+  store's rows matching `remaining ∧ Part_i`, one batched translation read over them), or, when the entity store
+  cannot list (a plain `IStore<T>`), every entity in the field's translation slice;
+- an empty `T_i` or `H_i` is reduced away rather than rendered as a constant.
 
-- **Given** `Name` is localizable and the filter is `x => x.Name == "Stolička" && x.Active`
-- **When** `RewriteFilter` runs on culture `"sk"`
-- **Then** the translation store is queried for `(EntityType = "Product", FieldName = "Name", Culture = "sk")`, the matching GUIDs `{G1}` are collected, and the inner store receives `x => x.Active && (x.Guid != null && guidList.Contains(x.Guid.Value))`
+So an entity with a translation is matched only on it, and an entity without one only on its base value. When the
+split finds no localized conditions the original filter SHALL be passed through unchanged (including `null`).
 
-#### Scenario: Fully localized filter becomes only the GUID predicate
+#### Scenario: Translated and untranslated entities
 
-- **Given** the filter is `x => x.Name == "Stolička"` and nothing else
-- **When** `RewriteFilter` runs
-- **Then** `split.RemainingFilter` is `null` and the GUID filter alone is passed to the inner store
+- **Given** `A` (base "Chair", Slovak "Stolička"), `B` (base "Lavica", no Slovak name) and `C` (base "Stolička", Slovak "Kreslo"), on `"sk"`
+- **When** the filters `Name == "Stolička"`, `Name == "Lavica"` and `Name == "Chair"` are read
+- **Then** they return `A`, `B` and nothing — `C`'s base value does not count because it has a translation, `B`'s does because it has none
+
+#### Scenario: An exact-value lookup reads only the matching rows
+
+- **Given** 1 000 entities, each with a Slovak name, and the filter `Name == "sk0500"`
+- **When** it is resolved
+- **Then** the translation store returns the one row with that value's hash (plus the translations of any base-column candidates), not the field's 1 000 rows
+
+#### Scenario: A remaining condition applies to the fallback too
+
+- **Given** the filter `x => x.Code == "B" && x.Name == "Lavica"`
+- **When** it is resolved
+- **Then** the base-column candidates are read with `Code == "B" && Name == "Lavica"`, and the count is 1; with `Code == "A"` it is 0
+
+#### Scenario: An entity store that cannot list
+
+- **Given** a `LocalizedStoreWrapper` over an `IStore<T>` that is not a bulk store
+- **When** a filter on a translated field is resolved
+- **Then** `H_i` is every entity in the field's translation slice and the result is the same as on a bulk store — correct, at the cost of that read
+
+#### Scenario: A translation stored without its hash
+
+- **Given** a consumer model whose `ValueHash` is a plain stored property, and a row written straight into the translation store with no hash
+- **When** `Name == <its value>` is resolved
+- **Then** the lookup also reads the field's rows with a null or empty hash, confirms each by its value, and finds the entity
+
+#### Scenario: Recorded limits
+
+- **Given** a SQL Server or MySQL entity store with a case-insensitive collation
+- **When** `Name == "lavica"` is resolved
+- **Then** an untranslated "Lavica" matches through the base column and a translated one does not (translations match ordinally); an IN over a set with a non-ordinal comparer is refused; and a translation created between the candidate read and the query can let its entity match on its base value once
 
 #### Scenario: Filter with no localized condition is untouched
 
@@ -273,30 +309,21 @@ unchanged (including `null`).
 - **When** `Split` runs
 - **Then** it returns immediately with `RemainingFilter = filter` and no localized conditions
 
-### Requirement: Multiple localized conditions are intersected
+### Requirement: Multiple localized conditions are combined
 
-The system SHALL query the translation store once per extracted localized condition and intersect the
-resulting GUID sets, so an entity must satisfy every localized condition.
+The system SHALL resolve each extracted localized condition on its own and `AndAlso`-combine their terms, so an entity
+must satisfy every localized condition, each on its translation or, without one, on its base value.
 
 #### Scenario: Two localized conditions on different fields
 
 - **Given** `Name` and `Description` are localizable and the filter is `x => x.Name.Contains("a") && x.Description.Contains("b")`
 - **When** the conditions are resolved
-- **Then** two translation queries run and the final GUID set is the intersection of the two match sets
-
-#### Scenario: Two localized conditions on the same field
-
-- **Given** the filter is `x => x.Name.StartsWith("St") && x.Name.EndsWith("ka")`
-- **When** the conditions are resolved
-- **Then** both are extracted independently and their GUID sets are intersected, so only entities whose `"sk"` `Name` translation satisfies both remain
-
-#### Scenario: A localized condition matching nothing empties the intersection
-
-- **Given** one condition matches `{G1, G2}` and another matches no translation values
-- **When** the sets are intersected
-- **Then** the result is an empty GUID set
+- **Then** each is resolved against its own field, and the entity store receives both terms joined by `AndAlso`
 
 ### Requirement: GUID membership filter construction
+
+`LocalizedFilterHelper.BuildGuidFilter` serves the base-value reads of the update paths; the filter rewrite builds its
+own membership terms (`LocalizedFilterResolution`).
 
 The system SHALL build the membership predicate as `x => x.Guid != null && guidList.Contains(x.Guid.Value)`
 over a `List<Guid>` (not the `HashSet<Guid>` it was given), and SHALL build `x => false` when the GUID set
@@ -336,6 +363,12 @@ the second evaluates to a `StringComparison`. A part that is not extracted SHALL
 filter, evaluated by the inner store against the base column, **only when it reads no localizable field**
 or is a comparison of a localizable field with `null`; any other part that reads a localizable field SHALL
 be refused with `NotSupportedException` naming the field.
+
+#### Scenario: IN over a list is extracted
+
+- **Given** `names` is a `List<string>`, an array or any `IEnumerable<string>`, and the filter is `x => names.Contains(x.Name)` or `Enumerable.Contains(names, x.Name)` — including the span overload an array binds to on C# 14
+- **When** extraction runs
+- **Then** a condition with `Values` = the distinct non-null names is produced, resolved by their hashes
 
 #### Scenario: Equality on a localizable field is extracted
 
@@ -447,17 +480,16 @@ An exception thrown while invoking SHALL propagate to the caller, unwrapped from
 - **When** `ExtractFieldAndConstant` casts the value with `as string`
 - **Then** the result is `null` and the part is not extracted
 
-### Requirement: Not-equal on a localizable field matches only entities that have a translation row
+### Requirement: Not-equal on a localizable field matches untranslated entities on their base value
 
-The system SHALL, for an extracted `NotEqual` condition, return only the GUIDs of translation rows whose
-`Value` differs from the constant, so entities with no translation row for that field and culture are
-excluded from the result rather than treated as "value differs".
+The system SHALL, for an extracted `NotEqual` condition, match an entity with a translation when that translation
+differs from the constant, and an entity without one when its base value differs.
 
-#### Scenario: Entity without a translation is excluded from a not-equal match
+#### Scenario: Entity without a translation is matched on its base value
 
-- **Given** entities `G1` (translation `Name = "A"` for `"sk"`) and `G2` (no `"sk"` translation for `Name`), and the filter `x => x.Name != "A"`
+- **Given** entities `G1` (translation `Name = "A"` for `"sk"`) and `G2` (no `"sk"` translation for `Name`, base `"B"`), and the filter `x => x.Name != "A"`
 - **When** the filter is rewritten on culture `"sk"`
-- **Then** the resolved GUID set is empty and neither entity is returned, even though `G2`'s value is not `"A"`
+- **Then** `G2` is returned and `G1` is not; the base-column candidates for `!=` can be most of the table, which the wrapper reads
 
 ### Requirement: Count applies the same rewriting
 
@@ -470,11 +502,11 @@ original filter unchanged on the default culture.
 - **When** `Count(filter)` / `CountAsync(filter)` runs
 - **Then** the rewritten GUID-based filter is passed to the inner store's count
 
-#### Scenario: Count with no localized matches
+#### Scenario: Count with no translated matches
 
-- **Given** the localized condition resolves to an empty GUID set
-- **When** `Count` delegates `x => false` to the inner store
-- **Then** the count is 0
+- **Given** no translation satisfies the localized condition
+- **When** `Count` runs
+- **Then** the inner store receives the condition on the base column, restricted to entities without a translation, so untranslated entities whose base value matches are counted and nothing else
 
 ### Requirement: Ordering on a localizable field forces in-memory sort and paging
 
@@ -958,3 +990,9 @@ fail the store.
 - **Given** MySQL 8.4 with `utf8mb4`
 - **When** the translation store is initialised
 - **Then** the three string key columns are `VARCHAR(255)`, the key (3 204 bytes) exceeds InnoDB's 3 072, the index is not created, and `IndexCreationFailures` names it (TASK-684 bounds the columns)
+
+#### Scenario: The value hash and its index
+
+- **Given** `EntityTranslationModel` and the SQL mapping
+- **When** a row is written and the store initialised
+- **Then** `ValueHash` is the lower-case hex SHA-256 of `Value`, computed by the model (its setter is ignored) and written by the upsert for any model; the table has a non-unique `IX_{table}_ValueHash` on it alone, and the table name is at most 50 characters so that name fits PostgreSQL's 63

@@ -184,62 +184,10 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
     protected bool IsNonDefaultCulture()
         => _context.CurrentCulture.Name != _context.DefaultCulture.Name;
 
-    /// <summary>
-    /// Rewrites a filter expression: extracts localized field conditions,
-    /// queries the translation store for matching entity GUIDs,
-    /// and replaces localized conditions with a GUID membership test.
-    /// </summary>
+    /// <summary>The filter rewritten for the current culture — see <see cref="LocalizedFilterResolution"/> (TASK-681).</summary>
     protected Expression<Func<T, bool>>? RewriteFilter(Expression<Func<T, bool>>? filter)
-    {
-        var localizableFields = GetLocalizableFieldsFromInstance();
-        var split = LocalizedExpressionAnalyzer.Split(filter, localizableFields);
-
-        if (!split.HasLocalizedConditions)
-        {
-            return filter;
-        }
-
-        var matchingGuids = ResolveMatchingGuids(split.LocalizedConditions);
-
-        // Build: x => matchingGuids.Contains(x.Guid)
-        var guidFilter = LocalizedFilterHelper.BuildGuidFilter<T>(matchingGuids);
-
-        if (split.RemainingFilter == null)
-        {
-            return guidFilter;
-        }
-
-        return LocalizedFilterHelper.CombineFilters(split.RemainingFilter, guidFilter);
-    }
-
-    /// <summary>
-    /// Queries the translation store to find entity GUIDs that match all localized conditions.
-    /// </summary>
-    protected HashSet<Guid> ResolveMatchingGuids(IReadOnlyList<LocalizedFieldCondition> conditions)
-    {
-        HashSet<Guid>? result = null;
-        var culture = _context.CurrentCulture.Name;
-        var entityType = LocalizedTranslationRows.EntityTypeOf<T>();
-
-        foreach (var condition in conditions)
-        {
-            var translations = _translationStore.Read(LocalizedTranslationRows.Where<TTranslation>(
-                entityType: entityType, fieldName: condition.FieldName, culture: culture));
-            var guids = new HashSet<Guid>(
-                translations.Where(t => condition.ValuePredicate(t.Value)).Select(t => t.EntityGuid));
-
-            if (result == null)
-            {
-                result = guids;
-            }
-            else
-            {
-                result.IntersectWith(guids);
-            }
-        }
-
-        return result ?? new HashSet<Guid>();
-    }
+        => LocalizedFilterResolution.Rewrite(
+            filter, GetLocalizableFieldsFromInstance(), _translationStore, _innerStore as IBulkStore<T>, _context.CurrentCulture.Name);
 
     #endregion
 

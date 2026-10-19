@@ -18,7 +18,8 @@ namespace Birko.Data.Localization.SQL.Mappings;
 /// </para>
 /// <para>
 /// <b>No index on <c>Value</c>.</b> An index key on MySQL and SQL Server bounds the column to 255 characters (rule 37),
-/// which would cap every translation; the value lookup and its index are TASK-681's.
+/// which would cap every translation. Exact-value lookups use <see cref="ValueHashIndex"/> on <c>ValueHash</c>
+/// (SHA-256 hex, 64 characters) instead, and confirm the value in memory (TASK-681).
 /// </para>
 /// </remarks>
 public sealed class EntityTranslationMapping<TTranslation> : IModelMapping<TTranslation>
@@ -45,8 +46,8 @@ public sealed class EntityTranslationMapping<TTranslation> : IModelMapping<TTran
         Table = table;
     }
 
-    /// <summary>Leaves room for the <c>UX_</c> / <c>_Key</c> affixes inside PostgreSQL's 63-character identifiers.</summary>
-    public const int MaxTableLength = 56;
+    /// <summary>Leaves room for the index-name affixes (<c>IX_</c> … <c>_ValueHash</c>) inside PostgreSQL's 63-character identifiers.</summary>
+    public const int MaxTableLength = 50;
 
     public string Table { get; }
 
@@ -54,6 +55,11 @@ public sealed class EntityTranslationMapping<TTranslation> : IModelMapping<TTran
     public string KeyIndex => KeyIndexName(Table);
 
     public static string KeyIndexName(string table) => $"UX_{table}_Key";
+
+    /// <summary>The non-unique index on <c>ValueHash</c> that exact-value lookups use (TASK-681).</summary>
+    public string ValueHashIndex => ValueHashIndexName(Table);
+
+    public static string ValueHashIndexName(string table) => $"IX_{table}_ValueHash";
 
     public void Configure(ModelMap<TTranslation> map)
     {
@@ -64,5 +70,8 @@ public sealed class EntityTranslationMapping<TTranslation> : IModelMapping<TTran
         map.Property(x => x.FieldName).IsRequired().HasUniqueIndex(KeyIndex, 2);
         map.Property(x => x.Culture).IsRequired().HasUniqueIndex(KeyIndex, 3);
         map.Property(x => x.Value).IsRequired();
+        // Not required: a column added to an existing table cannot be NOT NULL without a default. The hash alone is
+        // selective, and a column belongs to one fluent index, so it is not appended to the key's columns.
+        map.Property(x => x.ValueHash).HasIndex(ValueHashIndex);
     }
 }

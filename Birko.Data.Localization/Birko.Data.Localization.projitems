@@ -14,6 +14,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\EntityTranslationModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\IEntityLocalizationContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\IEntityTranslation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\LocalizedValueHash.cs" />
     <!-- Filters -->
     <Compile Include="$(MSBuildThisFileDirectory)Filters\EntityTranslationFilter.cs" />
     <!-- Expressions -->
@@ -24,6 +25,7 @@
     <!-- Decorators -->
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedEntityFields.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedTranslationRows.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedFilterResolution.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncLocalizedStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedBulkStoreWrapper.cs" />

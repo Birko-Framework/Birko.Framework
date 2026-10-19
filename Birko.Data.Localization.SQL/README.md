@@ -8,7 +8,7 @@ unique key, for the default `EntityTranslationModel` or a model of your own.
 - One fluent mapping for any `IEntityTranslation` model, in a table you name.
 - A **unique** key over `(EntityGuid, EntityType, FieldName, Culture)`: two writers saving one key at once leave one row
   (the second create is refused and retried as an update by the localization wrappers).
-- No index on `Value`, so a translation's length is not capped by an index key.
+- No index on `Value`, so a translation's length is not capped by an index key; exact-value lookups (slugs) use an index on `ValueHash` instead.
 
 ## Usage
 

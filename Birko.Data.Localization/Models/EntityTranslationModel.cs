@@ -27,6 +27,16 @@ public class EntityTranslationModel : AbstractModel, IEntityTranslation
     /// <summary>When the translation was last updated.</summary>
     public DateTime? UpdatedAt { get; set; }
 
+    /// <summary>
+    /// Computed from <see cref="Value"/> (TASK-681): always correct, however the row was written. The setter exists for
+    /// the stores' hydration and is ignored.
+    /// </summary>
+    public string ValueHash
+    {
+        get => LocalizedValueHash.Of(Value);
+        set { }
+    }
+
     public override AbstractModel CopyTo(AbstractModel? clone = null)
     {
         clone ??= new EntityTranslationModel();

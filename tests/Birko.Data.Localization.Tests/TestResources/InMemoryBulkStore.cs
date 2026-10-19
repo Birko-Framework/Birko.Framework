@@ -29,6 +29,9 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
     /// <summary>How many filtered collection reads ran — what a test counts to prove a read is batched.</summary>
     public int FilteredReadCalls { get; private set; }
 
+    /// <summary>How many rows the filtered collection reads returned — what proves a lookup did not scan.</summary>
+    public int RowsRead { get; private set; }
+
     public int CreateInstanceCalls { get; private set; }
 
     public T? Read(Guid guid) => _data.TryGetValue(guid, out var item) ? item : null;
@@ -49,7 +52,9 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
         if (filter != null) items = items.Where(filter);
         if (offset.HasValue) items = items.Skip(offset.Value);
         if (limit.HasValue) items = items.Take(limit.Value);
-        return items.ToList();
+        var result = items.ToList();
+        RowsRead += result.Count;
+        return result;
     }
 
     public long Count(Expression<Func<T, bool>>? filter = null)

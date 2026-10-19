@@ -24,7 +24,13 @@ Every name `GetLocalizableFields()` returns must be a public `string` property w
 
 ## Filters on localizable fields
 
-Under a non-default culture, a filter condition on a localizable field is answered from the translation rows. Supported: `==`, `!=`, `Contains`, `StartsWith` and `EndsWith` on the field itself, against a value (a `StringComparison` argument is honoured), joined by `&&`. Ordering by a localizable field sorts the translated text in memory, collated with the current culture — so it loads every matching entity, not just the page; an order-by naming a property that doesn't exist, or a negative offset or limit, is refused.
+Under a non-default culture, a filter condition on a localizable field is answered from the translation rows. Supported: `==`, `!=`, `Contains`, `StartsWith` and `EndsWith` on the field itself, against a value (a `StringComparison` argument is honoured), and `values.Contains(x.Field)` (IN), joined by `&&`.
+
+**Fallback:** an entity with a translation for that field in the current culture is matched only on the translation; an entity without one is matched on its base (default-culture) value. So an untranslated product is still found by its slug.
+
+**Cost:** `==` and `IN` look translation rows up by `ValueHash` (SHA-256 of the value) and read only the matching rows; the other shapes read the field's translations in that culture and test them in memory. The fallback reads the entity store's rows that match on the base column, plus their translations in one batched read — for `!=` that can be most of the table.
+
+**Limits:** translations match exactly (ordinal), while the base-column fallback is evaluated by the entity store under its collation — case-insensitive by default on SQL Server and MySQL, so `Name == "lavica"` can find an untranslated "Lavica" there but never a translated one. An IN over a set with a non-ordinal comparer is refused for that reason. A translation row stored without its `ValueHash` (written around the wrappers by a model that does not compute it, or before the column existed) is still found, by a read of the field's unhashed rows; backfill the column to keep lookups cheap. Ordering by a localizable field sorts the translated text in memory, collated with the current culture — so it loads every matching entity, not just the page; an order-by naming a property that doesn't exist, or a negative offset or limit, is refused.
 
 Anything else that reads a localizable field throws `NotSupportedException` instead of silently testing the default-culture column: a condition inside `||` or `!`, a chained call (`x.Name.ToLower()`), a static call (`string.IsNullOrEmpty(x.Name)`) or a comparison with another column. `x.Name == null` / `!= null` is the one exception: it tests the base column.
 

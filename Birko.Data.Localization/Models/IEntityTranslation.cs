@@ -26,4 +26,13 @@ public interface IEntityTranslation
     string Value { get; set; }
 
     DateTime? UpdatedAt { get; set; }
+
+    /// <summary>
+    /// <see cref="LocalizedValueHash.Of"/> of <see cref="Value"/> — what an exact-value lookup selects rows by (TASK-681).
+    /// The wrappers write it on every save; a model can also compute it from <see cref="Value"/> and ignore the setter,
+    /// as <see cref="EntityTranslationModel"/> does. A row stored without it (seeded or imported around the wrappers by a
+    /// model that does not compute it, or written before the column existed) is still found, by a slower read of the
+    /// field's unhashed rows — backfill the column to keep lookups cheap.
+    /// </summary>
+    string ValueHash { get; set; }
 }

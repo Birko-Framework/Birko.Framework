@@ -19,6 +19,7 @@ Entity-level localization for Birko.Data stores. Provides transparent translatio
 
 ### Decorators (`Decorators/`)
 - **LocalizedEntityFields** — the one producer for capturing/restoring localizable values and detaching an entity
+- **LocalizedFilterResolution** — the one producer of a filter rewritten for a non-default culture (TASK-681): per condition `guid ∈ T ∨ (Part ∧ guid ∉ H)` — translated matches (by `ValueHash` for ==/IN), or the base value for entities without a translation
 - **LocalizedTranslationRows** — the one producer for reading, writing and deleting translation rows (TASK-168, TASK-194, TASK-679, TASK-680): the four-part key `(EntityGuid, EntityType, FieldName, Culture)`, filters built with `Expression.Property` on the concrete translation type (a precaution, not a measured failure), keyed by the GUID the store returned, `EntityType` from `EntityTypeOf<T>()`, `null` removes the row, a create refused by the unique key retried as an update, list reads batched per 500 GUIDs
 - **LocalizedStoreWrapper** — Sync `IStore<T>` decorator
 - **AsyncLocalizedStoreWrapper** — Async `IAsyncStore<T>` decorator

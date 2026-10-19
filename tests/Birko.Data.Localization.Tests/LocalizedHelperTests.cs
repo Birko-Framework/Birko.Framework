@@ -13,7 +13,7 @@ namespace Birko.Data.Localization.Tests;
 /// <summary>
 /// CR-L140: direct unit coverage for LocalizedOrderByHelper.ApplyInMemoryOrderBy / ApplyInMemoryPaging
 /// (multi-field ASC/DESC + offset/limit) and LocalizedFilterHelper.BuildGuidFilter (empty/non-empty) +
-/// CombineFilters (parameter rebinding). CR-L138: a sort on a non-comparable property degrades gracefully
+/// CR-L138: a sort on a non-comparable property degrades gracefully
 /// instead of throwing.
 /// </summary>
 public class LocalizedHelperTests
@@ -95,16 +95,4 @@ public class LocalizedHelperTests
         filter(new SortModel { Guid = null }).Should().BeFalse("the filter guards x.Guid != null");
     }
 
-    [Fact]
-    public void CombineFilters_rebinds_the_right_parameter_and_ands()
-    {
-        System.Linq.Expressions.Expression<Func<SortModel, bool>> left = x => x.Name == "a";
-        System.Linq.Expressions.Expression<Func<SortModel, bool>> right = y => y.Rank == 1;
-
-        var combined = LocalizedFilterHelper.CombineFilters(left, right).Compile();
-
-        combined(new SortModel { Name = "a", Rank = 1 }).Should().BeTrue();
-        combined(new SortModel { Name = "a", Rank = 2 }).Should().BeFalse();
-        combined(new SortModel { Name = "b", Rank = 1 }).Should().BeFalse();
-    }
 }

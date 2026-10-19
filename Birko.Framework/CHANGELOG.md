@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — OAuth server stores ship, and single use is enforced by the store
+
+[[TASK-518]]. New `Birko.Security.OAuth.Server.InMemory` and `.SqLite` provide all five stores and a DI extension.
+SQLite keeps client lists and refresh claims as JSON columns. Measured: concurrent redemptions of one code or one refresh
+token each issued several pairs. New `TryRedeemAsync` / `TryRevokeAsync` claim atomically in the shipped stores; custom
+stores keep a read-check-write default. A lost rotation fails only that request (decided by the user).
+
 ## 2026-10-18 — OAuth server issues tokens for a federated sign-in
 
 [[TASK-517]]. `TokenEndpointHandler.IssueForSubjectAsync(clientId, subject, scope, claims)` gives a subject who signed in

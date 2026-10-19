@@ -161,54 +161,11 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
     protected bool IsNonDefaultCulture()
         => _context.CurrentCulture.Name != _context.DefaultCulture.Name;
 
-    protected async Task<Expression<Func<T, bool>>?> RewriteFilterAsync(
+    /// <summary>The filter rewritten for the current culture — see <see cref="LocalizedFilterResolution"/> (TASK-681).</summary>
+    protected Task<Expression<Func<T, bool>>?> RewriteFilterAsync(
         Expression<Func<T, bool>>? filter, CancellationToken ct)
-    {
-        var localizableFields = GetLocalizableFieldsFromInstance();
-        var split = LocalizedExpressionAnalyzer.Split(filter, localizableFields);
-
-        if (!split.HasLocalizedConditions)
-        {
-            return filter;
-        }
-
-        var matchingGuids = await ResolveMatchingGuidsAsync(split.LocalizedConditions, ct);
-        var guidFilter = LocalizedFilterHelper.BuildGuidFilter<T>(matchingGuids);
-
-        if (split.RemainingFilter == null)
-        {
-            return guidFilter;
-        }
-
-        return LocalizedFilterHelper.CombineFilters(split.RemainingFilter, guidFilter);
-    }
-
-    protected async Task<HashSet<Guid>> ResolveMatchingGuidsAsync(
-        IReadOnlyList<LocalizedFieldCondition> conditions, CancellationToken ct)
-    {
-        HashSet<Guid>? result = null;
-        var culture = _context.CurrentCulture.Name;
-        var entityType = LocalizedTranslationRows.EntityTypeOf<T>();
-
-        foreach (var condition in conditions)
-        {
-            var translations = await _translationStore.ReadAsync(LocalizedTranslationRows.Where<TTranslation>(
-                entityType: entityType, fieldName: condition.FieldName, culture: culture), null, null, null, ct);
-            var guids = new HashSet<Guid>(
-                translations.Where(t => condition.ValuePredicate(t.Value)).Select(t => t.EntityGuid));
-
-            if (result == null)
-            {
-                result = guids;
-            }
-            else
-            {
-                result.IntersectWith(guids);
-            }
-        }
-
-        return result ?? new HashSet<Guid>();
-    }
+        => LocalizedFilterResolution.RewriteAsync(
+            filter, GetLocalizableFieldsFromInstance(), _translationStore, _innerStore as IAsyncBulkStore<T>, _context.CurrentCulture.Name, ct);
 
     #endregion
 

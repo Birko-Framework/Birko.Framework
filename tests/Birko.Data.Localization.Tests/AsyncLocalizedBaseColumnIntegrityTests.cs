@@ -233,6 +233,12 @@ public class AsyncLocalizedBaseColumnIntegrityTests
         var target = await _bulk.CreateAsync(new TestLocalizableModel { Name = EnglishName, Code = "TARGET" });
         var decoy = await _bulk.CreateAsync(new TestLocalizableModel { Name = SlovakName, Code = "DECOY" });
         await SeedSlovakNameTranslationAsync(target);
+        // The decoy has a Slovak name of its own: since TASK-681 an entity WITHOUT one is matched on its base column
+        // (SH-M070), and "Stolicka" there would make it a legitimate match.
+        await _translationStore.CreateAsync(new EntityTranslationModel
+        {
+            EntityGuid = decoy, EntityType = nameof(TestLocalizableModel), FieldName = "Name", Culture = "sk", Value = "Stol",
+        });
         SwitchToSlovak();
         return (target, decoy);
     }

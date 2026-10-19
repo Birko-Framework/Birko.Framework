@@ -240,6 +240,12 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Filters on translated fields fall back to the base value and look up by hash (2026-10-19)
+[[TASK-681]]. On a non-default culture, an entity with a translation matches on it, and one without matches on its base
+value (SH-M070). `==` and `IN` read only matching rows through an indexed `ValueHash` (SHA-256, SH-M082), and
+`values.Contains(x.Field)` is now supported. Measured on SQLite, PostgreSQL, SQL Server and MySQL. On SQL Server and
+MySQL the fallback follows the collation. **Breaking:** `IEntityTranslation.ValueHash`, and table names are now at most 50
+characters. The large `IN` list is [[TASK-686]].
 ### Translations can be any model, with a unique key on SQL (2026-10-19)
 [[TASK-680]]. The localization wrappers take any `IEntityTranslation` model, such as a tenant entity. The two-parameter
 names still mean `EntityTranslationModel`. New `Birko.Data.Localization.SQL` maps the table with a unique key on
@@ -321,11 +327,6 @@ as 400, Basic not form-decoded or a malformed one ignored, and `/register` refus
 replies `response` or `error`. Every reply carries the request id, including errors (DraCode's dropped it, so clients
 timed out). `RunAsync` handles requests concurrently over the capped receive. An exception's message is not sent
 unless `ExposeExceptionMessages`.
-### OAuth server stores ship, and single use is enforced by the store (2026-10-18)
-[[TASK-518]]. New `Birko.Security.OAuth.Server.InMemory` and `.SqLite` provide all five stores and a DI extension.
-SQLite keeps client lists and refresh claims as JSON columns. Measured: concurrent redemptions of one code or one refresh
-token each issued several pairs. New `TryRedeemAsync` / `TryRevokeAsync` claim atomically in the shipped stores; custom
-stores keep a read-check-write default. A lost rotation fails only that request (decided by the user).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

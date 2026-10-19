@@ -88,7 +88,8 @@ internal static class LocalizedTranslationRows
         IReadOnlyCollection<Guid>? entityGuids = null,
         string? entityType = null,
         string? fieldName = null,
-        string? culture = null)
+        string? culture = null,
+        IReadOnlyCollection<string>? valueHashes = null)
         where TTranslation : AbstractModel, IEntityTranslation
     {
         var row = Expression.Parameter(typeof(TTranslation), "t");
@@ -103,6 +104,20 @@ internal static class LocalizedTranslationRows
             var contains = typeof(List<Guid>).GetMethod(nameof(List<Guid>.Contains), new[] { typeof(Guid) })!;
             terms.Add(Expression.Call(Expression.Constant(list), contains,
                 Expression.Property(row, nameof(IEntityTranslation.EntityGuid))));
+        }
+        if (valueHashes != null)
+        {
+            // A row whose stored hash is missing (written before the column existed, or straight into the store by a
+            // model that does not compute it) is read too and confirmed by its value in memory: otherwise its entity
+            // would match neither on the translation nor, having one, on its base value (TASK-681 review).
+            var hashes = valueHashes.ToList();
+            var containsHash = typeof(List<string>).GetMethod(nameof(List<string>.Contains), new[] { typeof(string) })!;
+            var stored = Expression.Property(row, nameof(IEntityTranslation.ValueHash));
+            terms.Add(Expression.OrElse(
+                Expression.Call(Expression.Constant(hashes), containsHash, stored),
+                Expression.OrElse(
+                    Expression.Equal(stored, Expression.Constant(null, typeof(string))),
+                    Expression.Equal(stored, Expression.Constant(string.Empty)))));
         }
         AddString(terms, row, nameof(IEntityTranslation.EntityType), entityType);
         AddString(terms, row, nameof(IEntityTranslation.FieldName), fieldName);
@@ -240,6 +255,7 @@ internal static class LocalizedTranslationRows
             }
 
             row.Value = pair.Value;
+            row.ValueHash = LocalizedValueHash.Of(pair.Value);
             row.UpdatedAt = now;
             store.Update(row);
         }
@@ -295,6 +311,7 @@ internal static class LocalizedTranslationRows
             }
 
             row.Value = pair.Value;
+            row.ValueHash = LocalizedValueHash.Of(pair.Value);
             row.UpdatedAt = now;
             await store.UpdateAsync(row, ct: ct);
         }
@@ -385,6 +402,7 @@ internal static class LocalizedTranslationRows
         row.FieldName = fieldName;
         row.Culture = culture;
         row.Value = value;
+        row.ValueHash = LocalizedValueHash.Of(value);
         row.UpdatedAt = now;
         return row;
     }

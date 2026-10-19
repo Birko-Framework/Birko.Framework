@@ -33,6 +33,7 @@ public sealed class TenantTranslation : TenantBase, IEntityTranslation
     public string Culture { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
     public DateTime? UpdatedAt { get; set; }
+    public string ValueHash { get; set; } = string.Empty;
 }
 
 public sealed class Product : AbstractModel, ILocalizable
@@ -45,6 +46,21 @@ public sealed class Product : AbstractModel, ILocalizable
 public static class TestModels
 {
     public const string TenantTable = "BirkoTestTenantTranslations";
+    public const string ProductTable = "BirkoTestLocalizedProducts";
+}
+
+/// <summary>Products stored in SQL too, so the rewritten filter (OR, NOT IN) runs through the provider's translator.</summary>
+public sealed class SqlProduct : AbstractModel, ILocalizable
+{
+    public string Name { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+
+    public IReadOnlyList<string> GetLocalizableFields() => new[] { nameof(Name) };
+}
+
+public sealed class SqlProductMapping : IModelMapping<SqlProduct>
+{
+    public void Configure(ModelMap<SqlProduct> map) => map.ToTable(TestModels.ProductTable).HasPrimary(x => x.Guid);
 }
 
 /// <summary>
@@ -219,6 +235,71 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     }
 
     [Fact]
+    public async Task Schema_ensure_creates_the_value_hash_index()
+    {
+        if (!RequireServer()) return;
+        var store = Store<EntityTranslationModel>();
+        await store.InitAsync();
+        var table = EntityTranslationMapping<EntityTranslationModel>.DefaultTable;
+
+        var info = await Indexes(store.Connector!).GetInfoAsync(EntityTranslationMapping<EntityTranslationModel>.ValueHashIndexName(table), table);
+
+        info.Should().NotBeNull();
+        info!.Unique.Should().BeFalse();
+        info.Fields.Select(f => f.Name.ToLowerInvariant()).Should().Equal("valuehash");
+    }
+
+    [Fact]
+    public async Task A_filter_on_a_translated_field_falls_back_and_looks_up_by_hash_through_the_providers_translator()
+    {
+        if (!RequireServer()) return;
+        var context = new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") };
+        var products = Store<SqlProduct>();
+        var translations = Store<EntityTranslationModel>();
+        var run = Guid.NewGuid().ToString("N")[..8];
+        var bulk = new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<SqlProduct>, SqlProduct>(products, translations, context);
+        context.CurrentCulture = new CultureInfo("en");
+        var a = await bulk.CreateAsync(new SqlProduct { Name = $"Chair-{run}", Code = run });
+        var b = await bulk.CreateAsync(new SqlProduct { Name = $"Lavica-{run}", Code = run });
+        var c = await bulk.CreateAsync(new SqlProduct { Name = $"Stolicka-{run}", Code = run });
+        context.CurrentCulture = new CultureInfo("sk");
+        await translations.CreateAsync(new EntityTranslationModel { EntityGuid = a, EntityType = nameof(SqlProduct), FieldName = "Name", Culture = "sk", Value = $"Stolicka-{run}" });
+        await translations.CreateAsync(new EntityTranslationModel { EntityGuid = c, EntityType = nameof(SqlProduct), FieldName = "Name", Culture = "sk", Value = $"Kreslo-{run}" });
+
+        async Task<List<Guid?>> Find(Expression<Func<SqlProduct, bool>> filter)
+            => (await bulk.ReadAsync(filter, null, null, null)).Select(x => x.Guid).ToList();
+
+        (await Find(x => x.Code == run && x.Name == $"Stolicka-{run}")).Should().Equal(a);
+        (await Find(x => x.Code == run && x.Name == $"Lavica-{run}")).Should().Equal(b);
+        (await Find(x => x.Code == run && x.Name == $"Chair-{run}")).Should().BeEmpty();
+        var both = new List<string> { $"Stolicka-{run}", $"Lavica-{run}" };
+        (await Find(x => x.Code == run && both.Contains(x.Name))).Should().BeEquivalentTo(new Guid?[] { a, b });
+        (await Find(x => x.Code == run && x.Name.Contains("avica"))).Should().Equal(b);
+        (await bulk.CountAsync(x => x.Code == run && x.Name != $"Stolicka-{run}")).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task A_translation_row_stored_without_its_hash_is_still_found()
+    {
+        if (!RequireServer()) return;
+        var context = new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") };
+        var products = Store<SqlProduct>();
+        var translations = Store<TenantTranslation>();
+        var run = Guid.NewGuid().ToString("N")[..8];
+        var bulk = new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<SqlProduct>, SqlProduct, TenantTranslation>(products, translations, context);
+        var guid = Guid.NewGuid();
+        await products.CreateAsync(new SqlProduct { Guid = guid, Name = $"Stolicka-{run}", Code = run });
+        // Written around the wrappers: the model stores its hash as a plain property, so this row has none.
+        await translations.CreateAsync(new TenantTranslation
+        {
+            EntityGuid = guid, EntityType = nameof(SqlProduct), FieldName = "Name", Culture = "sk", Value = $"Kreslo-{run}",
+        });
+
+        (await bulk.CountAsync(x => x.Code == run && x.Name == $"Kreslo-{run}")).Should().Be(1);
+        (await bulk.CountAsync(x => x.Code == run && x.Name == $"Stolicka-{run}")).Should().Be(0);
+    }
+
+    [Fact]
     public async Task A_batched_read_renders_past_one_batch_and_returns_every_row()
     {
         if (!RequireServer()) return;
@@ -339,6 +420,7 @@ internal static class TranslationMappings
             }
             var registry = LocalizationSqlMappings.Register(new ModelMapRegistry());
             LocalizationSqlMappings.Register<TenantTranslation>(registry, TestModels.TenantTable);
+            registry.Register(new SqlProductMapping());
             registry.ApplyToDatabase();
             _applied = true;
         }
