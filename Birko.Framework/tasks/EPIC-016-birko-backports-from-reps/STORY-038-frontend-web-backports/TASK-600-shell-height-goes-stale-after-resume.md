@@ -23,6 +23,46 @@ jira-key: null
 > **Moved from WorkoutTracker TASK-130 on 2026-10-14.** It was filed there as Birko.Web work, where the framework's pick never saw it. Every TASK / STORY / FEATURE id in the body below is **WorkoutTracker's**. It depended on WorkoutTracker TASK-148 (iOS rotation leaves a gap above the top bar, in progress there) and blocks WorkoutTracker TASK-045 (adopt the mobile shell). There, TASK-130 stays open as the Reps-side check, blocked on this task.
 
 
+## Research, 2026-10-19 — what the platforms say (picked up for work)
+
+Searched before a fifth attempt. Nothing here has been measured yet; each item says what it would change.
+
+**Android: no public Chromium bug matches.** Nobody reports a stale `dvh` after an in-place reload in a WebAPK.
+- The nearest is Chromium 331326389: `clientHeight` wrong on a first load after a keyboard was up. It was fixed in
+  Chrome 139, and the device already ran Chrome 150 in August, so it does not explain the September disappearance.
+- Chrome 135 made edge-to-edge (the "chin" under the gesture bar) the default on small-screen Android. Its guide
+  covers the gesture bar only, says nothing about 3-button navigation or installed apps, and rolls out by
+  variation, so the same Chrome version can lay out differently on two days.
+- So the 7/7 clean readings of 2026-09-07 are consistent with a server-side variation change, a Chrome update, or a
+  race that stopped being won. They cannot tell these apart. Per rule 54, the Android half is **recorded as not
+  reproducing**, not as fixed.
+
+**iOS: the landscape gap (Reps TASK-148) has a documented suspect, and it is in Reps' `index.html`, not the shell.**
+- Reps declares `apple-mobile-web-app-status-bar-style` `default`. Apple documents that with `default` the web
+  content is laid out **below** an opaque status bar. An iPhone hides the status bar in landscape, so the view
+  changes height on rotation by about one status bar. That matches the report: space above the top bar, the
+  bottom bar pushed off screen by the same amount, and a scroll that fixes it.
+- WebKit bug 316008 (NEW, iOS 26, rdar 179009964): `100vh` and `lvh` are wrong in installed apps **without**
+  `black-translucent`. Adding the tag later does not fix an existing install; it needs a reinstall.
+- WebKit tracks related standalone-viewport bugs. A minimal repro has the viewport staying short until a
+  rotation (phcorp/webkit-standalone-viewport-repro). A `dvh` gap regression in an iOS 26 release was fixed in
+  26.1 (158055568). WebKit 301994 was a 26.1 regression of the status bar in installed apps.
+- So a fix in `b-core-app-shell` may be the wrong layer for TASK-148. A status-bar-style test (with a reinstall)
+  should come first.
+
+**A shape not yet tried: size the shell without any viewport length.**
+- `position: fixed; inset: 0` on the shell, with `html` and `body` at `overflow: hidden`, takes the height from the
+  fixed containing block, which the engine owns and updates on every viewport change.
+- It is none of the ruled-out sources: no measured px, no `dvh` length that can go stale, nothing to re-assert.
+- Community reports favour it for installed apps (a fixed full-screen view with an inner scroller). They also report
+  iOS standalone `position: fixed` bugs (Apple forums 744327; the standalone keyboard shrink).
+- Untested here, and it changes every consumer's shell (Symbio included). It needs both phones before it can be
+  called anything.
+
+Sources: developer.chrome.com/docs/css-ui/edge-to-edge · bugs.webkit.org 316008, 301994 ·
+github.com/phcorp/webkit-standalone-viewport-repro · github.com/Zwyx/chrome-android-clientheight ·
+webkit.org/blog/17541 (Safari 26.1) · Apple "Configuring Web Applications" (status bar style).
+
 ## Android symptom does not reproduce — device pass, 2026-09-07
 
 Re-measured on the **Xiaomi Mi A2 Lite** (Android 10, Chrome 150, **3-button** nav — the harsher case and the
