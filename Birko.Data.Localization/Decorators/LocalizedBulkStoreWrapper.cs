@@ -23,6 +23,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
     protected readonly TStore _innerStore;
     protected readonly IBulkStore<EntityTranslationModel> _translationStore;
     protected readonly IEntityLocalizationContext _context;
+    protected readonly IReadOnlyList<string> _localizableFields;
 
     public LocalizedBulkStoreWrapper(
         TStore innerStore,
@@ -32,6 +33,8 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
         _translationStore = translationStore ?? throw new ArgumentNullException(nameof(translationStore));
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        // SH-L079 / SH-L082 (TASK-194): the declaration is read and validated once, at wiring, on every culture.
+        _localizableFields = LocalizedEntityFields.LocalizableFieldsOf(_innerStore.CreateInstance());
     }
 
     // Singular read with localization
@@ -106,6 +109,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
     public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
+        LocalizedEntityFields.RequireValidDeclarations(new[] { data });
         var guid = _innerStore.Create(data, storeDelegate);
         // SH-M076: keyed by the GUID the store returned — it need not have written it onto the entity.
         SaveTranslations(guid, LocalizedTranslationRows.ValuesOf(data));
@@ -117,6 +121,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
         // CR-M100: materialize once — a lazy/one-shot IEnumerable would otherwise be enumerated
         // twice (once by the inner store, once here), re-running or exhausting the source.
         var items = data as IList<T> ?? data.ToList();
+        LocalizedEntityFields.RequireValidDeclarations(items);
         _innerStore.Create(items, storeDelegate);
         foreach (var entity in items)
         {
@@ -127,6 +132,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
     /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Update(T, StoreDataDelegate{T}?)" />
     public void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
+        LocalizedEntityFields.RequireValidDeclarations(new[] { data });
         if (!IsNonDefaultCulture())
         {
             _innerStore.Update(data, storeDelegate);
@@ -134,7 +140,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
             return;
         }
 
-        var fields = data.GetLocalizableFields();
+        var fields = LocalizedEntityFields.LocalizableFieldsOf(data);
         var baseValues = ReadBaseValues(data.Guid, fields);
 
         // The entity handed to the inner store is a DETACHED copy carrying the base values, not the
@@ -154,6 +160,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         var items = data as IList<T> ?? data.ToList();
+        LocalizedEntityFields.RequireValidDeclarations(items);
 
         if (!IsNonDefaultCulture())
         {
@@ -224,7 +231,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
             {
                 if (item.Guid is Guid guid)
                 {
-                    LocalizedEntityFields.Restore(item, LocalizedTranslationRows.Read(_translationStore, guid, culture, fields));
+                    LocalizedEntityFields.Restore(item, LocalizedTranslationRows.Read(_translationStore, guid, LocalizedTranslationRows.EntityTypeOf<T>(), culture, fields));
                 }
 
                 var before = LocalizedEntityFields.Capture(item, fields);
@@ -249,9 +256,6 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
     {
-        // TASK-498: refused on every culture, before the culture decides the path.
-        LocalizedPropertyUpdateHelper.RefuseIncrementOnLocalizableField(updates, GetLocalizableFieldsFromInstance());
-
         // CR-L135: a native PropertyUpdate mutates the base column directly. When it targets a localizable
         // field on a non-default culture, that diverges from the value the Action<T> overload would persist
         // (a translation row). Detect that case and fall back to the read-modify-write path so the
@@ -302,8 +306,21 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
         return StoreSave.Save(data, storeDelegate, Create, Update);
     }
 
-    public void Init() => _innerStore.Init();
-    public void Destroy() => _innerStore.Destroy();
+    public void Init()
+    {
+        _innerStore.Init();
+        _translationStore.Init();
+    }
+
+    /// <summary>
+    /// Destroys the inner store, then deletes this entity type's translation rows (SH-L078) — only this type's,
+    /// because the translation store is shared by every localized store.
+    /// </summary>
+    public void Destroy()
+    {
+        _innerStore.Destroy();
+        LocalizedTranslationRows.DeleteType(_translationStore, LocalizedTranslationRows.EntityTypeOf<T>());
+    }
     public T CreateInstance() => _innerStore.CreateInstance();
 
     object? IStoreWrapper.GetInnerStore() => _innerStore;
@@ -373,9 +390,6 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
     /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Localize(T)" />
     protected T Localize(T entity)
     {
-        // No translations exist for the default culture (IEntityLocalizationContext contract), so
-        // skip the per-entity query and avoid overwriting base fields with a stray default-culture
-        // translation row — matching the non-bulk wrapper (CR-H053).
         if (!IsNonDefaultCulture())
         {
             return entity;
@@ -388,34 +402,9 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
         // SH-H016: never write to the instance the inner store returned.
         var localized = LocalizedEntityFields.Detach(entity);
-
-        var filter = EntityTranslationFilter.ByEntityAndCulture(entity.Guid.Value, _context.CurrentCulture.Name);
-        var translations = _translationStore.Read(filter.ToExpression());
-        var translationDict = new Dictionary<string, string>();
-        foreach (var t in translations)
-        {
-            translationDict[t.FieldName] = t.Value;
-        }
-
-        if (translationDict.Count == 0)
-        {
-            return localized;
-        }
-
-        var fields = localized.GetLocalizableFields();
-        var type = localized.GetType();
-        foreach (var fieldName in fields)
-        {
-            if (translationDict.TryGetValue(fieldName, out var value))
-            {
-                var prop = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
-                if (prop != null && prop.PropertyType == typeof(string) && prop.CanWrite)
-                {
-                    prop.SetValue(localized, value);
-                }
-            }
-        }
-
+        LocalizedEntityFields.Restore(localized, LocalizedTranslationRows.Read(
+            _translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name,
+            LocalizedEntityFields.LocalizableFieldsOf(localized)));
         return localized;
     }
 
@@ -525,20 +514,14 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
             return;
         }
 
-        var filter = EntityTranslationFilter.ByEntity(entity.Guid.Value);
-        var translations = _translationStore.Read(filter.ToExpression());
-        _translationStore.Delete(translations);
+        LocalizedTranslationRows.Delete(_translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>());
     }
 
     #endregion
 
     #region Helpers
 
-    protected IReadOnlyList<string> GetLocalizableFieldsFromInstance()
-    {
-        var instance = _innerStore.CreateInstance();
-        return instance.GetLocalizableFields();
-    }
+    protected IReadOnlyList<string> GetLocalizableFieldsFromInstance() => _localizableFields;
 
     #endregion
 }

@@ -1,7 +1,7 @@
 ---
 id: STORY-054
 parent: EPIC-014
-status: planned
+status: in-progress
 created: 2026-07-30
 source: SPEC-HARVEST-FINDINGS-2026-07-30.md
 severity: low
@@ -13,7 +13,7 @@ finding-ids: SH-L001 … SH-L391
 
 ## Progress
 
-**101 / 391 closed by this story's tasks.** All 17 of `caching` ([[TASK-184]], done 2026-10-18): 16 confirmed (2 found fixed by TASK-169), 1 narrower (SH-L047, documented by the user's decision), 0 refuted. All 29 of `event-bus-and-messaging` ([[TASK-174]], done 2026-10-18): 23 confirmed,
+**111 / 391 closed by this story's tasks.** All 10 of `entity-localization` ([[TASK-194]], done 2026-10-19): 8 confirmed, 2 narrower (SH-L081, SH-L082), 0 refuted; 9 fixed there (three by the user's decisions: bad field names refused, unknown order-by refused, the four-part key), SH-L087 handed to [[TASK-681]]. All 17 of `caching` ([[TASK-184]], done 2026-10-18): 16 confirmed (2 found fixed by TASK-169), 1 narrower (SH-L047, documented by the user's decision), 0 refuted. All 29 of `event-bus-and-messaging` ([[TASK-174]], done 2026-10-18): 23 confirmed,
 6 narrower; unused options refused until [[TASK-668]] (user decision). All 24 of `background-jobs` ([[TASK-175]], done 2026-10-18): 19 confirmed,
 3 narrower (`SH-L014`, `SH-L015`, `SH-L017`), 2 refuted (`SH-L008`, `SH-L019`); `SH-L016` found fixed by TASK-663, `SH-L017` and
 `SH-L021` waived in part, [[TASK-667]] spawned and fixed first. All 31 of `llm-provider-and-agents` ([[TASK-173]], done 2026-10-18):

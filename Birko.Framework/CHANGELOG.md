@@ -4,6 +4,16 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — Caching triage: the SQL cache hands out copies; Redis and Hybrid fixes
+
+[[TASK-169]]. 14 medium findings: 13 confirmed, 1 found fixed. One half was spawned as [[TASK-669]].
+
+- `CachedAsyncDataBaseBulkStore` caches a JSON copy and caches a not-found row on Redis too.
+- Reads inside a transaction bypass that cache, and every write, including `DestroyAsync`, invalidates even when
+  cancelled. Invalidating after the commit is TASK-669.
+- HybridCache lets the caller's cancellation through, and a removed key is not backfilled from L2.
+- Redis scans its own database on every primary (`RedisConnectionManager.GetServers()`).
+
 ## 2026-10-18 — Event bus and messaging low triage: unused options refused until implemented
 
 [[TASK-174]]. 29 low findings. **Decided by the user:** options no transport honours are refused

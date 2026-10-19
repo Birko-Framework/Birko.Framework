@@ -1,6 +1,6 @@
 ---
 area: entity-localization
-generated-at: 53a5e76eeed874c948edb2ee3469f05978b2ce1e
+generated-at: 1d2dfb16af4137126112752651bafd3777cddac6
 generated-on: 2026-10-19
 sources:
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
@@ -23,7 +23,7 @@ shaped-by: [FEATURE-014]
 # Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
 # task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
-# 2026-10-19 regen (TASK-168): the evidence pass was not re-run; FEATURE-014, TASK-168's feature, is already listed.
+# 2026-10-19 regens (TASK-168, TASK-194): the evidence pass was not re-run; FEATURE-014, both tasks' feature, is already listed.
 shaped-by-derived: true
 shaped-by-unresolved: 266
 ---
@@ -62,10 +62,14 @@ consumer's responsibility.
 ### Requirement: Localizable entity and translation row contract
 
 The system SHALL treat a property as localizable only when its name is returned by
-`ILocalizable.GetLocalizableFields()` on the entity type, and SHALL store each translated value as one
+`ILocalizable.GetLocalizableFields()` on the entity type, and SHALL refuse with `InvalidOperationException`,
+naming the type and the field, a declared name that is not a public instance `string` property with a public
+getter and setter — when the wrapper is constructed for the store's type, on every culture, and when an entity
+whose own declaration differs is translated or about to be written, before the inner store's write. It SHALL store each translated value as one
 `EntityTranslationModel` carrying `EntityGuid`, `EntityType`, `FieldName`, `Culture`, `Value` and
-`UpdatedAt`, where `EntityType` is the runtime `Type.Name` of the entity instance and `FieldName` is the
-property name. Wrapped entity types SHALL derive from `Birko.Data.Models.AbstractModel` and implement
+`UpdatedAt`, where `EntityType` is the store's type name (`typeof(T).Name`) and `FieldName` is the
+property name, and SHALL identify a row by `(EntityGuid, EntityType, FieldName, Culture)` on every read,
+write and delete. Wrapped entity types SHALL derive from `Birko.Data.Models.AbstractModel` and implement
 `ILocalizable`; the translation store SHALL be a bulk store of `EntityTranslationModel`
 (`IBulkStore<EntityTranslationModel>` for the sync wrappers, `IAsyncBulkStore<EntityTranslationModel>`
 for the async wrappers) even when the wrapped entity store is non-bulk.
@@ -82,11 +86,17 @@ for the async wrappers) even when the wrapped entity store is non-bulk.
 - **When** `CopyTo(null)` is called
 - **Then** a new `EntityTranslationModel` is returned with `EntityGuid`, `EntityType`, `FieldName`, `Culture`, `Value` and `UpdatedAt` copied, after `AbstractModel.CopyTo` has copied the base fields
 
-#### Scenario: Localizable field list is read from a fresh instance for filter and order-by decisions
+#### Scenario: Localizable field list is read once, at construction
 
 - **Given** a wrapper whose inner store's `CreateInstance()` returns a new entity
-- **When** the wrapper needs the localizable field list for filter rewriting, order-by detection or `PropertyUpdate` inspection
-- **Then** it calls `_innerStore.CreateInstance().GetLocalizableFields()` (a fresh instance), whereas translation application and persistence call `GetLocalizableFields()` on the *entity being processed*
+- **When** the wrapper is constructed, and later needs the localizable field list for filter rewriting, order-by detection or `PropertyUpdate` inspection
+- **Then** it calls `_innerStore.CreateInstance()` once, in the constructor, validates the list and keeps it; translation application and persistence use the validated `GetLocalizableFields()` of the *entity being processed*
+
+#### Scenario: A misdeclared field is refused when the wrapper is built
+
+- **Given** a model whose `GetLocalizableFields()` returns `"Nmae"` (no such property), a `decimal` property, or a string property without a public setter
+- **When** any of the four wrappers is constructed for it, on the default culture or another
+- **Then** `InvalidOperationException` names the type and the field, and no wrapper is created
 
 ### Requirement: Culture gating
 
@@ -122,9 +132,9 @@ filter rewriting while the current culture is the default one.
 ### Requirement: Applying translations on read
 
 The system SHALL, on a non-default culture, return a **detached copy** of the entity whose localizable
-properties carry the current culture's values: it loads every translation row for the read entity's GUID
-and the current culture — via `EntityTranslationFilter.ByEntityAndCulture`, which leaves `EntityType`
-unconstrained — builds a `FieldName → Value` dictionary, and assigns the matching values onto the copy.
+properties carry the current culture's values: it loads the translation rows for the read entity's GUID,
+the store's entity type and the current culture, builds a `FieldName → Value` dictionary of the entity's
+localizable fields, and assigns those values onto the copy.
 The instance the inner store returned SHALL NOT be written to. On the default culture the wrapper SHALL
 return that instance unchanged.
 
@@ -156,11 +166,11 @@ detached entity*.
 - **When** `Localize` runs
 - **Then** it returns that same instance without copying it or querying the translation store
 
-#### Scenario: Only writable string properties are assigned
+#### Scenario: Only declared fields are assigned
 
-- **Given** `GetLocalizableFields()` names a property that is not `typeof(string)`, is read-only, or does not exist on the runtime type
-- **When** a translation exists for that field name
-- **Then** the value is not assigned and no exception is raised (the property lookup uses `BindingFlags.Public | BindingFlags.Instance` and requires `PropertyType == typeof(string) && CanWrite`)
+- **Given** a translation row whose `FieldName` is not among the entity's localizable fields
+- **When** the entity is read
+- **Then** that row is ignored; a misdeclared field never reaches this point, because it is refused when the wrapper is built
 
 #### Scenario: Duplicate translation rows resolve to the last one enumerated
 
@@ -174,11 +184,11 @@ detached entity*.
 - **When** `Read(guid)` / `ReadAsync(guid)` / `Read(filter)` returns
 - **Then** `Localize` is not called and `null` is propagated
 
-#### Scenario: The read lookup ignores entity type while filter resolution does not
+#### Scenario: A row of another entity type is not applied
 
-- **Given** translation rows written with `EntityType = entity.GetType().Name`, read through a wrapper whose `T` is a base type of the stored instance
-- **When** `Localize` loads them and, separately, `ResolveMatchingGuids` resolves a localized filter condition
-- **Then** the read lookup matches on `(EntityGuid, Culture)` only and applies the rows regardless of their `EntityType`, while the filter resolution constrains `EntityType = typeof(T).Name` and therefore matches no row — the two paths read the same rows through different entity-type criteria
+- **Given** entity `G` and a `"sk"` row for `(G, "Name")` whose `EntityType` is not the store's type
+- **When** `G` is read on `"sk"`
+- **Then** the row is not applied and the base value is returned — the read and the filter resolution use the same four-part key
 
 ### Requirement: Bulk reads translate every returned entity
 
@@ -475,19 +485,21 @@ then apply `offset`/`limit` in memory.
 - **When** `ApplyInMemoryPaging` runs
 - **Then** the full list is returned as a new list, with neither `Skip` nor `Take` applied
 
-#### Scenario: Negative paging bounds
+#### Scenario: Negative paging bounds are refused
 
-- **Given** `offset = -5` and `limit = -1`
-- **When** `ApplyInMemoryPaging` runs
-- **Then** `Skip(-5)` skips nothing and `Take(-1)` yields nothing, so the result is an empty list
+- **Given** `offset = -5`, or `limit = -1`
+- **When** `ApplyInMemoryPaging` runs on the in-memory path
+- **Then** `ArgumentOutOfRangeException` names the argument, instead of `Skip` ignoring the offset or `Take` returning an empty page
 
 ### Requirement: In-memory ordering semantics
 
 The system SHALL sort in memory by reflecting each `OrderBy` field's property value, using a defensive
 comparer that orders `null` first, collates two strings with the localization context's current culture
 (`CultureInfo.CompareInfo`), compares other same-typed `IComparable` values directly, and otherwise falls
-back to `string.CompareOrdinal` of `ToString()`. Fields whose property cannot be found on `typeof(T)`
-SHALL be skipped wherever they appear; the first field that resolves starts the ordering.
+back to `string.CompareOrdinal` of `ToString()`. A field whose property cannot be found on `typeof(T)` SHALL
+be refused with `ArgumentException`, wherever it appears and even when there is nothing to sort, as
+`OrderByHelper` refuses it on the path that is not translated; names resolve case-insensitively, as there. Null placement and string collation are
+deliberately not aligned with the backends, which disagree among themselves.
 
 #### Scenario: Multi-field ordering builds a ThenBy chain
 
@@ -515,30 +527,25 @@ SHALL be skipped wherever they appear; the first field that resolves starts the 
 
 #### Scenario: Trivial input is returned unchanged
 
-- **Given** the list holds one or zero entities, or `orderBy.Fields` is empty
+- **Given** the list holds one or zero entities, or `orderBy.Fields` is empty, and every field resolves
 - **When** `ApplyInMemoryOrderBy` runs
 - **Then** the same list instance is returned without sorting
 
-#### Scenario: First order-by field missing while a later one exists
+#### Scenario: An unknown order-by field is refused
 
-- **Given** `orderBy.Fields` is `[{"NoSuchProp"}, {"Name"}]`
-- **When** `ApplyInMemoryOrderBy` iterates
-- **Then** `NoSuchProp` is skipped and `Name` starts the ordering with `OrderBy`, because the branch is chosen by whether a key exists yet, not by position
-
-#### Scenario: All order-by fields missing
-
-- **Given** every `PropertyName` is absent from `typeof(T)`
-- **When** the loop completes with `ordered == null`
-- **Then** `ordered?.ToList() ?? entities` returns the unsorted input list
+- **Given** `orderBy.Fields` is `[{"NoSuchProp"}, {"Name"}]` or `[{"Name"}, {"NoSuchProp"}]`
+- **When** `ApplyInMemoryOrderBy` resolves the fields, before sorting anything
+- **Then** `ArgumentException` names `NoSuchProp`
 
 ### Requirement: Translation persistence on create and update
 
 The system SHALL, after the inner store's write succeeds and only on a non-default culture, write one
 translation row per localizable string property through the single producer `LocalizedTranslationRows`,
 keyed by the GUID the inner store's create **returned** (on update, the entity's GUID): a `null` value
-deletes the rows for `(EntityGuid, FieldName, Culture)`; otherwise an existing row is updated in place with
-the new `Value`, `EntityType` and `UpdatedAt = DateTime.UtcNow`, and a missing one is created with the same
-fields. `EntityType` SHALL be the store's type name, `typeof(T).Name`, which is what every filter queries.
+deletes the rows for `(EntityGuid, EntityType, FieldName, Culture)`; otherwise an existing row with that key
+is updated in place with the new `Value` and `UpdatedAt = DateTime.UtcNow`, and a missing one is created with
+the same fields. `EntityType` SHALL be the store's type name, `typeof(T).Name`, which is what every filter
+queries; a row with the same GUID under another type name is another store's and is left alone.
 
 #### Scenario: First write creates a translation row
 
@@ -568,7 +575,7 @@ fields. `EntityType` SHALL be the store's type name, `typeof(T).Name`, which is 
 
 - **Given** a store typed for `Product` and a `SpecialProduct : Product` instance created on `"sk"`
 - **When** its translation row is written
-- **Then** `EntityType` is `"Product"`, so a localized filter on the `Product` store finds it; a row found under another name is rewritten
+- **Then** `EntityType` is `"Product"`, so a localized filter on the `Product` store finds it
 
 #### Scenario: Empty string is persisted
 
@@ -576,11 +583,11 @@ fields. `EntityType` SHALL be the store's type name, `typeof(T).Name`, which is 
 - **When** `SaveTranslations` runs
 - **Then** the translation row's `Value` becomes `""` (only `null` removes the row)
 
-#### Scenario: Non-string localizable field is skipped
+#### Scenario: Non-string localizable field is refused
 
-- **Given** `GetLocalizableFields()` names an `int` property
-- **When** `SaveTranslations` reflects the property
-- **Then** the `PropertyType != typeof(string)` guard skips it with no exception
+- **Given** an entity being written whose own `GetLocalizableFields()` names an `int` property or a missing one
+- **When** its translations are persisted
+- **Then** `InvalidOperationException` names the field
 
 #### Scenario: Create keys translations by the returned GUID
 
@@ -650,14 +657,14 @@ iterate the same materialized list to persist translations.
 ### Requirement: Deleting an entity deletes all of its translations
 
 The system SHALL, after the inner store deletes the entity, delete every translation row matching the
-entity's GUID — across all cultures, all field names and without filtering by entity type — and SHALL skip
-the deletion when the entity's GUID is null.
+entity's GUID and the store's entity type — across all cultures and field names — and SHALL skip the deletion
+when the entity's GUID is null. A row with the same GUID under another entity type survives.
 
 #### Scenario: All cultures are removed
 
 - **Given** entity `G` has `"sk"` and `"de"` translations
 - **When** `Delete(entity)` / `DeleteAsync(entity)` runs
-- **Then** `EntityTranslationFilter.ByEntity(G)` selects both rows and they are removed with a single bulk delete
+- **Then** a filter on `(G, store type)` selects both rows and they are removed with a single bulk delete
 
 #### Scenario: Bulk delete of a collection
 
@@ -748,11 +755,10 @@ and at least one assignment targets a localizable field, convert the update to a
 `PropertyUpdate.ApplyTo` and route it through the read-modify-write path; otherwise it SHALL delegate the
 native `PropertyUpdate` straight to the inner store.
 
-Before choosing a path it SHALL refuse, with `NotSupportedException` and on **every** culture, an update
-whose increment targets a field named by `GetLocalizableFields()`; and on the read-modify-write path it
-SHALL refuse, with `NotSupportedException`, an update that carries any increment at all, because replaying
-it there would silently drop the increment's atomicity. Both refusals throw before the inner store or the
-translation store is called.
+On the read-modify-write path it SHALL refuse, with `NotSupportedException`, an update that carries any
+increment at all, because replaying it there would silently drop the increment's atomicity; the refusal
+throws before the inner store or the translation store is called. An increment can never target a localizable
+field: those are strings, which `Increment` does not accept, and a numeric one is refused at construction.
 
 #### Scenario: PropertyUpdate on a non-localizable field stays native
 
@@ -772,11 +778,11 @@ translation store is called.
 - **When** `Update(filter, updates)` runs
 - **Then** the `IsNonDefaultCulture()` guard short-circuits and the native `PropertyUpdate` is delegated unchanged
 
-#### Scenario: An increment on a localizable field is refused on every culture
+#### Scenario: A numeric field declared localizable is refused before any increment
 
-- **Given** `Price` is named by `GetLocalizableFields()` and the update is `Increment(x => x.Price, 1m)`
-- **When** `Update(filter, updates)` / `UpdateAsync(filter, updates)` runs on the default culture or on a non-default one
-- **Then** `LocalizedPropertyUpdateHelper.RefuseIncrementOnLocalizableField` — called first, before the culture decides the path — throws `NotSupportedException` naming `T.Price`, and neither store is called. The test is by field *name* only: `Increment` accepts only numeric properties, so this refuses a numeric field listed as localizable even though translation reads and writes skip non-string fields
+- **Given** a model whose `GetLocalizableFields()` names `decimal Price`
+- **When** a bulk wrapper is constructed for it, on the default culture or another
+- **Then** `InvalidOperationException` names `Price`; TASK-498's per-increment refusal for this case was removed as unreachable (rule 53)
 
 #### Scenario: An increment beside a localizable Set is refused on a non-default culture
 
@@ -875,10 +881,11 @@ and `ByEntityTypeAndCulture`.
 ### Requirement: Wrapper construction and inner-store access
 
 The system SHALL reject a null inner store, translation store or localization context with
-`ArgumentNullException`, SHALL delegate `Init`/`InitAsync`, `Destroy`/`DestroyAsync` and `CreateInstance`
-straight to the inner store and to the inner store only — the translation store is never initialized or
-destroyed by the wrapper — and SHALL expose the inner store via `IStoreWrapper.GetInnerStore()` and
-`GetInnerStoreAs<TInner>()`.
+`ArgumentNullException`, SHALL initialize both the inner store and the translation store on `Init` /
+`InitAsync`, SHALL on `Destroy` / `DestroyAsync` destroy the inner store and then delete every translation row
+of the store's entity type — never the whole translation store, which other localized stores share — SHALL
+delegate `CreateInstance` to the inner store, and SHALL expose the inner store via
+`IStoreWrapper.GetInnerStore()` and `GetInnerStoreAs<TInner>()`.
 
 #### Scenario: Null constructor argument
 
@@ -886,10 +893,10 @@ destroyed by the wrapper — and SHALL expose the inner store via `IStoreWrapper
 - **When** the wrapper is constructed
 - **Then** `ArgumentNullException` is thrown naming `translationStore`
 
-#### Scenario: Lifecycle calls are pass-through
+#### Scenario: CreateInstance is pass-through
 
 - **Given** any localized wrapper
-- **When** `Init()` / `InitAsync()` / `Destroy()` / `DestroyAsync()` / `CreateInstance()` is called
+- **When** `CreateInstance()` is called
 - **Then** the call is forwarded to the inner store with no localization behaviour added
 
 #### Scenario: Typed unwrapping is single-level
@@ -898,8 +905,8 @@ destroyed by the wrapper — and SHALL expose the inner store via `IStoreWrapper
 - **When** `GetInnerStoreAs<ConcreteStore>()` is called on the outermost wrapper
 - **Then** it returns `null`, because the implementation is `_innerStore as TInner` with no recursion into further wrappers
 
-#### Scenario: The translation store is not part of the lifecycle
+#### Scenario: The translation store follows the lifecycle
 
-- **Given** a localized wrapper whose entities have translation rows
+- **Given** a localized `Product` wrapper with translation rows, sharing its translation store with an `Order` wrapper
 - **When** `Init()` / `InitAsync()` and later `Destroy()` / `DestroyAsync()` are called
-- **Then** only the inner store is initialized and destroyed; the translation store receives neither call, so its rows survive the wrapper's `Destroy()`
+- **Then** both stores are initialized; on destroy the inner store is destroyed and every `"Product"` row is deleted, while the `"Order"` rows remain

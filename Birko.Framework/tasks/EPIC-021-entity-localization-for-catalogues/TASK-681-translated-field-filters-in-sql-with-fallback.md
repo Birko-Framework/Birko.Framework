@@ -9,7 +9,7 @@ assignee: ai
 created: 2026-10-19
 depends-on: [TASK-680]
 blocks: [TASK-682]
-findings: [SH-M070, SH-M082]
+findings: [SH-M070, SH-M082, SH-L087]
 pr: null
 github-issue: null
 jira-key: null
@@ -29,6 +29,8 @@ condition in memory (`condition.ValuePredicate(t.Value)`), then intersects Guids
   untranslated product is unreachable by slug under English, while a read of it would show its base text.
 
 **Also remediates SH-M070 and SH-M082** (handed over by [[TASK-168]], both confirmed 2026-10-19): M070 is this task's fallback criterion, M082 its full-slice scan. M082 adds that the slice spans every tenant because `EntityTranslationModel` is not `ITenant` (TASK-680's model change is what lets a tenant wrapper scope it).
+
+**Also SH-L087** (handed over by [[TASK-194]], confirmed 2026-10-19): the matched GUIDs become one `IN` list (`LocalizedFilterHelper.BuildGuidFilter`), which a broad match pushes past MSSQL's ~2100 parameters; nothing in the framework chunks `IN` lists. Resolving the condition as a query against the translation table is the place to replace the list with a sub-query.
 
 ## Acceptance criteria
 

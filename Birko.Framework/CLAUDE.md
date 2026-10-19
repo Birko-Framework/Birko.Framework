@@ -240,6 +240,14 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Localization low triage: declarations validated, the four-part key, Destroy cleans up (2026-10-19)
+[[TASK-194]]. 10 low findings: 8 confirmed, 2 narrower; SH-L087 handed to [[TASK-681]]. Decided by the user:
+- A localizable field must be a public read/write string property. Anything else throws when the wrapper is built.
+  TASK-498's increment refusal could no longer fire and was removed.
+- Translation rows match on `(EntityGuid, EntityType, FieldName, Culture)`, so another type's row is left alone.
+- An unknown order-by property throws on the in-memory path, as `OrderByHelper` does.
+
+`Destroy` also deletes this type's translation rows, `Init` initialises the translation store, and negative paging throws.
 ### Localization triage: untranslatable filters refused, translations saved after the write (2026-10-19)
 [[TASK-168]]. 14 medium findings, all confirmed (SH-M076 narrower); 4 handed to EPIC-021, SH-M083 spawned as [[TASK-683]].
 - A filter that reads a translated field in a form the analyzer cannot translate (`||`, `!`, chained or static calls,
@@ -318,13 +326,6 @@ refresh re-issues them. Registered claims are refused.
 
 Every cache throws after `Dispose`. MemoryCache takes an optional `TimeProvider`. The Redis stampede lock releases
 only its own token. SQL cache keys name the entity type.
-### Caching triage: the SQL cache hands out copies; Redis and Hybrid fixes (2026-10-18)
-[[TASK-169]]. 14 medium findings: 13 confirmed, 1 found fixed. One half was spawned as [[TASK-669]].
-- `CachedAsyncDataBaseBulkStore` caches a JSON copy and caches a not-found row on Redis too.
-- Reads inside a transaction bypass that cache, and every write, including `DestroyAsync`, invalidates even when
-  cancelled. Invalidating after the commit is TASK-669.
-- HybridCache lets the caller's cancellation through, and a removed key is not backfilled from L2.
-- Redis scans its own database on every primary (`RedisConnectionManager.GetServers()`).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

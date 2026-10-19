@@ -38,45 +38,43 @@ public static class LocalizedOrderByHelper
     /// often invariant on a server, mis-orders letters such as Slovak "č". <c>null</c> keeps the previous
     /// behaviour of comparing with the thread culture.
     /// </param>
+    /// <exception cref="ArgumentException">
+    /// An order-by field names no public instance property of <typeparamref name="T"/> — refused as
+    /// <c>OrderByHelper</c> refuses it on the path that is not translated (SH-L081), instead of returning a page sorted
+    /// by fewer keys than asked for.
+    /// </exception>
     public static List<T> ApplyInMemoryOrderBy<T>(List<T> entities, OrderBy<T> orderBy, CultureInfo? culture = null)
         where T : Data.Models.AbstractModel
     {
-        if (entities.Count <= 1 || orderBy.Fields.Count == 0)
+        var type = typeof(T);
+        var keys = new List<(PropertyInfo Property, bool Descending)>(orderBy.Fields.Count);
+        foreach (var field in orderBy.Fields)
+        {
+            // Case-insensitive, as OrderByHelper's Expression.Property resolves it: the same name must pass or fail
+            // alike on both paths, whatever the culture.
+            var prop = type.GetProperty(field.PropertyName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                ?? throw new ArgumentException(
+                    $"Cannot order by '{field.PropertyName}': it is not a public instance property of {type.Name}.",
+                    nameof(orderBy));
+            keys.Add((prop, field.Descending));
+        }
+
+        if (entities.Count <= 1 || keys.Count == 0)
         {
             return entities;
         }
 
-        var type = typeof(T);
         var comparer = new SafeObjectComparer(culture);
         IOrderedEnumerable<T>? ordered = null;
-
-        foreach (var field in orderBy.Fields)
+        foreach (var (prop, descending) in keys)
         {
-            var prop = type.GetProperty(field.PropertyName, BindingFlags.Public | BindingFlags.Instance);
-            if (prop == null)
-            {
-                continue;
-            }
-
             Func<T, object?> selector = e => prop.GetValue(e);
-
-            // SH-M071: decided by whether a key exists yet, not by position — an unknown first field used
-            // to send the second one to ThenBy on nothing.
-            if (ordered == null)
-            {
-                ordered = field.Descending
-                    ? entities.OrderByDescending(selector, comparer)
-                    : entities.OrderBy(selector, comparer);
-            }
-            else
-            {
-                ordered = field.Descending
-                    ? ordered.ThenByDescending(selector, comparer)
-                    : ordered.ThenBy(selector, comparer);
-            }
+            ordered = ordered == null
+                ? (descending ? entities.OrderByDescending(selector, comparer) : entities.OrderBy(selector, comparer))
+                : (descending ? ordered.ThenByDescending(selector, comparer) : ordered.ThenBy(selector, comparer));
         }
 
-        return ordered?.ToList() ?? entities;
+        return ordered!.ToList();
     }
 
     /// <summary>
@@ -119,8 +117,21 @@ public static class LocalizedOrderByHelper
     /// <summary>
     /// Applies in-memory skip/take pagination.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="offset"/> or <paramref name="limit"/> is negative (SH-L086): <c>Skip</c> ignored a negative
+    /// offset and <c>Take</c> turned a negative limit into an empty page, with no error.
+    /// </exception>
     public static List<T> ApplyInMemoryPaging<T>(List<T> entities, int? offset, int? limit)
     {
+        if (offset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(offset), offset, "The offset cannot be negative.");
+        }
+        if (limit < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit), limit, "The limit cannot be negative.");
+        }
+
         IEnumerable<T> result = entities;
         if (offset.HasValue)
         {

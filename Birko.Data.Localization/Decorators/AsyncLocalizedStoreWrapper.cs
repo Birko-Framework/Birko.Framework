@@ -25,6 +25,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
     protected readonly TStore _innerStore;
     protected readonly IAsyncBulkStore<EntityTranslationModel> _translationStore;
     protected readonly IEntityLocalizationContext _context;
+    protected readonly IReadOnlyList<string> _localizableFields;
 
     public AsyncLocalizedStoreWrapper(
         TStore innerStore,
@@ -34,6 +35,8 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
         _translationStore = translationStore ?? throw new ArgumentNullException(nameof(translationStore));
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        // SH-L079 / SH-L082 (TASK-194): the declaration is read and validated once, at wiring, on every culture.
+        _localizableFields = LocalizedEntityFields.LocalizableFieldsOf(_innerStore.CreateInstance());
     }
 
     public async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
@@ -67,6 +70,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
 
     public async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
+        LocalizedEntityFields.RequireValidDeclarations(new[] { data });
         var guid = await _innerStore.CreateAsync(data, processDelegate, ct);
         // SH-M076: keyed by the GUID the store returned — it need not have written it onto the entity.
         await SaveTranslationsAsync(guid, LocalizedTranslationRows.ValuesOf(data), ct);
@@ -76,6 +80,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
     /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Update(T, StoreDataDelegate{T}?)" />
     public async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
+        LocalizedEntityFields.RequireValidDeclarations(new[] { data });
         if (!IsNonDefaultCulture())
         {
             await _innerStore.UpdateAsync(data, processDelegate, ct);
@@ -83,7 +88,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
             return;
         }
 
-        var fields = data.GetLocalizableFields();
+        var fields = LocalizedEntityFields.LocalizableFieldsOf(data);
         var baseValues = await ReadBaseValuesAsync(data.Guid, fields, ct);
 
         // The entity handed to the inner store is a DETACHED copy carrying the base values, not the
@@ -132,8 +137,18 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
         return await StoreSave.SaveAsync(data, processDelegate, CreateAsync, UpdateAsync, ct);
     }
 
-    public Task InitAsync(CancellationToken ct = default) => _innerStore.InitAsync(ct);
-    public Task DestroyAsync(CancellationToken ct = default) => _innerStore.DestroyAsync(ct);
+    public async Task InitAsync(CancellationToken ct = default)
+    {
+        await _innerStore.InitAsync(ct);
+        await _translationStore.InitAsync(ct);
+    }
+
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Destroy" />
+    public async Task DestroyAsync(CancellationToken ct = default)
+    {
+        await _innerStore.DestroyAsync(ct);
+        await LocalizedTranslationRows.DeleteTypeAsync(_translationStore, LocalizedTranslationRows.EntityTypeOf<T>(), ct);
+    }
     public T CreateInstance() => _innerStore.CreateInstance();
 
     object? IStoreWrapper.GetInnerStore() => _innerStore;
@@ -217,34 +232,9 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
 
         // SH-H016: never write to the instance the inner store returned.
         var localized = LocalizedEntityFields.Detach(entity);
-
-        var filter = EntityTranslationFilter.ByEntityAndCulture(entity.Guid.Value, _context.CurrentCulture.Name);
-        var translations = await _translationStore.ReadAsync(filter.ToExpression(), ct: ct);
-        var translationDict = new Dictionary<string, string>();
-        foreach (var t in translations)
-        {
-            translationDict[t.FieldName] = t.Value;
-        }
-
-        if (translationDict.Count == 0)
-        {
-            return localized;
-        }
-
-        var fields = localized.GetLocalizableFields();
-        var type = localized.GetType();
-        foreach (var fieldName in fields)
-        {
-            if (translationDict.TryGetValue(fieldName, out var value))
-            {
-                var prop = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
-                if (prop != null && prop.PropertyType == typeof(string) && prop.CanWrite)
-                {
-                    prop.SetValue(localized, value);
-                }
-            }
-        }
-
+        LocalizedEntityFields.Restore(localized, await LocalizedTranslationRows.ReadAsync(
+            _translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name,
+            LocalizedEntityFields.LocalizableFieldsOf(localized), ct));
         return localized;
     }
 
@@ -275,20 +265,14 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
             return;
         }
 
-        var filter = EntityTranslationFilter.ByEntity(entity.Guid.Value);
-        var translations = await _translationStore.ReadAsync(filter.ToExpression(), ct: ct);
-        await _translationStore.DeleteAsync(translations, ct);
+        await LocalizedTranslationRows.DeleteAsync(_translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), ct);
     }
 
     #endregion
 
     #region Helpers
 
-    protected IReadOnlyList<string> GetLocalizableFieldsFromInstance()
-    {
-        var instance = _innerStore.CreateInstance();
-        return instance.GetLocalizableFields();
-    }
+    protected IReadOnlyList<string> GetLocalizableFieldsFromInstance() => _localizableFields;
 
     #endregion
 }

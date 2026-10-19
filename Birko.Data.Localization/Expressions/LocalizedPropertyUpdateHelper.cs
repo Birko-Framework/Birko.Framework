@@ -38,34 +38,6 @@ internal static class LocalizedPropertyUpdateHelper
     }
 
     /// <summary>
-    /// Throws if <paramref name="updates"/> increments one of <paramref name="localizableFields"/>. An increment
-    /// has no translation-row meaning, so it is refused on <b>every</b> culture — the same call must not pass or
-    /// fail depending on the request's culture.
-    /// </summary>
-    /// <exception cref="NotSupportedException">An increment targets a localizable field.</exception>
-    public static void RefuseIncrementOnLocalizableField<T>(PropertyUpdate<T> updates, IReadOnlyList<string> localizableFields)
-        where T : Data.Models.AbstractModel
-    {
-        if (updates.Assignments.Count == 0 || localizableFields.Count == 0)
-        {
-            return;
-        }
-
-        var fieldSet = new HashSet<string>(localizableFields);
-        foreach (var assignment in updates.Assignments)
-        {
-            var name = GetMemberName(assignment.Property);
-            if (name == null || !fieldSet.Contains(name) || !assignment.Match(set => false, increment => true))
-            {
-                continue;
-            }
-
-            throw new NotSupportedException(
-                $"Cannot increment '{typeof(T).Name}.{name}': it is localizable, and an increment cannot be expressed as a translation.");
-        }
-    }
-
-    /// <summary>
     /// Throws if <paramref name="updates"/> carries any increment. Called on the non-default-culture path that
     /// replays the update as read-modify-save: an increment on a non-localizable field there would lose its
     /// atomicity silently, while the identical call on the default culture stays atomic.

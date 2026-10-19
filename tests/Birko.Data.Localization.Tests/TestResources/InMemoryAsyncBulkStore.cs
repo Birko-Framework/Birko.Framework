@@ -23,6 +23,10 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
     /// <summary>False models a store that returns the new key without writing it onto the entity.</summary>
     public bool AssignsGuidOnCreate { get; set; } = true;
 
+    public int InitCalls { get; private set; }
+
+    public int CreateInstanceCalls { get; private set; }
+
     public Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
         => Task.FromResult(_data.TryGetValue(guid, out var item) ? item : null);
 
@@ -140,7 +144,15 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
         return UpdateAsync(data, processDelegate, ct).ContinueWith(_ => data.Guid!.Value);
     }
 
-    public Task InitAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task InitAsync(CancellationToken ct = default)
+    {
+        InitCalls++;
+        return Task.CompletedTask;
+    }
     public Task DestroyAsync(CancellationToken ct = default) => Task.CompletedTask;
-    public T CreateInstance() => new();
+    public T CreateInstance()
+    {
+        CreateInstanceCalls++;
+        return new();
+    }
 }

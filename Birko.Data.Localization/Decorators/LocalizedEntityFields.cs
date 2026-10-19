@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Birko.Data.Localization.Models;
 
 namespace Birko.Data.Localization.Decorators;
 
@@ -86,8 +87,46 @@ internal static class LocalizedEntityFields
     }
 
     /// <summary>
-    /// Reads the current value of every localizable <see cref="string"/> property named in
-    /// <paramref name="fields"/>. A field that is absent, not a string, or unreadable is skipped.
+    /// <paramref name="entity"/>'s <see cref="ILocalizable.GetLocalizableFields"/>, after checking that every name is a
+    /// public instance <see cref="string"/> property with a public getter and setter.
+    /// </summary>
+    /// <remarks>
+    /// SH-L079 (TASK-194): a name that was not such a property — a typo, a renamed property, a <c>decimal</c> — was
+    /// skipped by every read and write, so localization of that field silently did nothing while filters still
+    /// treated it as localized. It is refused instead (rule 41).
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">A declared name is not a public read/write string property.</exception>
+    public static IReadOnlyList<string> LocalizableFieldsOf(ILocalizable entity)
+    {
+        if (entity == null)
+        {
+            throw new ArgumentNullException(nameof(entity));
+        }
+
+        var type = entity.GetType();
+        var fields = entity.GetLocalizableFields();
+        foreach (var fieldName in fields)
+        {
+            LocalizableProperty(type, fieldName);
+        }
+
+        return fields;
+    }
+
+    /// <summary>
+    /// Validates the declaration of every entity a write is about to persist — called <b>before</b> the inner
+    /// store's write, so a refused declaration never leaves a committed row behind a failed call.
+    /// </summary>
+    public static void RequireValidDeclarations<T>(IEnumerable<T> entities) where T : ILocalizable
+    {
+        foreach (var entity in entities)
+        {
+            LocalizableFieldsOf(entity);
+        }
+    }
+
+    /// <summary>
+    /// Reads the current value of every localizable property named in <paramref name="fields"/>.
     /// </summary>
     /// <remarks>
     /// A <c>null</c> value is captured as <c>null</c> rather than omitted, so
@@ -106,13 +145,7 @@ internal static class LocalizedEntityFields
         var type = entity.GetType();
         foreach (var fieldName in fields)
         {
-            var prop = ResolveLocalizableProperty(type, fieldName);
-            if (prop == null || !prop.CanRead)
-            {
-                continue;
-            }
-
-            captured[fieldName] = prop.GetValue(entity) as string;
+            captured[fieldName] = LocalizableProperty(type, fieldName).GetValue(entity) as string;
         }
 
         return captured;
@@ -134,29 +167,34 @@ internal static class LocalizedEntityFields
         var type = entity.GetType();
         foreach (var pair in values)
         {
-            var prop = ResolveLocalizableProperty(type, pair.Key);
-            if (prop == null || !prop.CanWrite)
-            {
-                continue;
-            }
-
-            prop.SetValue(entity, pair.Value);
+            LocalizableProperty(type, pair.Key).SetValue(entity, pair.Value);
         }
     }
 
     /// <summary>
-    /// Resolves a localizable field name to a writable-or-readable public <see cref="string"/>
-    /// property, using the same guard the decorators' <c>ApplyTranslations</c> applies — so a name
-    /// this helper accepts is exactly a name a translation can be applied to.
+    /// The one definition of a localizable property: a public instance <see cref="string"/> property with a public
+    /// getter and setter, resolved on the most-derived type that declares the name (a property hidden with
+    /// <c>new</c> resolves to the hiding one rather than being ambiguous).
     /// </summary>
-    private static PropertyInfo? ResolveLocalizableProperty(Type type, string fieldName)
+    /// <exception cref="InvalidOperationException">The name is not such a property.</exception>
+    private static PropertyInfo LocalizableProperty(Type type, string fieldName)
     {
-        if (string.IsNullOrEmpty(fieldName))
+        PropertyInfo? prop = null;
+        for (var current = type; prop == null && current != null && !string.IsNullOrEmpty(fieldName); current = current.BaseType)
         {
-            return null;
+            prop = current.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
         }
 
-        var prop = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
-        return prop != null && prop.PropertyType == typeof(string) ? prop : null;
+        if (prop == null
+            || prop.PropertyType != typeof(string)
+            || prop.GetMethod?.IsPublic != true
+            || prop.SetMethod?.IsPublic != true)
+        {
+            throw new InvalidOperationException(
+                $"{type.Name}.GetLocalizableFields() names '{fieldName}', which is not a public read/write string "
+                + "property; a localizable field must be one.");
+        }
+
+        return prop;
     }
 }

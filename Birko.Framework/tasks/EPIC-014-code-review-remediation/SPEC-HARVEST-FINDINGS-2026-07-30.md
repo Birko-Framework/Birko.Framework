@@ -1703,7 +1703,7 @@ The branch is chosen by loop index (`if (i == 0)`) rather than by whether `order
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:153`
 
-**Verdict: CONFIRMED — fixed by [[TASK-168]] (2026-10-19).** Writes stamped `entity.GetType().Name` while `ResolveMatchingGuids` queries `typeof(T).Name`; a subclass instance in a base-type store was invisible to every localized filter (measured: 0 rows). Rows are now stamped with the store type in the one producer `LocalizedTranslationRows.Save` / `SaveAsync`, and an upsert that finds a row under the old name rewrites it (`LocalizedTranslationRows.cs:106/145`). Tests: `LocalizationMediumFindingsTests` 2 tests (sync + async), red with the subclass name stamped.
+**Verdict: CONFIRMED — fixed by [[TASK-168]] (2026-10-19).** Writes stamped `entity.GetType().Name` while `ResolveMatchingGuids` queries `typeof(T).Name`; a subclass instance in a base-type store was invisible to every localized filter (measured: 0 rows). Rows are now stamped with the store type in the one producer `LocalizedTranslationRows.Save` / `SaveAsync`, and an upsert that found a row under the old name rewrote it — superseded by [[TASK-194]] (SH-L080): rows are now matched on the four-part key, so a row under another type name is left alone. Tests: `LocalizationMediumFindingsTests` 2 tests (sync + async), red with the subclass name stamped.
 
 SaveTranslations stamps EntityType = entity.GetType().Name (242) while ResolveMatchingGuids filters on typeof(T).Name (153). When T is a base type of the stored instances (or the store returns a subclass), no row matches, BuildGuidFilter gets an empty set and returns `x => false`, so a filtered read/Count silently returns zero rows - while ApplyTranslations, which filters by GUID+culture only, still translates the same entities on an unfiltered read. Same at LocalizedBulkStoreWrapper.cs:266/358, AsyncLocalizedStoreWrapper.cs:147/236, AsyncLocalizedBulkStoreWrapper.cs:276/368.
 
@@ -5061,11 +5061,15 @@ For a OneToOne relationship the provider's result is reduced with `related.First
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:107`
 
+**Verdict: CONFIRMED — fixed by [[TASK-194]] (2026-10-19).** `Init` / `Destroy` forwarded to the inner store only, so a destroy left every translation row behind. `Destroy` / `DestroyAsync` now destroy the inner store and then delete this entity type's rows (`LocalizedStoreWrapper.cs:168`, bulk `:315`, async `:145` / `:287`, through `LocalizedTranslationRows.DeleteType`) — scoped to the type, because the translation store is shared — and `Init` initialises the translation store too. Tests: `LocalizationLowFindingsTests` 4 tests, red with the delete or the init removed.
+
 Init/Destroy (106-107) forward to the inner store only. Destroy() therefore wipes the entity store while the translation store keeps every row for entities that no longer exist - a leak with no reachable cleanup path, and one that resurfaces as bogus translations when GUIDs are re-seeded (fixture data with fixed GUIDs). Same at LocalizedBulkStoreWrapper.cs:230, AsyncLocalizedStoreWrapper.cs:109, AsyncLocalizedBulkStoreWrapper.cs:238.
 
 #### SH-L079 — A GetLocalizableFields name that is not a writable string property is silently ignored everywhere
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:216`
+
+**Verdict: CONFIRMED — fixed by [[TASK-194]] (2026-10-19, decided by the user 2026-10-19: refuse every bad name).** A declared name that was not a public read/write string property was skipped by every read and write. `LocalizedEntityFields.LocalizableFieldsOf` (`LocalizedEntityFields.cs:99`) now refuses it with `InvalidOperationException` naming type and field — in every wrapper's constructor (`LocalizedStoreWrapper.cs:37` and its three twins), so at wiring on every culture, and for an entity's own declaration before the inner store writes it (close review: validating after the write left a committed row behind the exception). TASK-498's increment refusal could no longer fire (a localizable field is now a string) and was removed (rule 53); its two tests were inverted into construction refusals (rule 56). Tests: `LocalizationLowFindingsTests` 3 tests plus the 2 inverted ones (4 cases), red without the check.
 
 ApplyTranslations requires prop != null && PropertyType == typeof(string) && CanWrite and otherwise does nothing (216-219); SaveTranslations skips on prop == null || type mismatch (248). ILocalizable's doc says these must be string properties but nothing validates it - a typo or renamed property disables localization for that field with no exception or log, while the same name still participates in filter/order-by matching (fieldSet.Contains works on the string alone), so a filter on it is treated as localized and resolves against rows that can never exist.
 
@@ -5073,11 +5077,15 @@ ApplyTranslations requires prop != null && PropertyType == typeof(string) && Can
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:293`
 
+**Verdict: CONFIRMED — fixed by [[TASK-194]] (2026-10-19, decided by the user 2026-10-19: the four-part key).** The read lookup (`ByEntityAndCulture`), the upsert (`ByEntityFieldAndCulture`) and the cascade delete (`ByEntity`) left `EntityType` out. The in-process route the finding names (rows under the runtime type) was already closed by SH-M072; what remained was a row of another type with the same GUID being applied, overwritten or deleted. Every read, upsert and delete now goes through `LocalizedTranslationRows.Key(...)` with the type (`LocalizedTranslationRows.cs:177`); TASK-168's rewrite of a row found under another type name is gone. Rows written before TASK-168 under a subclass's runtime name are no longer found; no consumer has any (none calls the wrappers), so no migration. Tests: `LocalizationLowFindingsTests` 4 tests, red with the type dropped from the key.
+
 EntityTranslationModel documents each row as one (EntityGuid, EntityType, FieldName, Culture) combination, but DeleteTranslations uses ByEntity(guid) (293) and ApplyTranslations uses ByEntityAndCulture (196), both leaving EntityType unconstrained, so any row sharing the GUID is applied or deleted regardless of type. Reachable in-process, not only via GUID collision: because writes stamp the runtime type name while resolution uses typeof(T).Name, one entity can own rows under two EntityType values, and ApplyTranslations applies whichever is enumerated last.
 
 #### SH-L081 — LocalizedOrderByHelper reimplements OrderByHelper with divergent semantics
 
 `../Birko.Data.Localization/Expressions/LocalizedOrderByHelper.cs:57`
+
+**Verdict: CONFIRMED-NARROWER — fixed in part by [[TASK-194]] (2026-10-19, decided by the user 2026-10-19: throw like `OrderByHelper`).** Of the three divergences, the null guard was SH-M071 (fixed by TASK-168). An unknown property is now refused with `ArgumentException` wherever it appears, before the trivial-input return, and names resolve case-insensitively as `Expression.Property` does in `OrderByHelper` (`LocalizedOrderByHelper.cs:54`); the M071 test was inverted from "skipped" to "refused". Kept deliberately: NULL placement (the backends disagree among themselves — NULLs last on PostgreSQL, first elsewhere — so no in-memory choice matches "the backend") and the culture collation SH-M080 added. Tests: `LocalizationLowFindingsTests` 2 tests plus the inverted M071 test, red with the unknown property skipped.
 
 Birko.Data.Stores.OrderByHelper.ApplyTo(IEnumerable) already does dynamic in-memory ordering; this copy diverges in three ways - accumulator guarded by loop index rather than null (the NRE above), a missing property skipped instead of throwing from Expression.Property, and SafeObjectComparer instead of the default comparer. Consequence: the same OrderBy over the same data sorts differently on the default culture (backend/OrderByHelper, backend NULL placement - NULLs last on PostgreSQL) versus a non-default one (this helper, NULLs always first, ordinal fallback for mismatched types).
 
@@ -5085,11 +5093,15 @@ Birko.Data.Stores.OrderByHelper.ApplyTo(IEnumerable) already does dynamic in-mem
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:304`
 
+**Verdict: CONFIRMED-NARROWER — fixed by [[TASK-194]] (2026-10-19).** Every filter, order-by and update inspection called `_innerStore.CreateInstance()` again. The list is now read and validated once, in the constructor (`_localizableFields`). The "split source of truth" is kept on purpose: writes and reads of an entity use that entity's own declaration, which a subclass may extend, and both sides are now validated by the same check. Tests: `LocalizationLowFindingsTests` 1 test counting `CreateInstance` calls, red with the per-call read restored.
+
 Every RewriteFilter, ReferencesLocalizedField and TouchesLocalizableField call does `_innerStore.CreateInstance().GetLocalizableFields()` - up to three allocations plus a CreateInstance round-trip per read, and CreateInstance is an inner-store extension point that may do more than `new`. It also splits the source of truth: filter/order/update decisions use the fresh instance's list while ApplyTranslations/SaveTranslations use the list from the entity being processed (209, 240), so an instance-dependent ILocalizable is filtered by one field set and translated by another.
 
 #### SH-L083 — `_ => null!` in the operator switch is a suppression that is genuinely null
 
 `../Birko.Data.Localization/Expressions/LocalizedExpressionVisitor.cs:167`
+
+**Verdict: CONFIRMED — fixed by [[TASK-194]] (2026-10-19).** The binary switch is now `Func<string?, bool>?` with `_ => null` (`LocalizedExpressionVisitor.cs:281`), like the method-call switch below it. No behaviour change; covered by the existing extraction tests and a clean build.
 
 The switch is typed `Func<string, bool>` (non-nullable) and its default arm returns `null!`, which the next line null-checks (`if (predicate != null)`). The project bans CS8600-CS8625 and allows `!` only when provably safe; here the value provably IS null for every operator other than Equal/NotEqual. The method-call switch below (191) does it correctly with `Func<string, bool>?` and `_ => null`, so the fix already exists in the same method.
 
@@ -5097,11 +5109,15 @@ The switch is typed `Func<string, bool>` (non-nullable) and its default arm retu
 
 `../Birko.Data.Localization/Expressions/LocalizedExpressionVisitor.cs:45`
 
+**Verdict: CONFIRMED — fixed by [[TASK-194]] (2026-10-19).** `LocalizedFieldCondition.ValuePredicate` is now `Func<string?, bool>` (`LocalizedExpressionVisitor.cs:45`), matching the null guards in its bodies. Tests: `LocalizationLowFindingsTests` 1 contract pin (a predicate given `null` answers false): it passes either way, the type change is checked by the compiler.
+
 `Func<string, bool> ValuePredicate` is invoked as condition.ValuePredicate(t.Value) (LocalizedStoreWrapper.cs:165 and the three sibling wrappers). The Contains/StartsWith/EndsWith predicates are written `v => v != null && ...` (188-190), i.e. the author expects a null argument, and a backend hydrating a NULL column into the non-nullable EntityTranslationModel.Value will supply one. It should be `Func<string?, bool>`; as written the null-tolerance is invisible to callers and to the nullable analyzer.
 
 #### SH-L085 — README documents PropertyUpdate and Delete(filter) as delegated straight to the inner store; neither is
 
 `../Birko.Data.Localization/Decorators/LocalizedBulkStoreWrapper.cs:181`
+
+**Verdict: CONFIRMED — fixed by [[TASK-168]]'s README rewrite and [[TASK-194]] (2026-10-19).** TASK-168 replaced the "delegated straight to the inner store" sentence for `PropertyUpdate`; TASK-194 adds that `Delete(filter)` reads, deletes and then cascades to the translations. Documentation only.
 
 README's "Filter-Based Bulk Operations" section states the wrappers delegate PropertyUpdate and Delete(filter) directly to the inner store. In code, Update(filter, PropertyUpdate) intercepts and converts to an Action<T> whenever the update touches a localizable field on a non-default culture (181-194), and Delete(filter) never uses the native filter-delete - it reads the matching set and calls Delete(IEnumerable) so translations cascade (206-214). A consumer trusting the README expects native SET/DELETE performance and no translation side effects, and gets the opposite.
 
@@ -5109,11 +5125,15 @@ README's "Filter-Based Bulk Operations" section states the wrappers delegate Pro
 
 `../Birko.Data.Localization/Expressions/LocalizedOrderByHelper.cs:103`
 
+**Verdict: CONFIRMED — fixed by [[TASK-194]] (2026-10-19).** `ApplyInMemoryPaging` passed negatives to `Skip` / `Take`, so `limit = -1` returned an empty page. It now throws `ArgumentOutOfRangeException` naming the argument (`LocalizedOrderByHelper.cs:124`). The pushed-down path still hands negatives to the inner store, whose behaviour is the backend's. Tests: `LocalizationLowFindingsTests` 3 cases (sync offset, sync limit, async), red without the check.
+
 ApplyInMemoryPaging applies Skip/Take unvalidated, so offset=-5 skips nothing and limit=-1 yields an empty list. The same call with a non-localized orderBy goes to the inner store instead, where a negative limit either errors or is ignored per backend - so identical arguments produce an empty page on one culture and rows (or an exception) on another, with no validation or diagnostic at either site.
 
 #### SH-L087 — BuildGuidFilter inlines the whole GUID set into one Contains with no chunking
 
 `../Birko.Data.Localization/Expressions/LocalizedFilterHelper.cs:38`
+
+**Verdict: CONFIRMED — handed to [[TASK-681]] (2026-10-19, [[TASK-194]]).** `BuildGuidFilter` (`LocalizedFilterHelper.cs:38`) still inlines every matched GUID into one `Contains`; nothing in the framework chunks `IN` lists. TASK-681 reworks this resolution into a translation-store query, which is where the GUID list can become a sub-query instead of a parameter list.
 
 The matched GUIDs become a single List<Guid> constant used in a Contains call, which SQL backends render as one IN list. A localized condition matching more than ~2100 entities exceeds MSSQL's parameter limit (and MySQL's packet size), so a broad localized search fails at the driver rather than degrading. The remarks (19-25) acknowledge this as best-effort, but nothing bounds the set - ResolveMatchingGuids can return every row of the translation slice.
 

@@ -86,16 +86,17 @@ public class LocalizationMediumFindingsTests
     // ---------------------------------------------------------------- SH-M071
 
     [Fact]
-    public void SH_M071_An_unknown_first_order_by_field_is_skipped_not_a_crash()
+    public void SH_M071_An_unknown_first_order_by_field_is_refused_not_a_crash()
     {
+        // Inverted by TASK-194 (SH-L081, decided by the user): first a crash, then skipped by TASK-168, now refused
+        // the way OrderByHelper refuses it on the path that is not translated.
         SeedWithSlovakName("Bed", "Postel", "B");
         SeedWithSlovakName("Armchair", "Kreslo", "A");
 
         var orderBy = OrderBy<TestLocalizableModel>.ByName("NoSuchProperty").ThenBy(x => x.Name);
         var act = () => _bulk.Read(null, orderBy, null, null).Select(x => x.Name).ToList();
 
-        act.Should().NotThrow();
-        act().Should().Equal("Kreslo", "Postel");
+        act.Should().Throw<ArgumentException>().WithMessage("*NoSuchProperty*");
     }
 
     // ---------------------------------------------------------------- SH-M080

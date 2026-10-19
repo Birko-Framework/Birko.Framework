@@ -42,7 +42,7 @@ public class LocalizedFieldCondition
     /// A predicate that tests a translation value string.
     /// Built from the original expression (e.g., x.Name == "Foo" → value == "Foo").
     /// </summary>
-    public Func<string, bool> ValuePredicate { get; init; } = _ => true;
+    public Func<string?, bool> ValuePredicate { get; init; } = _ => true;
 }
 
 /// <summary>
@@ -274,11 +274,11 @@ public static class LocalizedExpressionAnalyzer
 
             if (fieldName != null && constantValue != null)
             {
-                Func<string, bool> predicate = binary.NodeType switch
+                Func<string?, bool>? predicate = binary.NodeType switch
                 {
                     ExpressionType.Equal => v => v == constantValue,
                     ExpressionType.NotEqual => v => v != constantValue,
-                    _ => null!
+                    _ => null
                 };
 
                 if (predicate != null)
@@ -303,7 +303,7 @@ public static class LocalizedExpressionAnalyzer
                     : methodCall.Method.Name == "Contains" ? StringComparison.Ordinal : StringComparison.CurrentCulture;
                 if (argValue is string strArg && comparison is StringComparison cmp)
                 {
-                    Func<string, bool>? predicate = methodCall.Method.Name switch
+                    Func<string?, bool>? predicate = methodCall.Method.Name switch
                     {
                         "Contains" => v => v != null && v.Contains(strArg, cmp),
                         "StartsWith" => v => v != null && v.StartsWith(strArg, cmp),

@@ -13,18 +13,26 @@ using Xunit;
 namespace Birko.Data.Localization.Tests;
 
 /// <summary>
-/// TASK-498 — an increment on a localizable field has no translation-row meaning, so the wrappers refuse it,
-/// on <b>every</b> culture: before this rule the default culture took the native path and a non-default one the
-/// read-modify-write fallback, so the same call would have passed or failed depending on the request's culture.
+/// TASK-498 — an increment has no translation-row meaning. Since TASK-194 (SH-L079) a localizable field must be a
+/// string, so a model that declares a numeric one is refused when the wrapper is built, on every culture, and an
+/// increment can never target a localizable field; the increment refusal that existed for it is gone (rule 53).
 /// An increment on a field that is not localizable passes through untouched.
 /// </summary>
 public class LocalizedPropertyUpdateIncrementTests
 {
     public class PricedModel : AbstractModel, ILocalizable
     {
-        public decimal Price { get; set; }   // localizable: a per-culture price
         public int Stock { get; set; }       // not localizable
         public string Label { get; set; } = string.Empty;   // localizable
+
+        public IReadOnlyList<string> GetLocalizableFields() => new[] { nameof(Label) };
+    }
+
+    /// <summary>Declares a numeric field localizable — what TASK-498 refused per increment, now refused outright.</summary>
+    public class MisdeclaredPricedModel : AbstractModel, ILocalizable
+    {
+        public decimal Price { get; set; }
+        public string Label { get; set; } = string.Empty;
 
         public IReadOnlyList<string> GetLocalizableFields() => new[] { nameof(Price), nameof(Label) };
     }
@@ -44,25 +52,23 @@ public class LocalizedPropertyUpdateIncrementTests
     [Theory]
     [InlineData("en")]
     [InlineData("sk")]
-    public void Sync_Increment_On_A_Localizable_Field_Is_Refused(string culture)
+    public void Sync_A_Numeric_Localizable_Field_Is_Refused_At_Construction(string culture)
     {
-        var wrapper = SyncWrapper(new InMemoryBulkStore<PricedModel>(), culture);
+        var act = () => new LocalizedBulkStoreWrapper<IBulkStore<MisdeclaredPricedModel>, MisdeclaredPricedModel>(
+            new InMemoryBulkStore<MisdeclaredPricedModel>(), new InMemoryBulkStore<EntityTranslationModel>(), Context(culture));
 
-        var act = () => wrapper.Update(x => x.Stock > 0, new PropertyUpdate<PricedModel>().Increment(x => x.Price, 1m));
-
-        act.Should().Throw<NotSupportedException>().WithMessage("*Price*localizable*");
+        act.Should().Throw<InvalidOperationException>().WithMessage("*'Price'*string*");
     }
 
     [Theory]
     [InlineData("en")]
     [InlineData("sk")]
-    public async Task Async_Increment_On_A_Localizable_Field_Is_Refused(string culture)
+    public void Async_A_Numeric_Localizable_Field_Is_Refused_At_Construction(string culture)
     {
-        var wrapper = AsyncWrapper(new InMemoryAsyncBulkStore<PricedModel>(), culture);
+        var act = () => new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<MisdeclaredPricedModel>, MisdeclaredPricedModel>(
+            new InMemoryAsyncBulkStore<MisdeclaredPricedModel>(), new InMemoryAsyncBulkStore<EntityTranslationModel>(), Context(culture));
 
-        var act = () => wrapper.UpdateAsync(x => x.Stock > 0, new PropertyUpdate<PricedModel>().Increment(x => x.Price, 1m));
-
-        await act.Should().ThrowAsync<NotSupportedException>().WithMessage("*Price*localizable*");
+        act.Should().Throw<InvalidOperationException>().WithMessage("*'Price'*string*");
     }
 
     /// <summary>

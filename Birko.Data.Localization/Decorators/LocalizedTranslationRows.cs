@@ -10,19 +10,22 @@ using System.Threading.Tasks;
 namespace Birko.Data.Localization.Decorators;
 
 /// <summary>
-/// The one producer for writing an entity's translation rows, called by all four wrappers (TASK-168).
+/// The one producer for reading, writing and deleting an entity's translation rows, called by all four wrappers
+/// (TASK-168, TASK-194).
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each wrapper used to carry its own copy of this loop, so SH-M072, SH-M073 and SH-M076 were each present
+/// Each wrapper used to carry its own copy of these loops, so SH-M072, SH-M073 and SH-M076 were each present
 /// four times. The rules, stated once:
 /// </para>
 /// <list type="bullet">
+/// <item><description><b>A row is identified by the four-part key</b> <c>(EntityGuid, EntityType, FieldName,
+/// Culture)</c> the model documents: every read, upsert and delete here filters on all of the parts it knows, the
+/// entity type included (SH-L080). A row stored under another type name belongs to another store.</description></item>
 /// <item><description><b>Rows are keyed by the GUID the caller passes</b>, which on a create is the one the
 /// inner store <i>returned</i> — a store need not write it back onto the entity (SH-M076).</description></item>
-/// <item><description><b><c>EntityType</c> is the store's type</b> (<c>typeof(T).Name</c>), because that is
-/// what every filter queries; the runtime type of a subclass instance made its rows unfindable (SH-M072). A
-/// row found under another name is rewritten.</description></item>
+/// <item><description><b><c>EntityType</c> is the store's type</b> (<see cref="EntityTypeOf{T}"/>), because that is
+/// what every filter queries; the runtime type of a subclass instance made its rows unfindable (SH-M072).</description></item>
 /// <item><description><b>A <c>null</c> value removes the row</b>, so the read falls back to the base value;
 /// skipping it left the old translation to be re-applied on the next read (SH-M073). An empty string is a
 /// value and is stored.</description></item>
@@ -41,10 +44,10 @@ internal static class LocalizedTranslationRows
 
     /// <summary>
     /// The values of every localizable <see cref="string"/> property of <paramref name="entity"/>, keyed by
-    /// field name — what a whole-entity write persists.
+    /// field name — what a whole-entity write persists. The declaration is validated (SH-L079).
     /// </summary>
     public static Dictionary<string, string?> ValuesOf<T>(T entity) where T : class, ILocalizable
-        => LocalizedEntityFields.Capture(entity, entity.GetLocalizableFields());
+        => LocalizedEntityFields.Capture(entity, LocalizedEntityFields.LocalizableFieldsOf(entity));
 
     /// <summary>
     /// The fields whose value differs between <paramref name="before"/> and <paramref name="after"/>, with
@@ -66,19 +69,18 @@ internal static class LocalizedTranslationRows
 
     /// <summary>
     /// <paramref name="culture"/>'s translation of each of <paramref name="fields"/> for one entity, keyed by
-    /// field name; a field with no row is absent. Used to show a filter-based update action the same values a
-    /// read would.
+    /// field name; a field with no row is absent. What a read applies, and what a filter-based update action sees.
     /// </summary>
     public static Dictionary<string, string?> Read(
-        IBulkStore<EntityTranslationModel> store, Guid entityGuid, string culture, IReadOnlyList<string> fields)
-        => ToDictionary(store.Read(EntityTranslationFilter.ByEntityAndCulture(entityGuid, culture).ToExpression()), fields);
+        IBulkStore<EntityTranslationModel> store, Guid entityGuid, string entityType, string culture, IReadOnlyList<string> fields)
+        => ToDictionary(store.Read(Key(entityGuid, entityType, culture).ToExpression()), fields);
 
     /// <inheritdoc cref="Read"/>
     public static async Task<Dictionary<string, string?>> ReadAsync(
-        IAsyncBulkStore<EntityTranslationModel> store, Guid entityGuid, string culture, IReadOnlyList<string> fields,
-        CancellationToken ct)
+        IAsyncBulkStore<EntityTranslationModel> store, Guid entityGuid, string entityType, string culture,
+        IReadOnlyList<string> fields, CancellationToken ct)
         => ToDictionary(await store.ReadAsync(
-            EntityTranslationFilter.ByEntityAndCulture(entityGuid, culture).ToExpression(), null, null, null, ct), fields);
+            Key(entityGuid, entityType, culture).ToExpression(), null, null, null, ct), fields);
 
     public static void Save(
         IBulkStore<EntityTranslationModel> store,
@@ -90,8 +92,7 @@ internal static class LocalizedTranslationRows
         var now = DateTime.UtcNow;
         foreach (var pair in values)
         {
-            var existing = store.Read(
-                EntityTranslationFilter.ByEntityFieldAndCulture(entityGuid, pair.Key, culture).ToExpression()).ToList();
+            var existing = store.Read(Key(entityGuid, entityType, culture, pair.Key).ToExpression()).ToList();
 
             if (pair.Value == null)
             {
@@ -109,7 +110,6 @@ internal static class LocalizedTranslationRows
                 continue;
             }
 
-            row.EntityType = entityType;
             row.Value = pair.Value;
             row.UpdatedAt = now;
             store.Update(row);
@@ -129,8 +129,7 @@ internal static class LocalizedTranslationRows
         foreach (var pair in values)
         {
             var existing = (await store.ReadAsync(
-                EntityTranslationFilter.ByEntityFieldAndCulture(entityGuid, pair.Key, culture).ToExpression(),
-                null, null, null, ct)).ToList();
+                Key(entityGuid, entityType, culture, pair.Key).ToExpression(), null, null, null, ct)).ToList();
 
             if (pair.Value == null)
             {
@@ -148,12 +147,45 @@ internal static class LocalizedTranslationRows
                 continue;
             }
 
-            row.EntityType = entityType;
             row.Value = pair.Value;
             row.UpdatedAt = now;
             await store.UpdateAsync(row, ct: ct);
         }
     }
+
+    /// <summary>Deletes every row of one entity, in every culture.</summary>
+    public static void Delete(IBulkStore<EntityTranslationModel> store, Guid entityGuid, string entityType)
+        => store.Delete(store.Read(Key(entityGuid, entityType).ToExpression()).ToList());
+
+    /// <inheritdoc cref="Delete"/>
+    public static async Task DeleteAsync(
+        IAsyncBulkStore<EntityTranslationModel> store, Guid entityGuid, string entityType, CancellationToken ct)
+        => await store.DeleteAsync(
+            (await store.ReadAsync(Key(entityGuid, entityType).ToExpression(), null, null, null, ct)).ToList(), ct);
+
+    /// <summary>
+    /// Deletes every row of one entity type — what destroying that type's store leaves behind (SH-L078). Scoped to
+    /// the type, because the translation store is shared by every localized store.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="entityType"/> is null or empty: the filter reads a null type as "any type", which would delete
+    /// every row of every store (rules 2 and 5).
+    /// </exception>
+    public static void DeleteType(IBulkStore<EntityTranslationModel> store, string entityType)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(entityType);
+        store.Delete(EntityTranslationFilter.ByEntityType(entityType).ToExpression());
+    }
+
+    /// <inheritdoc cref="DeleteType"/>
+    public static Task DeleteTypeAsync(IAsyncBulkStore<EntityTranslationModel> store, string entityType, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(entityType);
+        return store.DeleteAsync(EntityTranslationFilter.ByEntityType(entityType).ToExpression(), ct);
+    }
+
+    private static EntityTranslationFilter Key(Guid entityGuid, string entityType, string? culture = null, string? fieldName = null)
+        => new() { EntityGuid = entityGuid, EntityType = entityType, Culture = culture, FieldName = fieldName };
 
     private static EntityTranslationModel NewRow(
         Guid entityGuid, string entityType, string fieldName, string culture, string value, DateTime now) => new()

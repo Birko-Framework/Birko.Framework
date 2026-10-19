@@ -21,6 +21,10 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
     /// <summary>False models a store that returns the new key without writing it onto the entity.</summary>
     public bool AssignsGuidOnCreate { get; set; } = true;
 
+    public int InitCalls { get; private set; }
+
+    public int CreateInstanceCalls { get; private set; }
+
     public T? Read(Guid guid) => _data.TryGetValue(guid, out var item) ? item : null;
 
     public T? Read(Expression<Func<T, bool>>? filter = null)
@@ -117,7 +121,11 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
         return data.Guid.Value;
     }
 
-    public void Init() { }
+    public void Init() => InitCalls++;
     public void Destroy() { }
-    public T CreateInstance() => new();
+    public T CreateInstance()
+    {
+        CreateInstanceCalls++;
+        return new();
+    }
 }
