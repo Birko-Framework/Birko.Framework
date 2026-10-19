@@ -14,7 +14,7 @@ Entity-level localization for Birko.Data stores. Provides store decorator wrappe
 
 1. Entity stores the default-language values in its own fields
 2. Translations for other languages are stored in a separate `EntityTranslationModel` store
-3. On **read**, the wrapper checks the current culture — if it differs from the default, it fetches translations and overwrites the entity's localizable fields
+3. On **read**, the wrapper checks the current culture — if it differs from the default, it fetches translations and overwrites the entity's localizable fields (on a detached copy). A list is translated with one translation query per 500 entities, not one per entity
 4. On **create/update**, the wrapper persists translations for the current culture (if non-default). Setting a localizable field to `null` removes that field's translation, so reads fall back to the base value; an empty string is stored as a translation
 5. On **delete**, all associated translations are removed
 6. `Init` initialises the translation store too; `Destroy` destroys the entity store and deletes this entity type's translation rows (only this type's: the translation store is shared)
@@ -23,7 +23,7 @@ Every name `GetLocalizableFields()` returns must be a public `string` property w
 
 ## Filters on localizable fields
 
-Under a non-default culture, a filter condition on a localizable field is answered from the translation rows. Supported: `==`, `!=`, `Contains`, `StartsWith` and `EndsWith` on the field itself, against a value (a `StringComparison` argument is honoured), joined by `&&`. Ordering by a localizable field sorts the translated text in memory, collated with the current culture; an order-by naming a property that doesn't exist, or a negative offset or limit, is refused.
+Under a non-default culture, a filter condition on a localizable field is answered from the translation rows. Supported: `==`, `!=`, `Contains`, `StartsWith` and `EndsWith` on the field itself, against a value (a `StringComparison` argument is honoured), joined by `&&`. Ordering by a localizable field sorts the translated text in memory, collated with the current culture — so it loads every matching entity, not just the page; an order-by naming a property that doesn't exist, or a negative offset or limit, is refused.
 
 Anything else that reads a localizable field throws `NotSupportedException` instead of silently testing the default-culture column: a condition inside `||` or `!`, a chained call (`x.Name.ToLower()`), a static call (`string.IsNullOrEmpty(x.Name)`) or a comparison with another column. `x.Name == null` / `!= null` is the one exception: it tests the base column.
 

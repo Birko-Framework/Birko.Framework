@@ -1,7 +1,7 @@
 ---
 id: EPIC-021
 # status — one of: planned, in-progress, done, cancelled
-status: planned
+status: in-progress
 created: 2026-10-19
 owner: ai
 affects: [Birko.Data.Localization]

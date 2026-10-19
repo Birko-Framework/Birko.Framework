@@ -240,6 +240,11 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Localized list reads fetch translations in batches (2026-10-19)
+[[TASK-679]]. A list read on a non-default culture costs one translation read per 500 entities, not one per entity.
+A page of 48 products cost 48 extra queries. `LocalizedTranslationRows.ReadMany` + `Apply` serve list reads, the
+in-memory sort and single reads. Sorting by a translated field still loads the whole matching set (stated limit). The
+batch size is unmeasured on SQL until [[TASK-680]] maps the translation model.
 ### Localization low triage: declarations validated, the four-part key, Destroy cleans up (2026-10-19)
 [[TASK-194]]. 10 low findings: 8 confirmed, 2 narrower; SH-L087 handed to [[TASK-681]]. Decided by the user:
 - A localizable field must be a public read/write string property. Anything else throws when the wrapper is built.
@@ -319,13 +324,6 @@ stores keep a read-check-write default. A lost rotation fails only that request 
 elsewhere (e.g. `github:42`) the server's own token pair. The refresh token renews through the normal grant, with
 rotation and reuse detection. Extra claims ride on `RefreshTokenRecord.Claims` (new; stores must persist it), so every
 refresh re-issues them. Registered claims are refused.
-### Caching low triage: TTLs validated, nulls on Redis, a fenced lock (2026-10-18)
-[[TASK-184]]. 17 low findings: 16 confirmed (2 already fixed by TASK-169), 1 narrower. Decided by the user:
-- A zero or negative TTL is refused on every backend (`CacheEntryOptions.Validate`).
-- Redis stores a null and returns it as a hit, as MemoryCache does.
-
-Every cache throws after `Dispose`. MemoryCache takes an optional `TimeProvider`. The Redis stampede lock releases
-only its own token. SQL cache keys name the entity type.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

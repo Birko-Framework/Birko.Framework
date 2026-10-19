@@ -400,23 +400,32 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
             return entity;
         }
 
-        // SH-H016: never write to the instance the inner store returned.
-        var localized = LocalizedEntityFields.Detach(entity);
-        LocalizedEntityFields.Restore(localized, LocalizedTranslationRows.Read(
-            _translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name,
-            LocalizedEntityFields.LocalizableFieldsOf(localized)));
-        return localized;
+        // SH-H016: Apply returns a detached copy, never the instance the inner store returned.
+        return LocalizedTranslationRows.Apply(entity, LocalizedTranslationRows.ReadMany(
+            _translationStore, new[] { entity.Guid.Value }, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name));
     }
 
     /// <summary>
-    /// <see cref="Localize"/> over a materialized list, returning a new list so the caller never holds
-    /// the inner store's own instances.
+    /// Replaces each entity of <paramref name="entities"/>, in place, by its translated detached copy, so the caller
+    /// never holds the inner store's own instances.
     /// </summary>
+    /// <remarks>
+    /// TASK-679: one translation read per <see cref="LocalizedTranslationRows.ReadBatchSize"/> entities, not one per
+    /// entity — a page of 48 products used to cost 48 extra queries.
+    /// </remarks>
     protected List<T> LocalizeAll(List<T> entities)
     {
+        if (!IsNonDefaultCulture() || entities.Count == 0)
+        {
+            return entities;
+        }
+
+        var rows = LocalizedTranslationRows.ReadMany(
+            _translationStore, entities.Where(e => e.Guid.HasValue).Select(e => e.Guid!.Value),
+            LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name);
         for (var i = 0; i < entities.Count; i++)
         {
-            entities[i] = Localize(entities[i]);
+            entities[i] = LocalizedTranslationRows.Apply(entities[i], rows);
         }
         return entities;
     }

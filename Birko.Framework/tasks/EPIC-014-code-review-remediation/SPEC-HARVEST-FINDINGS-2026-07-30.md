@@ -1781,7 +1781,7 @@ SafeObjectComparer.Compare uses `comparable.CompareTo(y)`, which for string is c
 
 `../Birko.Data.Localization/Decorators/LocalizedBulkStoreWrapper.cs:106`
 
-**Verdict: CONFIRMED — handed to [[TASK-679]] (2026-10-19, [[TASK-168]]).** `LocalizedBulkStoreWrapper.cs:86` (async `:84`) reads the whole matching set with no limit, then `Localize` queries once per entity. TASK-679 batches the per-entity reads; the unbounded read is inherent to sorting translated text in memory and goes into the spec as a stated limit.
+**Verdict: CONFIRMED — handed to [[TASK-679]] (2026-10-19, [[TASK-168]]).** `LocalizedBulkStoreWrapper.cs:86` (async `:84`) reads the whole matching set with no limit, then `Localize` queries once per entity. TASK-679 batches the per-entity reads; the unbounded read is inherent to sorting translated text in memory and goes into the spec as a stated limit. **Fixed by [[TASK-679]] (2026-10-19):** list reads cost one translation read per 500 entities (`LocalizedTranslationRows.ReadMany`); the whole-set load is stated in the spec. Tests: `LocalizationBatchedReadTests`, 5 red with the per-entity loop restored.
 
 `_innerStore.Read(rewritten)` runs with no limit/offset, then ApplyTranslations runs per entity, each issuing its own _translationStore.Read (313). Sorting a 100k-row catalogue by localized Name materializes all 100k entities and fires 100k translation queries before Skip/Take discards all but one page; the caller's limit/offset - the only bound available - is deliberately dropped. Same at AsyncLocalizedBulkStoreWrapper.cs:113-117; the per-entity query also applies to the other bulk read paths (72-81, 97-101).
 

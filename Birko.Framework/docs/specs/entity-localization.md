@@ -1,6 +1,6 @@
 ---
 area: entity-localization
-generated-at: 1d2dfb16af4137126112752651bafd3777cddac6
+generated-at: 451c62884ec51420f5b68b6a970f9b7178e0fa00
 generated-on: 2026-10-19
 sources:
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
@@ -23,7 +23,8 @@ shaped-by: [FEATURE-014]
 # Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
 # task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
-# 2026-10-19 regens (TASK-168, TASK-194): the evidence pass was not re-run; FEATURE-014, both tasks' feature, is already listed.
+# 2026-10-19 regens (TASK-168, TASK-194, TASK-679): the evidence pass was not re-run; FEATURE-014 is already listed
+# (TASK-679 has no feature).
 shaped-by-derived: true
 shaped-by-unresolved: 266
 ---
@@ -193,19 +194,28 @@ detached entity*.
 ### Requirement: Bulk reads translate every returned entity
 
 The system SHALL apply translations to each entity of a bulk read result, materializing the inner store's
-sequence to a list first.
+sequence to a list first, and SHALL read the translations of the whole list in **one** translation-store read per
+500 entities (`LocalizedTranslationRows.ReadBatchSize`): `EntityGuid IN (…)` for the store's entity type and the
+current culture, grouped in memory. An empty list, or the default culture, reads nothing. The two single-entity
+wrappers return one entity per read and cost one translation read each.
 
 #### Scenario: Read-all translates each entity
 
 - **Given** `CurrentCulture` is non-default and the inner store returns three entities from `Read()` / `ReadAsync(ct)`
 - **When** the parameterless bulk read completes
-- **Then** all three entities are materialized to a list and each is replaced in it by its localized copy
+- **Then** all three entities are materialized to a list, their translations are read in one query, and each is replaced in it by its localized copy; an entity with no rows becomes a detached copy carrying its base values
+
+#### Scenario: A list larger than one batch
+
+- **Given** 1 001 entities on a non-default culture
+- **When** they are read
+- **Then** the translations cost three reads of at most 500 GUIDs each — kept under the providers' parameter limits
 
 #### Scenario: Default-culture bulk read short-circuits
 
 - **Given** `CurrentCulture.Name == DefaultCulture.Name`
 - **When** `LocalizedBulkStoreWrapper.Read(filter, orderBy, limit, offset)` is called
-- **Then** the inner store's result is materialized and returned with no per-entity translation loop; `AsyncLocalizedBulkStoreWrapper.ReadAsync(filter, orderBy, limit, offset)` short-circuits identically
+- **Then** the inner store's result is materialized and returned with no translation read; `AsyncLocalizedBulkStoreWrapper.ReadAsync(filter, orderBy, limit, offset)` short-circuits identically
 
 #### Scenario: Single-result bulk read reaches the hidden overload by cast
 
@@ -471,7 +481,7 @@ then apply `offset`/`limit` in memory.
 
 - **Given** `orderBy` sorts by the localizable `Name` and `limit = 10, offset = 20`
 - **When** the bulk read runs on a non-default culture
-- **Then** the inner store is called with only the rewritten filter (no order, no limit, no offset), every matching entity is translated, the list is sorted in memory, and `Skip(20).Take(10)` is applied afterwards
+- **Then** the inner store is called with only the rewritten filter (no order, no limit, no offset), every matching entity is translated with the batched read (one per 500 entities), the list is sorted in memory, and `Skip(20).Take(10)` is applied afterwards. Loading the whole matching set is inherent to sorting translated text in memory and is a stated limit (SH-M081): the cost grows with the match, not the page
 
 #### Scenario: Null orderBy never triggers in-memory sorting
 

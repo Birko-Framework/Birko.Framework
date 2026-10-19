@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168 and TASK-194 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194 and TASK-679 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -12,17 +12,17 @@ which this regeneration never touches._
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
-| planned      | 11    | 23      | —     |
-| todo         | —     | —       | 150   |
-| in-progress  | 7     | 12      | 0     |
+| planned      | 10    | 23      | —     |
+| todo         | —     | —       | 149   |
+| in-progress  | 8     | 12      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 3     | 27      | 383   |
+| done         | 3     | 27      | 384   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 13× P1 · 100× P2 · 37× P3.
+`todo` by priority: 12× P1 · 100× P2 · 37× P3.
 
 ## In progress now
 
@@ -620,8 +620,8 @@ _None._
 
 <details><summary>3 closed epic(s)</summary>
 
-- **EPIC-021** Entity localization for real catalogues — planned (0/5 tasks done)
-  - [ ] [TASK-679](EPIC-021-entity-localization-for-catalogues/TASK-679-batched-localization-of-list-reads.md) A localized list read costs one translation query per entity — batch it (P1)
+- **EPIC-021** Entity localization for real catalogues — in-progress (1/5 tasks done)
+  - [x] [TASK-679](EPIC-021-entity-localization-for-catalogues/TASK-679-batched-localization-of-list-reads.md) A localized list read costs one translation query per entity — batch it (P1)
   - [ ] [TASK-680](EPIC-021-entity-localization-for-catalogues/TASK-680-translation-model-generic-and-unique-key.md) The translation model is fixed and unkeyed — make it the consumer's type, with a unique key (P1)
   - [ ] [TASK-681](EPIC-021-entity-localization-for-catalogues/TASK-681-translated-field-filters-in-sql-with-fallback.md) A filter on a translated field reads every translation into memory, and never matches an untranslated entity (P1)
   - [ ] [TASK-682](EPIC-021-entity-localization-for-catalogues/TASK-682-ientitytranslations-explicit-translation-api.md) `IEntityTranslations` — an explicit, batched API for working with translations (P1)

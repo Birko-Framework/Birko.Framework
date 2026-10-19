@@ -230,12 +230,9 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
             return entity;
         }
 
-        // SH-H016: never write to the instance the inner store returned.
-        var localized = LocalizedEntityFields.Detach(entity);
-        LocalizedEntityFields.Restore(localized, await LocalizedTranslationRows.ReadAsync(
-            _translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name,
-            LocalizedEntityFields.LocalizableFieldsOf(localized), ct));
-        return localized;
+        // SH-H016: Apply returns a detached copy, never the instance the inner store returned.
+        return LocalizedTranslationRows.Apply(entity, await LocalizedTranslationRows.ReadManyAsync(
+            _translationStore, new[] { entity.Guid.Value }, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name, ct));
     }
 
     #endregion

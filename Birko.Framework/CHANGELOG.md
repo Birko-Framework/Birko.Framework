@@ -4,6 +4,16 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — Caching low triage: TTLs validated, nulls on Redis, a fenced lock
+
+[[TASK-184]]. 17 low findings: 16 confirmed (2 already fixed by TASK-169), 1 narrower. Decided by the user:
+
+- A zero or negative TTL is refused on every backend (`CacheEntryOptions.Validate`).
+- Redis stores a null and returns it as a hit, as MemoryCache does.
+
+Every cache throws after `Dispose`. MemoryCache takes an optional `TimeProvider`. The Redis stampede lock releases
+only its own token. SQL cache keys name the entity type.
+
 ## 2026-10-18 — Caching triage: the SQL cache hands out copies; Redis and Hybrid fixes
 
 [[TASK-169]]. 14 medium findings: 13 confirmed, 1 found fixed. One half was spawned as [[TASK-669]].

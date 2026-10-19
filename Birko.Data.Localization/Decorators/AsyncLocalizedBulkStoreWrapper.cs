@@ -374,20 +374,25 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
             return entity;
         }
 
-        // SH-H016: never write to the instance the inner store returned.
-        var localized = LocalizedEntityFields.Detach(entity);
-        LocalizedEntityFields.Restore(localized, await LocalizedTranslationRows.ReadAsync(
-            _translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name,
-            LocalizedEntityFields.LocalizableFieldsOf(localized), ct));
-        return localized;
+        // SH-H016: Apply returns a detached copy, never the instance the inner store returned.
+        return LocalizedTranslationRows.Apply(entity, await LocalizedTranslationRows.ReadManyAsync(
+            _translationStore, new[] { entity.Guid.Value }, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name, ct));
     }
 
     /// <inheritdoc cref="LocalizedBulkStoreWrapper{TStore,T}.LocalizeAll(System.Collections.Generic.List{T})" />
     protected async Task<List<T>> LocalizeAllAsync(List<T> entities, CancellationToken ct)
     {
+        if (!IsNonDefaultCulture() || entities.Count == 0)
+        {
+            return entities;
+        }
+
+        var rows = await LocalizedTranslationRows.ReadManyAsync(
+            _translationStore, entities.Where(e => e.Guid.HasValue).Select(e => e.Guid!.Value),
+            LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name, ct);
         for (var i = 0; i < entities.Count; i++)
         {
-            entities[i] = await LocalizeAsync(entities[i], ct);
+            entities[i] = LocalizedTranslationRows.Apply(entities[i], rows);
         }
         return entities;
     }

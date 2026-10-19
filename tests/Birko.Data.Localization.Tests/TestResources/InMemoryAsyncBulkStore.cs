@@ -25,6 +25,9 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public int InitCalls { get; private set; }
 
+    /// <summary>How many filtered collection reads ran — what a test counts to prove a read is batched.</summary>
+    public int FilteredReadCalls { get; private set; }
+
     public int CreateInstanceCalls { get; private set; }
 
     public Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
@@ -42,6 +45,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
     {
+        FilteredReadCalls++;
         var items = _data.Values.AsQueryable();
         if (filter != null) items = items.Where(filter);
         if (offset.HasValue) items = items.Skip(offset.Value);

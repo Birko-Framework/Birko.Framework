@@ -23,6 +23,9 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 
     public int InitCalls { get; private set; }
 
+    /// <summary>How many filtered collection reads ran — what a test counts to prove a read is batched.</summary>
+    public int FilteredReadCalls { get; private set; }
+
     public int CreateInstanceCalls { get; private set; }
 
     public T? Read(Guid guid) => _data.TryGetValue(guid, out var item) ? item : null;
@@ -38,6 +41,7 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 
     public IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
+        FilteredReadCalls++;
         var items = _data.Values.AsQueryable();
         if (filter != null) items = items.Where(filter);
         if (offset.HasValue) items = items.Skip(offset.Value);

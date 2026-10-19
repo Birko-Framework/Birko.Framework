@@ -29,6 +29,12 @@ Read in source 2026-10-19 (Symbio session, for its STORY-081):
 
 **Also remediates SH-M074** (handed over by [[TASK-168]], confirmed 2026-10-19): the upsert in `LocalizedTranslationRows.Save` / `SaveAsync` (the one producer since TASK-168) reads, then creates when absent, with no key; reads then keep whichever duplicate is enumerated last.
 
+**Left for this task by [[TASK-679]]:** list reads now fetch translations as `guids.Contains(t.EntityGuid) && …` in
+batches of `LocalizedTranslationRows.ReadBatchSize` = 500 GUIDs, chosen to stay under MSSQL's ~2100 parameters. That is
+**unmeasured on SQL** — `EntityTranslationModel` has no SQL mapping yet, so no SQL store can hold it. Once this task
+puts the model on SQLite / PostgreSQL, run a `ReadMany` over more than 500 GUIDs there and confirm the `IN` list
+renders and fits; adjust the constant on measurement (rule 54).
+
 ## Acceptance criteria
 
 - [ ] The four wrappers (and TASK-682's API) are generic over `TTranslation : EntityTranslationModel, new()`, so a

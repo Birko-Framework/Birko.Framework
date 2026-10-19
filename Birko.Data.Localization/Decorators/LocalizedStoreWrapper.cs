@@ -277,12 +277,9 @@ public class LocalizedStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
             return entity;
         }
 
-        // SH-H016: never write to the instance the inner store returned.
-        var localized = LocalizedEntityFields.Detach(entity);
-        LocalizedEntityFields.Restore(localized, LocalizedTranslationRows.Read(
-            _translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name,
-            LocalizedEntityFields.LocalizableFieldsOf(localized)));
-        return localized;
+        // SH-H016: Apply returns a detached copy, never the instance the inner store returned.
+        return LocalizedTranslationRows.Apply(entity, LocalizedTranslationRows.ReadMany(
+            _translationStore, new[] { entity.Guid.Value }, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name));
     }
 
     #endregion

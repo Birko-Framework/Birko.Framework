@@ -82,6 +82,93 @@ internal static class LocalizedTranslationRows
         => ToDictionary(await store.ReadAsync(
             Key(entityGuid, entityType, culture).ToExpression(), null, null, null, ct), fields);
 
+    /// <summary>
+    /// How many GUIDs one batched read puts in its <c>IN</c> list. Kept well under the smallest provider limit
+    /// (MSSQL's ~2100 parameters), because the in-memory-sort path localizes a whole matching set at once.
+    /// </summary>
+    public const int ReadBatchSize = 500;
+
+    /// <summary>
+    /// <paramref name="culture"/>'s translations of many entities, grouped <c>EntityGuid → (FieldName → Value)</c>,
+    /// in one read per <see cref="ReadBatchSize"/> GUIDs instead of one per entity (TASK-679). An entity with no rows
+    /// is absent from the result.
+    /// </summary>
+    public static Dictionary<Guid, Dictionary<string, string?>> ReadMany(
+        IBulkStore<EntityTranslationModel> store, IEnumerable<Guid> entityGuids, string entityType, string culture)
+    {
+        var result = new Dictionary<Guid, Dictionary<string, string?>>();
+        foreach (var chunk in entityGuids.Distinct().Chunk(ReadBatchSize))
+        {
+            Group(result, store.Read(Many(chunk, entityType, culture)));
+        }
+        return result;
+    }
+
+    /// <inheritdoc cref="ReadMany"/>
+    public static async Task<Dictionary<Guid, Dictionary<string, string?>>> ReadManyAsync(
+        IAsyncBulkStore<EntityTranslationModel> store, IEnumerable<Guid> entityGuids, string entityType, string culture,
+        CancellationToken ct)
+    {
+        var result = new Dictionary<Guid, Dictionary<string, string?>>();
+        foreach (var chunk in entityGuids.Distinct().Chunk(ReadBatchSize))
+        {
+            Group(result, await store.ReadAsync(Many(chunk, entityType, culture), null, null, null, ct));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// <paramref name="entity"/> as a batched read shows it: the same instance when it has no GUID, otherwise a detached
+    /// copy (SH-H016) carrying its rows from <paramref name="rows"/> — only the fields its own declaration names — or its
+    /// base values when it has none.
+    /// </summary>
+    /// <remarks>
+    /// The one producer of "translation rows → a translated entity": the single-entity read, the list read and the
+    /// in-memory sort all come through here, so a change to which fields apply cannot land in one path only.
+    /// </remarks>
+    public static T Apply<T>(T entity, IReadOnlyDictionary<Guid, Dictionary<string, string?>> rows)
+        where T : Data.Models.AbstractModel, ILocalizable
+    {
+        if (entity.Guid is not Guid guid)
+        {
+            return entity;
+        }
+
+        var localized = LocalizedEntityFields.Detach(entity);
+        // Validated whether or not rows exist, so a bad declaration is refused on every read, not only a translated one.
+        var fields = LocalizedEntityFields.LocalizableFieldsOf(localized);
+        if (rows.TryGetValue(guid, out var values))
+        {
+            LocalizedEntityFields.Restore(localized, OnlyFields(values, fields));
+        }
+        return localized;
+    }
+
+    /// <summary>
+    /// <c>guids.Contains(t.EntityGuid) &amp;&amp; t.EntityType == type &amp;&amp; t.Culture == culture</c> over a captured
+    /// <see cref="List{T}"/>: <c>List.Contains</c> is what the SQL, Elasticsearch and RavenDB translators turn into
+    /// <c>IN</c> / terms, and a captured local is evaluated by each of them (and by the LINQ-based drivers).
+    /// </summary>
+    private static System.Linq.Expressions.Expression<Func<EntityTranslationModel, bool>> Many(
+        Guid[] chunk, string entityType, string culture)
+    {
+        var guids = chunk.ToList();
+        return t => guids.Contains(t.EntityGuid) && t.EntityType == entityType && t.Culture == culture;
+    }
+
+    private static void Group(Dictionary<Guid, Dictionary<string, string?>> result, IEnumerable<EntityTranslationModel> rows)
+    {
+        foreach (var row in rows)
+        {
+            if (!result.TryGetValue(row.EntityGuid, out var fields))
+            {
+                fields = new Dictionary<string, string?>();
+                result[row.EntityGuid] = fields;
+            }
+            fields[row.FieldName] = row.Value;
+        }
+    }
+
     public static void Save(
         IBulkStore<EntityTranslationModel> store,
         Guid entityGuid,
@@ -203,11 +290,12 @@ internal static class LocalizedTranslationRows
         var result = new Dictionary<string, string?>();
         foreach (var row in rows)
         {
-            if (fields.Contains(row.FieldName))
-            {
-                result[row.FieldName] = row.Value;
-            }
+            result[row.FieldName] = row.Value;
         }
-        return result;
+        return OnlyFields(result, fields);
     }
+
+    /// <summary>The values whose field is one of <paramref name="fields"/> — the one place that selection is made.</summary>
+    private static Dictionary<string, string?> OnlyFields(IReadOnlyDictionary<string, string?> values, IReadOnlyList<string> fields)
+        => values.Where(pair => fields.Contains(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
 }
