@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–672 filed, EPIC-019 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–673 filed, EPIC-019 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,7 +13,7 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 25      | —     |
-| todo         | —     | —       | 141   |
+| todo         | —     | —       | 142   |
 | in-progress  | 7     | 9       | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
@@ -22,7 +22,7 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 98× P2 · 34× P3.
+`todo` by priority: 9× P1 · 98× P2 · 35× P3.
 
 ## In progress now
 
@@ -610,6 +610,7 @@ _None._
 - [x] [TASK-606](_loose/TASK-606-in-list-on-a-converted-column-binds-raw-values.md) An `IN` list (`values.Contains(x.Col)`) on a converted SQL column may still bind raw values (P3)
 - [x] [TASK-607](_loose/TASK-607-ci-test-loop-runs-dotnet-test-on-shared-sources.md) build-and-test runs `dotnet test` on `tests/Shared`, which has no project, so the job is red with every suite green (P2)
 - [x] [TASK-608](_loose/TASK-608-finstat-rating-color-hand-edited-into-generated-css.md) `--b-rating-color` was hand-edited into the generated `finstat.css`, so token parity is red (P2)
+- [ ] [TASK-673](_loose/TASK-673-sql-bulk-upsert-by-key.md) The SQL stores have no batch upsert, so an idempotent feed import costs a read per row (P3)
 
 ## Completed
 
