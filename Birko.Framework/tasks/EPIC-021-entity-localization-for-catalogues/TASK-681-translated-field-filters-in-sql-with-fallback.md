@@ -9,7 +9,7 @@ assignee: ai
 created: 2026-10-19
 depends-on: [TASK-680]
 blocks: [TASK-682]
-findings: []
+findings: [SH-M070, SH-M082]
 pr: null
 github-issue: null
 jira-key: null
@@ -27,6 +27,8 @@ condition in memory (`condition.ValuePredicate(t.Value)`), then intersects Guids
   English, on every public product request) is the worst case.
 - **No fallback:** an entity with no translation in the current culture never matches — even on its base value — so an
   untranslated product is unreachable by slug under English, while a read of it would show its base text.
+
+**Also remediates SH-M070 and SH-M082** (handed over by [[TASK-168]], both confirmed 2026-10-19): M070 is this task's fallback criterion, M082 its full-slice scan. M082 adds that the slice spans every tenant because `EntityTranslationModel` is not `ITenant` (TASK-680's model change is what lets a tenant wrapper scope it).
 
 ## Acceptance criteria
 

@@ -3,6 +3,7 @@ using Birko.Data.Stores;
 using Birko.Configuration;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 
@@ -32,7 +33,12 @@ public static class LocalizedOrderByHelper
     /// Applies in-memory ordering to a list of entities based on the full OrderBy,
     /// after translations have been applied to the entities.
     /// </summary>
-    public static List<T> ApplyInMemoryOrderBy<T>(List<T> entities, OrderBy<T> orderBy)
+    /// <param name="culture">
+    /// The culture the translated text is in. Strings are collated with it (SH-M080): the thread culture,
+    /// often invariant on a server, mis-orders letters such as Slovak "č". <c>null</c> keeps the previous
+    /// behaviour of comparing with the thread culture.
+    /// </param>
+    public static List<T> ApplyInMemoryOrderBy<T>(List<T> entities, OrderBy<T> orderBy, CultureInfo? culture = null)
         where T : Data.Models.AbstractModel
     {
         if (entities.Count <= 1 || orderBy.Fields.Count == 0)
@@ -41,11 +47,11 @@ public static class LocalizedOrderByHelper
         }
 
         var type = typeof(T);
+        var comparer = new SafeObjectComparer(culture);
         IOrderedEnumerable<T>? ordered = null;
 
-        for (int i = 0; i < orderBy.Fields.Count; i++)
+        foreach (var field in orderBy.Fields)
         {
-            var field = orderBy.Fields[i];
             var prop = type.GetProperty(field.PropertyName, BindingFlags.Public | BindingFlags.Instance);
             if (prop == null)
             {
@@ -54,17 +60,19 @@ public static class LocalizedOrderByHelper
 
             Func<T, object?> selector = e => prop.GetValue(e);
 
-            if (i == 0)
+            // SH-M071: decided by whether a key exists yet, not by position — an unknown first field used
+            // to send the second one to ThenBy on nothing.
+            if (ordered == null)
             {
                 ordered = field.Descending
-                    ? entities.OrderByDescending(selector, SafeObjectComparer.Instance)
-                    : entities.OrderBy(selector, SafeObjectComparer.Instance);
+                    ? entities.OrderByDescending(selector, comparer)
+                    : entities.OrderBy(selector, comparer);
             }
             else
             {
                 ordered = field.Descending
-                    ? ordered!.ThenByDescending(selector, SafeObjectComparer.Instance)
-                    : ordered!.ThenBy(selector, SafeObjectComparer.Instance);
+                    ? ordered.ThenByDescending(selector, comparer)
+                    : ordered.ThenBy(selector, comparer);
             }
         }
 
@@ -77,16 +85,27 @@ public static class LocalizedOrderByHelper
     /// two values are different types. This handles nulls (sort first), compares same-typed
     /// <see cref="IComparable"/> values directly, and falls back to a stable ordinal string comparison for
     /// everything else — so a sort on an unexpected property type degrades gracefully instead of throwing.
+    /// Two strings are collated with the given culture when there is one (SH-M080).
     /// </summary>
     private sealed class SafeObjectComparer : IComparer<object?>
     {
-        public static readonly SafeObjectComparer Instance = new();
+        private readonly CultureInfo? _culture;
+
+        public SafeObjectComparer(CultureInfo? culture)
+        {
+            _culture = culture;
+        }
 
         public int Compare(object? x, object? y)
         {
             if (ReferenceEquals(x, y)) return 0;
             if (x is null) return -1;
             if (y is null) return 1;
+
+            if (_culture != null && x is string xs && y is string ys)
+            {
+                return _culture.CompareInfo.Compare(xs, ys);
+            }
 
             if (x is IComparable comparable && x.GetType() == y.GetType())
             {

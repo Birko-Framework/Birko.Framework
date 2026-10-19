@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -12,17 +12,17 @@ which this regeneration never touches._
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
-| planned      | 10    | 25      | —     |
-| todo         | —     | —       | 146   |
-| in-progress  | 7     | 9       | 0     |
+| planned      | 11    | 24      | —     |
+| todo         | —     | —       | 151   |
+| in-progress  | 7     | 11      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 3     | 28      | 381   |
+| done         | 3     | 27      | 382   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 101× P2 · 36× P3.
+`todo` by priority: 13× P1 · 101× P2 · 37× P3.
 
 ## In progress now
 
@@ -170,7 +170,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (227/282 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (228/282 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -368,7 +368,7 @@ _None._
     - [x] [TASK-575](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-575-two-workers-reclaim-the-same-stale-job.md) Two SQL job workers can both reclaim the same stale Processing job and run it twice (P1) · FEATURE-014
     - [x] [TASK-576](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-576-async-database-model-repository-rejects-concrete-stores.md) `AsyncDataBaseModelRepository<T>` rejects every store built with a concrete connector (P2) · FEATURE-014
     - [x] [TASK-577](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-577-cross-assembly-field-attributes-lose-values.md) A cross-assembly SQL field attribute is rebuilt without its value: lengths, precision and scale become 0, and `[UtcField]` is dropped (P1) · FEATURE-014
-  - STORY-053 Spec-harvest — medium findings — planned (63/68 done)
+  - STORY-053 Spec-harvest — medium findings — in-progress (64/68 done)
     - [x] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1) · FEATURE-014
     - [x] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1) · FEATURE-014
     - [x] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1) · FEATURE-014
@@ -386,7 +386,7 @@ _None._
     - [x] [TASK-165](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-165-triage-medium-security-and-authorization.md) Triage the 15 medium spec-harvest findings in `security-and-authorization` (P1) · FEATURE-014
     - [ ] [TASK-166](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-166-triage-medium-entity-tagging.md) Triage the 15 medium spec-harvest findings in `entity-tagging` (P2) · FEATURE-014
     - [ ] [TASK-167](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-167-triage-medium-serialization.md) Triage the 14 medium spec-harvest findings in `serialization` (P2) · FEATURE-014
-    - [ ] [TASK-168](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-168-triage-medium-entity-localization.md) Triage the 14 medium spec-harvest findings in `entity-localization` (P2) · FEATURE-014
+    - [x] [TASK-168](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-168-triage-medium-entity-localization.md) Triage the 14 medium spec-harvest findings in `entity-localization` (P2) · FEATURE-014
     - [x] [TASK-169](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-169-triage-medium-caching.md) Triage the 14 medium spec-harvest findings in `caching` (P2) · FEATURE-014
     - [x] [TASK-170](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-170-triage-medium-bulk-filter-operations.md) Triage the 14 medium spec-harvest findings in `bulk-filter-operations` (P1) · FEATURE-014
     - [x] [TASK-171](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-171-triage-medium-specifications-and-paging.md) Triage the 12 medium spec-harvest findings in `specifications-and-paging` (P1) · FEATURE-014
@@ -620,6 +620,13 @@ _None._
 
 <details><summary>3 closed epic(s)</summary>
 
+- **EPIC-021** Entity localization for real catalogues — planned (0/5 tasks done)
+  - [ ] [TASK-679](EPIC-021-entity-localization-for-catalogues/TASK-679-batched-localization-of-list-reads.md) A localized list read costs one translation query per entity — batch it (P1)
+  - [ ] [TASK-680](EPIC-021-entity-localization-for-catalogues/TASK-680-translation-model-generic-and-unique-key.md) The translation model is fixed and unkeyed — make it the consumer's type, with a unique key (P1)
+  - [ ] [TASK-681](EPIC-021-entity-localization-for-catalogues/TASK-681-translated-field-filters-in-sql-with-fallback.md) A filter on a translated field reads every translation into memory, and never matches an untranslated entity (P1)
+  - [ ] [TASK-682](EPIC-021-entity-localization-for-catalogues/TASK-682-ientitytranslations-explicit-translation-api.md) `IEntityTranslations` — an explicit, batched API for working with translations (P1)
+  - [ ] [TASK-683](EPIC-021-entity-localization-for-catalogues/TASK-683-entity-and-translation-writes-share-no-boundary.md) The entity write and its translation write share no boundary, so a failure desynchronises them (P2)
+
 - **EPIC-009** Birko.Communication — Remaining protocols — done (2/2 tasks done)
   - STORY-019 gRPC support — done (1/1 done) (done)
     - [x] [TASK-026](EPIC-009-communication-protocols/STORY-019-grpc/TASK-026-grpc-client-server.md) gRPC client + server support (P2) · FEATURE-009
@@ -635,13 +642,14 @@ _None._
     - [x] [TASK-654](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-654-stale-grant-health-check.md) A health check reports stored grants whose role or resource type was retired (P2)
 
 - **EPIC-019** Birko framework backports from DraCode — done (30/30 tasks done)
-  - STORY-058 Security / OAuth backports from DraCode — done (6/6 done) (done)
+  - STORY-058 Security / OAuth backports from DraCode — in-progress (6/7 done)
     - [x] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
     - [x] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)
     - [x] [TASK-519](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-519-aspnetcore-endpoint-mapping-for-the-oauth-server.md) ASP.NET Core endpoint mapping for the OAuth server (P3)
     - [x] [TASK-520](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-520-client-credentials-claims-hook-and-space-delimited-scope.md) client_credentials: let the app shape the token; read space-delimited scopes as permissions (P3)
     - [x] [TASK-521](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-521-web-sign-in-helpers-for-oauth-providers.md) Web (authorization-code) sign-in helpers for external OAuth providers, GitHub first (P3)
     - [x] [TASK-522](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-522-loopback-only-auth-bypass-option.md) Optional "no token needed when listening on loopback only" for Birko.Security.AspNetCore (P3)
+    - [ ] [TASK-678](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-678-public-single-refresh-token-revoke.md) OAuthServer: revoke one refresh token by its plaintext value (logout) (P3)
   - STORY-059 Web backports from DraCode — done (4/4 done) (done)
     - [x] [TASK-523](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-523-wsclient-request-response.md) WsClient: request/response with id correlation and timeout (P2)
     - [x] [TASK-524](EPIC-019-birko-backports-from-dracode/STORY-059-web-backports/TASK-524-shell-oauth-sign-in-helpers.md) Birko.Web.Shell auth: OAuth redirect parsing, token expiry and scheduled refresh (P2)

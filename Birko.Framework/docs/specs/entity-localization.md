@@ -1,13 +1,14 @@
 ---
 area: entity-localization
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 53a5e76eeed874c948edb2ee3469f05978b2ce1e
+generated-on: 2026-10-19
 sources:
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/LocalizedBulkStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/LocalizedEntityFields.cs
   - ../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs
+  - ../Birko.Data.Localization/Decorators/LocalizedTranslationRows.cs
   - ../Birko.Data.Localization/Expressions/LocalizedExpressionVisitor.cs
   - ../Birko.Data.Localization/Expressions/LocalizedFilterHelper.cs
   - ../Birko.Data.Localization/Expressions/LocalizedOrderByHelper.cs
@@ -22,6 +23,7 @@ shaped-by: [FEATURE-014]
 # Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
 # task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# 2026-10-19 regen (TASK-168): the evidence pass was not re-run; FEATURE-014, TASK-168's feature, is already listed.
 shaped-by-derived: true
 shaped-by-unresolved: 266
 ---
@@ -297,8 +299,11 @@ is empty.
 The system SHALL extract a localized condition only from a top-level `AndAlso`-chain part that is either a
 binary `Equal` / `NotEqual` between a direct `string` property of the lambda parameter named in the
 localizable set and a non-null string constant, or an instance method call named `Contains`, `StartsWith`
-or `EndsWith` on such a property whose first argument evaluates to a string. All other parts SHALL remain
-in the residual filter and therefore be evaluated by the inner store against the **base column**.
+or `EndsWith` on such a property with one argument that evaluates to a string, or two arguments of which
+the second evaluates to a `StringComparison`. A part that is not extracted SHALL remain in the residual
+filter, evaluated by the inner store against the base column, **only when it reads no localizable field**
+or is a comparison of a localizable field with `null`; any other part that reads a localizable field SHALL
+be refused with `NotSupportedException` naming the field.
 
 #### Scenario: Equality on a localizable field is extracted
 
@@ -316,25 +321,37 @@ in the residual filter and therefore be evaluated by the inner store against the
 
 - **Given** the filter part is `x.Name.CompareTo("A") > 0` expressed as a binary `GreaterThan` on the property
 - **When** extraction runs
-- **Then** the operator falls to the `_ => null!` switch arm, no condition is produced, and the part stays in the residual filter
+- **Then** no condition is produced, and because the part still reads `Name` the split throws `NotSupportedException` naming `Name`
 
 #### Scenario: Null comparison stays on the base column
 
-- **Given** `Name` is localizable and the filter is `x => x.Name == null`
+- **Given** `Name` is localizable and the filter is `x => x.Name == null`, or compares `Name` with a captured variable holding `null`
 - **When** extraction runs
-- **Then** the evaluated constant is `null`, the `constantValue != null` guard fails, the part is left in the residual filter, and the inner store tests the entity's own `Name` column rather than the translation
+- **Then** the evaluated constant is `null`, the `constantValue != null` guard fails, the part is exempt from the refusal and left in the residual filter, and the inner store tests the entity's own `Name` column rather than the translation
 
-#### Scenario: Disjunctions are never localized
+#### Scenario: A disjunction reading a localizable field is refused
 
 - **Given** the filter is `x => x.Name == "Stolička" || x.Code == "C1"`
 - **When** `FlattenAndAlso` runs
-- **Then** the whole `OrElse` node is one indivisible part, no localized condition is extracted from it, and the inner store evaluates `x.Name == "Stolička"` against the base column
+- **Then** the whole `OrElse` node is one indivisible part, no localized condition is extracted from it, and because it reads `Name` the read throws `NotSupportedException` naming `Name` instead of testing the base column
 
-#### Scenario: Negation is never localized
+#### Scenario: A negation reading a localizable field is refused
 
 - **Given** the filter is `x => !x.Name.Contains("a")`
 - **When** extraction runs
-- **Then** the `Not` node matches neither the binary nor the method-call shape, so it stays in the residual filter and is evaluated against the base column
+- **Then** the `Not` node matches neither the binary nor the method-call shape, and it is refused with `NotSupportedException`
+
+#### Scenario: Chained, static and column-to-column forms are refused
+
+- **Given** the filter is `x => x.Name.ToLower().Contains("a")`, `x => string.IsNullOrEmpty(x.Name)`, `x => x.Name == x.Code`, or one of these reading the field through a cast (`((INamed)x).Name`)
+- **When** extraction runs
+- **Then** none is extracted (the call's receiver is not the property itself, or the operand reads the entity), and each is refused with `NotSupportedException`
+
+#### Scenario: A disjunction that reads no localizable field passes through
+
+- **Given** the filter is `x => x.Code == "C1" || x.Code == "C2"`
+- **When** extraction runs
+- **Then** the part reads no localizable field, so it stays in the residual filter and the inner store evaluates it
 
 #### Scenario: Nested member access is not localized
 
@@ -342,17 +359,17 @@ in the residual filter and therefore be evaluated by the inner store against the
 - **When** `ExtractFieldName` runs
 - **Then** it returns `null` because `member.Expression == param` fails, and the part stays in the residual filter
 
-#### Scenario: A StringComparison argument is ignored
+#### Scenario: A StringComparison argument is honoured
 
 - **Given** the filter is `x => x.Name.Contains("st", StringComparison.OrdinalIgnoreCase)`
 - **When** extraction runs
-- **Then** the condition IS extracted (method name matches and `Arguments[0]` is a string) and the predicate is the default case-sensitive `v.Contains("st")` — the comparison argument is discarded
+- **Then** the condition is extracted and the predicate is `v.Contains("st", StringComparison.OrdinalIgnoreCase)`; with one argument each method keeps its .NET default — `Contains` ordinal, `StartsWith` / `EndsWith` culture-sensitive
 
 #### Scenario: Method-name matching is not overload-checked
 
-- **Given** the localizable property's declaring type exposes any instance method named `Contains`, `StartsWith` or `EndsWith` whose first argument is a string
+- **Given** the localizable property's declaring type exposes any instance method named `Contains`, `StartsWith` or `EndsWith` whose first argument is a string, with at most one further argument that evaluates to a `StringComparison`
 - **When** extraction runs
-- **Then** the condition is extracted purely on `methodCall.Method.Name`, without verifying the declaring type or overload
+- **Then** the condition is extracted purely on `methodCall.Method.Name`, without verifying the declaring type or overload; any other argument shape is not extracted and is refused
 
 #### Scenario: String method predicates guard against null translation values
 
@@ -364,7 +381,9 @@ in the residual filter and therefore be evaluated by the inner store against the
 
 The system SHALL resolve the compared value from a `ConstantExpression` directly, from a field or property
 access on a `ConstantExpression` (a closure capture) by reflection, and otherwise by compiling and invoking
-the subexpression; any exception during compile-and-invoke SHALL be swallowed and yield `null`.
+the subexpression. An operand that reads the lambda parameter SHALL yield `null` without being compiled.
+An exception thrown while invoking SHALL propagate to the caller, unwrapped from
+`TargetInvocationException`.
 
 #### Scenario: Captured local variable is resolved
 
@@ -378,11 +397,17 @@ the subexpression; any exception during compile-and-invoke SHALL be swallowed an
 - **When** neither the constant nor the single-level closure shape matches
 - **Then** `Expression.Lambda(expression).Compile().DynamicInvoke()` is used to obtain the value
 
-#### Scenario: Evaluation failure degrades to a base-column predicate
+#### Scenario: An evaluation failure is reported
 
 - **Given** the compared operand throws when invoked (for example it dereferences null)
-- **When** `EvaluateExpression` catches the exception and returns `null`
-- **Then** no localized condition is extracted, the part stays in the residual filter, and the condition silently applies to the base column with no diagnostic
+- **When** `EvaluateExpression` invokes it
+- **Then** the operand's own exception reaches the caller of the read, and no query runs
+
+#### Scenario: An operand that reads the entity is not a value
+
+- **Given** the filter is `x => x.Name == x.Code`
+- **When** `EvaluateExpression` runs on `x.Code`
+- **Then** it returns `null` without compiling, so nothing is extracted and the part is refused because it reads `Name`
 
 #### Scenario: Non-string constants are rejected
 
@@ -459,15 +484,22 @@ then apply `offset`/`limit` in memory.
 ### Requirement: In-memory ordering semantics
 
 The system SHALL sort in memory by reflecting each `OrderBy` field's property value, using a defensive
-comparer that orders `null` first, compares same-typed `IComparable` values directly, and otherwise falls
+comparer that orders `null` first, collates two strings with the localization context's current culture
+(`CultureInfo.CompareInfo`), compares other same-typed `IComparable` values directly, and otherwise falls
 back to `string.CompareOrdinal` of `ToString()`. Fields whose property cannot be found on `typeof(T)`
-SHALL be skipped.
+SHALL be skipped wherever they appear; the first field that resolves starts the ordering.
 
 #### Scenario: Multi-field ordering builds a ThenBy chain
 
 - **Given** `orderBy.Fields` is `[{Name, ascending}, {Code, descending}]` and both properties exist
 - **When** `ApplyInMemoryOrderBy` runs
 - **Then** the list is ordered by `Name` ascending then `Code` descending, using `SafeObjectComparer` for both keys
+
+#### Scenario: Translated text is collated with the localization culture
+
+- **Given** `CurrentCulture = "sk"`, the thread culture is invariant, and the translated names are `"dom"`, `"čaj"`, `"cesta"`
+- **When** the bulk read orders by `Name`
+- **Then** the order is `"cesta"`, `"čaj"`, `"dom"` — Slovak collation, where `č` follows `c` — not the invariant `"čaj"`, `"cesta"`, `"dom"`
 
 #### Scenario: Null keys sort first
 
@@ -491,7 +523,7 @@ SHALL be skipped.
 
 - **Given** `orderBy.Fields` is `[{"NoSuchProp"}, {"Name"}]`
 - **When** `ApplyInMemoryOrderBy` iterates
-- **Then** index 0 is skipped by `continue`, index 1 takes the `else` branch and dereferences the still-null `ordered` via `ordered!.ThenBy(...)`, raising `NullReferenceException`
+- **Then** `NoSuchProp` is skipped and `Name` starts the ordering with `OrderBy`, because the branch is chosen by whether a key exists yet, not by position
 
 #### Scenario: All order-by fields missing
 
@@ -501,10 +533,12 @@ SHALL be skipped.
 
 ### Requirement: Translation persistence on create and update
 
-The system SHALL, after the inner store's write succeeds and only on a non-default culture, upsert one
-translation row per localizable string property whose value is not null: an existing row for
-`(EntityGuid, FieldName, Culture)` is updated in place with the new `Value` and `UpdatedAt = DateTime.UtcNow`,
-otherwise a new row is created with the same fields plus `EntityType` from the runtime type name.
+The system SHALL, after the inner store's write succeeds and only on a non-default culture, write one
+translation row per localizable string property through the single producer `LocalizedTranslationRows`,
+keyed by the GUID the inner store's create **returned** (on update, the entity's GUID): a `null` value
+deletes the rows for `(EntityGuid, FieldName, Culture)`; otherwise an existing row is updated in place with
+the new `Value`, `EntityType` and `UpdatedAt = DateTime.UtcNow`, and a missing one is created with the same
+fields. `EntityType` SHALL be the store's type name, `typeof(T).Name`, which is what every filter queries.
 
 #### Scenario: First write creates a translation row
 
@@ -524,17 +558,23 @@ otherwise a new row is created with the same fields plus `EntityType` from the r
 - **When** the upsert calls `existing.FirstOrDefault()`
 - **Then** only the first row enumerated is updated and the other is left stale
 
-#### Scenario: Null property value leaves the previous translation in place
+#### Scenario: A null value removes the translation
 
 - **Given** entity `G` has a `"sk"` translation `Name = "Stolička"` and the caller sets `entity.Name = null`
-- **When** `SaveTranslations` reaches `Name`
-- **Then** the `value == null` guard skips the field, the old translation row is neither updated nor deleted, and a later read re-applies `"Stolička"` to the entity
+- **When** `Update(entity)` runs on `"sk"`
+- **Then** the `(G, "Name", "sk")` row is deleted, and a later `"sk"` read falls back to the base value
+
+#### Scenario: A subclass instance is stamped with the store's type
+
+- **Given** a store typed for `Product` and a `SpecialProduct : Product` instance created on `"sk"`
+- **When** its translation row is written
+- **Then** `EntityType` is `"Product"`, so a localized filter on the `Product` store finds it; a row found under another name is rewritten
 
 #### Scenario: Empty string is persisted
 
 - **Given** `entity.Name = ""`
 - **When** `SaveTranslations` runs
-- **Then** the translation row's `Value` becomes `""` (only `null` is skipped)
+- **Then** the translation row's `Value` becomes `""` (only `null` removes the row)
 
 #### Scenario: Non-string localizable field is skipped
 
@@ -542,11 +582,17 @@ otherwise a new row is created with the same fields plus `EntityType` from the r
 - **When** `SaveTranslations` reflects the property
 - **Then** the `PropertyType != typeof(string)` guard skips it with no exception
 
-#### Scenario: Entity with no GUID persists no translations
+#### Scenario: Create keys translations by the returned GUID
 
 - **Given** the inner store's `Create` returns a GUID but does not set `data.Guid` on the passed instance
-- **When** `SaveTranslations(data)` runs
-- **Then** the `entity.Guid == null` guard returns immediately and the translation row is silently not written
+- **When** `Create(data)` / `CreateAsync(data)` / `SaveAsync(data)` completes on a non-default culture
+- **Then** the translation rows are written under the returned GUID
+
+#### Scenario: Entity with no GUID persists no translations
+
+- **Given** an update or a bulk create of an entity whose `Guid` is null or empty
+- **When** translation persistence runs
+- **Then** it returns immediately and no row is written
 
 #### Scenario: Timestamps come from the system clock
 
@@ -646,24 +692,24 @@ the inner store's native filter-delete.
 
 ### Requirement: Filter-based bulk update with an action
 
-The system SHALL implement `Update(filter, Action<T>)` by applying the caller's action and then persisting
-translations for each affected entity, using the **rewritten** filter on a non-default culture (and the
-original filter on the default culture); the sync and async wrappers SHALL do so by different mechanisms.
-On a non-default culture it SHALL additionally capture each entity's localizable values before the action
-runs and restore them after the translation row is written, so the action's translated text reaches the
-translation row and the entity's own column keeps the default-culture value.
+The system SHALL implement `Update(filter, Action<T>)` with the **rewritten** filter on a non-default
+culture and the original filter on the default culture, where it delegates the action unchanged. On a
+non-default culture it SHALL show the action each entity with the current culture's translations applied,
+write translations only for the localizable fields the action **changed**, keep each entity's own column on
+the default-culture value, and write those translation rows only **after** the inner store's update for
+that entity has returned; the sync and async wrappers SHALL do so by different mechanisms.
 
 #### Scenario: Sync wrapper delegates to the inner store's native filter update
 
-- **Given** `LocalizedBulkStoreWrapper.Update(filter, updateAction)`
+- **Given** `LocalizedBulkStoreWrapper.Update(filter, updateAction)` on a non-default culture
 - **When** it runs
-- **Then** it calls `_innerStore.Update(<filter>, item => { …; updateAction(item); SaveTranslations(item); … })` exactly once, so the entity selection, iteration and persistence are owned by the inner store and translations are written from inside its mutation callback; on a non-default culture the filter passed is the rewritten one and the callback brackets the action with a capture and a restore of the localizable values
+- **Then** it calls `_innerStore.Update(<rewritten filter>, callback)` exactly once; the callback captures the base values, applies the entity's translations, runs the action, records the changed localizable fields, and restores the base values in a `finally`; the recorded translations are written after `_innerStore.Update` returns
 
 #### Scenario: Async wrapper does read-modify-write per entity
 
 - **Given** `AsyncLocalizedBulkStoreWrapper.UpdateAsync(filter, updateAction)`
 - **When** it runs
-- **Then** it reads all matching entities via `_innerStore.ReadAsync(<filter>, null, null, null, ct)` — the rewritten filter on a non-default culture — then for each entity applies the action and issues one inner update per entity. On the default culture it updates and then saves translations; on a non-default culture it saves the translation first, restores the captured base values, and updates last, so the base column is not overwritten
+- **Then** it reads all matching entities via `_innerStore.ReadAsync(<filter>, null, null, null, ct)`. On the default culture it applies the action to each and issues one inner update. On a non-default culture it works on a detached copy of each: translations applied, action run, base values restored, inner update issued, and then the changed fields' translations written
 
 #### Scenario: Filter-based update on a non-default culture preserves the base column
 
@@ -677,17 +723,23 @@ translation row and the entity's own column keeps the default-culture value.
 - **When** the update completes on a non-default culture
 - **Then** the new `Code` is persisted — the capture and restore cover the localizable fields only
 
-#### Scenario: A failed inner update can leave a translation row behind
+#### Scenario: An untouched localizable field keeps its translation
 
-- **Given** a non-default culture, where the translation is written before the inner store persists the entity
-- **When** the inner update throws
-- **Then** the translation row for that entity has already been written and is not rolled back — the sync and async wrappers behave alike here, because the sync wrapper's callback also runs ahead of the inner store's own write
+- **Given** `CurrentCulture = "sk"`, entity `G` with a `"sk"` `Name` translation `"Stolička"` and no `"sk"` `Description` row, and the action `e => e.Code = "C2"`
+- **When** the update completes
+- **Then** the `"sk"` `Name` row still reads `"Stolička"` and no `Description` row is created
 
-#### Scenario: Entities read for the update are not translated first
+#### Scenario: The action sees the translated values
 
-- **Given** the async wrapper reads matching entities through `_innerStore.ReadAsync`
-- **When** the caller's action inspects `item.Name`
-- **Then** it sees the base (default-culture) value, because `ApplyTranslationsAsync` is not applied on this path
+- **Given** the same entity `G`
+- **When** the action reads `e.Name`
+- **Then** it sees `"Stolička"`, as a `"sk"` read would show it
+
+#### Scenario: A failed inner update leaves no translation row
+
+- **Given** a non-default culture and an inner update that throws
+- **When** the filter-based update runs
+- **Then** the exception propagates and no translation row is written for that entity. The sync wrapper writes none for the whole call, since it writes after `_innerStore.Update` returns; the async wrapper keeps the rows of entities updated earlier in the call (the two writes share no boundary, TASK-683)
 
 ### Requirement: Native PropertyUpdate falls back when it touches a localizable field
 

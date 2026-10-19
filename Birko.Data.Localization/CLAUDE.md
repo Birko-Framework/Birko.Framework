@@ -17,6 +17,8 @@ Entity-level localization for Birko.Data stores. Provides transparent translatio
 - **EntityTranslationFilter** — Query builder with static factories: `ByEntity`, `ByEntityAndCulture`, `ByEntityFieldAndCulture`, `ByEntityType`, `ByEntityTypeAndCulture`.
 
 ### Decorators (`Decorators/`)
+- **LocalizedEntityFields** — the one producer for capturing/restoring localizable values and detaching an entity
+- **LocalizedTranslationRows** — the one producer for writing translation rows (TASK-168): keyed by the GUID the store returned, stamped with `typeof(T).Name`, `null` removes the row
 - **LocalizedStoreWrapper** — Sync `IStore<T>` decorator
 - **AsyncLocalizedStoreWrapper** — Async `IAsyncStore<T>` decorator
 - **LocalizedBulkStoreWrapper** — Sync `IBulkStore<T>` decorator
@@ -24,7 +26,8 @@ Entity-level localization for Birko.Data stores. Provides transparent translatio
 
 All wrappers:
 - Intercept reads to apply translations (when current culture != default culture)
-- Intercept creates/updates to persist translations (upsert per field)
+- Intercept creates/updates to persist translations (upsert per field, through `LocalizedTranslationRows`)
+- Refuse a filter that reads a localizable field in a form the analyzer cannot translate (`NotSupportedException`), never test it against the base column
 - Intercept deletes to remove all associated translations
 - Implement `IStoreWrapper<T>` for decorator introspection
 - Use reflection to get/set localizable string properties

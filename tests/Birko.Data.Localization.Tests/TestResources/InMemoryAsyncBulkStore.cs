@@ -17,6 +17,12 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 {
     private readonly Dictionary<Guid, T> _data = new();
 
+    /// <summary>Runs before every single-entity update is stored; a test makes it throw to fail the write.</summary>
+    public Action<T>? BeforeUpdate { get; set; }
+
+    /// <summary>False models a store that returns the new key without writing it onto the entity.</summary>
+    public bool AssignsGuidOnCreate { get; set; } = true;
+
     public Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
         => Task.FromResult(_data.TryGetValue(guid, out var item) ? item : null);
 
@@ -49,9 +55,10 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
     public Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
         if (processDelegate != null) data = processDelegate(data);
-        data.Guid ??= Guid.NewGuid();
-        _data[data.Guid.Value] = data;
-        return Task.FromResult(data.Guid.Value);
+        var guid = data.Guid ?? Guid.NewGuid();
+        if (AssignsGuidOnCreate) data.Guid = guid;
+        _data[guid] = data;
+        return Task.FromResult(guid);
     }
 
     public Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
@@ -68,6 +75,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
     public Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
         if (processDelegate != null) data = processDelegate(data);
+        BeforeUpdate?.Invoke(data);
         if (data.Guid.HasValue) _data[data.Guid.Value] = data;
         return Task.CompletedTask;
     }

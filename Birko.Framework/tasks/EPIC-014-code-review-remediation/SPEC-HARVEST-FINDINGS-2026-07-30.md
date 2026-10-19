@@ -1687,11 +1687,15 @@ HasMany/HasOne append to `_relationships` with no check that the navigation prop
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:165`
 
+**Verdict: CONFIRMED — handed to [[TASK-681]] (2026-10-19, [[TASK-168]]).** `ResolveMatchingGuids` (`LocalizedStoreWrapper.cs:198`, bulk `:338`, both async twins) builds the GUID set from translation rows only, while `Localize` keeps the base value when no row exists, so a filter and a read disagree on exactly the entities that fall back. TASK-681's fallback criterion is this finding; fixing it here would be rewritten there.
+
 ResolveMatchingGuids derives the GUID set only from translation rows, but ApplyTranslations leaves the base value when no row exists. On culture "sk" an entity whose displayed Name is the untranslated "Chair" is invisible to Read(x => x.Name == "Chair") / Contains / StartsWith / EndsWith - filter and projection disagree for exactly the entities that fall back. The class remarks (LocalizedExpressionVisitor.cs:61-66) document this only for `!=`. Same code at LocalizedBulkStoreWrapper.cs:278, AsyncLocalizedStoreWrapper.cs:159, AsyncLocalizedBulkStoreWrapper.cs:288.
 
 #### SH-M071 — ApplyInMemoryOrderBy throws NullReferenceException when the first OrderBy field's property is missing but a later one exists
 
 `../Birko.Data.Localization/Expressions/LocalizedOrderByHelper.cs:65`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED — fixed by [[TASK-168]] (2026-10-19).** `ApplyInMemoryOrderBy` chose `OrderBy` vs `ThenBy` by loop index, so an unknown first field sent the second to `ThenBy` on `null` (measured: `ArgumentNullException` from `Enumerable.ThenBy`, not the NRE the finding guessed). It now branches on whether a key exists (`LocalizedOrderByHelper.cs:65`). Tests: `LocalizationMediumFindingsTests` 1 test, red with the index branch restored.
 
 The branch is chosen by loop index (`if (i == 0)`) rather than by whether `ordered` was assigned. A missing property at index 0 hits `continue`, so index 1 takes the else-branch and runs `ordered!.ThenBy(...)` on a null `ordered`. OrderBy<T>.ByName accepts any string, so any order-by whose FIRST field name does not resolve on typeof(T) crashes the localized bulk read, while the same name in a later position is skipped harmlessly. The framework's own OrderByHelper.ApplyTo (Birko.Data.Stores/OrderByHelper.cs:66) uses the correct null guard.
 
@@ -1699,11 +1703,15 @@ The branch is chosen by loop index (`if (i == 0)`) rather than by whether `order
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:153`
 
+**Verdict: CONFIRMED — fixed by [[TASK-168]] (2026-10-19).** Writes stamped `entity.GetType().Name` while `ResolveMatchingGuids` queries `typeof(T).Name`; a subclass instance in a base-type store was invisible to every localized filter (measured: 0 rows). Rows are now stamped with the store type in the one producer `LocalizedTranslationRows.Save` / `SaveAsync`, and an upsert that finds a row under the old name rewrites it (`LocalizedTranslationRows.cs:106/145`). Tests: `LocalizationMediumFindingsTests` 2 tests (sync + async), red with the subclass name stamped.
+
 SaveTranslations stamps EntityType = entity.GetType().Name (242) while ResolveMatchingGuids filters on typeof(T).Name (153). When T is a base type of the stored instances (or the store returns a subclass), no row matches, BuildGuidFilter gets an empty set and returns `x => false`, so a filtered read/Count silently returns zero rows - while ApplyTranslations, which filters by GUID+culture only, still translates the same entities on an unfiltered read. Same at LocalizedBulkStoreWrapper.cs:266/358, AsyncLocalizedStoreWrapper.cs:147/236, AsyncLocalizedBulkStoreWrapper.cs:276/368.
 
 #### SH-M073 — Setting a localizable field to null cannot clear its translation; the stale value is re-applied on the next read
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:254`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED — fixed by [[TASK-168]] (2026-10-19).** `if (value == null) continue;` in all four `SaveTranslations` copies left the old row, which the next read re-applied. A `null` now removes the field's row, so the read falls back to the base value (`LocalizedTranslationRows.cs:90/129`); an empty string is still stored. Tests: `LocalizationMediumFindingsTests` 3 tests (bulk, single, async), red with the skip restored.
 
 SaveTranslations does `if (value == null) continue;`, skipping the field rather than deleting the row. After `entity.Name = null; Update(entity);` on a non-default culture the old row survives and the next read writes it back onto the entity, so the clear silently fails. Empty string IS persisted, so "" is the only way to blank a translation. Present in all four wrappers (LocalizedBulkStoreWrapper.cs:370, AsyncLocalizedStoreWrapper.cs:248, AsyncLocalizedBulkStoreWrapper.cs:380).
 
@@ -1711,17 +1719,29 @@ SaveTranslations does `if (value == null) continue;`, skipping the field rather 
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:261`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED — handed to [[TASK-680]] (2026-10-19, [[TASK-168]]).** The upsert reads `(EntityGuid, FieldName, Culture)`, takes `FirstOrDefault()` and creates when absent, with no key (`LocalizedTranslationRows.cs:99/138`, the one producer since TASK-168). The fix is the unique key TASK-680 adds.
+
 SaveTranslations reads (EntityGuid, FieldName, Culture), takes FirstOrDefault and creates when absent - with no uniqueness constraint on EntityTranslationModel and no guard. Two concurrent writers both see no row and both Create. ApplyTranslations then resolves the field via `translationDict[t.FieldName] = t.Value` (201), i.e. whichever duplicate is enumerated last, and every later upsert only updates FirstOrDefault() - so one duplicate stays permanently stale and reads flip between the two values. Same in all four wrappers.
 
 #### SH-M075 — Sync bulk Update(filter, Action) writes the translation before the inner store persists the entity
 
 `../Birko.Data.Localization/Decorators/LocalizedBulkStoreWrapper.cs:174`
 
+**Verdict: CONFIRMED — fixed by [[TASK-168]] (2026-10-19).** The sync wrapper saved the row inside the callback, which `AbstractBulkStore` runs before its own write; SH-H017's fix had made the async twin save first too, to match. Both now write the rows only after the inner update returns (`LocalizedBulkStoreWrapper.cs:235`, async `UpdateAsync(filter, Action)`). Tests: `LocalizationMediumFindingsTests` 2 tests (sync + async, inner write made to throw), red with the save moved back before the write. The wider gap — a failure *after* the inner write — is SH-M083.
+
 The wrapper hands the inner store `item => { updateAction(item); SaveTranslations(item); }`. AbstractBulkStore.Update(filter, Action) (Birko.Data.Stores/AbstractBulkStore.cs:74-82) invokes the callback and only then calls Update(item), so the translation row is committed before, and independently of, the entity write; if the inner Update throws the translation persists for an update that never happened. Every other path saves translations AFTER the inner write, and the async twin (AsyncLocalizedBulkStoreWrapper.cs:184-186) does read-modify-write per entity instead.
+
+#### TASK-168 — Filter-based update wrote every localizable field, putting base text over translations
+
+`../Birko.Data.Localization/Decorators/LocalizedBulkStoreWrapper.cs:209`  ·  _found while verifying SH-M075, not a harvest finding_
+
+**Verdict: CONFIRMED and fixed by [[TASK-168]] (2026-10-19).** Under a non-default culture, `Update(filter, Action)` handed the action the inner store's untranslated entity and then saved **every** localizable field, so `Update(x => x.Code == "C1", e => e.Code = "C2")` under `sk` overwrote the Slovak `Name` with the English one (measured). The PropertyUpdate fallback reaches the same path. The action now sees the translated values, and only the fields it changed are written. Same code as SH-M075, so fixed in the same change rather than spawned. Tests: `LocalizationMediumFindingsTests` 3 tests (sync, async, and the action's view), red with every field saved again.
 
 #### SH-M076 — Async SaveAsync discards the created GUID and returns Guid.Empty when the inner store does not assign data.Guid
 
 `../Birko.Data.Localization/Decorators/AsyncLocalizedStoreWrapper.cs:105`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED-NARROWER — fixed by [[TASK-168]] (2026-10-19).** The `SaveAsync` half was already fixed by TASK-555 (`StoreSave.SaveAsync` returns the created GUID). The other half held: translation persistence keyed on `data.Guid`, so a store that returns a key without writing it back lost the translations. `Create` now passes the returned GUID (`LocalizedStoreWrapper.cs:70`, bulk `:111`, async `:72` / `:110`). Latent for the shipped stores, which all write the GUID back. Tests: `LocalizationMediumFindingsTests` 3 tests, red with the entity's GUID used again.
 
 SaveAsync awaits CreateAsync (which returns the new GUID) but ignores the result and returns `data.Guid ?? Guid.Empty`; sync Save returns `Create(...)`'s value (LocalizedStoreWrapper.cs:97). Against an inner store that returns a GUID without writing it onto the instance, sync callers get the real key and async callers get Guid.Empty. The same assumption silently disables translation persistence, since SaveTranslations bails on a null Guid. Same at AsyncLocalizedBulkStoreWrapper.cs:234.
 
@@ -1729,11 +1749,15 @@ SaveAsync awaits CreateAsync (which returns the new GUID) but ignores the result
 
 `../Birko.Data.Localization/Expressions/LocalizedExpressionVisitor.cs:134`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED — fixed by [[TASK-168]] (2026-10-19), as a refusal.** A part of the filter that is not extracted but still reads a localizable field (inside `||` or `!`, a chained or static call, a comparison with another column) went to the inner store and tested the base column. It now throws `NotSupportedException` naming the field (`LocalizedExpressionVisitor.cs:111`, rule 42); the documented `== null` / `!= null` base-column compare stays exempt. No consumer calls the wrappers yet (Symbio imports the project only), so nothing breaks. Tests: `LocalizationMediumFindingsTests` 5 tests, red with the refusal removed.
+
 FlattenAndAlso only splits AndAlso chains, so an OrElse or Not node is one indivisible residual part and reaches the inner store untouched. `x => x.Name == "Stolicka" || x.Code == "C1"` compares the Slovak term against the English column and returns wrong rows. Static string calls (string.IsNullOrEmpty(x.Name)) and chained receivers (x.Name.ToLower().Contains(q)) degrade the same way, since methodCall.Object must be the property itself (180). The class remarks document the null-compare and `!=` limits but not these.
 
 #### SH-M078 — StringComparison argument on Contains/StartsWith/EndsWith is discarded, turning a case-insensitive filter case-sensitive
 
 `../Birko.Data.Localization/Expressions/LocalizedExpressionVisitor.cs:186`  ·  _restates a first-pass finding_
+
+**Verdict: CONFIRMED — fixed by [[TASK-168]] (2026-10-19).** Only `Arguments[0]` was read, so `Contains(q, OrdinalIgnoreCase)` ran case-sensitive. The two-argument form now passes its `StringComparison` through (`LocalizedExpressionVisitor.cs:278`); any other overload is not extracted and is refused per SH-M077. Tests: `LocalizationMediumFindingsTests` 1 test red with the comparison dropped, plus a pin that `Ordinal` stays case-sensitive.
 
 Extraction matches on methodCall.Method.Name and only inspects Arguments[0], so `x.Name.Contains(q, StringComparison.OrdinalIgnoreCase)` IS extracted but the predicate built is the case-sensitive `v.Contains(q)`. The same query behaves differently on the default culture (inner store, comparison honoured) and a non-default one (in-memory, comparison dropped) - the same species as the SQL Contains(q, StringComparison) bug already recorded in CHANGELOG.
 
@@ -1741,11 +1765,15 @@ Extraction matches on methodCall.Method.Name and only inspects Arguments[0], so 
 
 `../Birko.Data.Localization/Expressions/LocalizedExpressionVisitor.cs:268`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED — fixed by [[TASK-168]] (2026-10-19).** The bare `catch { return null; }` also served as the not-a-constant check (compiling `x.Code` throws), which is why it was there. That check is now explicit (an operand that reads the entity is not evaluated), and a real evaluation failure is rethrown unwrapped (`LocalizedExpressionVisitor.cs:366`). Tests: `LocalizationMediumFindingsTests` 1 test, red with the catch restored. Its first version passed either way because the in-memory store re-threw the same exception, so it now uses an operand that fails only on the analyzer's evaluation.
+
 The compile-and-invoke fallback is wrapped in `catch { return null; }`. A failure to evaluate the compared operand yields no constant, so the condition is not extracted and lands in the residual filter, where it queries the untranslated column. The failure is indistinguishable from "this field is not localizable" - the query returns wrong rows rather than reporting that it could not be localized.
 
 #### SH-M080 — In-memory ordering of translated text sorts with the thread culture, not the localization context's culture
 
 `../Birko.Data.Localization/Expressions/LocalizedOrderByHelper.cs:92`
+
+**Verdict: CONFIRMED — fixed by [[TASK-168]] (2026-10-19).** `SafeObjectComparer` used `string.CompareTo` (thread culture). Measured under the invariant culture: `čaj, cesta, dom`; Slovak is `cesta, čaj, dom`. `ApplyInMemoryOrderBy` now takes the context's culture and collates strings with its `CompareInfo` (`LocalizedOrderByHelper.cs:107`). Tests: `LocalizationMediumFindingsTests` 1 test, red without the culture.
 
 SafeObjectComparer.Compare uses `comparable.CompareTo(y)`, which for string is culture-sensitive on CultureInfo.CurrentCulture. The values sorted are the translations just fetched for _context.CurrentCulture, which this static helper is never given, so a Slovak list ordered by Name is collated with the ambient thread culture (often Invariant on a server), mis-ordering c/s/z-caron. This is the one path whose purpose is localized ordering, and the only sort where the data's culture is known and ignored.
 
@@ -1753,17 +1781,23 @@ SafeObjectComparer.Compare uses `comparable.CompareTo(y)`, which for string is c
 
 `../Birko.Data.Localization/Decorators/LocalizedBulkStoreWrapper.cs:106`
 
+**Verdict: CONFIRMED — handed to [[TASK-679]] (2026-10-19, [[TASK-168]]).** `LocalizedBulkStoreWrapper.cs:86` (async `:84`) reads the whole matching set with no limit, then `Localize` queries once per entity. TASK-679 batches the per-entity reads; the unbounded read is inherent to sorting translated text in memory and goes into the spec as a stated limit.
+
 `_innerStore.Read(rewritten)` runs with no limit/offset, then ApplyTranslations runs per entity, each issuing its own _translationStore.Read (313). Sorting a 100k-row catalogue by localized Name materializes all 100k entities and fires 100k translation queries before Skip/Take discards all but one page; the caller's limit/offset - the only bound available - is deliberately dropped. Same at AsyncLocalizedBulkStoreWrapper.cs:113-117; the per-entity query also applies to the other bulk read paths (72-81, 97-101).
 
 #### SH-M082 — Localized-condition resolution materializes the whole field+culture translation slice, un-tenant-scoped
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:157`
 
+**Verdict: CONFIRMED — handed to [[TASK-681]] (2026-10-19, [[TASK-168]]).** `ResolveMatchingGuids` reads every row of `(EntityType, FieldName, Culture)` with no value term and applies the predicate in memory; `EntityTranslationModel` is not `ITenant`, so the slice spans tenants. TASK-681 pushes equality/IN into the query; TASK-680's model change is what lets a tenant wrapper scope it.
+
 ResolveMatchingGuids builds a filter with EntityType/FieldName/Culture but no EntityGuid, reads the whole result and applies condition.ValuePredicate client-side (165). Every filtered read on a non-default culture pulls that entire slice into memory - and since EntityTranslationModel does not implement ITenant, TenantBulkStoreWrapper (which requires T : ITenant) cannot wrap the translation store, so the slice spans every tenant. Only GUIDs escape, so results stay tenant-correct, but the scan and the in-process exposure of other tenants' text are unbounded.
 
 #### SH-M083 — Entity write and translation write have no transactional boundary, silently desynchronizing the two stores
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:77`
+
+**Verdict: CONFIRMED — spawned as [[TASK-683]] (2026-10-19, [[TASK-168]]).** Every path is two independent store calls (`LocalizedStoreWrapper.cs:145-146` delete then `DeleteTranslations`; create/update then `LocalizedTranslationRows.Save`), with no `ITransactionalStore` / `IUnitOfWork` participation. Needs a decision on how the wrappers join a boundary, so too large for the triage.
 
 Every path is two independent store operations: Create/Update then SaveTranslations (76-78, 83-84), Delete then DeleteTranslations (89-90), and the bulk variants loop per entity after one inner bulk call (LocalizedBulkStoreWrapper.cs:196-214). A throw from the second half leaves the entity written with no translation, or deleted with its rows orphaned forever - DeleteTranslations is the only deletion site, so nothing ever cleans them. No ITransactionalStore/IUnitOfWork participation, and no failure is reported for the entities already processed.
 

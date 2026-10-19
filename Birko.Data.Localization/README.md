@@ -15,8 +15,14 @@ Entity-level localization for Birko.Data stores. Provides store decorator wrappe
 1. Entity stores the default-language values in its own fields
 2. Translations for other languages are stored in a separate `EntityTranslationModel` store
 3. On **read**, the wrapper checks the current culture — if it differs from the default, it fetches translations and overwrites the entity's localizable fields
-4. On **create/update**, the wrapper persists translations for the current culture (if non-default)
+4. On **create/update**, the wrapper persists translations for the current culture (if non-default). Setting a localizable field to `null` removes that field's translation, so reads fall back to the base value; an empty string is stored as a translation
 5. On **delete**, all associated translations are removed
+
+## Filters on localizable fields
+
+Under a non-default culture, a filter condition on a localizable field is answered from the translation rows. Supported: `==`, `!=`, `Contains`, `StartsWith` and `EndsWith` on the field itself, against a value (a `StringComparison` argument is honoured), joined by `&&`. Ordering by a localizable field sorts the translated text in memory, collated with the current culture.
+
+Anything else that reads a localizable field throws `NotSupportedException` instead of silently testing the default-culture column: a condition inside `||` or `!`, a chained call (`x.Name.ToLower()`), a static call (`string.IsNullOrEmpty(x.Name)`) or a comparison with another column. `x.Name == null` / `!= null` is the one exception: it tests the base column.
 
 ## Usage
 
@@ -74,7 +80,7 @@ store = new AsyncLocalizedStoreWrapper<...>(store, translationStore, locContext)
 
 ## Filter-Based Bulk Operations
 
-Localized store wrappers delegate `PropertyUpdate` and `Delete(filter)` directly to the inner store. The `Action<T>` overload saves translations after each entity update.
+Filters on all bulk operations are translated as above. Under a non-default culture, the `Action<T>` overload shows the action the translated values, keeps the base columns on the default culture, and writes translations only for the localizable fields the action changed, after the inner store's update succeeds. A `PropertyUpdate` that sets a localizable field goes through the same path. The entity write and the translation write are not atomic yet (TASK-683).
 
 ## License
 

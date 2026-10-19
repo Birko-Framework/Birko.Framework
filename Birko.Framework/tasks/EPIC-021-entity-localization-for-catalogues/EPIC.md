@@ -48,3 +48,4 @@ below does not build on known defects.
 - TASK-680 — translation model generic over the consumer's type; unique key
 - TASK-681 — filters on translated fields in SQL, with base-value fallback
 - TASK-682 — `IEntityTranslations`: the explicit translation API
+- TASK-683 — entity write and translation write share no boundary (SH-M083, spawned from TASK-168)

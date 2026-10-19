@@ -87,7 +87,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
         if (orderBy != null)
         {
-            allEntities = LocalizedOrderByHelper.ApplyInMemoryOrderBy(allEntities, orderBy);
+            allEntities = LocalizedOrderByHelper.ApplyInMemoryOrderBy(allEntities, orderBy, _context.CurrentCulture);
         }
 
         return LocalizedOrderByHelper.ApplyInMemoryPaging(allEntities, offset, limit);
@@ -107,7 +107,8 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
     public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
         var guid = _innerStore.Create(data, storeDelegate);
-        SaveTranslations(data);
+        // SH-M076: keyed by the GUID the store returned — it need not have written it onto the entity.
+        SaveTranslations(guid, LocalizedTranslationRows.ValuesOf(data));
         return guid;
     }
 
@@ -195,30 +196,55 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
     /// <para>
     /// SH-H017: the action mutates the entity the inner store loaded and the inner store then persists
     /// it, so the translated text landed in the base column. The base values are captured before the
-    /// action runs and put back after the translation row is written — the callback runs ahead of the
-    /// inner store's own write, so this needs no second pass.
+    /// action runs and put back before the callback returns, whether or not the action threw.
+    /// </para>
+    /// <para>
+    /// TASK-168: the action sees the entity as a read in this culture shows it, and only the localizable
+    /// fields it <b>changed</b> are written as translations. Writing every field put the untouched base
+    /// (default-culture) text over the existing translations. Those rows are written <b>after</b> the
+    /// inner store's update returns (SH-M075): the callback runs ahead of the inner write, so a row written
+    /// there outlived an update that then failed.
     /// </para>
     /// </remarks>
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
     {
         if (!IsNonDefaultCulture())
         {
-            _innerStore.Update(filter, item =>
-            {
-                updateAction(item);
-                SaveTranslations(item);
-            });
+            _innerStore.Update(filter, updateAction);
             return;
         }
 
         var fields = GetLocalizableFieldsFromInstance();
+        var culture = _context.CurrentCulture.Name;
+        var pending = new List<(Guid Guid, Dictionary<string, string?> Values)>();
         _innerStore.Update(RewriteFilter(filter)!, item =>
         {
             var baseValues = LocalizedEntityFields.Capture(item, fields);
-            updateAction(item);
-            SaveTranslations(item);
-            LocalizedEntityFields.Restore(item, baseValues);
+            try
+            {
+                if (item.Guid is Guid guid)
+                {
+                    LocalizedEntityFields.Restore(item, LocalizedTranslationRows.Read(_translationStore, guid, culture, fields));
+                }
+
+                var before = LocalizedEntityFields.Capture(item, fields);
+                updateAction(item);
+                var changed = LocalizedTranslationRows.Changed(before, LocalizedEntityFields.Capture(item, fields));
+                if (item.Guid is Guid changedGuid && changed.Count > 0)
+                {
+                    pending.Add((changedGuid, changed));
+                }
+            }
+            finally
+            {
+                LocalizedEntityFields.Restore(item, baseValues);
+            }
         });
+
+        foreach (var (guid, values) in pending)
+        {
+            SaveTranslations(guid, values);
+        }
     }
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
@@ -313,7 +339,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
     {
         HashSet<Guid>? result = null;
         var culture = _context.CurrentCulture.Name;
-        var entityType = typeof(T).Name;
+        var entityType = LocalizedTranslationRows.EntityTypeOf<T>();
 
         foreach (var condition in conditions)
         {
@@ -475,62 +501,21 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
     #region Translation Persistence
 
-    protected void SaveTranslations(T entity)
+    /// <summary>Persists every localizable field of <paramref name="entity"/> as this culture's translation.</summary>
+    protected void SaveTranslations(T entity) => SaveTranslations(entity.Guid, LocalizedTranslationRows.ValuesOf(entity));
+
+    /// <summary>
+    /// Persists <paramref name="values"/> as this culture's translations of the entity keyed by
+    /// <paramref name="guid"/>; a <c>null</c> value removes that field's row. See <see cref="LocalizedTranslationRows"/>.
+    /// </summary>
+    protected void SaveTranslations(Guid? guid, IReadOnlyDictionary<string, string?> values)
     {
-        if (!IsNonDefaultCulture())
+        if (!IsNonDefaultCulture() || guid == null || guid == Guid.Empty)
         {
             return;
         }
 
-        if (entity.Guid == null)
-        {
-            return;
-        }
-
-        var fields = entity.GetLocalizableFields();
-        var type = entity.GetType();
-        var entityType = type.Name;
-        var now = DateTime.UtcNow;
-
-        foreach (var fieldName in fields)
-        {
-            var prop = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
-            if (prop == null || prop.PropertyType != typeof(string))
-            {
-                continue;
-            }
-
-            var value = prop.GetValue(entity) as string;
-            if (value == null)
-            {
-                continue;
-            }
-
-            var tFilter = EntityTranslationFilter.ByEntityFieldAndCulture(
-                entity.Guid.Value, fieldName, _context.CurrentCulture.Name);
-            var existing = _translationStore.Read(tFilter.ToExpression());
-
-            var translation = existing.FirstOrDefault();
-            if (translation != null)
-            {
-                translation.Value = value;
-                translation.UpdatedAt = now;
-                _translationStore.Update(translation);
-            }
-            else
-            {
-                translation = new EntityTranslationModel
-                {
-                    EntityGuid = entity.Guid.Value,
-                    EntityType = entityType,
-                    FieldName = fieldName,
-                    Culture = _context.CurrentCulture.Name,
-                    Value = value,
-                    UpdatedAt = now
-                };
-                _translationStore.Create(translation);
-            }
-        }
+        LocalizedTranslationRows.Save(_translationStore, guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name, values);
     }
 
     protected void DeleteTranslations(T entity)

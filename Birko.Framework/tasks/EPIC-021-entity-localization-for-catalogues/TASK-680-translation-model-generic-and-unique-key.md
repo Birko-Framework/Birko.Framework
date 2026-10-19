@@ -9,7 +9,7 @@ assignee: ai
 created: 2026-10-19
 depends-on: [TASK-168, TASK-194]
 blocks: [TASK-681, TASK-682]
-findings: []
+findings: [SH-M074]
 pr: null
 github-issue: null
 jira-key: null
@@ -26,6 +26,8 @@ Read in source 2026-10-19 (Symbio session, for its STORY-081):
   rows); the rows are global. Symbio needs its translation rows to be its own tenant entity.
 - Nothing prevents two rows for one `(EntityGuid, EntityType, FieldName, Culture)`: writes read, then create or update,
   per field, with no key — two concurrent writers can both create. Reads then pick one arbitrarily.
+
+**Also remediates SH-M074** (handed over by [[TASK-168]], confirmed 2026-10-19): the upsert in `LocalizedTranslationRows.Save` / `SaveAsync` (the one producer since TASK-168) reads, then creates when absent, with no key; reads then keep whichever duplicate is enumerated last.
 
 ## Acceptance criteria
 

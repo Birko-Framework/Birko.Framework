@@ -9,7 +9,7 @@ assignee: ai
 created: 2026-10-19
 depends-on: [TASK-168, TASK-194]
 blocks: [TASK-682]
-findings: []
+findings: [SH-M081]
 pr: null
 github-issue: null
 jira-key: null
@@ -25,6 +25,8 @@ Read in source 2026-10-19 (Symbio session, for its STORY-081): `AsyncLocalizedBu
 products in English is 48 extra queries; Symbio's rules forbid exactly that shape (N+1). The sync bulk wrapper has the
 same loop. Writes have the same shape (`SaveTranslationsAsync` reads then writes per field per entity), which TASK-682's
 batched `SetAsync` addresses.
+
+**Also remediates SH-M081** (handed over by [[TASK-168]], confirmed 2026-10-19): a localized order-by reads the whole matching set (`LocalizedBulkStoreWrapper.cs:86`, async twin `:84`) and then `Localize` issues one translation query per entity. Batching removes the N+1; the unbounded read itself is inherent to sorting translated text in memory, so record that limit in the spec rather than leave it implied.
 
 ## Acceptance criteria
 

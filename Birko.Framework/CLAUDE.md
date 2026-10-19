@@ -240,6 +240,14 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Localization triage: untranslatable filters refused, translations saved after the write (2026-10-19)
+[[TASK-168]]. 14 medium findings, all confirmed (SH-M076 narrower); 4 handed to EPIC-021, SH-M083 spawned as [[TASK-683]].
+- A filter that reads a translated field in a form the analyzer cannot translate (`||`, `!`, chained or static calls,
+  column-to-column) throws `NotSupportedException`. It used to test the default-culture column silently.
+- `Update(filter, Action)` shows the action the translated values and writes only the fields it changed, after the
+  inner write. Measured: an update of a non-localized field overwrote the Slovak translations with English text.
+- A `null` field removes its translation. Rows are stamped `typeof(T).Name`, keyed by the GUID the store returned.
+  `StringComparison` is honoured, and in-memory sorting collates with the current culture.
 ### The SQL cached store invalidates again after a transaction commits (2026-10-18)
 [[TASK-669]]. During a transaction, a reader outside it could cache the pre-commit rows until they expired. New
 `AmbientSqlTransaction.OnCommitted` registers work on a transaction. `SqlUnitOfWork` and the bulk stores' own
@@ -317,21 +325,6 @@ only its own token. SQL cache keys name the entity type.
   cancelled. Invalidating after the commit is TASK-669.
 - HybridCache lets the caller's cancellation through, and a removed key is not backfilled from L2.
 - Redis scans its own database on every primary (`RedisConnectionManager.GetServers()`).
-### Messaging options no transport honours are refused until implemented (2026-10-18)
-[[TASK-174]]. 29 low findings. Decided by the user, until [[TASK-668]] implements them, these throw:
-- `TimeToLive` on MQTT and in-memory, a non-zero `Priority`, and a non-default `PrefetchCount`.
-- The distributed bus's `RetryPolicy` / `DeadLetterOptions` (now null by default).
-
-Redeliveries carry `x-delivery-count`; `RedisConsumer.PollError` is public; any event can carry correlation through
-`ICorrelatedEvent`.
-### Event bus and messaging: transports refuse what they cannot do; dedup retries failures (2026-10-18)
-[[TASK-155]]. 24 medium findings. Decided by the user:
-- A new Redis group starts at the stream's tail unless `FromBeginning`.
-- MQTT and Redis refuse options and `Delay` they cannot honour.
-- An unknown event type is redelivered; a corrupt message is reported.
-- Deduplication releases its mark on failure. **Breaking:** `IDeduplicationStore.ReleaseAsync`.
-
-The outbox over the distributed bus now starts. Details: CHANGELOG.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -47,8 +47,8 @@ public class LocalizedFieldCondition
 
 /// <summary>
 /// Analyzes an expression tree to split conditions on localizable fields from non-localizable conditions.
-/// Supports: ==, !=, Contains, StartsWith, EndsWith on localizable string properties.
-/// Combined with &amp;&amp; (AndAlso) at the top level.
+/// Supports: ==, !=, Contains, StartsWith, EndsWith (optionally with a <see cref="StringComparison"/>) on
+/// localizable string properties, against a value, combined with &amp;&amp; (AndAlso) at the top level.
 /// </summary>
 /// <remarks>
 /// CR-L137: two localized-filter semantics to be aware of:
@@ -63,6 +63,13 @@ public class LocalizedFieldCondition
 /// lacking a translation are absent from the translation result set and are therefore silently excluded
 /// from a <c>!=</c> match, rather than being treated as "value differs". A fully correct <c>!=</c> would
 /// need the complement of the matching guids over the whole entity set.
+/// </description></item>
+/// <item><description>
+/// <b>Anything else that reads a localizable field is refused</b> with <see cref="NotSupportedException"/>
+/// (SH-M077, TASK-168): a condition inside <c>||</c> or <c>!</c>, a chained call
+/// (<c>x.Name.ToLower()</c>), a static call (<c>string.IsNullOrEmpty(x.Name)</c>), or a comparison with
+/// another column. Such a condition used to reach the inner store unchanged and test the base
+/// (default-culture) column, returning wrong rows with no error.
 /// </description></item>
 /// </list>
 /// </remarks>
@@ -98,11 +105,11 @@ public static class LocalizedExpressionAnalyzer
             if (extracted != null)
             {
                 localizedConditions.Add(extracted);
+                continue;
             }
-            else
-            {
-                remainingParts.Add(part);
-            }
+
+            RefuseUntranslatedLocalizedField(part, param, fieldSet);
+            remainingParts.Add(part);
         }
 
         Expression<Func<T, bool>>? remaining = null;
@@ -117,6 +124,113 @@ public static class LocalizedExpressionAnalyzer
             RemainingFilter = remaining,
             LocalizedConditions = localizedConditions
         };
+    }
+
+    /// <summary>
+    /// Throws when a part that could not be extracted still reads a localizable field, because the inner
+    /// store would evaluate it against the base column (SH-M077). The documented null comparison is the one
+    /// exception.
+    /// </summary>
+    private static void RefuseUntranslatedLocalizedField(Expression part, ParameterExpression param, HashSet<string> localizableFields)
+    {
+        if (IsNullComparison(part, param, localizableFields))
+        {
+            return;
+        }
+
+        var finder = new LocalizedFieldFinder(param, localizableFields);
+        finder.Visit(part);
+        if (finder.Found == null)
+        {
+            return;
+        }
+
+        throw new NotSupportedException(
+            $"A {part.NodeType} filter condition reads the localizable field '{finder.Found}' in a form that cannot be "
+            + "translated, so it would test the default-culture value instead of the current culture's. Supported: "
+            + "==, !=, Contains, StartsWith and EndsWith on the field itself against a value, joined by &&.");
+    }
+
+    private static bool IsNullComparison(Expression part, ParameterExpression param, HashSet<string> localizableFields)
+    {
+        if (part is not BinaryExpression binary
+            || (binary.NodeType != ExpressionType.Equal && binary.NodeType != ExpressionType.NotEqual))
+        {
+            return false;
+        }
+
+        return (ExtractFieldName(binary.Left, param, localizableFields) != null && IsNullValue(binary.Right))
+            || (ExtractFieldName(binary.Right, param, localizableFields) != null && IsNullValue(binary.Left));
+    }
+
+    /// <summary>A literal <c>null</c>, or a captured value that is <c>null</c> — never an operand reading the entity.</summary>
+    private static bool IsNullValue(Expression expression)
+    {
+        var parameters = new ParameterFinder();
+        parameters.Visit(expression);
+        return !parameters.Found && EvaluateExpression(expression) == null;
+    }
+
+    private sealed class LocalizedFieldFinder : ExpressionVisitor
+    {
+        private readonly ParameterExpression _param;
+        private readonly HashSet<string> _fields;
+
+        public LocalizedFieldFinder(ParameterExpression param, HashSet<string> fields)
+        {
+            _param = param;
+            _fields = fields;
+        }
+
+        public string? Found { get; private set; }
+
+        protected override Expression VisitMember(MemberExpression node)
+        {
+            if (Found == null && ReadsParameter(node.Expression) && _fields.Contains(node.Member.Name))
+            {
+                Found = node.Member.Name;
+            }
+            return base.VisitMember(node);
+        }
+
+        /// <summary>The parameter itself, or the parameter cast to an interface or base type (<c>((INamed)x).Name</c>).</summary>
+        private bool ReadsParameter(Expression? expression)
+        {
+            while (expression is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.TypeAs } cast)
+            {
+                expression = cast.Operand;
+            }
+            return expression == _param;
+        }
+    }
+
+    /// <summary>
+    /// Finds a parameter no lambda inside the visited expression binds — the filter's own entity parameter. The
+    /// parameter of a nested lambda (<c>names.First(n =&gt; n.StartsWith("S"))</c>) is bound there and does not
+    /// make the operand read the entity.
+    /// </summary>
+    private sealed class ParameterFinder : ExpressionVisitor
+    {
+        private readonly HashSet<ParameterExpression> _bound = new();
+
+        public bool Found { get; private set; }
+
+        protected override Expression VisitLambda<TDelegate>(Expression<TDelegate> node)
+        {
+            var added = node.Parameters.Where(_bound.Add).ToList();
+            Visit(node.Body);
+            _bound.ExceptWith(added);
+            return node;
+        }
+
+        protected override Expression VisitParameter(ParameterExpression node)
+        {
+            if (!_bound.Contains(node))
+            {
+                Found = true;
+            }
+            return node;
+        }
     }
 
     /// <summary>
@@ -174,20 +288,26 @@ public static class LocalizedExpressionAnalyzer
             }
         }
 
-        // Method call: x.Name.Contains("value"), x.Name.StartsWith("value"), x.Name.EndsWith("value")
+        // Method call: x.Name.Contains("value"), x.Name.StartsWith("value"), x.Name.EndsWith("value"), each
+        // optionally with a StringComparison (SH-M078: it used to be dropped, so the match went case-sensitive).
         if (node is MethodCallExpression methodCall && methodCall.Object != null)
         {
             var fieldName = ExtractFieldName(methodCall.Object, param, localizableFields);
-            if (fieldName != null && methodCall.Arguments.Count >= 1)
+            if (fieldName != null && methodCall.Arguments.Count is 1 or 2)
             {
                 var argValue = EvaluateExpression(methodCall.Arguments[0]);
-                if (argValue is string strArg)
+                // Without the argument, each method keeps its own .NET default: Contains is ordinal, StartsWith and
+                // EndsWith compare with the current culture.
+                var comparison = methodCall.Arguments.Count == 2
+                    ? EvaluateExpression(methodCall.Arguments[1]) as StringComparison?
+                    : methodCall.Method.Name == "Contains" ? StringComparison.Ordinal : StringComparison.CurrentCulture;
+                if (argValue is string strArg && comparison is StringComparison cmp)
                 {
                     Func<string, bool>? predicate = methodCall.Method.Name switch
                     {
-                        "Contains" => v => v != null && v.Contains(strArg),
-                        "StartsWith" => v => v != null && v.StartsWith(strArg),
-                        "EndsWith" => v => v != null && v.EndsWith(strArg),
+                        "Contains" => v => v != null && v.Contains(strArg, cmp),
+                        "StartsWith" => v => v != null && v.StartsWith(strArg, cmp),
+                        "EndsWith" => v => v != null && v.EndsWith(strArg, cmp),
                         _ => null
                     };
 
@@ -258,16 +378,25 @@ public static class LocalizedExpressionAnalyzer
             }
         }
 
-        // Fallback: compile and invoke
-        try
-        {
-            var lambda = Expression.Lambda(expression);
-            var compiled = lambda.Compile();
-            return compiled.DynamicInvoke();
-        }
-        catch
+        // An operand that reads the entity is not a value (x.Name == x.Code); it is left unextracted, and
+        // RefuseUntranslatedLocalizedField reports it.
+        var parameters = new ParameterFinder();
+        parameters.Visit(expression);
+        if (parameters.Found)
         {
             return null;
+        }
+
+        // SH-M079: a value that fails to evaluate is reported, not swallowed. Swallowing it left the condition
+        // unextracted, so it tested the base column.
+        try
+        {
+            return Expression.Lambda(expression).Compile().DynamicInvoke();
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+            throw;
         }
     }
 }

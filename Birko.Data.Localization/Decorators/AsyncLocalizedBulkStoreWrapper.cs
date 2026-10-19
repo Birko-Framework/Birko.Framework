@@ -86,7 +86,7 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
 
         if (orderBy != null)
         {
-            allEntities = LocalizedOrderByHelper.ApplyInMemoryOrderBy(allEntities, orderBy);
+            allEntities = LocalizedOrderByHelper.ApplyInMemoryOrderBy(allEntities, orderBy, _context.CurrentCulture);
         }
 
         return LocalizedOrderByHelper.ApplyInMemoryPaging(allEntities, offset, limit);
@@ -106,7 +106,8 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
     public async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
         var guid = await _innerStore.CreateAsync(data, processDelegate, ct);
-        await SaveTranslationsAsync(data, ct);
+        // SH-M076: keyed by the GUID the store returned — it need not have written it onto the entity.
+        await SaveTranslationsAsync(guid, LocalizedTranslationRows.ValuesOf(data), ct);
         return guid;
     }
 
@@ -185,24 +186,35 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
 
         foreach (var item in items)
         {
-            var baseValues = fields == null ? null : LocalizedEntityFields.Capture(item, fields);
-            updateAction(item);
-
-            if (baseValues == null)
+            if (fields == null)
             {
+                updateAction(item);
                 await _innerStore.UpdateAsync(item, ct: ct);
-                await SaveTranslationsAsync(item, ct);
                 continue;
             }
 
-            // SH-H017: the caller text belongs in the translation row and the base column keeps the
-            // default culture, so the translation is saved first and the base values put back before
-            // the inner store sees the entity. Saving first is also what the sync twin does (its
-            // callback runs ahead of the inner store write), so the two agree; the consequence either
-            // way is that a translation row can outlive a failed inner update.
-            await SaveTranslationsAsync(item, ct);
-            LocalizedEntityFields.Restore(item, baseValues);
-            await _innerStore.UpdateAsync(item, ct: ct);
+            // The action works on a detached copy: translations are applied to it, and the inner store's
+            // own instance must never carry them (SH-H016), even when the action throws.
+            var working = LocalizedEntityFields.Detach(item);
+            var baseValues = LocalizedEntityFields.Capture(working, fields);
+            if (working.Guid is Guid guid)
+            {
+                LocalizedEntityFields.Restore(working, await LocalizedTranslationRows.ReadAsync(
+                    _translationStore, guid, _context.CurrentCulture.Name, fields, ct));
+            }
+
+            var before = LocalizedEntityFields.Capture(working, fields);
+            updateAction(working);
+            var changed = LocalizedTranslationRows.Changed(before, LocalizedEntityFields.Capture(working, fields));
+
+            // SH-H017: the base column keeps the default culture. SH-M075: the translation rows are written
+            // only once the inner update has succeeded, so a failed update leaves none behind.
+            LocalizedEntityFields.Restore(working, baseValues);
+            await _innerStore.UpdateAsync(working, ct: ct);
+            if (changed.Count > 0)
+            {
+                await SaveTranslationsAsync(working.Guid, changed, ct);
+            }
         }
     }
 
@@ -304,7 +316,7 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
     {
         HashSet<Guid>? result = null;
         var culture = _context.CurrentCulture.Name;
-        var entityType = typeof(T).Name;
+        var entityType = LocalizedTranslationRows.EntityTypeOf<T>();
 
         foreach (var condition in conditions)
         {
@@ -465,62 +477,20 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
 
     #region Translation Persistence
 
-    protected async Task SaveTranslationsAsync(T entity, CancellationToken ct)
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.SaveTranslations(T)" />
+    protected Task SaveTranslationsAsync(T entity, CancellationToken ct)
+        => SaveTranslationsAsync(entity.Guid, LocalizedTranslationRows.ValuesOf(entity), ct);
+
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.SaveTranslations(Guid?, IReadOnlyDictionary{string, string?})" />
+    protected Task SaveTranslationsAsync(Guid? guid, IReadOnlyDictionary<string, string?> values, CancellationToken ct)
     {
-        if (!IsNonDefaultCulture())
+        if (!IsNonDefaultCulture() || guid == null || guid == Guid.Empty)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        if (entity.Guid == null)
-        {
-            return;
-        }
-
-        var fields = entity.GetLocalizableFields();
-        var type = entity.GetType();
-        var entityType = type.Name;
-        var now = DateTime.UtcNow;
-
-        foreach (var fieldName in fields)
-        {
-            var prop = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
-            if (prop == null || prop.PropertyType != typeof(string))
-            {
-                continue;
-            }
-
-            var value = prop.GetValue(entity) as string;
-            if (value == null)
-            {
-                continue;
-            }
-
-            var tFilter = EntityTranslationFilter.ByEntityFieldAndCulture(
-                entity.Guid.Value, fieldName, _context.CurrentCulture.Name);
-            var existing = await _translationStore.ReadAsync(tFilter.ToExpression(), ct: ct);
-
-            var translation = existing.FirstOrDefault();
-            if (translation != null)
-            {
-                translation.Value = value;
-                translation.UpdatedAt = now;
-                await _translationStore.UpdateAsync(translation, ct: ct);
-            }
-            else
-            {
-                translation = new EntityTranslationModel
-                {
-                    EntityGuid = entity.Guid.Value,
-                    EntityType = entityType,
-                    FieldName = fieldName,
-                    Culture = _context.CurrentCulture.Name,
-                    Value = value,
-                    UpdatedAt = now
-                };
-                await _translationStore.CreateAsync(translation, ct: ct);
-            }
-        }
+        return LocalizedTranslationRows.SaveAsync(
+            _translationStore, guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name, values, ct);
     }
 
     protected async Task DeleteTranslationsAsync(T entity, CancellationToken ct)

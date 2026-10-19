@@ -68,7 +68,8 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
     public async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
         var guid = await _innerStore.CreateAsync(data, processDelegate, ct);
-        await SaveTranslationsAsync(data, ct);
+        // SH-M076: keyed by the GUID the store returned — it need not have written it onto the entity.
+        await SaveTranslationsAsync(guid, LocalizedTranslationRows.ValuesOf(data), ct);
         return guid;
     }
 
@@ -170,7 +171,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
     {
         HashSet<Guid>? result = null;
         var culture = _context.CurrentCulture.Name;
-        var entityType = typeof(T).Name;
+        var entityType = LocalizedTranslationRows.EntityTypeOf<T>();
 
         foreach (var condition in conditions)
         {
@@ -251,62 +252,20 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
 
     #region Translation Persistence
 
-    protected async Task SaveTranslationsAsync(T entity, CancellationToken ct)
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.SaveTranslations(T)" />
+    protected Task SaveTranslationsAsync(T entity, CancellationToken ct)
+        => SaveTranslationsAsync(entity.Guid, LocalizedTranslationRows.ValuesOf(entity), ct);
+
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.SaveTranslations(Guid?, IReadOnlyDictionary{string, string?})" />
+    protected Task SaveTranslationsAsync(Guid? guid, IReadOnlyDictionary<string, string?> values, CancellationToken ct)
     {
-        if (!IsNonDefaultCulture())
+        if (!IsNonDefaultCulture() || guid == null || guid == Guid.Empty)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        if (entity.Guid == null)
-        {
-            return;
-        }
-
-        var fields = entity.GetLocalizableFields();
-        var type = entity.GetType();
-        var entityType = type.Name;
-        var now = DateTime.UtcNow;
-
-        foreach (var fieldName in fields)
-        {
-            var prop = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance);
-            if (prop == null || prop.PropertyType != typeof(string))
-            {
-                continue;
-            }
-
-            var value = prop.GetValue(entity) as string;
-            if (value == null)
-            {
-                continue;
-            }
-
-            var tFilter = EntityTranslationFilter.ByEntityFieldAndCulture(
-                entity.Guid.Value, fieldName, _context.CurrentCulture.Name);
-            var existing = await _translationStore.ReadAsync(tFilter.ToExpression(), ct: ct);
-
-            var translation = existing.FirstOrDefault();
-            if (translation != null)
-            {
-                translation.Value = value;
-                translation.UpdatedAt = now;
-                await _translationStore.UpdateAsync(translation, ct: ct);
-            }
-            else
-            {
-                translation = new EntityTranslationModel
-                {
-                    EntityGuid = entity.Guid.Value,
-                    EntityType = entityType,
-                    FieldName = fieldName,
-                    Culture = _context.CurrentCulture.Name,
-                    Value = value,
-                    UpdatedAt = now
-                };
-                await _translationStore.CreateAsync(translation, ct: ct);
-            }
-        }
+        return LocalizedTranslationRows.SaveAsync(
+            _translationStore, guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name, values, ct);
     }
 
     protected async Task DeleteTranslationsAsync(T entity, CancellationToken ct)
