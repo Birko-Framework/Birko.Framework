@@ -5,10 +5,11 @@ Entity-level localization for Birko.Data stores. Provides store decorator wrappe
 ## Features
 
 - **ILocalizable interface** — Mark entities with translatable fields
-- **EntityTranslationModel** — Separate translation table keyed by (EntityGuid, FieldName, Culture)
+- **IEntityTranslation** — The translation row contract; any model implementing it can be the translation store's type (TASK-680)
+- **EntityTranslationModel** — The default translation row, keyed by (EntityGuid, EntityType, FieldName, Culture)
 - **Store wrappers** — Transparent localization via decorator pattern (sync and async, singular and bulk)
 - **IEntityLocalizationContext** — Pluggable culture context for determining current/default language
-- **EntityTranslationFilter** — Query builder for translation lookups
+- **EntityTranslationFilter** — Query builder for translation lookups on the default `EntityTranslationModel` (the wrappers build their own filters for any model)
 
 ## How It Works
 
@@ -75,6 +76,17 @@ store = new AsyncTimestampStoreWrapper<...>(store, clock);
 store = new AsyncAuditStoreWrapper<...>(store, auditContext);
 store = new AsyncLocalizedStoreWrapper<...>(store, translationStore, locContext);
 ```
+
+### 5. Your own translation model (tenant-aware consumers)
+
+Each wrapper has a three-parameter form taking the translation model: `AsyncLocalizedBulkStoreWrapper<TStore, T, TTranslation>`
+with `TTranslation : AbstractModel, IEntityTranslation` (its members public properties, not an explicit implementation — checked when the wrapper is built). A tenant-aware consumer implements `IEntityTranslation` on
+a model deriving from its tenant base, so its tenant filter, soft delete and purge apply to translations too. The
+two-parameter names are the same wrappers with `EntityTranslationModel`. For SQL, map the table and its unique key with
+[Birko.Data.Localization.SQL](../Birko.Data.Localization.SQL/README.md).
+
+When a store enforces the key, two writers saving one `(entity, type, field, culture)` at once leave one row: the second
+create is refused (`StoreUniqueViolationException`) and retried as an update.
 
 ## Dependencies
 

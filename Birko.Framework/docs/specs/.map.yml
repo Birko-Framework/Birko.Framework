@@ -356,6 +356,7 @@ areas:
     title: Entity-level localization via store decoration
     sources:
       - ../Birko.Data.Localization/**/*.cs
+      - ../Birko.Data.Localization.SQL/**/*.cs
 
   - name: event-bus-and-messaging
     title: Event publication, handlers, outbox and message-queue transport

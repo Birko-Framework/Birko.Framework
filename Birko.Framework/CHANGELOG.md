@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — OAuth server issues tokens for a federated sign-in
+
+[[TASK-517]]. `TokenEndpointHandler.IssueForSubjectAsync(clientId, subject, scope, claims)` gives a subject who signed in
+elsewhere (e.g. `github:42`) the server's own token pair. The refresh token renews through the normal grant, with
+rotation and reuse detection. Extra claims ride on `RefreshTokenRecord.Claims` (new; stores must persist it), so every
+refresh re-issues them. Registered claims are refused.
+
 ## 2026-10-18 — Caching low triage: TTLs validated, nulls on Redis, a fenced lock
 
 [[TASK-184]]. 17 low findings: 16 confirmed (2 already fixed by TASK-169), 1 narrower. Decided by the user:

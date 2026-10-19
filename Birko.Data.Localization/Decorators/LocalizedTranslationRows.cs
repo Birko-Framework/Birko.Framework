@@ -1,9 +1,11 @@
-using Birko.Data.Localization.Filters;
+using Birko.Data.Exceptions;
 using Birko.Data.Localization.Models;
+using Birko.Data.Models;
 using Birko.Data.Stores;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,7 +13,7 @@ namespace Birko.Data.Localization.Decorators;
 
 /// <summary>
 /// The one producer for reading, writing and deleting an entity's translation rows, called by all four wrappers
-/// (TASK-168, TASK-194).
+/// (TASK-168, TASK-194, TASK-679), generic over the translation model a consumer supplies (TASK-680).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -29,10 +31,13 @@ namespace Birko.Data.Localization.Decorators;
 /// <item><description><b>A <c>null</c> value removes the row</b>, so the read falls back to the base value;
 /// skipping it left the old translation to be re-applied on the next read (SH-M073). An empty string is a
 /// value and is stored.</description></item>
+/// <item><description><b>A create the store refuses for its unique key is retried as an update</b> (SH-M074,
+/// TASK-680): two writers saving one key at once leave one row, carrying the last value. The key itself is declared
+/// by the store — <c>Birko.Data.Localization.SQL</c> maps it for SQL.</description></item>
+/// <item><description><b>Filters are built on the concrete translation type</b> (<see cref="Where{TTranslation}"/>),
+/// never through <see cref="IEntityTranslation"/>. A precaution, not a measured failure: a member access through the
+/// interface was not tried against every provider's translator, and the concrete property is what each of them maps.</description></item>
 /// </list>
-/// <para>
-/// Duplicate rows for one key (SH-M074) are not prevented here; that needs the unique key TASK-680 adds.
-/// </para>
 /// </remarks>
 internal static class LocalizedTranslationRows
 {
@@ -41,6 +46,12 @@ internal static class LocalizedTranslationRows
     /// every filter that reads them back (rule 16: one producer for a name written and read).
     /// </summary>
     public static string EntityTypeOf<T>() => typeof(T).Name;
+
+    /// <summary>
+    /// How many GUIDs one batched read puts in its <c>IN</c> list. Kept well under the smallest provider limit
+    /// (MSSQL's ~2100 parameters), because the in-memory-sort path localizes a whole matching set at once.
+    /// </summary>
+    public const int ReadBatchSize = 500;
 
     /// <summary>
     /// The values of every localizable <see cref="string"/> property of <paramref name="entity"/>, keyed by
@@ -68,51 +79,96 @@ internal static class LocalizedTranslationRows
     }
 
     /// <summary>
-    /// <paramref name="culture"/>'s translation of each of <paramref name="fields"/> for one entity, keyed by
-    /// field name; a field with no row is absent. What a read applies, and what a filter-based update action sees.
+    /// A filter over <typeparamref name="TTranslation"/> on the parts of the key that are given, built with
+    /// <see cref="Expression.Property(Expression, string)"/> on the concrete type and constants for the values.
     /// </summary>
-    public static Dictionary<string, string?> Read(
-        IBulkStore<EntityTranslationModel> store, Guid entityGuid, string entityType, string culture, IReadOnlyList<string> fields)
-        => ToDictionary(store.Read(Key(entityGuid, entityType, culture).ToExpression()), fields);
+    /// <exception cref="ArgumentException">No part is given: the filter would match every row of every store.</exception>
+    public static Expression<Func<TTranslation, bool>> Where<TTranslation>(
+        Guid? entityGuid = null,
+        IReadOnlyCollection<Guid>? entityGuids = null,
+        string? entityType = null,
+        string? fieldName = null,
+        string? culture = null)
+        where TTranslation : AbstractModel, IEntityTranslation
+    {
+        var row = Expression.Parameter(typeof(TTranslation), "t");
+        var terms = new List<Expression>();
+        if (entityGuid is Guid guid)
+        {
+            terms.Add(Expression.Equal(Expression.Property(row, nameof(IEntityTranslation.EntityGuid)), Expression.Constant(guid)));
+        }
+        if (entityGuids != null)
+        {
+            var list = entityGuids.ToList();
+            var contains = typeof(List<Guid>).GetMethod(nameof(List<Guid>.Contains), new[] { typeof(Guid) })!;
+            terms.Add(Expression.Call(Expression.Constant(list), contains,
+                Expression.Property(row, nameof(IEntityTranslation.EntityGuid))));
+        }
+        AddString(terms, row, nameof(IEntityTranslation.EntityType), entityType);
+        AddString(terms, row, nameof(IEntityTranslation.FieldName), fieldName);
+        AddString(terms, row, nameof(IEntityTranslation.Culture), culture);
+        if (terms.Count == 0)
+        {
+            throw new ArgumentException("A translation filter needs at least one part of the key.");
+        }
 
-    /// <inheritdoc cref="Read"/>
-    public static async Task<Dictionary<string, string?>> ReadAsync(
-        IAsyncBulkStore<EntityTranslationModel> store, Guid entityGuid, string entityType, string culture,
-        IReadOnlyList<string> fields, CancellationToken ct)
-        => ToDictionary(await store.ReadAsync(
-            Key(entityGuid, entityType, culture).ToExpression(), null, null, null, ct), fields);
+        return Expression.Lambda<Func<TTranslation, bool>>(terms.Aggregate(Expression.AndAlso), row);
+    }
+
+    private static void AddString(List<Expression> terms, ParameterExpression row, string property, string? value)
+    {
+        if (value == null)
+        {
+            return;
+        }
+        terms.Add(Expression.Equal(Expression.Property(row, property), Expression.Constant(value)));
+    }
 
     /// <summary>
-    /// How many GUIDs one batched read puts in its <c>IN</c> list. Kept well under the smallest provider limit
-    /// (MSSQL's ~2100 parameters), because the in-memory-sort path localizes a whole matching set at once.
+    /// <paramref name="culture"/>'s translation of each of <paramref name="fields"/> for one entity, keyed by
+    /// field name; a field with no row is absent. What a filter-based update action sees.
     /// </summary>
-    public const int ReadBatchSize = 500;
+    public static Dictionary<string, string?> Read<TTranslation>(
+        IBulkStore<TTranslation> store, Guid entityGuid, string entityType, string culture, IReadOnlyList<string> fields)
+        where TTranslation : AbstractModel, IEntityTranslation
+        => ToDictionary(store.Read(Where<TTranslation>(entityGuid, entityType: entityType, culture: culture)), fields);
+
+    /// <inheritdoc cref="Read"/>
+    public static async Task<Dictionary<string, string?>> ReadAsync<TTranslation>(
+        IAsyncBulkStore<TTranslation> store, Guid entityGuid, string entityType, string culture,
+        IReadOnlyList<string> fields, CancellationToken ct)
+        where TTranslation : AbstractModel, IEntityTranslation
+        => ToDictionary(await store.ReadAsync(
+            Where<TTranslation>(entityGuid, entityType: entityType, culture: culture), null, null, null, ct), fields);
 
     /// <summary>
     /// <paramref name="culture"/>'s translations of many entities, grouped <c>EntityGuid → (FieldName → Value)</c>,
     /// in one read per <see cref="ReadBatchSize"/> GUIDs instead of one per entity (TASK-679). An entity with no rows
     /// is absent from the result.
     /// </summary>
-    public static Dictionary<Guid, Dictionary<string, string?>> ReadMany(
-        IBulkStore<EntityTranslationModel> store, IEnumerable<Guid> entityGuids, string entityType, string culture)
+    public static Dictionary<Guid, Dictionary<string, string?>> ReadMany<TTranslation>(
+        IBulkStore<TTranslation> store, IEnumerable<Guid> entityGuids, string entityType, string culture)
+        where TTranslation : AbstractModel, IEntityTranslation
     {
         var result = new Dictionary<Guid, Dictionary<string, string?>>();
         foreach (var chunk in entityGuids.Distinct().Chunk(ReadBatchSize))
         {
-            Group(result, store.Read(Many(chunk, entityType, culture)));
+            Group(result, store.Read(Where<TTranslation>(entityGuids: chunk, entityType: entityType, culture: culture)));
         }
         return result;
     }
 
     /// <inheritdoc cref="ReadMany"/>
-    public static async Task<Dictionary<Guid, Dictionary<string, string?>>> ReadManyAsync(
-        IAsyncBulkStore<EntityTranslationModel> store, IEnumerable<Guid> entityGuids, string entityType, string culture,
+    public static async Task<Dictionary<Guid, Dictionary<string, string?>>> ReadManyAsync<TTranslation>(
+        IAsyncBulkStore<TTranslation> store, IEnumerable<Guid> entityGuids, string entityType, string culture,
         CancellationToken ct)
+        where TTranslation : AbstractModel, IEntityTranslation
     {
         var result = new Dictionary<Guid, Dictionary<string, string?>>();
         foreach (var chunk in entityGuids.Distinct().Chunk(ReadBatchSize))
         {
-            Group(result, await store.ReadAsync(Many(chunk, entityType, culture), null, null, null, ct));
+            Group(result, await store.ReadAsync(
+                Where<TTranslation>(entityGuids: chunk, entityType: entityType, culture: culture), null, null, null, ct));
         }
         return result;
     }
@@ -127,7 +183,7 @@ internal static class LocalizedTranslationRows
     /// in-memory sort all come through here, so a change to which fields apply cannot land in one path only.
     /// </remarks>
     public static T Apply<T>(T entity, IReadOnlyDictionary<Guid, Dictionary<string, string?>> rows)
-        where T : Data.Models.AbstractModel, ILocalizable
+        where T : AbstractModel, ILocalizable
     {
         if (entity.Guid is not Guid guid)
         {
@@ -144,42 +200,19 @@ internal static class LocalizedTranslationRows
         return localized;
     }
 
-    /// <summary>
-    /// <c>guids.Contains(t.EntityGuid) &amp;&amp; t.EntityType == type &amp;&amp; t.Culture == culture</c> over a captured
-    /// <see cref="List{T}"/>: <c>List.Contains</c> is what the SQL, Elasticsearch and RavenDB translators turn into
-    /// <c>IN</c> / terms, and a captured local is evaluated by each of them (and by the LINQ-based drivers).
-    /// </summary>
-    private static System.Linq.Expressions.Expression<Func<EntityTranslationModel, bool>> Many(
-        Guid[] chunk, string entityType, string culture)
-    {
-        var guids = chunk.ToList();
-        return t => guids.Contains(t.EntityGuid) && t.EntityType == entityType && t.Culture == culture;
-    }
-
-    private static void Group(Dictionary<Guid, Dictionary<string, string?>> result, IEnumerable<EntityTranslationModel> rows)
-    {
-        foreach (var row in rows)
-        {
-            if (!result.TryGetValue(row.EntityGuid, out var fields))
-            {
-                fields = new Dictionary<string, string?>();
-                result[row.EntityGuid] = fields;
-            }
-            fields[row.FieldName] = row.Value;
-        }
-    }
-
-    public static void Save(
-        IBulkStore<EntityTranslationModel> store,
+    public static void Save<TTranslation>(
+        IBulkStore<TTranslation> store,
         Guid entityGuid,
         string entityType,
         string culture,
         IReadOnlyDictionary<string, string?> values)
+        where TTranslation : AbstractModel, IEntityTranslation
     {
         var now = DateTime.UtcNow;
         foreach (var pair in values)
         {
-            var existing = store.Read(Key(entityGuid, entityType, culture, pair.Key).ToExpression()).ToList();
+            var key = Where<TTranslation>(entityGuid, entityType: entityType, fieldName: pair.Key, culture: culture);
+            var existing = store.Read(key).ToList();
 
             if (pair.Value == null)
             {
@@ -193,8 +226,17 @@ internal static class LocalizedTranslationRows
             var row = existing.FirstOrDefault();
             if (row == null)
             {
-                store.Create(NewRow(entityGuid, entityType, pair.Key, culture, pair.Value, now));
-                continue;
+                try
+                {
+                    store.Create(Fill(store.CreateInstance(), entityGuid, entityType, pair.Key, culture, pair.Value, now));
+                    continue;
+                }
+                catch (StoreUniqueViolationException violation)
+                {
+                    // SH-M074: another writer created this key between our read and our create. Its row is the one to
+                    // update; when there is none the refusal was about something else, so it stands.
+                    row = ReRead(() => store.Read(key).FirstOrDefault(), violation);
+                }
             }
 
             row.Value = pair.Value;
@@ -204,19 +246,20 @@ internal static class LocalizedTranslationRows
     }
 
     /// <inheritdoc cref="Save"/>
-    public static async Task SaveAsync(
-        IAsyncBulkStore<EntityTranslationModel> store,
+    public static async Task SaveAsync<TTranslation>(
+        IAsyncBulkStore<TTranslation> store,
         Guid entityGuid,
         string entityType,
         string culture,
         IReadOnlyDictionary<string, string?> values,
         CancellationToken ct)
+        where TTranslation : AbstractModel, IEntityTranslation
     {
         var now = DateTime.UtcNow;
         foreach (var pair in values)
         {
-            var existing = (await store.ReadAsync(
-                Key(entityGuid, entityType, culture, pair.Key).ToExpression(), null, null, null, ct)).ToList();
+            var key = Where<TTranslation>(entityGuid, entityType: entityType, fieldName: pair.Key, culture: culture);
+            var existing = (await store.ReadAsync(key, null, null, null, ct)).ToList();
 
             if (pair.Value == null)
             {
@@ -230,8 +273,25 @@ internal static class LocalizedTranslationRows
             var row = existing.FirstOrDefault();
             if (row == null)
             {
-                await store.CreateAsync(NewRow(entityGuid, entityType, pair.Key, culture, pair.Value, now), ct: ct);
-                continue;
+                try
+                {
+                    await store.CreateAsync(Fill(store.CreateInstance(), entityGuid, entityType, pair.Key, culture, pair.Value, now), ct: ct);
+                    continue;
+                }
+                catch (StoreUniqueViolationException violation)
+                {
+                    // SH-M074: see Save.
+                    TTranslation? raced;
+                    try
+                    {
+                        raced = (await store.ReadAsync(key, null, null, null, ct)).FirstOrDefault();
+                    }
+                    catch (Exception readFailure) when (readFailure is not OperationCanceledException)
+                    {
+                        throw Unretryable(violation, readFailure);
+                    }
+                    row = raced ?? throw Unretryable(violation, null);
+                }
             }
 
             row.Value = pair.Value;
@@ -240,52 +300,132 @@ internal static class LocalizedTranslationRows
         }
     }
 
+    /// <summary>
+    /// The re-read after a create the unique key refused. When it finds no row, or cannot read at all, the original
+    /// refusal is what the caller gets.
+    /// </summary>
+    /// <remarks>
+    /// Measured on PostgreSQL 16 inside a caller's <c>SqlUnitOfWork</c>: the refused INSERT aborts the transaction, so
+    /// the re-read fails with <c>25P02 current transaction is aborted</c> — which hid the unique violation that caused it.
+    /// The caller's transaction is lost either way there; the error now says why. SQL Server keeps the transaction and
+    /// the retry succeeds inside it (measured).
+    /// </remarks>
+    private static TTranslation ReRead<TTranslation>(Func<TTranslation?> read, StoreUniqueViolationException violation)
+        where TTranslation : class
+    {
+        TTranslation? raced;
+        try
+        {
+            raced = read();
+        }
+        catch (Exception readFailure) when (readFailure is not OperationCanceledException)
+        {
+            throw Unretryable(violation, readFailure);
+        }
+        return raced ?? throw Unretryable(violation, null);
+    }
+
+    private static Exception Unretryable(StoreUniqueViolationException violation, Exception? readFailure)
+    {
+        if (readFailure == null)
+        {
+            // No row holds the key: the refusal was about something else, so it stands as it was thrown.
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(violation).Throw();
+        }
+        return new StoreUniqueViolationException(
+            $"{violation.Message} The upsert could not re-read the key to update it instead (the transaction may have been "
+            + "aborted by the refusal, as PostgreSQL does): " + readFailure!.Message, violation);
+    }
+
     /// <summary>Deletes every row of one entity, in every culture.</summary>
-    public static void Delete(IBulkStore<EntityTranslationModel> store, Guid entityGuid, string entityType)
-        => store.Delete(store.Read(Key(entityGuid, entityType).ToExpression()).ToList());
+    public static void Delete<TTranslation>(IBulkStore<TTranslation> store, Guid entityGuid, string entityType)
+        where TTranslation : AbstractModel, IEntityTranslation
+        => store.Delete(store.Read(Where<TTranslation>(entityGuid, entityType: entityType)).ToList());
 
     /// <inheritdoc cref="Delete"/>
-    public static async Task DeleteAsync(
-        IAsyncBulkStore<EntityTranslationModel> store, Guid entityGuid, string entityType, CancellationToken ct)
+    public static async Task DeleteAsync<TTranslation>(
+        IAsyncBulkStore<TTranslation> store, Guid entityGuid, string entityType, CancellationToken ct)
+        where TTranslation : AbstractModel, IEntityTranslation
         => await store.DeleteAsync(
-            (await store.ReadAsync(Key(entityGuid, entityType).ToExpression(), null, null, null, ct)).ToList(), ct);
+            (await store.ReadAsync(Where<TTranslation>(entityGuid, entityType: entityType), null, null, null, ct)).ToList(), ct);
 
     /// <summary>
     /// Deletes every row of one entity type — what destroying that type's store leaves behind (SH-L078). Scoped to
     /// the type, because the translation store is shared by every localized store.
     /// </summary>
     /// <exception cref="ArgumentException">
-    /// <paramref name="entityType"/> is null or empty: the filter reads a null type as "any type", which would delete
-    /// every row of every store (rules 2 and 5).
+    /// <paramref name="entityType"/> is null or empty: an unscoped delete would remove every row of every store
+    /// (rules 2 and 5).
     /// </exception>
-    public static void DeleteType(IBulkStore<EntityTranslationModel> store, string entityType)
+    public static void DeleteType<TTranslation>(IBulkStore<TTranslation> store, string entityType)
+        where TTranslation : AbstractModel, IEntityTranslation
     {
         ArgumentException.ThrowIfNullOrEmpty(entityType);
-        store.Delete(EntityTranslationFilter.ByEntityType(entityType).ToExpression());
+        store.Delete(Where<TTranslation>(entityType: entityType));
     }
 
     /// <inheritdoc cref="DeleteType"/>
-    public static Task DeleteTypeAsync(IAsyncBulkStore<EntityTranslationModel> store, string entityType, CancellationToken ct)
+    public static Task DeleteTypeAsync<TTranslation>(IAsyncBulkStore<TTranslation> store, string entityType, CancellationToken ct)
+        where TTranslation : AbstractModel, IEntityTranslation
     {
         ArgumentException.ThrowIfNullOrEmpty(entityType);
-        return store.DeleteAsync(EntityTranslationFilter.ByEntityType(entityType).ToExpression(), ct);
+        return store.DeleteAsync(Where<TTranslation>(entityType: entityType), ct);
     }
 
-    private static EntityTranslationFilter Key(Guid entityGuid, string entityType, string? culture = null, string? fieldName = null)
-        => new() { EntityGuid = entityGuid, EntityType = entityType, Culture = culture, FieldName = fieldName };
-
-    private static EntityTranslationModel NewRow(
-        Guid entityGuid, string entityType, string fieldName, string culture, string value, DateTime now) => new()
+    /// <summary>
+    /// Fills a row the store created (<c>CreateInstance</c>), so the model needs no parameterless-constructor constraint
+    /// — a model with <c>required</c> members could not satisfy one.
+    /// </summary>
+    private static TTranslation Fill<TTranslation>(
+        TTranslation row, Guid entityGuid, string entityType, string fieldName, string culture, string value, DateTime now)
+        where TTranslation : IEntityTranslation
     {
-        EntityGuid = entityGuid,
-        EntityType = entityType,
-        FieldName = fieldName,
-        Culture = culture,
-        Value = value,
-        UpdatedAt = now,
-    };
+        row.EntityGuid = entityGuid;
+        row.EntityType = entityType;
+        row.FieldName = fieldName;
+        row.Culture = culture;
+        row.Value = value;
+        row.UpdatedAt = now;
+        return row;
+    }
 
-    private static Dictionary<string, string?> ToDictionary(IEnumerable<EntityTranslationModel> rows, IReadOnlyList<string> fields)
+    /// <summary>
+    /// Refuses a translation model whose <see cref="IEntityTranslation"/> members are not public instance properties
+    /// under those names — an explicit interface implementation, for instance. Every filter here is built with
+    /// <c>Expression.Property</c> on the model by name, so such a model compiled and then failed at its first query.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A member is missing or has another type.</exception>
+    public static void RequireQueryableModel<TTranslation>() where TTranslation : IEntityTranslation
+    {
+        foreach (var member in typeof(IEntityTranslation).GetProperties())
+        {
+            var prop = typeof(TTranslation).GetProperty(member.Name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (prop == null || prop.PropertyType != member.PropertyType)
+            {
+                throw new InvalidOperationException(
+                    $"{typeof(TTranslation).Name} must expose {nameof(IEntityTranslation)}.{member.Name} as a public "
+                    + $"{member.PropertyType.Name} property under that name (not an explicit interface implementation): "
+                    + "translation filters address it by name.");
+            }
+        }
+    }
+
+    private static void Group<TTranslation>(Dictionary<Guid, Dictionary<string, string?>> result, IEnumerable<TTranslation> rows)
+        where TTranslation : IEntityTranslation
+    {
+        foreach (var row in rows)
+        {
+            if (!result.TryGetValue(row.EntityGuid, out var fields))
+            {
+                fields = new Dictionary<string, string?>();
+                result[row.EntityGuid] = fields;
+            }
+            fields[row.FieldName] = row.Value;
+        }
+    }
+
+    private static Dictionary<string, string?> ToDictionary<TTranslation>(IEnumerable<TTranslation> rows, IReadOnlyList<string> fields)
+        where TTranslation : IEntityTranslation
     {
         var result = new Dictionary<string, string?>();
         foreach (var row in rows)

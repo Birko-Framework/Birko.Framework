@@ -7,7 +7,7 @@ namespace Birko.Data.Localization.Models;
 /// Stores a single translated value for a specific entity field and culture.
 /// Each row represents one (EntityGuid, EntityType, FieldName, Culture) combination.
 /// </summary>
-public class EntityTranslationModel : AbstractModel
+public class EntityTranslationModel : AbstractModel, IEntityTranslation
 {
     /// <summary>The GUID of the entity this translation belongs to.</summary>
     public Guid EntityGuid { get; set; }

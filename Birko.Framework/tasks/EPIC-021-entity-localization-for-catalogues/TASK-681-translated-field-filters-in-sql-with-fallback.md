@@ -32,6 +32,12 @@ condition in memory (`condition.ValuePredicate(t.Value)`), then intersects Guids
 
 **Also SH-L087** (handed over by [[TASK-194]], confirmed 2026-10-19): the matched GUIDs become one `IN` list (`LocalizedFilterHelper.BuildGuidFilter`), which a broad match pushes past MSSQL's ~2100 parameters; nothing in the framework chunks `IN` lists. Resolving the condition as a query against the translation table is the place to replace the list with a sub-query.
 
+**Handed over by [[TASK-680]] (user decision, 2026-10-19): the value index.** TASK-680 was to add a non-unique
+`(EntityType, FieldName, Culture, Value)` index for this task's lookups, but indexing `Value` bounds the column to 255
+characters on MySQL and SQL Server (rule 37) and to ~2.7 KB on PostgreSQL's btree — every translation would be capped
+to serve a lookup only short values (slugs) need. Design the lookup's index here, without capping `Value` (for
+example a bounded lookup column, a hash, or an index limited to the fields that are looked up).
+
 ## Acceptance criteria
 
 - [ ] Equality and `IN` (`Contains` on a list) conditions on a translated field are pushed into the translation query

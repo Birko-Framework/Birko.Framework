@@ -36,6 +36,8 @@ Proposed surface (names may be refined at plan time; each method batched, generi
 | `ExistsAsync(entityType, field, culture, value, exceptEntityGuid)` | uniqueness checks (a slug free in that language) |
 | `LocalizeAsync<T>(entities, culture)` where `T : ILocalizable` | applying a given language to loaded entities, batched, with fallback |
 
+**From [[TASK-680]]:** the translation model is any `TTranslation : AbstractModel, IEntityTranslation` (members as public properties, `LocalizedTranslationRows.RequireQueryableModel`; rows made with the store's `CreateInstance()`); build this API on that constraint and on `LocalizedTranslationRows` (generic, concrete-type filters, a create refused by the unique key retried as an update).
+
 ## Acceptance criteria
 
 - [ ] `IEntityTranslations` (+ implementation over any Birko async store of the translation model) with the methods

@@ -1,6 +1,6 @@
 ---
 area: entity-localization
-generated-at: 451c62884ec51420f5b68b6a970f9b7178e0fa00
+generated-at: 4bcfaa2feeacf84830269709d38f50d56d222a0b
 generated-on: 2026-10-19
 sources:
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
@@ -15,15 +15,18 @@ sources:
   - ../Birko.Data.Localization/Expressions/LocalizedPropertyUpdateHelper.cs
   - ../Birko.Data.Localization/Filters/EntityTranslationFilter.cs
   - ../Birko.Data.Localization/Models/EntityTranslationModel.cs
+  - ../Birko.Data.Localization/Models/IEntityTranslation.cs
   - ../Birko.Data.Localization/Models/IEntityLocalizationContext.cs
   - ../Birko.Data.Localization/Models/ILocalizable.cs
+  - ../Birko.Data.Localization.SQL/LocalizationSqlMappings.cs
+  - ../Birko.Data.Localization.SQL/Mappings/EntityTranslationMapping.cs
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
 # repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
 # Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
 # task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
-# 2026-10-19 regens (TASK-168, TASK-194, TASK-679): the evidence pass was not re-run; FEATURE-014 is already listed
+# 2026-10-19 regens (TASK-168, TASK-194, TASK-679, TASK-680): the evidence pass was not re-run; FEATURE-014 is already listed
 # (TASK-679 has no feature).
 shaped-by-derived: true
 shaped-by-unresolved: 266
@@ -67,19 +70,28 @@ The system SHALL treat a property as localizable only when its name is returned 
 naming the type and the field, a declared name that is not a public instance `string` property with a public
 getter and setter — when the wrapper is constructed for the store's type, on every culture, and when an entity
 whose own declaration differs is translated or about to be written, before the inner store's write. It SHALL store each translated value as one
-`EntityTranslationModel` carrying `EntityGuid`, `EntityType`, `FieldName`, `Culture`, `Value` and
-`UpdatedAt`, where `EntityType` is the store's type name (`typeof(T).Name`) and `FieldName` is the
-property name, and SHALL identify a row by `(EntityGuid, EntityType, FieldName, Culture)` on every read,
-write and delete. Wrapped entity types SHALL derive from `Birko.Data.Models.AbstractModel` and implement
-`ILocalizable`; the translation store SHALL be a bulk store of `EntityTranslationModel`
-(`IBulkStore<EntityTranslationModel>` for the sync wrappers, `IAsyncBulkStore<EntityTranslationModel>`
-for the async wrappers) even when the wrapped entity store is non-bulk.
+translation model carrying `EntityGuid`, `EntityType`, `FieldName`, `Culture`, `Value` and `UpdatedAt` — any
+type implementing `IEntityTranslation` that derives from `AbstractModel`, with its members as public properties under
+those names (refused at construction otherwise; rows are created through the store's `CreateInstance()`), with
+`EntityTranslationModel` as the default — where `EntityType` is the store's type name (`typeof(T).Name`) and
+`FieldName` is the property name, and SHALL identify a row by `(EntityGuid, EntityType, FieldName, Culture)` on every
+read, write and delete, building each filter on the concrete translation type. Wrapped entity types SHALL derive from `Birko.Data.Models.AbstractModel` and implement
+`ILocalizable`; the translation store SHALL be a bulk store of the translation model (`IBulkStore<TTranslation>` for
+the sync wrappers, `IAsyncBulkStore<TTranslation>` for the async wrappers) even when the wrapped entity store is
+non-bulk. Each wrapper SHALL exist as `X<TStore, T, TTranslation>` and as `X<TStore, T>`, the same wrapper with
+`EntityTranslationModel`.
 
 #### Scenario: Translation row identity
 
 - **Given** an entity `Product` with `Guid = G` whose `GetLocalizableFields()` returns `["Name", "Description"]`
 - **When** the wrapper persists translations for culture `"sk"`
 - **Then** it writes at most one `EntityTranslationModel` per field, each with `EntityType = "Product"`, `FieldName = "Name"` / `"Description"`, `Culture = "sk"` and `EntityGuid = G`
+
+#### Scenario: A consumer's own translation model
+
+- **Given** `ProductTranslation : TenantEntity, IEntityTranslation`, which cannot derive from `EntityTranslationModel`
+- **When** a wrapper `AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<Product>, Product, ProductTranslation>` creates, reads, filters and deletes
+- **Then** the rows are `ProductTranslation` instances with the same four-part key, and every behaviour in this spec applies unchanged
 
 #### Scenario: Translation model copies all its own fields
 
@@ -569,6 +581,12 @@ queries; a row with the same GUID under another type name is another store's and
 - **When** `Update(entity)` runs with a new `Name`
 - **Then** the existing row's `Value` and `UpdatedAt` are overwritten and the translation store's `Update` is called — no second row is created
 
+#### Scenario: A create refused by the unique key is retried as an update
+
+- **Given** a store that enforces the unique key, and another writer storing `(G, "Product", "Name", "sk")` after this upsert's read found nothing
+- **When** this upsert's create is refused with `StoreUniqueViolationException`
+- **Then** it re-reads the key and updates that row with its own value — one row, the last value, no exception; when the re-read finds no row the refusal was about something else and propagates
+
 #### Scenario: Only the first duplicate row is updated
 
 - **Given** two translation rows exist for the same `(G, "Name", "sk")`
@@ -920,3 +938,23 @@ delegate `CreateInstance` to the inner store, and SHALL expose the inner store v
 - **Given** a localized `Product` wrapper with translation rows, sharing its translation store with an `Order` wrapper
 - **When** `Init()` / `InitAsync()` and later `Destroy()` / `DestroyAsync()` are called
 - **Then** both stores are initialized; on destroy the inner store is destroyed and every `"Product"` row is deleted, while the `"Order"` rows remain
+
+### Requirement: SQL schema for the translation table
+
+The system SHALL map, through `Birko.Data.Localization.SQL`, any `IEntityTranslation` model to a table (default
+`BirkoEntityTranslations`) with a Guid primary key, the four key columns and `Value` required, and a **unique** index
+`UX_{table}_Key` over `(EntityGuid, EntityType, FieldName, Culture)`, created by schema-ensure; it SHALL declare no index
+on `Value`. Where a provider cannot hold the key, schema-ensure SHALL report it in `IndexCreationFailures` rather than
+fail the store.
+
+#### Scenario: The key exists after schema-ensure
+
+- **Given** the default mapping registered and applied, on SQLite, PostgreSQL or SQL Server
+- **When** the translation store is initialised
+- **Then** the catalogue holds a unique index `UX_BirkoEntityTranslations_Key` over `EntityGuid, EntityType, FieldName, Culture` in that order, and a second create of one key is refused with `StoreUniqueViolationException`
+
+#### Scenario: MySQL cannot hold the key
+
+- **Given** MySQL 8.4 with `utf8mb4`
+- **When** the translation store is initialised
+- **Then** the three string key columns are `VARCHAR(255)`, the key (3 204 bytes) exceeds InnoDB's 3 072, the index is not created, and `IndexCreationFailures` names it (TASK-684 bounds the columns)

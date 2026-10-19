@@ -240,6 +240,13 @@ immediately).
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
 ## Recent Updates
+### Translations can be any model, with a unique key on SQL (2026-10-19)
+[[TASK-680]]. The localization wrappers take any `IEntityTranslation` model, such as a tenant entity. The two-parameter
+names still mean `EntityTranslationModel`. New `Birko.Data.Localization.SQL` maps the table with a unique key on
+`(EntityGuid, EntityType, FieldName, Culture)`. A save refused by the key is retried as an update. Measured live: one row
+on SQLite, PostgreSQL and SQL Server. In a PostgreSQL transaction the refusal aborts it, and the typed exception surfaces.
+MySQL cannot hold the key ([[TASK-684]]). The value index moved to [[TASK-681]] (decided by the user). TASK-679's batch is
+now measured.
 ### Localized list reads fetch translations in batches (2026-10-19)
 [[TASK-679]]. A list read on a non-default culture costs one translation read per 500 entities, not one per entity.
 A page of 48 products cost 48 extra queries. `LocalizedTranslationRows.ReadMany` + `Apply` serve list reads, the
@@ -319,11 +326,6 @@ unless `ExposeExceptionMessages`.
 SQLite keeps client lists and refresh claims as JSON columns. Measured: concurrent redemptions of one code or one refresh
 token each issued several pairs. New `TryRedeemAsync` / `TryRevokeAsync` claim atomically in the shipped stores; custom
 stores keep a read-check-write default. A lost rotation fails only that request (decided by the user).
-### OAuth server issues tokens for a federated sign-in (2026-10-18)
-[[TASK-517]]. `TokenEndpointHandler.IssueForSubjectAsync(clientId, subject, scope, claims)` gives a subject who signed in
-elsewhere (e.g. `github:42`) the server's own token pair. The refresh token renews through the normal grant, with
-rotation and reuse detection. Extra claims ride on `RefreshTokenRecord.Claims` (new; stores must persist it), so every
-refresh re-issues them. Registered claims are refused.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -13,6 +13,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\ILocalizable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\EntityTranslationModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\IEntityLocalizationContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IEntityTranslation.cs" />
     <!-- Filters -->
     <Compile Include="$(MSBuildThisFileDirectory)Filters\EntityTranslationFilter.cs" />
     <!-- Expressions -->

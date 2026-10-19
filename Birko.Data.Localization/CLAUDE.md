@@ -10,7 +10,8 @@ Entity-level localization for Birko.Data stores. Provides transparent translatio
 
 ### Models (`Models/`)
 - **ILocalizable** — Interface for entities with translatable fields. Returns `IReadOnlyList<string>` of property names.
-- **EntityTranslationModel** — Persisted translation entity: `EntityGuid`, `EntityType`, `FieldName`, `Culture`, `Value`, `UpdatedAt`. Extends `AbstractModel`.
+- **IEntityTranslation** — The translation row contract the wrappers are generic over (`TTranslation : AbstractModel, IEntityTranslation`, TASK-680); a consumer's own model (e.g. a tenant entity) implements it, with the members as public properties (checked at construction). Rows are created through the store's `CreateInstance()`.
+- **EntityTranslationModel** — The default `IEntityTranslation`, persisted translation entity: `EntityGuid`, `EntityType`, `FieldName`, `Culture`, `Value`, `UpdatedAt`. Extends `AbstractModel`.
 - **IEntityLocalizationContext** — Provides `CurrentCulture` and `DefaultCulture` for determining which language to read/write.
 
 ### Filters (`Filters/`)
@@ -18,11 +19,13 @@ Entity-level localization for Birko.Data stores. Provides transparent translatio
 
 ### Decorators (`Decorators/`)
 - **LocalizedEntityFields** — the one producer for capturing/restoring localizable values and detaching an entity
-- **LocalizedTranslationRows** — the one producer for reading, writing and deleting translation rows (TASK-168, TASK-194): the four-part key `(EntityGuid, EntityType, FieldName, Culture)`, keyed by the GUID the store returned, `EntityType` from `EntityTypeOf<T>()`, `null` removes the row
+- **LocalizedTranslationRows** — the one producer for reading, writing and deleting translation rows (TASK-168, TASK-194, TASK-679, TASK-680): the four-part key `(EntityGuid, EntityType, FieldName, Culture)`, filters built with `Expression.Property` on the concrete translation type (a precaution, not a measured failure), keyed by the GUID the store returned, `EntityType` from `EntityTypeOf<T>()`, `null` removes the row, a create refused by the unique key retried as an update, list reads batched per 500 GUIDs
 - **LocalizedStoreWrapper** — Sync `IStore<T>` decorator
 - **AsyncLocalizedStoreWrapper** — Async `IAsyncStore<T>` decorator
 - **LocalizedBulkStoreWrapper** — Sync `IBulkStore<T>` decorator
 - **AsyncLocalizedBulkStoreWrapper** — Async `IAsyncBulkStore<T>` decorator
+
+Each wrapper is `X<TStore, T, TTranslation>`; `X<TStore, T>` is the same wrapper with `EntityTranslationModel`.
 
 All wrappers:
 - Intercept reads to apply translations (when current culture != default culture)

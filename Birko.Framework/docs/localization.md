@@ -300,6 +300,32 @@ store = new AsyncAuditStoreWrapper<...>(store, auditContext);
 store = new AsyncLocalizedStoreWrapper<...>(store, translationStore, locContext);
 ```
 
+### 5. Your own translation model, and SQL
+
+The wrappers take any model implementing `IEntityTranslation` (`EntityGuid`, `EntityType`, `FieldName`, `Culture`,
+`Value`, `UpdatedAt`) — for instance one deriving from your tenant base, so tenant filtering and purge apply to
+translations too. `EntityTranslationModel` is the default, used by the two-parameter wrapper names.
+
+```csharp
+public sealed class ProductTranslation : TenantEntity, IEntityTranslation { /* the six properties */ }
+
+var products = new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<Product>, Product, ProductTranslation>(
+    productStore, productTranslationStore, locContext);
+```
+
+On SQL, map the table with `Birko.Data.Localization.SQL` before the first store use:
+
+```csharp
+var registry = new ModelMapRegistry();
+LocalizationSqlMappings.Register(registry);                                   // the default model
+LocalizationSqlMappings.Register<ProductTranslation>(registry, "ProductTranslations"); // or your own
+registry.ApplyToDatabase();
+```
+
+The mapping declares a **unique** key over `(EntityGuid, EntityType, FieldName, Culture)`. Two writers saving one key at
+once then leave one row: the second create is refused by the key and retried as an update. On MySQL the key does not
+fit yet (3 204 bytes over InnoDB's 3 072; schema-ensure reports it in `IndexCreationFailures`) — TASK-684.
+
 ### Available Wrappers
 
 | Wrapper | Interface | Description |

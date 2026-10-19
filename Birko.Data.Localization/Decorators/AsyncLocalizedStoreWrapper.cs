@@ -18,18 +18,19 @@ namespace Birko.Data.Localization.Decorators;
 /// rewrites filter expressions to query the translation store for localized field conditions,
 /// and intercepts creates/updates to persist translations for localizable fields.
 /// </summary>
-public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<T>
+public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T>, IStoreWrapper<T>
     where TStore : IAsyncStore<T>
     where T : Data.Models.AbstractModel, ILocalizable
+    where TTranslation : Data.Models.AbstractModel, IEntityTranslation
 {
     protected readonly TStore _innerStore;
-    protected readonly IAsyncBulkStore<EntityTranslationModel> _translationStore;
+    protected readonly IAsyncBulkStore<TTranslation> _translationStore;
     protected readonly IEntityLocalizationContext _context;
     protected readonly IReadOnlyList<string> _localizableFields;
 
     public AsyncLocalizedStoreWrapper(
         TStore innerStore,
-        IAsyncBulkStore<EntityTranslationModel> translationStore,
+        IAsyncBulkStore<TTranslation> translationStore,
         IEntityLocalizationContext context)
     {
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
@@ -37,6 +38,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
         _context = context ?? throw new ArgumentNullException(nameof(context));
         // SH-L079 / SH-L082 (TASK-194): the declaration is read and validated once, at wiring, on every culture.
         _localizableFields = LocalizedEntityFields.LocalizableFieldsOf(_innerStore.CreateInstance());
+        LocalizedTranslationRows.RequireQueryableModel<TTranslation>();
     }
 
     public async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
@@ -77,7 +79,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
         return guid;
     }
 
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Update(T, StoreDataDelegate{T}?)" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.Update(T, StoreDataDelegate{T}?)" />
     public async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
         LocalizedEntityFields.RequireValidDeclarations(new[] { data });
@@ -99,8 +101,8 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
         await SaveTranslationsAsync(data, ct);
     }
 
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.ReadBaseValues(Guid?, IReadOnlyList{string})" />
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.WithBaseValues(T, IReadOnlyDictionary{string, string?}?)" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.ReadBaseValues(Guid?, IReadOnlyList{string})" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.WithBaseValues(T, IReadOnlyDictionary{string, string?}?)" />
     protected T WithBaseValues(T data, IReadOnlyDictionary<string, string?>? baseValues)
     {
         if (baseValues == null)
@@ -143,7 +145,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
         await _translationStore.InitAsync(ct);
     }
 
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Destroy" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.Destroy" />
     public async Task DestroyAsync(CancellationToken ct = default)
     {
         await _innerStore.DestroyAsync(ct);
@@ -190,13 +192,8 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
 
         foreach (var condition in conditions)
         {
-            var tFilter = new EntityTranslationFilter
-            {
-                EntityType = entityType,
-                FieldName = condition.FieldName,
-                Culture = culture
-            };
-            var translations = await _translationStore.ReadAsync(tFilter.ToExpression(), ct: ct);
+            var translations = await _translationStore.ReadAsync(LocalizedTranslationRows.Where<TTranslation>(
+                entityType: entityType, fieldName: condition.FieldName, culture: culture), null, null, null, ct);
             var guids = new HashSet<Guid>(
                 translations.Where(t => condition.ValuePredicate(t.Value)).Select(t => t.EntityGuid));
 
@@ -217,7 +214,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
 
     #region Translation Application
 
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Localize(T)" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.Localize(T)" />
     protected async Task<T> LocalizeAsync(T entity, CancellationToken ct)
     {
         if (!IsNonDefaultCulture())
@@ -239,11 +236,11 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
 
     #region Translation Persistence
 
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.SaveTranslations(T)" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.SaveTranslations(T)" />
     protected Task SaveTranslationsAsync(T entity, CancellationToken ct)
         => SaveTranslationsAsync(entity.Guid, LocalizedTranslationRows.ValuesOf(entity), ct);
 
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.SaveTranslations(Guid?, IReadOnlyDictionary{string, string?})" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.SaveTranslations(Guid?, IReadOnlyDictionary{string, string?})" />
     protected Task SaveTranslationsAsync(Guid? guid, IReadOnlyDictionary<string, string?> values, CancellationToken ct)
     {
         if (!IsNonDefaultCulture() || guid == null || guid == Guid.Empty)
@@ -272,4 +269,20 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
     protected IReadOnlyList<string> GetLocalizableFieldsFromInstance() => _localizableFields;
 
     #endregion
+}
+
+/// <summary>
+/// <see cref="AsyncLocalizedStoreWrapper{TStore,T,TTranslation}"/> with the default translation model, <see cref="EntityTranslationModel"/>.
+/// </summary>
+public class AsyncLocalizedStoreWrapper<TStore, T> : AsyncLocalizedStoreWrapper<TStore, T, EntityTranslationModel>
+    where TStore : IAsyncStore<T>
+    where T : Data.Models.AbstractModel, ILocalizable
+{
+    public AsyncLocalizedStoreWrapper(
+        TStore innerStore,
+        IAsyncBulkStore<EntityTranslationModel> translationStore,
+        IEntityLocalizationContext context)
+        : base(innerStore, translationStore, context)
+    {
+    }
 }

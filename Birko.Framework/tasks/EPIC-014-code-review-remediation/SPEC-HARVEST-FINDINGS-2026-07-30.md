@@ -1719,7 +1719,7 @@ SaveTranslations does `if (value == null) continue;`, skipping the field rather 
 
 `../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs:261`  ·  _restates a first-pass finding_
 
-**Verdict: CONFIRMED — handed to [[TASK-680]] (2026-10-19, [[TASK-168]]).** The upsert reads `(EntityGuid, FieldName, Culture)`, takes `FirstOrDefault()` and creates when absent, with no key (`LocalizedTranslationRows.cs:99/138`, the one producer since TASK-168). The fix is the unique key TASK-680 adds.
+**Verdict: CONFIRMED — handed to [[TASK-680]] (2026-10-19, [[TASK-168]]).** The upsert reads `(EntityGuid, FieldName, Culture)`, takes `FirstOrDefault()` and creates when absent, with no key (`LocalizedTranslationRows.cs:99/138`, the one producer since TASK-168). The fix is the unique key TASK-680 adds. **Fixed by [[TASK-680]] (2026-10-19):** `Birko.Data.Localization.SQL` maps a unique key over the four columns, and the upsert retries a create the key refuses as an update. Measured live: a racing writer leaves one row on SQLite, PostgreSQL and SQL Server; without the index, two. Not on MySQL yet — the key exceeds InnoDB's 3 072 bytes, reported and spawned as [[TASK-684]].
 
 SaveTranslations reads (EntityGuid, FieldName, Culture), takes FirstOrDefault and creates when absent - with no uniqueness constraint on EntityTranslationModel and no guard. Two concurrent writers both see no row and both Create. ApplyTranslations then resolves the field via `translationDict[t.FieldName] = t.Value` (201), i.e. whichever duplicate is enumerated last, and every later upsert only updates FirstOrDefault() - so one duplicate stays permanently stale and reads flip between the two values. Same in all four wrappers.
 

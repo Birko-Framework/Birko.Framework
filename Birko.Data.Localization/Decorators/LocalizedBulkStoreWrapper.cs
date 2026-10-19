@@ -16,18 +16,19 @@ namespace Birko.Data.Localization.Decorators;
 /// Rewrites filter expressions for localized field conditions and handles
 /// in-memory ordering/pagination when OrderBy references localized fields.
 /// </summary>
-public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
+public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>, IStoreWrapper<T>
     where TStore : IBulkStore<T>
     where T : Data.Models.AbstractModel, ILocalizable
+    where TTranslation : Data.Models.AbstractModel, IEntityTranslation
 {
     protected readonly TStore _innerStore;
-    protected readonly IBulkStore<EntityTranslationModel> _translationStore;
+    protected readonly IBulkStore<TTranslation> _translationStore;
     protected readonly IEntityLocalizationContext _context;
     protected readonly IReadOnlyList<string> _localizableFields;
 
     public LocalizedBulkStoreWrapper(
         TStore innerStore,
-        IBulkStore<EntityTranslationModel> translationStore,
+        IBulkStore<TTranslation> translationStore,
         IEntityLocalizationContext context)
     {
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
@@ -35,6 +36,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
         _context = context ?? throw new ArgumentNullException(nameof(context));
         // SH-L079 / SH-L082 (TASK-194): the declaration is read and validated once, at wiring, on every culture.
         _localizableFields = LocalizedEntityFields.LocalizableFieldsOf(_innerStore.CreateInstance());
+        LocalizedTranslationRows.RequireQueryableModel<TTranslation>();
     }
 
     // Singular read with localization
@@ -129,7 +131,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
         }
     }
 
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Update(T, StoreDataDelegate{T}?)" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.Update(T, StoreDataDelegate{T}?)" />
     public void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
         LocalizedEntityFields.RequireValidDeclarations(new[] { data });
@@ -360,13 +362,8 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
         foreach (var condition in conditions)
         {
-            var tFilter = new EntityTranslationFilter
-            {
-                EntityType = entityType,
-                FieldName = condition.FieldName,
-                Culture = culture
-            };
-            var translations = _translationStore.Read(tFilter.ToExpression());
+            var translations = _translationStore.Read(LocalizedTranslationRows.Where<TTranslation>(
+                entityType: entityType, fieldName: condition.FieldName, culture: culture));
             var guids = new HashSet<Guid>(
                 translations.Where(t => condition.ValuePredicate(t.Value)).Select(t => t.EntityGuid));
 
@@ -387,7 +384,7 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
     #region Translation Application
 
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.Localize(T)" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.Localize(T)" />
     protected T Localize(T entity)
     {
         if (!IsNonDefaultCulture())
@@ -430,8 +427,8 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
         return entities;
     }
 
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.ReadBaseValues(Guid?, IReadOnlyList{string})" />
-    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T}.WithBaseValues(T, IReadOnlyDictionary{string, string?}?)" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.ReadBaseValues(Guid?, IReadOnlyList{string})" />
+    /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.WithBaseValues(T, IReadOnlyDictionary{string, string?}?)" />
     protected T WithBaseValues(T data, IReadOnlyDictionary<string, string?>? baseValues)
     {
         if (baseValues == null)
@@ -533,4 +530,20 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
     protected IReadOnlyList<string> GetLocalizableFieldsFromInstance() => _localizableFields;
 
     #endregion
+}
+
+/// <summary>
+/// <see cref="LocalizedBulkStoreWrapper{TStore,T,TTranslation}"/> with the default translation model, <see cref="EntityTranslationModel"/>.
+/// </summary>
+public class LocalizedBulkStoreWrapper<TStore, T> : LocalizedBulkStoreWrapper<TStore, T, EntityTranslationModel>
+    where TStore : IBulkStore<T>
+    where T : Data.Models.AbstractModel, ILocalizable
+{
+    public LocalizedBulkStoreWrapper(
+        TStore innerStore,
+        IBulkStore<EntityTranslationModel> translationStore,
+        IEntityLocalizationContext context)
+        : base(innerStore, translationStore, context)
+    {
+    }
 }

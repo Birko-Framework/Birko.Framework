@@ -15,6 +15,9 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 {
     private readonly Dictionary<Guid, T> _data = new();
 
+    /// <summary>Runs before every single-entity create is stored; a test uses it to simulate a racing writer.</summary>
+    public Action<T>? BeforeCreate { get; set; }
+
     /// <summary>Runs before every single-entity update is stored; a test makes it throw to fail the write.</summary>
     public Action<T>? BeforeUpdate { get; set; }
 
@@ -59,6 +62,7 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
     public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
         if (storeDelegate != null) data = storeDelegate(data);
+        BeforeCreate?.Invoke(data);
         var guid = data.Guid ?? Guid.NewGuid();
         if (AssignsGuidOnCreate) data.Guid = guid;
         _data[guid] = data;

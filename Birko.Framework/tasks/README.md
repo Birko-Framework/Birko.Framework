@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194 and TASK-679 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679 and TASK-680 closed; TASK-684, TASK-685 filed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 23      | —     |
-| todo         | —     | —       | 149   |
+| todo         | —     | —       | 150   |
 | in-progress  | 8     | 12      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 3     | 27      | 384   |
+| done         | 3     | 27      | 385   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 12× P1 · 100× P2 · 37× P3.
+`todo` by priority: 11× P1 · 102× P2 · 37× P3.
 
 ## In progress now
 
@@ -170,7 +170,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (229/282 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (229/283 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -306,6 +306,7 @@ _None._
   - [x] [TASK-633](EPIC-014-code-review-remediation/TASK-633-schema-drift-produces-the-repair-sql.md) Schema drift produces the repair SQL — the ADD with its backfill, and the RENAME on a wrong case — not only the report (P2)
   - [x] [TASK-634](EPIC-014-code-review-remediation/TASK-634-elasticsearch-mapping-drift-produces-its-repair.md) ElasticSearch mapping drift produces its repair, not only the report (P2)
   - [x] [TASK-635](EPIC-014-code-review-remediation/TASK-635-index-drift-for-mongodb-ravendb-cosmosdb.md) Index drift is detected for SQL only: MongoDB, RavenDB and CosmosDB have none (P3)
+  - [ ] [TASK-685](EPIC-014-code-review-remediation/TASK-685-unique-violation-retry-inside-a-postgresql-transaction.md) A retry after a unique violation cannot run inside a PostgreSQL transaction — the slug and default decorators (P2)
   - STORY-024 Critical findings — done (0/0 done) (done)
   - STORY-025 High findings — done (0/0 done) (done)
   - STORY-026 Medium findings — in-progress (0/0 done)
@@ -620,12 +621,13 @@ _None._
 
 <details><summary>3 closed epic(s)</summary>
 
-- **EPIC-021** Entity localization for real catalogues — in-progress (1/5 tasks done)
+- **EPIC-021** Entity localization for real catalogues — in-progress (2/6 tasks done)
   - [x] [TASK-679](EPIC-021-entity-localization-for-catalogues/TASK-679-batched-localization-of-list-reads.md) A localized list read costs one translation query per entity — batch it (P1)
-  - [ ] [TASK-680](EPIC-021-entity-localization-for-catalogues/TASK-680-translation-model-generic-and-unique-key.md) The translation model is fixed and unkeyed — make it the consumer's type, with a unique key (P1)
+  - [x] [TASK-680](EPIC-021-entity-localization-for-catalogues/TASK-680-translation-model-generic-and-unique-key.md) The translation model is fixed and unkeyed — make it the consumer's type, with a unique key (P1)
   - [ ] [TASK-681](EPIC-021-entity-localization-for-catalogues/TASK-681-translated-field-filters-in-sql-with-fallback.md) A filter on a translated field reads every translation into memory, and never matches an untranslated entity (P1)
   - [ ] [TASK-682](EPIC-021-entity-localization-for-catalogues/TASK-682-ientitytranslations-explicit-translation-api.md) `IEntityTranslations` — an explicit, batched API for working with translations (P1)
   - [ ] [TASK-683](EPIC-021-entity-localization-for-catalogues/TASK-683-entity-and-translation-writes-share-no-boundary.md) The entity write and its translation write share no boundary, so a failure desynchronises them (P2)
+  - [ ] [TASK-684](EPIC-021-entity-localization-for-catalogues/TASK-684-translation-key-too-long-on-mysql.md) The translation table's unique key is too long for MySQL, and a fluent mapping cannot bound the columns (P2)
 
 - **EPIC-009** Birko.Communication — Remaining protocols — done (2/2 tasks done)
   - STORY-019 gRPC support — done (1/1 done) (done)

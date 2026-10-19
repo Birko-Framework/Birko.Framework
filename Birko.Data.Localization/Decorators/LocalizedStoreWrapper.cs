@@ -16,18 +16,19 @@ namespace Birko.Data.Localization.Decorators;
 /// rewrites filter expressions to query the translation store for localized field conditions,
 /// and intercepts creates/updates to persist translations for localizable fields.
 /// </summary>
-public class LocalizedStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
+public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreWrapper<T>
     where TStore : IStore<T>
     where T : Data.Models.AbstractModel, ILocalizable
+    where TTranslation : Data.Models.AbstractModel, IEntityTranslation
 {
     protected readonly TStore _innerStore;
-    protected readonly IBulkStore<EntityTranslationModel> _translationStore;
+    protected readonly IBulkStore<TTranslation> _translationStore;
     protected readonly IEntityLocalizationContext _context;
     protected readonly IReadOnlyList<string> _localizableFields;
 
     public LocalizedStoreWrapper(
         TStore innerStore,
-        IBulkStore<EntityTranslationModel> translationStore,
+        IBulkStore<TTranslation> translationStore,
         IEntityLocalizationContext context)
     {
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
@@ -35,6 +36,7 @@ public class LocalizedStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
         _context = context ?? throw new ArgumentNullException(nameof(context));
         // SH-L079 / SH-L082 (TASK-194): the declaration is read and validated once, at wiring, on every culture.
         _localizableFields = LocalizedEntityFields.LocalizableFieldsOf(_innerStore.CreateInstance());
+        LocalizedTranslationRows.RequireQueryableModel<TTranslation>();
     }
 
     public T? Read(Guid guid)
@@ -221,13 +223,8 @@ public class LocalizedStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 
         foreach (var condition in conditions)
         {
-            var tFilter = new EntityTranslationFilter
-            {
-                EntityType = entityType,
-                FieldName = condition.FieldName,
-                Culture = culture
-            };
-            var translations = _translationStore.Read(tFilter.ToExpression());
+            var translations = _translationStore.Read(LocalizedTranslationRows.Where<TTranslation>(
+                entityType: entityType, fieldName: condition.FieldName, culture: culture));
             var guids = new HashSet<Guid>(
                 translations.Where(t => condition.ValuePredicate(t.Value)).Select(t => t.EntityGuid));
 
@@ -320,4 +317,20 @@ public class LocalizedStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     protected IReadOnlyList<string> GetLocalizableFieldsFromInstance() => _localizableFields;
 
     #endregion
+}
+
+/// <summary>
+/// <see cref="LocalizedStoreWrapper{TStore,T,TTranslation}"/> with the default translation model, <see cref="EntityTranslationModel"/>.
+/// </summary>
+public class LocalizedStoreWrapper<TStore, T> : LocalizedStoreWrapper<TStore, T, EntityTranslationModel>
+    where TStore : IStore<T>
+    where T : Data.Models.AbstractModel, ILocalizable
+{
+    public LocalizedStoreWrapper(
+        TStore innerStore,
+        IBulkStore<EntityTranslationModel> translationStore,
+        IEntityLocalizationContext context)
+        : base(innerStore, translationStore, context)
+    {
+    }
 }

@@ -79,7 +79,7 @@ jobs:
                    Birko.Data.SQL.MySQL.Tests Birko.Data.SQL.MySQL.View.Tests \
                    Birko.Data.SQL.MSSql.Tests Birko.Data.SQL.MSSql.View.Tests Birko.Data.SQL.Providers.Tests Birko.Data.SQL.Views.Tests \
                    Birko.Data.Migrations.SQL.Tests Birko.Data.TimescaleDB.Tests \
-                   Birko.Data.Migrations.TimescaleDB.Tests Birko.BackgroundJobs.SQL.Tests; do
+                   Birko.Data.Migrations.TimescaleDB.Tests Birko.BackgroundJobs.SQL.Tests Birko.Data.Localization.SQL.Tests; do
             dotnet test "tests/$p" --nologo -v q || { echo "::error::$p failed"; fail=1; }
           done
           exit $fail

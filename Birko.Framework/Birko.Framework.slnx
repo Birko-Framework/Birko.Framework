@@ -284,6 +284,7 @@
     <Project Path="../tests/Birko.Localization.Tests/Birko.Localization.Tests.csproj" />
     <Project Path="../tests/Birko.Localization.Data.Tests/Birko.Localization.Data.Tests.csproj" />
     <Project Path="../tests/Birko.Data.Localization.Tests/Birko.Data.Localization.Tests.csproj" />
+    <Project Path="../tests/Birko.Data.Localization.SQL.Tests/Birko.Data.Localization.SQL.Tests.csproj" />
     <Project Path="../tests/Birko.Communication.Modbus.Tests/Birko.Communication.Modbus.Tests.csproj" />
     <Project Path="../tests/Birko.Communication.OAuth.Tests/Birko.Communication.OAuth.Tests.csproj" />
     <Project Path="../tests/Birko.Communication.IR.Tests/Birko.Communication.IR.Tests.csproj" />
@@ -411,6 +412,7 @@
     <Project Path="../Birko.Localization/Birko.Localization.shproj" />
     <Project Path="../Birko.Localization.Data/Birko.Localization.Data.shproj" />
     <Project Path="../Birko.Data.Localization/Birko.Data.Localization.shproj" />
+    <Project Path="../Birko.Data.Localization.SQL/Birko.Data.Localization.SQL.shproj" />
   </Folder>
   <Folder Name="/Serialization/">
     <Project Path="../Birko.Serialization/Birko.Serialization.shproj" />

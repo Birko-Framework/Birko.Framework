@@ -501,6 +501,10 @@
 			"path": "../Birko.Data.Localization"
 		},
 		{
+			"name": "Localization / Birko.Data.Localization.SQL",
+			"path": "../Birko.Data.Localization.SQL"
+		},
+		{
 			"name": "Localization / Birko.Localization",
 			"path": "../Birko.Localization"
 		},
@@ -947,6 +951,10 @@
 		{
 			"name": "Tests / Birko.Data.Localization.Tests",
 			"path": "../tests/Birko.Data.Localization.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.Localization.SQL.Tests",
+			"path": "../tests/Birko.Data.Localization.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Migrations.SQL.Tests",

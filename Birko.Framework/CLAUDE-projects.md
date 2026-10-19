@@ -72,6 +72,11 @@ Birko.Security.Grants (GrantRoleTable, ResourceGrant, IResourceGrantStore, IGran
   -> Birko.Security.Grants.SQL (fluent mappings, SqlResourceGrantStore<DB>, GrantSqlIndexes)
      <- Birko.Models.SQL + Birko.Data.SQL; schemaless backends need none of it
 
+Birko.Data.Localization (ILocalizable, IEntityTranslation, the localized store wrappers)
+  <- Birko.Data.Core + Birko.Data.Stores only: no SQL (TASK-680 kept it that way)
+  -> Birko.Data.Localization.SQL (EntityTranslationMapping<TTranslation>, LocalizationSqlMappings)
+     <- Birko.Models.SQL + Birko.Data.SQL; schemaless backends need none of it
+
 Birko.Security.OAuth.Server (OAuthServer, endpoint handlers, store interfaces — no store implementation)
   <- Birko.Security + Birko.Data.Stores + Birko.Time.Abstractions
   -> Birko.Security.OAuth.Server.InMemory (the five stores on AsyncInMemoryStore<T>, AddOAuthServerInMemoryStores)
@@ -258,7 +263,8 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Time** - Time zones, business calendar, holidays, working hours
 - **Birko.Localization** - Translation framework, CLDR pluralization, JSON/RESX/InMemory providers
 - **Birko.Localization.Data** - Database-backed translations, namespace scoping, TTL cache
-- **Birko.Data.Localization** - Entity-level localization (ILocalizable, store decorator wrappers)
+- **Birko.Data.Localization** - Entity-level localization (ILocalizable, store decorator wrappers, any `IEntityTranslation` model)
+- **Birko.Data.Localization.SQL** - SQL schema for translation rows: `EntityTranslationMapping<TTranslation>` (table + UNIQUE `(EntityGuid, EntityType, FieldName, Culture)`), `LocalizationSqlMappings.Register` / `Register<TTranslation>`
 
 ## AI / LLM
 - **Birko.AI.Contracts** - LLM provider interface (ILlmProvider), models (Message, ContentBlock, TokenUsage, LlmResponse, LlmStreamingResponse), Tool base class, AgentOptions, LlmProviderFactory (registration-based, `Birko.AI.Factories` namespace)
@@ -295,7 +301,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Health.Tests, Birko.Health.Azure.Tests, Birko.Health.Data.SQL.Tests, Birko.Health.Data.ElasticSearch.Tests, Birko.Health.Data.IndexManagement.Tests, Birko.Health.Security.Grants.Tests
 - Birko.Messaging.Tests, Birko.Messaging.Razor.Tests
 - Birko.Serialization.Tests, Birko.Time.Tests, Birko.Caching.Hybrid.Tests
-- Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests
+- Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests, Birko.Data.Localization.SQL.Tests
 - Birko.Communication.Modbus.Tests, Birko.Communication.OAuth.Tests, Birko.Communication.GraphQL.Tests, Birko.Communication.IR.Tests, Birko.Communication.NFC.Tests
 - Birko.Data.MongoDB.Tests
 - Birko.Random.Tests
