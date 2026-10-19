@@ -7,7 +7,7 @@ created: 2026-07-06
 
 # Frontend Birko.Web backports (shipped)
 
-> Reopened 2026-10-14 — TASK-599 to TASK-605 are todo (moved from WorkoutTracker STORY-009, where they were filed as Birko.Web work the framework's pick never saw).
+> Reopened 2026-10-14 — TASK-599 to TASK-605 are todo (moved from WorkoutTracker STORY-009, where they were filed as Birko.Web work the framework's pick never saw). TASK-670 and TASK-671 followed on 2026-10-19 (WorkoutTracker TASK-124 and TASK-125, the same move).
 
 ## User story
 

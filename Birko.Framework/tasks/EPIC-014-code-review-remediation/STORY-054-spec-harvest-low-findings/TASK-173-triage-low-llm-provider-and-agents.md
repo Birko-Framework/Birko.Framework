@@ -2,8 +2,8 @@
 id: TASK-173
 parent: STORY-054
 feature: FEATURE-014
-# status: done | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-09
