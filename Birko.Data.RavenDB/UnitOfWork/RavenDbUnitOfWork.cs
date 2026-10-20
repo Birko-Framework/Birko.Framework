@@ -16,6 +16,11 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
     private readonly IDocumentStore _documentStore;
     private IAsyncDocumentSession? _session;
     private bool _endedByFailedCommit;
+    // TASK-700: the database key its session is published under, the cell installed at construction so a session opened
+    // in BeginAsync reaches the caller's flow, and the published entry.
+    private readonly string? _ambientKey;
+    private readonly IDisposable _cell;
+    private Birko.Data.Stores.AmbientSession<IAsyncDocumentSession>.Scope? _published;
     private bool _disposed;
 
     public bool IsActive => _session is not null;
@@ -52,9 +57,17 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
     /// <summary>
     /// Creates a new RavenDbUnitOfWork from a document store.
     /// </summary>
+    /// <remarks>
+    /// TASK-700: from <see cref="BeginAsync"/> to the transaction's end, the session is published for the document store's
+    /// database (<c>RavenAmbientKey</c>) in the constructing flow, so an async store on that database that was given no
+    /// session of its own writes inside it, as a SQL store joins a <c>SqlUnitOfWork</c>. Construct it in the flow that runs
+    /// the writes. The sync store takes an <c>IDocumentSession</c> and does not join.
+    /// </remarks>
     public RavenDbUnitOfWork(IDocumentStore documentStore)
     {
         _documentStore = documentStore ?? throw new ArgumentNullException(nameof(documentStore));
+        _ambientKey = Stores.RavenAmbientKey.Of(documentStore);
+        _cell = Birko.Data.Stores.AmbientSession<IAsyncDocumentSession>.InstallCell();
     }
 
     /// <summary>
@@ -79,6 +92,10 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
             TransactionMode = TransactionMode.ClusterWide
         });
         _endedByFailedCommit = false;
+        if (_ambientKey != null)
+        {
+            _published = Birko.Data.Stores.AmbientSession<IAsyncDocumentSession>.Enter(_ambientKey, _session);
+        }
         return Task.CompletedTask;
     }
 
@@ -94,7 +111,12 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
             throw new NoActiveTransactionException();
+        // TASK-700: a write that joined this session and failed (a localized write boundary) marked it, so saving would
+        // keep half of that write. The session stays open for RollbackAsync, as SqlUnitOfWork's transaction does.
+        if (_published is { IsRollbackOnly: true })
+            throw new TransactionRollbackOnlyException();
 
+        Unpublish();
         var session = _session!;
         _session = null;
         try
@@ -127,9 +149,16 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
         }
 
         // RavenDB sessions are transactional — unsaved changes are discarded on dispose.
+        Unpublish();
         _session!.Dispose();
         _session = null;
         return Task.CompletedTask;
+    }
+
+    private void Unpublish()
+    {
+        _published?.Dispose();
+        _published = null;
     }
 
     public ValueTask DisposeAsync()
@@ -137,8 +166,10 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
         if (!_disposed)
         {
             _disposed = true;
+            Unpublish();
             _session?.Dispose();
             _session = null;
+            _cell.Dispose();
         }
         return ValueTask.CompletedTask;
     }
@@ -148,8 +179,10 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
         if (!_disposed)
         {
             _disposed = true;
+            Unpublish();
             _session?.Dispose();
             _session = null;
+            _cell.Dispose();
         }
     }
 }

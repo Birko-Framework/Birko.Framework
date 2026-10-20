@@ -80,6 +80,8 @@ Birko.Data.Localization (ILocalizable, IEntityTranslation, the localized store w
   -> Birko.Data.Localization.MongoDB (LocalizationMongoIndexes: the translation key and ValueHash indexes, TASK-699;
      MongoLocalizedWriteBoundary: one transaction for an entity and its translations, TASK-700)
      <- Birko.Data.MongoDB + Birko.Data.Patterns (IndexManagement)
+  -> Birko.Data.Localization.RavenDB (RavenLocalizedWriteBoundary: one session for an entity and its translations, TASK-700)
+     <- Birko.Data.RavenDB
 
 Birko.Security.OAuth.Server (OAuthServer, endpoint handlers, store interfaces — no store implementation)
   <- Birko.Security + Birko.Data.Stores + Birko.Time.Abstractions
@@ -269,6 +271,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Localization.Data** - Database-backed translations, namespace scoping, TTL cache
 - **Birko.Data.Localization** - Entity-level localization (ILocalizable, store decorator wrappers, any `IEntityTranslation` model)
 - **Birko.Data.Localization.MongoDB** - MongoDB indexes for translation rows: `LocalizationMongoIndexes.EnsureAsync(store)` creates the unique `(EntityGuid, EntityType, FieldName, Culture)` key and the `ValueHash` index, idempotently (TASK-699); `MongoLocalizedWriteBoundary.For(entityStore, translationStore)` makes a localized write one transaction on one database of a replica set, joining a caller's `MongoDbUnitOfWork` (TASK-700)
+- **Birko.Data.Localization.RavenDB** - RavenDB write boundary: `RavenLocalizedWriteBoundary.For(entityStore, translationStore)` makes a localized write one cluster-wide session on one database, joining a caller's `RavenDbUnitOfWork` (TASK-700)
 - **Birko.Data.Localization.SQL** - SQL schema for translation rows: `EntityTranslationMapping<TTranslation>` (table + UNIQUE `(EntityGuid, EntityType, FieldName, Culture)`), `LocalizationSqlMappings.Register` / `Register<TTranslation>`
 
 ## AI / LLM
@@ -306,7 +309,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Health.Tests, Birko.Health.Azure.Tests, Birko.Health.Data.SQL.Tests, Birko.Health.Data.ElasticSearch.Tests, Birko.Health.Data.IndexManagement.Tests, Birko.Health.Security.Grants.Tests
 - Birko.Messaging.Tests, Birko.Messaging.Razor.Tests
 - Birko.Serialization.Tests, Birko.Time.Tests, Birko.Caching.Hybrid.Tests
-- Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests, Birko.Data.Localization.SQL.Tests, Birko.Data.Localization.MongoDB.Tests
+- Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests, Birko.Data.Localization.SQL.Tests, Birko.Data.Localization.MongoDB.Tests, Birko.Data.Localization.RavenDB.Tests
 - Birko.Communication.Modbus.Tests, Birko.Communication.OAuth.Tests, Birko.Communication.GraphQL.Tests, Birko.Communication.IR.Tests, Birko.Communication.NFC.Tests
 - Birko.Data.MongoDB.Tests
 - Birko.Random.Tests

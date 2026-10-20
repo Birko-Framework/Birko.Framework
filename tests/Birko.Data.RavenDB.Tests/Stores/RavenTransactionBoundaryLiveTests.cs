@@ -113,6 +113,47 @@ public class RavenTransactionBoundaryLiveTests
         }
     }
 
+    /// <summary>
+    /// TASK-700: a store given no session, in the flow that began the unit of work, on its database, writes into its
+    /// session, as a SQL store joins a <c>SqlUnitOfWork</c>: nothing reaches the database on a rollback, and a store in
+    /// another flow is not drawn in.
+    /// </summary>
+    [Fact]
+    public async Task A_store_in_the_unit_of_works_flow_joins_it()
+    {
+        if (!RequireServer()) return;
+        var db = NewDb();
+        using var owner = NewStore(db);
+        using var joined = NewStore(db);
+        using var elsewhere = NewStore(db);
+        var inFlow = Guid.NewGuid();
+        var otherFlow = Guid.NewGuid();
+        try
+        {
+            await owner.InitAsync();
+            await using (var uow = RavenDbUnitOfWork.FromStore(owner))
+            {
+                await uow.BeginAsync();
+                await joined.CreateAsync(new TxDoc { Guid = inFlow, Name = "joined" });
+                (await joined.ReadAsync(inFlow)).Should().NotBeNull("a load by id sees the session's unsaved write");
+                Task other;
+                using (ExecutionContext.SuppressFlow())
+                {
+                    other = Task.Run(() => elsewhere.CreateAsync(new TxDoc { Guid = otherFlow, Name = "elsewhere" }));
+                }
+                await other;
+                await uow.RollbackAsync();
+            }
+
+            (await joined.ReadAsync(inFlow)).Should().BeNull("the joined write went with the rollback");
+            (await elsewhere.ReadAsync(otherFlow)).Should().NotBeNull("a store in another flow saved on its own");
+        }
+        finally
+        {
+            try { await owner.DestroyAsync(); } catch { }
+        }
+    }
+
     [Fact]
     public async Task A_committed_session_persists_every_write()
     {

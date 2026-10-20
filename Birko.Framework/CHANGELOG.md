@@ -4,6 +4,14 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-20 — IEntityTranslations: explicit, batched translations
+
+[[TASK-682]]. New `IEntityTranslations<T>`, with `AddEntityTranslations<T>()`, works on a given culture rather than the
+ambient one. Get one language for a list, every language of one entity, set, remove, find an entity by value, check
+uniqueness (`exceptEntityGuid`) and localize loaded entities. Lookups use the wrappers' fallback: an untranslated
+product is found by its base slug, and `ExistsAsync` counts it. The default culture is refused by `SetAsync`. Build it
+on the unlocalized entity store; a localized wrapper is refused. Measured on SQLite, PostgreSQL, SQL Server and MySQL.
+
 ## 2026-10-20 — Translation writes are batched
 
 [[TASK-690]]. Saving translations costs one read of the existing rows per 500 entities, then at most one bulk delete,

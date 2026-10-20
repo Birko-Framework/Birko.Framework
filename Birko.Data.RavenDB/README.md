@@ -5,6 +5,8 @@ RavenDB document-based storage implementation for the Birko Framework with ACID 
 ## Features
 
 - Document-based CRUD with ACID transactions
+- `RavenDbUnitOfWork`: a cluster-wide session; async stores on its database in the same flow join it (TASK-700), and
+  updates inside it work on documents a cluster transaction wrote (TASK-702)
 - Built-in caching and optimistic concurrency
 - Full-text search via LINQ
 - Include/Load pattern for reducing round trips

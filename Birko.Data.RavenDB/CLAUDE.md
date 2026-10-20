@@ -327,6 +327,15 @@ conflict forever, and a retry after a cancellation wrote late. To try again, beg
   query no" and query reads are the common case -- it states the answer a caller is unsafe to get wrong.
   The query half is a RavenDB property, not a defect, and is not fixable from this side.
 
+**Stores in the unit of work's flow join it (TASK-700).** From `BeginAsync` to its end, a `RavenDbUnitOfWork` publishes
+its session in `AmbientSession<IAsyncDocumentSession>` under `RavenAmbientKey.Of(documentStore)` (URLs and database,
+the one producer). Every async store operation uses its own `TransactionContext`, else the session its flow publishes
+for its database (`Session`), as a SQL store joins a `SqlUnitOfWork`. Construct the unit of work in the flow that runs
+the writes. The sync store reads `AmbientSession<IDocumentSession>`, which only a localized write boundary publishes. A
+failed participant marks the session rollback-only, and `CommitAsync` then throws `TransactionRollbackOnlyException`
+and keeps the session for `RollbackAsync`. `IRavenConnectedStore` exposes `DocumentStore`, `AmbientKey` and the
+given session without the model type.
+
 **An update copies onto the tracked document (TASK-702).** The update paths load the document and copy the caller's
 values onto it (`RavenTrackedCopy.Into`: public fields and public properties with a setter of any visibility). They
 used to evict it and store the caller's object, which lost the atomic guard index of a document a cluster transaction

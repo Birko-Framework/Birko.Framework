@@ -505,6 +505,10 @@
 			"path": "../Birko.Data.Localization.MongoDB"
 		},
 		{
+			"name": "Localization / Birko.Data.Localization.RavenDB",
+			"path": "../Birko.Data.Localization.RavenDB"
+		},
+		{
 			"name": "Localization / Birko.Data.Localization.SQL",
 			"path": "../Birko.Data.Localization.SQL"
 		},
@@ -959,6 +963,10 @@
 		{
 			"name": "Tests / Birko.Data.Localization.MongoDB.Tests",
 			"path": "../tests/Birko.Data.Localization.MongoDB.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.Localization.RavenDB.Tests",
+			"path": "../tests/Birko.Data.Localization.RavenDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Localization.SQL.Tests",

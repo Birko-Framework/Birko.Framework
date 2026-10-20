@@ -373,7 +373,9 @@ EntityTranslationFilter.ByEntityTypeAndCulture("Product", "sk");
 Pass `SqlLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.SQL) as the wrapper's last
 argument. When both stores are SQL on one database, the entity write and its translation write commit or roll back
 together, joining your `SqlUnitOfWork` if you opened one. On MongoDB, `MongoLocalizedWriteBoundary.For` (Birko.Data.
-Localization.MongoDB) does the same on one database of a replica set, joining your `MongoDbUnitOfWork` (TASK-700).
+Localization.MongoDB) does the same on one database of a replica set, joining your `MongoDbUnitOfWork` (TASK-700), and
+`RavenLocalizedWriteBoundary.For` (Birko.Data.Localization.RavenDB) on one RavenDB database, joining your
+`RavenDbUnitOfWork`. Cosmos DB stays best effort: its transactional batch holds one partition key of one container.
 Other pairings are best effort. A delete whose translation
 cleanup fails then throws `TranslationCleanupException` naming the entities to clean with `RemoveEntitiesAsync`. See
 the [pairing table](../../Birko.Data.Localization/README.md#atomicity-which-store-pairings-are-one-unit).

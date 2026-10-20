@@ -26,6 +26,7 @@ public class RavenDBStore<T>
     , ITransactionalStore<T, Raven.Client.Documents.Session.IDocumentSession>
     , IAggregatableStore<T>
     , IRealtimeReadStore<T>
+    , IRavenConnectedStore
     , IDisposable
     where T : AbstractModel
 {
@@ -43,6 +44,21 @@ public class RavenDBStore<T>
 
     /// <inheritdoc />
     public Raven.Client.Documents.Session.IDocumentSession? TransactionContext { get; private set; }
+
+    /// <summary>
+    /// TASK-700: the session this store's operations run in: its own <see cref="TransactionContext"/>, else the session
+    /// its flow publishes for this database (<see cref="Data.Stores.AmbientSession{TSession}"/>), which a
+    /// <c>RavenDbUnitOfWork</c> or a localized write boundary publishes. Null outside any: each operation then opens and
+    /// saves a session of its own.
+    /// </summary>
+    private Raven.Client.Documents.Session.IDocumentSession? Session
+        => TransactionContext ?? Data.Stores.AmbientSession<Raven.Client.Documents.Session.IDocumentSession>.Find(AmbientKey);
+
+    /// <inheritdoc />
+    public string? AmbientKey => RavenAmbientKey.Of(_documentStore);
+
+    /// <inheritdoc />
+    object? IRavenConnectedStore.GivenSession => TransactionContext;
 
     /// <inheritdoc />
     public void SetTransactionContext(Raven.Client.Documents.Session.IDocumentSession? context)
@@ -176,14 +192,14 @@ public class RavenDBStore<T>
 
         // TASK-567: an empty change vector means "this id must not exist yet", so an id already stored is a
         // ConcurrencyException at SaveChanges instead of the silent overwrite Store does without one.
-        if (TransactionContext != null)
+        if (Session != null)
         {
             // Inside a unit of work (a cluster-wide transaction) RavenDB refuses an explicit change vector, and its
             // atomic guards only cover documents a cluster transaction created: measured on 7.2.6, a stored id written
             // by an ordinary create was silently overwritten at commit. So the id is checked in the session first. A
             // concurrent writer between the check and the commit is not covered (TASK-567).
-            if (TransactionContext.Advanced.Exists(IdOf(data.Guid.Value))) throw DuplicateCreateRefusal(null);
-            TransactionContext.Store(data, IdOf(data.Guid.Value));
+            if (Session.Advanced.Exists(IdOf(data.Guid.Value))) throw DuplicateCreateRefusal(null);
+            Session.Store(data, IdOf(data.Guid.Value));
             return data.Guid.Value;
         }
 
@@ -223,9 +239,9 @@ public class RavenDBStore<T>
         EnsureInitialized();
         if (_documentStore == null || guid == Guid.Empty) return null;
 
-        if (TransactionContext != null)
+        if (Session != null)
         {
-            return TransactionContext.Load<T>(IdOf(guid));
+            return Session.Load<T>(IdOf(guid));
         }
 
         using var session = _documentStore.OpenSession();
@@ -238,9 +254,9 @@ public class RavenDBStore<T>
         EnsureInitialized();
         if (_documentStore == null) return Enumerable.Empty<T>();
 
-        if (TransactionContext != null)
+        if (Session != null)
         {
-            return TransactionContext.Query<T>().ToList();
+            return Session.Query<T>().ToList();
         }
 
         using var session = _documentStore.OpenSession();
@@ -258,13 +274,13 @@ public class RavenDBStore<T>
         filter = Expressions.RavenFilterRewriter.Rewrite(filter);
         if (_documentStore == null) return null;
 
-        if (TransactionContext != null)
+        if (Session != null)
         {
             if (filter != null)
             {
-                return TransactionContext.Query<T>().FirstOrDefault(filter);
+                return Session.Query<T>().FirstOrDefault(filter);
             }
-            return TransactionContext.Query<T>().FirstOrDefault();
+            return Session.Query<T>().FirstOrDefault();
         }
 
         using var session = _documentStore.OpenSession();
@@ -290,9 +306,9 @@ public class RavenDBStore<T>
 
         data = StoreDelegates.Apply(storeDelegate, data);
 
-        if (TransactionContext != null)
+        if (Session != null)
         {
-            var existing = TransactionContext.Load<T>(IdOf(data.Guid.Value))
+            var existing = Session.Load<T>(IdOf(data.Guid.Value))
                 ?? throw new EntityNotFoundException(typeof(T), data.Guid);
             // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
             RavenTrackedCopy.Into(data, existing);
@@ -312,9 +328,9 @@ public class RavenDBStore<T>
     {
         if (_documentStore == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
-        if (TransactionContext != null)
+        if (Session != null)
         {
-            TransactionContext.Delete(IdOf(data.Guid.Value));
+            Session.Delete(IdOf(data.Guid.Value));
             return;
         }
 
@@ -333,13 +349,13 @@ public class RavenDBStore<T>
         filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
         if (_documentStore == null) return 0;
 
-        if (TransactionContext != null)
+        if (Session != null)
         {
             if (filter != null)
             {
-                return TransactionContext.Query<T>().Count(filter);
+                return Session.Query<T>().Count(filter);
             }
-            return TransactionContext.Query<T>().Count();
+            return Session.Query<T>().Count();
         }
 
         using var session = _documentStore.OpenSession();
@@ -362,7 +378,7 @@ public class RavenDBStore<T>
         filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
         if (_documentStore == null) return Enumerable.Empty<T>();
 
-        var session = TransactionContext ?? _documentStore.OpenSession();
+        var session = Session ?? _documentStore.OpenSession();
         try
         {
             IRavenQueryable<T> query = session.Query<T>();
@@ -409,7 +425,7 @@ public class RavenDBStore<T>
         }
         finally
         {
-            if (TransactionContext == null)
+            if (Session == null)
             {
                 session.Dispose();
             }
@@ -421,7 +437,7 @@ public class RavenDBStore<T>
     {
         if (_documentStore == null || data == null) return;
 
-        if (TransactionContext != null)
+        if (Session != null)
         {
             foreach (var itemSource in data)
             {
@@ -430,8 +446,8 @@ public class RavenDBStore<T>
                 // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
                 item.EnsureGuid();
                 item = StoreDelegates.Apply(storeDelegate, item);
-                if (TransactionContext.Advanced.Exists(IdOf(item.Guid!.Value))) throw DuplicateCreateRefusal(null);
-                TransactionContext.Store(item, IdOf(item.Guid.Value));
+                if (Session.Advanced.Exists(IdOf(item.Guid!.Value))) throw DuplicateCreateRefusal(null);
+                Session.Store(item, IdOf(item.Guid.Value));
             }
             return;
         }
@@ -464,7 +480,7 @@ public class RavenDBStore<T>
 
         // TASK-555: an entity that is not stored is reported, not created — the stored ones are still written.
         var missing = new List<Guid>();
-        var session = TransactionContext ?? _documentStore.OpenSession();
+        var session = Session ?? _documentStore.OpenSession();
         try
         {
             foreach (var itemSource in data)
@@ -492,14 +508,14 @@ public class RavenDBStore<T>
                 RavenTrackedCopy.Into(item, existing);
             }
 
-            if (TransactionContext == null)
+            if (Session == null)
             {
                 session.SaveChanges();
             }
         }
         finally
         {
-            if (TransactionContext == null)
+            if (Session == null)
             {
                 session.Dispose();
             }
@@ -512,7 +528,7 @@ public class RavenDBStore<T>
     {
         if (_documentStore == null || data == null) return;
 
-        var session = TransactionContext ?? _documentStore.OpenSession();
+        var session = Session ?? _documentStore.OpenSession();
         try
         {
             foreach (var item in data)
@@ -525,14 +541,14 @@ public class RavenDBStore<T>
                 session.Delete(IdOf(item.Guid.Value));
             }
 
-            if (TransactionContext == null)
+            if (Session == null)
             {
                 session.SaveChanges();
             }
         }
         finally
         {
-            if (TransactionContext == null)
+            if (Session == null)
             {
                 session.Dispose();
             }
@@ -587,7 +603,7 @@ public class RavenDBStore<T>
     {
         if (_documentStore == null) return Array.Empty<AggregateResult>();
 
-        var session = TransactionContext ?? _documentStore.OpenSession();
+        var session = Session ?? _documentStore.OpenSession();
         try
         {
             bool canUseNative = query.GroupByFields.Count == 1
@@ -607,7 +623,7 @@ public class RavenDBStore<T>
         }
         finally
         {
-            if (TransactionContext == null)
+            if (Session == null)
                 session.Dispose();
         }
     }

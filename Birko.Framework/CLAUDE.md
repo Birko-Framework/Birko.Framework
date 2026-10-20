@@ -289,6 +289,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### RavenDB: localized writes in one session, and stores join a unit of work (2026-10-20)
+[[TASK-700]]. New `RavenLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.RavenDB):
+on one database, both stores write into one cluster-wide session, so a failed translation write discards the entity
+write. A `RavenDbUnitOfWork` now publishes its session; an async store on its database in the same flow joins it. A
+race surfaces at save and is re-run once. Measured on RavenDB 7.2. Cosmos DB stays best effort: a batch holds one
+container's partition.
 ### RavenDB: updates inside a unit of work work on cluster-written documents (2026-10-20)
 [[TASK-702]]. An update inside a `RavenDbUnitOfWork` of a document a unit of work had written failed at commit with
 `ClusterTransactionConcurrencyException`. The stores evicted the loaded document and stored yours, which lost its
@@ -363,12 +369,6 @@ other type is refused. An index-key column keeps its declared length instead of 
 translation write rolls the entity write back. It joins your `SqlUnitOfWork`, and in its own transaction re-runs a
 write once after a key race (PostgreSQL). Measured on SQLite, PostgreSQL, SQL Server and MySQL. Other pairings are best
 effort. A failed delete cleanup throws `TranslationCleanupException` listing the GUIDs. New `ISqlConnectedStore`.
-### IEntityTranslations: explicit, batched translations (2026-10-20)
-[[TASK-682]]. New `IEntityTranslations<T>`, with `AddEntityTranslations<T>()`, works on a given culture rather than the
-ambient one. Get one language for a list, every language of one entity, set, remove, find an entity by value, check
-uniqueness (`exceptEntityGuid`) and localize loaded entities. Lookups use the wrappers' fallback: an untranslated
-product is found by its base slug, and `ExistsAsync` counts it. The default culture is refused by `SetAsync`. Build it
-on the unlocalized entity store; a localized wrapper is refused. Measured on SQLite, PostgreSQL, SQL Server and MySQL.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

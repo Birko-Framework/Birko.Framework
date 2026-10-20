@@ -196,7 +196,10 @@ Every write that touches both stores runs through an `ILocalizedWriteBoundary` (
 | SQL stores on two databases (different `Settings.GetId()`) | No |
 | Both stores MongoDB on one database, with `MongoLocalizedWriteBoundary.For(entityStore, translationStore)` ([Birko.Data.Localization.MongoDB](../Birko.Data.Localization.MongoDB/README.md)) | **Yes**, on a replica set (TASK-700). A failed translation write rolls the entity write back. |
 | Same pairing, no boundary, inside your own `MongoDbUnitOfWork` | **Yes**: both stores join it. |
-| InMemory, JSON, XML, RavenDB, Cosmos DB, Elasticsearch | No |
+| Both stores RavenDB on one database, with `RavenLocalizedWriteBoundary.For(entityStore, translationStore)` ([Birko.Data.Localization.RavenDB](../Birko.Data.Localization.RavenDB/README.md)) | **Yes** (TASK-700): one cluster-wide session. A failed translation write discards the entity write. |
+| Same pairing (async stores), no boundary, inside your own `RavenDbUnitOfWork` | **Yes**: both stores join its session. |
+| Cosmos DB | No: a transactional batch holds one partition key of one container, and the translations are another container |
+| InMemory, JSON, XML, Elasticsearch | No |
 | A chain with a decorator that opens its own connection | Only as wide as that decorator (rule 6) |
 
 **When the write is not atomic:**
