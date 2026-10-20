@@ -1,3 +1,4 @@
+using Birko.Data.Localization.Boundaries;
 using Birko.Data.Localization.Decorators;
 using Birko.Data.Localization.Models;
 using Birko.Data.Models;
@@ -38,12 +39,17 @@ public class EntityTranslations<T, TTranslation> : IEntityTranslations<T>
     private readonly IAsyncBulkStore<T> _entities;
     private readonly IAsyncBulkStore<TTranslation> _translations;
     private readonly IEntityLocalizationContext _context;
+    private readonly ILocalizedWriteBoundary _boundary;
     private readonly IReadOnlyList<string> _fields;
     private readonly string _entityType = LocalizedTranslationRows.EntityTypeOf<T>();
 
     /// <param name="entities">The entity store, unlocalized: read for the base values the lookups fall back to.</param>
     /// <param name="translations">The translation store the wrappers of <typeparamref name="T"/> use.</param>
     /// <param name="context">Only its <see cref="IEntityLocalizationContext.DefaultCulture"/> is read.</param>
+    /// <param name="boundary">
+    /// Makes each write one unit (TASK-683): <see cref="SetAsync"/>'s read and bulk calls, a chunked removal. Best effort
+    /// when omitted. A write here never pairs with an entity write: wrap both in the caller's own transaction for that.
+    /// </param>
     /// <exception cref="ArgumentException"><paramref name="entities"/> is, or wraps, a localized store wrapper.</exception>
     /// <exception cref="InvalidOperationException">
     /// <typeparamref name="T"/> declares a localizable field that is not a public read/write string property, or
@@ -52,11 +58,13 @@ public class EntityTranslations<T, TTranslation> : IEntityTranslations<T>
     public EntityTranslations(
         IAsyncBulkStore<T> entities,
         IAsyncBulkStore<TTranslation> translations,
-        IEntityLocalizationContext context)
+        IEntityLocalizationContext context,
+        ILocalizedWriteBoundary? boundary = null)
     {
         _entities = entities ?? throw new ArgumentNullException(nameof(entities));
         _translations = translations ?? throw new ArgumentNullException(nameof(translations));
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _boundary = boundary ?? BestEffortWriteBoundary.Instance;
         RefuseLocalizedWrapper(entities);
         _fields = LocalizedEntityFields.LocalizableFieldsOf(entities.CreateInstance());
         LocalizedTranslationRows.RequireQueryableModel<TTranslation>();
@@ -93,20 +101,23 @@ public class EntityTranslations<T, TTranslation> : IEntityTranslations<T>
             return Task.CompletedTask;
         }
 
-        return LocalizedTranslationRows.SaveAsync(_translations, id, _entityType, culture.Name, fields, ct);
+        return _boundary.RunAsync(c => LocalizedTranslationRows.SaveAsync(_translations, id, _entityType, culture.Name, fields, c), ct);
     }
 
     public Task RemoveCultureAsync(Guid id, CultureInfo culture, CancellationToken ct = default)
     {
         RequireId(id);
         RequireTranslatedCulture(culture);
-        return LocalizedTranslationRows.DeleteCultureAsync(_translations, id, _entityType, culture.Name, ct);
+        return _boundary.RunAsync(c => LocalizedTranslationRows.DeleteCultureAsync(_translations, id, _entityType, culture.Name, c), ct);
     }
 
     public Task RemoveEntitiesAsync(IEnumerable<Guid> ids, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ids);
-        return LocalizedTranslationRows.DeleteManyAsync(_translations, ids, _entityType, ct);
+        var list = ids.Distinct().ToList();
+        return list.Count == 0
+            ? Task.CompletedTask
+            : _boundary.RunAsync(c => LocalizedTranslationRows.DeleteManyAsync(_translations, list, _entityType, c), ct);
     }
 
     public async Task<Guid?> FindEntityAsync(string field, CultureInfo culture, string value, CancellationToken ct = default)
@@ -267,8 +278,9 @@ public class EntityTranslations<T> : EntityTranslations<T, EntityTranslationMode
     public EntityTranslations(
         IAsyncBulkStore<T> entities,
         IAsyncBulkStore<EntityTranslationModel> translations,
-        IEntityLocalizationContext context)
-        : base(entities, translations, context)
+        IEntityLocalizationContext context,
+        ILocalizedWriteBoundary? boundary = null)
+        : base(entities, translations, context, boundary)
     {
     }
 }

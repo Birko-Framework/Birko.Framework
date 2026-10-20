@@ -21,6 +21,7 @@ namespace Birko.Data.SQL.Stores
         , ISettingsStore<ISettings>
         , ISettingsStore<PasswordSettings>
         , ITransactionalStore<T, SqlTransactionContext>
+        , ISqlConnectedStore
         where T : Models.AbstractModel
         where DB : AbstractConnector
     {
@@ -28,6 +29,8 @@ namespace Birko.Data.SQL.Stores
         /// Gets the database connector for this store.
         /// </summary>
         public DB Connector { get; protected set; } = null!;
+
+        AbstractConnector? ISqlConnectedStore.Connector => Connector;
 
         /// <inheritdoc />
         public SqlTransactionContext? TransactionContext { get; private set; }

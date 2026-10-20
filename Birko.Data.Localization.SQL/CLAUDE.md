@@ -15,8 +15,11 @@ SQL by design. Follows `Birko.Security.Grants.SQL`.
 Birko.Data.Localization.SQL/
 ├── LocalizationSqlMappings.cs            — Register(registry, table) for EntityTranslationModel;
 │                                           Register<TTranslation>(registry, table) for a consumer's model
-└── Mappings/EntityTranslationMapping.cs  — table (default BirkoEntityTranslations), Guid primary, four required key
-                                            columns + UX_{table}_Key (unique), Value required; no index on Value
+├── Mappings/EntityTranslationMapping.cs  — table (default BirkoEntityTranslations), Guid primary, four required key
+│                                           columns + UX_{table}_Key (unique), Value required; no index on Value
+└── SqlLocalizedWriteBoundary.cs          — For(entityStore, translationStore, requireAtomic): atomic when both chains
+                                            reach an ISqlConnectedStore with one Settings.GetId(), best effort otherwise
+                                            (TASK-683)
 ```
 
 ## Dependencies
@@ -35,6 +38,15 @@ Birko.Data.Localization.SQL/
   1071, measured). Schema-ensure reports it (`IndexCreationFailures`, rule 49); bounding the columns needs a fluent
   length the mapping registry does not apply — TASK-684.
 - A changed mapping is not applied to an existing table: schema-ensure never alters an index or column.
+- **One database means one settings id** (`Connector.Settings.GetId()`), the key `AmbientSqlTransaction` itself uses,
+  never connector identity (rule 16).
+- **The boundary joins before it opens.** Async: a `SqlUnitOfWork` built in the flow that runs the write. Sync: it
+  mirrors `DataBaseBulkStore.Atomically`, in a cell of its own. A failure as a participant marks the caller's boundary
+  rollback-only. `EntityNotFoundException` commits the stored part (TASK-555).
+- **The PostgreSQL race is retried by re-running the whole write once** (decided by the user, TASK-683). Only when the
+  boundary owns the transaction: a refused insert aborts it, so the in-place upsert retry cannot re-read. Inside a
+  caller's transaction the typed violation surfaces. Measured: removing the retry fails the PostgreSQL race test, and
+  SQL Server retries in place.
 
 ## Maintenance
 See [CLAUDE-maintenance.md](../Birko.Framework/CLAUDE-maintenance.md). Tests: `tests/Birko.Data.Localization.SQL.Tests`

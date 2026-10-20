@@ -30,6 +30,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncLocalizedStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedBulkStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncLocalizedBulkStoreWrapper.cs" />
+    <!-- Boundaries: how a write touching both stores is made one unit (TASK-683) -->
+    <Compile Include="$(MSBuildThisFileDirectory)Boundaries\ILocalizedWriteBoundary.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Boundaries\BestEffortWriteBoundary.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Boundaries\TranslationCleanupException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Boundaries\LocalizedCleanup.cs" />
     <!-- Translations: the explicit API (TASK-682). The DI extension needs Microsoft.Extensions.DependencyInjection.Abstractions,
          consumer-supplied: Birko.Data.Repositories declares it, and declaring it here too would collide (NU1504)
          wherever both are imported. -->

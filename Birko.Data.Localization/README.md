@@ -142,8 +142,9 @@ IReadOnlyList<Product> shown = await translations.LocalizeAsync(products, sk);
   no name (the invariant culture), and the default culture for `SetAsync` / `RemoveCultureAsync`.
 - **Ambiguous lookup:** if more than one entity matches, `FindEntityAsync` throws `InvalidOperationException` naming
   two of them, rather than picking one.
-- **Limits** are the filters' limits (above): the base-value fallback follows the entity store's collation, and the
-  API's writes share no transaction with the entity's (TASK-683).
+- **Limits** are the filters' limits (above): the base-value fallback follows the entity store's collation. Each
+  write is one unit through the boundary you pass. An entity write plus `SetAsync` is one unit only inside your own
+  `SqlUnitOfWork` (see Atomicity below).
 
 **Dependency injection:**
 
@@ -166,7 +167,36 @@ The extension needs `Microsoft.Extensions.DependencyInjection.Abstractions`. A c
 
 ## Filter-Based Bulk Operations
 
-`Delete(filter)` never uses the inner store's native filter delete: it reads the matching entities, deletes them, and then deletes their translations, so the cascade happens. Filters on all bulk operations are translated as above. Under a non-default culture, the `Action<T>` overload shows the action the translated values, keeps the base columns on the default culture, and writes translations only for the localizable fields the action changed, after the inner store's update succeeds. A `PropertyUpdate` that sets a localizable field goes through the same path. The entity write and the translation write are not atomic yet (TASK-683).
+`Delete(filter)` never uses the inner store's native filter delete: it reads the matching entities, deletes them, and then deletes their translations, so the cascade happens. Filters on all bulk operations are translated as above. Under a non-default culture, the `Action<T>` overload shows the action the translated values, keeps the base columns on the default culture, and writes translations only for the localizable fields the action changed, after the inner store's update succeeds. A `PropertyUpdate` that sets a localizable field goes through the same path. Whether the entity write and the translation write are one unit depends on the boundary (below).
+
+## Atomicity: which store pairings are one unit
+
+Every write that touches both stores runs through an `ILocalizedWriteBoundary` (TASK-683). Pass one as the wrappers' or
+`EntityTranslations`' last constructor argument. Without one, writes are best effort.
+
+| Pairing | Atomic? |
+|---|---|
+| Both stores SQL on one database, with `SqlLocalizedWriteBoundary.For(entityStore, translationStore)` ([Birko.Data.Localization.SQL](../Birko.Data.Localization.SQL/README.md)) | **Yes**, on SQLite, PostgreSQL, SQL Server and MySQL. A failed translation write rolls the entity write back. |
+| Same pairing, no boundary, inside your own `SqlUnitOfWork` | **Yes**: both stores join your transaction. |
+| Same pairing, neither | No |
+| SQL stores on two databases (different `Settings.GetId()`) | No |
+| InMemory, JSON, XML, MongoDB, RavenDB, Cosmos DB, Elasticsearch | No |
+| A chain with a decorator that opens its own connection | Only as wide as that decorator (rule 6) |
+
+**When the write is not atomic:**
+- A failure after the entity write leaves the entity written.
+- A filter update that fails part way still saves the translations of the entities it already wrote.
+- A delete removes the entity first, then its translations. If that cleanup fails, the delete throws
+  `TranslationCleanupException`, whose `RemainingEntityGuids` lists the entities whose translations remain. Clear them
+  with `IEntityTranslations.RemoveEntitiesAsync`, which is safe to repeat.
+
+**Inside an atomic boundary:**
+- A unique-key race on a translation (another writer stored the same key first) rolls back and re-runs the whole write
+  once, in a new transaction. A filter update's action runs again too.
+- Inside your own `SqlUnitOfWork` the boundary joins instead, and does not retry. On PostgreSQL the race then reaches
+  you as `StoreUniqueViolationException`, because PostgreSQL aborts the transaction. Any failure marks your unit of
+  work rollback-only.
+
 
 ## License
 

@@ -26,6 +26,15 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
     /// <summary>False models a store that returns the new key without writing it onto the entity.</summary>
     public bool AssignsGuidOnCreate { get; set; } = true;
 
+    /// <summary>
+    /// Items a collection update treats as not stored: the rest are written, then <see cref="Birko.Data.Exceptions.EntityNotFoundException"/>
+    /// names these, as a SQL store's bulk update does (TASK-555).
+    /// </summary>
+    public Func<T, bool>? MissingOnUpdate { get; set; }
+
+    /// <summary>Runs before every delete call — single, collection or filter; a test makes it throw to fail the delete.</summary>
+    public Action? BeforeDelete { get; set; }
+
     public int InitCalls { get; private set; }
 
     /// <summary>How many filtered collection reads ran — what a test counts to prove a read is batched.</summary>
@@ -117,16 +126,21 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
     public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
         UpdateCalls++;
+        var missing = new List<Guid>();
         foreach (var item in data)
         {
+            if (MissingOnUpdate?.Invoke(item) == true) { missing.Add(item.Guid!.Value); continue; }
             if (item.Guid.HasValue) _data[item.Guid.Value] = item;
         }
+        if (missing.Count > 0) throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), missing);
         return Task.CompletedTask;
     }
 
     public Task DeleteAsync(T data, CancellationToken ct = default)
     {
         DeleteCalls++;
+        ct.ThrowIfCancellationRequested();
+        BeforeDelete?.Invoke();
         if (data.Guid.HasValue) _data.Remove(data.Guid.Value);
         return Task.CompletedTask;
     }
@@ -156,6 +170,8 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
     {
         DeleteCalls++;
+        ct.ThrowIfCancellationRequested();
+        BeforeDelete?.Invoke();
         foreach (var item in data)
         {
             if (item.Guid.HasValue) _data.Remove(item.Guid.Value);
@@ -166,6 +182,8 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
     public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
     {
         DeleteCalls++;
+        ct.ThrowIfCancellationRequested();
+        BeforeDelete?.Invoke();
         var items = _data.Values.AsQueryable().Where(filter).ToList();
         foreach (var item in items)
         {

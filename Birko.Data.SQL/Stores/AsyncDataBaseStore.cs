@@ -23,6 +23,7 @@ namespace Birko.Data.SQL.Stores
         , ISettingsStore<ISettings>
         , ISettingsStore<PasswordSettings>
         , IAsyncTransactionalStore<T, SqlTransactionContext>
+        , ISqlConnectedStore
         where T : Models.AbstractModel
         where DB : AbstractConnector
     {
@@ -30,6 +31,8 @@ namespace Birko.Data.SQL.Stores
         /// Gets the database connector.
         /// </summary>
         public DB? Connector { get; protected set; }
+
+        AbstractConnector? ISqlConnectedStore.Connector => Connector;
 
         /// <summary>
         /// Gets the connector as an async connector for native async operations.

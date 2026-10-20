@@ -24,6 +24,15 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
     /// <summary>False models a store that returns the new key without writing it onto the entity.</summary>
     public bool AssignsGuidOnCreate { get; set; } = true;
 
+    /// <summary>
+    /// Items a collection update treats as not stored: the rest are written, then <see cref="Birko.Data.Exceptions.EntityNotFoundException"/>
+    /// names these, as a SQL store's bulk update does (TASK-555).
+    /// </summary>
+    public Func<T, bool>? MissingOnUpdate { get; set; }
+
+    /// <summary>Runs before every delete call — single, collection or filter; a test makes it throw to fail the delete.</summary>
+    public Action? BeforeDelete { get; set; }
+
     public int InitCalls { get; private set; }
 
     /// <summary>How many filtered collection reads ran — what a test counts to prove a read is batched.</summary>
@@ -110,7 +119,13 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         UpdateCalls++;
-        foreach (var item in data) UpdateOne(item, storeDelegate);
+        var missing = new List<Guid>();
+        foreach (var item in data)
+        {
+            if (MissingOnUpdate?.Invoke(item) == true) { missing.Add(item.Guid!.Value); continue; }
+            UpdateOne(item, storeDelegate);
+        }
+        if (missing.Count > 0) throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), missing);
     }
 
     private void UpdateOne(T data, StoreDataDelegate<T>? storeDelegate)
@@ -123,6 +138,7 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
     public void Delete(T data)
     {
         DeleteCalls++;
+        BeforeDelete?.Invoke();
         Remove(data);
     }
 
@@ -156,12 +172,14 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
     public void Delete(IEnumerable<T> data)
     {
         DeleteCalls++;
+        BeforeDelete?.Invoke();
         foreach (var item in data) Remove(item);
     }
 
     public void Delete(Expression<Func<T, bool>> filter)
     {
         DeleteCalls++;
+        BeforeDelete?.Invoke();
         var items = _data.Values.AsQueryable().Where(filter).ToList();
         foreach (var item in items) Remove(item);
     }

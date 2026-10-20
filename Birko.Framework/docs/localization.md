@@ -361,7 +361,15 @@ EntityTranslationFilter.ByEntityType("Product");
 EntityTranslationFilter.ByEntityTypeAndCulture("Product", "sk");
 ```
 
-### 6. The explicit API
+### 6. One transaction for the entity and its translations
+
+Pass `SqlLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.SQL) as the wrapper's last
+argument. When both stores are SQL on one database, the entity write and its translation write commit or roll back
+together, joining your `SqlUnitOfWork` if you opened one. Other pairings are best effort. A delete whose translation
+cleanup fails then throws `TranslationCleanupException` naming the entities to clean with `RemoveEntitiesAsync`. See
+the [pairing table](../../Birko.Data.Localization/README.md#atomicity-which-store-pairings-are-one-unit).
+
+### 7. The explicit API
 
 `IEntityTranslations<T>` gives explicit, batched access to translations for a given culture, beside the wrappers'
 ambient one: one language for a list, every language of one entity, upsert and remove, slug → entity with the

@@ -39,6 +39,7 @@ Extends AsyncDataBaseStore with async bulk operations.
 - `DataBaseBulkStore<DB,T>` - Base sync SQL bulk store
 - `AsyncDataBaseStore<DB,T>` - Base async SQL store
 - `AsyncDataBaseBulkStore<DB,T>` - Base async SQL bulk store
+- `ISqlConnectedStore` - a store's connector without its generic arguments, implemented explicitly by the two base stores; how composing code tells two stores share one database (`Connector.Settings.GetId()`, TASK-683)
 
 ### Repositories
 - `DataBaseRepository<T,S,DB>` - SQL repository base

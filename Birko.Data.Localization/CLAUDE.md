@@ -33,9 +33,15 @@ All wrappers:
 - Intercept creates/updates to persist translations, one batched write per call however many entities (`LocalizedTranslationRows.SaveMany`); a filter-based update reads the matched entities and their translations once, writes each entity through a detached copy (sync and async alike), and when it fails part way still saves, best effort, the translations of the entities already written (decided by the user), the original error always surfacing
 - Refuse a filter that reads a localizable field in a form the analyzer cannot translate (`NotSupportedException`), never test it against the base column
 - Validate the declared localizable fields once, in the constructor (`LocalizedEntityFields.LocalizableFieldsOf`)
+- Run every write that touches both stores through the boundary: non-default-culture creates and updates (the filter update included), and every delete. A collection is materialized first, because a retried boundary re-runs the write. Inside an atomic boundary the filter update skips its best-effort save. A collection update that reports items not stored (`EntityNotFoundException`) saves the stored items' translations, then rethrows
 - Intercept deletes to remove all associated translations, as one filter delete per 500 entities; `Destroy` deletes this type's rows, `Init` initialises the translation store
 - Implement `IStoreWrapper<T>` for decorator introspection
 - Use reflection to get/set localizable string properties
+
+### Boundaries (`Boundaries/`)
+- **ILocalizedWriteBoundary** — how a write touching both stores is one unit (TASK-683); `IsAtomic`, `Run`, `RunAsync`. The SQL implementation lives in Birko.Data.Localization.SQL, so this project stays storage-free
+- **BestEffortWriteBoundary** — the default: runs the write as it is
+- **LocalizedCleanup** — the one producer of a delete's translation cleanup: entity first, then rows; on a non-atomic boundary a failure becomes **TranslationCleanupException** (`RemainingEntityGuids`, the original as inner; rule 22), on an atomic one it propagates and rolls back
 
 ### Translations (`Translations/`)
 - **IEntityTranslations<T>** / **EntityTranslations<T, TTranslation>** (`EntityTranslations<T>` = with `EntityTranslationModel`) — the explicit API (TASK-682): `GetAsync`, `GetAllCulturesAsync`, `SetAsync`, `RemoveCultureAsync`, `RemoveEntitiesAsync`, `FindEntityAsync`, `ExistsAsync`, `LocalizeAsync`. Each is a thin call into `LocalizedTranslationRows` or `LocalizedFilterResolution`; `Find`/`Exists` share one producer (`x.F == v && x.Guid != except`, rewritten as a wrapper's read, read with a limit). Built over the unlocalized entity store (a localized wrapper anywhere in the `IStoreWrapper` chain is refused), the translation store and the context (`DefaultCulture` only). Default culture: `SetAsync` refuses it, lookups test the base column, `LocalizeAsync` returns the entities unchanged. An undeclared field is refused (rule 41), an ambiguous `FindEntityAsync` throws naming two GUIDs (rule 26)

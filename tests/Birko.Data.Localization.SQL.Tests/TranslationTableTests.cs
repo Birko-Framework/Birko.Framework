@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using Birko.Configuration;
 using Birko.Data.Exceptions;
 using Birko.Data.InMemory.Stores;
+using Birko.Data.Localization.Boundaries;
 using Birko.Data.Localization.Decorators;
 using Birko.Data.Localization.Models;
 using Birko.Data.Localization.SQL.Mappings;
@@ -494,6 +495,239 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
         localized.Select(x => x.Name).Should().Equal($"stolicka-{run}", $"lavica-{run}", $"stol-{run}");
     }
 
+    // ---------------------------------------------------------------- TASK-683: one boundary for both stores
+
+    private async Task<(AsyncDataBaseBulkStore<DB, SqlProduct> Products, AsyncDataBaseBulkStore<DB, EntityTranslationModel> Rows,
+        FailingStore<EntityTranslationModel> Failing, AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<SqlProduct>, SqlProduct> Bulk,
+        Context Context, string Run)> BoundaryFixtureAsync(bool atomic = true)
+    {
+        var products = Store<SqlProduct>();
+        var rows = Store<EntityTranslationModel>();
+        // Schema first: lazy schema-ensure inside the boundary is not what these tests are about.
+        await products.InitAsync();
+        await rows.InitAsync();
+        var failing = new FailingStore<EntityTranslationModel>(rows);
+        var context = new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") };
+        var boundary = atomic ? SqlLocalizedWriteBoundary.For(products, failing) : BestEffortWriteBoundary.Instance;
+        var bulk = new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<SqlProduct>, SqlProduct>(products, failing, context, boundary);
+        return (products, rows, failing, bulk, context, Guid.NewGuid().ToString("N")[..8]);
+    }
+
+    private static async Task<List<string>> CodesAsync(AsyncDataBaseBulkStore<DB, SqlProduct> products, string run)
+        => (await products.ReadAsync(x => x.Code.StartsWith(run), null, null, null)).Select(x => $"{x.Code}:{x.Name}").OrderBy(x => x).ToList();
+
+    private static async Task<List<string>> TranslationsAsync(AsyncDataBaseBulkStore<DB, EntityTranslationModel> rows, IEnumerable<Guid?> guids)
+    {
+        var list = guids.Select(g => g!.Value).ToList();
+        return (await rows.ReadAsync(t => list.Contains(t.EntityGuid), null, null, null)).Select(t => t.Value).OrderBy(v => v).ToList();
+    }
+
+    [Fact]
+    public void The_boundary_is_atomic_only_for_two_sql_stores_on_one_database()
+    {
+        if (!RequireServer()) return;
+        var products = Store<SqlProduct>();
+
+        SqlLocalizedWriteBoundary.For(products, new FailingStore<EntityTranslationModel>(Store<EntityTranslationModel>())).IsAtomic.Should().BeTrue();
+        SqlLocalizedWriteBoundary.For(products, new AsyncInMemoryStore<EntityTranslationModel>()).IsAtomic.Should().BeFalse();
+        var strict = () => SqlLocalizedWriteBoundary.For(products, new AsyncInMemoryStore<EntityTranslationModel>(), requireAtomic: true);
+        strict.Should().Throw<InvalidOperationException>().WithMessage("*not SQL stores on one database*");
+    }
+
+    [Fact]
+    public async Task A_create_whose_translation_write_fails_leaves_no_entity()
+    {
+        if (!RequireServer()) return;
+        var (products, _, failing, bulk, _, run) = await BoundaryFixtureAsync();
+        failing.Fail = true;
+
+        var act = async () => await bulk.CreateAsync(new SqlProduct { Name = "stolicka", Code = run });
+        var many = async () => await bulk.CreateAsync(new[] { new SqlProduct { Name = "a", Code = run }, new SqlProduct { Name = "b", Code = run } });
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("injected*");
+        await many.Should().ThrowAsync<InvalidOperationException>();
+        (await CodesAsync(products, run)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task An_update_whose_translation_write_fails_rolls_the_entity_write_back()
+    {
+        if (!RequireServer()) return;
+        var (products, rows, failing, bulk, context, run) = await BoundaryFixtureAsync();
+        var a = new SqlProduct { Name = "sk-a", Code = $"{run}-1" };
+        var b = new SqlProduct { Name = "sk-b", Code = $"{run}-1" };
+        await bulk.CreateAsync(new[] { a, b });
+        failing.Fail = true;
+
+        var single = async () => await bulk.UpdateAsync(new SqlProduct { Guid = a.Guid, Name = "sk-a!", Code = $"{run}-2" });
+        var many = async () => await bulk.UpdateAsync(new[]
+        {
+            new SqlProduct { Guid = a.Guid, Name = "sk-a!", Code = $"{run}-2" }, new SqlProduct { Guid = b.Guid, Name = "sk-b!", Code = $"{run}-2" },
+        });
+        var filtered = async () => await bulk.UpdateAsync(x => x.Code == $"{run}-1", x => { x.Code = $"{run}-2"; x.Name += "!"; });
+
+        await single.Should().ThrowAsync<InvalidOperationException>();
+        await many.Should().ThrowAsync<InvalidOperationException>();
+        await filtered.Should().ThrowAsync<InvalidOperationException>();
+        (await CodesAsync(products, run)).Should().Equal($"{run}-1:sk-a", $"{run}-1:sk-b");
+        (await TranslationsAsync(rows, new[] { a.Guid, b.Guid })).Should().Equal("sk-a", "sk-b");
+    }
+
+    [Fact]
+    public async Task A_delete_whose_translation_cleanup_fails_rolls_the_entity_delete_back()
+    {
+        if (!RequireServer()) return;
+        var (products, rows, failing, bulk, _, run) = await BoundaryFixtureAsync();
+        var a = new SqlProduct { Name = "sk-a", Code = run };
+        var b = new SqlProduct { Name = "sk-b", Code = run };
+        await bulk.CreateAsync(new[] { a, b });
+        failing.Fail = true;
+
+        var single = async () => await bulk.DeleteAsync(a);
+        var many = async () => await bulk.DeleteAsync(new[] { a, b });
+        var filtered = async () => await bulk.DeleteAsync(x => x.Code == run);
+
+        await single.Should().ThrowAsync<InvalidOperationException>();
+        await many.Should().ThrowAsync<InvalidOperationException>();
+        await filtered.Should().ThrowAsync<InvalidOperationException>();
+        (await CodesAsync(products, run)).Should().HaveCount(2);
+        (await TranslationsAsync(rows, new[] { a.Guid, b.Guid })).Should().Contain(new[] { "sk-a", "sk-b" });
+    }
+
+    [Fact]
+    public void The_sync_wrapper_rolls_back_the_same_way()
+    {
+        if (!RequireServer()) return;
+        var products = new DataBaseBulkStore<DB, SqlProduct>();
+        products.SetSettings(Settings());
+        var rows = new DataBaseBulkStore<DB, EntityTranslationModel>();
+        rows.SetSettings(Settings());
+        products.Init();
+        rows.Init();
+        var failing = new FailingSyncStore<EntityTranslationModel>(rows);
+        var context = new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") };
+        var bulk = new LocalizedBulkStoreWrapper<IBulkStore<SqlProduct>, SqlProduct>(products, failing, context, SqlLocalizedWriteBoundary.For(products, failing));
+        var run = Guid.NewGuid().ToString("N")[..8];
+        var kept = new SqlProduct { Name = "sk-kept", Code = run };
+        bulk.Create(kept);
+        failing.Fail = true;
+
+        var create = () => bulk.Create(new SqlProduct { Name = "sk-new", Code = run });
+        var delete = () => bulk.Delete(kept);
+
+        create.Should().Throw<InvalidOperationException>();
+        delete.Should().Throw<InvalidOperationException>();
+        products.Read(x => x.Code == run, null, null, null).Select(x => x.Name).Should().Equal("sk-kept");
+    }
+
+    [Fact]
+    public async Task A_callers_unit_of_work_is_joined_and_a_failed_write_poisons_it()
+    {
+        if (!RequireServer()) return;
+        var (products, _, failing, bulk, _, run) = await BoundaryFixtureAsync();
+
+        await using (var uow = SqlUnitOfWork.FromStore(products))
+        {
+            await uow.BeginAsync();
+            await bulk.CreateAsync(new SqlProduct { Name = "sk-ok", Code = run });
+            failing.Fail = true;
+            var act = async () => await bulk.CreateAsync(new SqlProduct { Name = "sk-fails", Code = run });
+            await act.Should().ThrowAsync<InvalidOperationException>();
+
+            var commit = async () => await uow.CommitAsync();
+            await commit.Should().ThrowAsync<Exception>("half a write must not be committable");
+            await uow.RollbackAsync();
+        }
+
+        (await CodesAsync(products, run)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_transaction_given_to_the_entity_store_carries_both_writes()
+    {
+        if (!RequireServer()) return;
+        var (products, rows, _, bulk, _, run) = await BoundaryFixtureAsync();
+        var connector = products.Connector!;
+        await using var connection = connector.CreateConnection(connector.Settings);
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        products.SetTransactionContext(new SqlTransactionContext(connection, transaction));
+        var item = new SqlProduct { Name = "sk-given", Code = run };
+
+        await bulk.CreateAsync(item);
+        await transaction.RollbackAsync();
+        products.SetTransactionContext(null);
+
+        (await CodesAsync(products, run)).Should().BeEmpty();
+        (await rows.CountAsync(t => t.EntityGuid == item.Guid!.Value)).Should().Be(0, "the translation was written in the caller's transaction too");
+    }
+
+    [Fact]
+    public async Task A_key_race_inside_the_boundary_is_retried_once_in_a_new_transaction()
+    {
+        // SQLite has one writer: the competing insert would wait on our transaction. MySQL holds no key (TASK-684).
+        if (!RequireServer() || !RequireKey() || RetriesInsideATransaction is null) return;
+        var products = Store<SqlProduct>();
+        var rows = Store<EntityTranslationModel>();
+        await products.InitAsync();
+        await rows.InitAsync();
+        var run = Guid.NewGuid().ToString("N")[..8];
+        var guid = Guid.NewGuid();
+        // The other writer commits on its own connection, after our read found nothing and before our create.
+        var racing = new RacingStore<EntityTranslationModel>(rows, () =>
+        {
+            Task other;
+            using (ExecutionContext.SuppressFlow())
+            {
+                other = Task.Run(async () => await Store<EntityTranslationModel>().CreateAsync(new EntityTranslationModel
+                {
+                    EntityGuid = guid, EntityType = nameof(SqlProduct), FieldName = "Name", Culture = "sk", Value = "other writer",
+                }));
+            }
+            return other;
+        });
+        var context = new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") };
+        var boundary = SqlLocalizedWriteBoundary.For(products, racing);
+        boundary.IsAtomic.Should().BeTrue();
+        var bulk = new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<SqlProduct>, SqlProduct>(products, racing, context, boundary);
+
+        await bulk.CreateAsync(new SqlProduct { Guid = guid, Name = "ours", Code = run });
+
+        racing.Raced.Should().BeTrue("the test must actually have raced");
+        (await products.ReadAsync(x => x.Code == run, null, null, null)).Should().ContainSingle();
+        (await rows.ReadAsync(t => t.EntityGuid == guid, null, null, null)).Select(t => t.Value).Should().Equal("ours");
+    }
+
+    [Fact]
+    public async Task A_best_effort_delete_whose_cleanup_fails_reports_the_remaining_entities()
+    {
+        if (!RequireServer()) return;
+        var products = Store<SqlProduct>();
+        var rows = new AsyncInMemoryStore<EntityTranslationModel>();
+        var failing = new FailingStore<EntityTranslationModel>(rows);
+        var context = new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") };
+        var boundary = SqlLocalizedWriteBoundary.For(products, failing);
+        boundary.IsAtomic.Should().BeFalse("the translations live in another store");
+        var bulk = new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<SqlProduct>, SqlProduct>(products, failing, context, boundary);
+        var run = Guid.NewGuid().ToString("N")[..8];
+        var a = new SqlProduct { Name = "sk-a", Code = run };
+        var b = new SqlProduct { Name = "sk-b", Code = run };
+        await bulk.CreateAsync(new[] { a, b });
+        failing.Fail = true;
+
+        var act = async () => await bulk.DeleteAsync(x => x.Code == run);
+
+        var cleanup = (await act.Should().ThrowAsync<TranslationCleanupException>()).Which;
+        cleanup.RemainingEntityGuids.Should().BeEquivalentTo(new[] { a.Guid!.Value, b.Guid!.Value });
+        cleanup.InnerException.Should().BeOfType<InvalidOperationException>();
+        (await products.CountAsync(x => x.Code == run)).Should().Be(0, "best effort: the entity delete stands");
+
+        failing.Fail = false;
+        await new Birko.Data.Localization.Translations.EntityTranslations<SqlProduct>(products, failing, context)
+            .RemoveEntitiesAsync(cleanup.RemainingEntityGuids);
+        (await rows.CountAsync(t => cleanup.RemainingEntityGuids.Contains(t.EntityGuid))).Should().Be(0);
+    }
+
     [Fact]
     public async Task A_provider_that_cannot_hold_the_key_reports_it()
     {
@@ -514,10 +748,82 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     }
 
     /// <summary>
+    /// TASK-683: delegates to a real store and, once <see cref="Fail"/> is set, throws on every write, client side, so the
+    /// transaction stays usable on every provider. An <see cref="IStoreWrapper"/>, so the boundary must find the SQL store
+    /// under it.
+    /// </summary>
+    private sealed class FailingStore<T> : IAsyncBulkStore<T>, IStoreWrapper where T : AbstractModel
+    {
+        private readonly IAsyncBulkStore<T> _inner;
+
+        public FailingStore(IAsyncBulkStore<T> inner) => _inner = inner;
+
+        public bool Fail { get; set; }
+
+        private Task Write(Func<Task> write) => Fail ? throw new InvalidOperationException("injected translation write failure") : write();
+
+        public object? GetInnerStore() => _inner;
+        public Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default) => _inner.ReadAsync(filter, orderBy, limit, offset, ct);
+        public Task<T?> ReadAsync(Guid guid, CancellationToken ct = default) => _inner.ReadAsync(guid, ct);
+        public Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default) => ((IAsyncReadStore<T>)_inner).ReadAsync(filter, ct);
+        public Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default) => _inner.ReadAsync(ct);
+        public Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default) => _inner.CountAsync(filter, ct);
+        public Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) => Fail ? throw new InvalidOperationException("injected translation write failure") : _inner.CreateAsync(data, processDelegate, ct);
+        public Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) => Write(() => _inner.CreateAsync(data, storeDelegate, ct));
+        public Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) => Write(() => _inner.UpdateAsync(data, processDelegate, ct));
+        public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) => Write(() => _inner.UpdateAsync(data, storeDelegate, ct));
+        public Task DeleteAsync(T data, CancellationToken ct = default) => Write(() => _inner.DeleteAsync(data, ct));
+        public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default) => Write(() => _inner.UpdateAsync(filter, updateAction, ct));
+        public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default) => Write(() => _inner.UpdateAsync(filter, updates, ct));
+        public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default) => Write(() => _inner.DeleteAsync(data, ct));
+        public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default) => Write(() => _inner.DeleteAsync(filter, ct));
+        public Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) => _inner.SaveAsync(data, processDelegate, ct);
+        public Task InitAsync(CancellationToken ct = default) => _inner.InitAsync(ct);
+        public Task DestroyAsync(CancellationToken ct = default) => _inner.DestroyAsync(ct);
+        public T CreateInstance() => _inner.CreateInstance();
+    }
+
+    /// <summary>The sync twin of <see cref="FailingStore{T}"/>.</summary>
+    private sealed class FailingSyncStore<T> : IBulkStore<T>, IStoreWrapper where T : AbstractModel
+    {
+        private readonly IBulkStore<T> _inner;
+
+        public FailingSyncStore(IBulkStore<T> inner) => _inner = inner;
+
+        public bool Fail { get; set; }
+
+        private void Write(Action write)
+        {
+            if (Fail) throw new InvalidOperationException("injected translation write failure");
+            write();
+        }
+
+        public object? GetInnerStore() => _inner;
+        public IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null) => _inner.Read(filter, orderBy, limit, offset);
+        public T? Read(Guid guid) => _inner.Read(guid);
+        public T? Read(Expression<Func<T, bool>>? filter = null) => ((IReadStore<T>)_inner).Read(filter);
+        public IEnumerable<T> Read() => _inner.Read();
+        public long Count(Expression<Func<T, bool>>? filter = null) => _inner.Count(filter);
+        public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null) => Fail ? throw new InvalidOperationException("injected translation write failure") : _inner.Create(data, storeDelegate);
+        public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null) => Write(() => _inner.Create(data, storeDelegate));
+        public void Update(T data, StoreDataDelegate<T>? storeDelegate = null) => Write(() => _inner.Update(data, storeDelegate));
+        public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null) => Write(() => _inner.Update(data, storeDelegate));
+        public void Delete(T data) => Write(() => _inner.Delete(data));
+        public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction) => Write(() => _inner.Update(filter, updateAction));
+        public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates) => Write(() => _inner.Update(filter, updates));
+        public void Delete(IEnumerable<T> data) => Write(() => _inner.Delete(data));
+        public void Delete(Expression<Func<T, bool>> filter) => Write(() => _inner.Delete(filter));
+        public Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null) => _inner.Save(data, storeDelegate);
+        public void Init() => _inner.Init();
+        public void Destroy() => _inner.Destroy();
+        public T CreateInstance() => _inner.CreateInstance();
+    }
+
+    /// <summary>
     /// Delegates to a real store; the first filtered collection read runs, then lets <c>race</c> store a row, and
     /// returns what it read before — the moment another writer commits between our read and our create.
     /// </summary>
-    private sealed class RacingStore<T> : IAsyncBulkStore<T> where T : AbstractModel
+    private sealed class RacingStore<T> : IAsyncBulkStore<T>, IStoreWrapper where T : AbstractModel
     {
         private readonly IAsyncBulkStore<T> _inner;
         private Func<Task>? _race;
@@ -529,6 +835,8 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
         }
 
         public bool Raced { get; private set; }
+
+        public object? GetInnerStore() => _inner;
 
         /// <summary>Calls made through this store, one per call whatever its size (TASK-690 counts them).</summary>
         public int Reads { get; private set; }

@@ -1,3 +1,5 @@
+using Birko.Data.Exceptions;
+using Birko.Data.Localization.Boundaries;
 using Birko.Data.Localization.Expressions;
 using Birko.Data.Localization.Filters;
 using Birko.Data.Localization.Models;
@@ -25,15 +27,19 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
     protected readonly IBulkStore<TTranslation> _translationStore;
     protected readonly IEntityLocalizationContext _context;
     protected readonly IReadOnlyList<string> _localizableFields;
+    /// <summary>How a write touching both stores is made one unit (TASK-683); best effort when none is given.</summary>
+    protected readonly ILocalizedWriteBoundary _boundary;
 
     public LocalizedStoreWrapper(
         TStore innerStore,
         IBulkStore<TTranslation> translationStore,
-        IEntityLocalizationContext context)
+        IEntityLocalizationContext context,
+        ILocalizedWriteBoundary? boundary = null)
     {
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
         _translationStore = translationStore ?? throw new ArgumentNullException(nameof(translationStore));
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _boundary = boundary ?? BestEffortWriteBoundary.Instance;
         // SH-L079 / SH-L082 (TASK-194): the declaration is read and validated once, at wiring, on every culture.
         _localizableFields = LocalizedEntityFields.LocalizableFieldsOf(_innerStore.CreateInstance());
         LocalizedTranslationRows.RequireQueryableModel<TTranslation>();
@@ -70,6 +76,17 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
 
     public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
+        if (!IsNonDefaultCulture())
+        {
+            return CreateWithTranslations(data, storeDelegate);
+        }
+        var guid = Guid.Empty;
+        _boundary.Run(() => guid = CreateWithTranslations(data, storeDelegate));
+        return guid;
+    }
+
+    private Guid CreateWithTranslations(T data, StoreDataDelegate<T>? storeDelegate)
+    {
         LocalizedEntityFields.RequireValidDeclarations(new[] { data });
         var guid = _innerStore.Create(data, storeDelegate);
         // SH-M076: keyed by the GUID the store returned — it need not have written it onto the entity.
@@ -90,6 +107,16 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
     /// reaches the translation row instead. Costs one extra read per update on a non-default culture.
     /// </remarks>
     public void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
+    {
+        if (IsNonDefaultCulture())
+        {
+            _boundary.Run(() => UpdateWithTranslations(data, storeDelegate));
+            return;
+        }
+        UpdateWithTranslations(data, storeDelegate);
+    }
+
+    private void UpdateWithTranslations(T data, StoreDataDelegate<T>? storeDelegate)
     {
         LocalizedEntityFields.RequireValidDeclarations(new[] { data });
         if (!IsNonDefaultCulture())
@@ -147,7 +174,9 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
         return stored == null ? null : LocalizedEntityFields.Capture(stored, fields);
     }
 
-    public void Delete(T data)
+    public void Delete(T data) => _boundary.Run(() => DeleteWithTranslations(data));
+
+    private void DeleteWithTranslations(T data)
     {
         _innerStore.Delete(data);
         DeleteTranslations(data);
@@ -243,8 +272,11 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
     }
 
     protected void DeleteTranslations(T entity)
-        => LocalizedTranslationRows.DeleteMany(
-            _translationStore, LocalizedTranslationRows.GuidsOf(new[] { entity }), LocalizedTranslationRows.EntityTypeOf<T>());
+    {
+        var guids = LocalizedTranslationRows.GuidsOf(new[] { entity }).ToList();
+        LocalizedCleanup.Run(_boundary, typeof(T), guids, () => LocalizedTranslationRows.DeleteMany(
+            _translationStore, guids, LocalizedTranslationRows.EntityTypeOf<T>()));
+    }
 
     #endregion
 
@@ -265,8 +297,9 @@ public class LocalizedStoreWrapper<TStore, T> : LocalizedStoreWrapper<TStore, T,
     public LocalizedStoreWrapper(
         TStore innerStore,
         IBulkStore<EntityTranslationModel> translationStore,
-        IEntityLocalizationContext context)
-        : base(innerStore, translationStore, context)
+        IEntityLocalizationContext context,
+        ILocalizedWriteBoundary? boundary = null)
+        : base(innerStore, translationStore, context, boundary)
     {
     }
 }

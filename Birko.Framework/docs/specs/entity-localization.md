@@ -1,8 +1,12 @@
 ---
 area: entity-localization
-generated-at: 1938931c7d23ccf5deaff6cdfc1cf07d7e35c693
+generated-at: 5412e88ffb2ce10bb83d75189e3c79e70e7fd3b4
 generated-on: 2026-10-20
 sources:
+  - ../Birko.Data.Localization/Boundaries/BestEffortWriteBoundary.cs
+  - ../Birko.Data.Localization/Boundaries/ILocalizedWriteBoundary.cs
+  - ../Birko.Data.Localization/Boundaries/LocalizedCleanup.cs
+  - ../Birko.Data.Localization/Boundaries/TranslationCleanupException.cs
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/LocalizedBulkStoreWrapper.cs
@@ -25,6 +29,7 @@ sources:
   - ../Birko.Data.Localization/Translations/IEntityTranslations.cs
   - ../Birko.Data.Localization.SQL/LocalizationSqlMappings.cs
   - ../Birko.Data.Localization.SQL/Mappings/EntityTranslationMapping.cs
+  - ../Birko.Data.Localization.SQL/SqlLocalizedWriteBoundary.cs
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
 # repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
@@ -37,6 +42,8 @@ shaped-by: [FEATURE-014]
 # TASK-690 has no feature.
 # 2026-10-20 regen (TASK-682, harvested from the uncommitted working tree): the evidence pass was not re-run;
 # TASK-682 has no feature.
+# 2026-10-20 regen (TASK-683, harvested from the uncommitted working tree): the evidence pass was not re-run;
+# TASK-683 has no feature.
 shaped-by-derived: true
 shaped-by-unresolved: 266
 ---
@@ -75,6 +82,12 @@ per call instead of the ambient one, every culture of one entity, lookups by a t
 calls the same producers the wrappers use (`LocalizedTranslationRows`, `LocalizedFilterResolution`), so the two cannot
 disagree about a key, a fallback or a batch, and it ships with a dependency-injection registration
 (`AddEntityTranslations`).
+
+A write that touches both the entity store and the translation store runs through an `ILocalizedWriteBoundary`. The
+default, `BestEffortWriteBoundary`, runs it as it is: a failure after the entity write leaves the entity written, and a
+delete whose translation cleanup fails reports the entities whose rows remain (`TranslationCleanupException`).
+`Birko.Data.Localization.SQL`'s `SqlLocalizedWriteBoundary.For` makes the write one transaction when both stores reach
+SQL stores on one database (the same `Settings.GetId()`), joining a caller's transaction when one is open.
 
 ## Requirements
 
@@ -359,12 +372,6 @@ is empty.
 - **Given** a localized condition matches 50 000 entities
 - **When** the membership filter is built
 - **Then** all 50 000 GUIDs are placed in a single `List<Guid>` constant with no chunking, which a SQL backend renders as one oversized `IN` list
-
-#### Scenario: Combining rebinds the right-hand parameter
-
-- **Given** two lambdas with distinct `ParameterExpression` instances
-- **When** `LocalizedFilterHelper.CombineFilters(left, right)` runs
-- **Then** the right body's parameter is rewritten to the left lambda's parameter by `ParameterReplacer` and the two bodies are joined with `AndAlso`
 
 ### Requirement: Localized condition extraction support matrix
 
@@ -729,10 +736,17 @@ update is sent, so a create that is refused and cannot be retried leaves nothing
 - **When** the update runs
 - **Then** the base values for the whole batch are fetched with a single GUID-membership read rather than one read per entity, and each entity with a stored row is replaced by a copy carrying its own base values
 
+#### Scenario: A collection update that reports items not stored saves the stored items' translations
+
+- **Given** a non-default culture and an `Update(IEnumerable<T>)` / `UpdateAsync(IEnumerable<T>)` whose inner update writes the stored items and throws `EntityNotFoundException` naming the rest (TASK-555)
+- **When** the update runs
+- **Then** the translations of the items not named are saved in one batch and the `EntityNotFoundException` is rethrown; when that save fails, on a best-effort boundary its failure is dropped so the report surfaces, and on an atomic boundary the save's failure propagates and rolls the whole write back
+
 ### Requirement: Bulk create and update persist translations in one batch
 
-The system SHALL materialize the incoming sequence exactly once before handing it to the inner store, then
-persist the translations of the same materialized list in one batched save.
+The system SHALL materialize the incoming sequence exactly once, before the write boundary is entered, and hand
+the same list to the inner store and to the one batched translation save — so a boundary that re-runs the write
+re-runs it over the same items.
 
 #### Scenario: One-shot enumerable is not enumerated twice
 
@@ -754,6 +768,14 @@ entity's GUID and the store's entity type — across all cultures and field name
 is null: an empty GUID list makes no store call. `DeleteMany` SHALL refuse a null or empty entity type with
 `ArgumentException`. A row with the same GUID under another entity type survives.
 
+The entity SHALL always be deleted first and its translations second, never the reverse. On an atomic boundary a
+failed cleanup SHALL propagate as it is, rolling the entity delete back with it. Otherwise the entity is gone, so a
+failed cleanup SHALL be rethrown as `TranslationCleanupException` (a `StoreException`) carrying `EntityType`,
+`RemainingEntityGuids` (the distinct GUIDs whose rows remain), the original failure as its `InnerException`, and a
+message naming `IEntityTranslations.RemoveEntitiesAsync` as the repeatable cleanup. On that best-effort path the async
+wrappers SHALL run the cleanup with `CancellationToken.None`, because the entities are already deleted, and wrap any
+failure; the sync wrappers SHALL let an `OperationCanceledException` from the cleanup propagate unwrapped.
+
 #### Scenario: All cultures are removed
 
 - **Given** entity `G` has `"sk"` and `"de"` translations
@@ -771,6 +793,18 @@ is null: an empty GUID list makes no store call. `DeleteMany` SHALL refuse a nul
 - **Given** an entity whose `Guid` is null
 - **When** `DeleteTranslations` runs
 - **Then** the GUID list is empty, so no store call is made
+
+#### Scenario: A failed cleanup on a best-effort pairing is reported
+
+- **Given** the default best-effort boundary and a translation store whose delete throws
+- **When** `Delete(entity)`, a collection delete or a filter delete runs
+- **Then** the entities are deleted, and `TranslationCleanupException` names the deleted entities whose rows remain, with the store's failure as its inner exception; `RemoveEntitiesAsync` with those GUIDs then removes the rows
+
+#### Scenario: A failed cleanup on an atomic pairing rolls the delete back
+
+- **Given** an atomic boundary (both stores SQL on one database) and a translation delete that throws after the entity delete
+- **When** the delete runs, sync or async, single, collection or filter
+- **Then** the store's exception propagates unwrapped, and the entity rows and their translation rows are all still there
 
 ### Requirement: Filter-based bulk delete reads before deleting and localizes the filter
 
@@ -800,15 +834,18 @@ write translations only for the localizable fields the action **changed**, keep 
 the default-culture value, and write those translation rows only **after** the inner store's update for
 that entity has returned. The sync and async wrappers SHALL take the same path: read the matched entities, read
 their translations in one batched read, run the action on a detached copy of each, write each entity, and then
-save every changed translation in one batched save. When the call fails part way, the entities already written
-SHALL get their changed translations saved best effort and the original exception SHALL be rethrown; a failure of
-that save is dropped.
+save every changed translation in one batched save. An entity whose inner update throws `EntityNotFoundException`
+(deleted since the read) SHALL be skipped, with no translation saved for it, and the update SHALL continue. When the
+call fails part way on a boundary that is not atomic, the entities already written SHALL get their changed
+translations saved best effort and the original exception SHALL be rethrown; a failure of that save is dropped. On an
+atomic boundary that save SHALL be skipped and the exception propagates, rolling the whole write back.
 
 #### Scenario: Default culture delegates the action
 
 - **Given** the current culture is the default one
 - **When** `Update(filter, updateAction)` / `UpdateAsync(filter, updateAction)` runs
-- **Then** the sync wrapper calls `_innerStore.Update(filter, updateAction)` once; the async wrapper reads all matching entities via `_innerStore.ReadAsync(filter, null, null, null, ct)`, applies the action to each and issues one inner update per entity
+- **Then** the sync wrapper calls `_innerStore.Update(filter, updateAction)` once; the async wrapper reads all matching entities via `_innerStore.ReadAsync(filter, null, null, null, ct)`, applies the action to each and issues one inner update per entity, outside the write boundary
+- **And** on the async wrapper an entity deleted since the read (its inner update throws `EntityNotFoundException`) is skipped and the update continues, as the sync wrapper's inner filter update does
 
 #### Scenario: Both wrappers do read-modify-write per entity on a non-default culture
 
@@ -850,7 +887,120 @@ that save is dropped.
 
 - **Given** a non-default culture, three matched entities whose action changes `Name`, and an inner update that throws on the third
 - **When** the filter-based update runs, sync or async
-- **Then** the first two entities' changed translations are saved in one batch (async: without the caller's cancellation token) and the inner update's exception propagates; if that save fails too, its failure is dropped and the original exception still surfaces. The entity writes and the translation writes share no boundary (TASK-683)
+- **Then** on a best-effort boundary the first two entities' changed translations are saved in one batch (async: without the caller's cancellation token) and the inner update's exception propagates; if that save fails too, its failure is dropped and the original exception still surfaces
+- **And** on an atomic boundary no save is attempted, the exception propagates, and the first two entity updates are rolled back
+
+#### Scenario: A row deleted since the read is skipped
+
+- **Given** a non-default culture and three matched entities, the second deleted by another writer after the read so that its inner update throws `EntityNotFoundException`
+- **When** the filter-based update runs, sync or async
+- **Then** the second entity is skipped with no translation written for it, the first and third are updated, and their changed translations are saved; no exception reaches the caller
+
+### Requirement: Writes that touch both stores run through the write boundary
+
+The system SHALL let each of the four wrappers take an optional `ILocalizedWriteBoundary` as its last constructor
+argument (also on the `X<TStore, T>` subclasses), using `BestEffortWriteBoundary.Instance` when it is `null`, and SHALL
+run through it, as one `Run` / `RunAsync` call per public method:
+
+- on a non-default culture: `Create(T)`, `Create(IEnumerable<T>)`, `Update(T)`, `Update(IEnumerable<T>)` and
+  `Update(filter, Action<T>)` — and so the `PropertyUpdate` fallback, which calls that overload — and their async twins;
+- on every culture: `Delete(T)`, `Delete(IEnumerable<T>)` and `Delete(filter)` and their async twins, including the read
+  a filter delete makes.
+
+A default-culture create, update or filter update writes the entity store only and SHALL NOT enter the boundary; nor
+SHALL reads, counts, a native `PropertyUpdate`, `Init` or `Destroy`. `ILocalizedWriteBoundary.IsAtomic` SHALL be
+true only when a write that throws leaves neither store changed; `BestEffortWriteBoundary` SHALL report false and
+run the write inline, even inside a caller's transaction that would in fact make it atomic. The async create returns
+the GUID the last run of the write produced.
+
+#### Scenario: Two-store writes enter the boundary once
+
+- **Given** a wrapper with a recording boundary, on `"sk"`
+- **When** a single create, a collection create, a single update, a collection update, a filter update, a `PropertyUpdate` touching a localizable field, and each kind of delete are called
+- **Then** each enters the boundary exactly once, and its whole entity write and translation write run inside it
+
+#### Scenario: Default-culture writes of one store stay outside
+
+- **Given** the same wrapper on the default culture
+- **When** a create, an update or a filter update runs
+- **Then** the boundary is not entered; a delete still enters it, because it removes translation rows on every culture
+
+#### Scenario: No boundary given
+
+- **Given** a wrapper constructed without a boundary
+- **When** a translation write throws after the entity write
+- **Then** the entity write stays and the exception propagates — best effort
+
+### Requirement: SQL write boundary for one database
+
+The system SHALL provide, in `Birko.Data.Localization.SQL`, `SqlLocalizedWriteBoundary.For(entityStore,
+translationStore, requireAtomic = false)`, which rejects a null store with `ArgumentNullException`, walks each store's
+`IStoreWrapper` chain (`StoreChain.Walk`) to the first link implementing `ISqlConnectedStore` with a non-null
+`Connector`, and returns an atomic `SqlLocalizedWriteBoundary` when both are found and their `Connector.Settings.GetId()`
+are equal. Otherwise it SHALL return `BestEffortWriteBoundary.Instance`, or, with `requireAtomic`, throw
+`InvalidOperationException` describing each store's database or that it is not a SQL store or has no settings yet. The
+connector SHALL be captured when `For` runs.
+
+An atomic boundary SHALL run each write as follows, checking in this order:
+
+- **An explicit transaction:** when either store was given `SetTransactionContext`, the write runs inside that
+  transaction, published as the ambient transaction for the settings id so the other store joins it; nothing is
+  committed, rolled back, marked or retried.
+- **A caller's boundary:** when an ambient transaction for the settings id is open (a caller's `SqlUnitOfWork` or a
+  store's own bulk transaction), the write takes part in it; any failure other than `EntityNotFoundException` marks it
+  rollback-only and propagates, with no retry.
+- **Its own transaction:** otherwise it opens a transaction (sync: its own connection in a flow-local ambient cell; async:
+  a `SqlUnitOfWork` built in the running flow), commits when the write returns, and rolls back and rethrows when it
+  throws — a failed rollback never replacing the write's exception. An `EntityNotFoundException` commits the stored part
+  and is rethrown. A `StoreUniqueViolationException` on the first attempt rolls back and re-runs the **whole** write once
+  in a new transaction; a second violation propagates. After a commit it runs the transaction's after-commit callbacks,
+  recording a failing one in the connector's `SubscriberFailures` (`AfterCommit`).
+
+Everything the write does runs again on that retry: a `StoreDataDelegate`, a filter update's action, and changes the
+first run made to the caller's objects (a create's assigned `Guid` stays set).
+
+#### Scenario: A translation failure rolls back the entity write
+
+- **Given** an entity store and a translation store on one SQL database, a boundary from `For`, and a translation write that throws after the entity write
+- **When** a create, collection create, update, collection update, filter update, delete, collection delete or filter delete runs, sync or async
+- **Then** the exception propagates and the entity rows read as they did before the call, with no orphaned translation rows
+
+#### Scenario: Different databases are best effort, or refused
+
+- **Given** the two stores on settings with different ids (even with equal values), or a store that is not SQL, or one whose settings are not set yet
+- **When** `For` runs
+- **Then** it returns the best-effort boundary, and with `requireAtomic: true` it throws `InvalidOperationException` naming both sides
+
+#### Scenario: Decorators are walked
+
+- **Given** an entity store behind a tenant or soft-delete wrapper, over a SQL store on the translation store's database
+- **When** `For` runs
+- **Then** the boundary is atomic; a decorator that opens its own connection stays outside the transaction (rule 6)
+
+#### Scenario: A caller's unit of work is joined
+
+- **Given** a caller's `SqlUnitOfWork` open on the same database
+- **When** a localized write through the boundary fails
+- **Then** it ran inside the caller's transaction, the caller's unit of work is marked rollback-only so it cannot commit half the write, and no retry was made
+
+#### Scenario: A unique-key race in its own transaction is retried once
+
+- **Given** PostgreSQL, the boundary owning its transaction, and another writer storing a translation key after this write's read found nothing
+- **When** the translation create is refused with `StoreUniqueViolationException`
+- **Then** the transaction is rolled back and the whole write re-runs once; the second pass updates the other writer's row, leaving one row with this write's value
+- **And** inside a caller's transaction the typed violation reaches the caller instead
+
+#### Scenario: A store's own transaction context is honoured
+
+- **Given** the entity store given `SetTransactionContext` with a caller's transaction
+- **When** a localized write runs through the boundary
+- **Then** both stores write in that transaction, and the boundary neither commits, rolls back nor retries it
+
+#### Scenario: A collection update reporting missing items commits the stored part
+
+- **Given** the boundary owning its transaction and a collection update whose inner store throws `EntityNotFoundException` for some items
+- **When** the write runs
+- **Then** the stored items and their translations are committed and the `EntityNotFoundException` is rethrown
 
 ### Requirement: Native PropertyUpdate falls back when it touches a localizable field
 
@@ -1046,7 +1196,7 @@ fail the store.
 The system SHALL provide `IEntityTranslations<T>`, implemented by `EntityTranslations<T, TTranslation>` and by
 `EntityTranslations<T>` (the same class with `EntityTranslationModel`), over an `IAsyncBulkStore<T>` entity store, an
 `IAsyncBulkStore<TTranslation>` translation store and an `IEntityLocalizationContext` of which only `DefaultCulture` is
-read. It SHALL reject a null argument with `ArgumentNullException`, and SHALL refuse with `ArgumentException` (parameter
+read, with an optional `ILocalizedWriteBoundary` (best effort when `null`). It SHALL reject a null argument with `ArgumentNullException`, and SHALL refuse with `ArgumentException` (parameter
 `entities`) an entity store that is, or wraps anywhere in its `IStoreWrapper.GetInnerStore()` chain, one of the four
 localized wrappers or a type derived from one — the lookups read base values through that store, and a localized
 wrapper would apply the ambient culture to them. Other wrappers in the chain (tenant, soft delete) are kept, so their
@@ -1131,6 +1281,9 @@ refusal by the unique key is retried as the wrappers retry it. An empty `fields`
 `RemoveCultureAsync(id, culture)` as one filter delete on `(EntityGuid, EntityType, Culture)` with no read, leaving the
 entity's other cultures and other types' rows alone, and `RemoveEntitiesAsync(ids)` as one filter delete on
 `EntityGuid IN (…)` and the entity type per 500 distinct ids, across all cultures, with no call for an empty list.
+Each of the three SHALL run as one unit through the API's write boundary (an empty `fields` or id list does not enter
+it); a failure is not wrapped in `TranslationCleanupException`, since no entity was deleted. A write here never pairs
+with an entity write: atomicity with one needs the caller's own transaction.
 
 #### Scenario: A value set through the API is what the wrapper reads
 
@@ -1228,7 +1381,8 @@ The system SHALL provide `AddEntityTranslations<T, TTranslation>(lifetime = Scop
 `IEntityTranslations<T>` built from the container's `IAsyncBulkStore<T>`, `IAsyncBulkStore<TTranslation>` and
 `IEntityLocalizationContext`; `AddEntityTranslations<T, TTranslation>(entities, translations, lifetime = Scoped)`, taking
 factories for the two stores; and `AddEntityTranslations<T>(lifetime = Scoped)`, the first with `EntityTranslationModel`.
-A null `services` or factory SHALL be rejected with `ArgumentNullException`. The service is constructed when resolved,
+Each SHALL take an optional last argument `Func<IServiceProvider, ILocalizedWriteBoundary>? boundary`, invoked when the
+service is constructed (best effort when omitted). A null `services` or store factory SHALL be rejected with `ArgumentNullException`. The service is constructed when resolved,
 so a container whose `IAsyncBulkStore<T>` is the localized wrapper fails on resolution with the construction refusal;
 the factory overload is the way to pass the store it wraps. The extension needs
 `Microsoft.Extensions.DependencyInjection.Abstractions`, which the project does not declare.

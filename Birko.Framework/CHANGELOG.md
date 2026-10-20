@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — GitHub web sign-in helpers; OAuthClient survives GitHub's 200 errors
+
+[[TASK-521]]. New `IOAuthStateStore` (single-use, expiring, browser-bound sign-in state), `IOAuthCodeExchanger`,
+GitHub web-flow settings and `GitHubUserClient`. Measured: GitHub answers errors with HTTP 200, so `OAuthClient` threw
+`KeyNotFoundException` on a bad code and on the first device-flow poll (Copilot sign-in). It now asks for JSON and reads
+a 2xx `error` as an error, and a borrowed HttpClient is no longer reconfigured.
+
 ## 2026-10-18 — client_credentials tokens can be shaped; a scope claim reads as permissions
 
 [[TASK-520]]. `TokenEndpointHandler.ShapeClientCredentialsToken` sets a service account's subject and extra claims

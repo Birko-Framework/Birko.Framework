@@ -18,7 +18,12 @@ Birko.Data.Localization.SQL.Tests/
 │                                       on one key of a batch, chunked and per-culture deletes, the wrappers'
 │                                       collection/filter/delete writes on SQL (TASK-690), the explicit API on
 │                                       SQL: get/set/remove, find with fallback and read counts, exists with
-│                                       except, localize (TASK-682), a consumer model on its own table
+│                                       except, localize (TASK-682); TASK-683: a translation write failing after
+│                                       the entity write rolls it back (create, update, bulk, filter update,
+│                                       deletes; sync and async) through a FailingStore wrapper, a caller's
+│                                       SqlUnitOfWork joined and poisoned, the key race retried once (PostgreSQL,
+│                                       SQL Server), a best-effort delete's TranslationCleanupException; a
+│                                       consumer model on its own table
 │                                       through the wrappers; on MySQL, the reported key failure (TASK-684)
 └── ProviderTranslationTableTests.cs  — SQLite, PostgreSQL, MySQL, SQL Server subclasses
 ```

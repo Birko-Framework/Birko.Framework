@@ -1,3 +1,4 @@
+using Birko.Data.Localization.Boundaries;
 using Birko.Data.Localization.Models;
 using Birko.Data.Models;
 using Birko.Data.Stores;
@@ -20,20 +21,27 @@ public static class EntityTranslationsServiceCollectionExtensions
     /// entity store is the localized wrapper, use the overload taking factories and pass the store it wraps.
     /// </summary>
     public static IServiceCollection AddEntityTranslations<T, TTranslation>(
-        this IServiceCollection services, ServiceLifetime lifetime = ServiceLifetime.Scoped)
+        this IServiceCollection services,
+        ServiceLifetime lifetime = ServiceLifetime.Scoped,
+        Func<IServiceProvider, ILocalizedWriteBoundary>? boundary = null)
         where T : AbstractModel, ILocalizable
         where TTranslation : AbstractModel, IEntityTranslation
         => services.AddEntityTranslations<T, TTranslation>(
             sp => sp.GetRequiredService<IAsyncBulkStore<T>>(),
             sp => sp.GetRequiredService<IAsyncBulkStore<TTranslation>>(),
-            lifetime);
+            lifetime,
+            boundary);
 
-    /// <summary>Registers <see cref="IEntityTranslations{T}"/> over the stores the factories return.</summary>
+    /// <summary>
+    /// Registers <see cref="IEntityTranslations{T}"/> over the stores the factories return, and the boundary
+    /// <paramref name="boundary"/> returns (best effort when omitted; TASK-683).
+    /// </summary>
     public static IServiceCollection AddEntityTranslations<T, TTranslation>(
         this IServiceCollection services,
         Func<IServiceProvider, IAsyncBulkStore<T>> entities,
         Func<IServiceProvider, IAsyncBulkStore<TTranslation>> translations,
-        ServiceLifetime lifetime = ServiceLifetime.Scoped)
+        ServiceLifetime lifetime = ServiceLifetime.Scoped,
+        Func<IServiceProvider, ILocalizedWriteBoundary>? boundary = null)
         where T : AbstractModel, ILocalizable
         where TTranslation : AbstractModel, IEntityTranslation
     {
@@ -43,14 +51,16 @@ public static class EntityTranslationsServiceCollectionExtensions
         services.Add(new ServiceDescriptor(
             typeof(IEntityTranslations<T>),
             sp => new EntityTranslations<T, TTranslation>(
-                entities(sp), translations(sp), sp.GetRequiredService<IEntityLocalizationContext>()),
+                entities(sp), translations(sp), sp.GetRequiredService<IEntityLocalizationContext>(), boundary?.Invoke(sp)),
             lifetime));
         return services;
     }
 
-    /// <summary><see cref="AddEntityTranslations{T, TTranslation}(IServiceCollection, ServiceLifetime)"/> with <see cref="EntityTranslationModel"/>.</summary>
+    /// <summary><see cref="AddEntityTranslations{T, TTranslation}(IServiceCollection, ServiceLifetime, Func{IServiceProvider, ILocalizedWriteBoundary}?)"/> with <see cref="EntityTranslationModel"/>.</summary>
     public static IServiceCollection AddEntityTranslations<T>(
-        this IServiceCollection services, ServiceLifetime lifetime = ServiceLifetime.Scoped)
+        this IServiceCollection services,
+        ServiceLifetime lifetime = ServiceLifetime.Scoped,
+        Func<IServiceProvider, ILocalizedWriteBoundary>? boundary = null)
         where T : AbstractModel, ILocalizable
-        => services.AddEntityTranslations<T, EntityTranslationModel>(lifetime);
+        => services.AddEntityTranslations<T, EntityTranslationModel>(lifetime, boundary);
 }

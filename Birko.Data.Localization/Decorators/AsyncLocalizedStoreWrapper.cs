@@ -1,3 +1,5 @@
+using Birko.Data.Exceptions;
+using Birko.Data.Localization.Boundaries;
 using Birko.Data.Localization.Expressions;
 using Birko.Data.Localization.Filters;
 using Birko.Data.Localization.Models;
@@ -27,15 +29,19 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
     protected readonly IAsyncBulkStore<TTranslation> _translationStore;
     protected readonly IEntityLocalizationContext _context;
     protected readonly IReadOnlyList<string> _localizableFields;
+    /// <summary>How a write touching both stores is made one unit (TASK-683); best effort when none is given.</summary>
+    protected readonly ILocalizedWriteBoundary _boundary;
 
     public AsyncLocalizedStoreWrapper(
         TStore innerStore,
         IAsyncBulkStore<TTranslation> translationStore,
-        IEntityLocalizationContext context)
+        IEntityLocalizationContext context,
+        ILocalizedWriteBoundary? boundary = null)
     {
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
         _translationStore = translationStore ?? throw new ArgumentNullException(nameof(translationStore));
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _boundary = boundary ?? BestEffortWriteBoundary.Instance;
         // SH-L079 / SH-L082 (TASK-194): the declaration is read and validated once, at wiring, on every culture.
         _localizableFields = LocalizedEntityFields.LocalizableFieldsOf(_innerStore.CreateInstance());
         LocalizedTranslationRows.RequireQueryableModel<TTranslation>();
@@ -72,6 +78,17 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
 
     public async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
+        if (!IsNonDefaultCulture())
+        {
+            return await CreateWithTranslationsAsync(data, processDelegate, ct);
+        }
+        var guid = Guid.Empty;
+        await _boundary.RunAsync(async c => guid = await CreateWithTranslationsAsync(data, processDelegate, c), ct);
+        return guid;
+    }
+
+    private async Task<Guid> CreateWithTranslationsAsync(T data, StoreDataDelegate<T>? processDelegate, CancellationToken ct)
+    {
         LocalizedEntityFields.RequireValidDeclarations(new[] { data });
         var guid = await _innerStore.CreateAsync(data, processDelegate, ct);
         // SH-M076: keyed by the GUID the store returned — it need not have written it onto the entity.
@@ -80,7 +97,12 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
     }
 
     /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.Update(T, StoreDataDelegate{T}?)" />
-    public async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+    public Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+        => IsNonDefaultCulture()
+            ? _boundary.RunAsync(c => UpdateWithTranslationsAsync(data, processDelegate, c), ct)
+            : UpdateWithTranslationsAsync(data, processDelegate, ct);
+
+    private async Task UpdateWithTranslationsAsync(T data, StoreDataDelegate<T>? processDelegate, CancellationToken ct)
     {
         LocalizedEntityFields.RequireValidDeclarations(new[] { data });
         if (!IsNonDefaultCulture())
@@ -127,7 +149,10 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
         return stored == null ? null : LocalizedEntityFields.Capture(stored, fields);
     }
 
-    public async Task DeleteAsync(T data, CancellationToken ct = default)
+    public Task DeleteAsync(T data, CancellationToken ct = default)
+        => _boundary.RunAsync(c => DeleteWithTranslationsAsync(data, c), ct);
+
+    private async Task DeleteWithTranslationsAsync(T data, CancellationToken ct)
     {
         await _innerStore.DeleteAsync(data, ct);
         await DeleteTranslationsAsync(data, ct);
@@ -204,8 +229,11 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
     }
 
     protected Task DeleteTranslationsAsync(T entity, CancellationToken ct)
-        => LocalizedTranslationRows.DeleteManyAsync(
-            _translationStore, LocalizedTranslationRows.GuidsOf(new[] { entity }), LocalizedTranslationRows.EntityTypeOf<T>(), ct);
+    {
+        var guids = LocalizedTranslationRows.GuidsOf(new[] { entity }).ToList();
+        return LocalizedCleanup.RunAsync(_boundary, typeof(T), guids, c => LocalizedTranslationRows.DeleteManyAsync(
+            _translationStore, guids, LocalizedTranslationRows.EntityTypeOf<T>(), c), ct);
+    }
 
     #endregion
 
@@ -226,8 +254,9 @@ public class AsyncLocalizedStoreWrapper<TStore, T> : AsyncLocalizedStoreWrapper<
     public AsyncLocalizedStoreWrapper(
         TStore innerStore,
         IAsyncBulkStore<EntityTranslationModel> translationStore,
-        IEntityLocalizationContext context)
-        : base(innerStore, translationStore, context)
+        IEntityLocalizationContext context,
+        ILocalizedWriteBoundary? boundary = null)
+        : base(innerStore, translationStore, context, boundary)
     {
     }
 }

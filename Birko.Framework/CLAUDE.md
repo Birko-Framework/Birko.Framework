@@ -289,6 +289,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Localized writes: the entity and its translations in one transaction (2026-10-20)
+[[TASK-683]]. Wrappers and `EntityTranslations` take an optional `ILocalizedWriteBoundary`. With
+`SqlLocalizedWriteBoundary.For(entityStore, translationStore)` and both stores on one SQL database, a failed
+translation write rolls the entity write back. It joins your `SqlUnitOfWork`, and in its own transaction re-runs a
+write once after a key race (PostgreSQL). Measured on SQLite, PostgreSQL, SQL Server and MySQL. Other pairings are best
+effort. A failed delete cleanup throws `TranslationCleanupException` listing the GUIDs. New `ISqlConnectedStore`.
 ### IEntityTranslations: explicit, batched translations (2026-10-20)
 [[TASK-682]]. New `IEntityTranslations<T>`, with `AddEntityTranslations<T>()`, works on a given culture rather than the
 ambient one. Get one language for a list, every language of one entity, set, remove, find an entity by value, check
@@ -370,11 +376,6 @@ subscription is always disposed. Frames come from `SseEvent`, and `KeyedEventBro
 server without a token. It decides from the addresses Kestrel actually bound. Measured: DraCode's rule, read from the
 configured URLs, bypassed while bound to `[::]`. Unknown or wildcard binds enforce, and the host refuses to start if the
 bypass is enabled without its middleware.
-### GitHub web sign-in helpers; OAuthClient survives GitHub's 200 errors (2026-10-18)
-[[TASK-521]]. New `IOAuthStateStore` (single-use, expiring, browser-bound sign-in state), `IOAuthCodeExchanger`,
-GitHub web-flow settings and `GitHubUserClient`. Measured: GitHub answers errors with HTTP 200, so `OAuthClient` threw
-`KeyNotFoundException` on a bad code and on the first device-flow poll (Copilot sign-in). It now asks for JSON and reads
-a 2xx `error` as an error, and a borrowed HttpClient is no longer reconfigured.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
