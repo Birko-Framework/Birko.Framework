@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 23      | —     |
-| todo         | —     | —       | 150   |
+| todo         | —     | —       | 149   |
 | in-progress  | 8     | 12      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 3     | 27      | 393   |
+| done         | 3     | 27      | 394   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 100× P2 · 41× P3.
+`todo` by priority: 9× P1 · 100× P2 · 40× P3.
 
 ## In progress now
 
@@ -618,7 +618,7 @@ _None._
 - [ ] [TASK-673](_loose/TASK-673-sql-bulk-upsert-by-key.md) The SQL stores have no batch upsert, so an idempotent feed import costs a read per row (P3)
 - [ ] [TASK-675](_loose/TASK-675-smtp-sender-ignores-its-timeout-and-cannot-classify-failures.md) `SmtpEmailSender` ignores its own timeout, and a caller cannot tell a transient failure from a permanent one (P2)
 - [ ] [TASK-677](_loose/TASK-677-a-telemetry-update-stamps-the-audit-columns.md) A counter update through the decorator chain stamps `UpdatedBy` / `UpdatedAt`, so an anonymous hit erases who last edited the row (P3)
-- [ ] [TASK-688](_loose/TASK-688-abstractconnector-holds-raw-nul-bytes-so-git-treats-it-as-binary.md) `AbstractConnector.cs` holds raw NUL bytes, so git treats it as binary (P3)
+- [x] [TASK-688](_loose/TASK-688-abstractconnector-holds-raw-nul-bytes-so-git-treats-it-as-binary.md) `AbstractConnector.cs` holds raw NUL bytes, so git treats it as binary (P3)
 - [ ] [TASK-689](_loose/TASK-689-spec-map-coverage-unverified-207-source-files-unexplained.md) The spec map was never coverage-checked: 207 source files are unexplained and `ignore:` matches nothing (P3)
 
 ## Completed

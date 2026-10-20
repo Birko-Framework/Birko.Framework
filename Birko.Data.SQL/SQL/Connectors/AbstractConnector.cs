@@ -331,7 +331,7 @@ namespace Birko.Data.SQL.Connectors
         // type) so a logging bug and a metrics bug stay distinguishable, and DELIBERATELY WITHOUT AN EVENT:
         // announcing a subscriber failure through a subscriber is the same hole one level up.
         private readonly SchemaEnsureFailureLog<SubscriberFailure> _subscriberFailures =
-            new(f => f.Channel + " " + f.Error.GetType().FullName);
+            new(f => f.Channel + "\0" + f.Error.GetType().FullName);
 
         /// <summary>
         /// Diagnostic subscribers that threw. Empty in the normal case; an entry means the framework
@@ -417,7 +417,7 @@ namespace Birko.Data.SQL.Connectors
         {
             if (channel == null) throw new ArgumentNullException(nameof(channel));
             if (error == null) throw new ArgumentNullException(nameof(error));
-            _subscriberFailures.Record(channel + " " + error.GetType().FullName, new SubscriberFailure(channel, error));
+            _subscriberFailures.Record(channel + "\0" + error.GetType().FullName, new SubscriberFailure(channel, error));
         }
 
         protected void RecordSchemaEscape(Exception ex, IEnumerable<string>? tableNames)
