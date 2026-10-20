@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-19 — Translations can be any model, with a unique key on SQL
+
+[[TASK-680]]. The localization wrappers take any `IEntityTranslation` model, such as a tenant entity. The two-parameter
+names still mean `EntityTranslationModel`. New `Birko.Data.Localization.SQL` maps the table with a unique key on
+`(EntityGuid, EntityType, FieldName, Culture)`. A save refused by the key is retried as an update. Measured live: one row
+on SQLite, PostgreSQL and SQL Server. In a PostgreSQL transaction the refusal aborts it, and the typed exception surfaces.
+MySQL cannot hold the key ([[TASK-684]]). The value index moved to [[TASK-681]] (decided by the user). TASK-679's batch is
+now measured.
+
 ## 2026-10-19 — Localized list reads fetch translations in batches
 
 [[TASK-679]]. A list read on a non-default culture costs one translation read per 500 entities, not one per entity.

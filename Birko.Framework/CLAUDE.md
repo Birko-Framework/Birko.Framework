@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Birko.Data.Localization.MongoDB: the translation indexes (2026-10-20)
+[[TASK-699]]. New project. `LocalizationMongoIndexes.EnsureAsync(store)` creates the unique key over `(EntityGuid,
+EntityType, FieldName, Culture)` and the `ValueHash` index, idempotently. Measured live: a value lookup went from a
+`COLLSCAN` to an `IXSCAN`. A race against a writer that does not derive the key Guid (TASK-698) left two rows without
+the key index and one with it. A collection already holding a duplicate is refused. Async store only.
 ### Translation races leave one row on every provider (2026-10-20)
 [[TASK-698]]. A new translation row's Guid is derived from its key (`LocalizedTranslationRows.KeyGuid`), so a racing
 writer's create is refused and retried as an update on every store, not only behind SQL's unique key. Measured live on
@@ -366,13 +371,6 @@ value (SH-M070). `==` and `IN` read only matching rows through an indexed `Value
 `values.Contains(x.Field)` is now supported. Measured on SQLite, PostgreSQL, SQL Server and MySQL. On SQL Server and
 MySQL the fallback follows the collation. **Breaking:** `IEntityTranslation.ValueHash`, and table names are now at most 50
 characters. The large `IN` list is [[TASK-686]].
-### Translations can be any model, with a unique key on SQL (2026-10-19)
-[[TASK-680]]. The localization wrappers take any `IEntityTranslation` model, such as a tenant entity. The two-parameter
-names still mean `EntityTranslationModel`. New `Birko.Data.Localization.SQL` maps the table with a unique key on
-`(EntityGuid, EntityType, FieldName, Culture)`. A save refused by the key is retried as an update. Measured live: one row
-on SQLite, PostgreSQL and SQL Server. In a PostgreSQL transaction the refusal aborts it, and the typed exception surfaces.
-MySQL cannot hold the key ([[TASK-684]]). The value index moved to [[TASK-681]] (decided by the user). TASK-679's batch is
-now measured.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

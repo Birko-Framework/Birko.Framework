@@ -501,6 +501,10 @@
 			"path": "../Birko.Data.Localization"
 		},
 		{
+			"name": "Localization / Birko.Data.Localization.MongoDB",
+			"path": "../Birko.Data.Localization.MongoDB"
+		},
+		{
 			"name": "Localization / Birko.Data.Localization.SQL",
 			"path": "../Birko.Data.Localization.SQL"
 		},
@@ -951,6 +955,10 @@
 		{
 			"name": "Tests / Birko.Data.Localization.Tests",
 			"path": "../tests/Birko.Data.Localization.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.Localization.MongoDB.Tests",
+			"path": "../tests/Birko.Data.Localization.MongoDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Localization.SQL.Tests",

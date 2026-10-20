@@ -77,6 +77,8 @@ Birko.Data.Localization (ILocalizable, IEntityTranslation, the localized store w
      Microsoft.Extensions.DependencyInjection.Abstractions consumer-supplied for AddEntityTranslations (TASK-682)
   -> Birko.Data.Localization.SQL (EntityTranslationMapping<TTranslation>, LocalizationSqlMappings)
      <- Birko.Models.SQL + Birko.Data.SQL; schemaless backends need none of it
+  -> Birko.Data.Localization.MongoDB (LocalizationMongoIndexes: the translation key and ValueHash indexes, TASK-699)
+     <- Birko.Data.MongoDB + Birko.Data.Patterns (IndexManagement)
 
 Birko.Security.OAuth.Server (OAuthServer, endpoint handlers, store interfaces — no store implementation)
   <- Birko.Security + Birko.Data.Stores + Birko.Time.Abstractions
@@ -265,6 +267,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Localization** - Translation framework, CLDR pluralization, JSON/RESX/InMemory providers
 - **Birko.Localization.Data** - Database-backed translations, namespace scoping, TTL cache
 - **Birko.Data.Localization** - Entity-level localization (ILocalizable, store decorator wrappers, any `IEntityTranslation` model)
+- **Birko.Data.Localization.MongoDB** - MongoDB indexes for translation rows: `LocalizationMongoIndexes.EnsureAsync(store)` creates the unique `(EntityGuid, EntityType, FieldName, Culture)` key and the `ValueHash` index, idempotently (TASK-699)
 - **Birko.Data.Localization.SQL** - SQL schema for translation rows: `EntityTranslationMapping<TTranslation>` (table + UNIQUE `(EntityGuid, EntityType, FieldName, Culture)`), `LocalizationSqlMappings.Register` / `Register<TTranslation>`
 
 ## AI / LLM
@@ -302,7 +305,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Health.Tests, Birko.Health.Azure.Tests, Birko.Health.Data.SQL.Tests, Birko.Health.Data.ElasticSearch.Tests, Birko.Health.Data.IndexManagement.Tests, Birko.Health.Security.Grants.Tests
 - Birko.Messaging.Tests, Birko.Messaging.Razor.Tests
 - Birko.Serialization.Tests, Birko.Time.Tests, Birko.Caching.Hybrid.Tests
-- Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests, Birko.Data.Localization.SQL.Tests
+- Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests, Birko.Data.Localization.SQL.Tests, Birko.Data.Localization.MongoDB.Tests
 - Birko.Communication.Modbus.Tests, Birko.Communication.OAuth.Tests, Birko.Communication.GraphQL.Tests, Birko.Communication.IR.Tests, Birko.Communication.NFC.Tests
 - Birko.Data.MongoDB.Tests
 - Birko.Random.Tests

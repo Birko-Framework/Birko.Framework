@@ -313,6 +313,13 @@ var products = new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<Product>, Prod
     productStore, productTranslationStore, locContext);
 ```
 
+On MongoDB, create the translation indexes once at startup with `Birko.Data.Localization.MongoDB` (TASK-699): the unique
+key and the `ValueHash` index. Without them a value lookup scans the collection (measured: `COLLSCAN`):
+
+```csharp
+await LocalizationMongoIndexes.EnsureAsync(translationStore);   // an AsyncMongoDBStore<EntityTranslationModel>
+```
+
 On SQL, map the table with `Birko.Data.Localization.SQL` before the first store use:
 
 ```csharp
