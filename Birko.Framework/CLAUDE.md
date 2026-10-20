@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A fluent column can belong to several indexes (2026-10-20)
+[[TASK-695]]. Call `HasIndex` / `HasUniqueIndex` once per index, and a column joins each with its own order and
+uniqueness. Before, a second call replaced the first silently, and `HasUniqueIndex` made a later index on the column
+UNIQUE. One index twice on a column is refused. New `FieldDescriptor.Indexes`; `IndexName` and the rest read the first.
+Split from [[TASK-693]], which needs `ResourceType` in two Grants.SQL indexes.
 ### A unique refusal inside a caller's transaction stays typed (2026-10-20)
 [[TASK-685]]. Inside a `SqlUnitOfWork` on PostgreSQL, a slug or default decorator's refused write threw the raw
 `25P02` error: the refusal aborts the transaction, so the re-check failed. The re-check now runs through
@@ -370,11 +375,6 @@ batch size is unmeasured on SQL until [[TASK-680]] maps the translation model.
 `AmbientSqlTransaction.OnCommitted` registers work on a transaction. `SqlUnitOfWork` and the bulk stores' own
 transactions run it once after the commit and drop it on rollback. A failing callback is recorded in
 `SubscriberFailures` (`AfterCommit`), never thrown. A transaction committed by its caller has no owner to run it.
-### An agent run reports how it ended (2026-10-18)
-[[TASK-660]]. New `RunWithOutcomeAsync` / `ContinueWithOutcomeAsync` / `ResumeWithOutcomeAsync` return an `AgentRunResult`.
-Its outcome is Completed, LlmFailed (with the classified `LlmFailure`), NotConfigured, MaxIterationsReached, Truncated,
-MissingToolCall, StoppedByHook or UnexpectedStop, so callers no longer match `"Error:"` text. `RunAsync` and the other
-two old methods are unchanged (decided by the user).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

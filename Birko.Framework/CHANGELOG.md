@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — An agent run reports how it ended
+
+[[TASK-660]]. New `RunWithOutcomeAsync` / `ContinueWithOutcomeAsync` / `ResumeWithOutcomeAsync` return an `AgentRunResult`.
+Its outcome is Completed, LlmFailed (with the classified `LlmFailure`), NotConfigured, MaxIterationsReached, Truncated,
+MissingToolCall, StoppedByHook or UnexpectedStop, so callers no longer match `"Error:"` text. `RunAsync` and the other
+two old methods are unchanged (decided by the user).
+
 ## 2026-10-18 — Messaging options TASK-174 refused are honoured where a transport can
 
 [[TASK-668]].

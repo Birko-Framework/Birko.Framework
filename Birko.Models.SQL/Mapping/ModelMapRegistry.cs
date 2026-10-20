@@ -229,9 +229,10 @@ namespace Birko.Models.SQL.Mapping
         /// </exception>
         private static void ApplyIndexes(Birko.Data.SQL.Tables.Table table, IReadOnlyList<FieldDescriptor> properties)
         {
-            foreach (var group in properties.Where(p => !string.IsNullOrEmpty(p.IndexName)).GroupBy(p => p.IndexName!))
+            var memberships = properties.SelectMany(p => p.Indexes.Select(index => (Property: p, Index: index)));
+            foreach (var group in memberships.GroupBy(m => m.Index.Name))
             {
-                if (group.Select(p => p.IndexUnique).Distinct().Count() > 1)
+                if (group.Select(m => m.Index.Unique).Distinct().Count() > 1)
                     throw new InvalidOperationException(
                         $"Index '{group.Key}' on table '{table.Name}' mixes HasIndex and HasUniqueIndex across its columns; declare every column of it the same way.");
 
@@ -241,9 +242,9 @@ namespace Birko.Models.SQL.Mapping
                     index = new Birko.Data.SQL.Tables.IndexDefinition { Name = group.Key };
                     table.Indexes[group.Key] = index;
                 }
-                index.Unique = group.First().IndexUnique;
+                index.Unique = group.First().Index.Unique;
 
-                foreach (var property in group.OrderBy(p => p.IndexOrder))
+                foreach (var (property, membership) in group.OrderBy(m => m.Index.Order))
                 {
                     var sqlField = table.GetFieldByPropertyName(property.Name)
                         ?? throw new InvalidOperationException(
@@ -257,8 +258,8 @@ namespace Birko.Models.SQL.Mapping
                     index.Columns.Add(new Birko.Data.SQL.Tables.IndexColumn
                     {
                         ColumnName = sqlField.Name,
-                        Order = property.IndexOrder,
-                        IsDescending = property.IndexDescending,
+                        Order = membership.Order,
+                        IsDescending = membership.Descending,
                     });
                 }
             }

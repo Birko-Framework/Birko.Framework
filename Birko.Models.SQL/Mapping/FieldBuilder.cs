@@ -80,14 +80,11 @@ namespace Birko.Models.SQL.Mapping
         /// Adds this column to the index <paramref name="indexName"/> at <paramref name="order"/>. Columns sharing a
         /// name form one composite index. <c>ModelMapRegistry.ApplyToDatabase()</c> writes it into the table's index
         /// declarations, so the store's schema-ensure creates it (TASK-595; before that it was metadata nothing read).
+        /// Call it once per index: a column may belong to several (TASK-695).
         /// </summary>
+        /// <exception cref="InvalidOperationException">This column already belongs to <paramref name="indexName"/>.</exception>
         public FieldBuilder<T> HasIndex(string indexName, int order = 0, bool descending = false)
-        {
-            _field.IndexName = indexName;
-            _field.IndexOrder = order;
-            _field.IndexDescending = descending;
-            return this;
-        }
+            => AddIndex(indexName, order, descending, unique: false);
 
         /// <summary>
         /// Like <see cref="HasIndex"/>, but the index is UNIQUE across every column that names it, which is how a
@@ -96,9 +93,17 @@ namespace Birko.Models.SQL.Mapping
         /// refused by <c>ApplyToDatabase</c>.
         /// </summary>
         public FieldBuilder<T> HasUniqueIndex(string indexName, int order = 0, bool descending = false)
+            => AddIndex(indexName, order, descending, unique: true);
+
+        private FieldBuilder<T> AddIndex(string indexName, int order, bool descending, bool unique)
         {
-            HasIndex(indexName, order, descending);
-            _field.IndexUnique = true;
+            if (string.IsNullOrWhiteSpace(indexName))
+                throw new ArgumentException("An index needs a name.", nameof(indexName));
+            // Rule 55: a second declaration of one index on one column would otherwise replace the first silently.
+            if (_field.Indexes.Any(i => i.Name == indexName))
+                throw new InvalidOperationException(
+                    $"Property '{_field.Name}' already belongs to index '{indexName}'; declare each index on a column once.");
+            _field.Indexes.Add(new FieldIndex(indexName, order, descending, unique));
             return this;
         }
 

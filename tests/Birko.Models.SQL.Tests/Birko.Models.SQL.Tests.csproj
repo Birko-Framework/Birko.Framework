@@ -31,5 +31,12 @@
   <Import Project="..\..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Models.SQL\Birko.Models.SQL.projitems" Label="Shared" />
+  <!-- TASK-695: the SQLite stack, so an index declared on a shared column is measured in a real database. -->
+  <Import Project="..\..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.ViewModel\Birko.Data.ViewModel.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.ViewModel\Birko.Data.SQL.ViewModel.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems" Label="Shared" />
 
 </Project>

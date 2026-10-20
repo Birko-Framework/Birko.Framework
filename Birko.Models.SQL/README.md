@@ -94,6 +94,7 @@ Console.WriteLine(map?.TableName); // "Customers"
 | `[MaxLengthField(N)]` | `.HasMaxLength(N)` |
 | `[IndexedField("idx", order)]` | `.HasIndex("idx", order)` |
 | `[CompositeIndex]` unique across columns | `.HasUniqueIndex("ux", order)` on each column |
+| a column in several indexes | one `.HasIndex` / `.HasUniqueIndex` call per index (TASK-695; one index twice is refused) |
 | `[IncrementField]` | `.IsIncrement()` |
 
 ## Sibling projects

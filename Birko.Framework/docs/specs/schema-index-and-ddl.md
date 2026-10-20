@@ -1638,11 +1638,13 @@ branch and the class-level `[CompositeIndex]` branch — before any DDL is emitt
 ### Requirement: A fluent index reaches the table's index declarations, and marks its columns
 
 `ModelMapRegistry.ApplyToDatabase` SHALL write every fluent `HasIndex` / `HasUniqueIndex` into the loaded table's
-`Indexes` (the declarations schema-ensure creates), with columns ordered by `IndexOrder` and named by their physical
-column. It SHALL set `IsIndexed` on each of those fields, as `DataBase.LoadIndexes` does for the attribute path,
-so a provider bounds the column type. `FieldDescriptor.IndexUnique` SHALL make the index UNIQUE across all its
-columns. One index whose columns disagree on uniqueness SHALL be refused. Applying the registry twice SHALL NOT
-duplicate a column. (TASK-595: before this, the fluent index was metadata nothing read, and every
+`Indexes` (the declarations schema-ensure creates), with columns ordered by their order in that index and named by
+their physical column. A column SHALL belong to every index declared on it, one `HasIndex` / `HasUniqueIndex` call each
+(`FieldDescriptor.Indexes`), with its own order, direction and uniqueness per index; declaring one index twice on a
+column SHALL be refused with `InvalidOperationException`, and a blank name with `ArgumentException` (TASK-695). It SHALL
+set `IsIndexed` on each of those fields, as `DataBase.LoadIndexes` does for the attribute path, so a provider bounds the
+column type. A `HasUniqueIndex` SHALL make that index, and only that one, UNIQUE across all its columns. One index whose
+columns disagree on uniqueness SHALL be refused. Applying the registry twice SHALL NOT duplicate a column. (TASK-595: before this, the fluent index was metadata nothing read, and every
 `Birko.Models.Users.SQL` table had zero indexes.)
 
 #### Scenario: A composite natural key is unique on SQLite
@@ -1652,6 +1654,15 @@ duplicate a column. (TASK-595: before this, the fluent index was metadata nothin
 - **When** the mapping is applied and two logins with the same (Provider, ProviderKey) are created
 - **Then** the second create throws, and `sqlite_master` lists `UX_UserLogin_Provider_ProviderKey` and
   `IX_UserLogins_UserGuid`
+
+#### Scenario: A column shared by two composite indexes
+
+- **Given** a mapping declaring `UserGuid.HasIndex("IX_User", 0)`, `ResourceType.HasIndex("IX_User", 1).HasUniqueIndex("UX_Resource", 0)`
+  and `ResourceId.HasUniqueIndex("UX_Resource", 1)`
+- **When** it is applied and the store creates its table on SQLite
+- **Then** `IX_User` is (UserGuid, ResourceType) and not unique, `UX_Resource` is (ResourceType, ResourceId) and
+  unique, `ResourceType` sits at order 0 in the second, both indexes exist, and a duplicate (ResourceType, ResourceId)
+  is refused
 
 #### Scenario: A fluent index column is an index key for the provider
 
