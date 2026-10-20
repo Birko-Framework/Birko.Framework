@@ -25,7 +25,7 @@ Mapping/
 
 ## Dependencies
 - **Birko.Data.Patterns** — `FieldDescriptor` (shared type for both mapping and migrations)
-- **Birko.Data.SQL** — `ApplyToDatabase()` registers table names and applies the column name, the primary/unique/required/auto-increment flags, and `HasIndex` / `HasUniqueIndex`, written into the table's index declarations so schema-ensure creates them (TASK-595: before that they were metadata nothing read, and every `Birko.Models.Users.SQL` table had zero indexes). `HasMaxLength`/`HasPrecision`/`HasScale` stay mapping metadata only (not applied — declare them via the model's SQL field attributes / migrations); they remain readable through `GetPropertyMaps()`. Mixing `HasIndex` and `HasUniqueIndex` under one index name is refused
+- **Birko.Data.SQL** — `ApplyToDatabase()` registers table names and applies the column name, the primary/unique/required/auto-increment flags, and `HasIndex` / `HasUniqueIndex`, written into the table's index declarations so schema-ensure creates them (TASK-595: before that they were metadata nothing read, and every `Birko.Models.Users.SQL` table had zero indexes). `HasMaxLength` is applied too (TASK-691): registered with `DataBase.RegisterMaxLength` before the table loads, so a `string` becomes the bounded column `[MaxLengthField]` gives (winning over one) and a `byte[]` is bounded likewise; on any other type `ApplyToDatabase` refuses it (rule 55). A length above a provider's index-key cap is rendered as declared, and the database refuses the index, as with the attribute. `HasPrecision`/`HasScale` stay mapping metadata only (TASK-692): not applied, and a string's `HasPrecision` is **not** a length on this path, unlike `[PrecisionField]`. Both remain readable through `GetPropertyMaps()`. Mixing `HasIndex` and `HasUniqueIndex` under one index name is refused
 
 ## Sibling Projects (canonical mappings)
 | Sibling | Contains |
@@ -49,7 +49,7 @@ public class StockItemMapping : IModelMapping<StockItem>
         map.ToTable("Items")
             .HasPrimary(x => x.Guid)
             .HasUnique(x => x.Guid);
-        map.Property(x => x.Code).HasPrecision(256);
+        map.Property(x => x.Code).HasMaxLength(256);
     }
 }
 

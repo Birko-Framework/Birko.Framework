@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Fluent HasMaxLength reaches the DDL (2026-10-20)
+[[TASK-691]]. `ModelMapRegistry.ApplyToDatabase` applies `HasMaxLength`. It was accepted and dropped. A string
+becomes the bounded column `[MaxLengthField]` gives, and the fluent value wins. A `byte[]` is bounded likewise, and any
+other type is refused. An index-key column keeps its declared length instead of 255. New
+`DataBase.RegisterMaxLength`. Groundwork for [[TASK-684]]. `HasPrecision`/`HasScale` stay unapplied ([[TASK-692]]).
 ### Localized writes: the entity and its translations in one transaction (2026-10-20)
 [[TASK-683]]. Wrappers and `EntityTranslations` take an optional `ILocalizedWriteBoundary`. With
 `SqlLocalizedWriteBoundary.For(entityStore, translationStore)` and both stores on one SQL database, a failed
@@ -371,11 +376,6 @@ accepted with none, and refused the handshake.
 [[TASK-540]]. New project. `SseResults.Stream` streams a `ChannelReader` or `IAsyncEnumerable` as SSE. It sends
 proxy-friendly headers and a `: heartbeat` when idle, and stops after a terminal item. A disconnect ends it, and an owned
 subscription is always disposed. Frames come from `SseEvent`, and `KeyedEventBroadcaster` feeds it directly.
-### Opt-in loopback-only auth bypass (2026-10-18)
-[[TASK-522]]. `BirkoSecurityOptions.LoopbackBypass` with `UseBirkoLoopbackBypass()` lets local tools call a loopback-only
-server without a token. It decides from the addresses Kestrel actually bound. Measured: DraCode's rule, read from the
-configured URLs, bypassed while bound to `[::]`. Unknown or wildcard binds enforce, and the host refuses to start if the
-bypass is enabled without its middleware.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

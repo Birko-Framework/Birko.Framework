@@ -62,7 +62,7 @@ public class ModelMapRegistryApplyTests
         var registry = new ModelMapRegistry();
         registry.Register(new WidgetMap());
 
-        // HasMaxLength is not applied to the schema, but stays readable via the mapping metadata.
+        // The mapping metadata stays readable (HasMaxLength is also applied since TASK-691: FluentMaxLengthTests).
         var codeDescriptor = registry.GetPropertyMaps(typeof(Widget)).First(f => f.Name == "Code");
         codeDescriptor.MaxLength.Should().Be(64);
         codeDescriptor.ColumnName.Should().Be("code_col");

@@ -1,7 +1,7 @@
 ---
 area: schema-index-and-ddl
-generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
-generated-on: 2026-10-16
+generated-at: 3a7af0793e9111ea84b8adcd2b022ac3c5a529e9
+generated-on: 2026-10-20
 sources:
   - ../Birko.Data.CosmosDB/IndexManagement/CosmosDBIndexManager.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs
@@ -51,11 +51,11 @@ sources:
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
 # repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
-# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# Evidence pass ran 2026-10-20 over 376 feature-linked tasks: 121 resolved, 255 did not — no reachable
+# first-parent commit whose subject leads with the task id (single-branch: `pr:` is null by design), or a
+# state the gate refuses (todo/cancelled; 1 of those leads a commit subject). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 255
 ---
 # Schema descriptors, index management and attribute-driven DDL
 
@@ -739,6 +739,59 @@ supplying decimal precision/scale.
 - **When** the field is created
 - **Then** a `CharField` with `Lenght == 32` is produced
 
+### Requirement: A registered length bounds a property as a MaxLengthField would
+
+The system SHALL expose `DataBase.RegisterMaxLength(modelType, propertyName, maxLength)`, recording a length per
+(model type, property name) for fluent mapping systems (`HasMaxLength`), and SHALL throw `ArgumentNullException` for a
+null type, `ArgumentException` for a null or empty property name, and `ArgumentOutOfRangeException` for a length that
+is not positive. `LoadField` SHALL look the property's name up on the model type it is read through (the lambda's
+parameter type for `GetField` / `GetFieldFromLambda`), then on the property's `ReflectedType`, each with its base types,
+the first (most derived) registration winning, so a length registered for a model also bounds the property on types
+derived from it, as an inherited attribute would. When one is found it SHALL append a
+`MaxLengthField(length)` **after** the property's own field attributes (direct or rebuilt cross-assembly), so
+`CreateAbstractField` — where the last `MaxLengthField` read sets `maxLength` — remains the one producer of the column's
+type and the registered length wins over the property's own `[MaxLengthField]`. Registering a **different** length
+SHALL drop the type's `_fieldsCache` and `_tableCache` entries so the next load builds the bounded field; registering
+the **same** length again SHALL change nothing, leaving the cached fields (and whatever a mapping applied to them)
+intact. The registry SHALL NOT check that the property exists or is a string / `byte[]`: a length for a missing
+property is never read, and one for another CLR type reaches `CreateAbstractField`, whose type arm decides whether
+`maxLength` is used. (TASK-691: before this, a fluent `HasMaxLength` was accepted and dropped.)
+
+#### Scenario: A registered length makes an unbounded string a bounded column
+
+- **Given** `public string Code { get; set; }` with no length attribute and `RegisterMaxLength(typeof(M), "Code", 40)`
+  called before the type is loaded
+- **When** the table is loaded
+- **Then** `Code` is a `CharField` with `Lenght == 40` rather than a length-less `StringField`; on a `byte[]` property
+  the same registration yields a `BinaryField` with `MaxLength == 40`
+
+#### Scenario: The registered length wins over the property's attribute
+
+- **Given** `[MaxLengthField(100)] public string Code { get; set; }` and `RegisterMaxLength(typeof(M), "Code", 40)`
+- **When** the field is created
+- **Then** its length is `40`, because the registered `MaxLengthField` is read last; and over a `[MaxLengthField]` of
+  `0` (which suppresses the DataAnnotations fallback) a registered positive length still produces a `CharField`
+
+#### Scenario: Re-registering a different length rebuilds the field, the same length does not
+
+- **Given** a type already loaded with a registered length of `40`
+- **When** `RegisterMaxLength` is called again with `60`, and separately with `40`
+- **Then** with `60` the type's cached fields and table are dropped and the next load yields a 60-character column;
+  with `40` both caches are left as they were
+
+#### Scenario: A non-positive length is refused
+
+- **Given** any model type and property
+- **When** `RegisterMaxLength(type, "Code", 0)` or a negative length is called
+- **Then** `ArgumentOutOfRangeException` is thrown and nothing is registered
+
+#### Scenario: A length registered for a model reaches derived types and lambda-built fields
+
+- **Given** `RegisterMaxLength(typeof(M), "Slug", 48)` where `Slug` is declared on `M`'s base type, and a type `D : M`
+- **When** `D`'s table is loaded, and `GetField<M, string>(x => x.Slug)` builds a field from the lambda
+- **Then** both are a `CharField` of length 48 — the lambda's member is reflected from the base type, and the model type
+  it was read through is consulted first
+
 ### Requirement: Cross-assembly field attributes are rebuilt by short type name
 
 The system SHALL, when a property carries no directly castable `Birko.Data.SQL.Attributes.Field`, collect
@@ -995,8 +1048,8 @@ rather than being skipped.
 
 - **Given** repeated `DataBase.Write(entity)` / `DataBase.Read(reader, entity)` calls for the same CLR type
 - **When** they run
-- **Then** `LoadFields` serves the field list from the static `_fieldsCache` `ConcurrentDictionary`, which is
-  never invalidated for the process lifetime
+- **Then** `LoadFields` serves the field list from the static `_fieldsCache` `ConcurrentDictionary`, whose entry
+  for a type is dropped only when `RegisterMaxLength` registers a different length for one of its properties
 
 ### Requirement: A field reports the stored form of an unassigned value
 

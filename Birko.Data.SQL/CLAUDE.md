@@ -39,6 +39,7 @@ Extends AsyncDataBaseStore with async bulk operations.
 - `DataBaseBulkStore<DB,T>` - Base sync SQL bulk store
 - `AsyncDataBaseStore<DB,T>` - Base async SQL store
 - `AsyncDataBaseBulkStore<DB,T>` - Base async SQL bulk store
+- `DataBase.RegisterMaxLength(type, property, length)` - a fluent length (TASK-691): `LoadField` appends it as a `MaxLengthField` after the property's own attributes, so `CreateAbstractField` stays the one producer of a column's type and the fluent value wins. A changed length drops the type's cached fields and table; the same length again changes nothing. Register before any store loads the type
 - `ISqlConnectedStore` - a store's connector without its generic arguments, implemented explicitly by the two base stores; how composing code tells two stores share one database (`Connector.Settings.GetId()`, TASK-683)
 
 ### Repositories

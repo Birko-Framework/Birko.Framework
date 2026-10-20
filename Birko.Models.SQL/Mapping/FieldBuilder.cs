@@ -65,8 +65,11 @@ namespace Birko.Models.SQL.Mapping
             return this;
         }
 
-        /// <summary>Mapping metadata only — NOT applied by <c>ModelMapRegistry.ApplyToDatabase()</c>
-        /// (declare max length via the model's SQL field attributes). Readable via GetPropertyMaps.</summary>
+        /// <summary>
+        /// Bounds a <c>string</c> (or <c>byte[]</c>) column to <paramref name="maxLength"/>, as <c>[MaxLengthField]</c> does
+        /// and winning over one; applied by <c>ModelMapRegistry.ApplyToDatabase()</c> (TASK-691), which refuses it on any
+        /// other type.
+        /// </summary>
         public FieldBuilder<T> HasMaxLength(int maxLength)
         {
             _field.MaxLength = maxLength;

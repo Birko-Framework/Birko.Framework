@@ -85,11 +85,15 @@ namespace Birko.Models.SQL.Mapping
         /// the attribute path fills and schema-ensure creates (TASK-595). Measured before it: every
         /// <c>Birko.Models.Users.SQL</c> table had zero indexes after this call, though the mappings declared seven.
         /// <para>
-        /// <b>Not applied</b> — <c>HasMaxLength</c>, <c>HasPrecision</c> and <c>HasScale</c> are mapping metadata only. The
-        /// concrete SQL field type (length/precision/scale) is fixed at construction from the model's SQL field attributes
-        /// when the table is loaded, and <see cref="Birko.Data.SQL.Fields.AbstractField"/> has no length/precision members
-        /// to assign afterwards. Declare those on the model (SQL field attributes) instead; the fluent options remain
-        /// readable via <see cref="GetPropertyMaps"/> for other consumers.
+        /// <c>HasMaxLength</c> is applied too (TASK-691), through <c>DataBase.RegisterMaxLength</c> before the table loads:
+        /// a <c>string</c> becomes the bounded column a <c>[MaxLengthField]</c> gives, winning over one, and a <c>byte[]</c>
+        /// is bounded likewise. On any other type it is refused (rule 55). A length above a provider's index-key cap is
+        /// rendered as declared, and the database refuses the index, which schema-ensure reports, as with the attribute.
+        /// </para>
+        /// <para>
+        /// <b>Not applied</b> — <c>HasPrecision</c> and <c>HasScale</c> are mapping metadata only (TASK-692): the column type
+        /// is fixed when the field is built, from the model's SQL field attributes. A string's <c>HasPrecision</c> is not a
+        /// length here, unlike <c>[PrecisionField]</c>. The fluent options remain readable via <see cref="GetPropertyMaps"/>.
         /// </para>
         /// </summary>
         public void ApplyToDatabase()
@@ -100,6 +104,13 @@ namespace Birko.Models.SQL.Mapping
                 // TASK-272: a schema declared with ToTable(name, schema).
                 if (!string.IsNullOrEmpty(map.TableName) && map.TableSchema != null)
                     Birko.Data.SQL.DataBase.RegisterTableName(type, map.TableName!, map.TableSchema);
+            }
+
+            // TASK-691: lengths first. A changed one rebuilds the type's fields, so it must come before the flags below are
+            // written onto them.
+            foreach (var (type, _) in _maps)
+            {
+                RegisterMaxLengths(type, GetPropertyMaps(type));
             }
 
             foreach (var (type, _) in _maps)
@@ -130,13 +141,63 @@ namespace Birko.Models.SQL.Mapping
                     if (field.IsRequired) sqlField.IsNotNull = true;
                     if (field.IsAutoIncrement) sqlField.IsAutoincrement = true;
 
-                    // MaxLength / Precision / Scale are intentionally not applied here — see the method doc. They
-                    // cannot be assigned onto an already-loaded AbstractField.
+                    // MaxLength was registered before the load; Precision / Scale are not applied (TASK-692).
                 }
 
                 if (renamed.Count > 0) RenameColumns(table, renamed);
                 ApplyIndexes(table, properties);
             }
+        }
+
+        /// <summary>
+        /// Registers each <c>HasMaxLength</c> of <paramref name="type"/>'s mapping (TASK-691).
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// A <c>HasMaxLength</c> that cannot be honoured, refused rather than dropped (rule 55): a length that is not
+        /// positive; a property that is neither <c>string</c> nor <c>byte[]</c> (no column of that type has a length); or a
+        /// property that is no column at all (ignored, or without a public instance setter).
+        /// </exception>
+        private static void RegisterMaxLengths(Type type, IReadOnlyList<FieldDescriptor> properties)
+        {
+            foreach (var field in properties)
+            {
+                if (field.MaxLength is not int maxLength)
+                {
+                    continue;
+                }
+                var where = $"HasMaxLength({maxLength}) on {type.Name}.{field.Name}";
+                if (maxLength <= 0)
+                {
+                    throw new InvalidOperationException($"{where}: a length must be positive.");
+                }
+                var property = DeclaredProperty(type, field.Name)
+                    ?? throw new InvalidOperationException($"{where}: {type.Name} has no such public property.");
+                if (property.PropertyType != typeof(string) && property.PropertyType != typeof(byte[]))
+                {
+                    throw new InvalidOperationException(
+                        $"{where}, a {property.PropertyType.Name}: only a string or byte[] column has a length.");
+                }
+                if (field.IsIgnored || !property.CanWrite
+                    || property.IsDefined(typeof(Birko.Data.SQL.Attributes.IgnoreField), true))
+                {
+                    throw new InvalidOperationException($"{where}: the property is not a column (ignored, or it has no setter).");
+                }
+                Birko.Data.SQL.DataBase.RegisterMaxLength(type, field.Name, maxLength);
+            }
+        }
+
+        /// <summary>The most derived public instance property of that name: a property hidden with <c>new</c> is not ambiguous.</summary>
+        private static PropertyInfo? DeclaredProperty(Type type, string name)
+        {
+            for (var current = type; current != null; current = current.BaseType)
+            {
+                var property = current.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                if (property != null)
+                {
+                    return property;
+                }
+            }
+            return null;
         }
 
         /// <summary>

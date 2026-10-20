@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — Opt-in loopback-only auth bypass
+
+[[TASK-522]]. `BirkoSecurityOptions.LoopbackBypass` with `UseBirkoLoopbackBypass()` lets local tools call a loopback-only
+server without a token. It decides from the addresses Kestrel actually bound. Measured: DraCode's rule, read from the
+configured URLs, bypassed while bound to `[::]`. Unknown or wildcard binds enforce, and the host refuses to start if the
+bypass is enabled without its middleware.
+
 ## 2026-10-18 — GitHub web sign-in helpers; OAuthClient survives GitHub's 200 errors
 
 [[TASK-521]]. New `IOAuthStateStore` (single-use, expiring, browser-bound sign-in state), `IOAuthCodeExchanger`,

@@ -14,6 +14,45 @@ namespace Birko.Data.SQL
     {
         internal static readonly ConcurrentDictionary<Type, IEnumerable<Fields.AbstractField>> _fieldsCache = new();
 
+        // TASK-691: lengths a fluent mapping declares, read by LoadField as a MaxLengthField after the property's own
+        // attributes, so CreateAbstractField stays the one producer of a column's type.
+        private static readonly ConcurrentDictionary<(Type Model, string Property), int> _maxLengthOverrides = new();
+
+        /// <summary>
+        /// Bounds <paramref name="propertyName"/> of <paramref name="modelType"/> to <paramref name="maxLength"/>, as a
+        /// <c>[MaxLengthField]</c> on the property would, and winning over one (used by fluent mapping systems:
+        /// <c>HasMaxLength</c>). Register before any store loads the type, as <see cref="RegisterTableName(Type, string)"/>
+        /// requires.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Registering a different length drops the type's cached fields and table, so the next load builds the bounded
+        /// field. Registering the same length again changes nothing, so the flags a mapping applied to the loaded fields stay.
+        /// Like <see cref="RegisterTableName(Type, string)"/>, a registration is process-wide and is meant for startup: a
+        /// change drops what other registrations wrote onto the cached table, and a load running at the same moment can
+        /// cache the field it built before the change.
+        /// </para>
+        /// <para>
+        /// A length registered for a type also bounds that property on every type derived from it, as an inherited
+        /// attribute would; the most derived registration wins.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxLength"/> is not positive.</exception>
+        public static void RegisterMaxLength(Type modelType, string propertyName, int maxLength)
+        {
+            ArgumentNullException.ThrowIfNull(modelType);
+            ArgumentException.ThrowIfNullOrEmpty(propertyName);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxLength);
+            var key = (modelType, propertyName);
+            if (_maxLengthOverrides.TryGetValue(key, out var registered) && registered == maxLength)
+            {
+                return;
+            }
+            _maxLengthOverrides[key] = maxLength;
+            _fieldsCache.TryRemove(modelType, out _);
+            _tableCache.TryRemove(modelType, out _);
+        }
+
         internal static IEnumerable<AbstractField> LoadFields(Type type)
         {
             return _fieldsCache.GetOrAdd(type, t =>
@@ -37,7 +76,13 @@ namespace Birko.Data.SQL
             return false;
         }
 
-        public static IEnumerable<AbstractField> LoadField(PropertyInfo field)
+        public static IEnumerable<AbstractField> LoadField(PropertyInfo field) => LoadField(field, null);
+
+        /// <summary>
+        /// <see cref="LoadField(PropertyInfo)"/> for <paramref name="field"/> read through <paramref name="modelType"/>, so a
+        /// length registered for the model applies even when the property is declared on a base type (a lambda's member).
+        /// </summary>
+        public static IEnumerable<AbstractField> LoadField(PropertyInfo field, Type? modelType)
         {
             // Direct cast works when attribute type identity matches (same compilation unit).
             var directAttrs = field.GetCustomAttributes(typeof(Birko.Data.SQL.Attributes.Field), true);
@@ -71,6 +116,12 @@ namespace Birko.Data.SQL
                     }
                     fieldAttrs = rebuilt.ToArray();
                 }
+            }
+
+            if (RegisteredMaxLength(field, modelType) is int maxLength)
+            {
+                // Last, so it wins over the property's own MaxLengthField (CreateAbstractField: the last one read wins).
+                fieldAttrs = fieldAttrs.Append(new Birko.Data.SQL.Attributes.MaxLengthField(maxLength)).ToArray();
             }
 
             var tableField = Fields.AbstractField.CreateAbstractField(field, fieldAttrs);
@@ -139,6 +190,29 @@ namespace Birko.Data.SQL
         /// is resolved by name on the model type instead, most-derived first; an explicit implementation is not found by
         /// name and keeps the interface property.
         /// </summary>
+        /// <summary>
+        /// The length registered for <paramref name="field"/>: looked up on <paramref name="modelType"/> and its base types,
+        /// then on the type it was reflected from and its base types; the first (most derived) registration wins.
+        /// </summary>
+        private static int? RegisteredMaxLength(PropertyInfo field, Type? modelType)
+        {
+            if (_maxLengthOverrides.IsEmpty)
+            {
+                return null;
+            }
+            foreach (var start in new[] { modelType, field.ReflectedType })
+            {
+                for (var type = start; type != null && type != typeof(object); type = type.BaseType)
+                {
+                    if (_maxLengthOverrides.TryGetValue((type, field.Name), out var length))
+                    {
+                        return length;
+                    }
+                }
+            }
+            return null;
+        }
+
         private static PropertyInfo ResolveOnModel(PropertyInfo property, Type modelType)
         {
             if (property.DeclaringType?.IsInterface != true || modelType.IsInterface)
@@ -180,7 +254,7 @@ namespace Birko.Data.SQL
             {
                 propInfo = typeof(Models.AbstractDatabaseModel).GetProperty(propInfo.Name);
             }
-            var fields = LoadField(propInfo!);
+            var fields = LoadField(propInfo!, expr.Parameters[0].Type);
             return fields.First();
         }
 
@@ -212,7 +286,7 @@ namespace Birko.Data.SQL
             {
                 propInfo = typeof(Models.AbstractDatabaseModel).GetProperty(propInfo.Name);
             }
-            var fields = LoadField(propInfo!);
+            var fields = LoadField(propInfo!, expr.Parameters[0].Type);
             return fields.FirstOrDefault()
                 // SH-M027 (TASK-170): an [IgnoreField] / [NotMapped] / unsupported member maps to no field, and First()
                 // threw "Sequence contains no elements" from inside the store, naming nothing.
