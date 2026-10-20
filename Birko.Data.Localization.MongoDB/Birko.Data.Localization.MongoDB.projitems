@@ -10,5 +10,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)LocalizationMongoIndexes.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MongoLocalizedWriteBoundary.cs" />
   </ItemGroup>
 </Project>

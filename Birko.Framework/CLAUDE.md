@@ -289,6 +289,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### MongoDB: localized writes in one transaction, and stores join a unit of work (2026-10-20)
+[[TASK-700]]. New `MongoLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.MongoDB):
+on one database of a replica set, a failed translation write rolls the entity write back. A `MongoDbUnitOfWork` now
+publishes its session, so a store on its database in the same flow joins it, as on SQL. A failed joined write makes
+`CommitAsync` throw `TransactionRollbackOnlyException`. Measured: a race inside a transaction is a write conflict, never
+a duplicate key, and is re-run once. New `AmbientSession<TSession>` and `IMongoConnectedStore`. RavenDB follows.
 ### Birko.Data.Localization.MongoDB: the translation indexes (2026-10-20)
 [[TASK-699]]. New project. `LocalizationMongoIndexes.EnsureAsync(store)` creates the unique key over `(EntityGuid,
 EntityType, FieldName, Culture)` and the `ValueHash` index, idempotently. Measured live: a value lookup went from a
@@ -365,12 +371,6 @@ fields made 6 reads and 6 creates. Deletes by a list or filter are one filter de
 update reads the matched translations once. If the unique key refuses the batch, the keys are re-read once and another
 writer's rows are updated. A filter update that fails part way keeps the translations it wrote (decided by the user).
 Measured on SQLite, PostgreSQL, SQL Server and MySQL. Groundwork for [[TASK-682]].
-### Filters on translated fields fall back to the base value and look up by hash (2026-10-19)
-[[TASK-681]]. On a non-default culture, an entity with a translation matches on it, and one without matches on its base
-value (SH-M070). `==` and `IN` read only matching rows through an indexed `ValueHash` (SHA-256, SH-M082), and
-`values.Contains(x.Field)` is now supported. Measured on SQLite, PostgreSQL, SQL Server and MySQL. On SQL Server and
-MySQL the fallback follows the collation. **Breaking:** `IEntityTranslation.ValueHash`, and table names are now at most 50
-characters. The large `IN` list is [[TASK-686]].
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

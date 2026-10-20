@@ -288,8 +288,18 @@ finally { store.SetTransactionContext(null); }
   decision is made.
 - Create the collection **before** opening the transaction; implicit collection creation inside one fails
   on older servers, and it fails for the wrong reason.
+- **Stores in the unit of work's flow join it (TASK-700).** From `BeginAsync` to the transaction's end, a
+  `MongoDbUnitOfWork` built from a `MongoDBClient` publishes its session in
+  `AmbientSession<IClientSessionHandle>` under the client's `Settings.GetId()`. Every store operation uses its own
+  `TransactionContext`, else the session its flow publishes for its database (`Session`), as a SQL store joins a
+  `SqlUnitOfWork`. Construct the unit of work in the flow that runs the writes (its constructor installs the cell).
+  A store in another flow does not see it. `SetTransactionContext` still works and wins.
+- **Rollback-only.** A participant that failed (`MongoLocalizedWriteBoundary`) marks the published session
+  (`AmbientSession.MarkRollbackOnly`); `CommitAsync` then throws `TransactionRollbackOnlyException` and stays active for
+  `RollbackAsync`, as `SqlUnitOfWork` does.
+- `IMongoConnectedStore` exposes a store's `Client`, `TransactionContext` and `AmbientKey` without its model type.
 
-Pinned by `Birko.Data.MongoDB.Tests.Stores.MongoTransactionBoundaryLiveTests` (6, gated on
+Pinned by `Birko.Data.MongoDB.Tests.Stores.MongoTransactionBoundaryLiveTests` (7, gated on
 `BIRKO_MONGO_HOST`; set `BIRKO_REQUIRE_LIVE` to make a skip a failure). Its first test asserts the server
 really is a replica set, so nothing below it can be a vacuous pass. Mutation-tested: unwiring the session
 from the read helpers fails 2 of 97.

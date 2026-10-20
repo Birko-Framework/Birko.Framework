@@ -21,6 +21,7 @@ namespace Birko.Data.MongoDB.Stores
         , Data.Stores.ISettingsStore<Settings>, Data.Stores.ISettingsStore<Birko.Configuration.ISettings>
         , Data.Stores.ITransactionalStore<T, IClientSessionHandle>
         , Data.Stores.IAggregatableStore<T>
+        , IMongoConnectedStore
         where T : Models.MongoDBModel
     {
         /// <summary>
@@ -30,6 +31,17 @@ namespace Birko.Data.MongoDB.Stores
 
         /// <inheritdoc />
         public IClientSessionHandle? TransactionContext { get; private set; }
+
+        /// <summary>
+        /// TASK-700: the session this store's operations run in: its own <see cref="TransactionContext"/>, else the session
+        /// its flow publishes for this database (<see cref="Data.Stores.AmbientSession{TSession}"/>), which a
+        /// <c>MongoDbUnitOfWork</c> or a localized write boundary publishes. Null outside any.
+        /// </summary>
+        private IClientSessionHandle? Session
+            => TransactionContext ?? Data.Stores.AmbientSession<IClientSessionHandle>.Find(AmbientKey);
+
+        /// <summary>The key a session for this store's database is published under: its client settings' id.</summary>
+        public string? AmbientKey => Client?.Settings.GetId();
 
         /// <inheritdoc />
         public void SetTransactionContext(IClientSessionHandle? context)
@@ -161,8 +173,8 @@ namespace Birko.Data.MongoDB.Stores
             data.EnsureGuid();
             data = StoreDelegates.Apply(storeDelegate, data);
 
-            if (TransactionContext != null)
-                Collection.InsertOne(TransactionContext, data);
+            if (Session != null)
+                Collection.InsertOne(Session, data);
             else
                 Collection.InsertOne(data);
 
@@ -191,8 +203,8 @@ namespace Birko.Data.MongoDB.Stores
         private bool ReplaceExisting(T item)
         {
             var filter = new ModelByGuid<T>(item.Guid!.Value).Filter();
-            var result = TransactionContext != null
-                ? Collection!.ReplaceOne(TransactionContext, filter, item, new ReplaceOptions { IsUpsert = false })
+            var result = Session != null
+                ? Collection!.ReplaceOne(Session, filter, item, new ReplaceOptions { IsUpsert = false })
                 : Collection!.ReplaceOne(filter, item, new ReplaceOptions { IsUpsert = false });
             return !result.IsAcknowledged || result.MatchedCount > 0;
         }
@@ -203,8 +215,8 @@ namespace Birko.Data.MongoDB.Stores
             if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
             var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
-            if (TransactionContext != null)
-                Collection.DeleteOne(TransactionContext, filter);
+            if (Session != null)
+                Collection.DeleteOne(Session, filter);
             else
                 Collection.DeleteOne(filter);
         }
@@ -257,8 +269,8 @@ namespace Birko.Data.MongoDB.Stores
                 itemsToCreate[itemIndex] = item; // the list is what gets persisted
             }
 
-            if (TransactionContext != null)
-                Collection.InsertMany(TransactionContext, itemsToCreate);
+            if (Session != null)
+                Collection.InsertMany(Session, itemsToCreate);
             else
                 Collection.InsertMany(itemsToCreate);
         }
@@ -306,8 +318,8 @@ namespace Birko.Data.MongoDB.Stores
             if (guids.Count == 0) return;
 
             var filter = new ModelsByGuid<T>(guids).Filter();
-            if (TransactionContext != null)
-                Collection.DeleteMany(TransactionContext, filter);
+            if (Session != null)
+                Collection.DeleteMany(Session, filter);
             else
                 Collection.DeleteMany(filter);
         }
@@ -326,8 +338,8 @@ namespace Birko.Data.MongoDB.Stores
             RequireBoundedFilter(filter, "delete");
             if (Collection == null) return;
 
-            if (TransactionContext != null)
-                Collection.DeleteMany(TransactionContext, filter);
+            if (Session != null)
+                Collection.DeleteMany(Session, filter);
             else
                 Collection.DeleteMany(filter);
         }
@@ -346,8 +358,8 @@ namespace Birko.Data.MongoDB.Stores
             if (Collection == null || updates.Assignments.Count == 0) return;
 
             var combined = MongoPropertyUpdateTranslator.Build(updates);
-            if (TransactionContext != null)
-                Collection.UpdateMany(TransactionContext, filter, combined);
+            if (Session != null)
+                Collection.UpdateMany(Session, filter, combined);
             else
                 Collection.UpdateMany(filter, combined);
         }

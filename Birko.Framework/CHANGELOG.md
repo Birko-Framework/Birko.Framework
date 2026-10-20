@@ -4,6 +4,14 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-19 — Filters on translated fields fall back to the base value and look up by hash
+
+[[TASK-681]]. On a non-default culture, an entity with a translation matches on it, and one without matches on its base
+value (SH-M070). `==` and `IN` read only matching rows through an indexed `ValueHash` (SHA-256, SH-M082), and
+`values.Contains(x.Field)` is now supported. Measured on SQLite, PostgreSQL, SQL Server and MySQL. On SQL Server and
+MySQL the fallback follows the collation. **Breaking:** `IEntityTranslation.ValueHash`, and table names are now at most 50
+characters. The large `IN` list is [[TASK-686]].
+
 ## 2026-10-19 — Translations can be any model, with a unique key on SQL
 
 [[TASK-680]]. The localization wrappers take any `IEntityTranslation` model, such as a tenant entity. The two-parameter

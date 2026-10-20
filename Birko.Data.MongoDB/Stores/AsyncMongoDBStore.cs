@@ -24,6 +24,7 @@ namespace Birko.Data.MongoDB.Stores
         , Data.Stores.ISettingsStore<Settings>, Data.Stores.ISettingsStore<Birko.Configuration.ISettings>
         , Data.Stores.IAsyncTransactionalStore<T, IClientSessionHandle>
         , Data.Stores.IAsyncAggregatableStore<T>
+        , IMongoConnectedStore
         where T : Data.Models.AbstractModel
     {
         /// <summary>
@@ -33,6 +34,17 @@ namespace Birko.Data.MongoDB.Stores
 
         /// <inheritdoc />
         public IClientSessionHandle? TransactionContext { get; private set; }
+
+        /// <summary>
+        /// TASK-700: the session this store's operations run in: its own <see cref="TransactionContext"/>, else the session
+        /// its flow publishes for this database (<see cref="Data.Stores.AmbientSession{TSession}"/>), which a
+        /// <c>MongoDbUnitOfWork</c> or a localized write boundary publishes. Null outside any.
+        /// </summary>
+        private IClientSessionHandle? Session
+            => TransactionContext ?? Data.Stores.AmbientSession<IClientSessionHandle>.Find(AmbientKey);
+
+        /// <summary>The key a session for this store's database is published under: its client settings' id.</summary>
+        public string? AmbientKey => Client?.Settings.GetId();
 
         /// <inheritdoc />
         public void SetTransactionContext(IClientSessionHandle? context)
@@ -109,16 +121,16 @@ namespace Birko.Data.MongoDB.Stores
         /// <c>CountDocumentsAsync</c> below did, which is why one of two identical hazards was visible.
         /// </remarks>
         private IFindFluent<T, T> FindIn(IMongoCollection<T> collection, FilterDefinition<T> filter)
-            => TransactionContext != null
-                ? collection.Find(TransactionContext, filter)
+            => Session != null
+                ? collection.Find(Session, filter)
                 : collection.Find(filter);
 
         /// <summary>
         /// Counts within <see cref="TransactionContext"/> when one is set. See <see cref="FindIn"/>.
         /// </summary>
         private Task<long> CountIn(IMongoCollection<T> collection, FilterDefinition<T> filter, CancellationToken ct)
-            => TransactionContext != null
-                ? collection.CountDocumentsAsync(TransactionContext, filter, null, ct)
+            => Session != null
+                ? collection.CountDocumentsAsync(Session, filter, null, ct)
                 : collection.CountDocumentsAsync(filter, null, ct);
 
         protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
@@ -200,8 +212,8 @@ namespace Birko.Data.MongoDB.Stores
             data.EnsureGuid();
             data = StoreDelegates.Apply(processDelegate, data);
 
-            if (TransactionContext != null)
-                await Collection.InsertOneAsync(TransactionContext, data, null, ct);
+            if (Session != null)
+                await Collection.InsertOneAsync(Session, data, null, ct);
             else
                 await Collection.InsertOneAsync(data, null, ct);
 
@@ -233,8 +245,8 @@ namespace Birko.Data.MongoDB.Stores
         private async Task<bool> ReplaceExistingAsync(T item, CancellationToken ct)
         {
             var filter = new ModelByGuid<T>(item.Guid!.Value).Filter();
-            var result = TransactionContext != null
-                ? await Collection!.ReplaceOneAsync(TransactionContext, filter, item, new ReplaceOptions { IsUpsert = false }, ct)
+            var result = Session != null
+                ? await Collection!.ReplaceOneAsync(Session, filter, item, new ReplaceOptions { IsUpsert = false }, ct)
                 : await Collection!.ReplaceOneAsync(filter, item, new ReplaceOptions { IsUpsert = false }, ct);
             return !result.IsAcknowledged || result.MatchedCount > 0;
         }
@@ -248,8 +260,8 @@ namespace Birko.Data.MongoDB.Stores
             }
 
             var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
-            if (TransactionContext != null)
-                await Collection.DeleteOneAsync(TransactionContext, filter, null, ct);
+            if (Session != null)
+                await Collection.DeleteOneAsync(Session, filter, null, ct);
             else
                 await Collection.DeleteOneAsync(filter, ct);
         }
@@ -277,8 +289,8 @@ namespace Birko.Data.MongoDB.Stores
                 data = StoreDelegates.Apply(processDelegate, data);
 
                 var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
-                if (TransactionContext != null)
-                    await Collection.ReplaceOneAsync(TransactionContext, filter, data, new ReplaceOptions { IsUpsert = true }, ct);
+                if (Session != null)
+                    await Collection.ReplaceOneAsync(Session, filter, data, new ReplaceOptions { IsUpsert = true }, ct);
                 else
                     await Collection.ReplaceOneAsync(filter, data, new ReplaceOptions { IsUpsert = true }, ct);
                 return data.Guid.Value;
@@ -375,8 +387,8 @@ namespace Birko.Data.MongoDB.Stores
                 itemsToCreate[itemIndex] = item; // the list is what gets persisted
             }
 
-            if (TransactionContext != null)
-                await Collection.InsertManyAsync(TransactionContext, itemsToCreate, null, ct);
+            if (Session != null)
+                await Collection.InsertManyAsync(Session, itemsToCreate, null, ct);
             else
                 await Collection.InsertManyAsync(itemsToCreate, null, ct);
         }
@@ -439,8 +451,8 @@ namespace Birko.Data.MongoDB.Stores
             }
 
             var filter = new ModelsByGuid<T>(guids).Filter();
-            if (TransactionContext != null)
-                await Collection.DeleteManyAsync(TransactionContext, filter, null, ct);
+            if (Session != null)
+                await Collection.DeleteManyAsync(Session, filter, null, ct);
             else
                 await Collection.DeleteManyAsync(filter, ct);
         }
@@ -458,8 +470,8 @@ namespace Birko.Data.MongoDB.Stores
             RequireBoundedFilter(filter, "delete");
             if (Collection == null) return;
 
-            if (TransactionContext != null)
-                await Collection.DeleteManyAsync(TransactionContext, filter, null, ct);
+            if (Session != null)
+                await Collection.DeleteManyAsync(Session, filter, null, ct);
             else
                 await Collection.DeleteManyAsync(filter, ct);
         }
@@ -478,8 +490,8 @@ namespace Birko.Data.MongoDB.Stores
             if (Collection == null || updates.Assignments.Count == 0) return;
 
             var combined = MongoPropertyUpdateTranslator.Build(updates);
-            if (TransactionContext != null)
-                await Collection.UpdateManyAsync(TransactionContext, filter, combined, cancellationToken: ct);
+            if (Session != null)
+                await Collection.UpdateManyAsync(Session, filter, combined, cancellationToken: ct);
             else
                 await Collection.UpdateManyAsync(filter, combined, cancellationToken: ct);
         }

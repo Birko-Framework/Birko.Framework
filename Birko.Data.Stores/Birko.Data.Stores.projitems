@@ -32,6 +32,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)RetryableWrite.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ISoftDeleteStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IRealtimeReadStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AmbientSession.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreDelegates.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AggregateQuery.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AggregateResult.cs" />

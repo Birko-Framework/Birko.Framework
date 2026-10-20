@@ -372,7 +372,9 @@ EntityTranslationFilter.ByEntityTypeAndCulture("Product", "sk");
 
 Pass `SqlLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.SQL) as the wrapper's last
 argument. When both stores are SQL on one database, the entity write and its translation write commit or roll back
-together, joining your `SqlUnitOfWork` if you opened one. Other pairings are best effort. A delete whose translation
+together, joining your `SqlUnitOfWork` if you opened one. On MongoDB, `MongoLocalizedWriteBoundary.For` (Birko.Data.
+Localization.MongoDB) does the same on one database of a replica set, joining your `MongoDbUnitOfWork` (TASK-700).
+Other pairings are best effort. A delete whose translation
 cleanup fails then throws `TranslationCleanupException` naming the entities to clean with `RemoveEntitiesAsync`. See
 the [pairing table](../../Birko.Data.Localization/README.md#atomicity-which-store-pairings-are-one-unit).
 

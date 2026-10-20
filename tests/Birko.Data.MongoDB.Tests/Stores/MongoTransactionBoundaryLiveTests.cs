@@ -217,6 +217,37 @@ public class MongoTransactionBoundaryLiveTests
     }
 
     /// <summary>
+    /// TASK-700: a store given no session, in the flow that began the unit of work, on its database, writes inside it, as a
+    /// SQL store joins a <c>SqlUnitOfWork</c>: its write is rolled back with the unit.
+    /// </summary>
+    [Fact]
+    public async Task A_store_in_the_unit_of_works_flow_joins_it()
+    {
+        if (!RequireServer()) return;
+        var db = NewDb();
+        var owner = NewStore(db);
+        var joined = NewStore(db);
+        try
+        {
+            await owner.CreateAsync(new TxDoc { Guid = Guid.NewGuid(), Name = "seed" });
+
+            await using (var uow = new MongoDbUnitOfWork(owner.Client!))
+            {
+                await uow.BeginAsync();
+                await joined.CreateAsync(new TxDoc { Guid = Guid.NewGuid(), Name = "joined" });
+                (await CountAsync(joined)).Should().Be(2, "it reads inside the session too");
+                await uow.RollbackAsync();
+            }
+
+            (await CountAsync(joined)).Should().Be(1, "the joined write was rolled back with the unit");
+        }
+        finally
+        {
+            await owner.DestroyAsync();
+        }
+    }
+
+    /// <summary>
     /// A store with no session must not see another flow's uncommitted writes.
     /// </summary>
     [Fact]
@@ -236,8 +267,13 @@ public class MongoTransactionBoundaryLiveTests
             await inside.CreateAsync(new TxDoc { Guid = Guid.NewGuid(), Name = "inside" });
 
             (await CountAsync(inside)).Should().Be(2, "the writer sees its own uncommitted row");
-            (await CountAsync(outside)).Should().Be(1,
-                "a store with no session must see only committed data");
+            // Another flow: since TASK-700 a store in the unit of work's own flow joins it, as on SQL.
+            Task<int> other;
+            using (ExecutionContext.SuppressFlow())
+            {
+                other = Task.Run(() => CountAsync(outside));
+            }
+            (await other).Should().Be(1, "a store in another flow, with no session, must see only committed data");
 
             await uow.RollbackAsync();
             inside.SetTransactionContext(null);

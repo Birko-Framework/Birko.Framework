@@ -226,7 +226,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Data.Processors** | Birko.Helpers |
 | **Birko.Data.Localization** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.Localization.SQL** | Birko.Data.Localization, Birko.Models.SQL, Birko.Data.SQL |
-| **Birko.Data.Localization.MongoDB** | Birko.Data.Localization, Birko.Data.MongoDB, Birko.Data.Patterns |
+| **Birko.Data.Localization.MongoDB** | Birko.Data.Localization, Birko.Data.MongoDB, Birko.Data.Stores, Birko.Data.Patterns |
 | **Birko.Data.Tagging** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.Composition** | Birko.Data.Patterns, Birko.Data.Tenant, Birko.Time.Abstractions |
 | **Birko.Data.Views** | Birko.Data.Stores |

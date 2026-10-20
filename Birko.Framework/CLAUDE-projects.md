@@ -77,7 +77,8 @@ Birko.Data.Localization (ILocalizable, IEntityTranslation, the localized store w
      Microsoft.Extensions.DependencyInjection.Abstractions consumer-supplied for AddEntityTranslations (TASK-682)
   -> Birko.Data.Localization.SQL (EntityTranslationMapping<TTranslation>, LocalizationSqlMappings)
      <- Birko.Models.SQL + Birko.Data.SQL; schemaless backends need none of it
-  -> Birko.Data.Localization.MongoDB (LocalizationMongoIndexes: the translation key and ValueHash indexes, TASK-699)
+  -> Birko.Data.Localization.MongoDB (LocalizationMongoIndexes: the translation key and ValueHash indexes, TASK-699;
+     MongoLocalizedWriteBoundary: one transaction for an entity and its translations, TASK-700)
      <- Birko.Data.MongoDB + Birko.Data.Patterns (IndexManagement)
 
 Birko.Security.OAuth.Server (OAuthServer, endpoint handlers, store interfaces — no store implementation)
@@ -267,7 +268,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Localization** - Translation framework, CLDR pluralization, JSON/RESX/InMemory providers
 - **Birko.Localization.Data** - Database-backed translations, namespace scoping, TTL cache
 - **Birko.Data.Localization** - Entity-level localization (ILocalizable, store decorator wrappers, any `IEntityTranslation` model)
-- **Birko.Data.Localization.MongoDB** - MongoDB indexes for translation rows: `LocalizationMongoIndexes.EnsureAsync(store)` creates the unique `(EntityGuid, EntityType, FieldName, Culture)` key and the `ValueHash` index, idempotently (TASK-699)
+- **Birko.Data.Localization.MongoDB** - MongoDB indexes for translation rows: `LocalizationMongoIndexes.EnsureAsync(store)` creates the unique `(EntityGuid, EntityType, FieldName, Culture)` key and the `ValueHash` index, idempotently (TASK-699); `MongoLocalizedWriteBoundary.For(entityStore, translationStore)` makes a localized write one transaction on one database of a replica set, joining a caller's `MongoDbUnitOfWork` (TASK-700)
 - **Birko.Data.Localization.SQL** - SQL schema for translation rows: `EntityTranslationMapping<TTranslation>` (table + UNIQUE `(EntityGuid, EntityType, FieldName, Culture)`), `LocalizationSqlMappings.Register` / `Register<TTranslation>`
 
 ## AI / LLM

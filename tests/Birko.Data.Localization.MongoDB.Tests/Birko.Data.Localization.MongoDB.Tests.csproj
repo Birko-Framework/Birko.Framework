@@ -26,6 +26,7 @@
   <Import Project="..\..\Birko.Data.MongoDB\Birko.Data.MongoDB.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.InMemory\Birko.Data.InMemory.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Localization\Birko.Data.Localization.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Localization.MongoDB\Birko.Data.Localization.MongoDB.projitems" Label="Shared" />
 

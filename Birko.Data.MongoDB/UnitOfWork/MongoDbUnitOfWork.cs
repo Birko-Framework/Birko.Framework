@@ -15,6 +15,11 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
     private readonly IMongoClient _client;
     private IClientSessionHandle? _session;
     private bool _endedByFailedCommit;
+    // TASK-700: the database key its session is published under (Birko clients only), the cell installed at
+    // construction so a session entered in BeginAsync reaches the caller's flow, and the published entry.
+    private readonly string? _ambientKey;
+    private readonly IDisposable? _cell;
+    private Birko.Data.Stores.AmbientSession<IClientSessionHandle>.Scope? _published;
     private bool _disposed;
 
     public bool IsActive => _session?.IsInTransaction ?? false;
@@ -47,9 +52,16 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
     /// <summary>
     /// Creates a new MongoDbUnitOfWork from a Birko MongoDBClient.
     /// </summary>
+    /// <remarks>
+    /// TASK-700: from <see cref="BeginAsync"/> to the transaction's end, the session is published for the client's
+    /// database in the constructing flow, so a store on that database that was given no context of its own writes
+    /// inside it, as a SQL store joins a <c>SqlUnitOfWork</c>. Construct it in the flow that runs the writes.
+    /// </remarks>
     public MongoDbUnitOfWork(MongoDBClient client)
     {
         _client = client?.Client ?? throw new ArgumentNullException(nameof(client));
+        _ambientKey = client.Settings.GetId();
+        _cell = Birko.Data.Stores.AmbientSession<IClientSessionHandle>.InstallCell();
     }
 
     /// <summary>
@@ -73,6 +85,10 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
         _session = await _client.StartSessionAsync(cancellationToken: ct);
         _session.StartTransaction();
         _endedByFailedCommit = false;
+        if (_ambientKey != null)
+        {
+            _published = Birko.Data.Stores.AmbientSession<IClientSessionHandle>.Enter(_ambientKey, _session);
+        }
     }
 
     /// <remarks>
@@ -86,6 +102,10 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsActive)
             throw new NoActiveTransactionException();
+        // TASK-700: a write that joined this transaction and failed (a localized write boundary) marked it, so committing
+        // would keep half of that write. The transaction stays active for RollbackAsync, as SqlUnitOfWork's does.
+        if (_published is { IsRollbackOnly: true })
+            throw new TransactionRollbackOnlyException();
 
         try
         {
@@ -128,6 +148,8 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
 
     private void ReleaseSession()
     {
+        _published?.Dispose();
+        _published = null;
         var session = _session;
         _session = null;
         try { session?.Dispose(); }
@@ -139,8 +161,10 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
         if (!_disposed)
         {
             _disposed = true;
+            _published?.Dispose();
             _session?.Dispose();
             _session = null;
+            _cell?.Dispose();
         }
         return ValueTask.CompletedTask;
     }
@@ -150,8 +174,10 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
         if (!_disposed)
         {
             _disposed = true;
+            _published?.Dispose();
             _session?.Dispose();
             _session = null;
+            _cell?.Dispose();
         }
     }
 }

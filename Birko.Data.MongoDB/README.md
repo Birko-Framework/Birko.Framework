@@ -141,7 +141,8 @@ MongoDB stores support native filter-based update and delete:
 - `Update(filter, PropertyUpdate<T>)` — Uses `Collection.UpdateMany()` with `Builders<T>.Update.Set()` definitions
 - `Delete(filter)` — Uses `Collection.DeleteMany(filter)` directly
 - `Update(filter, Action<T>)` — Read-modify-save fallback for complex mutations
-- All operations respect `TransactionContext` when set
+- All operations respect `TransactionContext` when set, else the session a `MongoDbUnitOfWork` publishes for the store's
+  database in the same async flow (TASK-700): stores on that database join the unit of work, as on SQL
 
 ## License
 

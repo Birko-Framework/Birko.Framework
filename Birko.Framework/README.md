@@ -320,7 +320,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Localization.Data | Database-backed translations, namespace scoping, TTL cache |
 | Birko.Data.Localization | Entity-level localization (ILocalizable, store decorator wrappers, any `IEntityTranslation` model) |
 | Birko.Data.Localization.SQL | SQL schema for translation rows: the table and its unique key, for the default or your own model |
-| Birko.Data.Localization.MongoDB | MongoDB indexes for translation rows: the unique key and the value index |
+| Birko.Data.Localization.MongoDB | MongoDB indexes for translation rows (the unique key and the value index) and the write boundary that makes an entity and its translations one transaction |
 | Birko.Random | Pluggable RNG, distributions, sequences (GuidV4/V7, NanoId, Snowflake), noise (Perlin, Simplex) |
 | Birko.Structures | Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, deque) |
 | Birko.Helpers | Utility and extension methods, CsvParser, ProcessRunner |
@@ -386,7 +386,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Data.Aggregates.Tests | Aggregate mapper tests (flatten/expand, sync integration) |
 | Birko.Data.Localization.Tests | Entity-level localization tests (ILocalizable, store decorators) |
 | Birko.Data.Localization.SQL.Tests | Translation table on SQLite, live PostgreSQL / SQL Server / MySQL (unique key, racing writers, batched reads) |
-| Birko.Data.Localization.MongoDB.Tests | Translation indexes on live MongoDB (query plan before/after, unique key, a race against a random-Guid writer) |
+| Birko.Data.Localization.MongoDB.Tests | Translation indexes and the write boundary on live MongoDB (query plan before/after, unique key, races, rollback, joining a unit of work) |
 | Birko.Data.XML.Tests | XML file store tests |
 | Birko.Health.Tests | Health check tests (runner, disk space, memory) |
 | Birko.Health.Azure.Tests | Azure health check tests (Blob Storage, Key Vault) |

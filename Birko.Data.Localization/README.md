@@ -194,7 +194,9 @@ Every write that touches both stores runs through an `ILocalizedWriteBoundary` (
 | Same pairing, no boundary, inside your own `SqlUnitOfWork` | **Yes**: both stores join your transaction. |
 | Same pairing, neither | No |
 | SQL stores on two databases (different `Settings.GetId()`) | No |
-| InMemory, JSON, XML, MongoDB, RavenDB, Cosmos DB, Elasticsearch | No |
+| Both stores MongoDB on one database, with `MongoLocalizedWriteBoundary.For(entityStore, translationStore)` ([Birko.Data.Localization.MongoDB](../Birko.Data.Localization.MongoDB/README.md)) | **Yes**, on a replica set (TASK-700). A failed translation write rolls the entity write back. |
+| Same pairing, no boundary, inside your own `MongoDbUnitOfWork` | **Yes**: both stores join it. |
+| InMemory, JSON, XML, RavenDB, Cosmos DB, Elasticsearch | No |
 | A chain with a decorator that opens its own connection | Only as wide as that decorator (rule 6) |
 
 **When the write is not atomic:**
