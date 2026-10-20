@@ -50,5 +50,6 @@ below does not build on known defects.
 - TASK-690 — translation writes batched, one producer shared by the wrappers (spawned from TASK-682, first)
 - TASK-682 — `IEntityTranslations`: the explicit translation API
 - TASK-683 — entity write and translation write share no boundary (SH-M083, spawned from TASK-168)
+- TASK-691 — a fluent `HasMaxLength` reaches the DDL (split from TASK-684, which depends on it)
 - TASK-684 — the translation key is too long for MySQL; a fluent mapping cannot bound the columns (spawned from TASK-680)
 - TASK-686 — the matched GUIDs reach the entity store as one unbounded IN list (SH-L087, spawned from TASK-681)

@@ -7,7 +7,7 @@ status: todo
 priority: P2
 assignee: ai
 created: 2026-10-19
-depends-on: []
+depends-on: [TASK-691]
 blocks: []
 # findings: ids this task remediates — from a review/audit/harvest/drill pass, or from ordinary
 # field use with no pass behind it at all. Prefixes: see /tasks intake
@@ -57,4 +57,34 @@ N/A — asserted by the live MySQL suite.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-684` — leave empty until then._
+_Drafted 2026-10-20 (Plan agent). Decided by the user: split the fluent length into [[TASK-691]], which goes first;
+a length above an index cap behaves as the attribute does; `Culture` is bounded at 85._
+
+**AC 3, as read here:** "the skipped key tests run there" includes the boundary race test, which is also gated on
+`RetriesInsideATransaction`. Measure what InnoDB does with a refused INSERT inside a transaction, and set MySQL's value
+from that (rule 54).
+
+1. **`EntityTranslationMapping`:** add consts `MaxEntityTypeLength = 128` and `MaxFieldNameLength = 128` (CLR simple
+   names; SQL Server's `sysname`), and `MaxCultureLength = 85` (Windows `LOCALE_NAME_MAX_LENGTH`; stored values are
+   `CultureInfo.Name`, such as `sk-SK` or `sk`, about 15 characters at most). Chain `.HasMaxLength(...)` on the three
+   key columns.
+   - MySQL utf8mb4: 144 + (128 + 128 + 85) × 4 = **1 508 ≤ 3 072**.
+   - SQL Server: 16 + 341 × 2 = **698 ≤ 1 700**.
+   - Over-long writes are refused by the database (MySQL 1406, SQL Server 2628, PostgreSQL 22001); SQLite does not
+     enforce lengths.
+2. **Tests flip:**
+   - MySQL: drop `HoldsTheKey => false` and set `RetriesInsideATransaction` from the measurement.
+   - Invert `A_provider_that_cannot_hold_the_key_reports_it` (rule 56).
+   - Catalogue read-back of `CHARACTER_MAXIMUM_LENGTH` on MySQL, PostgreSQL and SQL Server, plus `DetectDrift` clean
+     (rule 63).
+   - One over-long `Culture` write is refused on MySQL.
+   - Before first use, drop the old-shape live tables `BirkoEntityTranslations` and `BirkoTestTenantTranslations` once
+     per process, behind a static gate, never in teardown (rules 61 and 7).
+3. **Existing tables** (AC 4): a hand-made old-shape `LegacyTranslation` table on MySQL.
+   - Assert `IndexCreationFailures` names its key.
+   - Assert `DetectDrift` reports the three columns, declared 128/85 against stored 255.
+   - The README remedy: remove duplicates, `ALTER TABLE … MODIFY` the three columns, and the next schema-ensure creates
+     the key.
+4. **Mutation:** remove the `HasMaxLength` calls → MySQL key, inverted and read-back tests red.
+5. **Docs:** the Localization.SQL README / CLAUDE.md (bounds, byte math, existing tables never altered, the remedy,
+   SQLite not enforcing lengths) and Recent Updates.
