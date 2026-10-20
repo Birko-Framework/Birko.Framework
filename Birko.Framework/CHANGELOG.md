@@ -4,6 +4,20 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — Birko.Security.OAuth.Server.AspNetCore: MapOAuthServer
+
+[[TASK-519]]. New project, from DraCode's `OAuthEndpoints.cs`. `MapOAuthServer()` maps `/token`, `/device_authorization`,
+`/device/approve`, `/authorize` and an opt-in `/register`. They take form or Basic client credentials and return RFC 6749
+errors, and `GrantHandlers` lets the app take over a grant. Fixed against DraCode: no `no-store`, `invalid_client` sent
+as 400, Basic not form-decoded or a malformed one ignored, and `/register` refusing its own `client_type`.
+
+## 2026-10-18 — WebSocketCommandRouter: the server half of WsClient.request
+
+[[TASK-539]]. New in Birko.Communication.WebSocket. It routes `{ type, id, data }` to a handler by command name and
+replies `response` or `error`. Every reply carries the request id, including errors (DraCode's dropped it, so clients
+timed out). `RunAsync` handles requests concurrently over the capped receive. An exception's message is not sent
+unless `ExposeExceptionMessages`.
+
 ## 2026-10-18 — OAuth server stores ship, and single use is enforced by the store
 
 [[TASK-518]]. New `Birko.Security.OAuth.Server.InMemory` and `.SqLite` provide all five stores and a DI extension.

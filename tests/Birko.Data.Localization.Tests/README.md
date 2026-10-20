@@ -14,6 +14,7 @@ Unit tests for the Birko.Data.Localization entity localization project.
 - **EntityTranslationFilterTests** — All filter factory methods and expression matching
 - **LocalizedStoreWrapperTests** — Sync bulk wrapper: create, read, update, delete with localization, constructor validation
 - **AsyncLocalizedStoreWrapperTests** — Async bulk wrapper: same scenarios as sync
+- **LocalizationBatchedReadTests** / **LocalizationBatchedWriteTests** — translation reads and writes are batched, with the calls counted
 
 ## Running Tests
 

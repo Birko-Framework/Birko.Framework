@@ -1,7 +1,7 @@
 ---
 area: entity-localization
-generated-at: d2fcde672bcd30e93edd7317f873a809ccb89daa
-generated-on: 2026-10-19
+generated-at: 289c92efffe0c36aac27490a4acfe4faf4906d86
+generated-on: 2026-10-20
 sources:
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedStoreWrapper.cs
@@ -30,6 +30,8 @@ shaped-by: [FEATURE-014]
 # task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
 # 2026-10-19 regens (TASK-168, TASK-194, TASK-679, TASK-680, TASK-681): the evidence pass was not re-run; FEATURE-014 is already listed
 # (TASK-679 has no feature).
+# 2026-10-20 regen (TASK-690, harvested from the uncommitted working tree): the evidence pass was not re-run;
+# TASK-690 has no feature.
 shaped-by-derived: true
 shaped-by-unresolved: 266
 ---
@@ -594,12 +596,18 @@ deliberately not aligned with the backends, which disagree among themselves.
 ### Requirement: Translation persistence on create and update
 
 The system SHALL, after the inner store's write succeeds and only on a non-default culture, write one
-translation row per localizable string property through the single producer `LocalizedTranslationRows`,
+translation row per localizable string property through the single producer `LocalizedTranslationRows`
+(`SaveMany` / `SaveManyAsync`; the single-entity `Save` / `SaveAsync` delegate to it),
 keyed by the GUID the inner store's create **returned** (on update, the entity's GUID): a `null` value
 deletes the rows for `(EntityGuid, EntityType, FieldName, Culture)`; otherwise an existing row with that key
 is updated in place with the new `Value` and `UpdatedAt = DateTime.UtcNow`, and a missing one is created with
 the same fields. `EntityType` SHALL be the store's type name, `typeof(T).Name`, which is what every filter
 queries; a row with the same GUID under another type name is another store's and is left alone.
+
+A save SHALL cost one read of the entities' existing rows in the culture per 500 entities, then at most one bulk
+create, one bulk update and one bulk delete, sent in that order and each skipped when it has nothing to do. An
+entity listed twice is merged, the later value winning. An updated row SHALL receive its new value only when the
+update is sent, so a create that is refused and cannot be retried leaves nothing applied.
 
 #### Scenario: First write creates a translation row
 
@@ -611,19 +619,32 @@ queries; a row with the same GUID under another type name is another store's and
 
 - **Given** a translation row already exists for `(G, "Name", "sk")`
 - **When** `Update(entity)` runs with a new `Name`
-- **Then** the existing row's `Value` and `UpdatedAt` are overwritten and the translation store's `Update` is called — no second row is created
+- **Then** the existing row's `Value` and `UpdatedAt` are overwritten and the translation store's bulk `Update` is called — no second row is created
+
+#### Scenario: One save costs one read and at most three bulk calls
+
+- **Given** entity `G` on `"sk"` whose save carries one field with no row yet, one with a changed value and one set to `null`
+- **When** the translations are saved
+- **Then** the translation store sees one read, then one bulk create, one bulk update and one bulk delete, in that order; a save with nothing to create, update or delete skips that call
+
+#### Scenario: A collection is saved in one batch
+
+- **Given** a collection `Create` / `Update` of 3 entities with 2 localizable fields each, on `"sk"`, none translated yet
+- **When** the translations are saved
+- **Then** the translation store sees one read and one bulk create of 6 rows (it was 6 reads and 6 creates); 501 entities take 2 reads
 
 #### Scenario: A create refused by the unique key is retried as an update
 
-- **Given** a store that enforces the unique key, and another writer storing `(G, "Product", "Name", "sk")` after this upsert's read found nothing
-- **When** this upsert's create is refused with `StoreUniqueViolationException`
-- **Then** it re-reads the key and updates that row with its own value — one row, the last value, no exception; when the re-read finds no row the refusal was about something else and propagates
+- **Given** a store that enforces the unique key, and another writer storing `(G, "Product", "Name", "sk")` after this save's read found nothing, while the same batch also creates `(G, "Product", "Description", "sk")`
+- **When** this save's bulk create is refused with `StoreUniqueViolationException`
+- **Then** it re-reads the keys it was creating once, updates the row the other writer holds with its own value and creates the rest again — one row per key, the last value, no exception; a store that inserted part of the batch before refusing has its own rows found and updated the same way
+- **And** when the re-read finds none of the keys held, or the second create is refused too, the original refusal propagates; when the re-read itself fails (PostgreSQL's aborted transaction), a `StoreUniqueViolationException` wrapping the original and naming the read failure is thrown
 
 #### Scenario: Only the first duplicate row is updated
 
 - **Given** two translation rows exist for the same `(G, "Name", "sk")`
-- **When** the upsert calls `existing.FirstOrDefault()`
-- **Then** only the first row enumerated is updated and the other is left stale
+- **When** the save plans the update from the batched read
+- **Then** only the key's first row enumerated is updated and the other is left stale; a `null` value deletes both
 
 #### Scenario: A null value removes the translation
 
@@ -697,16 +718,16 @@ queries; a row with the same GUID under another type name is another store's and
 - **When** the update runs
 - **Then** the base values for the whole batch are fetched with a single GUID-membership read rather than one read per entity, and each entity with a stored row is replaced by a copy carrying its own base values
 
-### Requirement: Bulk create and update persist translations per item
+### Requirement: Bulk create and update persist translations in one batch
 
 The system SHALL materialize the incoming sequence exactly once before handing it to the inner store, then
-iterate the same materialized list to persist translations.
+persist the translations of the same materialized list in one batched save.
 
 #### Scenario: One-shot enumerable is not enumerated twice
 
 - **Given** a lazily-generated `IEnumerable<T>` that can only be enumerated once
 - **When** `Create(data)` / `CreateAsync(data)` / `Update(data)` / `UpdateAsync(data)` runs
-- **Then** it is materialized via `data as IList<T> ?? data.ToList()` and the same list is passed to the inner store and used for the translation loop
+- **Then** it is materialized via `data as IList<T> ?? data.ToList()` and the same list is passed to the inner store and used for the translation save
 
 #### Scenario: Existing list is reused without copying
 
@@ -717,39 +738,41 @@ iterate the same materialized list to persist translations.
 ### Requirement: Deleting an entity deletes all of its translations
 
 The system SHALL, after the inner store deletes the entity, delete every translation row matching the
-entity's GUID and the store's entity type — across all cultures and field names — and SHALL skip the deletion
-when the entity's GUID is null. A row with the same GUID under another entity type survives.
+entity's GUID and the store's entity type — across all cultures and field names — as a filter delete
+(`LocalizedTranslationRows.DeleteMany`, one per 500 entities), and SHALL skip the deletion when the entity's GUID
+is null: an empty GUID list makes no store call. `DeleteMany` SHALL refuse a null or empty entity type with
+`ArgumentException`. A row with the same GUID under another entity type survives.
 
 #### Scenario: All cultures are removed
 
 - **Given** entity `G` has `"sk"` and `"de"` translations
 - **When** `Delete(entity)` / `DeleteAsync(entity)` runs
-- **Then** a filter on `(G, store type)` selects both rows and they are removed with a single bulk delete
+- **Then** both rows are removed by one filter delete on `EntityGuid IN (G)` and the store type, with no read first
 
 #### Scenario: Bulk delete of a collection
 
 - **Given** three entities are passed to `Delete(IEnumerable<T>)`
 - **When** the call completes
-- **Then** the sequence is materialized once, the inner store deletes all three, and `DeleteTranslations` runs once per entity
+- **Then** the sequence is materialized once, the inner store deletes all three, and their translations are removed by one filter delete; 501 entities take two
 
 #### Scenario: Entity without a GUID
 
 - **Given** an entity whose `Guid` is null
 - **When** `DeleteTranslations` runs
-- **Then** it returns without querying or deleting anything
+- **Then** the GUID list is empty, so no store call is made
 
 ### Requirement: Filter-based bulk delete reads before deleting and localizes the filter
 
 The system SHALL implement `Delete(filter)` by reading the matching entities from the inner store with the
 **rewritten** filter on a non-default culture (and the original filter on the default culture), deleting
-that materialized set through the inner store, and then deleting each entity's translations — never using
-the inner store's native filter-delete.
+that materialized set through the inner store, and then deleting their translations through `DeleteMany` — never
+using the inner store's native filter-delete.
 
 #### Scenario: Delete by filter cascades to translations
 
 - **Given** two entities match `x => x.Active == false`
 - **When** `Delete(filter)` / `DeleteAsync(filter)` runs
-- **Then** both entities are read, deleted as a collection, and each one's translation rows are removed
+- **Then** both entities are read, deleted as a collection, and their translation rows are removed by one filter delete
 
 #### Scenario: Delete by a filter on a localizable field targets the translated rows
 
@@ -764,19 +787,23 @@ culture and the original filter on the default culture, where it delegates the a
 non-default culture it SHALL show the action each entity with the current culture's translations applied,
 write translations only for the localizable fields the action **changed**, keep each entity's own column on
 the default-culture value, and write those translation rows only **after** the inner store's update for
-that entity has returned; the sync and async wrappers SHALL do so by different mechanisms.
+that entity has returned. The sync and async wrappers SHALL take the same path: read the matched entities, read
+their translations in one batched read, run the action on a detached copy of each, write each entity, and then
+save every changed translation in one batched save. When the call fails part way, the entities already written
+SHALL get their changed translations saved best effort and the original exception SHALL be rethrown; a failure of
+that save is dropped.
 
-#### Scenario: Sync wrapper delegates to the inner store's native filter update
+#### Scenario: Default culture delegates the action
 
-- **Given** `LocalizedBulkStoreWrapper.Update(filter, updateAction)` on a non-default culture
+- **Given** the current culture is the default one
+- **When** `Update(filter, updateAction)` / `UpdateAsync(filter, updateAction)` runs
+- **Then** the sync wrapper calls `_innerStore.Update(filter, updateAction)` once; the async wrapper reads all matching entities via `_innerStore.ReadAsync(filter, null, null, null, ct)`, applies the action to each and issues one inner update per entity
+
+#### Scenario: Both wrappers do read-modify-write per entity on a non-default culture
+
+- **Given** `LocalizedBulkStoreWrapper.Update(filter, updateAction)` or `AsyncLocalizedBulkStoreWrapper.UpdateAsync(filter, updateAction)` on a non-default culture
 - **When** it runs
-- **Then** it calls `_innerStore.Update(<rewritten filter>, callback)` exactly once; the callback captures the base values, applies the entity's translations, runs the action, records the changed localizable fields, and restores the base values in a `finally`; the recorded translations are written after `_innerStore.Update` returns
-
-#### Scenario: Async wrapper does read-modify-write per entity
-
-- **Given** `AsyncLocalizedBulkStoreWrapper.UpdateAsync(filter, updateAction)`
-- **When** it runs
-- **Then** it reads all matching entities via `_innerStore.ReadAsync(<filter>, null, null, null, ct)`. On the default culture it applies the action to each and issues one inner update. On a non-default culture it works on a detached copy of each: translations applied, action run, base values restored, inner update issued, and then the changed fields' translations written
+- **Then** it reads the entities matching the rewritten filter, reads their translations in one batched read (one per 500 entities), and for each works on a detached copy: translations applied, action run, base values restored, inner update of that entity issued; the changed fields' translations of every entity are then saved in one batch. The sync wrapper does not call the inner store's `Update(filter, action)` on this culture
 
 #### Scenario: Filter-based update on a non-default culture preserves the base column
 
@@ -806,7 +833,13 @@ that entity has returned; the sync and async wrappers SHALL do so by different m
 
 - **Given** a non-default culture and an inner update that throws
 - **When** the filter-based update runs
-- **Then** the exception propagates and no translation row is written for that entity. The sync wrapper writes none for the whole call, since it writes after `_innerStore.Update` returns; the async wrapper keeps the rows of entities updated earlier in the call (the two writes share no boundary, TASK-683)
+- **Then** the exception propagates and no translation row is written for that entity
+
+#### Scenario: A failure part way keeps the translations of entities already written
+
+- **Given** a non-default culture, three matched entities whose action changes `Name`, and an inner update that throws on the third
+- **When** the filter-based update runs, sync or async
+- **Then** the first two entities' changed translations are saved in one batch (async: without the caller's cancellation token) and the inner update's exception propagates; if that save fails too, its failure is dropped and the original exception still surfaces. The entity writes and the translation writes share no boundary (TASK-683)
 
 ### Requirement: Native PropertyUpdate falls back when it touches a localizable field
 

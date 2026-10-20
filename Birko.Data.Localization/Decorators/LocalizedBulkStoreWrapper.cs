@@ -125,10 +125,7 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
         var items = data as IList<T> ?? data.ToList();
         LocalizedEntityFields.RequireValidDeclarations(items);
         _innerStore.Create(items, storeDelegate);
-        foreach (var entity in items)
-        {
-            SaveTranslations(entity);
-        }
+        SaveTranslations(items);
     }
 
     /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.Update(T, StoreDataDelegate{T}?)" />
@@ -167,10 +164,7 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
         if (!IsNonDefaultCulture())
         {
             _innerStore.Update(items, storeDelegate);
-            foreach (var entity in items)
-            {
-                SaveTranslations(entity);
-            }
+            SaveTranslations(items);
             return;
         }
 
@@ -178,11 +172,7 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
         var baseValues = ReadBaseValues(items, fields);
 
         _innerStore.Update(WithBaseValues(items, baseValues), storeDelegate);
-
-        foreach (var entity in items)
-        {
-            SaveTranslations(entity);
-        }
+        SaveTranslations(items);
     }
 
     public void Delete(T data)
@@ -203,16 +193,17 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
     /// which rows it covered.
     /// </para>
     /// <para>
-    /// SH-H017: the action mutates the entity the inner store loaded and the inner store then persists
-    /// it, so the translated text landed in the base column. The base values are captured before the
-    /// action runs and put back before the callback returns, whether or not the action threw.
+    /// SH-H017: the action used to mutate the entity the inner store loaded, and the inner store then
+    /// persisted it, so the translated text landed in the base column. The action now works on a detached
+    /// copy carrying the translations, and the copy gets the base values back before it is written.
     /// </para>
     /// <para>
     /// TASK-168: the action sees the entity as a read in this culture shows it, and only the localizable
     /// fields it <b>changed</b> are written as translations. Writing every field put the untouched base
     /// (default-culture) text over the existing translations. Those rows are written <b>after</b> the
-    /// inner store's update returns (SH-M075): the callback runs ahead of the inner write, so a row written
-    /// there outlived an update that then failed.
+    /// entity's inner write succeeds (SH-M075), in one batch for the whole update (TASK-690). The matched
+    /// entities are read here and written one by one, as the async wrapper does, so the two take the same
+    /// path; when a write fails part way, the entities already written keep their translation changes.
     /// </para>
     /// </remarks>
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
@@ -224,35 +215,58 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
         }
 
         var fields = GetLocalizableFieldsFromInstance();
-        var culture = _context.CurrentCulture.Name;
-        var pending = new List<(Guid Guid, Dictionary<string, string?> Values)>();
-        _innerStore.Update(RewriteFilter(filter)!, item =>
+        var items = _innerStore.Read(RewriteFilter(filter)).ToList();
+        // TASK-690: the matched entities' translations in one read, not one per entity.
+        var rows = LocalizedTranslationRows.ReadMany(
+            _translationStore, LocalizedTranslationRows.GuidsOf(items), LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name);
+        var pending = new List<(Guid EntityGuid, IReadOnlyDictionary<string, string?> Values)>();
+        try
         {
-            var baseValues = LocalizedEntityFields.Capture(item, fields);
-            try
+            foreach (var item in items)
             {
-                if (item.Guid is Guid guid)
+                // The action works on a detached copy: translations are applied to it, and the inner store's
+                // own instance must never carry them (SH-H016), even when the action throws.
+                var working = LocalizedEntityFields.Detach(item);
+                var baseValues = LocalizedEntityFields.Capture(working, fields);
+                if (working.Guid is Guid guid && rows.TryGetValue(guid, out var translated))
                 {
-                    LocalizedEntityFields.Restore(item, LocalizedTranslationRows.Read(_translationStore, guid, LocalizedTranslationRows.EntityTypeOf<T>(), culture, fields));
+                    LocalizedEntityFields.Restore(working, LocalizedTranslationRows.OnlyFields(translated, fields));
                 }
 
-                var before = LocalizedEntityFields.Capture(item, fields);
-                updateAction(item);
-                var changed = LocalizedTranslationRows.Changed(before, LocalizedEntityFields.Capture(item, fields));
-                if (item.Guid is Guid changedGuid && changed.Count > 0)
+                var before = LocalizedEntityFields.Capture(working, fields);
+                updateAction(working);
+                var changed = LocalizedTranslationRows.Changed(before, LocalizedEntityFields.Capture(working, fields));
+
+                // SH-H017: the base column keeps the default culture. SH-M075: an entity's translation rows are
+                // written only once its inner update has succeeded, so a failed update leaves none behind.
+                LocalizedEntityFields.Restore(working, baseValues);
+                _innerStore.Update(working);
+                if (working.Guid is Guid changedGuid && changed.Count > 0)
                 {
                     pending.Add((changedGuid, changed));
                 }
             }
-            finally
-            {
-                LocalizedEntityFields.Restore(item, baseValues);
-            }
-        });
-
-        foreach (var (guid, values) in pending)
+        }
+        catch (Exception) when (pending.Count > 0)
         {
-            SaveTranslations(guid, values);
+            SaveAfterFailure(pending);
+            throw;
+        }
+
+        // TASK-690: one batched write for every entity the update changed.
+        SaveTranslations(pending);
+    }
+
+    /// <inheritdoc cref="AsyncLocalizedBulkStoreWrapper{TStore,T,TTranslation}.SaveAfterFailureAsync" />
+    private void SaveAfterFailure(IReadOnlyCollection<(Guid EntityGuid, IReadOnlyDictionary<string, string?> Values)> pending)
+    {
+        try
+        {
+            SaveTranslations(pending);
+        }
+        catch (Exception)
+        {
+            // The original exception is rethrown by the caller.
         }
     }
 
@@ -281,10 +295,7 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
     {
         var items = data as IList<T> ?? data.ToList();
         _innerStore.Delete(items);
-        foreach (var entity in items)
-        {
-            DeleteTranslations(entity);
-        }
+        DeleteTranslations(items);
     }
 
     /// <summary>
@@ -296,10 +307,7 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
     {
         var items = _innerStore.Read(IsNonDefaultCulture() ? RewriteFilter(filter) : filter).ToList();
         _innerStore.Delete(items);
-        foreach (var entity in items)
-        {
-            DeleteTranslations(entity);
-        }
+        DeleteTranslations(items);
     }
 
     public Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null)
@@ -350,14 +358,8 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
             return entity;
         }
 
-        if (entity.Guid == null)
-        {
-            return entity;
-        }
-
-        // SH-H016: Apply returns a detached copy, never the instance the inner store returned.
-        return LocalizedTranslationRows.Apply(entity, LocalizedTranslationRows.ReadMany(
-            _translationStore, new[] { entity.Guid.Value }, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name));
+        // SH-H016: the result is a detached copy, never the instance the inner store returned.
+        return LocalizedTranslationRows.LocalizeAll(_translationStore, new List<T> { entity }, _context.CurrentCulture.Name)[0];
     }
 
     /// <summary>
@@ -369,21 +371,9 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
     /// entity — a page of 48 products used to cost 48 extra queries.
     /// </remarks>
     protected List<T> LocalizeAll(List<T> entities)
-    {
-        if (!IsNonDefaultCulture() || entities.Count == 0)
-        {
-            return entities;
-        }
-
-        var rows = LocalizedTranslationRows.ReadMany(
-            _translationStore, entities.Where(e => e.Guid.HasValue).Select(e => e.Guid!.Value),
-            LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name);
-        for (var i = 0; i < entities.Count; i++)
-        {
-            entities[i] = LocalizedTranslationRows.Apply(entities[i], rows);
-        }
-        return entities;
-    }
+        => IsNonDefaultCulture()
+            ? LocalizedTranslationRows.LocalizeAll(_translationStore, entities, _context.CurrentCulture.Name)
+            : entities;
 
     /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.ReadBaseValues(Guid?, IReadOnlyList{string})" />
     /// <inheritdoc cref="LocalizedStoreWrapper{TStore,T,TTranslation}.WithBaseValues(T, IReadOnlyDictionary{string, string?}?)" />
@@ -458,28 +448,55 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
     protected void SaveTranslations(T entity) => SaveTranslations(entity.Guid, LocalizedTranslationRows.ValuesOf(entity));
 
     /// <summary>
+    /// Persists every localizable field of each of <paramref name="entities"/> as this culture's translations, in one
+    /// batched write (TASK-690).
+    /// </summary>
+    protected void SaveTranslations(IEnumerable<T> entities)
+    {
+        if (IsNonDefaultCulture())
+        {
+            SaveTranslations(LocalizedTranslationRows.ValuesOfAll(entities));
+        }
+    }
+
+    /// <summary>
     /// Persists <paramref name="values"/> as this culture's translations of the entity keyed by
     /// <paramref name="guid"/>; a <c>null</c> value removes that field's row. See <see cref="LocalizedTranslationRows"/>.
     /// </summary>
     protected void SaveTranslations(Guid? guid, IReadOnlyDictionary<string, string?> values)
     {
-        if (!IsNonDefaultCulture() || guid == null || guid == Guid.Empty)
+        if (guid is Guid g)
         {
-            return;
+            SaveTranslations(new[] { (g, values) });
         }
-
-        LocalizedTranslationRows.Save(_translationStore, guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name, values);
     }
 
-    protected void DeleteTranslations(T entity)
+    /// <summary>
+    /// Persists each entity's <c>Values</c> as this culture's translations, in one batched write: one read of the
+    /// existing rows, then at most one bulk delete, update and create (<see cref="LocalizedTranslationRows.SaveMany"/>).
+    /// Nothing is written on the default culture, and an empty GUID is skipped.
+    /// </summary>
+    protected void SaveTranslations(IReadOnlyCollection<(Guid EntityGuid, IReadOnlyDictionary<string, string?> Values)> values)
     {
-        if (entity.Guid == null)
+        if (!IsNonDefaultCulture())
         {
             return;
         }
 
-        LocalizedTranslationRows.Delete(_translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>());
+        LocalizedTranslationRows.SaveMany(
+            _translationStore, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name,
+            values.Where(v => v.EntityGuid != Guid.Empty));
     }
+
+    protected void DeleteTranslations(T entity) => DeleteTranslations(new[] { entity });
+
+    /// <summary>
+    /// Deletes every culture's translations of <paramref name="entities"/>, as one filter delete per
+    /// <see cref="LocalizedTranslationRows.ReadBatchSize"/> entities (TASK-690); no call when none has a GUID.
+    /// </summary>
+    protected void DeleteTranslations(IEnumerable<T> entities)
+        => LocalizedTranslationRows.DeleteMany(
+            _translationStore, LocalizedTranslationRows.GuidsOf(entities), LocalizedTranslationRows.EntityTypeOf<T>());
 
     #endregion
 

@@ -179,14 +179,8 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
             return entity;
         }
 
-        if (entity.Guid == null)
-        {
-            return entity;
-        }
-
-        // SH-H016: Apply returns a detached copy, never the instance the inner store returned.
-        return LocalizedTranslationRows.Apply(entity, await LocalizedTranslationRows.ReadManyAsync(
-            _translationStore, new[] { entity.Guid.Value }, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name, ct));
+        // SH-H016: the result is a detached copy, never the instance the inner store returned.
+        return (await LocalizedTranslationRows.LocalizeAllAsync(_translationStore, new List<T> { entity }, _context.CurrentCulture.Name, ct))[0];
     }
 
     #endregion
@@ -209,15 +203,9 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
             _translationStore, guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name, values, ct);
     }
 
-    protected async Task DeleteTranslationsAsync(T entity, CancellationToken ct)
-    {
-        if (entity.Guid == null)
-        {
-            return;
-        }
-
-        await LocalizedTranslationRows.DeleteAsync(_translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>(), ct);
-    }
+    protected Task DeleteTranslationsAsync(T entity, CancellationToken ct)
+        => LocalizedTranslationRows.DeleteManyAsync(
+            _translationStore, LocalizedTranslationRows.GuidsOf(new[] { entity }), LocalizedTranslationRows.EntityTypeOf<T>(), ct);
 
     #endregion
 

@@ -13,12 +13,15 @@ Unit tests for entity-level localization (Birko.Data.Localization).
 - **EntityTranslationFilterTests** — All static factory methods, expression matching
 - **LocalizedStoreWrapperTests** — Sync bulk wrapper (create/read/update/delete, partial translations, constructor validation)
 - **AsyncLocalizedStoreWrapperTests** — Async bulk wrapper (same coverage)
+- **LocalizationBatchedReadTests** — TASK-679: one translation read per 500 entities on list reads
+- **LocalizationBatchedWriteTests** — TASK-690: write calls counted (one read + at most one bulk delete, update and create per save; one filter delete per 500 entities), the batched unique-key retry, `DeleteCulture`, `ReadAllCultures`, and the wrappers' collection, filter and delete paths
 
 ### Test Resources (`TestResources/`)
 - **TestLocalizableModel** — Test entity implementing `ILocalizable` with Name, Description, Code
 - **TestEntityLocalizationContext** — Mutable `IEntityLocalizationContext` for tests
 - **InMemoryBulkStore** — In-memory `IBulkStore<T>` for sync tests
 - **InMemoryAsyncBulkStore** — In-memory `IAsyncBulkStore<T>` for async tests
+  - Both count filtered reads and write calls (`CreateCalls` / `UpdateCalls` / `DeleteCalls`, one per call whatever its size); a collection create is all or nothing, every `BeforeCreate` running first, as a SQL store's is
 
 ## Dependencies
 - Birko.Data.Localization (projitems)

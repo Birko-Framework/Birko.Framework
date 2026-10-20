@@ -32,6 +32,18 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
     /// <summary>How many rows the filtered collection reads returned — what proves a lookup did not scan.</summary>
     public int RowsRead { get; private set; }
 
+    /// <summary>
+    /// Write calls made on this store, one per call whatever its size: a single, collection or filter write counts once.
+    /// What a test counts to prove a write is batched (TASK-690).
+    /// </summary>
+    public int CreateCalls { get; private set; }
+
+    /// <inheritdoc cref="CreateCalls"/>
+    public int UpdateCalls { get; private set; }
+
+    /// <inheritdoc cref="CreateCalls"/>
+    public int DeleteCalls { get; private set; }
+
     public int CreateInstanceCalls { get; private set; }
 
     public T? Read(Guid guid) => _data.TryGetValue(guid, out var item) ? item : null;
@@ -66,32 +78,55 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 
     public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
+        CreateCalls++;
         if (storeDelegate != null) data = storeDelegate(data);
         BeforeCreate?.Invoke(data);
+        return Store(data);
+    }
+
+    /// <summary>All or nothing, as a SQL store's collection create is: every <see cref="BeforeCreate"/> runs first.</summary>
+    public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+    {
+        CreateCalls++;
+        var items = data.Select(item => storeDelegate != null ? storeDelegate(item) : item).ToList();
+        foreach (var item in items) BeforeCreate?.Invoke(item);
+        foreach (var item in items) Store(item);
+    }
+
+    private Guid Store(T data)
+    {
         var guid = data.Guid ?? Guid.NewGuid();
         if (AssignsGuidOnCreate) data.Guid = guid;
         _data[guid] = data;
         return guid;
     }
 
-    public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+    public void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        foreach (var item in data) Create(item, storeDelegate);
+        UpdateCalls++;
+        UpdateOne(data, storeDelegate);
     }
 
-    public void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
+    public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+    {
+        UpdateCalls++;
+        foreach (var item in data) UpdateOne(item, storeDelegate);
+    }
+
+    private void UpdateOne(T data, StoreDataDelegate<T>? storeDelegate)
     {
         if (storeDelegate != null) data = storeDelegate(data);
         BeforeUpdate?.Invoke(data);
         if (data.Guid.HasValue) _data[data.Guid.Value] = data;
     }
 
-    public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+    public void Delete(T data)
     {
-        foreach (var item in data) Update(item, storeDelegate);
+        DeleteCalls++;
+        Remove(data);
     }
 
-    public void Delete(T data)
+    private void Remove(T data)
     {
         if (data.Guid.HasValue) _data.Remove(data.Guid.Value);
     }
@@ -99,16 +134,18 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
     {
         // Mirrors AbstractBulkStore: the callback runs, then each entity is written through Update(T).
+        UpdateCalls++;
         var items = _data.Values.AsQueryable().Where(filter).ToList();
         foreach (var item in items)
         {
             updateAction(item);
-            Update(item);
+            UpdateOne(item, null);
         }
     }
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
     {
+        UpdateCalls++;
         var items = _data.Values.AsQueryable().Where(filter).ToList();
         foreach (var item in items)
         {
@@ -118,13 +155,15 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 
     public void Delete(IEnumerable<T> data)
     {
-        foreach (var item in data) Delete(item);
+        DeleteCalls++;
+        foreach (var item in data) Remove(item);
     }
 
     public void Delete(Expression<Func<T, bool>> filter)
     {
+        DeleteCalls++;
         var items = _data.Values.AsQueryable().Where(filter).ToList();
-        foreach (var item in items) Delete(item);
+        foreach (var item in items) Remove(item);
     }
 
     public Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null)

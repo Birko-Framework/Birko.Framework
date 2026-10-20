@@ -34,6 +34,18 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
     /// <summary>How many rows the filtered collection reads returned — what proves a lookup did not scan.</summary>
     public int RowsRead { get; private set; }
 
+    /// <summary>
+    /// Write calls made on this store, one per call whatever its size: a single, collection or filter write counts once.
+    /// What a test counts to prove a write is batched (TASK-690).
+    /// </summary>
+    public int CreateCalls { get; private set; }
+
+    /// <inheritdoc cref="CreateCalls"/>
+    public int UpdateCalls { get; private set; }
+
+    /// <inheritdoc cref="CreateCalls"/>
+    public int DeleteCalls { get; private set; }
+
     public int CreateInstanceCalls { get; private set; }
 
     public Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
@@ -70,6 +82,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
+        CreateCalls++;
         if (processDelegate != null) data = processDelegate(data);
         BeforeCreate?.Invoke(data);
         var guid = data.Guid ?? Guid.NewGuid();
@@ -78,12 +91,15 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
         return Task.FromResult(guid);
     }
 
+    /// <summary>All or nothing, as a SQL store's collection create is: every <see cref="BeforeCreate"/> runs first.</summary>
     public Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
-        foreach (var item in data)
+        CreateCalls++;
+        var items = data.ToList();
+        foreach (var item in items) BeforeCreate?.Invoke(item);
+        foreach (var item in items)
         {
-            if (storeDelegate != null) item.Guid ??= Guid.NewGuid();
-            else item.Guid ??= Guid.NewGuid();
+            item.Guid ??= Guid.NewGuid();
             _data[item.Guid!.Value] = item;
         }
         return Task.CompletedTask;
@@ -91,6 +107,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
+        UpdateCalls++;
         if (processDelegate != null) data = processDelegate(data);
         BeforeUpdate?.Invoke(data);
         if (data.Guid.HasValue) _data[data.Guid.Value] = data;
@@ -99,6 +116,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
+        UpdateCalls++;
         foreach (var item in data)
         {
             if (item.Guid.HasValue) _data[item.Guid.Value] = item;
@@ -108,12 +126,14 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task DeleteAsync(T data, CancellationToken ct = default)
     {
+        DeleteCalls++;
         if (data.Guid.HasValue) _data.Remove(data.Guid.Value);
         return Task.CompletedTask;
     }
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
     {
+        UpdateCalls++;
         var items = _data.Values.AsQueryable().Where(filter).ToList();
         foreach (var item in items)
         {
@@ -124,6 +144,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
     {
+        UpdateCalls++;
         var items = _data.Values.AsQueryable().Where(filter).ToList();
         foreach (var item in items)
         {
@@ -134,6 +155,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
     {
+        DeleteCalls++;
         foreach (var item in data)
         {
             if (item.Guid.HasValue) _data.Remove(item.Guid.Value);
@@ -143,6 +165,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
     {
+        DeleteCalls++;
         var items = _data.Values.AsQueryable().Where(filter).ToList();
         foreach (var item in items)
         {

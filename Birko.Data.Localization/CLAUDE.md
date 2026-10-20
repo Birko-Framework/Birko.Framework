@@ -20,7 +20,7 @@ Entity-level localization for Birko.Data stores. Provides transparent translatio
 ### Decorators (`Decorators/`)
 - **LocalizedEntityFields** — the one producer for capturing/restoring localizable values and detaching an entity
 - **LocalizedFilterResolution** — the one producer of a filter rewritten for a non-default culture (TASK-681): per condition `guid ∈ T ∨ (Part ∧ guid ∉ H)` — translated matches (by `ValueHash` for ==/IN), or the base value for entities without a translation
-- **LocalizedTranslationRows** — the one producer for reading, writing and deleting translation rows (TASK-168, TASK-194, TASK-679, TASK-680): the four-part key `(EntityGuid, EntityType, FieldName, Culture)`, filters built with `Expression.Property` on the concrete translation type (a precaution, not a measured failure), keyed by the GUID the store returned, `EntityType` from `EntityTypeOf<T>()`, `null` removes the row, a create refused by the unique key retried as an update, list reads batched per 500 GUIDs
+- **LocalizedTranslationRows** — the one producer for reading, writing and deleting translation rows (TASK-168, TASK-194, TASK-679, TASK-680): the four-part key `(EntityGuid, EntityType, FieldName, Culture)`, filters built with `Expression.Property` on the concrete translation type (a precaution, not a measured failure), keyed by the GUID the store returned, `EntityType` from `EntityTypeOf<T>()`, `null` removes the row, list reads batched per 500 GUIDs, and writes batched (TASK-690): `SaveMany` is one read of the existing rows per 500 entities, then at most one bulk create, update and delete, creates first; a create the unique key refuses re-reads the keys it was creating once and updates the rows another writer holds, and a second refusal rethrows the original; `DeleteMany` / `DeleteCulture` are chunked filter deletes and an empty list makes no call; `LocalizeAll` is the one localize path; `ReadAllCultures` reads one entity's every culture in one read
 - **LocalizedStoreWrapper** — Sync `IStore<T>` decorator
 - **AsyncLocalizedStoreWrapper** — Async `IAsyncStore<T>` decorator
 - **LocalizedBulkStoreWrapper** — Sync `IBulkStore<T>` decorator
@@ -30,10 +30,10 @@ Each wrapper is `X<TStore, T, TTranslation>`; `X<TStore, T>` is the same wrapper
 
 All wrappers:
 - Intercept reads to apply translations (when current culture != default culture)
-- Intercept creates/updates to persist translations (upsert per field, through `LocalizedTranslationRows`)
+- Intercept creates/updates to persist translations, one batched write per call however many entities (`LocalizedTranslationRows.SaveMany`); a filter-based update reads the matched entities and their translations once, writes each entity through a detached copy (sync and async alike), and when it fails part way still saves, best effort, the translations of the entities already written (decided by the user), the original error always surfacing
 - Refuse a filter that reads a localizable field in a form the analyzer cannot translate (`NotSupportedException`), never test it against the base column
 - Validate the declared localizable fields once, in the constructor (`LocalizedEntityFields.LocalizableFieldsOf`)
-- Intercept deletes to remove all associated translations; `Destroy` deletes this type's rows, `Init` initialises the translation store
+- Intercept deletes to remove all associated translations, as one filter delete per 500 entities; `Destroy` deletes this type's rows, `Init` initialises the translation store
 - Implement `IStoreWrapper<T>` for decorator introspection
 - Use reflection to get/set localizable string properties
 

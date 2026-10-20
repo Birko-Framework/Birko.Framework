@@ -14,7 +14,9 @@ Birko.Data.Localization.SQL.Tests/
 ├── TranslationTableTests.cs          — abstract per provider: the unique key read back from the catalogue (rule 63),
 │                                       a second create refused, a racing writer → one row (deterministic: a
 │                                       delegating store stores the competing row between our read and our create),
-│                                       a batched read past one batch (TASK-679), a consumer model on its own table
+│                                       a batched read past one batch (TASK-679), batched writes counted, a race
+│                                       on one key of a batch, chunked and per-culture deletes, the wrappers'
+│                                       collection/filter/delete writes on SQL (TASK-690), a consumer model on its own table
 │                                       through the wrappers; on MySQL, the reported key failure (TASK-684)
 └── ProviderTranslationTableTests.cs  — SQLite, PostgreSQL, MySQL, SQL Server subclasses
 ```

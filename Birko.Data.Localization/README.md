@@ -16,8 +16,8 @@ Entity-level localization for Birko.Data stores. Provides store decorator wrappe
 1. Entity stores the default-language values in its own fields
 2. Translations for other languages are stored in a separate `EntityTranslationModel` store
 3. On **read**, the wrapper checks the current culture — if it differs from the default, it fetches translations and overwrites the entity's localizable fields (on a detached copy). A list is translated with one translation query per 500 entities, not one per entity
-4. On **create/update**, the wrapper persists translations for the current culture (if non-default). Setting a localizable field to `null` removes that field's translation, so reads fall back to the base value; an empty string is stored as a translation
-5. On **delete**, all associated translations are removed
+4. On **create/update**, the wrapper persists translations for the current culture (if non-default). Setting a localizable field to `null` removes that field's translation, so reads fall back to the base value; an empty string is stored as a translation. One write call costs one read of the existing rows (per 500 entities) and at most one bulk delete, one bulk update and one bulk create, however many entities and fields it carries. If a unique key refuses the create because another writer stored one of the keys in between, those rows are updated instead. A filter-based update that fails part way still saves the translations of the entities it already wrote, then rethrows the original error
+5. On **delete**, all associated translations are removed, as one delete per 500 entities
 6. `Init` initialises the translation store too; `Destroy` destroys the entity store and deletes this entity type's translation rows (only this type's: the translation store is shared)
 
 Every name `GetLocalizableFields()` returns must be a public `string` property with a public getter and setter. Anything else — a typo, a renamed property, a `decimal` — is refused with `InvalidOperationException` when the wrapper is constructed. A translation row belongs to one `(EntityGuid, EntityType, FieldName, Culture)`, where `EntityType` is the store's type name.

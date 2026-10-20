@@ -217,14 +217,8 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
             return entity;
         }
 
-        if (entity.Guid == null)
-        {
-            return entity;
-        }
-
-        // SH-H016: Apply returns a detached copy, never the instance the inner store returned.
-        return LocalizedTranslationRows.Apply(entity, LocalizedTranslationRows.ReadMany(
-            _translationStore, new[] { entity.Guid.Value }, LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name));
+        // SH-H016: the result is a detached copy, never the instance the inner store returned.
+        return LocalizedTranslationRows.LocalizeAll(_translationStore, new List<T> { entity }, _context.CurrentCulture.Name)[0];
     }
 
     #endregion
@@ -249,14 +243,8 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
     }
 
     protected void DeleteTranslations(T entity)
-    {
-        if (entity.Guid == null)
-        {
-            return;
-        }
-
-        LocalizedTranslationRows.Delete(_translationStore, entity.Guid.Value, LocalizedTranslationRows.EntityTypeOf<T>());
-    }
+        => LocalizedTranslationRows.DeleteMany(
+            _translationStore, LocalizedTranslationRows.GuidsOf(new[] { entity }), LocalizedTranslationRows.EntityTypeOf<T>());
 
     #endregion
 

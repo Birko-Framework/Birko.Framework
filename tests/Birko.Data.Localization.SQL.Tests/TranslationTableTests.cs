@@ -332,6 +332,92 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     }
 
     [Fact]
+    public async Task A_save_costs_one_read_and_one_call_of_each_kind()
+    {
+        if (!RequireServer()) return;
+        var inner = Store<EntityTranslationModel>();
+        var entity = Guid.NewGuid();
+        await inner.CreateAsync(new[] { Row(entity, "stare"), Row(entity, "zmaz ma", field: "Description") });
+        var counted = new RacingStore<EntityTranslationModel>(inner, race: null);
+
+        await LocalizedTranslationRows.SaveAsync(counted, entity, "Product", "sk",
+            new Dictionary<string, string?> { ["Name"] = "nove", ["Description"] = null, ["Code"] = "pridane" }, CancellationToken.None);
+
+        (counted.Reads, counted.Creates, counted.Updates, counted.Deletes).Should().Be((1, 1, 1, 1));
+        (await inner.ReadAsync(t => t.EntityGuid == entity, null, null, null))
+            .Select(r => (r.FieldName, r.Value, r.ValueHash)).OrderBy(r => r.FieldName)
+            .Should().Equal(("Code", "pridane", LocalizedValueHash.Of("pridane")), ("Name", "nove", LocalizedValueHash.Of("nove")));
+    }
+
+    [Fact]
+    public async Task A_racing_writer_on_one_key_of_a_batch_leaves_one_row_per_key()
+    {
+        if (!RequireServer() || !RequireKey()) return;
+        var inner = Store<EntityTranslationModel>();
+        var entity = Guid.NewGuid();
+        // The other writer stores one of the two keys after our read: the batch's create is refused as a whole.
+        var racing = new RacingStore<EntityTranslationModel>(inner, () => inner.CreateAsync(Row(entity, "other writer")));
+
+        await LocalizedTranslationRows.SaveAsync(racing, entity, "Product", "sk",
+            new Dictionary<string, string?> { ["Name"] = "ours", ["Description"] = "popis" }, CancellationToken.None);
+
+        racing.Raced.Should().BeTrue("the test must actually have raced");
+        (await inner.ReadAsync(t => t.EntityGuid == entity, null, null, null))
+            .Select(r => (r.FieldName, r.Value)).OrderBy(r => r.FieldName)
+            .Should().Equal(("Description", "popis"), ("Name", "ours"));
+    }
+
+    [Fact]
+    public async Task Deleting_many_entities_and_one_culture_runs_through_the_providers_translator()
+    {
+        if (!RequireServer()) return;
+        var store = Store<EntityTranslationModel>();
+        var gone = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var oneCulture = Guid.NewGuid();
+        var kept = Guid.NewGuid();
+        foreach (var entity in gone.Append(oneCulture).Append(kept))
+        {
+            var czech = Row(entity, "cs");
+            czech.Culture = "cs";
+            await store.CreateAsync(new[] { Row(entity, "sk"), czech });
+        }
+
+        await LocalizedTranslationRows.DeleteManyAsync(store, gone, "Product", CancellationToken.None);
+        await LocalizedTranslationRows.DeleteCultureAsync(store, oneCulture, "Product", "sk", CancellationToken.None);
+
+        var left = (await store.ReadAsync(t => gone.Contains(t.EntityGuid) || t.EntityGuid == oneCulture || t.EntityGuid == kept, null, null, null))
+            .Select(r => (r.EntityGuid, r.Culture)).ToList();
+        left.Should().BeEquivalentTo(new[] { (oneCulture, "cs"), (kept, "sk"), (kept, "cs") });
+    }
+
+    [Fact]
+    public async Task The_wrappers_collection_filter_and_delete_writes_reach_the_provider_batched()
+    {
+        if (!RequireServer()) return;
+        var context = new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") };
+        var products = Store<SqlProduct>();
+        var counted = new RacingStore<EntityTranslationModel>(Store<EntityTranslationModel>(), race: null);
+        var run = Guid.NewGuid().ToString("N")[..8];
+        var bulk = new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<SqlProduct>, SqlProduct>(products, counted, context);
+        var items = Enumerable.Range(0, 3).Select(i => new SqlProduct { Guid = Guid.NewGuid(), Name = $"sk-{i}", Code = run }).ToList();
+
+        await bulk.CreateAsync(items);
+        (counted.Reads, counted.Creates).Should().Be((1, 1));
+
+        await bulk.UpdateAsync(x => x.Code == run, x => x.Name += "!");
+        (await bulk.ReadAsync(x => x.Code == run, null, null, null)).Select(x => x.Name)
+            .Should().BeEquivalentTo("sk-0!", "sk-1!", "sk-2!");
+        (await products.ReadAsync(x => x.Code == run, null, null, null)).Select(x => x.Name)
+            .Should().BeEquivalentTo(new[] { "sk-0", "sk-1", "sk-2" }, "the base column keeps what the create stored");
+
+        var deletes = counted.Deletes;
+        await bulk.DeleteAsync(x => x.Code == run);
+        (counted.Deletes - deletes).Should().Be(1);
+        var guids = items.Select(i => i.Guid!.Value).ToList();
+        (await counted.CountAsync(t => guids.Contains(t.EntityGuid))).Should().Be(0);
+    }
+
+    [Fact]
     public async Task A_provider_that_cannot_hold_the_key_reports_it()
     {
         if (!RequireServer() || HoldsTheKey) return;
@@ -359,7 +445,7 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
         private readonly IAsyncBulkStore<T> _inner;
         private Func<Task>? _race;
 
-        public RacingStore(IAsyncBulkStore<T> inner, Func<Task> race)
+        public RacingStore(IAsyncBulkStore<T> inner, Func<Task>? race)
         {
             _inner = inner;
             _race = race;
@@ -367,8 +453,15 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
 
         public bool Raced { get; private set; }
 
+        /// <summary>Calls made through this store, one per call whatever its size (TASK-690 counts them).</summary>
+        public int Reads { get; private set; }
+        public int Creates { get; private set; }
+        public int Updates { get; private set; }
+        public int Deletes { get; private set; }
+
         public async Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
         {
+            Reads++;
             var result = (await _inner.ReadAsync(filter, orderBy, limit, offset, ct)).ToList();
             var race = _race;
             if (race != null)
@@ -384,15 +477,15 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
         public Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default) => ((IAsyncReadStore<T>)_inner).ReadAsync(filter, ct);
         public Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default) => _inner.ReadAsync(ct);
         public Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default) => _inner.CountAsync(filter, ct);
-        public Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) => _inner.CreateAsync(data, processDelegate, ct);
-        public Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) => _inner.CreateAsync(data, storeDelegate, ct);
-        public Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) => _inner.UpdateAsync(data, processDelegate, ct);
-        public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) => _inner.UpdateAsync(data, storeDelegate, ct);
-        public Task DeleteAsync(T data, CancellationToken ct = default) => _inner.DeleteAsync(data, ct);
+        public Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) { Creates++; return _inner.CreateAsync(data, processDelegate, ct); }
+        public Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) { Creates++; return _inner.CreateAsync(data, storeDelegate, ct); }
+        public Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) { Updates++; return _inner.UpdateAsync(data, processDelegate, ct); }
+        public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) { Updates++; return _inner.UpdateAsync(data, storeDelegate, ct); }
+        public Task DeleteAsync(T data, CancellationToken ct = default) { Deletes++; return _inner.DeleteAsync(data, ct); }
         public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default) => _inner.UpdateAsync(filter, updateAction, ct);
         public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default) => _inner.UpdateAsync(filter, updates, ct);
-        public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default) => _inner.DeleteAsync(data, ct);
-        public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default) => _inner.DeleteAsync(filter, ct);
+        public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default) { Deletes++; return _inner.DeleteAsync(data, ct); }
+        public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default) { Deletes++; return _inner.DeleteAsync(filter, ct); }
         public Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) => _inner.SaveAsync(data, processDelegate, ct);
         public Task InitAsync(CancellationToken ct = default) => _inner.InitAsync(ct);
         public Task DestroyAsync(CancellationToken ct = default) => _inner.DestroyAsync(ct);

@@ -289,6 +289,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Translation writes are batched (2026-10-20)
+[[TASK-690]]. Saving translations costs one read of the existing rows per 500 entities, then at most one bulk delete,
+update and create. It used to be a read and a write per field, per entity: a collection create of 3 products with 2
+fields made 6 reads and 6 creates. Deletes by a list or filter are one filter delete per 500 entities, and a filter
+update reads the matched translations once. If the unique key refuses the batch, the keys are re-read once and another
+writer's rows are updated. A filter update that fails part way keeps the translations it wrote (decided by the user).
+Measured on SQLite, PostgreSQL, SQL Server and MySQL. Groundwork for [[TASK-682]].
 ### Filters on translated fields fall back to the base value and look up by hash (2026-10-19)
 [[TASK-681]]. On a non-default culture, an entity with a translation matches on it, and one without matches on its base
 value (SH-M070). `==` and `IN` read only matching rows through an indexed `ValueHash` (SHA-256, SH-M082), and
@@ -366,16 +373,6 @@ a 2xx `error` as an error, and a borrowed HttpClient is no longer reconfigured.
 [[TASK-520]]. `TokenEndpointHandler.ShapeClientCredentialsToken` sets a service account's subject and extra claims
 without replacing the grant; registered claims are refused. `ClaimsCurrentUser` splits a `scope` permission claim on
 spaces too (RFC 6749 §3.3), so `"a b"` reads as two permissions. Commas still work, and other claims are unchanged.
-### Birko.Security.OAuth.Server.AspNetCore: MapOAuthServer (2026-10-18)
-[[TASK-519]]. New project, from DraCode's `OAuthEndpoints.cs`. `MapOAuthServer()` maps `/token`, `/device_authorization`,
-`/device/approve`, `/authorize` and an opt-in `/register`. They take form or Basic client credentials and return RFC 6749
-errors, and `GrantHandlers` lets the app take over a grant. Fixed against DraCode: no `no-store`, `invalid_client` sent
-as 400, Basic not form-decoded or a malformed one ignored, and `/register` refusing its own `client_type`.
-### WebSocketCommandRouter: the server half of WsClient.request (2026-10-18)
-[[TASK-539]]. New in Birko.Communication.WebSocket. It routes `{ type, id, data }` to a handler by command name and
-replies `response` or `error`. Every reply carries the request id, including errors (DraCode's dropped it, so clients
-timed out). `RunAsync` handles requests concurrently over the capped receive. An exception's message is not sent
-unless `ExposeExceptionMessages`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
