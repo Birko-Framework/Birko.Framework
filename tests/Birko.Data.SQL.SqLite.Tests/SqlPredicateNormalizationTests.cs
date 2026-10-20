@@ -53,7 +53,7 @@ public class SqlPredicateNormalizationTests : IDisposable
         public void Configure(ModelMap<NRow> map)
         {
             map.ToTable("NRows").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Amount);
             map.Property(x => x.Bonus);
             map.Property(x => x.Total);

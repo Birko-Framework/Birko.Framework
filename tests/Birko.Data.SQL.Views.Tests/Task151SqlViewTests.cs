@@ -64,7 +64,7 @@ public class Task151SqlViewTests : IDisposable
         public void Configure(ModelMap<T151Person> map)
         {
             map.ToTable("T151Persons").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

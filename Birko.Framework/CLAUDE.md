@@ -289,6 +289,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Fluent HasPrecision / HasScale reach a decimal, and are refused on a string (2026-10-20)
+[[TASK-692]]. Both were accepted and dropped: a decimal got `(22,6)`, and a string's `HasPrecision(n)` stayed `LONGTEXT` /
+`NVARCHAR(MAX)`. Now a decimal gets them, and any other type is refused. **Breaking:** a string's length is `HasMaxLength(n)`,
+and `ApplyToDatabase` throws on a string `HasPrecision`. The framework's 74 such calls were converted, so those columns get
+their declared length; existing tables report drift until altered. WorkoutTracker converted; FisData.Stock skipped (decided
+by the user). Measured on MySQL.
 ### Grants.SQL's lookup indexes are buildable on MySQL and SQL Server (2026-10-20)
 [[TASK-693]]. `GrantSqlIndexes.EnsureAsync` threw on both: the indexed `ResourceType` and `Email` were `LONGTEXT` /
 `NVARCHAR(MAX)`, which neither can index. The mappings now declare the three indexes, so schema-ensure creates them and
@@ -321,7 +327,7 @@ this keep 255-character columns and are reported; the README has the `ALTER` rem
 [[TASK-691]]. `ModelMapRegistry.ApplyToDatabase` applies `HasMaxLength`. It was accepted and dropped. A string
 becomes the bounded column `[MaxLengthField]` gives, and the fluent value wins. A `byte[]` is bounded likewise, and any
 other type is refused. An index-key column keeps its declared length instead of 255. New
-`DataBase.RegisterMaxLength`. Groundwork for [[TASK-684]]. `HasPrecision`/`HasScale` stay unapplied ([[TASK-692]]).
+`DataBase.RegisterMaxLength`. Groundwork for [[TASK-684]]. `HasPrecision`/`HasScale` followed in [[TASK-692]].
 ### Localized writes: the entity and its translations in one transaction (2026-10-20)
 [[TASK-683]]. Wrappers and `EntityTranslations` take an optional `ILocalizedWriteBoundary`. With
 `SqlLocalizedWriteBoundary.For(entityStore, translationStore)` and both stores on one SQL database, a failed
@@ -367,14 +373,6 @@ batch size is unmeasured on SQL until [[TASK-680]] maps the translation model.
 - An unknown order-by property throws on the in-memory path, as `OrderByHelper` does.
 
 `Destroy` also deletes this type's translation rows, `Init` initialises the translation store, and negative paging throws.
-### Localization triage: untranslatable filters refused, translations saved after the write (2026-10-19)
-[[TASK-168]]. 14 medium findings, all confirmed (SH-M076 narrower); 4 handed to EPIC-021, SH-M083 spawned as [[TASK-683]].
-- A filter that reads a translated field in a form the analyzer cannot translate (`||`, `!`, chained or static calls,
-  column-to-column) throws `NotSupportedException`. It used to test the default-culture column silently.
-- `Update(filter, Action)` shows the action the translated values and writes only the fields it changed, after the
-  inner write. Measured: an update of a non-localized field overwrote the Slovak translations with English text.
-- A `null` field removes its translation. Rows are stamped `typeof(T).Name`, keyed by the GUID the store returned.
-  `StringComparison` is honoured, and in-memory sorting collates with the current culture.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

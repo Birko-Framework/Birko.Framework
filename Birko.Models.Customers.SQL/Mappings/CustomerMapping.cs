@@ -13,13 +13,13 @@ namespace Birko.Models.Customers.SQL.Mappings
 
             // CR-M219: bound the string columns (previously unmapped → unbounded nvarchar(max),
             // unindexable), matching ContactPersonMapping / Pricing.SQL precision conventions.
-            map.Property(x => x.Name).HasPrecision(256);
-            map.Property(x => x.Code).HasPrecision(64);
-            map.Property(x => x.Email).HasPrecision(256);
-            map.Property(x => x.Phone).HasPrecision(64);
-            map.Property(x => x.Website).HasPrecision(256);
-            map.Property(x => x.TaxId).HasPrecision(32);
-            map.Property(x => x.VatId).HasPrecision(32);
+            map.Property(x => x.Name).HasMaxLength(256);
+            map.Property(x => x.Code).HasMaxLength(64);
+            map.Property(x => x.Email).HasMaxLength(256);
+            map.Property(x => x.Phone).HasMaxLength(64);
+            map.Property(x => x.Website).HasMaxLength(256);
+            map.Property(x => x.TaxId).HasMaxLength(32);
+            map.Property(x => x.VatId).HasMaxLength(32);
         }
     }
 }

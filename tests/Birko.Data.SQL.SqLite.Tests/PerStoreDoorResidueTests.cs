@@ -96,7 +96,7 @@ public class PerStoreDoorResidueTests : IDisposable
         public void Configure(ModelMap<DoorRow> map)
         {
             map.ToTable("DoorRows").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

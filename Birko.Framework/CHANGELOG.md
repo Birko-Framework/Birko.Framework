@@ -4,6 +4,16 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-19 — Localization triage: untranslatable filters refused, translations saved after the write
+
+[[TASK-168]]. 14 medium findings, all confirmed (SH-M076 narrower); 4 handed to EPIC-021, SH-M083 spawned as [[TASK-683]].
+- A filter that reads a translated field in a form the analyzer cannot translate (`||`, `!`, chained or static calls,
+  column-to-column) throws `NotSupportedException`. It used to test the default-culture column silently.
+- `Update(filter, Action)` shows the action the translated values and writes only the fields it changed, after the
+  inner write. Measured: an update of a non-localized field overwrote the Slovak translations with English text.
+- A `null` field removes its translation. Rows are stamped `typeof(T).Name`, keyed by the GUID the store returned.
+  `StringComparison` is honoured, and in-memory sorting collates with the current culture.
+
 ## 2026-10-18 — The SQL cached store invalidates again after a transaction commits
 
 [[TASK-669]]. During a transaction, a reader outside it could cache the pre-commit rows until they expired. New

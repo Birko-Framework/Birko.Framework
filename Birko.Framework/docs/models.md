@@ -216,7 +216,7 @@ var map = registry.GetMap<StockItem>();
 | `Ignore<TProp>(expr)` | Exclude property |
 | `Property<TProp>(expr)` | Enter property-level builder |
 | `.HasColumnName(string)` | Column alias |
-| `.HasPrecision(int)` / `.HasScale(int)` | Decimal precision/scale |
+| `.HasPrecision(int)` / `.HasScale(int)` | Decimal precision/scale; refused on any other type (TASK-692) |
 | `.HasMaxLength(int)` | String length |
 | `.IsUnique()` / `.IsPrimary()` | Constraints |
 | `.HasIndex()` | Index creation |

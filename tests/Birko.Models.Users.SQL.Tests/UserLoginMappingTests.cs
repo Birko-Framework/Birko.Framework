@@ -40,6 +40,6 @@ public class UserLoginMappingTests
     [InlineData("ProviderKey")]
     public void NaturalKeyColumns_AreBounded(string column)
     {
-        Map().First(f => f.Name == column).Precision.Should().NotBe(0);
+        Map().First(f => f.Name == column).MaxLength.Should().BeGreaterThan(0, "a string is bounded by HasMaxLength (TASK-692)");
     }
 }

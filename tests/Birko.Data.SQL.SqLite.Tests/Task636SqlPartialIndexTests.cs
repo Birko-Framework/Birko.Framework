@@ -48,7 +48,7 @@ public class Task636SqlPartialIndexTests : IDisposable
         public void Configure(ModelMap<T636Currency> map)
         {
             map.ToTable("T636Currencies").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Code).HasPrecision(10);
+            map.Property(x => x.Code);
             map.Property(x => x.DefaultMarker);
             map.Property(x => x.DeletedAt);
         }

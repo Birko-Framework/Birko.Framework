@@ -65,7 +65,7 @@ public class SyncDataBaseRepositoryTests : IDisposable
         public void Configure(ModelMap<RepoModel> map)
         {
             map.ToTable("RepoModels").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

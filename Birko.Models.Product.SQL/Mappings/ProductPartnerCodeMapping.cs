@@ -11,8 +11,8 @@ namespace Birko.Models.Product.SQL.Mappings
                 .HasPrimary(x => x.Guid)
                 .HasUnique(x => x.Guid);
 
-            map.Property(x => x.PartnerName).HasPrecision(256);
-            map.Property(x => x.Code).HasPrecision(256);
+            map.Property(x => x.PartnerName).HasMaxLength(256);
+            map.Property(x => x.Code).HasMaxLength(256);
         }
     }
 }

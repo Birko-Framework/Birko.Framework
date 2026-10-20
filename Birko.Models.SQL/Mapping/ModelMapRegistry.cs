@@ -91,9 +91,10 @@ namespace Birko.Models.SQL.Mapping
         /// rendered as declared, and the database refuses the index, which schema-ensure reports, as with the attribute.
         /// </para>
         /// <para>
-        /// <b>Not applied</b> — <c>HasPrecision</c> and <c>HasScale</c> are mapping metadata only (TASK-692): the column type
-        /// is fixed when the field is built, from the model's SQL field attributes. A string's <c>HasPrecision</c> is not a
-        /// length here, unlike <c>[PrecisionField]</c>. The fluent options remain readable via <see cref="GetPropertyMaps"/>.
+        /// <c>HasPrecision</c> / <c>HasScale</c> are applied to a <c>decimal</c> column (TASK-692), through
+        /// <c>DataBase.RegisterPrecision</c>, winning over <c>[PrecisionField]</c> / <c>[ScaleField]</c>. On any other type
+        /// they are refused (rule 55); a string's length is <c>HasMaxLength</c>. Before, both were accepted and dropped: a
+        /// decimal got the provider default, and a string's <c>HasPrecision(n)</c> left it unbounded.
         /// </para>
         /// </summary>
         public void ApplyToDatabase()
@@ -111,6 +112,7 @@ namespace Birko.Models.SQL.Mapping
             foreach (var (type, _) in _maps)
             {
                 RegisterMaxLengths(type, GetPropertyMaps(type));
+                RegisterPrecisions(type, GetPropertyMaps(type));
             }
 
             foreach (var (type, _) in _maps)
@@ -141,7 +143,7 @@ namespace Birko.Models.SQL.Mapping
                     if (field.IsRequired) sqlField.IsNotNull = true;
                     if (field.IsAutoIncrement) sqlField.IsAutoincrement = true;
 
-                    // MaxLength was registered before the load; Precision / Scale are not applied (TASK-692).
+                    // MaxLength, Precision and Scale were registered before the load (TASK-691, TASK-692).
                 }
 
                 if (renamed.Count > 0) RenameColumns(table, renamed);
@@ -183,6 +185,55 @@ namespace Birko.Models.SQL.Mapping
                     throw new InvalidOperationException($"{where}: the property is not a column (ignored, or it has no setter).");
                 }
                 Birko.Data.SQL.DataBase.RegisterMaxLength(type, field.Name, maxLength);
+            }
+        }
+
+        /// <summary>
+        /// Registers each <c>HasPrecision</c> / <c>HasScale</c> of <paramref name="type"/>'s mapping (TASK-692).
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// One that cannot be honoured, refused rather than dropped (rule 55): a property that is not <c>decimal</c> (a
+        /// string's length is <c>HasMaxLength</c>); a precision that is not positive; a negative scale, or one above the
+        /// precision; a property that is no column.
+        /// </exception>
+        private static void RegisterPrecisions(Type type, IReadOnlyList<FieldDescriptor> properties)
+        {
+            foreach (var field in properties)
+            {
+                if (field.Precision == null && field.Scale == null)
+                {
+                    continue;
+                }
+                var where = $"{(field.Precision != null ? $"HasPrecision({field.Precision})" : "")}"
+                    + $"{(field.Precision != null && field.Scale != null ? "." : "")}"
+                    + $"{(field.Scale != null ? $"HasScale({field.Scale})" : "")} on {type.Name}.{field.Name}";
+                var property = DeclaredProperty(type, field.Name)
+                    ?? throw new InvalidOperationException($"{where}: {type.Name} has no such public property.");
+                var clr = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+                if (clr == typeof(string))
+                {
+                    throw new InvalidOperationException(
+                        $"{where}, a string: precision and scale are a decimal's. A string's length is HasMaxLength(n).");
+                }
+                if (clr != typeof(decimal))
+                {
+                    throw new InvalidOperationException(
+                        $"{where}, a {clr.Name}: only a decimal column has a precision and scale.");
+                }
+                if (field.Precision is int precision && precision <= 0)
+                {
+                    throw new InvalidOperationException($"{where}: a precision must be positive.");
+                }
+                if (field.Scale is int scale && (scale < 0 || (field.Precision is int p && scale > p)))
+                {
+                    throw new InvalidOperationException($"{where}: a scale must be between 0 and the precision.");
+                }
+                if (field.IsIgnored || !property.CanWrite
+                    || property.IsDefined(typeof(Birko.Data.SQL.Attributes.IgnoreField), true))
+                {
+                    throw new InvalidOperationException($"{where}: the property is not a column (ignored, or it has no setter).");
+                }
+                Birko.Data.SQL.DataBase.RegisterPrecision(type, field.Name, field.Precision, field.Scale);
             }
         }
 

@@ -59,7 +59,7 @@ public abstract class Task639PersistentViewFilterLiveTestsBase : IAsyncLifetime
         public void Configure(ModelMap<T639Person> map)
         {
             map.ToTable("T639Persons").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

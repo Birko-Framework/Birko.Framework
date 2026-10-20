@@ -110,7 +110,7 @@ public class HypertableSchemaLiveTests : IDisposable
         public void Configure(ModelMap<TimeKeyedRow> map)
         {
             map.ToTable(TimeKeyedTable).HasPrimary(x => x.Ts);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Ts);
         }
     }
@@ -120,7 +120,7 @@ public class HypertableSchemaLiveTests : IDisposable
         public void Configure(ModelMap<GuidKeyedRow> map)
         {
             map.ToTable(GuidKeyedTable).HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Ts);
         }
     }

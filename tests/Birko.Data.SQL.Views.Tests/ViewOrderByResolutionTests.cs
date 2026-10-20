@@ -92,7 +92,7 @@ public class ViewOrderByResolutionTests : IDisposable
         public void Configure(ModelMap<VPerson> map)
         {
             map.ToTable("VPersons").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

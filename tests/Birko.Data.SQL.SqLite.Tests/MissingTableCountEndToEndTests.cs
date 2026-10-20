@@ -58,7 +58,7 @@ public class MissingTableCountEndToEndTests : IDisposable
         public void Configure(ModelMap<Row> map)
         {
             map.ToTable("MissingCountRows").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Amount);
         }
     }
@@ -218,7 +218,7 @@ public class SchemaEscapeDiagnosticTests : IDisposable
         public void Configure(ModelMap<ERow> map)
         {
             map.ToTable("EscapeRows").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(50);
+            map.Property(x => x.Name);
         }
     }
 

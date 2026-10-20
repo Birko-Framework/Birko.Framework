@@ -34,7 +34,7 @@ public class Task272SchemaHypertableLiveTests : IDisposable
         public void Configure(ModelMap<T272TsRow> map)
         {
             map.ToTable("T272TsRows", "t272ts").HasPrimary(x => x.Ts);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Ts);
         }
     }

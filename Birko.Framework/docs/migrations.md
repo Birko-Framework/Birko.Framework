@@ -266,7 +266,7 @@ public class CurrencyMapping : IModelMapping<Currency>
             .HasPrimary(x => x.Guid)
             .HasUnique(x => x.Guid);
 
-        map.Property(x => x.Code).HasPrecision(8).IsUnique();
+        map.Property(x => x.Code).HasMaxLength(8).IsUnique();
     }
 }
 ```

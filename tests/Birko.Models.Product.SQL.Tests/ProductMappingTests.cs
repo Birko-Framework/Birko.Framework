@@ -49,7 +49,7 @@ public class ProductMappingTests
     {
         var code = Configure(new MeasureUnitMapping()).Properties.Single(p => p.Name == "Code");
         code.IsUnique.Should().BeTrue("MeasureUnit.Code is a natural key");
-        code.Precision.Should().Be(50);
+        code.MaxLength.Should().Be(50);
     }
 
     [Fact]
@@ -67,6 +67,6 @@ public class ProductMappingTests
     public void MeasureUnit_StringColumns_AreBounded(string column)
     {
         Configure(new MeasureUnitMapping()).Properties.Single(p => p.Name == column)
-            .Precision.Should().NotBe(0);
+            .MaxLength.Should().BeGreaterThan(0, "a string is bounded by HasMaxLength (TASK-692)");
     }
 }

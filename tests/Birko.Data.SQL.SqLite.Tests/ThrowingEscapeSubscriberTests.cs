@@ -62,7 +62,7 @@ public class ThrowingEscapeSubscriberTests : IDisposable
         public void Configure(ModelMap<TRow> map)
         {
             map.ToTable("ThrowSubRows").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(50);
+            map.Property(x => x.Name);
         }
     }
 

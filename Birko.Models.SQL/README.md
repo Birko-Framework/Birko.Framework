@@ -8,7 +8,7 @@ Fluent SQL mapping framework for Birko domain models. Framework only — canonic
 - Expression-based property configuration (type-safe)
 - `ModelMapRegistry` with assembly scanning for auto-discovery
 - Supports: table name, column name, unique, primary, precision, scale, max length, index, ignore
-- Bridges to `Birko.Data.SQL` via `ApplyToDatabase()` — registers table names + patches the column name, the primary/unique/required/auto-increment flags and the `HasIndex` / `HasUniqueIndex` indexes onto the SQL layer and `HasMaxLength` (TASK-691; refused on a type with no length). `HasPrecision`/`HasScale` are mapping metadata only, not applied (TASK-692) — see CLAUDE.md
+- Bridges to `Birko.Data.SQL` via `ApplyToDatabase()` — registers table names + patches the column name, the primary/unique/required/auto-increment flags and the `HasIndex` / `HasUniqueIndex` indexes onto the SQL layer and `HasMaxLength` (TASK-691; refused on a type with no length). `HasPrecision`/`HasScale` on a `decimal` (TASK-692; refused on any other type, a string's length is `HasMaxLength`) — see CLAUDE.md
 
 ## Installation
 
@@ -86,8 +86,9 @@ Console.WriteLine(map?.TableName); // "Customers"
 | `[Table("X", Schema = "s")]` | `map.ToTable("X", "s")` (TASK-272) |
 | `[UniqueField]` | `.IsUnique()` or `map.HasUnique(x => x.Prop)` |
 | `[PrimaryField]` | `.IsPrimary()` or `map.HasPrimary(x => x.Prop)` |
-| `[PrecisionField(N)]` | `.HasPrecision(N)` |
-| `[ScaleField(N)]` | `.HasScale(N)` |
+| `[PrecisionField(N)]` on a decimal | `.HasPrecision(N)` |
+| `[ScaleField(N)]` on a decimal | `.HasScale(N)` |
+| `[PrecisionField(N)]` on a string (a length) | `.HasMaxLength(N)` — `HasPrecision` on a string is refused (TASK-692) |
 | `[NamedField("X")]` | `.HasColumnName("X")` |
 | `[RequiredField]` | `.IsRequired()` |
 | `[IgnoreField]` | `map.Ignore(x => x.Prop)` |

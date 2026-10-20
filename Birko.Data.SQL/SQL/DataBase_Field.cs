@@ -18,6 +18,10 @@ namespace Birko.Data.SQL
         // attributes, so CreateAbstractField stays the one producer of a column's type.
         private static readonly ConcurrentDictionary<(Type Model, string Property), int> _maxLengthOverrides = new();
 
+        // TASK-692: a decimal's precision and scale a fluent mapping declares, read by LoadField as PrecisionField /
+        // ScaleField after the property's own attributes, for the same reason.
+        private static readonly ConcurrentDictionary<(Type Model, string Property), (int? Precision, int? Scale)> _precisionOverrides = new();
+
         /// <summary>
         /// Bounds <paramref name="propertyName"/> of <paramref name="modelType"/> to <paramref name="maxLength"/>, as a
         /// <c>[MaxLengthField]</c> on the property would, and winning over one (used by fluent mapping systems:
@@ -49,6 +53,34 @@ namespace Birko.Data.SQL
                 return;
             }
             _maxLengthOverrides[key] = maxLength;
+            _fieldsCache.TryRemove(modelType, out _);
+            _tableCache.TryRemove(modelType, out _);
+        }
+
+        /// <summary>
+        /// Gives <paramref name="propertyName"/> of <paramref name="modelType"/> the decimal <paramref name="precision"/> and
+        /// <paramref name="scale"/> a <c>[PrecisionField]</c> / <c>[ScaleField]</c> would, winning over them (fluent mapping
+        /// systems: <c>HasPrecision</c> / <c>HasScale</c>). A null leaves that part to the property's own attribute, or to
+        /// the provider default. Same lifetime and inheritance as <see cref="RegisterMaxLength"/>: process-wide, at startup,
+        /// a changed value drops the type's cached fields and table, the same value again changes nothing.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">A precision that is not positive, or a negative scale.</exception>
+        public static void RegisterPrecision(Type modelType, string propertyName, int? precision, int? scale)
+        {
+            ArgumentNullException.ThrowIfNull(modelType);
+            ArgumentException.ThrowIfNullOrEmpty(propertyName);
+            if (precision is int p) ArgumentOutOfRangeException.ThrowIfNegativeOrZero(p, nameof(precision));
+            if (scale is int s) ArgumentOutOfRangeException.ThrowIfNegative(s, nameof(scale));
+            if (precision == null && scale == null)
+            {
+                return;
+            }
+            var key = (modelType, propertyName);
+            if (_precisionOverrides.TryGetValue(key, out var registered) && registered == (precision, scale))
+            {
+                return;
+            }
+            _precisionOverrides[key] = (precision, scale);
             _fieldsCache.TryRemove(modelType, out _);
             _tableCache.TryRemove(modelType, out _);
         }
@@ -123,6 +155,13 @@ namespace Birko.Data.SQL
                 // Last, so it wins over the property's own MaxLengthField (CreateAbstractField: the last one read wins).
                 fieldAttrs = fieldAttrs.Append(new Birko.Data.SQL.Attributes.MaxLengthField(maxLength)).ToArray();
             }
+            if (Registered(_precisionOverrides, field, modelType) is { } registered)
+            {
+                var (precision, scale) = registered;
+                // Last, as above: the fluent precision and scale win over the property's own attributes.
+                if (precision is int p) fieldAttrs = fieldAttrs.Append(new Birko.Data.SQL.Attributes.PrecisionField(p)).ToArray();
+                if (scale is int s) fieldAttrs = fieldAttrs.Append(new Birko.Data.SQL.Attributes.ScaleField(s)).ToArray();
+            }
 
             var tableField = Fields.AbstractField.CreateAbstractField(field, fieldAttrs);
             return tableField != null ? new[] { tableField } : Array.Empty<AbstractField>();
@@ -195,8 +234,13 @@ namespace Birko.Data.SQL
         /// then on the type it was reflected from and its base types; the first (most derived) registration wins.
         /// </summary>
         private static int? RegisteredMaxLength(PropertyInfo field, Type? modelType)
+            => Registered(_maxLengthOverrides, field, modelType) is int length ? length : null;
+
+        /// <summary>The one lookup both registrations share (rule 16): most derived registration first.</summary>
+        private static TValue? Registered<TValue>(ConcurrentDictionary<(Type Model, string Property), TValue> overrides, PropertyInfo field, Type? modelType)
+            where TValue : struct
         {
-            if (_maxLengthOverrides.IsEmpty)
+            if (overrides.IsEmpty)
             {
                 return null;
             }
@@ -204,9 +248,9 @@ namespace Birko.Data.SQL
             {
                 for (var type = start; type != null && type != typeof(object); type = type.BaseType)
                 {
-                    if (_maxLengthOverrides.TryGetValue((type, field.Name), out var length))
+                    if (overrides.TryGetValue((type, field.Name), out var value))
                     {
-                        return length;
+                        return value;
                     }
                 }
             }

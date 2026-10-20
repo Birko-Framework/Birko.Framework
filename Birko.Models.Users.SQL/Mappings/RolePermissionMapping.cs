@@ -11,7 +11,7 @@ namespace Birko.Models.Users.SQL.Mappings
                 .HasPrimary(x => x.Guid)
                 .HasUnique(x => x.Guid);
 
-            map.Property(x => x.PermissionCode).HasPrecision(256);
+            map.Property(x => x.PermissionCode).HasMaxLength(256);
             // CR-L324: index the FK lookup column (a role's permissions). Index metadata is advisory.
             map.Property(x => x.RoleGuid).HasIndex("IX_RolePermissions_RoleGuid");
         }

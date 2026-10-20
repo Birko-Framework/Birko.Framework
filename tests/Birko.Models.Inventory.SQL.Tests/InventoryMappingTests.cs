@@ -73,7 +73,7 @@ public class InventoryMappingTests
     public void StockItem_StringColumns_AreBounded(string column)
     {
         Configure(new StockItemMapping()).Properties.Single(p => p.Name == column)
-            .Precision.Should().NotBe(0);
+            .MaxLength.Should().BeGreaterThan(0, "a string is bounded by HasMaxLength (TASK-692)");
     }
 
     [Fact]
@@ -117,6 +117,6 @@ public class InventoryMappingTests
     public void StockBalance_BatchNumber_IsBounded()
     {
         Configure(new StockBalanceMapping()).Properties.Single(p => p.Name == "BatchNumber")
-            .Precision.Should().NotBe(0);
+            .MaxLength.Should().BeGreaterThan(0, "a string is bounded by HasMaxLength (TASK-692)");
     }
 }

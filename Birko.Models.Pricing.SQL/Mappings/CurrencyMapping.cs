@@ -11,9 +11,9 @@ namespace Birko.Models.Pricing.SQL.Mappings
                 .HasPrimary(x => x.Guid)
                 .HasUnique(x => x.Guid);
 
-            map.Property(x => x.Code).HasPrecision(8).IsUnique();
-            map.Property(x => x.Name).HasPrecision(256);
-            map.Property(x => x.Symbol).HasPrecision(8);
+            map.Property(x => x.Code).HasMaxLength(8).IsUnique();
+            map.Property(x => x.Name).HasMaxLength(256);
+            map.Property(x => x.Symbol).HasMaxLength(8);
         }
     }
 
@@ -28,8 +28,8 @@ namespace Birko.Models.Pricing.SQL.Mappings
                 .HasPrimary(x => x.Guid)
                 .HasUnique(x => x.Guid);
 
-            map.Property(x => x.Name).HasPrecision(256);
-            map.Property(x => x.ShortCut).HasPrecision(16);
+            map.Property(x => x.Name).HasMaxLength(256);
+            map.Property(x => x.ShortCut).HasMaxLength(16);
             map.Property(x => x.Percentage).HasPrecision(DecimalPrecision).HasScale(DecimalScale);
         }
     }
@@ -45,7 +45,7 @@ namespace Birko.Models.Pricing.SQL.Mappings
                 .HasPrimary(x => x.Guid)
                 .HasUnique(x => x.Guid);
 
-            map.Property(x => x.Name).HasPrecision(256);
+            map.Property(x => x.Name).HasMaxLength(256);
             map.Property(x => x.Percentage).HasPrecision(DecimalPrecision).HasScale(DecimalScale);
         }
     }

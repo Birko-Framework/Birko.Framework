@@ -38,7 +38,7 @@ namespace Birko.Models.Inventory.SQL.Mappings
 
             map.Property(x => x.Quantity).HasPrecision(DecimalPrecision).HasScale(DecimalScale);
             map.Property(x => x.UnitPrice).HasPrecision(DecimalPrecision).HasScale(DecimalScale);
-            map.Property(x => x.BatchNumber).HasPrecision(256);
+            map.Property(x => x.BatchNumber).HasMaxLength(256);
         }
     }
 }

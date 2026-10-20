@@ -66,7 +66,7 @@ public class VanishedTableHealingTests : IDisposable
         public void Configure(ModelMap<HRow> map)
         {
             map.ToTable("HealRows").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(50);
+            map.Property(x => x.Name);
         }
     }
 

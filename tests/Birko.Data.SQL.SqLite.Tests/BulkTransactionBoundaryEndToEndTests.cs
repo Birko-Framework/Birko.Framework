@@ -71,7 +71,7 @@ public class BulkTransactionBoundaryEndToEndTests : IDisposable
         public void Configure(ModelMap<Row> map)
         {
             map.ToTable("BulkTxRows").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Amount);
         }
     }

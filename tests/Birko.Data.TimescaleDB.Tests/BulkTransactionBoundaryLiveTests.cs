@@ -112,7 +112,7 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
         public void Configure(ModelMap<BulkRow> map)
         {
             map.ToTable(TableName).HasPrimary(x => x.Ts);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Amount);
             map.Property(x => x.Ts);
         }

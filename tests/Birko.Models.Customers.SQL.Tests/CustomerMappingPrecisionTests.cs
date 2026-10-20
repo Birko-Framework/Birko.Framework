@@ -10,7 +10,7 @@ namespace Birko.Models.Customers.SQL.Tests;
 /// <summary>
 /// CR-M219/M220: the Customer / Address / InvoiceAddress string columns were unmapped (unbounded,
 /// unindexable) while the sibling ContactPersonMapping bounded all of its. These assert every string
-/// column now carries a HasPrecision facet (readable via the mapping metadata), matching the convention.
+/// column now carries a HasMaxLength facet (applied to the column since TASK-691; a string's HasPrecision is refused since TASK-692).
 /// </summary>
 public class CustomerMappingPrecisionTests
 {
@@ -26,7 +26,7 @@ public class CustomerMappingPrecisionTests
         private readonly System.Collections.Generic.IReadOnlyList<Birko.Data.Patterns.Schema.FieldDescriptor> _fields;
         public FieldDescriptorView(System.Collections.Generic.IEnumerable<Birko.Data.Patterns.Schema.FieldDescriptor> fields)
             => _fields = fields.ToList();
-        public int? Precision(string name) => _fields.FirstOrDefault(f => f.Name == name)?.Precision;
+        public int? MaxLength(string name) => _fields.FirstOrDefault(f => f.Name == name)?.MaxLength;
     }
 
     [Theory]
@@ -39,7 +39,7 @@ public class CustomerMappingPrecisionTests
     [InlineData("VatId")]
     public void CustomerMapping_BoundsStringColumns(string column)
     {
-        Map(new CustomerMapping()).Precision(column).Should().HaveValue($"{column} must be bounded (CR-M219)");
+        Map(new CustomerMapping()).MaxLength(column).Should().HaveValue($"{column} must be bounded (CR-M219)");
     }
 
     [Theory]
@@ -55,7 +55,7 @@ public class CustomerMappingPrecisionTests
     [InlineData("Email")]
     public void AddressMapping_BoundsStringColumns(string column)
     {
-        Map(new AddressMapping()).Precision(column).Should().HaveValue($"{column} must be bounded (CR-M220)");
+        Map(new AddressMapping()).MaxLength(column).Should().HaveValue($"{column} must be bounded (CR-M220)");
     }
 
     [Theory]
@@ -66,7 +66,7 @@ public class CustomerMappingPrecisionTests
     [InlineData("Street")] // inherited address column, re-mapped
     public void InvoiceAddressMapping_BoundsStringColumns(string column)
     {
-        Map(new InvoiceAddressMapping()).Precision(column).Should().HaveValue($"{column} must be bounded (CR-M220)");
+        Map(new InvoiceAddressMapping()).MaxLength(column).Should().HaveValue($"{column} must be bounded (CR-M220)");
     }
 
     // ── CR-L307: table names + PK/unique on Guid ─────────

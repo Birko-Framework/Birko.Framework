@@ -88,7 +88,7 @@ public class PostgreSqlFilteredWriteTests : IDisposable
         public void Configure(ModelMap<FwPerson> map)
         {
             map.ToTable("FwPeople").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Score);
             map.Property(x => x.Seen);
         }

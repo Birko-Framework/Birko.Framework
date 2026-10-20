@@ -76,7 +76,7 @@ public class AsyncDataBaseRepositoryTests
         public void Configure(ModelMap<TestModel> map)
         {
             map.ToTable("TestModels").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

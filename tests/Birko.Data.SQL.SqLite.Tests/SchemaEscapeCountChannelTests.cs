@@ -63,7 +63,7 @@ public class SchemaEscapeCountChannelTests : IDisposable
         public void Configure(ModelMap<CRow> map)
         {
             map.ToTable("EscapeCountRows").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(50);
+            map.Property(x => x.Name);
         }
     }
 

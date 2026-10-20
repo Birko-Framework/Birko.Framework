@@ -38,5 +38,8 @@
   <Import Project="..\..\Birko.Data.ViewModel\Birko.Data.ViewModel.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.ViewModel\Birko.Data.SQL.ViewModel.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems" Label="Shared" />
+  <!-- TASK-692: the column type a fluent precision renders, on the two providers that bound a bare DECIMAL. -->
+  <Import Project="..\..\Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems" Label="Shared" />
 
 </Project>

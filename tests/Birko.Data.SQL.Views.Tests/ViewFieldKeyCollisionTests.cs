@@ -109,7 +109,7 @@ public class ViewFieldKeyCollisionTests : IDisposable
         public void Configure(ModelMap<VkPerson> map)
         {
             map.ToTable("VkPersons").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

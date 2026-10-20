@@ -49,7 +49,7 @@ public class PricingMappingTests
     {
         var code = Configure(new CurrencyMapping()).Properties.Single(p => p.Name == "Code");
         code.IsUnique.Should().BeTrue("Currency.Code is a natural key");
-        code.Precision.Should().Be(8);
+        code.MaxLength.Should().Be(8);
     }
 
     [Fact]
@@ -67,9 +67,9 @@ public class PricingMappingTests
     [Fact]
     public void StringColumns_AreBounded()
     {
-        Configure(new CurrencyMapping()).Properties.Single(p => p.Name == "Name").Precision.Should().Be(256);
-        Configure(new CurrencyMapping()).Properties.Single(p => p.Name == "Symbol").Precision.Should().Be(8);
-        Configure(new TaxMapping()).Properties.Single(p => p.Name == "ShortCut").Precision.Should().Be(16);
-        Configure(new PriceGroupMapping()).Properties.Single(p => p.Name == "Name").Precision.Should().Be(256);
+        Configure(new CurrencyMapping()).Properties.Single(p => p.Name == "Name").MaxLength.Should().Be(256);
+        Configure(new CurrencyMapping()).Properties.Single(p => p.Name == "Symbol").MaxLength.Should().Be(8);
+        Configure(new TaxMapping()).Properties.Single(p => p.Name == "ShortCut").MaxLength.Should().Be(16);
+        Configure(new PriceGroupMapping()).Properties.Single(p => p.Name == "Name").MaxLength.Should().Be(256);
     }
 }

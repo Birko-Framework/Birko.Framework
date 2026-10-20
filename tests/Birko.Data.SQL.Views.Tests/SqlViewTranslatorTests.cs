@@ -59,7 +59,7 @@ public class SqlViewTranslatorTests
         public void Configure(ModelMap<TransPerson> map)
         {
             map.ToTable("TransPersons").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

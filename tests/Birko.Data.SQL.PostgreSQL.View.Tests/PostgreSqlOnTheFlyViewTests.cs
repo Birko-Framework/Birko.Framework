@@ -104,7 +104,7 @@ public class PostgreSqlOnTheFlyViewTests : IDisposable
         public void Configure(ModelMap<OfPerson> map)
         {
             map.ToTable("OfPersons").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

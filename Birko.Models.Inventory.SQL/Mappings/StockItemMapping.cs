@@ -11,11 +11,11 @@ namespace Birko.Models.Inventory.SQL.Mappings
                 .HasPrimary(x => x.Guid)
                 .HasUnique(x => x.Guid);
 
-            map.Property(x => x.Code).HasPrecision(256);
-            map.Property(x => x.BarCode).HasPrecision(256);
-            map.Property(x => x.Name).HasPrecision(1024);
-            map.Property(x => x.ShortName).HasPrecision(256);
-            map.Property(x => x.Type).HasPrecision(256);
+            map.Property(x => x.Code).HasMaxLength(256);
+            map.Property(x => x.BarCode).HasMaxLength(256);
+            map.Property(x => x.Name).HasMaxLength(1024);
+            map.Property(x => x.ShortName).HasMaxLength(256);
+            map.Property(x => x.Type).HasMaxLength(256);
         }
     }
 }

@@ -56,7 +56,7 @@ public class SqlViewStoreAsyncTests : IDisposable
         public void Configure(ModelMap<Person> map)
         {
             map.ToTable("Persons").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

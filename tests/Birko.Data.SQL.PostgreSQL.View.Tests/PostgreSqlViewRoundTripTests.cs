@@ -159,7 +159,7 @@ public class PostgreSqlViewRoundTripTests : IDisposable
         public void Configure(ModelMap<PgPerson> map)
         {
             map.ToTable("PgPersons").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

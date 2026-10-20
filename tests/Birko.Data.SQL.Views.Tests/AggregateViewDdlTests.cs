@@ -120,7 +120,7 @@ public class AggregateViewDdlTests : IDisposable
         public void Configure(ModelMap<AvPerson> map)
         {
             map.ToTable("AvPersons").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

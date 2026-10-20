@@ -71,7 +71,7 @@ public class SchemaEnsureRollbackResidueTests : IDisposable
         public void Configure(ModelMap<Seed> map)
         {
             map.ToTable("ResidueSeeds").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
         }
     }
 

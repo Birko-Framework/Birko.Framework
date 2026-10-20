@@ -1666,7 +1666,7 @@ columns disagree on uniqueness SHALL be refused. Applying the registry twice SHA
 
 #### Scenario: A fluent index column is an index key for the provider
 
-- **Given** the same mapping, whose `Provider` is an unbounded `string` (`HasPrecision` is metadata only)
+- **Given** the same mapping, whose `Provider` is a `string` bounded by `HasMaxLength(50)`
 - **Then** after `ApplyToDatabase`, `Provider`, `ProviderKey` and `UserGuid` have `IsIndexed = true`, and an
   unindexed column does not
 

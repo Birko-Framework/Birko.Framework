@@ -76,7 +76,7 @@ public class LazyInitInsideBoundaryEndToEndTests : IDisposable
         public void Configure(ModelMap<RowA> map)
         {
             map.ToTable("LazyRowsA").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Amount);
         }
     }
@@ -86,7 +86,7 @@ public class LazyInitInsideBoundaryEndToEndTests : IDisposable
         public void Configure(ModelMap<RowB> map)
         {
             map.ToTable("LazyRowsB").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Amount);
         }
     }
