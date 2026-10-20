@@ -15,6 +15,8 @@ Store abstractions for the Birko Framework. Contains store interfaces, abstract 
 - **IAsyncBulkStore\<T\>** — Async equivalent of IBulkStore
 - **IStoreWrapper** — Interface for store decorators (caching, audit, etc.)
 - **ITransactionalStore\<T, TContext\>** — Interface for stores participating in external transactions
+- **ISoftDeleteStoreWrapper** — the soft-delete decorators' marker (moved here from Birko.Data.Patterns, TASK-698): a delete through it keeps the row stored, so its keys stay taken
+- **IRealtimeReadStore\<T\> / IAsyncRealtimeReadStore\<T\>** — TASK-698: read one entity by Guid at once, on a store whose queries see a write only after a refresh (ElasticSearch implements both with a realtime GET, RavenDB with its ACID load by id). Only the store handed to a caller is asked, never one beneath a decorator, which may scope reads
 - **IRetryableWriteStore / RetryableWrite** — TASK-694: a write a caller may retry after a unique refusal runs through `RetryableWrite.Run(Async)(store, write)`, which finds the `IRetryableWriteStore` beneath decorators (`IStoreWrapper`) or runs the write as is. The SQL stores take a savepoint there on PostgreSQL. Only for writes that are retried: a savepoint costs two round trips
 
 ### Abstract Implementations

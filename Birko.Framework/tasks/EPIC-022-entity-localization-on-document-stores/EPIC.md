@@ -1,7 +1,7 @@
 ---
 id: EPIC-022
 # status — one of: planned, in-progress, done, cancelled
-status: planned
+status: in-progress
 created: 2026-10-20
 owner: ai
 affects: [Birko.Data.Localization, Birko.Data.MongoDB, Birko.Data.RavenDB, Birko.Data.CosmosDB, Birko.Data.ElasticSearch]

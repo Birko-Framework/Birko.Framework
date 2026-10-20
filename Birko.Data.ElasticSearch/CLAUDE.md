@@ -197,7 +197,7 @@ view stores sent the CLR member name (`UpdatedAt`), which NEST stores as `update
 A key may be the member name or its stored field name. Anything else throws `ArgumentException`, and a string
 sorts on its keyword form.
 
-**Every read is a search except `ReadRealtimeAsync(guid)`** (async store, TASK-616), a realtime GET by document id.
+**Every read is a search except `ReadRealtimeAsync(guid)`** (async store, TASK-616) and its sync twin `ReadRealtime(guid)` (TASK-698), a realtime GET by document id. Both stores declare `IAsyncRealtimeReadStore<T>` / `IRealtimeReadStore<T>`, which the translation upsert re-reads through after a refusal.
 A search sees a write only after the next refresh (~1 s). Use `ReadRealtimeAsync` whenever code verifies its own write.
 
 **`PropertyUpdate` renders as one Painless script** (`ElasticSearchStoreHelper.BuildUpdateScript`): each field through

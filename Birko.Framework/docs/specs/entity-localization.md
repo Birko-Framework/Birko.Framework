@@ -697,6 +697,18 @@ update is sent, so a create that is refused and cannot be retried leaves nothing
 - **Then** it re-reads the keys it was creating once, updates the row the other writer holds with its own value and creates the rest again — one row per key, the last value, no exception; a store that inserted part of the batch before refusing has its own rows found and updated the same way
 - **And** when the re-read finds none of the keys held, or the second create is refused too, the original refusal propagates; when the re-read itself fails (PostgreSQL's aborted transaction), a `StoreUniqueViolationException` wrapping the original and naming the read failure is thrown
 
+#### Scenario: A race is refused and retried on every provider through the key's Guid
+
+- **Given** any provider (InMemory, JSON, XML, MongoDB, ElasticSearch, RavenDB, Cosmos DB, or SQL), and another writer saving `(G, "Product", "Name", "sk")` after this save's read found nothing
+- **When** this save creates the row
+- **Then** the row's Guid is `LocalizedTranslationRows.KeyGuid(G, "Product", "Name", "sk")`, an RFC 4122 v5 UUID of the four values the save passes, so the store refuses the second create of that Guid; the re-read (by key, and by that Guid through `IAsyncRealtimeReadStore` where the translation store handed in offers one, as ElasticSearch and RavenDB do; never beneath a decorator) finds the other writer's row and updates it; one row, the last value (TASK-698)
+
+#### Scenario: A key held outside the store's scope is refused and named
+
+- **Given** a translation store behind a decorator that hides another scope's rows (a tenant-scoped store over entities the tenants share), and another scope already holding `(G, "Product", "Name", "sk")`
+- **When** this save creates that key
+- **Then** the create is refused on the key's Guid, the scoped re-read finds no holder, and `StoreUniqueViolationException` is thrown wrapping the refusal and naming a translation store scoped narrower than its entities; the hidden row is not read or updated
+
 #### Scenario: Only the first duplicate row is updated
 
 - **Given** two translation rows exist for the same `(G, "Name", "sk")`
@@ -1188,7 +1200,15 @@ The system SHALL reject a null inner store, translation store or localization co
 `InitAsync`, SHALL on `Destroy` / `DestroyAsync` destroy the inner store and then delete every translation row
 of the store's entity type — never the whole translation store, which other localized stores share — SHALL
 delegate `CreateInstance` to the inner store, and SHALL expose the inner store via
-`IStoreWrapper.GetInnerStore()` and `GetInnerStoreAs<TInner>()`.
+`IStoreWrapper.GetInnerStore()` and `GetInnerStoreAs<TInner>()`. It SHALL refuse with `InvalidOperationException`,
+in each wrapper and in `EntityTranslations`, a translation store whose chain holds an `ISoftDeleteStoreWrapper`: a
+soft-deleted row keeps its key and its key Guid, so the key could not be saved again (TASK-698, measured on SQL).
+
+#### Scenario: A soft-delete-wrapped translation store is refused
+
+- **Given** a translation store wrapped in `AsyncSoftDeleteBulkStoreWrapper`
+- **When** a localized wrapper or `EntityTranslations` is built over it
+- **Then** construction throws `InvalidOperationException` naming the soft-delete decorator
 
 #### Scenario: Null constructor argument
 

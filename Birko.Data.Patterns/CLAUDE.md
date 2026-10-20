@@ -32,7 +32,8 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
   and writes the entity. A bulk update names its soft-deleted and its missing items in one `EntityNotFoundException`
   (TASK-649)
 - `ISoftDeleteStoreWrapper` marks the four wrappers; the Sluggable probe asks beneath one directly inside it, because a
-  soft-deleted row keeps its slug until it is removed for good (TASK-638)
+  soft-deleted row keeps its slug until it is removed for good (TASK-638). The marker lives in Birko.Data.Stores since
+  TASK-698, so Birko.Data.Localization can refuse a soft-delete-wrapped translation store
 
 ### Audit
 - `IAuditable` - Interface with `CreatedBy`, `UpdatedBy` properties (Guid?)

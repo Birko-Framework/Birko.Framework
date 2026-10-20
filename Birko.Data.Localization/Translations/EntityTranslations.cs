@@ -68,6 +68,7 @@ public class EntityTranslations<T, TTranslation> : IEntityTranslations<T>
         RefuseLocalizedWrapper(entities);
         _fields = LocalizedEntityFields.LocalizableFieldsOf(entities.CreateInstance());
         LocalizedTranslationRows.RequireQueryableModel<TTranslation>();
+        LocalizedTranslationRows.RequireNoSoftDelete(_translations);
     }
 
     public async Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, string>>> GetAsync(

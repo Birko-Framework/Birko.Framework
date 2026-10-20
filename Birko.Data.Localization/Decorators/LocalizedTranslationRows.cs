@@ -47,6 +47,35 @@ internal static class LocalizedTranslationRows
     /// </summary>
     public static string EntityTypeOf<T>() => typeof(T).Name;
 
+    /// <summary>The namespace of <see cref="KeyGuid"/>'s name-based UUIDs (TASK-698). Never change it: it keys stored rows.</summary>
+    public static readonly Guid KeyGuidNamespace = new("756ec46f-0f20-450f-85e0-d8234384440b");
+
+    /// <summary>
+    /// The Guid a translation row is created under: an RFC 4122 name-based UUID (version 5, SHA-1) of its key (TASK-698). Two writers of one key create the same Guid, and every store refuses a second
+    /// create of a stored Guid with <see cref="StoreUniqueViolationException"/>, so the upsert's retry runs on every
+    /// provider, not only where a unique key exists (SQL, TASK-680).
+    /// </summary>
+    /// <remarks>
+    /// Built from the values the save passes, which are the values stored (the type's name and the culture's
+    /// <c>CultureInfo.Name</c>, so every writer passes the same). The values are joined by U+001F (unit separator), which
+    /// no entity type, field name or culture name contains, so distinct keys cannot produce one name. Rows stored before TASK-698 keep their random Guids: they are found and
+    /// updated by key, never by Guid (decided by the user).
+    /// </remarks>
+    public static Guid KeyGuid(Guid entityGuid, string entityType, string fieldName, string culture)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(entityType);
+        ArgumentException.ThrowIfNullOrEmpty(fieldName);
+        ArgumentNullException.ThrowIfNull(culture);
+        var name = System.Text.Encoding.UTF8.GetBytes($"{entityGuid:D}\u001f{entityType}\u001f{fieldName}\u001f{culture}");
+        var input = new byte[16 + name.Length];
+        KeyGuidNamespace.TryWriteBytes(input, bigEndian: true, out _);
+        name.CopyTo(input, 16);
+        var hash = System.Security.Cryptography.SHA1.HashData(input);
+        hash[6] = (byte)((hash[6] & 0x0F) | 0x50); // version 5
+        hash[8] = (byte)((hash[8] & 0x3F) | 0x80); // RFC 4122 variant
+        return new Guid(hash.AsSpan(0, 16), bigEndian: true);
+    }
+
     /// <summary>
     /// How many GUIDs one batched read puts in its <c>IN</c> list. Kept well under the smallest provider limit
     /// (MSSQL's ~2100 parameters), because the in-memory-sort path localizes a whole matching set at once.
@@ -262,13 +291,13 @@ internal static class LocalizedTranslationRows
                 List<TTranslation> raced;
                 try
                 {
-                    raced = ReadKeys(store, plan.Creates.Select(r => r.EntityGuid), entityType, culture);
+                    raced = ReadRefused(store, plan.Creates, entityType, culture);
                 }
                 catch (Exception readFailure) when (readFailure is not OperationCanceledException)
                 {
                     throw Unretryable(violation, readFailure);
                 }
-                var retry = PlanRetry(plan.Creates, raced) ?? throw Unretryable(violation, null);
+                var retry = PlanRetry(plan.Creates, raced) ?? throw HeldOutOfSight(violation);
                 store.Update(retry.UpdatedRows());
                 if (retry.Creates.Count > 0)
                 {
@@ -325,13 +354,13 @@ internal static class LocalizedTranslationRows
                 List<TTranslation> raced;
                 try
                 {
-                    raced = await ReadKeysAsync(store, plan.Creates.Select(r => r.EntityGuid), entityType, culture, ct);
+                    raced = await ReadRefusedAsync(store, plan.Creates, entityType, culture, ct);
                 }
                 catch (Exception readFailure) when (readFailure is not OperationCanceledException)
                 {
                     throw Unretryable(violation, readFailure);
                 }
-                var retry = PlanRetry(plan.Creates, raced) ?? throw Unretryable(violation, null);
+                var retry = PlanRetry(plan.Creates, raced) ?? throw HeldOutOfSight(violation);
                 await store.UpdateAsync(retry.UpdatedRows(), ct: ct);
                 if (retry.Creates.Count > 0)
                 {
@@ -485,7 +514,10 @@ internal static class LocalizedTranslationRows
                 var row = rows.FirstOrDefault();
                 if (row == null)
                 {
-                    plan.Creates.Add(Fill(createInstance(), entityGuid, entityType, field, culture, value, now));
+                    var created = Fill(createInstance(), entityGuid, entityType, field, culture, value, now);
+                    // TASK-698: the key's Guid, so a racing writer's create of the same key is refused on every provider.
+                    created.Guid = KeyGuid(entityGuid, entityType, field, culture);
+                    plan.Creates.Add(created);
                     continue;
                 }
                 plan.Update(row, value, now);
@@ -516,6 +548,56 @@ internal static class LocalizedTranslationRows
         return retry.UpdateCount == 0 ? null : retry;
     }
 
+    /// <summary>
+    /// After a refused create: the rows now holding the refused keys. A query by key, then, where the store handed in can
+    /// read by Guid at once (<see cref="IRealtimeReadStore{T}"/>), each refused key the query did not return, read by its
+    /// <see cref="KeyGuid"/> (TASK-698). ElasticSearch's search missed a row written moments before,
+    /// inside its refresh window (measured), so the retry never saw the writer it raced.
+    /// </summary>
+    private static List<TTranslation> ReadRefused<TTranslation>(IBulkStore<TTranslation> store, List<TTranslation> refused, string entityType, string culture)
+        where TTranslation : AbstractModel, IEntityTranslation
+    {
+        var rows = ReadKeys(store, refused.Select(r => r.EntityGuid), entityType, culture);
+        // The store handed in, never one beneath a decorator: a tenant decorator scopes reads, and a read beneath it
+        // would plan an update of another scope's row (TASK-698 review). A decorator that does not scope forwards it.
+        var realtime = store as IRealtimeReadStore<TTranslation>;
+        if (realtime == null)
+        {
+            return rows;
+        }
+        var found = rows.Select(r => (r.EntityGuid, r.FieldName)).ToHashSet();
+        foreach (var row in refused.Where(r => r.Guid != null && !found.Contains((r.EntityGuid, r.FieldName))))
+        {
+            if (realtime.ReadRealtime(row.Guid!.Value) is { } held)
+            {
+                rows.Add(held);
+            }
+        }
+        return rows;
+    }
+
+    /// <inheritdoc cref="ReadRefused"/>
+    private static async Task<List<TTranslation>> ReadRefusedAsync<TTranslation>(
+        IAsyncBulkStore<TTranslation> store, List<TTranslation> refused, string entityType, string culture, CancellationToken ct)
+        where TTranslation : AbstractModel, IEntityTranslation
+    {
+        var rows = await ReadKeysAsync(store, refused.Select(r => r.EntityGuid), entityType, culture, ct);
+        var realtime = store as IAsyncRealtimeReadStore<TTranslation>;
+        if (realtime == null)
+        {
+            return rows;
+        }
+        var found = rows.Select(r => (r.EntityGuid, r.FieldName)).ToHashSet();
+        foreach (var row in refused.Where(r => r.Guid != null && !found.Contains((r.EntityGuid, r.FieldName))))
+        {
+            if (await realtime.ReadRealtimeAsync(row.Guid!.Value, ct) is { } held)
+            {
+                rows.Add(held);
+            }
+        }
+        return rows;
+    }
+
     private static void SetValue<TTranslation>(TTranslation row, string value, DateTime now)
         where TTranslation : IEntityTranslation
     {
@@ -534,6 +616,21 @@ internal static class LocalizedTranslationRows
     /// The caller's transaction is lost either way there; the error now says why. SQL Server keeps the transaction and
     /// the retry succeeds inside it (measured).
     /// </remarks>
+    /// <summary>
+    /// A refused create whose keys no row this store can see holds (TASK-698, decided by the user): another unique key
+    /// refused it, or the key is held by a row outside the store's scope, such as another tenant's translation of an
+    /// entity the tenants share. The key Guid leaves the scope out, because this project knows no tenants, so a
+    /// translation store scoped narrower than its entities cannot hold one row per scope. The type stays (rule 9); the
+    /// message says which configuration to change.
+    /// </summary>
+    private static StoreUniqueViolationException HeldOutOfSight(StoreUniqueViolationException violation)
+        => new(
+            $"{violation.Message} No translation row this store can see holds the refused key, so it was not retried. Either "
+            + "another unique key refused it, or the key is held outside this store's scope: a translation store scoped "
+            + "narrower than its entities (for example tenant-scoped translations of entities the tenants share) holds one "
+            + "row per key, not one per scope. Translate shared entities through an unscoped translation store.",
+            violation);
+
     private static Exception Unretryable(StoreUniqueViolationException violation, Exception? readFailure)
         // No read failure: no row holds the key, so the refusal was about something else and stands as it was thrown.
         => StoreException.UnretryableUniqueViolation(violation, readFailure);
@@ -714,6 +811,25 @@ internal static class LocalizedTranslationRows
         row.ValueHash = LocalizedValueHash.Of(value);
         row.UpdatedAt = now;
         return row;
+    }
+
+    /// <summary>
+    /// Refuses a translation store with a soft-delete decorator in its chain (TASK-698, decided by the user). A
+    /// soft-deleted row stays stored, hidden, and keeps its key and its <see cref="KeyGuid"/>, so saving that key again
+    /// is refused, and the upsert's retry cannot see the row to update it. That held on SQL too, where the unique key
+    /// counts the hidden row. Translations are replaced or removed, never kept as history, so nothing is lost.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The chain holds an <see cref="ISoftDeleteStoreWrapper"/>.</exception>
+    public static void RequireNoSoftDelete(object translationStore)
+    {
+        ArgumentNullException.ThrowIfNull(translationStore);
+        if (StoreChain.Walk(translationStore).OfType<ISoftDeleteStoreWrapper>().Any())
+        {
+            throw new InvalidOperationException(
+                "The translation store is wrapped in a soft-delete decorator. A soft-deleted translation keeps its key, so "
+                + "saving that key again would be refused, and the retry cannot see the hidden row. Give the localized "
+                + "wrapper the translation store without the soft-delete decorator.");
+        }
     }
 
     /// <summary>

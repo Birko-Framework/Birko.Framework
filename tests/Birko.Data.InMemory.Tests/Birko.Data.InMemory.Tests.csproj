@@ -11,6 +11,7 @@
     <PackageReference Include="FluentAssertions" Version="7.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
@@ -21,10 +22,13 @@
   <Import Project="..\..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.InMemory\Birko.Data.InMemory.projitems" Label="Shared" />
+  <!-- TASK-698: the shared translation race contract. -->
+  <Import Project="..\..\Birko.Data.Localization\Birko.Data.Localization.projitems" Label="Shared" />
   <ItemGroup>
     <Compile Include="..\Shared\StoreContract\UpdateMissContract.cs" Link="Shared\UpdateMissContract.cs" />
     <Compile Include="..\Shared\StoreContract\IdentityContract.cs" Link="Shared\IdentityContract.cs" />
     <Compile Include="..\Shared\StoreContract\DelegateContract.cs" Link="Shared\DelegateContract.cs" />
+    <Compile Include="..\Shared\LocalizationContract\TranslationRaceContract.cs" Link="Shared\TranslationRaceContract.cs" />
   </ItemGroup>
 
 </Project>

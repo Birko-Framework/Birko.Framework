@@ -25,6 +25,7 @@ public class RavenDBStore<T>
     , ISettingsStore<Settings>, ISettingsStore<Birko.Configuration.ISettings>
     , ITransactionalStore<T, Raven.Client.Documents.Session.IDocumentSession>
     , IAggregatableStore<T>
+    , IRealtimeReadStore<T>
     , IDisposable
     where T : AbstractModel
 {
@@ -210,6 +211,9 @@ public class RavenDBStore<T>
     /// (TASK-567). Slower than BulkInsert for very large loads, which is the price of Create meaning "new".
     /// </summary>
     private const int CreateChunkSize = 512;
+
+    /// <inheritdoc cref="AsyncRavenDBStore{T}.ReadRealtimeAsync"/>
+    public T? ReadRealtime(Guid guid) => Read(guid);
 
     /// <inheritdoc />
     public override T? Read(Guid guid)

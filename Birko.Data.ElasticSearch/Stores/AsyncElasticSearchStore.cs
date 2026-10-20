@@ -21,6 +21,7 @@ namespace Birko.Data.ElasticSearch.Stores
         : AbstractAsyncBulkStore<T>
         , ISettingsStore<Settings>, ISettingsStore<Birko.Configuration.ISettings>
         , IAsyncAggregatableStore<T>
+        , IAsyncRealtimeReadStore<T>
         where T : Models.AbstractModel
     {
         /// <summary>

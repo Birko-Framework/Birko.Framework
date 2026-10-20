@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-19 — Localized list reads fetch translations in batches
+
+[[TASK-679]]. A list read on a non-default culture costs one translation read per 500 entities, not one per entity.
+A page of 48 products cost 48 extra queries. `LocalizedTranslationRows.ReadMany` + `Apply` serve list reads, the
+in-memory sort and single reads. Sorting by a translated field still loads the whole matching set (stated limit). The
+batch size is unmeasured on SQL until [[TASK-680]] maps the translation model.
+
 ## 2026-10-19 — Localization low triage: declarations validated, the four-part key, Destroy cleans up
 
 [[TASK-194]]. 10 low findings: 8 confirmed, 2 narrower; SH-L087 handed to [[TASK-681]]. Decided by the user:

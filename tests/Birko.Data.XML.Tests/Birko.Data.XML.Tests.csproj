@@ -30,10 +30,13 @@
   <Import Project="..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <!-- TASK-698: the shared translation race contract. -->
+  <Import Project="..\..\Birko.Data.Localization\Birko.Data.Localization.projitems" Label="Shared" />
   <ItemGroup>
     <Compile Include="..\Shared\StoreContract\UpdateMissContract.cs" Link="Shared\UpdateMissContract.cs" />
     <Compile Include="..\Shared\StoreContract\IdentityContract.cs" Link="Shared\IdentityContract.cs" />
     <Compile Include="..\Shared\StoreContract\DelegateContract.cs" Link="Shared\DelegateContract.cs" />
+    <Compile Include="..\Shared\LocalizationContract\TranslationRaceContract.cs" Link="Shared\TranslationRaceContract.cs" />
   </ItemGroup>
 
 </Project>

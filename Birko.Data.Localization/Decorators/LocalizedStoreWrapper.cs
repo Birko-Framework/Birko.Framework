@@ -43,6 +43,7 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
         // SH-L079 / SH-L082 (TASK-194): the declaration is read and validated once, at wiring, on every culture.
         _localizableFields = LocalizedEntityFields.LocalizableFieldsOf(_innerStore.CreateInstance());
         LocalizedTranslationRows.RequireQueryableModel<TTranslation>();
+        LocalizedTranslationRows.RequireNoSoftDelete(_translationStore);
     }
 
     public T? Read(Guid guid)

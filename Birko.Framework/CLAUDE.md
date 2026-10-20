@@ -289,6 +289,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Translation races leave one row on every provider (2026-10-20)
+[[TASK-698]]. A new translation row's Guid is derived from its key (`LocalizedTranslationRows.KeyGuid`), so a racing
+writer's create is refused and retried as an update on every store, not only behind SQL's unique key. Measured live on
+InMemory, JSON, XML, MongoDB, ElasticSearch, RavenDB and Cosmos DB, where a race used to store two rows. ElasticSearch
+and RavenDB re-read by Guid through the new `IAsyncRealtimeReadStore`. Old rows are untouched. **Breaking:** a soft-delete-wrapped
+translation store is refused, and so is a tenant-scoped one over shared entities. `ISoftDeleteStoreWrapper` moved to the
+`Birko.Data.Stores` namespace.
 ### PostgreSQL retries a unique refusal inside a caller's transaction (2026-10-20)
 [[TASK-694]]. The slug and default decorators and the translation upsert run the write they retry through
 `RetryableWrite`. Beneath them, a SQL store runs it in a savepoint where a refusal aborts the transaction
@@ -366,11 +373,6 @@ names still mean `EntityTranslationModel`. New `Birko.Data.Localization.SQL` map
 on SQLite, PostgreSQL and SQL Server. In a PostgreSQL transaction the refusal aborts it, and the typed exception surfaces.
 MySQL cannot hold the key ([[TASK-684]]). The value index moved to [[TASK-681]] (decided by the user). TASK-679's batch is
 now measured.
-### Localized list reads fetch translations in batches (2026-10-19)
-[[TASK-679]]. A list read on a non-default culture costs one translation read per 500 entities, not one per entity.
-A page of 48 products cost 48 extra queries. `LocalizedTranslationRows.ReadMany` + `Apply` serve list reads, the
-in-memory sort and single reads. Sorting by a translated field still loads the whole matching set (stated limit). The
-batch size is unmeasured on SQL until [[TASK-680]] maps the translation model.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

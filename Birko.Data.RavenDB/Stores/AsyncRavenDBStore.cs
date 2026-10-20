@@ -27,6 +27,7 @@ public class AsyncRavenDBStore<T>
     , ISettingsStore<Settings>, ISettingsStore<Birko.Configuration.ISettings>
     , IAsyncTransactionalStore<T, Raven.Client.Documents.Session.IAsyncDocumentSession>
     , IAsyncAggregatableStore<T>
+    , IAsyncRealtimeReadStore<T>
     , IDisposable
     where T : AbstractModel
 {
@@ -213,6 +214,12 @@ public class AsyncRavenDBStore<T>
 
     /// <summary>Documents per session in a bulk create; see <c>RavenDBStore.CreateChunkSize</c> (TASK-567).</summary>
     private const int CreateChunkSize = 512;
+
+    /// <summary>
+    /// TASK-698: a load by document id is ACID, unlike a query, which reads an index that may not have caught up with a
+    /// write. The translation upsert re-reads through this after a refusal.
+    /// </summary>
+    public Task<T?> ReadRealtimeAsync(Guid guid, CancellationToken ct = default) => ReadAsync(guid, ct);
 
     /// <inheritdoc />
     public override async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)

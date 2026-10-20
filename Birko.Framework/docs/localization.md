@@ -385,3 +385,10 @@ over disjoint chunks of at most 500 GUIDs (TASK-686), so SQL Server's ~2 100-par
 counts, updates and deletes cover every chunk; ordered or paged reads sort and page the whole match in memory. A
 wrapper over a plain `IStore` refuses such a filter. See the
 [project README](../../Birko.Data.Localization/README.md#filters-on-localizable-fields).
+
+### 9. Races on every provider
+
+Two writers saving the same translation at once leave one row on every provider (TASK-698). A new row's Guid is
+derived from its key, so the second writer's create is refused like any duplicate Guid and retried as an update.
+Before, only SQL's unique key did this, and the other providers stored a duplicate row. Do not wrap the translation
+store in a soft-delete decorator: the localized wrappers refuse it, because a soft-deleted translation keeps its key.

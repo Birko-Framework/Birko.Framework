@@ -52,11 +52,3 @@ public static class SoftDeleteFilter
         return Expression.Lambda<Func<T, TProperty>>(Expression.Property(x, name), x);
     }
 }
-
-/// <summary>
-/// A soft-delete decorator. Its inner store also sees deleted rows, which is where the Sluggable probe asks, because a
-/// deleted row keeps its slug (TASK-638).
-/// </summary>
-public interface ISoftDeleteStoreWrapper : IStoreWrapper
-{
-}

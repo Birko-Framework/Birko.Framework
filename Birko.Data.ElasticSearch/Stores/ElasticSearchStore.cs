@@ -21,6 +21,7 @@ namespace Birko.Data.ElasticSearch.Stores
         : AbstractBulkStore<T>
         , ISettingsStore<Settings>, ISettingsStore<Birko.Configuration.ISettings>
         , IAggregatableStore<T>
+        , IRealtimeReadStore<T>
          where T : Models.AbstractModel
     {
         /// <summary>
@@ -202,6 +203,36 @@ namespace Birko.Data.ElasticSearch.Stores
             }
 
             return data.Guid.Value;
+        }
+
+        /// <summary>
+        /// Reads an entity by its Guid with a realtime GET, which sees a write before the next index refresh (the sync twin
+        /// of <c>AsyncElasticSearchStore.ReadRealtimeAsync</c>, TASK-698).
+        /// </summary>
+        public T? ReadRealtime(Guid guid)
+        {
+            EnsureInitialized();
+            return ReadRealtimeCore(guid);
+        }
+
+        /// <summary>Core of <see cref="ReadRealtime"/>. Null when no document has that id.</summary>
+        protected virtual T? ReadRealtimeCore(Guid guid)
+        {
+            RequireConnector();
+
+            var response = Connector.Get<T>(guid, g => g.Index(GetIndexName()).Realtime());
+            if (response.Found)
+            {
+                response.Source.Guid ??= guid;
+                return response.Source;
+            }
+            if (response.ApiCall?.HttpStatusCode == 404)
+            {
+                return null;
+            }
+            throw new InvalidOperationException(
+                $"ElasticSearch realtime get of {guid} failed. Index: {GetIndexName()}. DebugInfo: {response.DebugInformation}",
+                response.OriginalException);
         }
 
         /// <inheritdoc />

@@ -50,6 +50,19 @@ public sealed class LegacyTranslation : AbstractModel, IEntityTranslation
     public string ValueHash { get; set; } = string.Empty;
 }
 
+/// <summary>TASK-698: a consumer translation model that can be soft-deleted, to measure what a hidden row does to its key.</summary>
+public sealed class SoftTranslation : AbstractModel, IEntityTranslation, Birko.Data.Patterns.Models.ISoftDeletable
+{
+    public Guid EntityGuid { get; set; }
+    public string EntityType { get; set; } = string.Empty;
+    public string FieldName { get; set; } = string.Empty;
+    public string Culture { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public DateTime? UpdatedAt { get; set; }
+    public string ValueHash { get; set; } = string.Empty;
+    public DateTime? DeletedAt { get; set; }
+}
+
 public sealed class Product : AbstractModel, ILocalizable
 {
     public string Name { get; set; } = string.Empty;
@@ -61,6 +74,7 @@ public static class TestModels
 {
     public const string LegacyTable = "BirkoTestLegacyTranslations";
     public const string TenantTable = "BirkoTestTenantTranslations";
+    public const string SoftTable = "BirkoTestSoftTranslations";
     public const string ProductTable = "BirkoTestLocalizedProducts";
 }
 
@@ -189,6 +203,34 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
         info!.Unique.Should().BeTrue();
         // PostgreSQL folds the unquoted column names to lower case (rule 17); the order is what is asserted.
         return info.Fields.Select(f => f.Name.ToLowerInvariant()).ToList();
+    }
+
+    /// <summary>
+    /// TASK-698, measured: the reason a soft-delete-wrapped translation store is refused (decided by the user). A
+    /// soft-deleted row stays in the table and the unique key counts it, so saving the key again is refused, and the
+    /// upsert's retry reads through the decorator, which hides the row. It held on SQL before TASK-698's Guids; the
+    /// other providers would now behave the same through the key's Guid.
+    /// </summary>
+    [Fact]
+    public async Task TASK698_a_soft_deleted_translation_still_holds_its_key_so_the_wrappers_refuse_soft_delete()
+    {
+        if (!RequireServer()) return;
+        var store = Store<SoftTranslation>();
+        await store.InitAsync();
+        var soft = new Birko.Data.Patterns.Decorators.AsyncSoftDeleteBulkStoreWrapper<IAsyncBulkStore<SoftTranslation>, SoftTranslation>(
+            store, new Birko.Time.SystemDateTimeProvider());
+        var entity = Guid.NewGuid();
+
+        await LocalizedTranslationRows.SaveAsync(soft, entity, "Product", "sk", new Dictionary<string, string?> { ["Name"] = "first" }, CancellationToken.None);
+        await LocalizedTranslationRows.SaveAsync(soft, entity, "Product", "sk", new Dictionary<string, string?> { ["Name"] = null }, CancellationToken.None);
+        var again = () => LocalizedTranslationRows.SaveAsync(soft, entity, "Product", "sk", new Dictionary<string, string?> { ["Name"] = "second" }, CancellationToken.None);
+
+        await again.Should().ThrowAsync<StoreUniqueViolationException>("the hidden row keeps the key");
+        (await store.ReadAsync(t => t.EntityGuid == entity, null, null, null)).Should().ContainSingle(t => t.DeletedAt != null);
+        var products = Store<SqlProduct>();
+        FluentActions.Invoking(() => new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<SqlProduct>, SqlProduct, SoftTranslation>(
+            products, soft, new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") }))
+            .Should().Throw<InvalidOperationException>().WithMessage("*soft-delete*");
     }
 
     [Fact]
@@ -1080,6 +1122,7 @@ internal static class TranslationMappings
             var registry = LocalizationSqlMappings.Register(new ModelMapRegistry());
             LocalizationSqlMappings.Register<TenantTranslation>(registry, TestModels.TenantTable);
             LocalizationSqlMappings.Register<LegacyTranslation>(registry, TestModels.LegacyTable);
+            LocalizationSqlMappings.Register<SoftTranslation>(registry, TestModels.SoftTable);
             registry.Register(new SqlProductMapping());
             registry.ApplyToDatabase();
             _applied = true;
