@@ -1,0 +1,12 @@
+# Normalise text to LF in the repository (every tracked text file already is); the checkout follows core.autocrlf.
+* text=auto
+*.sh text eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pdf binary

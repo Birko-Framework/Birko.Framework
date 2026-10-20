@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 23      | —     |
-| todo         | —     | —       | 150   |
-| in-progress  | 8     | 12      | 0     |
+| todo         | —     | —       | 152   |
+| in-progress  | 9     | 12      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 3     | 27      | 386   |
+| done         | 2     | 27      | 387   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 10× P1 · 103× P2 · 37× P3.
+`todo` by priority: 10× P1 · 103× P2 · 39× P3.
 
 ## In progress now
 
@@ -616,6 +616,8 @@ _None._
 - [ ] [TASK-673](_loose/TASK-673-sql-bulk-upsert-by-key.md) The SQL stores have no batch upsert, so an idempotent feed import costs a read per row (P3)
 - [ ] [TASK-675](_loose/TASK-675-smtp-sender-ignores-its-timeout-and-cannot-classify-failures.md) `SmtpEmailSender` ignores its own timeout, and a caller cannot tell a transient failure from a permanent one (P2)
 - [ ] [TASK-677](_loose/TASK-677-a-telemetry-update-stamps-the-audit-columns.md) A counter update through the decorator chain stamps `UpdatedBy` / `UpdatedAt`, so an anonymous hit erases who last edited the row (P3)
+- [ ] [TASK-688](_loose/TASK-688-abstractconnector-holds-raw-nul-bytes-so-git-treats-it-as-binary.md) `AbstractConnector.cs` holds raw NUL bytes, so git treats it as binary (P3)
+- [ ] [TASK-689](_loose/TASK-689-spec-map-coverage-unverified-207-source-files-unexplained.md) The spec map was never coverage-checked: 207 source files are unexplained and `ignore:` matches nothing (P3)
 
 ## Completed
 
@@ -644,7 +646,8 @@ _None._
     - [x] [TASK-594](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-594-birko-security-grants-sql-mappings.md) Birko.Security.Grants.SQL — fluent SQL mappings for ResourceGrant and Invitation (P2)
     - [x] [TASK-654](EPIC-020-security-access-control/STORY-062-per-resource-access-grants/TASK-654-stale-grant-health-check.md) A health check reports stored grants whose role or resource type was retired (P2)
 
-- **EPIC-019** Birko framework backports from DraCode — done (30/30 tasks done)
+- **EPIC-019** Birko framework backports from DraCode — in-progress (31/32 tasks done)
+  - [x] [TASK-687](EPIC-019-birko-backports-from-dracode/TASK-687-epic-status-read-done-with-a-story-reopened.md) EPIC-019 read done while STORY-058 was reopened (P3)
   - STORY-058 Security / OAuth backports from DraCode — in-progress (6/7 done)
     - [x] [TASK-517](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-517-oauthserver-issue-tokens-for-a-federated-subject.md) OAuthServer: issue a token pair for a subject that signed in elsewhere (federated sign-in) (P2)
     - [x] [TASK-518](EPIC-019-birko-backports-from-dracode/STORY-058-security-oauth-backports/TASK-518-sqlite-and-in-memory-oauth-server-stores.md) Ship SQLite and in-memory implementations of the OAuth server stores (P2)

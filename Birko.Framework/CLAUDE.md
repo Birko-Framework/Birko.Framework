@@ -11,6 +11,45 @@ See also:
 
 Each project has its own `CLAUDE.md` at `Birko.{ProjectName}/CLAUDE.md` (tests: `tests/Birko.{ProjectName}.Tests/CLAUDE.md`) with project-specific details.
 
+## How we work — feature lifecycle
+
+Real work flows through a repeatable lifecycle so it stays **tracked, testable, reviewable, and visible to stakeholders** (the maintainers of the consumer solutions — Symbio, DraCode, FisData). Don't jump straight to code for anything non-trivial.
+
+```
+idea ─▶ prototype ─▶ decisions ─▶ tasks ─▶ human-test ─▶ review
+```
+
+1. **Capture + grill the idea** — `/feature new`. The idea is interrogated until every branch is resolved; each branch becomes a *decision*.
+2. **Prototype for stakeholders** — `/feature prototype`. A clickable HTML mockup, a markdown wireframe, or a code spike — whatever lets a stakeholder react to something concrete.
+3. **Record decisions** — `/feature decide`. Every decision gets a state: **approved / deferred / changed / removed**, with rationale, date, and who decided. The ledger in `docs/features/FEATURE-NNN/decisions.md` is append-logged — we keep *why* things changed, not just the current value. This is for stakeholders to see the state of the work, not only for devs.
+4. **Decompose into small tasks** — `/feature decompose` → `/tasks new`. Approved/changed decisions become atomic, independently-completable tasks under `tasks/`. Each task links back via `feature: FEATURE-NNN`. **This step comes before writing implementation code, always**.
+4b. **Entering an existing feature** — `/feature pick FEATURE-NNN`. It resolves what stage the feature is really at and offers the verb that unblocks it: undecided rows → `/feature decide`; **approved rows with no tasks → `/feature decompose`**; all tasks done → `/feature review`. It hands off to `/tasks pick --feature FEATURE-NNN` only once real tasks exist — you never start implementing straight out of a feature folder.
+5. **Make it testable** — every task carries a `## Human test plan` (in the TASK file). When unit/AI tests can't cover it (UI/UX, edge cases, system integrations), write concrete manual steps a tester can follow. Mark `N/A — fully covered by automated tests` only when that's genuinely true.
+6. **Stakeholder status** — `/feature status` regenerates a plain-language rollup for the maintainers of the consumer solutions — Symbio, DraCode, FisData: decision counts, build progress, what's testable, where it stands.
+7. **Review gate** — `/feature review`: a **completeness** check (every decision built + every task merged — code correctness was already reviewed *per task* at `/tasks close`, the merge gate) + verify every human-test plan was run + stakeholder sign-off. A feature is "done" only when all three pass; it's a completeness gate, not a wholesale code re-review. **Automated tests passing ≠ the feature works** — exercise the change in the real runtime (run the app / hit the endpoint / load the UI) before calling it done; if you only ran tests, say "verified headlessly, sign-off pending" rather than claiming it works.
+8. **Changing something already shipped** — a later change to a `done`/signed-off feature is still a recorded **`changed`** decision, logged in the feature that *owns* the behavior (re-home if you hit it elsewhere), with the ripple traced (downstream constants, comments, other features' decisions). If the change has a **human-verifiable surface** (visual/UX/feel), **preview it first** — show a mockup or 2–3 options and get the user's pick before editing live files (a request that reads like "a small fix" is still a change to a stakeholder-facing surface) — then, when the change is already in the code, that feature reverts to `review` and its implementing task to `verify` until re-confirmed; when it is not built yet, the feature reverts to `idea`, the old task stays `done`, and the change arrives as new work through `/feature decompose`. A built **tests-only** change stays `done`. After the revert, run `/feature status FEATURE-NNN` — it touches four surfaces (`idea.md`, the task file(s), `status.md`, the features index) and isn't complete until all four agree. Never let an unverified change keep reading as done.
+9. **Spec check at story close** — `docs/specs/` holds capability specs **generated from the code** (`/specs regen`), never hand-written. Closing a story (`/tasks close STORY-NNN`) offers a scoped `/specs regen` over the areas the story touched; the resulting spec **diff** is reviewed as a "was this behavioral change intended?" check. An unexpected spec diff at story close is a finding, not churn. (Needs `docs/specs/.map.yml` — run `/specs init` once the project has real code.)
+10. **Production feedback re-enters the pipeline** — work flows back, not only forward. A field signal (user report, incident, monitoring alert) is triaged like any new work: a **regression** → a `tasks/` bug that ships **with a regression test** so it can't recur; a **missing capability** → a new feature; evidence that a `removed`/`deferred` **decision** was wrong → reopen it (`/feature decide` — a new `proposed` row linking the old). `done` is never the terminus; `done → field → triage → …` is the cycle.
+
+**Ground truth & altitude — what gets recorded where.** `docs/BRIEF.md` stores the user's requests **verbatim**: the opening ask is **immutable**, and later requirement-changing requests are **appended verbatim** (dated, naming the feature they became). Every distilled doc (this file, `README.md`, each `idea.md`) reconciles *against* it — if they disagree, the brief wins (or the divergence is a logged decision). Record each change at the altitude that fits it:
+
+| The change… | …is recorded in |
+|---|---|
+| introduces/alters a **requirement or scope** (what we build) | a `docs/BRIEF.md` amendment → new/changed feature |
+| alters **how an already-requested feature looks/behaves** | that feature's `decisions.md` (a `changed` decision) |
+| is a pure **implementation detail** (naming, data structure) | code / commits / `docs/architecture.md` |
+| settles **what a word means here** | `docs/glossary.md` — vocabulary only, never decisions |
+| settles **why we chose it**, for a choice that is hard to undo | a record under `docs/adr/` |
+
+**The last two rows are `/domain`'s.** `docs/adr/` already holds its records; `docs/glossary.md` does not
+exist yet and is written on the **first real term** — not scaffolded, because an empty glossary claims the vocabulary
+was examined and found thin. Run `/domain` when you hit either; it decides whether a choice has earned a record, so
+don't pre-judge that here.
+
+Append to `BRIEF.md` **only** for the top row — a refinement of already-requested scope is a *decision*, not a brief amendment. Recognizing "this is new scope, not a tweak", and capturing the verbatim text *before* paraphrasing it into a feature, is the agent's job, not something to wait to be asked.
+
+**Why this exists:** tracking must go beyond a changelog of code. We track *decisions and their reasoning*, decompose into small verifiable units, and keep stakeholders informed of state throughout — not just at the end.
+
 ## Architecture
 
 ### Store Hierarchy (Template Method Pattern)
@@ -238,6 +277,16 @@ immediately).
 - Test both success and failure cases; include edge cases and boundary conditions
 - Each test project has its own `CLAUDE.md` describing scope and conventions
 - See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
+
+## Commands
+
+- **Build:** `dotnet build Birko.Framework.slnx --nologo`, from this directory — the command `build-and-test.yml` runs.
+- **Test one project:** `dotnet test --nologo` from `tests/Birko.{Project}.Tests/` (CI loops it over every `tests/*/`
+  that has a `.csproj`).
+- **Consumer smoke harness:** `dotnet run --nologo` from `Birko/Consumers/Birko.Sandbox` — the only check that the
+  framework still composes through `$(BirkoSrc)` + `.projitems`.
+- **Live database suites:** set `BIRKO_PG_HOST`, `BIRKO_MSSQL_HOST`, `BIRKO_MYSQL_HOST` (and `BIRKO_REQUIRE_LIVE=1` to
+  fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
 ### Filters on translated fields fall back to the base value and look up by hash (2026-10-19)
