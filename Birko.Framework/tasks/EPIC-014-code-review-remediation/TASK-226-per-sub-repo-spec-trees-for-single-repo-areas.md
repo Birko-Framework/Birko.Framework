@@ -96,3 +96,20 @@ name for it.
 
 **Re-scope or cancel before working this.** Do not start from the description above — it describes a
 repo topology that no longer exists.
+
+## The "own tree" families, measured (TASK-689, 2026-10-20)
+
+TASK-689 checked every family the map excluded: commits since 2026-09-01 and the area contracts each one references,
+and the ambiguous ones read. The families recorded in the map's `ignore:` as **own tree** are real, self-contained
+behaviour waiting for this task, not exclusions:
+
+| Family | Activity since 2026-09-01 |
+|---|---|
+| `Birko.Xaml.*` + `Birko.DesignTokens` | 9 commits, 13–15 tasks |
+| `Birko.Security.OAuth.Server*` | 33 files |
+| `Birko.Communication.WebSocket`, `.SSE`, `.SSE.AspNetCore`, `.REST.Server`, `.AspNetCore` | 8 / 5 / 1 / 3 / 3 commits; their auth adapters and owner rule moved into security-and-authorization |
+| `Birko.Messaging*` | 13 tasks |
+| `Birko.Localization` + `.Data` | |
+| `Birko.Telemetry` | its instrumented store wrappers moved into store-decorator-composition |
+
+The behaviour changes TASK-519, 539, 540, 569 and 668 landed in these families with no spec review.

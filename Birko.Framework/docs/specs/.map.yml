@@ -24,7 +24,7 @@
 # framework's filter-translation bug history (empty `IN` differing per provider,
 # ElasticSearch silently dropping clauses) was per-backend DIVERGENCE, which a
 # contract-only spec cannot catch. Areas whose backends are large standalone
-# surfaces (see out-of-scope list) keep the contract only.
+# surfaces (see the ignore block's "not specced here" entries) keep the contract only.
 #
 # Staleness: `generated-at` stamps THIS repo's HEAD, while sources live in sibling
 # repos with independent histories — so for the whole life of this map, commit-based
@@ -61,27 +61,312 @@
 # those 4 plus the 64 unspecced single-repo projects -- TASK-226 -- but it is not the
 # staleness fix and should not be cited as one.
 #
-# Note: test code is now CO-LOCATED, under `../../tests/Birko.X.Tests/`, so a careless
+# Note: test code is now CO-LOCATED, under `../tests/Birko.X.Tests/`, so a careless
 # glob CAN reach it. The test entries in `ignore:` (notably `**/*Tests*/**`) are
 # therefore LIVE rather than inert — they are what keeps specs harvested from
 # production source only. Do not remove them.
 #
-# Area count (25) exceeds the skill's ~5–20 guidance. Deliberate: this is a
+# Area count (26; backend-store-implementations added by TASK-689) exceeds the skill's ~5–20 guidance. Deliberate: this is a
 # 176-project family, and merging unrelated capabilities to hit the number would
 # produce noisier regen diffs — defeating the point of diff review.
 #
-# Deliberately OUT OF SCOPE (single-repo or large standalone surfaces — they
-# belong to a future per-sub-repo `docs/specs/`, and are NOT silent under-coverage):
-#   Birko.CQRS, Birko.Health*, Birko.Telemetry*, Birko.Localization*, Birko.Time
-#   (except Time.Abstractions), Birko.Storage*, Birko.Communication*,
-#   Birko.Models.*, Birko.Structures, Birko.Random, Birko.Data.Processors,
-#   Birko.Helpers, Birko.VersionControl.Git, Birko.Redis (except RedisSettings), Birko.Data.EventSourcing,
-#   Birko.Security.OAuth.Server(.InMemory/.SqLite/.AspNetCore), Birko.Security.NFC, Birko.AI.Providers,
-#   Birko.AI.Agents, Birko.AI.Resilience(.Data), Birko.AI.Orchestration,
-#   Birko.Data.SQL.View*, Birko.Messaging*, Birko.Web.*, Birko.Xaml.*,
-#   Birko.DesignTokens, per-backend store bodies (JSON/XML/Mongo/Raven/Cosmos/
-#   Influx/Timescale CRUD implementations).
+# What this map does NOT spec is now written as globs in `ignore:` (TASK-689), each family checked rather than
+# assumed: commits since 2026-09-01 and the area contracts it references, and the ambiguous ones read. The prose
+# list that stood here was never checked against a scan, and the first check (2026-10-20) overturned part of it,
+# decided by the user:
+#   - the per-backend store bodies were the MOST-changed excluded projects (10-30 commits each), so they and the
+#     backends' repositories got their own area, backend-store-implementations;
+#   - AI.Providers/Agents/Orchestration/Resilience joined llm-provider-and-agents, Models.SQL schema-index-and-ddl,
+#     Birko.Data.SQL.View views-and-aggregation, Data.EventSourcing and Telemetry's wrappers
+#     store-decorator-composition, the transport auth adapters and the owner-or-admin rule security-and-authorization.
+# "own tree" entries in `ignore:` are real behaviour awaiting a per-project spec tree (TASK-226), not a claim that
+# they need no spec.
 # ───────────────────────────────────────────────────────────────────────────────
+
+coverage: verified
+tracked-files-at-scan: 4947
+# The files no area reached before the first coverage check (TASK-689, 2026-10-20), now in an area. Paths are
+# repo-relative, written from this directory like `sources:`. Overwritten by the next /specs init.
+coverage-drift:
+  - ../Birko.AI.Agents/Agents/AgentRegistration.cs
+  - ../Birko.AI.Agents/Agents/Coding/DebugAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/DocumentationAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/RefactorAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/AngularCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/AssemblerCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/CSharpCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/CppCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/CssCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/HtmlCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/JavaScriptTypeScriptCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/PhpCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/PythonCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/ReactCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/TestAgent.cs
+  - ../Birko.AI.Agents/Agents/CodingAgent.cs
+  - ../Birko.AI.Agents/Agents/DiagrammingAgent.cs
+  - ../Birko.AI.Agents/Agents/Media/BitmapAgent.cs
+  - ../Birko.AI.Agents/Agents/Media/ImageAgent.cs
+  - ../Birko.AI.Agents/Agents/Media/SvgAgent.cs
+  - ../Birko.AI.Agents/Agents/MediaAgent.cs
+  - ../Birko.AI.Agents/Agents/OrchestratorAgent.cs
+  - ../Birko.AI.Orchestration/Dispatch/DirectTaskDispatcher.cs
+  - ../Birko.AI.Orchestration/Dispatch/ITaskDispatcher.cs
+  - ../Birko.AI.Orchestration/Models/AgentTaskRecord.cs
+  - ../Birko.AI.Orchestration/Models/AgentTaskStatus.cs
+  - ../Birko.AI.Orchestration/Models/EscalationAlert.cs
+  - ../Birko.AI.Orchestration/Models/ExecutionMetrics.cs
+  - ../Birko.AI.Orchestration/Models/ImplementationPlan.cs
+  - ../Birko.AI.Orchestration/Models/TaskAssignment.cs
+  - ../Birko.AI.Orchestration/Services/StepDependencyAnalyzer.cs
+  - ../Birko.AI.Orchestration/Validation/IStepValidator.cs
+  - ../Birko.AI.Orchestration/Validation/StepValidationService.cs
+  - ../Birko.AI.Orchestration/Validation/StepValidators.cs
+  - ../Birko.AI.Providers/ProviderRegistration.cs
+  - ../Birko.AI.Providers/Providers/AzureOpenAiProvider.cs
+  - ../Birko.AI.Providers/Providers/ClaudeProvider.cs
+  - ../Birko.AI.Providers/Providers/DeepSeekProvider.cs
+  - ../Birko.AI.Providers/Providers/GeminiProvider.cs
+  - ../Birko.AI.Providers/Providers/GitHubCopilotProvider.cs
+  - ../Birko.AI.Providers/Providers/GroqProvider.cs
+  - ../Birko.AI.Providers/Providers/LlamaCppProvider.cs
+  - ../Birko.AI.Providers/Providers/LmStudioProvider.cs
+  - ../Birko.AI.Providers/Providers/MistralProvider.cs
+  - ../Birko.AI.Providers/Providers/OllamaProvider.cs
+  - ../Birko.AI.Providers/Providers/OpenAiCompatibleProviderBase.cs
+  - ../Birko.AI.Providers/Providers/OpenAiProvider.cs
+  - ../Birko.AI.Providers/Providers/OpenRouterProvider.cs
+  - ../Birko.AI.Providers/Providers/SglangProvider.cs
+  - ../Birko.AI.Providers/Providers/VllmProvider.cs
+  - ../Birko.AI.Providers/Providers/ZAiProvider.cs
+  - ../Birko.AI.Resilience.Data/Models/CircuitBreakerStateModel.cs
+  - ../Birko.AI.Resilience.Data/Models/UsageRecordModel.cs
+  - ../Birko.AI.Resilience.Data/Stores/StoreCircuitBreakerStore.cs
+  - ../Birko.AI.Resilience.Data/Stores/StoreUsageRepository.cs
+  - ../Birko.AI.Resilience/Configuration/CostTrackingConfiguration.cs
+  - ../Birko.AI.Resilience/Configuration/RateLimitConfiguration.cs
+  - ../Birko.AI.Resilience/Services/CostTrackingService.cs
+  - ../Birko.AI.Resilience/Services/ProviderCircuitBreaker.cs
+  - ../Birko.AI.Resilience/Services/ProviderRateLimiter.cs
+  - ../Birko.AI.Resilience/Services/TrackedLlmProvider.cs
+  - ../Birko.AI.Resilience/Stores/ICircuitBreakerStore.cs
+  - ../Birko.AI.Resilience/Stores/IUsageRepository.cs
+  - ../Birko.Communication.AspNetCore/OwnedCrud/OwnedCrudResults.cs
+  - ../Birko.Communication.AspNetCore/OwnedCrud/OwnerAccess.cs
+  - ../Birko.Communication.REST.Server/Middleware/RestAuthenticationConfiguration.cs
+  - ../Birko.Communication.REST.Server/Middleware/RestAuthenticationMiddleware.cs
+  - ../Birko.Communication.REST.Server/Middleware/RestAuthenticationService.cs
+  - ../Birko.Communication.SOAP/Middleware/SoapAuthenticationConfiguration.cs
+  - ../Birko.Communication.SOAP/Middleware/SoapAuthenticationService.cs
+  - ../Birko.Communication.SSE/Middleware/SseAuthenticationConfiguration.cs
+  - ../Birko.Communication.SSE/Middleware/SseAuthenticationMiddleware.cs
+  - ../Birko.Communication.SSE/Middleware/SseAuthenticationService.cs
+  - ../Birko.Communication.WebSocket/Middleware/WebSocketAuthenticationGate.cs
+  - ../Birko.Communication.WebSocket/Services/WebSocketAuthenticationConfiguration.cs
+  - ../Birko.Communication.WebSocket/Services/WebSocketAuthenticationService.cs
+  - ../Birko.Data.Core/Exceptions/EntityNotFoundException.cs
+  - ../Birko.Data.Core/Exceptions/StoreConcurrencyException.cs
+  - ../Birko.Data.CosmosDB/Serialization/CosmosGuidIdSerializer.cs
+  - ../Birko.Data.CosmosDB/Stores/AsyncCosmosDBStore.cs
+  - ../Birko.Data.CosmosDB/Stores/CosmosDBStore.cs
+  - ../Birko.Data.CosmosDB/Stores/CosmosTransactionScopeException.cs
+  - ../Birko.Data.ElasticSearch/Repositories/AsyncElasticSearchModelRepository.cs
+  - ../Birko.Data.ElasticSearch/Repositories/AsyncElasticSearchRepository.cs
+  - ../Birko.Data.ElasticSearch/Repositories/ElasticSearchModelRepository.cs
+  - ../Birko.Data.ElasticSearch/Repositories/ElasticSearchRepository.cs
+  - ../Birko.Data.ElasticSearch/Stores/MappingDrift.cs
+  - ../Birko.Data.ElasticSearch/Stores/MappingRepairPlan.cs
+  - ../Birko.Data.EventSourcing/Events/DomainEvent.cs
+  - ../Birko.Data.EventSourcing/Events/EventStoreConcurrencyException.cs
+  - ../Birko.Data.EventSourcing/Events/IEvent.cs
+  - ../Birko.Data.EventSourcing/Events/IEventStore.cs
+  - ../Birko.Data.EventSourcing/Models/IEventSourced.cs
+  - ../Birko.Data.EventSourcing/Stores/AsyncEventSourcingBulkStoreWrapper.cs
+  - ../Birko.Data.EventSourcing/Stores/AsyncEventSourcingStoreWrapper.cs
+  - ../Birko.Data.EventSourcing/Stores/EventSourcingBulkStoreWrapper.cs
+  - ../Birko.Data.EventSourcing/Stores/EventSourcingStoreExtensions.cs
+  - ../Birko.Data.EventSourcing/Stores/EventSourcingStoreWrapper.cs
+  - ../Birko.Data.InfluxDB/Stores/AsyncInfluxDBStore.cs
+  - ../Birko.Data.InfluxDB/Stores/InfluxDBStore.cs
+  - ../Birko.Data.JSON/Repositories/AsyncJsonModelRepository.cs
+  - ../Birko.Data.JSON/Repositories/AsyncJsonRepository.cs
+  - ../Birko.Data.JSON/Repositories/JsonModelRepository.cs
+  - ../Birko.Data.JSON/Repositories/JsonRepository.cs
+  - ../Birko.Data.JSON/Stores/AbstractAsyncJsonStore.cs
+  - ../Birko.Data.JSON/Stores/AbstractJsonStore.cs
+  - ../Birko.Data.JSON/Stores/AsyncJsonBatchBulkStore.cs
+  - ../Birko.Data.JSON/Stores/AsyncJsonBatchStore.cs
+  - ../Birko.Data.JSON/Stores/AsyncJsonSeparateBulkStore.cs
+  - ../Birko.Data.JSON/Stores/AsyncJsonSeparateStore.cs
+  - ../Birko.Data.JSON/Stores/AsyncJsonStore.cs
+  - ../Birko.Data.JSON/Stores/BatchSettings.cs
+  - ../Birko.Data.JSON/Stores/JsonBatchBulkStore.cs
+  - ../Birko.Data.JSON/Stores/JsonBatchStore.cs
+  - ../Birko.Data.JSON/Stores/JsonFileNaming.cs
+  - ../Birko.Data.JSON/Stores/JsonSeparateBulkStore.cs
+  - ../Birko.Data.JSON/Stores/JsonSeparateStore.cs
+  - ../Birko.Data.JSON/Stores/JsonStore.cs
+  - ../Birko.Data.JSON/Stores/StoredKeyGuard.cs
+  - ../Birko.Data.MongoDB/Models/MongoDBLogModel.cs
+  - ../Birko.Data.RavenDB/Expressions/RavenFilterRewriter.cs
+  - ../Birko.Data.RavenDB/Stores/AsyncRavenDBStore.cs
+  - ../Birko.Data.RavenDB/Stores/RavenDBStore.cs
+  - ../Birko.Data.RavenDB/Stores/RavenDocumentId.cs
+  - ../Birko.Data.SQL.MSSql.View/Database/Connector/MSSqlConnector_View.cs
+  - ../Birko.Data.SQL.MSSql/Repositories/AsyncMSSqlModelRepository.cs
+  - ../Birko.Data.SQL.MSSql/Repositories/AsyncMSSqlRepository.cs
+  - ../Birko.Data.SQL.MSSql/Repositories/MSSqlModelRepository.cs
+  - ../Birko.Data.SQL.MSSql/Repositories/MSSqlRepository.cs
+  - ../Birko.Data.SQL.MSSql/Stores/AsyncMSSqlStore.cs
+  - ../Birko.Data.SQL.MSSql/Stores/IMSSqlStoreFactory.cs
+  - ../Birko.Data.SQL.MSSql/Stores/MSSqlStore.cs
+  - ../Birko.Data.SQL.MSSql/Stores/MSSqlStoreFactory.cs
+  - ../Birko.Data.SQL.MSSql/Stores/MSSqlStoreFactoryOptions.cs
+  - ../Birko.Data.SQL.MySQL.View/Database/Connectors/MySQLConnector_View.cs
+  - ../Birko.Data.SQL.MySQL/Repositories/AsyncMySQLModelRepository.cs
+  - ../Birko.Data.SQL.MySQL/Repositories/AsyncMySQLRepository.cs
+  - ../Birko.Data.SQL.MySQL/Repositories/MySQLModelRepository.cs
+  - ../Birko.Data.SQL.MySQL/Repositories/MySQLRepository.cs
+  - ../Birko.Data.SQL.MySQL/Stores/AsyncMySQLStore.cs
+  - ../Birko.Data.SQL.MySQL/Stores/IMySQLStoreFactory.cs
+  - ../Birko.Data.SQL.MySQL/Stores/MySQLStore.cs
+  - ../Birko.Data.SQL.MySQL/Stores/MySQLStoreFactory.cs
+  - ../Birko.Data.SQL.MySQL/Stores/MySQLStoreFactoryOptions.cs
+  - ../Birko.Data.SQL.PostgreSQL.View/Database/Connectors/PostgreSQLConnector_View.cs
+  - ../Birko.Data.SQL.PostgreSQL/Repositories/AsyncPostgreSQLModelRepository.cs
+  - ../Birko.Data.SQL.PostgreSQL/Repositories/AsyncPostgreSQLRepository.cs
+  - ../Birko.Data.SQL.PostgreSQL/Repositories/PostgreSQLModelRepository.cs
+  - ../Birko.Data.SQL.PostgreSQL/Repositories/PostgreSQLRepository.cs
+  - ../Birko.Data.SQL.PostgreSQL/Stores/AsyncPostgreSQLStore.cs
+  - ../Birko.Data.SQL.PostgreSQL/Stores/IPostgreSQLStoreFactory.cs
+  - ../Birko.Data.SQL.PostgreSQL/Stores/PostgreSQLStore.cs
+  - ../Birko.Data.SQL.PostgreSQL/Stores/PostgreSQLStoreFactory.cs
+  - ../Birko.Data.SQL.PostgreSQL/Stores/PostgreSQLStoreFactoryOptions.cs
+  - ../Birko.Data.SQL.SqLite.View/Database/Connectors/SqLiteConnector_View.cs
+  - ../Birko.Data.SQL.SqLite/Repositories/AsyncSqLiteModelRepository.cs
+  - ../Birko.Data.SQL.SqLite/Repositories/AsyncSqLiteRepository.cs
+  - ../Birko.Data.SQL.SqLite/Repositories/SqLiteModelRepository.cs
+  - ../Birko.Data.SQL.SqLite/Repositories/SqLiteRepository.cs
+  - ../Birko.Data.SQL.SqLite/Stores/AsyncSQLiteStore.cs
+  - ../Birko.Data.SQL.SqLite/Stores/ISqLiteStoreFactory.cs
+  - ../Birko.Data.SQL.SqLite/Stores/SQLiteStore.cs
+  - ../Birko.Data.SQL.SqLite/Stores/SqLiteStoreFactory.cs
+  - ../Birko.Data.SQL.SqLite/Stores/SqLiteStoreFactoryOptions.cs
+  - ../Birko.Data.SQL.View.Migrations/Migrations/ViewMigrationExtensions.cs
+  - ../Birko.Data.SQL.View.Migrations/Migrations/ViewSqlGenerator.cs
+  - ../Birko.Data.SQL.View/Attributes/AggregateField.cs
+  - ../Birko.Data.SQL.View/Attributes/AvgField.cs
+  - ../Birko.Data.SQL.View/Attributes/CountField.cs
+  - ../Birko.Data.SQL.View/Attributes/MaxField.cs
+  - ../Birko.Data.SQL.View/Attributes/MinField.cs
+  - ../Birko.Data.SQL.View/Attributes/SumField.cs
+  - ../Birko.Data.SQL.View/Attributes/View.cs
+  - ../Birko.Data.SQL.View/Attributes/ViewField.cs
+  - ../Birko.Data.SQL.View/MaterializedViewType.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractAsyncConnector_CreateView.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractAsyncConnector_SelectViewCount.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnectorBase_View.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_CreateSelectCommand.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_CreateView.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_SelectViewCount.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/ViewSelectSqlBuilder.cs
+  - ../Birko.Data.SQL.View/SQL/DataBase_View.cs
+  - ../Birko.Data.SQL.View/SQL/DataBase_ViewConditions.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/BooleanFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/CharFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/DateTimeFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/DecimalFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/FunctionField.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/GuidFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/IntegerFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/StringFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Tables/View.cs
+  - ../Birko.Data.SQL.View/ViewQueryMode.cs
+  - ../Birko.Data.SQL/Exceptions/FieldAttributeException.cs
+  - ../Birko.Data.SQL/Exceptions/TableAttributeException.cs
+  - ../Birko.Data.SQL/Models/AbstractDatabasePercentage.cs
+  - ../Birko.Data.SQL/Models/AbstractDatabaseTree.cs
+  - ../Birko.Data.SQL/Models/AbstractLogModel.cs
+  - ../Birko.Data.SQL/Models/AbstractModel.cs
+  - ../Birko.Data.SQL/Models/DatabaseValueData.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Aggregate.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Alter_Add.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Alter_Drop.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Create.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Drop.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Insert.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_SelectCount.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Aggregate.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Alter_Add.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Alter_Drop.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Create.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Drop.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_EnsureColumns.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Insert.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_SchemaDrift.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_SchemaRepair.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_SelectCount.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AmbientSqlTransaction.cs
+  - ../Birko.Data.SQL/SQL/Connectors/SchemaEnsureFailureLog.cs
+  - ../Birko.Data.SQL/SQL/SchemaDrift/ColumnDrift.cs
+  - ../Birko.Data.SQL/SQL/SchemaDrift/SchemaRepairPlan.cs
+  - ../Birko.Data.SQL/SQL/SqlLiteral.cs
+  - ../Birko.Data.SQL/Stores/AsyncDataBaseStore.cs
+  - ../Birko.Data.SQL/Stores/DataBaseStore.cs
+  - ../Birko.Data.SQL/Stores/DuplicateCreate.cs
+  - ../Birko.Data.SQL/Stores/ISqlConnectedStore.cs
+  - ../Birko.Data.SQL/Stores/ISqlSchemaSettings.cs
+  - ../Birko.Data.Stores/StoreChain.cs
+  - ../Birko.Data.Stores/StoreDelegates.cs
+  - ../Birko.Data.Stores/StoreSave.cs
+  - ../Birko.Data.TimescaleDB/Database/Connectors/TimescaleDBConnector.cs
+  - ../Birko.Data.TimescaleDB/Repositories/AsyncTimescaleDBModelRepository.cs
+  - ../Birko.Data.TimescaleDB/Repositories/TimescaleDBModelRepository.cs
+  - ../Birko.Data.TimescaleDB/Stores/AsyncTimescaleDBStore.cs
+  - ../Birko.Data.TimescaleDB/Stores/TimescaleDBStore.cs
+  - ../Birko.Data.XML/Repositories/AsyncXmlModelRepository.cs
+  - ../Birko.Data.XML/Repositories/AsyncXmlRepository.cs
+  - ../Birko.Data.XML/Repositories/XmlModelRepository.cs
+  - ../Birko.Data.XML/Repositories/XmlRepository.cs
+  - ../Birko.Data.XML/Stores/AbstractAsyncXmlStore.cs
+  - ../Birko.Data.XML/Stores/AbstractXmlStore.cs
+  - ../Birko.Data.XML/Stores/AsyncXmlBatchBulkStore.cs
+  - ../Birko.Data.XML/Stores/AsyncXmlBatchStore.cs
+  - ../Birko.Data.XML/Stores/AsyncXmlSeparateBulkStore.cs
+  - ../Birko.Data.XML/Stores/AsyncXmlSeparateStore.cs
+  - ../Birko.Data.XML/Stores/AsyncXmlStore.cs
+  - ../Birko.Data.XML/Stores/BatchSettings.cs
+  - ../Birko.Data.XML/Stores/StoredKeyGuard.cs
+  - ../Birko.Data.XML/Stores/XmlBatchBulkStore.cs
+  - ../Birko.Data.XML/Stores/XmlBatchStore.cs
+  - ../Birko.Data.XML/Stores/XmlSeparateBulkStore.cs
+  - ../Birko.Data.XML/Stores/XmlSeparateStore.cs
+  - ../Birko.Data.XML/Stores/XmlStore.cs
+  - ../Birko.EventBus.Outbox.SQL/Models/OutboxEntryModel.cs
+  - ../Birko.EventBus.Outbox.SQL/SqlOutboxStore.cs
+  - ../Birko.Health.Data.IndexManagement/IndexDeclarationDriftHealthCheck.cs
+  - ../Birko.Health.Data.SQL/SchemaDriftHealthCheck.cs
+  - ../Birko.Health.Security.Grants/StaleGrantHealthCheck.cs
+  - ../Birko.Models.SQL/Mapping/FieldBuilder.cs
+  - ../Birko.Models.SQL/Mapping/IModelMapping.cs
+  - ../Birko.Models.SQL/Mapping/ModelMap.cs
+  - ../Birko.Models.SQL/Mapping/ModelMapRegistry.cs
+  - ../Birko.Security.AspNetCore/Extensions/LoopbackBypassExtensions.cs
+  - ../Birko.Security.AspNetCore/Extensions/TenantHeaderGuardStartupCheck.cs
+  - ../Birko.Security.Grants.AspNetCore/Authorization/GrantAwareUserPermissionResolver.cs
+  - ../Birko.Security.Grants.AspNetCore/Authorization/RequireGrantEndpointFilter.cs
+  - ../Birko.Security.Grants.AspNetCore/Authorization/UserPermissionResolverAdminSource.cs
+  - ../Birko.Security.Grants.AspNetCore/Extensions/GrantEndpointExtensions.cs
+  - ../Birko.Security.Grants.AspNetCore/Extensions/GrantServiceExtensions.cs
+  - ../Birko.Security.Grants.AspNetCore/GrantsAspNetCoreOptions.cs
+  - ../Birko.Telemetry/AsyncInstrumentedBulkStoreWrapper.cs
+  - ../Birko.Telemetry/AsyncInstrumentedStoreWrapper.cs
+  - ../Birko.Telemetry/InstrumentedBulkStoreWrapper.cs
+  - ../Birko.Telemetry/InstrumentedStoreWrapper.cs
+  - ../Birko.Telemetry/StoreInstrumentation.cs
+  - ../Birko.Telemetry/StoreInstrumentationExtensions.cs
 
 areas:
   - name: core-model-contracts
@@ -96,6 +381,10 @@ areas:
       # never specced the defect and the regen for its fix would have been blind to it.
       - ../Birko.Data.MongoDB/Models/MongoDBModel.cs
       - ../Birko.Data.MongoDB/Serialization/*.cs
+      # TASK-689: the SQL model bases, and the two Guid wire / log-model files beside the MongoDB ones above
+      - ../Birko.Data.SQL/Models/*.cs
+      - ../Birko.Data.CosmosDB/Serialization/CosmosGuidIdSerializer.cs
+      - ../Birko.Data.MongoDB/Models/MongoDBLogModel.cs
 
   - name: store-crud-contract
     title: Store CRUD contract and template-method hierarchy
@@ -110,11 +399,26 @@ areas:
       - ../Birko.Data.Core/Exceptions/StoreException.cs
       # reference conformance: the simplest complete store in the family
       - ../Birko.Data.InMemory/Stores/*.cs
-      # NOT the document backends' store bodies: the header's out-of-scope list names them explicitly
-      # ("per-backend store bodies … CRUD implementations") as a deliberate exclusion, not a gap. The
-      # 2026-08-08 sweep proposed adding them and that was reverted — a coverage number is not an
-      # argument against a recorded decision. Individual files still enter an area when a specific
-      # cross-backend contract needs them (see bulk-filter-operations' two MongoDB entries).
+      # The backends' store bodies were a deliberate exclusion until TASK-689. The 2026-08-08 sweep proposed adding
+      # them and reverted it, rightly: a coverage number is not an argument against a recorded decision. The
+      # decision was revisited on different evidence (they were the most-changed excluded projects, so the exclusion
+      # hid real behaviour changes) and changed by the user, 2026-10-20: they are in backend-store-implementations.
+      # TASK-689: drift found by the first coverage check (exceptions, Save/chain/delegates, the SQL store
+      # bodies and the connector's insert/count funnel)
+      - ../Birko.Data.Core/Exceptions/EntityNotFoundException.cs
+      - ../Birko.Data.Core/Exceptions/StoreConcurrencyException.cs
+      - ../Birko.Data.Stores/StoreChain.cs
+      - ../Birko.Data.Stores/StoreDelegates.cs
+      - ../Birko.Data.Stores/StoreSave.cs
+      - ../Birko.Data.SQL/Stores/DataBaseStore.cs
+      - ../Birko.Data.SQL/Stores/AsyncDataBaseStore.cs
+      - ../Birko.Data.SQL/Stores/DuplicateCreate.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Insert.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Insert.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_SelectCount.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_SelectCount.cs
 
   - name: store-lazy-initialization
     title: Lazy store initialization (EnsureInitialized double-checked locking)
@@ -194,6 +498,10 @@ areas:
       - ../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs
       - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs
       - ../Birko.Data.ElasticSearch/Stores/AsyncElasticSearchStore.cs
+      # TASK-689: the one escaping producer (rule 20), Raven's filter rewriter and Timescale's connector
+      - ../Birko.Data.SQL/SQL/SqlLiteral.cs
+      - ../Birko.Data.RavenDB/Expressions/RavenFilterRewriter.cs
+      - ../Birko.Data.TimescaleDB/Database/Connectors/*.cs
 
   - name: views-and-aggregation
     title: Fluent view definitions and aggregation queries
@@ -207,13 +515,9 @@ areas:
       - ../Birko.Data.Stores/TimeIntervalParser.cs
       # platform translators — the conformance surface for one ViewDefinition
       - ../Birko.Data.SQL.Views/**/*.cs
-      # Birko.Data.SQL.View is otherwise out of scope (see the block above), but the view read path's sort
-      # contract is implemented in these three files and this spec documents it — added for TASK-128 rather
-      # than leaving the behaviour unmapped. Not an opening of that whole project.
-      # Three named files out of thirty. The rest of Birko.Data.SQL.View is in the header's out-of-scope
-      # list, so the 90% is deliberate rather than silent — the 2026-08-08 sweep proposed widening this to
-      # the whole tree and reverted it for that reason. Worth revisiting as a DECISION (TASK-129's
-      # aggregate-view DDL defect sits in the excluded part), not as a coverage fix.
+      # The view read path's sort contract (TASK-128). These three were once the only mapped files of
+      # Birko.Data.SQL.View, a deliberate exclusion noted as "worth revisiting as a DECISION". TASK-689 revisited it:
+      # the whole project is mapped below (12 commits since 2026-09-01), decided by the user.
       - ../Birko.Data.SQL.View/SQL/DataBase_ViewOrderBy.cs
       - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_SelectView.cs
       - ../Birko.Data.SQL.View/SQL/Connectors/AbstractAsyncConnector_SelectView.cs
@@ -226,6 +530,11 @@ areas:
       - ../Birko.Data.RavenDB.Views/**/*.cs
       - ../Birko.Data.CosmosDB.Views/**/*.cs
       - ../Birko.Data.ElasticSearch/Aggregation/StoreAggregationHelper.cs
+      # TASK-689: the rest of the SQL view engine and its provider dialects, and the connector's aggregate funnel
+      - ../Birko.Data.SQL.View/**/*.cs
+      - ../Birko.Data.SQL.*.View/**/*.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Aggregate.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Aggregate.cs
 
   - name: specifications-and-paging
     title: Specification composition and paged results
@@ -241,6 +550,11 @@ areas:
       - ../Birko.Data.Patterns/Models/*.cs
       - ../Birko.Data.Composition/*.cs
       - ../Birko.Time.Abstractions/**/*.cs
+      # TASK-689: decorators StoreWrapperBuilder composes or that honour IStoreWrapper (EventSourcing is composed
+      # innermost; Telemetry's instrumentation wrappers are opt-in)
+      - ../Birko.Data.EventSourcing/**/*.cs
+      - ../Birko.Telemetry/*Instrumented*StoreWrapper.cs
+      - ../Birko.Telemetry/StoreInstrumentation*.cs
 
   - name: tenant-isolation
     title: Multi-tenant isolation across stores, HTTP and events
@@ -250,6 +564,8 @@ areas:
       - ../Birko.Security.AspNetCore/Extensions/TenantHeaderGuardExtensions.cs
       - ../Birko.EventBus.Tenant/**/*.cs
       - ../Birko.Data.Sync.Tenant/**/*.cs
+      # TASK-689
+      - ../Birko.Security.AspNetCore/Extensions/TenantHeaderGuardStartupCheck.cs
 
   - name: repository-contract
     title: Repository and ViewModel-repository abstractions
@@ -265,6 +581,39 @@ areas:
       - ../Birko.Data.CosmosDB/Repositories/*.cs
       - ../Birko.Data.InfluxDB/Repositories/*.cs
       - ../Birko.Data.SQL/Repositories/*.cs
+
+  - name: backend-store-implementations
+    title: How each backend meets the store contract, and where they diverge
+    sources:
+      # TASK-689 (decided by the user): every backend's store bodies and repositories in ONE area, so the contract
+      # areas (store-crud-contract, bulk-filter-operations, repository-contract) keep the generic contract and this
+      # spec lists the backends side by side. The framework's defects here were per-backend DIVERGENCE (a scope
+      # guard missing on SQL, empty IN answered differently), which a side-by-side spec is built to show. Measured:
+      # these were the most-changed excluded projects, 10-30 commits each since 2026-09-01.
+      - ../Birko.Data.JSON/Stores/*.cs
+      - ../Birko.Data.JSON/Repositories/*.cs
+      - ../Birko.Data.XML/Stores/*.cs
+      - ../Birko.Data.XML/Repositories/*.cs
+      - ../Birko.Data.MongoDB/Stores/*.cs
+      - ../Birko.Data.MongoDB/Repositories/*.cs
+      - ../Birko.Data.RavenDB/Stores/*.cs
+      - ../Birko.Data.RavenDB/Repositories/*.cs
+      - ../Birko.Data.CosmosDB/Stores/*.cs
+      - ../Birko.Data.CosmosDB/Repositories/*.cs
+      - ../Birko.Data.InfluxDB/Stores/*.cs
+      - ../Birko.Data.InfluxDB/Repositories/*.cs
+      - ../Birko.Data.TimescaleDB/Stores/*.cs
+      - ../Birko.Data.TimescaleDB/Repositories/*.cs
+      - ../Birko.Data.ElasticSearch/Stores/*.cs
+      - ../Birko.Data.ElasticSearch/Repositories/*.cs
+      - ../Birko.Data.SQL.MSSql/Stores/*.cs
+      - ../Birko.Data.SQL.MSSql/Repositories/*.cs
+      - ../Birko.Data.SQL.MySQL/Stores/*.cs
+      - ../Birko.Data.SQL.MySQL/Repositories/*.cs
+      - ../Birko.Data.SQL.PostgreSQL/Stores/*.cs
+      - ../Birko.Data.SQL.PostgreSQL/Repositories/*.cs
+      - ../Birko.Data.SQL.SqLite/Stores/*.cs
+      - ../Birko.Data.SQL.SqLite/Repositories/*.cs
 
   - name: settings-configuration-chain
     title: Settings inheritance chain and connection-string contract
@@ -282,6 +631,8 @@ areas:
       - ../Birko.Data.InfluxDB/Stores/Settings.cs
       - ../Birko.Data.TimescaleDB/Stores/Settings.cs
       - ../Birko.Redis/RedisSettings.cs
+      # TASK-689
+      - ../Birko.Data.SQL/Stores/ISqlSchemaSettings.cs
 
   - name: schema-index-and-ddl
     title: Schema descriptors, index management and attribute-driven DDL
@@ -306,6 +657,24 @@ areas:
       - ../Birko.Data.MongoDB/IndexManagement/*.cs
       - ../Birko.Data.RavenDB/IndexManagement/*.cs
       - ../Birko.Data.CosmosDB/IndexManagement/*.cs
+      # TASK-689: the fluent mapping engine, the connector's DDL / drift / repair, and the drift health checks
+      - ../Birko.Models.SQL/**/*.cs
+      - ../Birko.Data.SQL/Exceptions/*.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Create.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Create.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Alter_*.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Alter_*.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Drop.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Drop.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_EnsureColumns.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_SchemaDrift.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_SchemaRepair.cs
+      - ../Birko.Data.SQL/SQL/Connectors/SchemaEnsureFailureLog.cs
+      - ../Birko.Data.SQL/SQL/SchemaDrift/*.cs
+      - ../Birko.Data.ElasticSearch/Stores/MappingDrift.cs
+      - ../Birko.Data.ElasticSearch/Stores/MappingRepairPlan.cs
+      - ../Birko.Health.Data.IndexManagement/**/*.cs
+      - ../Birko.Health.Data.SQL/**/*.cs
 
   - name: unit-of-work-and-transactions
     title: Unit of work and transactional store boundaries
@@ -321,6 +690,9 @@ areas:
       - ../Birko.Data.RavenDB/UnitOfWork/*.cs
       - ../Birko.Data.CosmosDB/UnitOfWork/*.cs
       - ../Birko.Data.InfluxDB/UnitOfWork/*.cs
+      # TASK-689
+      - ../Birko.Data.SQL/SQL/Connectors/AmbientSqlTransaction.cs
+      - ../Birko.Data.SQL/Stores/ISqlConnectedStore.cs
 
   - name: migrations
     title: Schema/data migration runner and backend contexts
@@ -333,6 +705,8 @@ areas:
       - ../Birko.Data.Migrations.CosmosDB/**/*.cs
       - ../Birko.Data.Migrations.InfluxDB/**/*.cs
       - ../Birko.Data.Migrations.TimescaleDB/**/*.cs
+      # TASK-689
+      - ../Birko.Data.SQL.View.Migrations/**/*.cs
 
   - name: data-sync
     title: Bidirectional data sync, conflict resolution and aggregate mapping
@@ -364,12 +738,14 @@ areas:
       - ../Birko.EventBus/**/*.cs
       - ../Birko.EventBus.Outbox/**/*.cs
       - ../Birko.EventBus.MessageQueue/**/*.cs
-      # bridge only — the EventStore itself (Birko.Data.EventSourcing) is out of scope
+      # the bridge; the EventStore itself (Birko.Data.EventSourcing) is in store-decorator-composition (TASK-689)
       - ../Birko.EventBus.EventSourcing/**/*.cs
       - ../Birko.MessageQueue/**/*.cs
       - ../Birko.MessageQueue.InMemory/**/*.cs
       - ../Birko.MessageQueue.MQTT/**/*.cs
       - ../Birko.MessageQueue.Redis/**/*.cs
+      # TASK-689
+      - ../Birko.EventBus.Outbox.SQL/**/*.cs
 
   - name: background-jobs
     title: Job queue, retry policy, processing and scheduling
@@ -423,6 +799,18 @@ areas:
       - ../Birko.Security.AspNetCore/User/*.cs
       - ../Birko.Security.AspNetCore/Extensions/PermissionResolutionExtensions.cs
       - ../Birko.Security.AspNetCore/Extensions/SecurityServiceExtensions.cs
+      # TASK-689: the Grants HTTP layer, the loopback bypass, the transport adapters of AuthenticationService, the
+      # owner-or-admin rule (rule 65) and the stale-grant health check
+      - ../Birko.Security.Grants.AspNetCore/**/*.cs
+      - ../Birko.Security.AspNetCore/Extensions/LoopbackBypassExtensions.cs
+      - ../Birko.Communication.REST.Server/Middleware/RestAuthentication*.cs
+      - ../Birko.Communication.SSE/Middleware/SseAuthentication*.cs
+      - ../Birko.Communication.WebSocket/Services/WebSocketAuthentication*.cs
+      - ../Birko.Communication.WebSocket/Middleware/WebSocketAuthenticationGate.cs
+      - ../Birko.Communication.SOAP/Middleware/SoapAuthentication*.cs
+      - ../Birko.Communication.AspNetCore/OwnedCrud/OwnerAccess.cs
+      - ../Birko.Communication.AspNetCore/OwnedCrud/OwnedCrudResults.cs
+      - ../Birko.Health.Security.Grants/**/*.cs
 
   - name: validation-and-rules
     title: Fluent validation, rule engine and validating store wrappers
@@ -443,12 +831,117 @@ areas:
     sources:
       - ../Birko.AI.Contracts/**/*.cs
       - ../Birko.AI/**/*.cs
+      # TASK-689: the provider, agent, orchestration and resilience implementors of this area's contracts
+      - ../Birko.AI.Providers/**/*.cs
+      - ../Birko.AI.Agents/**/*.cs
+      - ../Birko.AI.Orchestration/**/*.cs
+      - ../Birko.AI.Resilience/**/*.cs
+      - ../Birko.AI.Resilience.Data/**/*.cs
 
 ignore:
-  - "**/bin/**"
-  - "**/obj/**"
-  - "**/node_modules/**"
-  - "**/*.test.*"
-  - "**/*Tests*/**"
-  - "**/*.Designer.cs"
-  - "**/*.g.cs"
+  # Every entry resolves from this directory (Birko.Framework/), like `sources:`, so a repo-wide rule starts with
+  # `../` (TASK-689). Written without it, all seven entries reached Birko.Framework/ only and matched 0 of 4 947
+  # tracked files.
+  #
+  # ── Housekeeping: never project source ──
+  - "../**/bin/**"
+  - "../**/obj/**"
+  - "../**/node_modules/**"
+  - "../**/*.test.*"
+  - "../**/*.Designer.cs"
+  - "../**/*.g.cs"
+  # co-located test code (../tests/Birko.X.Tests/): what keeps specs harvested from production source only
+  - "../tests/**"
+  - "../**/*Tests*/**"
+  - "../**/*.md"
+  - "../**/*.csproj"
+  - "../**/*.shproj"
+  - "../**/*.projitems"
+  - "../**/*.slnx"
+  - "../**/*.props"
+  - "../**/*.code-workspace"
+  - "../**/*.yml"
+  - "../**/LICENSE"
+  - "../.github/**"
+  - "../.claude/**"
+  - "../ci/**"
+  - "tasks/**"
+  - "docs/**"
+  - ".vscode/**"
+  # the aggregator's own audit and maintenance scripts
+  - "*.cs"
+  - "tools/**"
+  #
+  # ── Not specced HERE, by decision (TASK-689, measured and decided by the user) ──
+  # Each entry was checked, not assumed: commits since 2026-09-01 (2 = the monorepo migration, i.e. dormant) and the
+  # area contracts it references. "own tree" means real, self-contained behaviour that belongs in a per-project spec
+  # tree (TASK-226) — NOT a claim that it needs no spec. Re-check an entry when it starts changing.
+  #
+  # own tree: the UI library and its tokens (active, but self-contained)
+  - "../Birko.Xaml.*/**"
+  - "../Birko.DesignTokens/**"
+  # nothing to spec yet: dormant, no contract an area specs
+  - "../Birko.CQRS/**"
+  - "../Birko.Random/**"
+  - "../Birko.Structures/**"
+  - "../Birko.Time/**"
+  - "../Birko.Telemetry.OpenTelemetry/**"
+  - "../Birko.Helpers/**"
+  - "../Birko.Data.Processors/**"
+  - "../Birko.VersionControl.Git/**"
+  - "../Birko.Storage*/**"
+  - "../Birko.Health/**"
+  - "../Birko.Health.Azure/**"
+  - "../Birko.Health.Redis/**"
+  - "../Birko.Health.Data/**"
+  - "../Birko.Health.Data.ElasticSearch/**"
+  - "../Birko.Localization/**"
+  # hardware and protocol clients
+  - "../Birko.Communication/**"
+  - "../Birko.Communication.Bluetooth/**"
+  - "../Birko.Communication.Camera/**"
+  - "../Birko.Communication.Hardware/**"
+  - "../Birko.Communication.IR/**"
+  - "../Birko.Communication.Modbus/**"
+  - "../Birko.Communication.NFC/**"
+  - "../Birko.Communication.Network/**"
+  - "../Birko.Communication.gRPC/**"
+  - "../Birko.Communication.gRPC.Server/**"
+  - "../Birko.Communication.GraphQL/**"
+  - "../Birko.Communication.SOAP/**"
+  - "../Birko.Communication.REST/**"
+  - "../Birko.Communication.OAuth/**"
+  - "../Birko.Communication.OAuth.Providers/**"
+  - "../Birko.Security.NFC/**"
+  # domain model POCOs and their mappings (Birko.Models.SQL, the mapping engine, is in schema-index-and-ddl)
+  - "../Birko.Models/**"
+  - "../Birko.Models.Contracts/**"
+  - "../Birko.Models.Category/**"
+  - "../Birko.Models.Customers*/**"
+  - "../Birko.Models.Inventory*/**"
+  - "../Birko.Models.Pricing*/**"
+  - "../Birko.Models.Product*/**"
+  - "../Birko.Models.SEO/**"
+  - "../Birko.Models.Users*/**"
+  # per-backend ViewModel-repository adapters (thin; the contract is repository-contract's)
+  - "../Birko.Data.*.ViewModel/**"
+  - "../Birko.Data.ViewModel/**"
+  # own tree: self-contained behaviour, decided after reading (TASK-689)
+  - "../Birko.Security.OAuth.Server*/**"
+  - "../Birko.Communication.WebSocket/**"
+  - "../Birko.Communication.SSE/**"
+  - "../Birko.Communication.SSE.AspNetCore/**"
+  - "../Birko.Communication.REST.Server/**"
+  - "../Birko.Communication.AspNetCore/**"
+  - "../Birko.Messaging*/**"
+  - "../Birko.Localization.Data/**"
+  - "../Birko.Telemetry/**"
+  # per-backend bodies with no cross-backend contract of their own
+  - "../Birko.Data.EventSourcing.SQL/**"
+  - "../Birko.Redis/RedisConnectionManager.cs"
+  - "../Birko.Data.ElasticSearch/Extensions/**"
+  - "../Birko.Data.ElasticSearch/Highlighting/**"
+  - "../Birko.Data.SQL.*/Extensions/**"
+  - "../Birko.Data.MongoDB/ChangeStreams/**"
+  - "../Birko.Data.MongoDB/MongoDB/**"
+  - "../Birko.Data.InfluxDB/InfluxDB/**"
