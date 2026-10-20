@@ -46,11 +46,12 @@ public class AsyncSluggableBulkStoreWrapper<TStore, T> : AsyncSluggableStoreWrap
                 await _innerStore.CreateAsync(items, storeDelegate, ct);
                 return;
             }
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts)
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)
             {
                 // TASK-632: retried only while nothing of the batch is stored (a store whose collection create is not
                 // atomic may have written a prefix, which a retry would create twice) and a slug is what collided.
-                if (await AnyStoredAsync(items, ct) || !await AnySlugHeldAsync(items, ct)) throw;
+                if (await Birko.Data.Exceptions.StoreException.ProbeAfterRefusalAsync(() => AnyStoredAsync(items, ct), violation)
+                    || !await Birko.Data.Exceptions.StoreException.ProbeAfterRefusalAsync(() => AnySlugHeldAsync(items, ct), violation)) throw;
             }
         }
     }
@@ -92,10 +93,10 @@ public class AsyncSluggableBulkStoreWrapper<TStore, T> : AsyncSluggableStoreWrap
                 await _innerStore.UpdateAsync(items, storeDelegate, ct);
                 return;
             }
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts)
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)
             {
                 // An update is idempotent, so a partly applied batch is safe to write again (TASK-632).
-                if (!await AnySlugHeldAsync(items, ct)) throw;
+                if (!await Birko.Data.Exceptions.StoreException.ProbeAfterRefusalAsync(() => AnySlugHeldAsync(items, ct), violation)) throw;
             }
         }
     }

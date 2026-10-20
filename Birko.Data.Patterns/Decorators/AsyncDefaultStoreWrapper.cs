@@ -95,10 +95,11 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
                 await _innerStore.CreateAsync(items, storeDelegate, ct);
                 return;
             }
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && chosen != null)
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxDefaultAttempts && chosen != null)
             {
                 // Retried only while nothing of the batch is stored: a non-atomic collection create may have written a prefix.
-                if (await AnyStoredAsync(items, ct) || !await OtherDefaultStoredAsync(chosen.Guid, ct)) throw;
+                if (await Birko.Data.Exceptions.StoreException.ProbeAfterRefusalAsync(() => AnyStoredAsync(items, ct), violation)
+                    || !await Birko.Data.Exceptions.StoreException.ProbeAfterRefusalAsync(() => OtherDefaultStoredAsync(chosen.Guid, ct), violation)) throw;
             }
         }
     }
@@ -123,10 +124,10 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
                 await _innerStore.UpdateAsync(DefaultLast(items), storeDelegate, ct);
                 return;
             }
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && chosen != null)
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxDefaultAttempts && chosen != null)
             {
                 // An update is idempotent, so a partly applied batch is safe to write again.
-                if (!await OtherDefaultStoredAsync(chosen.Guid, ct)) throw;
+                if (!await Birko.Data.Exceptions.StoreException.ProbeAfterRefusalAsync(() => OtherDefaultStoredAsync(chosen.Guid, ct), violation)) throw;
             }
         }
     }
@@ -148,9 +149,9 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
             {
                 return await write();
             }
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && data.IsDefault)
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxDefaultAttempts && data.IsDefault)
             {
-                if (!await OtherDefaultStoredAsync(data.Guid, ct)) throw;
+                if (!await Birko.Data.Exceptions.StoreException.ProbeAfterRefusalAsync(() => OtherDefaultStoredAsync(data.Guid, ct), violation)) throw;
             }
         }
     }

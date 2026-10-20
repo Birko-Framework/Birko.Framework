@@ -15,6 +15,11 @@ Unit tests for the Birko.Data.Migrations.SQL project - SQL database migration fr
 - `Models/MigrationResultTests.cs` - MigrationResult model tests
 - `SqlMigrationSettingsTests.cs` - SQL migration settings configuration tests
 - `SqlMigrationSplitTests.cs` - SQL migration script splitting tests
+- `Task632RaceLiveTests.cs` - TASK-632, live: concurrent slug creates and default promotions under a unique index
+- `Task685InTransactionLiveTests.cs` - TASK-685, live (PostgreSQL, MySQL, SQL Server): a unique refusal inside a
+  caller's `SqlUnitOfWork`, raced from another connection; per-provider knobs `RetriesInsideATransaction` and
+  `ProbeFailsAfterRefusal`. Uses its own tables (`T685Slugs` / `T685Defaults`), because the TASK-632 suite drops its
+  tables in parallel (rule 61)
 
 ## Dependencies
 - Birko.Data.Migrations.SQL (via .projitems) - SQL migration implementation

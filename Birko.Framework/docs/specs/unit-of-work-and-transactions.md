@@ -687,6 +687,13 @@ where individual items may succeed or fail independently and rollback of applied
   isolated from others per the provider's isolation level), while under Elasticsearch the write does
   not exist anywhere yet — it is only a delegate in a local list
 
+#### Scenario: A unique refusal inside a SQL transaction differs per provider
+
+- **Given** a `SqlUnitOfWork` whose write is refused by a unique index that another connection's commit now holds
+- **When** the write's caller reads again inside the same transaction
+- **Then** on PostgreSQL the read fails with `25P02` (the refusal aborted the transaction); on MySQL it succeeds but
+  reads the REPEATABLE READ snapshot without the other commit; on SQL Server it sees the other row (TASK-685)
+
 ### Requirement: Every unit of work declares its transactional capabilities
 
 The system SHALL describe what a boundary promises with `ITransactionCapabilities` — `Atomicity`

@@ -219,6 +219,19 @@ The store refuses the second default with `StoreUniqueViolationException` (a `St
 the winner and writes again, so the last writer wins, up to 5 attempts. Within one batch, demotions are written before the
 promotion they make room for. Measured on SQLite, PostgreSQL, MySQL and SQL Server.
 
+Inside a caller's transaction (`SqlUnitOfWork`) the retry depends on the provider (TASK-685, measured live):
+
+| Provider | After a refusal inside the transaction |
+|---|---|
+| SQL Server | the re-check sees the other writer's row and retries in place |
+| MySQL | the re-check reads the snapshot from before the other commit, so the `StoreUniqueViolationException` stands |
+| PostgreSQL | the refusal aborts the transaction; the caller gets `StoreUniqueViolationException` naming the failed re-check (`25P02`) |
+
+The transaction is lost on PostgreSQL either way: roll it back and run the unit again. Outside a transaction the four
+SQL providers retry. A failed re-check, in or out of a transaction, now surfaces as that typed refusal. The sync
+decorators used to swallow it and rethrow the bare refusal. A connection fault during the re-check therefore reads as a
+unique refusal too; the fault's message is kept in its text.
+
 > ⚠ Without `IDefaultMarker` and its index, or on a store that enforces no unique index (ElasticSearch, RavenDB,
 > Cosmos DB, JSON, XML, InMemory), the read-then-write only narrows the window. On MongoDB declare the index through the
 > index manager as a partial one (TASK-636); a *sparse* one would refuse the second non-default, because Birko stores

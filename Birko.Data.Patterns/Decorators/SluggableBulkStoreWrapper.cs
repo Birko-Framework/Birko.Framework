@@ -40,8 +40,10 @@ public class SluggableBulkStoreWrapper<TStore, T> : SluggableStoreWrapper<TStore
                 return;
             }
             // TASK-632: retried only while nothing of the batch is stored and a slug is what collided (see the async twin).
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts && !AnyStored(items) && AnySlugHeld(items))
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)
             {
+                // TASK-685: probed in the body, not the filter, so a failed probe surfaces through ProbeAfterRefusal.
+                if (Birko.Data.Exceptions.StoreException.ProbeAfterRefusal(() => AnyStored(items), violation) || !Birko.Data.Exceptions.StoreException.ProbeAfterRefusal(() => AnySlugHeld(items), violation)) throw;
             }
         }
     }
@@ -73,8 +75,10 @@ public class SluggableBulkStoreWrapper<TStore, T> : SluggableStoreWrapper<TStore
                 return;
             }
             // An update is idempotent, so a partly applied batch is safe to write again (TASK-632).
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts && AnySlugHeld(items))
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)
             {
+                // TASK-685: probed in the body, not the filter, so a failed probe surfaces through ProbeAfterRefusal.
+                if (!Birko.Data.Exceptions.StoreException.ProbeAfterRefusal(() => AnySlugHeld(items), violation)) throw;
             }
         }
     }

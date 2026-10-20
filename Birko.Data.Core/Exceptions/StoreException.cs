@@ -29,6 +29,59 @@ namespace Birko.Data.Exceptions
             => new StoreUniqueViolationException(
                 $"Update of {entityType.Name} refused: it would store a value a unique index already holds for another entity.",
                 innerException);
+
+        /// <summary>
+        /// What a write refused by a unique key throws when it cannot repair the collision (TASK-685): the original
+        /// <paramref name="violation"/>, rethrown as it was, when nothing failed; otherwise a
+        /// <see cref="StoreUniqueViolationException"/> wrapping it and naming <paramref name="readFailure"/>, the query that
+        /// was to decide the retry.
+        /// </summary>
+        /// <remarks>
+        /// Measured on PostgreSQL inside a caller's transaction: the refusal aborts the transaction, so the next query
+        /// fails with <c>25P02 current transaction is aborted</c>. Surfacing that driver exception replaced the typed
+        /// refusal callers select on (rule 9). The caller's transaction is lost either way; the error now says why.
+        /// </remarks>
+        public static Exception UnretryableUniqueViolation(StoreUniqueViolationException violation, Exception? readFailure)
+        {
+            if (readFailure == null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(violation).Throw();
+            }
+            return new StoreUniqueViolationException(
+                $"{violation.Message} The retry could not query the store after the refusal (the transaction may have been "
+                + "aborted by it, as PostgreSQL does): " + readFailure!.Message, violation);
+        }
+
+        /// <summary>
+        /// Runs <paramref name="probe"/>, the query that decides whether a refused write may be retried. If it fails, the
+        /// refusal is surfaced through <see cref="UnretryableUniqueViolation"/>, never the probe's own exception;
+        /// cancellation passes through.
+        /// </summary>
+        public static bool ProbeAfterRefusal(Func<bool> probe, StoreUniqueViolationException violation)
+        {
+            try
+            {
+                return probe();
+            }
+            catch (Exception readFailure) when (readFailure is not OperationCanceledException)
+            {
+                throw UnretryableUniqueViolation(violation, readFailure);
+            }
+        }
+
+        /// <inheritdoc cref="ProbeAfterRefusal"/>
+        public static async System.Threading.Tasks.Task<bool> ProbeAfterRefusalAsync(
+            Func<System.Threading.Tasks.Task<bool>> probe, StoreUniqueViolationException violation)
+        {
+            try
+            {
+                return await probe();
+            }
+            catch (Exception readFailure) when (readFailure is not OperationCanceledException)
+            {
+                throw UnretryableUniqueViolation(violation, readFailure);
+            }
+        }
     }
 
     /// <summary>

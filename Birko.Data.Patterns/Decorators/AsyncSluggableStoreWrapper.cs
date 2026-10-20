@@ -52,9 +52,9 @@ public class AsyncSluggableStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
             {
                 return await _innerStore.CreateAsync(data, processDelegate, ct);
             }
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts)
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)
             {
-                if (!await SlugHeldAsync(data.Slug, data.Guid, ct)) throw;
+                if (!await Birko.Data.Exceptions.StoreException.ProbeAfterRefusalAsync(() => SlugHeldAsync(data.Slug, data.Guid, ct), violation)) throw;
             }
         }
     }
@@ -69,9 +69,9 @@ public class AsyncSluggableStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapp
                 await _innerStore.UpdateAsync(data, processDelegate, ct);
                 return;
             }
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts)
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)
             {
-                if (!await SlugHeldAsync(data.Slug, data.Guid, ct)) throw;
+                if (!await Birko.Data.Exceptions.StoreException.ProbeAfterRefusalAsync(() => SlugHeldAsync(data.Slug, data.Guid, ct), violation)) throw;
             }
         }
     }

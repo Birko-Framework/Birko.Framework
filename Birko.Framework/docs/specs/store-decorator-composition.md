@@ -840,6 +840,41 @@ that enforces none, concurrent promotions can still both store a default.
 - **When** an entity with `IsDefault = true` is created through the Default decorator
 - **Then** the exception propagates after one write, with no retry
 
+### Requirement: A refusal whose re-check fails surfaces typed
+
+The system SHALL run the read that decides whether a slug or default decorator retries a refused write (the
+slug probe, the other-default read, the batch's stored-items count) through
+`StoreException.ProbeAfterRefusal` / `ProbeAfterRefusalAsync`. When that read throws anything but an
+`OperationCanceledException`, the system SHALL throw a new `StoreUniqueViolationException` whose message appends
+the read's message and whose inner exception is the original refusal, and SHALL NOT retry. An
+`OperationCanceledException` SHALL propagate unchanged. `StoreException.UnretryableUniqueViolation(violation, null)`
+SHALL rethrow the original refusal itself. The sync decorators SHALL run the read in the catch body, not in an
+exception filter (TASK-685).
+
+#### Scenario: PostgreSQL aborts the caller's transaction
+
+- **Given** a slug or default decorator writing inside a caller's `SqlUnitOfWork` on PostgreSQL, and another connection that commits the conflicting row after the decorator's first probe
+- **When** the decorator's write is refused and it re-checks
+- **Then** the re-check fails with `25P02`, and the caller receives `StoreUniqueViolationException` whose message names it, sync and async alike
+
+#### Scenario: MySQL's snapshot hides the other writer
+
+- **Given** the same race on MySQL
+- **When** the decorator re-checks inside the transaction
+- **Then** the REPEATABLE READ snapshot finds nothing, and the original `StoreUniqueViolationException` propagates without a read failure in its message
+
+#### Scenario: SQL Server retries in place
+
+- **Given** the same race on SQL Server
+- **When** the decorator re-checks inside the transaction
+- **Then** the READ COMMITTED read sees the other row, the slug becomes `widget-2` (or the other default is demoted), and the transaction commits
+
+#### Scenario: A cancelled re-check is not a refusal
+
+- **Given** a refused write whose re-check throws `OperationCanceledException`
+- **When** the decorator handles the refusal
+- **Then** the `OperationCanceledException` propagates
+
 ### Requirement: Default-flag enforcement on filter-based updates
 
 The system SHALL enforce the single-default invariant on the `Action<T>` filter-update overload — sync and

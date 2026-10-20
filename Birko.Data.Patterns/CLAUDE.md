@@ -79,6 +79,12 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
   Without the marker, or on a store with no unique index, the race is only narrowed
 - Slug wrappers retry the same way on a unique index over the slug (next suffix, `MaxSlugAttempts` = 5); a refusal for
   another key surfaces; a batch create retries only while none of it is stored
+- Inside a caller's transaction (TASK-685): the probe that decides a retry runs through
+  `StoreException.ProbeAfterRefusal(Async)`. If it fails, the caller gets the typed `StoreUniqueViolationException`
+  naming the failure, never the driver's error (PostgreSQL's aborted transaction answers `25P02`). Cancellation passes
+  through. The sync twins probe in the catch body, not in an exception filter, which would swallow the failure.
+  Per provider: SQL Server retries in place; MySQL's REPEATABLE READ re-probe misses the other commit, so the refusal
+  stands; PostgreSQL refuses typed. Savepoints that would let PostgreSQL retry are TASK-694
 
 ### Schema (Birko.Data.Patterns.Schema)
 Provider-agnostic field and schema abstractions. Used by both the migration system and the SQL model mapping framework.

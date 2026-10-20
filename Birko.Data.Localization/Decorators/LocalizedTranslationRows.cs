@@ -531,16 +531,8 @@ internal static class LocalizedTranslationRows
     /// the retry succeeds inside it (measured).
     /// </remarks>
     private static Exception Unretryable(StoreUniqueViolationException violation, Exception? readFailure)
-    {
-        if (readFailure == null)
-        {
-            // No row holds the key: the refusal was about something else, so it stands as it was thrown.
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(violation).Throw();
-        }
-        return new StoreUniqueViolationException(
-            $"{violation.Message} The upsert could not re-read the key to update it instead (the transaction may have been "
-            + "aborted by the refusal, as PostgreSQL does): " + readFailure!.Message, violation);
-    }
+        // No read failure: no row holds the key, so the refusal was about something else and stands as it was thrown.
+        => StoreException.UnretryableUniqueViolation(violation, readFailure);
 
     /// <summary>Deletes every row of one entity, in every culture: <see cref="DeleteMany"/> for a single entity.</summary>
     public static void Delete<TTranslation>(IBulkStore<TTranslation> store, Guid entityGuid, string entityType)

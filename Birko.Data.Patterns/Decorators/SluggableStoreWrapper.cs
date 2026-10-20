@@ -47,8 +47,10 @@ public class SluggableStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
             {
                 return _innerStore.Create(data, storeDelegate);
             }
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts && SlugHeld(data.Slug, data.Guid))
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)
             {
+                // TASK-685: probed in the body, not the filter, so a failed probe surfaces through ProbeAfterRefusal.
+                if (!Birko.Data.Exceptions.StoreException.ProbeAfterRefusal(() => SlugHeld(data.Slug, data.Guid), violation)) throw;
             }
         }
     }
@@ -63,8 +65,10 @@ public class SluggableStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
                 _innerStore.Update(data, storeDelegate);
                 return;
             }
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxSlugAttempts && SlugHeld(data.Slug, data.Guid))
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)
             {
+                // TASK-685: probed in the body, not the filter, so a failed probe surfaces through ProbeAfterRefusal.
+                if (!Birko.Data.Exceptions.StoreException.ProbeAfterRefusal(() => SlugHeld(data.Slug, data.Guid), violation)) throw;
             }
         }
     }

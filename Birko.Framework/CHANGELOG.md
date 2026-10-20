@@ -4,6 +4,14 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — Messaging options TASK-174 refused are honoured where a transport can
+
+[[TASK-668]].
+- TimeToLive works in memory and on MQTT 5 (new `MqttSettings.ProtocolVersion`).
+- PrefetchCount is Redis's read batch and in-memory's handlers in flight; MQTT still refuses it.
+- The distributed bus applies `RetryPolicy` and `DeadLetterOptions` through the new `IRedeliveryCapability`: a re-send in
+  memory, a reclaim on Redis. MQTT refuses them, and Priority stays refused (decided by the user).
+
 ## 2026-10-18 — OwnerAccess: one owner-or-admin rule; Security.AspNetCore imports Communication.AspNetCore
 
 [[TASK-541]]. `OwnerAccess.CanAccess(caller, owner, seesEverything)` covers Guid and string owners; a missing identity

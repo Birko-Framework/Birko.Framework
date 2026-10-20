@@ -90,9 +90,10 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
                 return;
             }
             // Retried only while nothing of the batch is stored: a non-atomic collection create may have written a prefix.
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && chosen != null
-                && !AnyStored(items) && OtherDefaultStored(chosen.Guid))
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxDefaultAttempts && chosen != null)
             {
+                // TASK-685: probed in the body, not the filter, so a failed probe surfaces through ProbeAfterRefusal.
+                if (Birko.Data.Exceptions.StoreException.ProbeAfterRefusal(() => AnyStored(items), violation) || !Birko.Data.Exceptions.StoreException.ProbeAfterRefusal(() => OtherDefaultStored(chosen.Guid), violation)) throw;
             }
         }
     }
@@ -118,9 +119,10 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
                 return;
             }
             // An update is idempotent, so a partly applied batch is safe to write again.
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && chosen != null
-                && OtherDefaultStored(chosen.Guid))
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxDefaultAttempts && chosen != null)
             {
+                // TASK-685: probed in the body, not the filter, so a failed probe surfaces through ProbeAfterRefusal.
+                if (!Birko.Data.Exceptions.StoreException.ProbeAfterRefusal(() => OtherDefaultStored(chosen.Guid), violation)) throw;
             }
         }
     }
@@ -142,9 +144,10 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
             {
                 return write();
             }
-            catch (Birko.Data.Exceptions.StoreUniqueViolationException) when (attempt < MaxDefaultAttempts && data.IsDefault
-                && OtherDefaultStored(data.Guid))
+            catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxDefaultAttempts && data.IsDefault)
             {
+                // TASK-685: probed in the body, not the filter, so a failed probe surfaces through ProbeAfterRefusal.
+                if (!Birko.Data.Exceptions.StoreException.ProbeAfterRefusal(() => OtherDefaultStored(data.Guid), violation)) throw;
             }
         }
     }

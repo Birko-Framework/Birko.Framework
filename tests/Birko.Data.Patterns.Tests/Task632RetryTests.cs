@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
+using System.Threading;
+using System.Threading.Tasks;
 using Birko.Data.Exceptions;
 using Birko.Data.InMemory.Stores;
 using Birko.Data.Models;
@@ -41,7 +44,19 @@ public class Task632RetryTests
         public Action<UniqueStore<T>>? Interloper { get; set; }
         public int Refusals { get; private set; }
 
+        /// <summary>TASK-685: once a write was refused, every read throws this, as PostgreSQL's aborted transaction does.</summary>
+        public Exception? ReadFailureAfterRefusal { get; set; }
+
         public UniqueStore(Func<T, object?> key) => _key = key;
+
+        private void FailIfAborted()
+        {
+            if (Refusals > 0 && ReadFailureAfterRefusal != null) throw ReadFailureAfterRefusal;
+        }
+
+        public override T? Read(Expression<Func<T, bool>>? filter = null) { FailIfAborted(); return base.Read(filter, null, 1, null).FirstOrDefault(); }
+        public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null) { FailIfAborted(); return base.Read(filter, orderBy, limit, offset); }
+        public override long Count(Expression<Func<T, bool>>? filter = null) { FailIfAborted(); return base.Count(filter); }
 
         public Guid Raw(T item) => base.Create(item);
 
@@ -70,6 +85,53 @@ public class Task632RetryTests
         public override void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null) { var l = data.ToList(); Before(l, true); base.Create(l, storeDelegate); }
         public override void Update(T data, StoreDataDelegate<T>? storeDelegate = null) { Before(new[] { data }, false); base.Update(data, storeDelegate); }
         public override void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null) { var l = data.ToList(); Before(l, false); base.Update(l, storeDelegate); }
+    }
+
+    /// <summary>TASK-685: the async twin of <see cref="UniqueStore{T}"/>, refusing a duplicate key, and failing every read
+    /// after a refusal with <see cref="ReadFailureAfterRefusal"/>.</summary>
+    public sealed class AsyncUniqueStore<T> : AsyncInMemoryStore<T> where T : AbstractModel
+    {
+        private readonly Func<T, object?> _key;
+        public Func<AsyncUniqueStore<T>, Task>? Interloper { get; set; }
+        public Exception? ReadFailureAfterRefusal { get; set; }
+        public int Refusals { get; private set; }
+
+        public AsyncUniqueStore(Func<T, object?> key) => _key = key;
+
+        public Task<Guid> RawAsync(T item) => base.CreateAsync(item);
+
+        private async Task Before(IEnumerable<T> items, bool create)
+        {
+            var interloper = Interloper;
+            Interloper = null;
+            if (interloper != null) await interloper(this);
+
+            var stored = (await base.ReadAsync(null, null, null, null)).ToList();
+            foreach (var item in items)
+            {
+                var key = _key(item);
+                if (key != null && stored.Any(s => s.Guid != item.Guid && Equals(_key(s), key)))
+                {
+                    Refusals++;
+                    throw create ? StoreException.DuplicateCreate(typeof(T)) : StoreException.UniqueViolation(typeof(T));
+                }
+                stored.RemoveAll(s => s.Guid == item.Guid);
+                stored.Add(item);
+            }
+        }
+
+        private void FailIfAborted()
+        {
+            if (Refusals > 0 && ReadFailureAfterRefusal != null) throw ReadFailureAfterRefusal;
+        }
+
+        public override async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) { await Before(new[] { data }, true); return await base.CreateAsync(data, storeDelegate, ct); }
+        public override async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) { var l = data.ToList(); await Before(l, true); await base.CreateAsync(l, storeDelegate, ct); }
+        public override async Task UpdateAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) { await Before(new[] { data }, false); await base.UpdateAsync(data, storeDelegate, ct); }
+        public override async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) { var l = data.ToList(); await Before(l, false); await base.UpdateAsync(l, storeDelegate, ct); }
+        public override Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default) { FailIfAborted(); return base.ReadAsync(filter, ct); }
+        public override Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default) { FailIfAborted(); return base.ReadAsync(filter, orderBy, limit, offset, ct); }
+        public override Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default) { FailIfAborted(); return base.CountAsync(filter, ct); }
     }
 
     private static UniqueStore<Article> SlugStore() => new(a => a.Slug);
@@ -160,5 +222,174 @@ public class Task632RetryTests
         rows.Count(o => o.IsDefault).Should().Be(1);
         rows.Count(o => o.DefaultMarker == true).Should().Be(1);
         rows.Should().NotContain(o => o.DefaultMarker == false);
+    }
+
+    private static readonly InvalidOperationException Aborted = new("25P02: current transaction is aborted");
+
+    private static void ShouldBeTheRefusalNamingTheProbe(Action write)
+    {
+        var thrown = write.Should().Throw<StoreUniqueViolationException>().Which;
+        thrown.Message.Should().Contain("could not query the store after the refusal").And.Contain(Aborted.Message);
+        thrown.InnerException.Should().BeAssignableTo<StoreUniqueViolationException>("the original refusal is kept");
+    }
+
+    [Fact]
+    public void TASK685_a_slug_probe_that_fails_after_the_refusal_surfaces_the_typed_refusal()
+    {
+        var store = SlugStore();
+        store.Interloper = s => s.Raw(new Article { Name = "Widget", Slug = "widget" });
+        store.ReadFailureAfterRefusal = Aborted;
+        var wrapper = new SluggableStoreWrapper<UniqueStore<Article>, Article>(store);
+
+        ShouldBeTheRefusalNamingTheProbe(() => wrapper.Create(new Article { Name = "Widget" }));
+        store.Refusals.Should().Be(1, "nothing is retried once the probe failed");
+    }
+
+    [Fact]
+    public void TASK685_a_batch_probe_that_fails_after_the_refusal_surfaces_the_typed_refusal()
+    {
+        var store = SlugStore();
+        store.Interloper = s => s.Raw(new Article { Name = "Widget", Slug = "widget" });
+        store.ReadFailureAfterRefusal = Aborted;
+        var wrapper = new SluggableBulkStoreWrapper<UniqueStore<Article>, Article>(store);
+
+        ShouldBeTheRefusalNamingTheProbe(() => wrapper.Create(new[] { new Article { Guid = Guid.NewGuid(), Name = "Widget" }, new Article { Guid = Guid.NewGuid(), Name = "Gadget" } }));
+    }
+
+    [Fact]
+    public void TASK685_a_default_probe_that_fails_after_the_refusal_surfaces_the_typed_refusal()
+    {
+        var store = MarkerStore();
+        store.Interloper = s => s.Raw(new Option { Name = "theirs", IsDefault = true, DefaultMarker = true });
+        store.ReadFailureAfterRefusal = Aborted;
+        var wrapper = new DefaultStoreWrapper<UniqueStore<Option>, Option>(store);
+
+        ShouldBeTheRefusalNamingTheProbe(() => wrapper.Create(new Option { Name = "mine", IsDefault = true }));
+    }
+
+    [Fact]
+    public void TASK685_a_cancelled_probe_is_not_turned_into_a_refusal()
+    {
+        var store = SlugStore();
+        store.Interloper = s => s.Raw(new Article { Name = "Widget", Slug = "widget" });
+        store.ReadFailureAfterRefusal = new OperationCanceledException();
+        var wrapper = new SluggableStoreWrapper<UniqueStore<Article>, Article>(store);
+
+        wrapper.Invoking(w => w.Create(new Article { Name = "Widget" })).Should().Throw<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task TASK685_the_async_probe_surfaces_the_refusal_and_lets_cancellation_through()
+    {
+        var violation = (StoreUniqueViolationException)StoreException.DuplicateCreate(typeof(Article));
+
+        (await StoreException.ProbeAfterRefusalAsync(() => Task.FromResult(true), violation)).Should().BeTrue();
+        var thrown = await FluentActions.Awaiting(() => StoreException.ProbeAfterRefusalAsync(() => Task.FromException<bool>(Aborted), violation))
+            .Should().ThrowAsync<StoreUniqueViolationException>();
+        thrown.Which.InnerException.Should().BeSameAs(violation);
+        thrown.Which.Message.Should().Contain(Aborted.Message);
+        await FluentActions.Awaiting(() => StoreException.ProbeAfterRefusalAsync(() => Task.FromException<bool>(new OperationCanceledException()), violation))
+            .Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public void TASK685_with_no_read_failure_the_refusal_is_rethrown_as_it_was()
+    {
+        var violation = (StoreUniqueViolationException)StoreException.UniqueViolation(typeof(Article));
+
+        FluentActions.Invoking(() => StoreException.UnretryableUniqueViolation(violation, null))
+            .Should().Throw<StoreUniqueViolationException>().Which.Should().BeSameAs(violation);
+    }
+
+    private static async Task ShouldBeTheRefusalNamingTheProbeAsync(Func<Task> write)
+    {
+        var thrown = (await write.Should().ThrowAsync<StoreUniqueViolationException>()).Which;
+        thrown.Message.Should().Contain("could not query the store after the refusal").And.Contain(Aborted.Message);
+        thrown.InnerException.Should().BeAssignableTo<StoreUniqueViolationException>("the original refusal is kept");
+    }
+
+    private static Task<Guid> TheirSlug(AsyncUniqueStore<Article> s) => s.RawAsync(new Article { Name = "Widget", Slug = "widget" });
+    private static Task<Guid> TheirDefault(AsyncUniqueStore<Option> s) => s.RawAsync(new Option { Name = "theirs", IsDefault = true, DefaultMarker = true });
+
+    private static AsyncUniqueStore<Article> AbortingSlugStore() => new(a => a.Slug) { Interloper = TheirSlug, ReadFailureAfterRefusal = Aborted };
+    private static AsyncUniqueStore<Option> AbortingMarkerStore() => new(o => o.DefaultMarker) { Interloper = TheirDefault, ReadFailureAfterRefusal = Aborted };
+
+    [Fact]
+    public async Task TASK685_async_slug_create_and_update_surface_the_typed_refusal()
+    {
+        var store = AbortingSlugStore();
+        await ShouldBeTheRefusalNamingTheProbeAsync(() => new AsyncSluggableStoreWrapper<AsyncUniqueStore<Article>, Article>(store).CreateAsync(new Article { Name = "Widget" }));
+        store.Refusals.Should().Be(1, "nothing is retried once the probe failed");
+
+        store = new AsyncUniqueStore<Article>(a => a.Slug) { ReadFailureAfterRefusal = Aborted };
+        var mine = new Article { Name = "Gadget", Slug = "gadget" };
+        await store.RawAsync(mine);
+        store.Interloper = TheirSlug;
+        await ShouldBeTheRefusalNamingTheProbeAsync(() => new AsyncSluggableStoreWrapper<AsyncUniqueStore<Article>, Article>(store)
+            .UpdateAsync(new Article { Guid = mine.Guid, Name = "Widget", Slug = "widget" }));
+    }
+
+    [Fact]
+    public async Task TASK685_async_batch_slug_create_and_update_surface_the_typed_refusal()
+    {
+        await ShouldBeTheRefusalNamingTheProbeAsync(() => new AsyncSluggableBulkStoreWrapper<AsyncUniqueStore<Article>, Article>(AbortingSlugStore())
+            .CreateAsync(new[] { new Article { Guid = Guid.NewGuid(), Name = "Widget" }, new Article { Guid = Guid.NewGuid(), Name = "Gadget" } }));
+
+        var store = new AsyncUniqueStore<Article>(a => a.Slug) { ReadFailureAfterRefusal = Aborted };
+        var mine = new Article { Name = "Gadget", Slug = "gadget" };
+        await store.RawAsync(mine);
+        store.Interloper = TheirSlug;
+        await ShouldBeTheRefusalNamingTheProbeAsync(() => new AsyncSluggableBulkStoreWrapper<AsyncUniqueStore<Article>, Article>(store)
+            .UpdateAsync(new[] { new Article { Guid = mine.Guid, Name = "Widget", Slug = "widget" } }));
+    }
+
+    [Fact]
+    public async Task TASK685_async_default_promotion_and_batches_surface_the_typed_refusal()
+    {
+        await ShouldBeTheRefusalNamingTheProbeAsync(() => new AsyncDefaultStoreWrapper<AsyncUniqueStore<Option>, Option>(AbortingMarkerStore())
+            .CreateAsync(new Option { Name = "mine", IsDefault = true }));
+        await ShouldBeTheRefusalNamingTheProbeAsync(() => new AsyncDefaultStoreWrapper<AsyncUniqueStore<Option>, Option>(AbortingMarkerStore())
+            .CreateAsync(new[] { new Option { Guid = Guid.NewGuid(), Name = "mine", IsDefault = true } }));
+
+        var store = new AsyncUniqueStore<Option>(o => o.DefaultMarker) { ReadFailureAfterRefusal = Aborted };
+        var mine = new Option { Name = "mine" };
+        await store.RawAsync(mine);
+        store.Interloper = TheirDefault;
+        await ShouldBeTheRefusalNamingTheProbeAsync(() => new AsyncDefaultStoreWrapper<AsyncUniqueStore<Option>, Option>(store)
+            .UpdateAsync(new[] { new Option { Guid = mine.Guid, Name = "mine", IsDefault = true } }));
+    }
+
+    [Fact]
+    public void TASK685_sync_updates_and_default_batches_surface_the_typed_refusal()
+    {
+        var slugs = SlugStore();
+        var mine = new Article { Name = "Gadget", Slug = "gadget" };
+        slugs.Raw(mine);
+        slugs.Interloper = s => s.Raw(new Article { Name = "Widget", Slug = "widget" });
+        slugs.ReadFailureAfterRefusal = Aborted;
+        ShouldBeTheRefusalNamingTheProbe(() => new SluggableBulkStoreWrapper<UniqueStore<Article>, Article>(slugs)
+            .Update(new[] { new Article { Guid = mine.Guid, Name = "Widget", Slug = "widget" } }));
+
+        var single = SlugStore();
+        var gadget = new Article { Name = "Gadget", Slug = "gadget" };
+        single.Raw(gadget);
+        single.Interloper = s => s.Raw(new Article { Name = "Widget", Slug = "widget" });
+        single.ReadFailureAfterRefusal = Aborted;
+        ShouldBeTheRefusalNamingTheProbe(() => new SluggableStoreWrapper<UniqueStore<Article>, Article>(single)
+            .Update(new Article { Guid = gadget.Guid, Name = "Widget", Slug = "widget" }));
+
+        var markers = MarkerStore();
+        markers.Interloper = s => s.Raw(new Option { Name = "theirs", IsDefault = true, DefaultMarker = true });
+        markers.ReadFailureAfterRefusal = Aborted;
+        ShouldBeTheRefusalNamingTheProbe(() => new DefaultStoreWrapper<UniqueStore<Option>, Option>(markers)
+            .Create(new[] { new Option { Guid = Guid.NewGuid(), Name = "mine", IsDefault = true } }));
+
+        markers = MarkerStore();
+        var option = new Option { Name = "mine" };
+        markers.Raw(option);
+        markers.Interloper = s => s.Raw(new Option { Name = "theirs", IsDefault = true, DefaultMarker = true });
+        markers.ReadFailureAfterRefusal = Aborted;
+        ShouldBeTheRefusalNamingTheProbe(() => new DefaultStoreWrapper<UniqueStore<Option>, Option>(markers)
+            .Update(new[] { new Option { Guid = option.Guid, Name = "mine", IsDefault = true } }));
     }
 }

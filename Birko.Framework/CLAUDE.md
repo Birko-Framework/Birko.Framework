@@ -289,6 +289,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A unique refusal inside a caller's transaction stays typed (2026-10-20)
+[[TASK-685]]. Inside a `SqlUnitOfWork` on PostgreSQL, a slug or default decorator's refused write threw the raw
+`25P02` error: the refusal aborts the transaction, so the re-check failed. The re-check now runs through
+`StoreException.ProbeAfterRefusal(Async)`, and the caller gets `StoreUniqueViolationException` naming the failure.
+Measured live: SQL Server retries in place; MySQL's snapshot hides the other commit, so the refusal stands. Savepoints
+that would let PostgreSQL retry are [[TASK-694]]. Sync decorators that swallowed a failed re-check now surface it the
+same way.
 ### Broad matches on translated fields run in chunks (2026-10-20)
 [[TASK-686]]. A filter on a translated field matching more than 500 entities in its translation sets runs as several
 queries over at most 500 GUIDs each. It used to be one `IN` / `NOT IN` list, refused by SQL Server past about 2 100
@@ -368,12 +375,6 @@ transactions run it once after the commit and drop it on rollback. A failing cal
 Its outcome is Completed, LlmFailed (with the classified `LlmFailure`), NotConfigured, MaxIterationsReached, Truncated,
 MissingToolCall, StoppedByHook or UnexpectedStop, so callers no longer match `"Error:"` text. `RunAsync` and the other
 two old methods are unchanged (decided by the user).
-### Messaging options TASK-174 refused are honoured where a transport can (2026-10-18)
-[[TASK-668]].
-- TimeToLive works in memory and on MQTT 5 (new `MqttSettings.ProtocolVersion`).
-- PrefetchCount is Redis's read batch and in-memory's handlers in flight; MQTT still refuses it.
-- The distributed bus applies `RetryPolicy` and `DeadLetterOptions` through the new `IRedeliveryCapability`: a re-send in
-  memory, a reclaim on Redis. MQTT refuses them, and Priority stays refused (decided by the user).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
