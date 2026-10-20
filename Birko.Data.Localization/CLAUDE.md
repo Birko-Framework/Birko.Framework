@@ -37,9 +37,14 @@ All wrappers:
 - Implement `IStoreWrapper<T>` for decorator introspection
 - Use reflection to get/set localizable string properties
 
+### Translations (`Translations/`)
+- **IEntityTranslations<T>** / **EntityTranslations<T, TTranslation>** (`EntityTranslations<T>` = with `EntityTranslationModel`) — the explicit API (TASK-682): `GetAsync`, `GetAllCulturesAsync`, `SetAsync`, `RemoveCultureAsync`, `RemoveEntitiesAsync`, `FindEntityAsync`, `ExistsAsync`, `LocalizeAsync`. Each is a thin call into `LocalizedTranslationRows` or `LocalizedFilterResolution`; `Find`/`Exists` share one producer (`x.F == v && x.Guid != except`, rewritten as a wrapper's read, read with a limit). Built over the unlocalized entity store (a localized wrapper anywhere in the `IStoreWrapper` chain is refused), the translation store and the context (`DefaultCulture` only). Default culture: `SetAsync` refuses it, lookups test the base column, `LocalizeAsync` returns the entities unchanged. An undeclared field is refused (rule 41), an ambiguous `FindEntityAsync` throws naming two GUIDs (rule 26)
+- **EntityTranslationsServiceCollectionExtensions** — `AddEntityTranslations<T>()`, `<T, TTranslation>()`, and a factory overload for when the container's entity store is the localized wrapper
+
 ## Dependencies
 - **Birko.Data.Core** — `AbstractModel`
 - **Birko.Data.Stores** — `IStore`, `IAsyncStore`, `IBulkStore`, `IAsyncBulkStore`, `IStoreWrapper`, `StoreDataDelegate`
+- **Microsoft.Extensions.DependencyInjection.Abstractions** — only `EntityTranslationsServiceCollectionExtensions`; consumer-supplied, not declared in the `.projitems` (Birko.Data.Repositories declares it, a second declaration collides, NU1504)
 
 ## Key Patterns
 - Follows the same decorator pattern as `Birko.Data.Patterns` (Audit, Timestamp, SoftDelete wrappers)

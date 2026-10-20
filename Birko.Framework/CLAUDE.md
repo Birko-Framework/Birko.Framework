@@ -289,6 +289,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### IEntityTranslations: explicit, batched translations (2026-10-20)
+[[TASK-682]]. New `IEntityTranslations<T>`, with `AddEntityTranslations<T>()`, works on a given culture rather than the
+ambient one. Get one language for a list, every language of one entity, set, remove, find an entity by value, check
+uniqueness (`exceptEntityGuid`) and localize loaded entities. Lookups use the wrappers' fallback: an untranslated
+product is found by its base slug, and `ExistsAsync` counts it. The default culture is refused by `SetAsync`. Build it
+on the unlocalized entity store; a localized wrapper is refused. Measured on SQLite, PostgreSQL, SQL Server and MySQL.
 ### Translation writes are batched (2026-10-20)
 [[TASK-690]]. Saving translations costs one read of the existing rows per 500 entities, then at most one bulk delete,
 update and create. It used to be a read and a write per field, per entity: a collection create of 3 products with 2
@@ -369,10 +375,6 @@ bypass is enabled without its middleware.
 GitHub web-flow settings and `GitHubUserClient`. Measured: GitHub answers errors with HTTP 200, so `OAuthClient` threw
 `KeyNotFoundException` on a bad code and on the first device-flow poll (Copilot sign-in). It now asks for JSON and reads
 a 2xx `error` as an error, and a borrowed HttpClient is no longer reconfigured.
-### client_credentials tokens can be shaped; a scope claim reads as permissions (2026-10-18)
-[[TASK-520]]. `TokenEndpointHandler.ShapeClientCredentialsToken` sets a service account's subject and extra claims
-without replacing the grant; registered claims are refused. `ClaimsCurrentUser` splits a `scope` permission claim on
-spaces too (RFC 6749 §3.3), so `"a b"` reads as two permissions. Commas still work, and other claims are unchanged.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

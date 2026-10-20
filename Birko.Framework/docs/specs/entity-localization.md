@@ -1,6 +1,6 @@
 ---
 area: entity-localization
-generated-at: 289c92efffe0c36aac27490a4acfe4faf4906d86
+generated-at: 1938931c7d23ccf5deaff6cdfc1cf07d7e35c693
 generated-on: 2026-10-20
 sources:
   - ../Birko.Data.Localization/Decorators/AsyncLocalizedBulkStoreWrapper.cs
@@ -20,6 +20,9 @@ sources:
   - ../Birko.Data.Localization/Models/LocalizedValueHash.cs
   - ../Birko.Data.Localization/Models/IEntityLocalizationContext.cs
   - ../Birko.Data.Localization/Models/ILocalizable.cs
+  - ../Birko.Data.Localization/Translations/EntityTranslations.cs
+  - ../Birko.Data.Localization/Translations/EntityTranslationsServiceCollectionExtensions.cs
+  - ../Birko.Data.Localization/Translations/IEntityTranslations.cs
   - ../Birko.Data.Localization.SQL/LocalizationSqlMappings.cs
   - ../Birko.Data.Localization.SQL/Mappings/EntityTranslationMapping.cs
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
@@ -32,6 +35,8 @@ shaped-by: [FEATURE-014]
 # (TASK-679 has no feature).
 # 2026-10-20 regen (TASK-690, harvested from the uncommitted working tree): the evidence pass was not re-run;
 # TASK-690 has no feature.
+# 2026-10-20 regen (TASK-682, harvested from the uncommitted working tree): the evidence pass was not re-run;
+# TASK-682 has no feature.
 shaped-by-derived: true
 shaped-by-unresolved: 266
 ---
@@ -62,8 +67,14 @@ sorted and paged in memory.
 
 The consumer supplies two things: an entity type implementing `ILocalizable.GetLocalizableFields()`,
 and an `IEntityLocalizationContext` giving `CurrentCulture` and `DefaultCulture`. The project ships no
-implementation of that context and no dependency-injection registration helper — both are the
+implementation of that context and no dependency-injection registration helper for the wrappers — both are the
 consumer's responsibility.
+
+Beside the wrappers, `IEntityTranslations<T>` gives explicit access to one entity type's translations: a culture named
+per call instead of the ambient one, every culture of one entity, lookups by a translated value and batched writes. It
+calls the same producers the wrappers use (`LocalizedTranslationRows`, `LocalizedFilterResolution`), so the two cannot
+disagree about a key, a fallback or a batch, and it ships with a dependency-injection registration
+(`AddEntityTranslations`).
 
 ## Requirements
 
@@ -1029,3 +1040,207 @@ fail the store.
 - **Given** `EntityTranslationModel` and the SQL mapping
 - **When** a row is written and the store initialised
 - **Then** `ValueHash` is the lower-case hex SHA-256 of `Value`, computed by the model (its setter is ignored) and written by the upsert for any model; the table has a non-unique `IX_{table}_ValueHash` on it alone, and the table name is at most 50 characters so that name fits PostgreSQL's 63
+
+### Requirement: Explicit translation API construction
+
+The system SHALL provide `IEntityTranslations<T>`, implemented by `EntityTranslations<T, TTranslation>` and by
+`EntityTranslations<T>` (the same class with `EntityTranslationModel`), over an `IAsyncBulkStore<T>` entity store, an
+`IAsyncBulkStore<TTranslation>` translation store and an `IEntityLocalizationContext` of which only `DefaultCulture` is
+read. It SHALL reject a null argument with `ArgumentNullException`, and SHALL refuse with `ArgumentException` (parameter
+`entities`) an entity store that is, or wraps anywhere in its `IStoreWrapper.GetInnerStore()` chain, one of the four
+localized wrappers or a type derived from one — the lookups read base values through that store, and a localized
+wrapper would apply the ambient culture to them. Other wrappers in the chain (tenant, soft delete) are kept, so their
+scoping applies to the lookups. It SHALL then read the localizable field list once from the entity store's
+`CreateInstance()`, refusing a misdeclared field with `InvalidOperationException` as the wrappers do, and refuse a
+translation model whose members are not public properties. Rows SHALL be keyed by the entity type `typeof(T).Name`, as
+the wrappers key them.
+
+#### Scenario: A localized wrapper as the entity store is refused
+
+- **Given** an `AsyncLocalizedBulkStoreWrapper` over a store, or a wrapper chain with a localized wrapper below another wrapper
+- **When** `EntityTranslations<T>` is constructed with it as the entity store
+- **Then** `ArgumentException` names the localized wrapper's type and says to pass the store it wraps
+
+#### Scenario: Other wrappers are kept
+
+- **Given** an entity store wrapped by a tenant wrapper and no localized wrapper
+- **When** `EntityTranslations<T>` is constructed and a lookup runs
+- **Then** the construction succeeds and the lookup's entity reads go through the tenant wrapper
+
+### Requirement: Explicit translation API argument checks
+
+The system SHALL refuse, before any store call:
+
+- a null culture with `ArgumentNullException`, and a culture with an empty name (the invariant culture) with
+  `ArgumentException`, on every method that takes a culture;
+- `Guid.Empty` as the entity id with `ArgumentException` on `GetAllCulturesAsync`, `SetAsync` and `RemoveCultureAsync`;
+- the default culture — `culture.Name == DefaultCulture.Name`, ordinal — with `ArgumentException` on `SetAsync` and
+  `RemoveCultureAsync`, because its values are the entity's own columns and no translation row is ever read for it;
+- a field that is null or not one of the type's declared localizable fields (ordinal, case-sensitive) with
+  `ArgumentException` on `SetAsync` (any key of `fields`), `FindEntityAsync` and `ExistsAsync`;
+- a null `ids`, `fields`, `entities` or lookup `value` with `ArgumentNullException`.
+
+`GetAsync` and `LocalizeAsync` accept the default culture, and `RemoveEntitiesAsync` does not check the ids it is given.
+
+#### Scenario: Set refuses and writes nothing
+
+- **Given** a `SetAsync` call with the default culture, with `Guid.Empty`, or with a field `"Nmae"` beside a declared one
+- **When** it runs
+- **Then** `ArgumentException` is thrown and the translation store sees no call
+
+#### Scenario: A culture without a name
+
+- **Given** `CultureInfo.InvariantCulture`
+- **When** any method taking a culture is called with it
+- **Then** `ArgumentException` says a named culture is required
+
+### Requirement: Explicit translation reads
+
+The system SHALL return from `GetAsync(ids, culture)` the culture's translation rows of the given entities as
+`entity GUID → field → value`, in one translation read per 500 distinct ids (`EntityGuid IN (…)`, the entity type and
+the culture), with no read for an empty list; and from `GetAllCulturesAsync(id)` every culture's rows of one entity as
+`culture name → field → value`, in one read by `EntityGuid` and entity type. Both SHALL return only declared
+localizable fields, drop an entity or culture whose only rows are for undeclared fields, and return a row's `null`
+`Value` as `""`. They return translation rows only: an entity without rows in the culture is absent, and the default
+culture's values (the base columns) are never returned.
+
+#### Scenario: One language for a list
+
+- **Given** entities `A` and `B` with `"sk"` rows and `C` with none, and a `"sk"` row of `A` for an undeclared field
+- **When** `GetAsync([A, B, C], sk)` runs
+- **Then** the translation store sees one read, the result holds `A` and `B` with their declared fields only, and `C` is absent
+
+#### Scenario: An entity with only undeclared rows
+
+- **Given** entity `G` whose only `"sk"` row is for a field the type does not declare
+- **When** `GetAsync([G], sk)` or `GetAllCulturesAsync(G)` runs
+- **Then** `G` (or the `"sk"` culture) is absent, as the wrappers treat it as untranslated
+
+#### Scenario: Every culture of one entity
+
+- **Given** entity `G` with `"sk"` and `"de"` rows
+- **When** `GetAllCulturesAsync(G)` runs
+- **Then** one read returns both cultures, each with its fields
+
+### Requirement: Explicit translation writes
+
+The system SHALL implement `SetAsync(id, culture, fields)` as the batched translation save the wrappers use
+(`LocalizedTranslationRows.SaveAsync`): one read of the entity's rows in the culture, then at most one bulk create, one
+bulk update and one bulk delete; a `null` value removes that field's row, so reads fall back to the base value; a
+refusal by the unique key is retried as the wrappers retry it. An empty `fields` SHALL make no call. It SHALL implement
+`RemoveCultureAsync(id, culture)` as one filter delete on `(EntityGuid, EntityType, Culture)` with no read, leaving the
+entity's other cultures and other types' rows alone, and `RemoveEntitiesAsync(ids)` as one filter delete on
+`EntityGuid IN (…)` and the entity type per 500 distinct ids, across all cultures, with no call for an empty list.
+
+#### Scenario: A value set through the API is what the wrapper reads
+
+- **Given** `SetAsync(G, sk, { Name: "Stolička" })`
+- **When** a localized wrapper reads `G` on `"sk"`
+- **Then** its `Name` is `"Stolička"`; the save cost one read and at most three bulk calls
+
+#### Scenario: Removing one culture
+
+- **Given** entity `G` with `"sk"` and `"de"` rows, and a `"sk"` row of another entity type under the same GUID
+- **When** `RemoveCultureAsync(G, sk)` runs
+- **Then** only `G`'s `"sk"` rows of this type are deleted, in one call
+
+#### Scenario: Removing entities
+
+- **Given** a list of entity ids, or an empty one
+- **When** `RemoveEntitiesAsync` runs
+- **Then** every culture's rows of those entities are removed in one delete per 500 ids, and an empty list makes no call
+
+### Requirement: Lookups by a translated value
+
+The system SHALL answer `FindEntityAsync(field, culture, value)` and `ExistsAsync(field, culture, value,
+exceptEntityGuid)` from one producer: the filter `x.field == value`, with `&& x.Guid != exceptEntityGuid` when one is
+given, rewritten for a non-default culture by `LocalizedFilterResolution` with the entity store as the candidate source —
+exactly as a wrapper's read is — so an entity with a translation for the field matches only on it and one without
+matches on its base value. The rewritten filter SHALL be read from the entity store with a limit (2 for Find, 1 for
+Exists), no ordering and no offset, and entities without a GUID SHALL be dropped. On the default culture the filter SHALL
+test the base column as written, with no translation read. On a non-default culture a lookup SHALL cost one translation
+read by value hash, one entity read of the base-value candidates, one translation read per 500 candidates (none when
+there are none) and the final entity read — at most four for up to 500 candidates. `FindEntityAsync` SHALL return
+`null` for no match and the GUID for one, and SHALL throw `InvalidOperationException` naming the type, field, culture,
+value and two of the GUIDs when more than one entity matches. `ExistsAsync` SHALL return whether any entity other than
+`exceptEntityGuid` matches. The recorded limits of the filter rewrite (base-column collation, a translation created
+between the candidate read and the query) apply.
+
+#### Scenario: A translated value resolves to its entity
+
+- **Given** entity `A` with a `"sk"` `Name` of `"Stolička"`
+- **When** `FindEntityAsync("Name", sk, "Stolička")` runs
+- **Then** it returns `A`, in at most four reads
+
+#### Scenario: The base value of an untranslated entity only
+
+- **Given** `B` (base `"Lavica"`, no `"sk"` name) and `C` (base `"Kreslo"`, `"sk"` name `"Stolička"`)
+- **When** `FindEntityAsync("Name", sk, "Lavica")` and `FindEntityAsync("Name", sk, "Kreslo")` run
+- **Then** the first returns `B` and the second returns `null`
+
+#### Scenario: Default culture tests the base column
+
+- **Given** the default culture `"en"` and entity `A` with base `Name = "Chair"`
+- **When** `FindEntityAsync("Name", en, "Chair")` runs
+- **Then** it returns `A` and the translation store sees no read
+
+#### Scenario: An ambiguous value is refused
+
+- **Given** two entities that read `"Stolička"` as `Name` in `"sk"`, by translation or by base value
+- **When** `FindEntityAsync("Name", sk, "Stolička")` runs
+- **Then** `InvalidOperationException` names both GUIDs
+
+#### Scenario: Exists excludes the entity that holds the value
+
+- **Given** entity `A` whose `"sk"` `Name` is `"Stolička"` and no other entity reading that value
+- **When** `ExistsAsync("Name", sk, "Stolička")` and `ExistsAsync("Name", sk, "Stolička", exceptEntityGuid: A)` run
+- **Then** the first returns true and the second false
+
+#### Scenario: Exists counts an untranslated entity's base value
+
+- **Given** `B` with base `Name = "Lavica"` and no `"sk"` name
+- **When** `ExistsAsync("Name", sk, "Lavica")` runs
+- **Then** it returns true, so the value is taken in `"sk"`
+
+### Requirement: Localizing entities in a given culture
+
+The system SHALL implement `LocalizeAsync(entities, culture)` by materializing the sequence once and, on a non-default
+culture, passing it through the wrappers' localize path (`LocalizedTranslationRows.LocalizeAllAsync`): one translation
+read per 500 entities, each entity with a GUID replaced, in the input order, by a detached copy carrying its declared
+translations and its base values where a field has none, an entity without a GUID returned as it is, and a misdeclared
+field refused. On the default culture it SHALL return the same instances in a new list with no read.
+
+#### Scenario: A given language as detached copies
+
+- **Given** entities `A` (with a `"sk"` name) and `B` (without), on any ambient culture
+- **When** `LocalizeAsync([A, B], sk)` runs
+- **Then** one read returns copies of `A` with its Slovak name and `B` with its base name, in that order, and the passed instances are unchanged
+
+#### Scenario: Default culture returns the entities unchanged
+
+- **Given** the default culture
+- **When** `LocalizeAsync(entities, en)` runs
+- **Then** the same instances are returned and the translation store sees no read
+
+### Requirement: Dependency-injection registration of the translation API
+
+The system SHALL provide `AddEntityTranslations<T, TTranslation>(lifetime = Scoped)`, registering
+`IEntityTranslations<T>` built from the container's `IAsyncBulkStore<T>`, `IAsyncBulkStore<TTranslation>` and
+`IEntityLocalizationContext`; `AddEntityTranslations<T, TTranslation>(entities, translations, lifetime = Scoped)`, taking
+factories for the two stores; and `AddEntityTranslations<T>(lifetime = Scoped)`, the first with `EntityTranslationModel`.
+A null `services` or factory SHALL be rejected with `ArgumentNullException`. The service is constructed when resolved,
+so a container whose `IAsyncBulkStore<T>` is the localized wrapper fails on resolution with the construction refusal;
+the factory overload is the way to pass the store it wraps. The extension needs
+`Microsoft.Extensions.DependencyInjection.Abstractions`, which the project does not declare.
+
+#### Scenario: Registered over the container's stores
+
+- **Given** a container with `IAsyncBulkStore<Product>`, `IAsyncBulkStore<EntityTranslationModel>` and an `IEntityLocalizationContext`
+- **When** `AddEntityTranslations<Product>()` is called and `IEntityTranslations<Product>` resolved
+- **Then** an `EntityTranslations<Product, EntityTranslationModel>` over those stores is returned, scoped by default
+
+#### Scenario: The factory overload takes the wrapped store
+
+- **Given** a container whose `IAsyncBulkStore<Product>` is a localized wrapper
+- **When** `AddEntityTranslations<Product, EntityTranslationModel>(sp => innerStore, sp => translations)` is used
+- **Then** the API resolves over the inner store, where the parameterless overload would throw on resolution

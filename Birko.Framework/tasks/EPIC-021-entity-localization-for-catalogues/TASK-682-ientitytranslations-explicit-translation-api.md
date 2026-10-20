@@ -3,7 +3,7 @@ id: TASK-682
 parent: EPIC-021
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-19
@@ -40,16 +40,16 @@ Proposed surface (names may be refined at plan time; each method batched, generi
 
 ## Acceptance criteria
 
-- [ ] `IEntityTranslations` (+ implementation over any Birko async store of the translation model) with the methods
+- [x] `IEntityTranslations` (+ implementation over any Birko async store of the translation model) with the methods
       above, a DI registration extension, and a README section with an example per method.
-- [ ] Every method costs a fixed number of queries, independent of the number of fields, counted in tests: one
+- [x] Every method costs a fixed number of queries, independent of the number of fields, counted in tests: one
       translation read per 500 ids for `GetAsync`/`LocalizeAsync`, 1 for `GetAllCulturesAsync`, a fixed 4 for
       `FindEntityAsync`/`ExistsAsync` with fallback. `SetAsync` writes one entity-language as 1 read + at most 3 bulk
       calls (TASK-690) and respects TASK-680's unique key. *(Reworded 2026-10-20, decided by the user: the original
       "one query regardless of ids" cannot hold under the 500-id chunking or across two stores.)*
-- [ ] The wrappers reuse the same internals (no second copy of the lookup/localize code — cf. TASK-452's three copies of
+- [x] The wrappers reuse the same internals (no second copy of the lookup/localize code — cf. TASK-452's three copies of
       the detach helper).
-- [ ] Tests on a real SQL store for each method, incl. fallback in `FindEntityAsync`/`LocalizeAsync` and `exceptEntityGuid`
+- [x] Tests on a real SQL store for each method, incl. fallback in `FindEntityAsync`/`LocalizeAsync` and `exceptEntityGuid`
       in `ExistsAsync`; mutation-proven where a method guards something (uniqueness, fallback).
 
 ## Out of scope
@@ -60,6 +60,68 @@ Proposed surface (names may be refined at plan time; each method batched, generi
 ## Human test plan
 
 N/A — asserted by tests.
+
+## Outcome (2026-10-20)
+
+All criteria met, measured:
+
+- **The API.** `IEntityTranslations<T>` / `EntityTranslations<T, TTranslation>` (`EntityTranslations<T>` with
+  `EntityTranslationModel`), in `Birko.Data.Localization/Translations/`.
+  - Methods: `GetAsync`, `GetAllCulturesAsync`, `SetAsync`, `RemoveCultureAsync`, `RemoveEntitiesAsync`
+    (renamed from `RemoveAllAsync`, rule 1), `FindEntityAsync`, `ExistsAsync`, `LocalizeAsync`.
+  - DI: `AddEntityTranslations<T>()`, `<T, TTranslation>()`, and a factory overload.
+  - The README has an example per method.
+- **One producer** (AC 3). Each method is a thin call into `LocalizedTranslationRows` (TASK-690) or
+  `LocalizedFilterResolution` (TASK-681). `Find` and `Exists` share one private producer.
+- **Query counts** (AC 2 as reworded), counted:
+  - `GetAsync`: 1 read for 3 ids and 2 fields, 2 reads for 501 ids, 0 for none.
+  - `GetAllCulturesAsync`: 1 read.
+  - `SetAsync`: 1 read + at most 3 bulk calls.
+  - `LocalizeAsync`: 1 read.
+  - `FindEntityAsync` / `ExistsAsync` on a non-default culture: at most 4 reads.
+    - 3 when no entity holds the value as its base value, because the translated-candidates read is skipped.
+    - One more per further 500 base candidates, measured by the close review.
+    - The interface doc says "at most four" rather than the plan's "a fixed four".
+  - Live on SQL: `Find` is 2 entity reads + 2 translation reads, and `Get` / `Localize` 1 read each.
+- **Decisions D1–D8** applied as recorded above.
+  - The localized-wrapper refusal is an `ArgumentException`, since it concerns a constructor argument.
+  - D8 is "consumer-supplied" per CLAUDE-maintenance § External dependencies, shape 3, as `Birko.Data.SQL.SqLite` and
+    `Birko.Data.Tagging` do. `Birko.Data.Repositories` declares the package and a second declaration collides (NU1504).
+    Recorded in the projitems, the README, the project CLAUDE.md and CLAUDE-projects § Dependency Flow.
+  - A consumer importing Localization without Repositories adds the package itself; all four current importers have it.
+- **Tests:**
+  - EntityTranslationsTests: 23 unit tests, covering every method, refusals, fallback, `exceptEntityGuid`,
+    ambiguity, the wrapper refusal through a chain, DI, and the API and wrappers reading each other's writes.
+  - SQL: +3 per provider, live on SQLite, PostgreSQL 16, SQL Server 2022 and MySQL 8.4.
+  - Unit 261/261, SQL 68/68. The solution builds with no new warnings, and Sandbox and Symbio.Birko build.
+- **Mutations** (12, each red):
+  - Fallback term dropped: 16 unit, 12 live.
+  - `except` clause dropped: 2 unit, 4 live.
+  - `Exists` ignoring the fallback: 1 unit, 4 live.
+  - Ambiguity not refused.
+  - Default culture writable.
+  - Default culture removable.
+  - Invariant culture accepted.
+  - Undeclared field accepted.
+  - Localized wrapper accepted.
+  - Undeclared rows returned.
+  - Groups with only undeclared fields kept.
+  - Localize copying on the default culture.
+- **Close review** (9 findings).
+  - Fixed:
+    - `RemoveCultureAsync` now refuses the default culture, like `SetAsync` (rule 22).
+    - A culture with no name (the invariant culture) is refused everywhere.
+    - An entity or culture whose only rows are for undeclared fields is dropped instead of returned empty.
+    - `GetAllCulturesAsync` refuses an empty id.
+    - The count doc covers more than 500 candidates.
+    - The refusal message names the DI factory overload.
+    - The test project pins the DI package version like its siblings.
+  - Kept as decided:
+    - The undeclared DI dependency (D8, shape 3).
+    - The default DI overload failing at first resolve when the container's store is the localized wrapper (D7).
+      There is no provider to check at registration. The README and the message point to the factory overload.
+  - Not fixed: a stored `null` value reads as `""`, because `IEntityTranslation.Value` is a non-nullable string and a
+    null is outside its contract.
 
 ## Implementation plan
 

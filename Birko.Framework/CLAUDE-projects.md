@@ -73,7 +73,8 @@ Birko.Security.Grants (GrantRoleTable, ResourceGrant, IResourceGrantStore, IGran
      <- Birko.Models.SQL + Birko.Data.SQL; schemaless backends need none of it
 
 Birko.Data.Localization (ILocalizable, IEntityTranslation, the localized store wrappers)
-  <- Birko.Data.Core + Birko.Data.Stores only: no SQL (TASK-680 kept it that way)
+  <- Birko.Data.Core + Birko.Data.Stores only: no SQL (TASK-680 kept it that way);
+     Microsoft.Extensions.DependencyInjection.Abstractions consumer-supplied for AddEntityTranslations (TASK-682)
   -> Birko.Data.Localization.SQL (EntityTranslationMapping<TTranslation>, LocalizationSqlMappings)
      <- Birko.Models.SQL + Birko.Data.SQL; schemaless backends need none of it
 

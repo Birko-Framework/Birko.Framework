@@ -360,3 +360,12 @@ EntityTranslationFilter.ByEntityFieldAndCulture(entityGuid, "Name", "sk");
 EntityTranslationFilter.ByEntityType("Product");
 EntityTranslationFilter.ByEntityTypeAndCulture("Product", "sk");
 ```
+
+### 6. The explicit API
+
+`IEntityTranslations<T>` gives explicit, batched access to translations for a given culture, beside the wrappers'
+ambient one: one language for a list, every language of one entity, upsert and remove, slug → entity with the
+base-value fallback, and "is this value taken in this language". Register it with
+`services.AddEntityTranslations<Product>()`. See the
+[project README](../../Birko.Data.Localization/README.md#6-the-explicit-api--ientitytranslationst) for an example per
+method.

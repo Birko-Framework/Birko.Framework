@@ -14,6 +14,7 @@ Unit tests for entity-level localization (Birko.Data.Localization).
 - **LocalizedStoreWrapperTests** — Sync bulk wrapper (create/read/update/delete, partial translations, constructor validation)
 - **AsyncLocalizedStoreWrapperTests** — Async bulk wrapper (same coverage)
 - **LocalizationBatchedReadTests** — TASK-679: one translation read per 500 entities on list reads
+- **EntityTranslationsTests** — TASK-682: every `IEntityTranslations` method (results, read counts, refusals, fallback, `exceptEntityGuid`, ambiguity, the localized-wrapper refusal through a chain, DI), and that the API and the wrappers read each other's writes
 - **LocalizationBatchedWriteTests** — TASK-690: write calls counted (one read + at most one bulk delete, update and create per save; one filter delete per 500 entities), the batched unique-key retry, `DeleteCulture`, `ReadAllCultures`, and the wrappers' collection, filter and delete paths
 
 ### Test Resources (`TestResources/`)
@@ -28,6 +29,7 @@ Unit tests for entity-level localization (Birko.Data.Localization).
 - Birko.Data.Core (projitems)
 - Birko.Data.Stores (projitems)
 - xUnit 2.9.3, FluentAssertions 7.0.0
+- Microsoft.Extensions.DependencyInjection 10.* (the DI test; the project under test does not declare it)
 
 ## Maintenance
 - When adding new features to Birko.Data.Localization, add corresponding tests here

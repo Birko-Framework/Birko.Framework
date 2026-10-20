@@ -6,6 +6,7 @@ using Birko.Data.InMemory.Stores;
 using Birko.Data.Localization.Decorators;
 using Birko.Data.Localization.Models;
 using Birko.Data.Localization.SQL.Mappings;
+using Birko.Data.Localization.Translations;
 using Birko.Data.Models;
 using Birko.Data.Patterns.IndexManagement;
 using Birko.Data.SQL.Connectors;
@@ -415,6 +416,82 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
         (counted.Deletes - deletes).Should().Be(1);
         var guids = items.Select(i => i.Guid!.Value).ToList();
         (await counted.CountAsync(t => guids.Contains(t.EntityGuid))).Should().Be(0);
+    }
+
+    /// <summary>TASK-682: three products in SQL, one per fallback case, values unique to this run.</summary>
+    private async Task<(EntityTranslations<SqlProduct> Api, RacingStore<SqlProduct> Products, RacingStore<EntityTranslationModel> Translations,
+        Guid Translated, Guid Untranslated, Guid Other, string Run)> ApiFixtureAsync()
+    {
+        var context = new Context { CurrentCulture = new CultureInfo("en"), DefaultCulture = new CultureInfo("en") };
+        var products = new RacingStore<SqlProduct>(Store<SqlProduct>(), race: null);
+        var translations = new RacingStore<EntityTranslationModel>(Store<EntityTranslationModel>(), race: null);
+        var run = Guid.NewGuid().ToString("N")[..8];
+        var translated = await products.CreateAsync(new SqlProduct { Name = $"chair-{run}", Code = run });
+        var untranslated = await products.CreateAsync(new SqlProduct { Name = $"lavica-{run}", Code = run });
+        var other = await products.CreateAsync(new SqlProduct { Name = $"table-{run}", Code = run });
+        var api = new EntityTranslations<SqlProduct>(products, translations, context);
+        await api.SetAsync(translated, new CultureInfo("sk"), new Dictionary<string, string?> { ["Name"] = $"stolicka-{run}" });
+        await api.SetAsync(other, new CultureInfo("sk"), new Dictionary<string, string?> { ["Name"] = $"stol-{run}" });
+        await api.SetAsync(other, new CultureInfo("cs"), new Dictionary<string, string?> { ["Name"] = $"stul-{run}" });
+        return (api, products, translations, translated, untranslated, other, run);
+    }
+
+    [Fact]
+    public async Task The_explicit_api_reads_writes_and_removes_translations_on_the_provider()
+    {
+        if (!RequireServer()) return;
+        var (api, _, translations, translated, untranslated, other, run) = await ApiFixtureAsync();
+        var sk = new CultureInfo("sk");
+
+        var reads = translations.Reads;
+        var slovak = await api.GetAsync(new[] { translated, untranslated, other }, sk);
+        (translations.Reads - reads).Should().Be(1);
+        slovak.Keys.Should().BeEquivalentTo(new[] { translated, other });
+        slovak[other]["Name"].Should().Be($"stol-{run}");
+
+        (await api.GetAllCulturesAsync(other)).Keys.Should().BeEquivalentTo("sk", "cs");
+
+        await api.SetAsync(other, sk, new Dictionary<string, string?> { ["Name"] = null });
+        (await api.GetAllCulturesAsync(other)).Keys.Should().BeEquivalentTo("cs");
+
+        await api.RemoveCultureAsync(other, new CultureInfo("cs"));
+        await api.RemoveEntitiesAsync(new[] { translated });
+        (await translations.CountAsync(t => t.EntityGuid == translated || t.EntityGuid == other)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task The_explicit_api_finds_with_fallback_and_checks_uniqueness_on_the_provider()
+    {
+        if (!RequireServer()) return;
+        var (api, products, translations, translated, untranslated, other, run) = await ApiFixtureAsync();
+        var sk = new CultureInfo("sk");
+
+        var before = (products.Reads, translations.Reads);
+        (await api.FindEntityAsync("Name", sk, $"lavica-{run}")).Should().Be(untranslated);
+        (products.Reads - before.Item1, translations.Reads - before.Item2).Should().Be((2, 2));
+
+        (await api.FindEntityAsync("Name", sk, $"stolicka-{run}")).Should().Be(translated);
+        (await api.FindEntityAsync("Name", sk, $"chair-{run}")).Should().BeNull("a translated product matches only on its translation");
+        (await api.FindEntityAsync("Name", new CultureInfo("en"), $"chair-{run}")).Should().Be(translated);
+
+        (await api.ExistsAsync("Name", sk, $"lavica-{run}")).Should().BeTrue();
+        (await api.ExistsAsync("Name", sk, $"lavica-{run}", exceptEntityGuid: untranslated)).Should().BeFalse();
+        (await api.ExistsAsync("Name", sk, $"stol-{run}", exceptEntityGuid: translated)).Should().BeTrue();
+        (await api.ExistsAsync("Name", sk, $"stol-{run}", exceptEntityGuid: other)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task The_explicit_api_localizes_loaded_entities_with_fallback_on_the_provider()
+    {
+        if (!RequireServer()) return;
+        var (api, products, translations, translated, untranslated, other, run) = await ApiFixtureAsync();
+        var loaded = (await products.ReadAsync(x => x.Code == run, null, null, null)).OrderBy(x => x.Name).ToList();
+        var reads = translations.Reads;
+
+        var localized = await api.LocalizeAsync(loaded, new CultureInfo("sk"));
+
+        (translations.Reads - reads).Should().Be(1);
+        localized.Select(x => x.Name).Should().Equal($"stolicka-{run}", $"lavica-{run}", $"stol-{run}");
     }
 
     [Fact]

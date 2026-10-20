@@ -30,6 +30,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncLocalizedStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedBulkStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncLocalizedBulkStoreWrapper.cs" />
+    <!-- Translations: the explicit API (TASK-682). The DI extension needs Microsoft.Extensions.DependencyInjection.Abstractions,
+         consumer-supplied: Birko.Data.Repositories declares it, and declaring it here too would collide (NU1504)
+         wherever both are imported. -->
+    <Compile Include="$(MSBuildThisFileDirectory)Translations\IEntityTranslations.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Translations\EntityTranslations.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Translations\EntityTranslationsServiceCollectionExtensions.cs" />
   </ItemGroup>
 
 </Project>

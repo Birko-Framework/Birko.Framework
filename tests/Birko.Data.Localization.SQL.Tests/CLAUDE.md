@@ -16,7 +16,9 @@ Birko.Data.Localization.SQL.Tests/
 │                                       delegating store stores the competing row between our read and our create),
 │                                       a batched read past one batch (TASK-679), batched writes counted, a race
 │                                       on one key of a batch, chunked and per-culture deletes, the wrappers'
-│                                       collection/filter/delete writes on SQL (TASK-690), a consumer model on its own table
+│                                       collection/filter/delete writes on SQL (TASK-690), the explicit API on
+│                                       SQL: get/set/remove, find with fallback and read counts, exists with
+│                                       except, localize (TASK-682), a consumer model on its own table
 │                                       through the wrappers; on MySQL, the reported key failure (TASK-684)
 └── ProviderTranslationTableTests.cs  — SQLite, PostgreSQL, MySQL, SQL Server subclasses
 ```

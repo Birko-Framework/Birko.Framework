@@ -9,6 +9,7 @@ Entity-level localization for Birko.Data stores. Provides store decorator wrappe
 - **EntityTranslationModel** — The default translation row, keyed by (EntityGuid, EntityType, FieldName, Culture)
 - **Store wrappers** — Transparent localization via decorator pattern (sync and async, singular and bulk)
 - **IEntityLocalizationContext** — Pluggable culture context for determining current/default language
+- **IEntityTranslations** — Explicit, batched translations for a given culture: get, every culture, set, remove, find by value, uniqueness, localize (TASK-682)
 - **EntityTranslationFilter** — Query builder for translation lookups on the default `EntityTranslationModel` (the wrappers build their own filters for any model)
 
 ## How It Works
@@ -94,10 +95,74 @@ two-parameter names are the same wrappers with `EntityTranslationModel`. For SQL
 When a store enforces the key, two writers saving one `(entity, type, field, culture)` at once leave one row: the second
 create is refused (`StoreUniqueViolationException`) and retried as an update.
 
+### 6. The explicit API — `IEntityTranslations<T>`
+
+The wrappers follow the ambient culture. When code needs a given language per call, every language of one entity, a
+lookup by a translated value or a uniqueness check, use `IEntityTranslations<T>`. It is built from the **entity store
+itself, not the localized wrapper**, because lookups read base values through it. A localized wrapper anywhere in its
+decorator chain is refused, and tenant or soft-delete wrappers are fine. It also takes the translation store and the
+context, of which only `DefaultCulture` is read:
+
+With `Slug` declared beside `Name` in `GetLocalizableFields()`:
+
+```csharp
+IEntityTranslations<Product> translations = new EntityTranslations<Product>(productStore, translationStore, context);
+var sk = new CultureInfo("sk");
+
+// One language for a list: id → field → value, one read per 500 ids.
+var names = await translations.GetAsync(productIds, sk);
+
+// Every language of one entity, for an editor: culture → field → value, one read.
+var all = await translations.GetAllCulturesAsync(productId);
+
+// Save one language: one read + at most 3 bulk calls; null removes that field's translation.
+await translations.SetAsync(productId, sk, new Dictionary<string, string?> { ["Name"] = "Stolička", ["Slug"] = "stolicka" });
+
+// Drop a language, or purge what deleted entities left behind.
+await translations.RemoveCultureAsync(productId, sk);
+await translations.RemoveEntitiesAsync(deletedIds);
+
+// Slug → entity, with fallback: an untranslated product is found by its base slug.
+Guid? id = await translations.FindEntityAsync("Slug", sk, "stolicka");
+
+// Is this slug taken in Slovak by another product? Counts a base slug an untranslated product answers with.
+bool taken = await translations.ExistsAsync("Slug", sk, "stolicka", exceptEntityGuid: productId);
+
+// Apply a language to entities you already loaded: detached copies, one read.
+IReadOnlyList<Product> shown = await translations.LocalizeAsync(products, sk);
+```
+
+- **Cost:** a fixed number of queries, however many fields are involved. `GetAsync` and `LocalizeAsync` take one
+  translation read per 500 entities and `GetAllCulturesAsync` one read. `FindEntityAsync` and `ExistsAsync` take at
+  most four on a non-default culture: a hash lookup, the base-value candidates, their translations (one more read per
+  further 500 candidates), and the final read.
+- **Default culture:** its values are the entity's own columns. `SetAsync` refuses it, the reads return translation
+  rows only, and `FindEntityAsync` / `ExistsAsync` test the base column.
+- **Refused with `ArgumentException`:** a field the type does not declare as localizable, an empty id, a culture with
+  no name (the invariant culture), and the default culture for `SetAsync` / `RemoveCultureAsync`.
+- **Ambiguous lookup:** if more than one entity matches, `FindEntityAsync` throws `InvalidOperationException` naming
+  two of them, rather than picking one.
+- **Limits** are the filters' limits (above): the base-value fallback follows the entity store's collation, and the
+  API's writes share no transaction with the entity's (TASK-683).
+
+**Dependency injection:**
+
+```csharp
+services.AddEntityTranslations<Product>();                        // EntityTranslationModel, Scoped
+services.AddEntityTranslations<Product, ShopTranslation>();       // your own model
+services.AddEntityTranslations<Product, EntityTranslationModel>(  // when the container's IAsyncBulkStore<Product>
+    sp => sp.GetRequiredService<ProductStore>(),                  // is the localized wrapper, pass the store it wraps
+    sp => sp.GetRequiredService<IAsyncBulkStore<EntityTranslationModel>>());
+```
+
+The extension needs `Microsoft.Extensions.DependencyInjection.Abstractions`. A consumer that imports
+`Birko.Data.Repositories` has it already. Any other consumer adds the package.
+
 ## Dependencies
 
 - Birko.Data.Core (AbstractModel)
 - Birko.Data.Stores (IStore, IAsyncStore, IBulkStore, IAsyncBulkStore, IStoreWrapper)
+- Microsoft.Extensions.DependencyInjection.Abstractions — only for `AddEntityTranslations`; consumer-supplied
 
 ## Filter-Based Bulk Operations
 

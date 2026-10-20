@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — client_credentials tokens can be shaped; a scope claim reads as permissions
+
+[[TASK-520]]. `TokenEndpointHandler.ShapeClientCredentialsToken` sets a service account's subject and extra claims
+without replacing the grant; registered claims are refused. `ClaimsCurrentUser` splits a `scope` permission claim on
+spaces too (RFC 6749 §3.3), so `"a b"` reads as two permissions. Commas still work, and other claims are unchanged.
+
 ## 2026-10-18 — Birko.Security.OAuth.Server.AspNetCore: MapOAuthServer
 
 [[TASK-519]]. New project, from DraCode's `OAuthEndpoints.cs`. `MapOAuthServer()` maps `/token`, `/device_authorization`,
