@@ -45,7 +45,8 @@ public class SluggableStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
             ResolveSlug(data, excludeId: null);
             try
             {
-                return _innerStore.Create(data, storeDelegate);
+                // TASK-694: a savepoint only while this attempt can still be retried; a null store runs the write as is.
+                return Birko.Data.Stores.RetryableWrite.Run(attempt < MaxSlugAttempts ? _innerStore : null, () => _innerStore.Create(data, storeDelegate));
             }
             catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)
             {
@@ -62,7 +63,8 @@ public class SluggableStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
             ResolveSlug(data, data.Guid);
             try
             {
-                _innerStore.Update(data, storeDelegate);
+                // TASK-694: a savepoint only while this attempt can still be retried; a null store runs the write as is.
+                Birko.Data.Stores.RetryableWrite.Run(attempt < MaxSlugAttempts ? _innerStore : null, () => _innerStore.Update(data, storeDelegate));
                 return;
             }
             catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)

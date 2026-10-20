@@ -254,7 +254,8 @@ internal static class LocalizedTranslationRows
         {
             try
             {
-                store.Create(plan.Creates);
+                // TASK-694: in a savepoint where a refusal would abort the caller's transaction, so the re-read and retry run.
+                RetryableWrite.Run(store, () => store.Create(plan.Creates));
             }
             catch (StoreUniqueViolationException violation)
             {
@@ -273,6 +274,7 @@ internal static class LocalizedTranslationRows
                 {
                     try
                     {
+                        // Not retried again, so no savepoint (TASK-694).
                         store.Create(retry.Creates);
                     }
                     catch (StoreUniqueViolationException)
@@ -315,7 +317,8 @@ internal static class LocalizedTranslationRows
         {
             try
             {
-                await store.CreateAsync(plan.Creates, ct: ct);
+                // TASK-694: in a savepoint where a refusal would abort the caller's transaction, so the re-read and retry run.
+                await RetryableWrite.RunAsync(store, () => store.CreateAsync(plan.Creates, ct: ct), ct);
             }
             catch (StoreUniqueViolationException violation)
             {
@@ -334,6 +337,7 @@ internal static class LocalizedTranslationRows
                 {
                     try
                     {
+                        // Not retried again, so no savepoint (TASK-694).
                         await store.CreateAsync(retry.Creates, ct: ct);
                     }
                     catch (StoreUniqueViolationException)

@@ -15,6 +15,7 @@ Store abstractions for the Birko Framework. Contains store interfaces, abstract 
 - **IAsyncBulkStore\<T\>** — Async equivalent of IBulkStore
 - **IStoreWrapper** — Interface for store decorators (caching, audit, etc.)
 - **ITransactionalStore\<T, TContext\>** — Interface for stores participating in external transactions
+- **IRetryableWriteStore / RetryableWrite** — TASK-694: a write a caller may retry after a unique refusal runs through `RetryableWrite.Run(Async)(store, write)`, which finds the `IRetryableWriteStore` beneath decorators (`IStoreWrapper`) or runs the write as is. The SQL stores take a savepoint there on PostgreSQL. Only for writes that are retried: a savepoint costs two round trips
 
 ### Abstract Implementations
 - **AbstractStore\<T\>** — Base sync store with Create, Read, Update, Delete, Save, Count

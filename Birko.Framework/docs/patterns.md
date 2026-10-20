@@ -224,11 +224,13 @@ Inside a caller's transaction (`SqlUnitOfWork`) the retry depends on the provide
 | Provider | After a refusal inside the transaction |
 |---|---|
 | SQL Server | the re-check sees the other writer's row and retries in place |
+| PostgreSQL | retries in place: the write runs in a savepoint, so the refusal is rolled back to it instead of aborting the transaction (TASK-694) |
 | MySQL | the re-check reads the snapshot from before the other commit, so the `StoreUniqueViolationException` stands |
-| PostgreSQL | the refusal aborts the transaction; the caller gets `StoreUniqueViolationException` naming the failed re-check (`25P02`) |
 
-The transaction is lost on PostgreSQL either way: roll it back and run the unit again. Outside a transaction the four
-SQL providers retry. A failed re-check, in or out of a transaction, now surfaces as that typed refusal. The sync
+A refusal that stands leaves the transaction usable on every provider, so you can carry on or roll back. Only the
+writes these decorators retry take a savepoint: one costs two round trips, which doubled the cost of a write inside a
+transaction on PostgreSQL. A write of your own that you mean to retry can do the same through
+`RetryableWrite.RunAsync(store, () => store.CreateAsync(entity))`. Outside a transaction the four SQL providers retry. A failed re-check, in or out of a transaction, now surfaces as that typed refusal. The sync
 decorators used to swallow it and rethrow the bare refusal. A connection fault during the re-check therefore reads as a
 unique refusal too; the fault's message is kept in its text.
 

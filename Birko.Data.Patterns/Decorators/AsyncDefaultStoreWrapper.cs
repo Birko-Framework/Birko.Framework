@@ -92,7 +92,8 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
             items.ForEach(Mark);
             try
             {
-                await _innerStore.CreateAsync(items, storeDelegate, ct);
+                // TASK-694: a savepoint only while this write can still be retried (a default being promoted); a null store runs it as is.
+                await Birko.Data.Stores.RetryableWrite.RunAsync(attempt < MaxDefaultAttempts && chosen != null ? _innerStore : null, () => _innerStore.CreateAsync(items, storeDelegate, ct), ct);
                 return;
             }
             catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxDefaultAttempts && chosen != null)
@@ -121,7 +122,8 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
             items.ForEach(Mark);
             try
             {
-                await _innerStore.UpdateAsync(DefaultLast(items), storeDelegate, ct);
+                // TASK-694: a savepoint only while this write can still be retried (a default being promoted); a null store runs it as is.
+                await Birko.Data.Stores.RetryableWrite.RunAsync(attempt < MaxDefaultAttempts && chosen != null ? _innerStore : null, () => _innerStore.UpdateAsync(DefaultLast(items), storeDelegate, ct), ct);
                 return;
             }
             catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxDefaultAttempts && chosen != null)
@@ -147,7 +149,8 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
             Mark(data);
             try
             {
-                return await write();
+                // TASK-694: a savepoint only while this write can still be retried (a default being promoted); a null store runs it as is.
+                return await Birko.Data.Stores.RetryableWrite.RunAsync(attempt < MaxDefaultAttempts && data.IsDefault ? _innerStore : null, write, ct);
             }
             catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxDefaultAttempts && data.IsDefault)
             {

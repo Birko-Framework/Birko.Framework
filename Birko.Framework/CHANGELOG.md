@@ -4,6 +4,16 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-19 — Localization low triage: declarations validated, the four-part key, Destroy cleans up
+
+[[TASK-194]]. 10 low findings: 8 confirmed, 2 narrower; SH-L087 handed to [[TASK-681]]. Decided by the user:
+- A localizable field must be a public read/write string property. Anything else throws when the wrapper is built.
+  TASK-498's increment refusal could no longer fire and was removed.
+- Translation rows match on `(EntityGuid, EntityType, FieldName, Culture)`, so another type's row is left alone.
+- An unknown order-by property throws on the in-memory path, as `OrderByHelper` does.
+
+`Destroy` also deletes this type's translation rows, `Init` initialises the translation store, and negative paging throws.
+
 ## 2026-10-19 — Localization triage: untranslatable filters refused, translations saved after the write
 
 [[TASK-168]]. 14 medium findings, all confirmed (SH-M076 narrower); 4 handed to EPIC-021, SH-M083 spawned as [[TASK-683]].

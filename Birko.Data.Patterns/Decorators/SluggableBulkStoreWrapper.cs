@@ -36,7 +36,8 @@ public class SluggableBulkStoreWrapper<TStore, T> : SluggableStoreWrapper<TStore
             }
             try
             {
-                _innerStore.Create(items, storeDelegate);
+                // TASK-694: a savepoint only while this attempt can still be retried; a null store runs the write as is.
+                Birko.Data.Stores.RetryableWrite.Run(attempt < MaxSlugAttempts ? _innerStore : null, () => _innerStore.Create(items, storeDelegate));
                 return;
             }
             // TASK-632: retried only while nothing of the batch is stored and a slug is what collided (see the async twin).
@@ -71,7 +72,8 @@ public class SluggableBulkStoreWrapper<TStore, T> : SluggableStoreWrapper<TStore
             }
             try
             {
-                _innerStore.Update(items, storeDelegate);
+                // TASK-694: a savepoint only while this attempt can still be retried; a null store runs the write as is.
+                Birko.Data.Stores.RetryableWrite.Run(attempt < MaxSlugAttempts ? _innerStore : null, () => _innerStore.Update(items, storeDelegate));
                 return;
             }
             // An update is idempotent, so a partly applied batch is safe to write again (TASK-632).

@@ -41,6 +41,7 @@ Extends AsyncDataBaseStore with async bulk operations.
 - `AsyncDataBaseBulkStore<DB,T>` - Base async SQL bulk store
 - `DataBase.RegisterMaxLength(type, property, length)` - a fluent length (TASK-691): `LoadField` appends it as a `MaxLengthField` after the property's own attributes, so `CreateAbstractField` stays the one producer of a column's type and the fluent value wins. A changed length drops the type's cached fields and table; the same length again changes nothing. Register before any store loads the type
 - `ISqlConnectedStore` - a store's connector without its generic arguments, implemented explicitly by the two base stores; how composing code tells two stores share one database (`Connector.Settings.GetId()`, TASK-683)
+- `IRetryableWriteStore` (TASK-694) - implemented by the two base stores through `SqlRetryableWrite`, the one producer: a retryable write runs in a savepoint (`DbTransaction.Save` / `Rollback(name)` / `Release`) only when the connector's `AbortsTransactionOnError` (PostgreSQL) and a transaction is active (the store's context or the ambient boundary); a refusal rolls back to it, so the caller's transaction stays usable
 
 ### Repositories
 - `DataBaseRepository<T,S,DB>` - SQL repository base

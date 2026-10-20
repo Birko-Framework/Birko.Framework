@@ -43,7 +43,8 @@ public class AsyncSluggableBulkStoreWrapper<TStore, T> : AsyncSluggableStoreWrap
             }
             try
             {
-                await _innerStore.CreateAsync(items, storeDelegate, ct);
+                // TASK-694: a savepoint only while this attempt can still be retried; a null store runs the write as is.
+                await Birko.Data.Stores.RetryableWrite.RunAsync(attempt < MaxSlugAttempts ? _innerStore : null, () => _innerStore.CreateAsync(items, storeDelegate, ct), ct);
                 return;
             }
             catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)
@@ -90,7 +91,8 @@ public class AsyncSluggableBulkStoreWrapper<TStore, T> : AsyncSluggableStoreWrap
             }
             try
             {
-                await _innerStore.UpdateAsync(items, storeDelegate, ct);
+                // TASK-694: a savepoint only while this attempt can still be retried; a null store runs the write as is.
+                await Birko.Data.Stores.RetryableWrite.RunAsync(attempt < MaxSlugAttempts ? _innerStore : null, () => _innerStore.UpdateAsync(items, storeDelegate, ct), ct);
                 return;
             }
             catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxSlugAttempts)

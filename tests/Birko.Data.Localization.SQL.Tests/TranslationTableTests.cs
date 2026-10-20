@@ -142,8 +142,9 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
 
     /// <summary>
     /// What a racing writer does to an upsert running inside the caller's <c>SqlUnitOfWork</c>: true — the retry
-    /// succeeds in the transaction (SQL Server, measured); false — the refused INSERT aborts the transaction and the
-    /// upsert surfaces the unique violation (PostgreSQL, measured: 25P02 otherwise hid it); null — not exercised here.
+    /// succeeds in the transaction (SQL Server; PostgreSQL since TASK-694, where the create runs in a savepoint, so the
+    /// refusal no longer aborts the transaction; measured); false — the upsert surfaces the unique violation (MySQL: its
+    /// REPEATABLE READ re-read misses the other commit); null — not exercised here.
     /// </summary>
     protected virtual bool? RetriesInsideATransaction => null;
 

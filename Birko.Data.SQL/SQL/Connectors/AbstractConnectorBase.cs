@@ -1487,6 +1487,14 @@ namespace Birko.Data.SQL.Connectors
         public virtual bool IsUniqueViolationException(Exception ex) => false;
 
         /// <summary>
+        /// Whether a statement the server refuses aborts the enclosing transaction, so every later statement in it fails
+        /// until it is rolled back (PostgreSQL: <c>25P02</c>). Where true, a write a caller may retry runs inside a
+        /// savepoint (<see cref="Birko.Data.Stores.IRetryableWriteStore"/>, TASK-694). Measured false on SQL Server,
+        /// MySQL and SQLite: their transaction stays usable after a refused statement.
+        /// </summary>
+        public virtual bool AbortsTransactionOnError => false;
+
+        /// <summary>
         /// Generates a DROP INDEX SQL statement.
         /// Override in provider-specific connectors if the DDL syntax differs (e.g. MSSQL).
         /// </summary>

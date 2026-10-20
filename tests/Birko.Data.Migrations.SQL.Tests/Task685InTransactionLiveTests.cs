@@ -50,8 +50,10 @@ public class T685Defaultable : AbstractModel, IDefaultMarker
 /// conflicting row right after the decorator's first probe, so the decorator's write is refused and it probes again.
 /// What happens next is per provider:
 /// <list type="bullet">
-/// <item><description>PostgreSQL aborts the transaction, so the re-probe fails. The caller must get the typed
-/// <see cref="StoreUniqueViolationException"/>, never the raw <c>25P02</c> error.</description></item>
+/// <item><description>PostgreSQL aborts the transaction on the refusal. Since TASK-694 the decorators run the write
+/// they retry inside a savepoint there, so the re-probe and the retry run in the transaction, as on SQL Server. Before,
+/// the re-probe failed with <c>25P02</c> and the caller got the typed refusal (TASK-685, the test inverted here,
+/// rule 56).</description></item>
 /// <item><description>MySQL keeps the transaction, but the re-probe reads its REPEATABLE READ snapshot, from before the
 /// other writer committed. It finds nothing, and the typed refusal stands.</description></item>
 /// <item><description>SQL Server keeps it, and its READ COMMITTED re-probe sees the other writer's row, so the decorator
@@ -69,9 +71,6 @@ public abstract class Task685InTransactionLiveTestsBase<DB> : IDisposable where 
 
     /// <summary>True: the decorator retries in place inside the transaction; false: the typed refusal reaches the caller.</summary>
     protected abstract bool RetriesInsideATransaction { get; }
-
-    /// <summary>True: the refusal aborts the transaction, so the decorator's re-probe fails and the typed refusal says so.</summary>
-    protected abstract bool ProbeFailsAfterRefusal { get; }
 
     private bool RequireServer()
     {
@@ -161,15 +160,7 @@ public abstract class Task685InTransactionLiveTestsBase<DB> : IDisposable where 
         {
             // Rule 9: the type is the contract; a raw driver exception (PostgreSQL's 25P02) is the defect.
             thrown.Should().BeAssignableTo<StoreUniqueViolationException>();
-            if (ProbeFailsAfterRefusal)
-            {
-                thrown!.Message.Should().Contain("could not query the store after the refusal").And.Contain("25P02");
-                thrown.InnerException.Should().BeAssignableTo<StoreUniqueViolationException>("the original refusal is kept");
-            }
-            else
-            {
-                thrown!.Message.Should().NotContain("could not query", "the probe ran and found nothing, so the refusal stands as thrown");
-            }
+            thrown!.Message.Should().NotContain("could not query", "the probe ran and found nothing, so the refusal stands as thrown");
             await assertRefused();
         }
     }
@@ -255,6 +246,95 @@ public abstract class Task685InTransactionLiveTestsBase<DB> : IDisposable where 
             async () => (await store.ReadAsync(null, null, null, null)).Count(r => r.IsDefault).Should().Be(1),
             async () => (await store.ReadAsync(null, null, null, null)).Select(r => r.Name).Should().Equal("theirs"),
             () => racer.Raced);
+    }
+
+    /// <summary>The provider aborts its transaction on a refused statement (the connector's flag, TASK-694).</summary>
+    private bool Aborts() => Store<T685Slugged>().Connector!.AbortsTransactionOnError;
+
+    [Fact]
+    public async Task TASK694_a_refused_retryable_write_leaves_the_callers_transaction_usable()
+    {
+        if (!RequireServer()) return;
+        var store = Store<T685Slugged>();
+        Drop(store.Connector, typeof(T685Slugged));
+        await store.InitAsync();
+        var kept = new T685Slugged { Name = "Kept", Slug = "kept" };
+
+        await using (var uow = SqlUnitOfWork.FromStore(store))
+        {
+            await uow.BeginAsync();
+            await store.CreateAsync(kept);
+            var refused = () => RetryableWrite.RunAsync(store, () => store.CreateAsync(new T685Slugged { Name = "Again", Slug = "kept" }));
+            await refused.Should().ThrowAsync<StoreUniqueViolationException>();
+
+            // The transaction still answers, and commits the write made before the refusal.
+            (await store.CountAsync(null)).Should().Be(1);
+            await uow.CommitAsync();
+        }
+
+        (await store.ReadAsync(null, null, null, null)).Select(x => x.Slug).Should().Equal("kept");
+    }
+
+    [Fact]
+    public async Task TASK694_the_sync_path_keeps_the_callers_transaction_usable_too()
+    {
+        if (!RequireServer()) return;
+        var owner = Store<T685Slugged>();
+        Drop(owner.Connector, typeof(T685Slugged));
+        await owner.InitAsync();
+        var store = SyncStore<T685Slugged>();
+        // Schema first: a lazy init inside the caller's transaction would lock the table.
+        store.Init();
+        await using (var uow = SqlUnitOfWork.FromStore(owner))
+        {
+            await uow.BeginAsync();
+            store.Create(new T685Slugged { Name = "Kept", Slug = "kept" });
+            var refused = () => RetryableWrite.Run(store, () => store.Create(new T685Slugged { Name = "Again", Slug = "kept" }));
+            refused.Should().Throw<StoreUniqueViolationException>();
+            store.Count(null).Should().Be(1, "the sync savepoint path left the transaction answering");
+            await uow.CommitAsync();
+        }
+        store.Read(null, null, null, null).Select(x => x.Slug).Should().Equal("kept");
+    }
+
+    [Fact]
+    public async Task TASK694_outside_a_transaction_a_retryable_write_takes_no_savepoint()
+    {
+        if (!RequireServer()) return;
+        var store = Store<T685Slugged>();
+        Drop(store.Connector, typeof(T685Slugged));
+        await store.InitAsync();
+        await store.CreateAsync(new T685Slugged { Name = "Kept", Slug = "kept" });
+
+        // No transaction to save into: the refusal arrives as it would without RetryableWrite.
+        var refused = () => RetryableWrite.RunAsync(store, () => store.CreateAsync(new T685Slugged { Name = "Again", Slug = "kept" }));
+        await refused.Should().ThrowAsync<StoreUniqueViolationException>();
+        (await store.CountAsync(null)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task TASK694_an_ordinary_write_takes_no_savepoint_so_a_refusal_still_aborts_where_the_provider_does()
+    {
+        if (!RequireServer()) return;
+        var store = Store<T685Slugged>();
+        Drop(store.Connector, typeof(T685Slugged));
+        await store.InitAsync();
+
+        Exception? afterRefusal = null;
+        await using (var uow = SqlUnitOfWork.FromStore(store))
+        {
+            await uow.BeginAsync();
+            await store.CreateAsync(new T685Slugged { Name = "Kept", Slug = "kept" });
+            var refused = () => store.CreateAsync(new T685Slugged { Name = "Again", Slug = "kept" });
+            await refused.Should().ThrowAsync<StoreUniqueViolationException>();
+            try { await store.CountAsync(null); } catch (Exception e) { afterRefusal = e; }
+            if (uow.IsActive) await uow.RollbackAsync();
+        }
+
+        // Decided by the user (TASK-694): only writes a caller retries pay for a savepoint.
+        Output.WriteLine(afterRefusal?.Message ?? "the transaction still answered");
+        if (Aborts()) afterRefusal.Should().NotBeNull("PostgreSQL aborts the transaction on a refused statement outside a savepoint");
+        else afterRefusal.Should().BeNull();
     }
 
     [Fact]
@@ -391,8 +471,7 @@ public sealed class PostgreSqlTask685InTransactionLiveTests : Task685InTransacti
 {
     public PostgreSqlTask685InTransactionLiveTests(ITestOutputHelper output) : base(output) { }
     protected override string HostVariable => "BIRKO_PG_HOST";
-    protected override bool RetriesInsideATransaction => false;
-    protected override bool ProbeFailsAfterRefusal => true;
+    protected override bool RetriesInsideATransaction => true;
     protected override Birko.Configuration.Settings Settings() => new PostgreSqlSettings(Environment.GetEnvironmentVariable("BIRKO_PG_HOST")!,
         Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview",
         Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres",
@@ -405,7 +484,6 @@ public sealed class MySqlTask685InTransactionLiveTests : Task685InTransactionLiv
     public MySqlTask685InTransactionLiveTests(ITestOutputHelper output) : base(output) { }
     protected override string HostVariable => "BIRKO_MYSQL_HOST";
     protected override bool RetriesInsideATransaction => false;
-    protected override bool ProbeFailsAfterRefusal => false;
     protected override Birko.Configuration.Settings Settings() => new MySqlSettings(Environment.GetEnvironmentVariable("BIRKO_MYSQL_HOST")!,
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview",
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root",
@@ -418,7 +496,6 @@ public sealed class MSSqlTask685InTransactionLiveTests : Task685InTransactionLiv
     public MSSqlTask685InTransactionLiveTests(ITestOutputHelper output) : base(output) { }
     protected override string HostVariable => "BIRKO_MSSQL_HOST";
     protected override bool RetriesInsideATransaction => true;
-    protected override bool ProbeFailsAfterRefusal => false;
     protected override Birko.Configuration.Settings Settings() => new MSSqlSettings(Environment.GetEnvironmentVariable("BIRKO_MSSQL_HOST")!,
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview",
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa",

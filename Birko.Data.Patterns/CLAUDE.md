@@ -83,8 +83,11 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
   `StoreException.ProbeAfterRefusal(Async)`. If it fails, the caller gets the typed `StoreUniqueViolationException`
   naming the failure, never the driver's error (PostgreSQL's aborted transaction answers `25P02`). Cancellation passes
   through. The sync twins probe in the catch body, not in an exception filter, which would swallow the failure.
-  Per provider: SQL Server retries in place; MySQL's REPEATABLE READ re-probe misses the other commit, so the refusal
-  stands; PostgreSQL refuses typed. Savepoints that would let PostgreSQL retry are TASK-694
+  Per provider: SQL Server and PostgreSQL retry in place; MySQL's REPEATABLE READ re-probe misses the other commit, so
+  the refusal stands. PostgreSQL retries because each write the decorators retry runs through
+  `RetryableWrite.Run(Async)` (TASK-694): beneath the decorators, a SQL store runs it in a savepoint where a refusal
+  would abort the transaction (`AbortsTransactionOnError`, PostgreSQL only), and rolls back to it on a refusal. Other
+  writes take no savepoint: one costs two round trips, which doubled a write inside a transaction (measured)
 
 ### Schema (Birko.Data.Patterns.Schema)
 Provider-agnostic field and schema abstractions. Used by both the migration system and the SQL model mapping framework.

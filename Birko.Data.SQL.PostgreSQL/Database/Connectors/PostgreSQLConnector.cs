@@ -50,6 +50,12 @@ namespace Birko.Data.SQL.Connectors
         protected override string? EnsureSchemaSql(string schema) => "CREATE SCHEMA IF NOT EXISTS " + QuoteIdentifier(schema);
 
         /// <summary>
+        /// A refused statement aborts the transaction: later statements fail with <c>25P02</c> until rollback (measured,
+        /// TASK-685). So a retryable write runs inside a savepoint here (TASK-694).
+        /// </summary>
+        public override bool AbortsTransactionOnError => true;
+
+        /// <summary>
         /// Detects PostgreSQL transient errors: deadlocks (40P01), serialization failures (40001),
         /// connection exceptions (08xxx), insufficient resources (53xxx), operator intervention (57xxx).
         /// </summary>

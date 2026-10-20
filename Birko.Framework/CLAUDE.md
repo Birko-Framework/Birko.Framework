@@ -289,6 +289,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### PostgreSQL retries a unique refusal inside a caller's transaction (2026-10-20)
+[[TASK-694]]. The slug and default decorators and the translation upsert run the write they retry through
+`RetryableWrite`. Beneath them, a SQL store runs it in a savepoint where a refusal aborts the transaction
+(`AbortsTransactionOnError`, PostgreSQL), so the re-check and the retry run in it. Measured live: PostgreSQL now retries
+in place, as SQL Server does, and MySQL still refuses. Other writes take no savepoint (decided by the user): one doubled
+a write's cost inside a transaction.
 ### Fluent HasPrecision / HasScale reach a decimal, and are refused on a string (2026-10-20)
 [[TASK-692]]. Both were accepted and dropped: a decimal got `(22,6)`, and a string's `HasPrecision(n)` stayed `LONGTEXT` /
 `NVARCHAR(MAX)`. Now a decimal gets them, and any other type is refused. **Breaking:** a string's length is `HasMaxLength(n)`,
@@ -365,14 +371,6 @@ now measured.
 A page of 48 products cost 48 extra queries. `LocalizedTranslationRows.ReadMany` + `Apply` serve list reads, the
 in-memory sort and single reads. Sorting by a translated field still loads the whole matching set (stated limit). The
 batch size is unmeasured on SQL until [[TASK-680]] maps the translation model.
-### Localization low triage: declarations validated, the four-part key, Destroy cleans up (2026-10-19)
-[[TASK-194]]. 10 low findings: 8 confirmed, 2 narrower; SH-L087 handed to [[TASK-681]]. Decided by the user:
-- A localizable field must be a public read/write string property. Anything else throws when the wrapper is built.
-  TASK-498's increment refusal could no longer fire and was removed.
-- Translation rows match on `(EntityGuid, EntityType, FieldName, Culture)`, so another type's row is left alone.
-- An unknown order-by property throws on the in-memory path, as `OrderByHelper` does.
-
-`Destroy` also deletes this type's translation rows, `Init` initialises the translation store, and negative paging throws.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

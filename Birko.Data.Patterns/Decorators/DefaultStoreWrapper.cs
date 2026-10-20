@@ -86,7 +86,8 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
             items.ForEach(Mark);
             try
             {
-                _innerStore.Create(items, storeDelegate);
+                // TASK-694: a savepoint only while this write can still be retried (a default being promoted); a null store runs it as is.
+                Birko.Data.Stores.RetryableWrite.Run(attempt < MaxDefaultAttempts && chosen != null ? _innerStore : null, () => _innerStore.Create(items, storeDelegate));
                 return;
             }
             // Retried only while nothing of the batch is stored: a non-atomic collection create may have written a prefix.
@@ -115,7 +116,8 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
             items.ForEach(Mark);
             try
             {
-                _innerStore.Update(DefaultLast(items), storeDelegate);
+                // TASK-694: a savepoint only while this write can still be retried (a default being promoted); a null store runs it as is.
+                Birko.Data.Stores.RetryableWrite.Run(attempt < MaxDefaultAttempts && chosen != null ? _innerStore : null, () => _innerStore.Update(DefaultLast(items), storeDelegate));
                 return;
             }
             // An update is idempotent, so a partly applied batch is safe to write again.
@@ -142,7 +144,8 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
             Mark(data);
             try
             {
-                return write();
+                // TASK-694: a savepoint only while this write can still be retried (a default being promoted); a null store runs it as is.
+                return Birko.Data.Stores.RetryableWrite.Run(attempt < MaxDefaultAttempts && data.IsDefault ? _innerStore : null, write);
             }
             catch (Birko.Data.Exceptions.StoreUniqueViolationException violation) when (attempt < MaxDefaultAttempts && data.IsDefault)
             {

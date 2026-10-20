@@ -61,7 +61,8 @@ public sealed class PostgreSqlTranslationTableTests : TranslationTableTests<Post
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432 };
     protected override IIndexManager Indexes(AbstractConnectorBase connector) => new PostgreSqlIndexManager(connector);
     protected override string? CurrentSchemaSql => "current_schema()";
-    protected override bool? RetriesInsideATransaction => false;
+    // TASK-694: inverted (rule 56) — the refused create runs in a savepoint, so the retry runs in the transaction.
+    protected override bool? RetriesInsideATransaction => true;
 }
 
 public sealed class MySqlTranslationTableTests : TranslationTableTests<MySQLConnector>

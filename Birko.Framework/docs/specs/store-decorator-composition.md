@@ -851,11 +851,17 @@ the read's message and whose inner exception is the original refusal, and SHALL 
 SHALL rethrow the original refusal itself. The sync decorators SHALL run the read in the catch body, not in an
 exception filter (TASK-685).
 
-#### Scenario: PostgreSQL aborts the caller's transaction
+#### Scenario: PostgreSQL retries inside a savepoint
 
 - **Given** a slug or default decorator writing inside a caller's `SqlUnitOfWork` on PostgreSQL, and another connection that commits the conflicting row after the decorator's first probe
-- **When** the decorator's write is refused and it re-checks
-- **Then** the re-check fails with `25P02`, and the caller receives `StoreUniqueViolationException` whose message names it, sync and async alike
+- **When** the decorator's write is refused
+- **Then** the write, run through `RetryableWrite`, is rolled back to its savepoint, the re-check sees the other row, the retry stores the entity, and the transaction commits, sync and async alike (TASK-694; before, the re-check failed with `25P02`)
+
+#### Scenario: Only a write the decorator retries takes a savepoint
+
+- **Given** the slug and default decorators over a store implementing `IRetryableWriteStore`
+- **When** they create or update, single or batch, and one attempt is refused
+- **Then** each attempt's write that can still be retried runs through `RunRetryable` / `RunRetryableAsync` once: not the last attempt, not a default decorator write that promotes no default, and not the demotions written before a promotion (those run as is, `RetryableWrite.Run(null, …)`)
 
 #### Scenario: MySQL's snapshot hides the other writer
 

@@ -694,6 +694,14 @@ where individual items may succeed or fail independently and rollback of applied
 - **Then** on PostgreSQL the read fails with `25P02` (the refusal aborted the transaction); on MySQL it succeeds but
   reads the REPEATABLE READ snapshot without the other commit; on SQL Server it sees the other row (TASK-685)
 
+#### Scenario: A retryable write keeps a PostgreSQL transaction usable
+
+- **Given** a `SqlUnitOfWork` on PostgreSQL holding one created row
+- **When** a create of a duplicate key runs through `RetryableWrite.RunAsync(store, …)` and is refused
+- **Then** the SQL store had run it in a savepoint and rolled back to it, so the transaction still answers and commits the
+  first row; the same create made directly leaves the transaction aborted (TASK-694: only retryable writes take a
+  savepoint, priced at two round trips each)
+
 ### Requirement: Every unit of work declares its transactional capabilities
 
 The system SHALL describe what a boundary promises with `ITransactionCapabilities` — `Atomicity`

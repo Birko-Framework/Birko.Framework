@@ -38,8 +38,13 @@ public class Task632RetryTests
     }
 
     /// <summary>An in-memory store with one unique key, checked per item in write order, and a one-shot interloper.</summary>
-    public sealed class UniqueStore<T> : InMemoryStore<T> where T : AbstractModel
+    public sealed class UniqueStore<T> : InMemoryStore<T>, IRetryableWriteStore where T : AbstractModel
     {
+        /// <summary>TASK-694: the writes a decorator ran as retryable.</summary>
+        public int RetryableWrites { get; private set; }
+        public void RunRetryable(Action write) { RetryableWrites++; write(); }
+        public Task RunRetryableAsync(Func<Task> write, CancellationToken ct = default) { RetryableWrites++; return write(); }
+
         private readonly Func<T, object?> _key;
         public Action<UniqueStore<T>>? Interloper { get; set; }
         public int Refusals { get; private set; }
@@ -60,11 +65,15 @@ public class Task632RetryTests
 
         public Guid Raw(T item) => base.Create(item);
 
+        /// <summary>TASK-694: runs before EVERY write with the items about to be written (not one-shot).</summary>
+        public Action<UniqueStore<T>, IReadOnlyList<T>>? InterloperFor { get; set; }
+
         private void Before(IEnumerable<T> items, bool create)
         {
             var interloper = Interloper;
             Interloper = null;
             interloper?.Invoke(this);
+            InterloperFor?.Invoke(this, items.ToList());
 
             var stored = base.Read(null, null, null, null).ToList();
             foreach (var item in items)
@@ -89,8 +98,13 @@ public class Task632RetryTests
 
     /// <summary>TASK-685: the async twin of <see cref="UniqueStore{T}"/>, refusing a duplicate key, and failing every read
     /// after a refusal with <see cref="ReadFailureAfterRefusal"/>.</summary>
-    public sealed class AsyncUniqueStore<T> : AsyncInMemoryStore<T> where T : AbstractModel
+    public sealed class AsyncUniqueStore<T> : AsyncInMemoryStore<T>, IRetryableWriteStore where T : AbstractModel
     {
+        /// <summary>TASK-694: the writes a decorator ran as retryable.</summary>
+        public int RetryableWrites { get; private set; }
+        public void RunRetryable(Action write) { RetryableWrites++; write(); }
+        public Task RunRetryableAsync(Func<Task> write, CancellationToken ct = default) { RetryableWrites++; return write(); }
+
         private readonly Func<T, object?> _key;
         public Func<AsyncUniqueStore<T>, Task>? Interloper { get; set; }
         public Exception? ReadFailureAfterRefusal { get; set; }
@@ -391,5 +405,81 @@ public class Task632RetryTests
         markers.ReadFailureAfterRefusal = Aborted;
         ShouldBeTheRefusalNamingTheProbe(() => new DefaultStoreWrapper<UniqueStore<Option>, Option>(markers)
             .Update(new[] { new Option { Guid = option.Guid, Name = "mine", IsDefault = true } }));
+    }
+
+    // TASK-694: each write a decorator may retry runs through the store's IRetryableWriteStore (a savepoint on
+    // PostgreSQL), once per attempt; a write it does not retry does not.
+
+    [Fact]
+    public void TASK694_the_sync_slug_and_default_writes_run_as_retryable_once_per_attempt()
+    {
+        var slugs = SlugStore();
+        slugs.Interloper = s => s.Raw(new Article { Name = "Widget", Slug = "widget" });
+        var slugged = new SluggableBulkStoreWrapper<UniqueStore<Article>, Article>(slugs);
+        slugged.Create(new Article { Name = "Widget" });
+        slugs.RetryableWrites.Should().Be(2, "the refused attempt and the retry");
+        var stored = slugs.Read(null, null, null, null).Single(a => a.Slug == "widget-2");
+        slugged.Update(stored);
+        slugged.Create(new[] { new Article { Name = "Gadget" } });
+        slugged.Update(new[] { stored });
+        slugs.RetryableWrites.Should().Be(5);
+
+        var markers = MarkerStore();
+        var defaults = new DefaultStoreWrapper<UniqueStore<Option>, Option>(markers);
+        var option = new Option { Name = "a", IsDefault = true };
+        defaults.Create(option);
+        defaults.Update(option);
+        defaults.Create(new[] { new Option { Name = "b", IsDefault = true } });
+        defaults.Update(new[] { option });
+        markers.RetryableWrites.Should().Be(4, "each write the decorator retries, once; the demotions are not retried");
+    }
+
+    [Fact]
+    public async Task TASK694_a_write_the_decorator_does_not_retry_takes_no_savepoint()
+    {
+        var markers = MarkerStore();
+        var defaults = new DefaultStoreWrapper<UniqueStore<Option>, Option>(markers);
+        defaults.Create(new Option { Name = "plain" });
+        defaults.Create(new[] { new Option { Name = "plain batch" } });
+        markers.RetryableWrites.Should().Be(0, "a non-default write is never retried (review finding, rule 10)");
+
+        var asyncMarkers = new AsyncUniqueStore<Option>(o => o.DefaultMarker);
+        var asyncDefaults = new AsyncDefaultStoreWrapper<AsyncUniqueStore<Option>, Option>(asyncMarkers);
+        await asyncDefaults.CreateAsync(new Option { Name = "plain" });
+        await asyncDefaults.CreateAsync(new[] { new Option { Name = "plain batch" } });
+        asyncMarkers.RetryableWrites.Should().Be(0);
+
+        // The last attempt cannot be retried either: five refusals take four savepoints.
+        var slugs = SlugStore();
+        slugs.InterloperFor = (s, items) => s.Raw(new Article { Name = "Widget", Slug = items[0].Slug });
+        var wrapper = new SluggableStoreWrapper<UniqueStore<Article>, Article>(slugs);
+
+        wrapper.Invoking(w => w.Create(new Article { Name = "Widget" })).Should().Throw<StoreUniqueViolationException>();
+
+        slugs.Refusals.Should().Be(5, "every attempt collided");
+        slugs.RetryableWrites.Should().Be(4, "the fifth attempt is not retried, so it takes no savepoint");
+    }
+
+    [Fact]
+    public async Task TASK694_the_async_slug_and_default_writes_run_as_retryable_once_per_attempt()
+    {
+        var slugs = new AsyncUniqueStore<Article>(a => a.Slug) { Interloper = TheirSlug };
+        var slugged = new AsyncSluggableBulkStoreWrapper<AsyncUniqueStore<Article>, Article>(slugs);
+        await slugged.CreateAsync(new Article { Name = "Widget" });
+        slugs.RetryableWrites.Should().Be(2, "the refused attempt and the retry");
+        var stored = (await slugs.ReadAsync(null, null, null, null)).Single(a => a.Slug == "widget-2");
+        await slugged.UpdateAsync(stored);
+        await slugged.CreateAsync(new[] { new Article { Name = "Gadget" } });
+        await slugged.UpdateAsync(new[] { stored });
+        slugs.RetryableWrites.Should().Be(5);
+
+        var markers = new AsyncUniqueStore<Option>(o => o.DefaultMarker);
+        var defaults = new AsyncDefaultStoreWrapper<AsyncUniqueStore<Option>, Option>(markers);
+        var option = new Option { Name = "a", IsDefault = true };
+        await defaults.CreateAsync(option);
+        await defaults.UpdateAsync(option);
+        await defaults.CreateAsync(new[] { new Option { Name = "b", IsDefault = true } });
+        await defaults.UpdateAsync(new[] { option });
+        markers.RetryableWrites.Should().Be(4, "each write the decorator retries, once; the demotions are not retried");
     }
 }

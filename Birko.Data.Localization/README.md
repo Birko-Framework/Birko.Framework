@@ -207,9 +207,10 @@ Every write that touches both stores runs through an `ILocalizedWriteBoundary` (
 **Inside an atomic boundary:**
 - A unique-key race on a translation (another writer stored the same key first) rolls back and re-runs the whole write
   once, in a new transaction. A filter update's action runs again too.
-- Inside your own `SqlUnitOfWork` the boundary joins instead, and does not retry. On PostgreSQL the race then reaches
-  you as `StoreUniqueViolationException`, because PostgreSQL aborts the transaction. Any failure marks your unit of
-  work rollback-only.
+- Inside your own `SqlUnitOfWork` the boundary joins instead, and does not re-run the write. The translation upsert
+  then retries in place: on PostgreSQL its create runs in a savepoint (TASK-694), so the refused insert does not abort
+  your transaction. On MySQL the race still reaches you as `StoreUniqueViolationException`, because its snapshot hides
+  the other writer. Any failure marks your unit of work rollback-only.
 
 
 ## License

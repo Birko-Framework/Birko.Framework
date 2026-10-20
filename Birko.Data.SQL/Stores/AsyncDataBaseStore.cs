@@ -23,6 +23,7 @@ namespace Birko.Data.SQL.Stores
         , ISettingsStore<ISettings>
         , ISettingsStore<PasswordSettings>
         , IAsyncTransactionalStore<T, SqlTransactionContext>
+        , Birko.Data.Stores.IRetryableWriteStore
         , ISqlConnectedStore
         where T : Models.AbstractModel
         where DB : AbstractConnector
@@ -62,6 +63,16 @@ namespace Birko.Data.SQL.Stores
         {
             TransactionContext = context;
         }
+
+        /// <summary>
+        /// TASK-694: runs a write a caller may retry inside a savepoint where a refusal would abort the active
+        /// transaction (PostgreSQL), so the re-check and the retry can run in it.
+        /// </summary>
+        public Task RunRetryableAsync(Func<Task> write, CancellationToken ct = default)
+            => SqlRetryableWrite.RunAsync(Connector, TransactionContext, write, ct);
+
+        /// <inheritdoc cref="RunRetryableAsync"/>
+        public void RunRetryable(Action write) => SqlRetryableWrite.Run(Connector, TransactionContext, write);
 
         /// <summary>
         /// Publishes <see cref="TransactionContext"/> for the duration of one operation, so the connector

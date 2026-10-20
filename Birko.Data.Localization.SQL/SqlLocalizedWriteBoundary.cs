@@ -29,10 +29,11 @@ namespace Birko.Data.Localization.SQL;
 /// <item><description><b>A unique-key race is retried once</b> (decided by the user). When the write's own transaction
 /// fails with <see cref="StoreUniqueViolationException"/>, the transaction is rolled back and the whole write re-runs once
 /// in a new one. A filter update's action runs again too. The second pass reads the row the other writer stored and
-/// updates it. PostgreSQL needs this, because a refused insert aborts its transaction and the in-place retry cannot
-/// re-read. Everything the write does runs twice: a <c>StoreDataDelegate</c>, a filter update's action, and changes to
-/// the caller's objects (a create's assigned <c>Guid</c> stays set). Inside a caller's boundary there is no retry: the
-/// typed error reaches the caller.</description></item>
+/// updates it. Everything the write does runs twice: a <c>StoreDataDelegate</c>, a filter update's action, and changes
+/// to the caller's objects (a create's assigned <c>Guid</c> stays set). Since TASK-694 the translation upsert retries a
+/// race in place even on PostgreSQL (its create runs in a savepoint), so this re-run is what still covers a race on the
+/// entity write. Inside a caller's boundary there is no re-run: the upsert's in-place retry is all there is, and on MySQL
+/// the typed error reaches the caller.</description></item>
 /// <item><description><b>A store given its own transaction</b> (<c>SetTransactionContext</c>) makes the write run in that
 /// transaction, published so the other store joins it too. The caller owns it, so there is no retry and nothing to mark.
 /// </description></item>
