@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 23      | —     |
-| todo         | —     | —       | 149   |
+| todo         | —     | —       | 148   |
 | in-progress  | 8     | 12      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 3     | 27      | 396   |
+| done         | 3     | 27      | 397   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 99× P2 · 41× P3.
+`todo` by priority: 9× P1 · 99× P2 · 40× P3.
 
 ## In progress now
 
@@ -170,7 +170,7 @@ _None._
   - [x] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2) · FEATURE-013
   - [x] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1) · FEATURE-013
   - [ ] [TASK-307](EPIC-013-reference-consumers/TASK-307-playground-token-editor-falls-back-to-text-for-non-hex-tokens.md) The playground's token editor has no editor for `rgba()`/`hsla()` tokens, and none for lengths (P3) · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (231/287 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (232/287 tasks done)
   - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2) · FEATURE-014
   - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2) · FEATURE-014
   - [x] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model (P3) · FEATURE-014
@@ -308,7 +308,7 @@ _None._
   - [x] [TASK-635](EPIC-014-code-review-remediation/TASK-635-index-drift-for-mongodb-ravendb-cosmosdb.md) Index drift is detected for SQL only: MongoDB, RavenDB and CosmosDB have none (P3)
   - [x] [TASK-685](EPIC-014-code-review-remediation/TASK-685-unique-violation-retry-inside-a-postgresql-transaction.md) A retry after a unique violation cannot run inside a PostgreSQL transaction — the slug and default decorators (P2)
   - [ ] [TASK-692](EPIC-014-code-review-remediation/TASK-692-fluent-precision-and-scale-accepted-and-dropped.md) Fluent `HasPrecision` / `HasScale` are accepted and dropped (P3)
-  - [ ] [TASK-693](EPIC-014-code-review-remediation/TASK-693-grants-sql-unbounded-index-columns-on-mysql.md) Birko.Security.Grants.SQL's indexes over unbounded string columns — unmeasured on MySQL (P3)
+  - [x] [TASK-693](EPIC-014-code-review-remediation/TASK-693-grants-sql-unbounded-index-columns-on-mysql.md) Birko.Security.Grants.SQL's indexes over unbounded string columns — unmeasured on MySQL (P3)
   - [ ] [TASK-694](EPIC-014-code-review-remediation/TASK-694-savepoint-scoped-writes-inside-a-callers-transaction.md) Savepoint-scoped writes inside a caller's transaction, so PostgreSQL can retry after a refusal (P3)
   - [x] [TASK-695](EPIC-014-code-review-remediation/TASK-695-a-fluent-column-belongs-to-one-index-only.md) A fluent column can belong to one index only, and a second `HasIndex` silently replaces the first (P2)
   - STORY-024 Critical findings — done (0/0 done) (done)

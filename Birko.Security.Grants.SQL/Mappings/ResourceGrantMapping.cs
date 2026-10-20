@@ -14,8 +14,15 @@ public sealed class ResourceGrantMapping : IModelMapping<ResourceGrant>
             .HasPrimary(x => x.Guid)
             .HasUnique(x => x.Guid);
 
-        map.Property(x => x.UserGuid).IsRequired();
-        map.Property(x => x.ResourceType).IsRequired();
+        // The lookup indexes are declared here, so the schema knows these columns are index keys (rule 37): MySQL and
+        // SQL Server bound them instead of LONGTEXT / NVARCHAR(MAX), which neither can index (TASK-693, measured).
+        map.Property(x => x.UserGuid).IsRequired()
+            .HasIndex(GrantSqlIndexes.GrantsByUser, 0);
+        map.Property(x => x.ResourceType).IsRequired()
+            .HasIndex(GrantSqlIndexes.GrantsByUser, 1)
+            .HasIndex(GrantSqlIndexes.GrantsByResource, 0);
+        map.Property(x => x.ResourceId)
+            .HasIndex(GrantSqlIndexes.GrantsByResource, 1);
         map.Property(x => x.Role).IsRequired();
     }
 }

@@ -23,9 +23,9 @@ public sealed class SqliteGrantsFixture : IDisposable
     public SqlResourceGrantStore<SqLiteConnector> Grants { get; } = new();
     public SqlInvitationStore<SqLiteConnector> Invitations { get; } = new();
 
-    public SqliteGrantsFixture()
+    /// <summary>The mapping registry writes process-wide state (table names, field flags); apply it once per process.</summary>
+    public static void EnsureMapped()
     {
-        // The mapping registry writes process-wide state (table names, field flags); apply it once.
         lock (MappingGate)
         {
             if (!_mapped)
@@ -34,6 +34,11 @@ public sealed class SqliteGrantsFixture : IDisposable
                 _mapped = true;
             }
         }
+    }
+
+    public SqliteGrantsFixture()
+    {
+        EnsureMapped();
         Directory.CreateDirectory(Root);
         Settings = new SqLiteSettings(Root, "grants.db");
         Grants.SetSettings(Settings);

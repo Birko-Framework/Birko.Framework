@@ -11,9 +11,11 @@ using Birko.Security.Grants.SQL.Stores;
 namespace Birko.Security.Grants.SQL;
 
 /// <summary>
-/// Creates the indexes the grant lookups read by. They are created through the provider's <see cref="IIndexManager"/> rather than
-/// declared with the fluent <c>HasIndex</c>, which at the time <c>ModelMapRegistry.ApplyToDatabase</c> did not emit
-/// (measured 2026-10-14, TASK-594; fixed by TASK-595). Either producer now creates them.
+/// The indexes the grant lookups read by. The mappings declare them with the fluent <c>HasIndex</c>, so schema-ensure
+/// creates them and bounds their string columns on MySQL and SQL Server (TASK-693). Created only through the
+/// <see cref="IIndexManager"/>, as TASK-594 did, they left those columns LONGTEXT / NVARCHAR(MAX), which neither provider
+/// can index, and <see cref="EnsureAsync{DB}"/> threw there. It now verifies them, and creates any that schema-ensure
+/// could not (it reports such a failure rather than throwing).
 /// </summary>
 public static class GrantSqlIndexes
 {

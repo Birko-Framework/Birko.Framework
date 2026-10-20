@@ -7,7 +7,8 @@ provider.
 
 - Fluent mappings for `ResourceGrant` → `BirkoResourceGrants` and `Invitation` → `BirkoInvitations`
 - `SqlResourceGrantStore<DB>` / `SqlInvitationStore<DB>`: one pair for SQLite, PostgreSQL, SQL Server or MySQL
-- `GrantSqlIndexes.EnsureAsync`: the indexes grant checks read by, created idempotently
+- `GrantSqlIndexes.EnsureAsync`: checks the indexes grant checks read by, creating any that are missing. The mappings
+  declare them, so the stores' schema-ensure already creates them, on every provider (TASK-693)
 - The invitation token hash is UNIQUE in the database
 
 ## Usage
@@ -37,6 +38,22 @@ builder.Services.AddBirkoGrants(...);   // Birko.Security.Grants.AspNetCore
 
 For another provider, swap `SqLiteConnector` / `SqLiteSettings` / `SqLiteIndexManager` for that provider's
 connector, settings and index manager.
+
+### Tables created on MySQL or SQL Server before TASK-693
+
+Their `ResourceType` and `Email` columns are unbounded, so the lookup indexes cannot be built and `EnsureAsync`
+throws. Bound the two columns, then call `EnsureAsync`:
+
+```sql
+-- MySQL
+ALTER TABLE BirkoResourceGrants MODIFY ResourceType VARCHAR(255) NOT NULL;
+ALTER TABLE BirkoInvitations MODIFY Email VARCHAR(255) NOT NULL;
+-- SQL Server
+ALTER TABLE [BirkoResourceGrants] ALTER COLUMN ResourceType NVARCHAR(255) NOT NULL;
+ALTER TABLE [BirkoInvitations] ALTER COLUMN Email NVARCHAR(255) NOT NULL;
+```
+
+PostgreSQL and SQLite tables need nothing.
 
 ## Running tests
 

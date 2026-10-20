@@ -17,8 +17,11 @@ Birko.Security.Grants.SQL.Tests/
 │                               resource × tenant grid, nulls included; tenant isolation on SQL               (TASK-593)
 ├── InvitationClaimTests.cs   — the claim across two instances (separate KeyedLocks): two users / one email, a stale
 │                               redemption after a completed one (gated, deterministic), revoke vs redeem     (TASK-593)
-└── PropertyUpdatePathTests.cs — values the services write via PropertyUpdate read back like entity-written ones
-                                (ticks + Kind), released claims write nulls                                    (TASK-593)
+├── PropertyUpdatePathTests.cs — values the services write via PropertyUpdate read back like entity-written ones
+│                               (ticks + Kind), released claims write nulls                                    (TASK-593)
+└── ProviderIndexLiveTests.cs — live PostgreSQL / MySQL / SQL Server: schema-ensure alone creates the three lookup
+                                indexes with no reported failure, the key columns are 255 in the catalogue on MySQL and
+                                SQL Server, EnsureAsync and a restart stay quiet                             (TASK-693)
 ```
 
 ## Test Patterns

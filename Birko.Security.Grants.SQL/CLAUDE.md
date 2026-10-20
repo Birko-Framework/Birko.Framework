@@ -28,9 +28,13 @@ Birko.Security.Grants.SQL/
 ## Rules the code keeps
 - **Every property is a column**, measured on SQLite: the fluent mapping gives a plain model its columns.
   `IsRequired` becomes NOT NULL, and `IsUnique` becomes a real UNIQUE constraint (the token hash).
-- **Indexes are created through the provider's `IIndexManager`** (`GrantSqlIndexes.EnsureAsync`). When this project
-  was written, the fluent `HasIndex` was applied by nothing. TASK-595 fixed that, so a `HasIndex` declaration would
-  now work too. Moving these to `HasIndex` is optional and would drop the `EnsureAsync` step. The indexes:
+- **The mappings declare the indexes with `HasIndex`** (TASK-693), so schema-ensure creates them and, on MySQL and
+  SQL Server, bounds `ResourceType` and `Email` to `VARCHAR(255)` / `NVARCHAR(255)` (rule 37). Created only through the
+  index manager, as TASK-594 did, the columns stayed `LONGTEXT` / `NVARCHAR(MAX)`, which neither provider can index,
+  and `GrantSqlIndexes.EnsureAsync` threw on both (measured). `ResourceType` sits in two indexes, which needed
+  TASK-695. `EnsureAsync` stays as the startup check and creates any index schema-ensure reported as failed. A table
+  created on MySQL or SQL Server before this keeps its unbounded columns: alter `ResourceType` and `Email` to 255
+  characters, then call `EnsureAsync`. The indexes:
   - `IX_BirkoResourceGrants_User` on (UserGuid, ResourceType): `CanAsync` and listing.
   - `IX_BirkoResourceGrants_Resource` on (ResourceType, ResourceId): grantees and the last-owner count.
   - `IX_BirkoInvitations_Email` on (Email): sign-in.

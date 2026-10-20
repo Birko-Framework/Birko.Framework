@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — The SQL cached store invalidates again after a transaction commits
+
+[[TASK-669]]. During a transaction, a reader outside it could cache the pre-commit rows until they expired. New
+`AmbientSqlTransaction.OnCommitted` registers work on a transaction. `SqlUnitOfWork` and the bulk stores' own
+transactions run it once after the commit and drop it on rollback. A failing callback is recorded in
+`SubscriberFailures` (`AfterCommit`), never thrown. A transaction committed by its caller has no owner to run it.
+
 ## 2026-10-18 — An agent run reports how it ended
 
 [[TASK-660]]. New `RunWithOutcomeAsync` / `ContinueWithOutcomeAsync` / `ResumeWithOutcomeAsync` return an `AgentRunResult`.

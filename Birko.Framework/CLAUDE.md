@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Grants.SQL's lookup indexes are buildable on MySQL and SQL Server (2026-10-20)
+[[TASK-693]]. `GrantSqlIndexes.EnsureAsync` threw on both: the indexed `ResourceType` and `Email` were `LONGTEXT` /
+`NVARCHAR(MAX)`, which neither can index. The mappings now declare the three indexes, so schema-ensure creates them and
+bounds those columns at 255. Measured live on PostgreSQL, MySQL and SQL Server. An older MySQL or SQL Server table must
+have the two columns altered first (README).
 ### A fluent column can belong to several indexes (2026-10-20)
 [[TASK-695]]. Call `HasIndex` / `HasUniqueIndex` once per index, and a column joins each with its own order and
 uniqueness. Before, a second call replaced the first silently, and `HasUniqueIndex` made a later index on the column
@@ -370,11 +375,6 @@ batch size is unmeasured on SQL until [[TASK-680]] maps the translation model.
   inner write. Measured: an update of a non-localized field overwrote the Slovak translations with English text.
 - A `null` field removes its translation. Rows are stamped `typeof(T).Name`, keyed by the GUID the store returned.
   `StringComparison` is honoured, and in-memory sorting collates with the current culture.
-### The SQL cached store invalidates again after a transaction commits (2026-10-18)
-[[TASK-669]]. During a transaction, a reader outside it could cache the pre-commit rows until they expired. New
-`AmbientSqlTransaction.OnCommitted` registers work on a transaction. `SqlUnitOfWork` and the bulk stores' own
-transactions run it once after the commit and drop it on rollback. A failing callback is recorded in
-`SubscriberFailures` (`AfterCommit`), never thrown. A transaction committed by its caller has no owner to run it.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
