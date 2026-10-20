@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-20 — Translation writes are batched
+
+[[TASK-690]]. Saving translations costs one read of the existing rows per 500 entities, then at most one bulk delete,
+update and create. It used to be a read and a write per field, per entity: a collection create of 3 products with 2
+fields made 6 reads and 6 creates. Deletes by a list or filter are one filter delete per 500 entities, and a filter
+update reads the matched translations once. If the unique key refuses the batch, the keys are re-read once and another
+writer's rows are updated. A filter update that fails part way keeps the translations it wrote (decided by the user).
+Measured on SQLite, PostgreSQL, SQL Server and MySQL. Groundwork for [[TASK-682]].
+
 ## 2026-10-19 — Filters on translated fields fall back to the base value and look up by hash
 
 [[TASK-681]]. On a non-default culture, an entity with a translation matches on it, and one without matches on its base

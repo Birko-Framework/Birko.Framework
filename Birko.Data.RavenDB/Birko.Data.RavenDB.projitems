@@ -23,6 +23,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\RavenDocumentId.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\RavenDBStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncRavenDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\RavenTrackedCopy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\RavenDbUnitOfWork.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\RavenDBIndexManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Aggregation\FacetAggregationHelper.cs" />

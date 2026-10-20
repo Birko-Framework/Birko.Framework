@@ -290,17 +290,16 @@ public class AsyncRavenDBStore<T>
         {
             var existing = await TransactionContext.LoadAsync<T>(IdOf(data.Guid.Value), ct)
                 ?? throw new EntityNotFoundException(typeof(T), data.Guid);
-            TransactionContext.Advanced.Evict(existing);
-            await TransactionContext.StoreAsync(data, IdOf(data.Guid.Value), ct);
+            // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
+            RavenTrackedCopy.Into(data, existing);
             return;
         }
 
         using var session = _documentStore.OpenAsyncSession();
         var existingItem = await session.LoadAsync<T>(IdOf(data.Guid.Value), ct)
             ?? throw new EntityNotFoundException(typeof(T), data.Guid);
-        session.Advanced.Evict(existingItem);
-
-        await session.StoreAsync(data, IdOf(data.Guid.Value), ct);
+        // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
+        RavenTrackedCopy.Into(data, existingItem);
         await session.SaveChangesAsync(ct);
     }
 
@@ -594,9 +593,8 @@ public class AsyncRavenDBStore<T>
                     missing.Add(item.Guid.Value);
                     continue;
                 }
-                session.Advanced.Evict(existing);
-
-                await session.StoreAsync(item, IdOf(item.Guid.Value), ct);
+                // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
+                RavenTrackedCopy.Into(item, existing);
             }
 
             if (TransactionContext == null)

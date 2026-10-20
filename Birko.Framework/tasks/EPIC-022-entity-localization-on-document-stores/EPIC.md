@@ -38,6 +38,7 @@ Filed at the user's request, 2026-10-20 (all four follow-ups chosen).
 - [[TASK-699]] MongoDB: declare the translation key and ValueHash indexes
 - [[TASK-700]] A localized write boundary for MongoDB, RavenDB and Cosmos DB
 - [[TASK-701]] Measure the chunk budget on the non-SQL providers
+- [[TASK-702]] RavenDB: an update inside a unit of work fails on a document a cluster transaction wrote (spawned from TASK-700)
 
 ## Out of scope
 

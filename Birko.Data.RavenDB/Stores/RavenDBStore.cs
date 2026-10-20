@@ -294,17 +294,16 @@ public class RavenDBStore<T>
         {
             var existing = TransactionContext.Load<T>(IdOf(data.Guid.Value))
                 ?? throw new EntityNotFoundException(typeof(T), data.Guid);
-            TransactionContext.Advanced.Evict(existing);
-            TransactionContext.Store(data, IdOf(data.Guid.Value));
+            // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
+            RavenTrackedCopy.Into(data, existing);
             return;
         }
 
         using var session = _documentStore.OpenSession();
         var existingItem = session.Load<T>(IdOf(data.Guid.Value))
             ?? throw new EntityNotFoundException(typeof(T), data.Guid);
-        session.Advanced.Evict(existingItem);
-
-        session.Store(data, IdOf(data.Guid.Value));
+        // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
+        RavenTrackedCopy.Into(data, existingItem);
         session.SaveChanges();
     }
 
@@ -489,9 +488,8 @@ public class RavenDBStore<T>
                     missing.Add(item.Guid.Value);
                     continue;
                 }
-                session.Advanced.Evict(existing);
-
-                session.Store(item, IdOf(item.Guid.Value));
+                // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
+                RavenTrackedCopy.Into(item, existing);
             }
 
             if (TransactionContext == null)

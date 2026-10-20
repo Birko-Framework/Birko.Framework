@@ -327,6 +327,12 @@ conflict forever, and a retry after a cancellation wrote late. To try again, beg
   query no" and query reads are the common case -- it states the answer a caller is unsafe to get wrong.
   The query half is a RavenDB property, not a defect, and is not fixable from this side.
 
+**An update copies onto the tracked document (TASK-702).** The update paths load the document and copy the caller's
+values onto it (`RavenTrackedCopy.Into`: public fields and public properties with a setter of any visibility). They
+used to evict it and store the caller's object, which lost the atomic guard index of a document a cluster transaction
+wrote, so an update inside a unit of work of anything a unit of work had written failed at commit with
+`ClusterTransactionConcurrencyException` (measured on 7.2; pinned by `Task702ClusterUpdateLiveTests`).
+
 Pinned by `Birko.Data.RavenDB.Tests.Stores.RavenTransactionBoundaryLiveTests` (5) and
 `RavenDocumentIdLiveTests` (11), both gated on `BIRKO_RAVEN_URL`; set `BIRKO_REQUIRE_LIVE` to make a skip
 a failure.

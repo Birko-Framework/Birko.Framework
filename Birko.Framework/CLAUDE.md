@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### RavenDB: updates inside a unit of work work on cluster-written documents (2026-10-20)
+[[TASK-702]]. An update inside a `RavenDbUnitOfWork` of a document a unit of work had written failed at commit with
+`ClusterTransactionConcurrencyException`. The stores evicted the loaded document and stored yours, which lost its
+cluster guard. They now copy your values onto the loaded document: public fields and properties with any setter.
+Measured on RavenDB 7.2, async and sync, single and collection. Found while building [[TASK-700]]'s RavenDB boundary.
 ### MongoDB: localized writes in one transaction, and stores join a unit of work (2026-10-20)
 [[TASK-700]]. New `MongoLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.MongoDB):
 on one database of a replica set, a failed translation write rolls the entity write back. A `MongoDbUnitOfWork` now
@@ -364,13 +369,6 @@ ambient one. Get one language for a list, every language of one entity, set, rem
 uniqueness (`exceptEntityGuid`) and localize loaded entities. Lookups use the wrappers' fallback: an untranslated
 product is found by its base slug, and `ExistsAsync` counts it. The default culture is refused by `SetAsync`. Build it
 on the unlocalized entity store; a localized wrapper is refused. Measured on SQLite, PostgreSQL, SQL Server and MySQL.
-### Translation writes are batched (2026-10-20)
-[[TASK-690]]. Saving translations costs one read of the existing rows per 500 entities, then at most one bulk delete,
-update and create. It used to be a read and a write per field, per entity: a collection create of 3 products with 2
-fields made 6 reads and 6 creates. Deletes by a list or filter are one filter delete per 500 entities, and a filter
-update reads the matched translations once. If the unique key refuses the batch, the keys are re-read once and another
-writer's rows are updated. A filter update that fails part way keeps the translations it wrote (decided by the user).
-Measured on SQLite, PostgreSQL, SQL Server and MySQL. Groundwork for [[TASK-682]].
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
