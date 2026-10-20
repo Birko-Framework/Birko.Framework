@@ -1,6 +1,6 @@
 ---
 area: entity-localization
-generated-at: 85f66d7d54c1cc5fc8be999ba18ad163be37b3ba
+generated-at: fbb41e30bc5ba8ba197c6feae24ec07bfecb3c2f
 generated-on: 2026-10-20
 sources:
   - ../Birko.Data.Localization/Boundaries/BestEffortWriteBoundary.cs
@@ -12,6 +12,7 @@ sources:
   - ../Birko.Data.Localization/Decorators/LocalizedBulkStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/LocalizedEntityFields.cs
   - ../Birko.Data.Localization/Decorators/LocalizedFilterResolution.cs
+  - ../Birko.Data.Localization/Decorators/LocalizedQueries.cs
   - ../Birko.Data.Localization/Decorators/LocalizedStoreWrapper.cs
   - ../Birko.Data.Localization/Decorators/LocalizedTranslationRows.cs
   - ../Birko.Data.Localization/Expressions/LocalizedExpressionVisitor.cs
@@ -44,6 +45,8 @@ shaped-by: [FEATURE-014]
 # TASK-682 has no feature.
 # 2026-10-20 regen (TASK-683, harvested from the uncommitted working tree): the evidence pass was not re-run;
 # TASK-683 has no feature.
+# 2026-10-20 regen (TASK-686, harvested from the uncommitted working tree): the evidence pass was not re-run;
+# TASK-686 has no feature.
 shaped-by-derived: true
 shaped-by-unresolved: 266
 ---
@@ -69,7 +72,8 @@ values as translation rows. Filters that mention a localizable property are rewr
 takes one — reads, filter-based updates and filter-based deletes alike — so a destructive statement
 selects the same rows as the equivalent read: the predicate is evaluated against the translation table in
 memory, and the localized part of the filter is replaced with a GUID-membership test that the inner store
-can execute. Ordering on a localizable property forces the whole matching set to be loaded, translated,
+can execute. When the matched GUID sets outgrow one batch, that test runs as several queries over disjoint GUID chunks.
+Ordering on a localizable property forces the whole matching set to be loaded, translated,
 sorted and paged in memory.
 
 The consumer supplies two things: an entity type implementing `ILocalizable.GetLocalizableFields()`,
@@ -281,6 +285,16 @@ with the remaining filter (one producer, `LocalizedFilterResolution`, for the fo
 So an entity with a translation is matched only on it, and an entity without one only on its base value. When the
 split finds no localized conditions the original filter SHALL be passed through unchanged (including `null`).
 
+That single query SHALL be used only while the GUIDs across every `T_i` and `H_i` number at most
+`LocalizedTranslationRows.ReadBatchSize` (500). Above that, the system SHALL rewrite the filter to `remaining ∧ guid ∈ S`
+with `S = ∩_i (T_i ∪ (C_i \ H_i))`, where `C_i` is the base-column candidates it already read (no extra read), split `S`
+into disjoint chunks of at most 500 GUIDs (`LocalizedQueries<T>`), and run each chunk as its own entity-store query through
+the one runner `LocalizedChunkedReads`: list reads concatenate the chunks, counts sum them, and a single-result read returns
+the first match of the first chunk that has one. An empty `S` SHALL run no query at all, never `remaining` alone. Above
+that size, an entity store that cannot list (whose `H_i` is the field's whole translation slice, with no candidates to
+turn the exclusion into a positive set) SHALL keep the one query up to `NonListingQueryLimit` (2 000) GUIDs, under SQL
+Server's ~2 100 parameters, and SHALL be refused with `NotSupportedException` beyond it.
+
 #### Scenario: Translated and untranslated entities
 
 - **Given** `A` (base "Chair", Slovak "Stolička"), `B` (base "Lavica", no Slovak name) and `C` (base "Stolička", Slovak "Kreslo"), on `"sk"`
@@ -303,7 +317,25 @@ split finds no localized conditions the original filter SHALL be passed through 
 
 - **Given** a `LocalizedStoreWrapper` over an `IStore<T>` that is not a bulk store
 - **When** a filter on a translated field is resolved
-- **Then** `H_i` is every entity in the field's translation slice and the result is the same as on a bulk store — correct, at the cost of that read
+- **Then** `H_i` is every entity in the field's translation slice and the result is the same as on a bulk store — correct, at the cost of that read — while `T_i` and `H_i` together hold at most 2 000 GUIDs (`NonListingQueryLimit`); beyond that, because `H_i` is the field's whole slice, the filter throws `NotSupportedException` naming the limit
+
+#### Scenario: A broad match is chunked
+
+- **Given** 1 100 entities whose Slovak name matches, 1 100 untranslated entities whose base name matches and 1 100 translated entities whose base name matches but whose translation does not, on `"sk"`
+- **When** the filter is read, counted, and read as an ordered page
+- **Then** every entity-store query carries at most 500 GUIDs, the read returns the 2 200 matches each once, the count is 2 200, and the page is cut from the whole match (see the ordering requirement)
+
+#### Scenario: Nothing can match
+
+- **Given** a chunked rewrite whose intersection `S` is empty (two localized conditions no entity satisfies together)
+- **When** a read, a count or a filter delete runs
+- **Then** the entity store receives no query, the read is empty, the count is 0 and nothing is deleted
+
+#### Scenario: Below the budget the query is unchanged
+
+- **Given** a filter whose `T_i` and `H_i` together hold at most 500 GUIDs
+- **When** it is resolved
+- **Then** it is the single query `remaining ∧ (guid ∈ T_i ∨ (Part_i ∧ guid ∉ H_i))`, exclusion included
 
 #### Scenario: A translation stored without its hash
 
@@ -315,7 +347,7 @@ split finds no localized conditions the original filter SHALL be passed through 
 
 - **Given** a SQL Server or MySQL entity store with a case-insensitive collation
 - **When** `Name == "lavica"` is resolved
-- **Then** an untranslated "Lavica" matches through the base column and a translated one does not (translations match ordinally); an IN over a set with a non-ordinal comparer is refused; and a translation created between the candidate read and the query can let its entity match on its base value once
+- **Then** an untranslated "Lavica" matches through the base column and a translated one does not (translations match ordinally); an IN over a set with a non-ordinal comparer is refused; and a translation created between the candidate read and the query can let its entity match on its base value once; above 500 GUIDs the fallback is answered from the candidate read itself, so a row written between that read and the query is not matched
 
 #### Scenario: Filter with no localized condition is untouched
 
@@ -367,11 +399,11 @@ is empty.
 - **When** `BuildGuidFilter<T>` receives the empty set
 - **Then** it returns `x => false`, so the inner store returns no rows and `Count` returns 0
 
-#### Scenario: Large GUID sets are not chunked
+#### Scenario: Callers bound the GUID set
 
-- **Given** a localized condition matches 50 000 entities
-- **When** the membership filter is built
-- **Then** all 50 000 GUIDs are placed in a single `List<Guid>` constant with no chunking, which a SQL backend renders as one oversized `IN` list
+- **Given** a collection update of 1 001 entities on a non-default culture
+- **When** their base values are read
+- **Then** `BuildGuidFilter<T>` is called once per 500 GUIDs (three reads); the helper itself places whatever set it is given in one `List<Guid>` constant without chunking it
 
 ### Requirement: Localized condition extraction support matrix
 
@@ -513,8 +545,8 @@ differs from the constant, and an entity without one when its base value differs
 
 ### Requirement: Count applies the same rewriting
 
-The system SHALL rewrite the filter before delegating to the inner store's `Count`, and SHALL delegate the
-original filter unchanged on the default culture.
+The system SHALL rewrite the filter before delegating to the inner store's `Count`, summing the counts of the chunks
+when the rewrite is chunked, and SHALL delegate the original filter unchanged on the default culture.
 
 #### Scenario: Count on a localized filter
 
@@ -533,7 +565,14 @@ original filter unchanged on the default culture.
 The system SHALL detect whether any `OrderBy<T>.Fields` entry's `PropertyName` is localizable; when none
 is, it SHALL pass `orderBy`, `limit` and `offset` to the inner store; when one is, it SHALL read **all**
 entities matching the rewritten filter with no limit or offset, apply translations, sort in memory, and
-then apply `offset`/`limit` in memory.
+then apply `offset`/`limit` in memory. When the rewritten filter is chunked, it SHALL read every chunk with no order,
+limit or offset, translate the whole match, and sort (by `orderBy`, whichever fields it names) and page it in memory.
+
+#### Scenario: A chunked page is cut from the whole match
+
+- **Given** a rewrite chunked over 2 200 matches and `orderBy` on `CreatedAt` (not localizable), on `Name`, or `null`, with `limit = 10, offset = 20`
+- **When** the bulk read runs, sync or async
+- **Then** every chunk is read without order or page, all 2 200 entities are translated, sorted in memory when an order is given (compared in .NET, not by the database) and `Skip(20).Take(10)` is returned
 
 #### Scenario: Ordering on a non-localized field is pushed down
 
@@ -734,7 +773,7 @@ update is sent, so a create that is refused and cannot be retried leaves nothing
 
 - **Given** a non-default culture and an `Update(IEnumerable<T>)` carrying several entities
 - **When** the update runs
-- **Then** the base values for the whole batch are fetched with a single GUID-membership read rather than one read per entity, and each entity with a stored row is replaced by a copy carrying its own base values
+- **Then** the base values for the whole batch are fetched with one GUID-membership read per 500 entities rather than one read per entity, and each entity with a stored row is replaced by a copy carrying its own base values
 
 #### Scenario: A collection update that reports items not stored saves the stored items' translations
 
@@ -809,7 +848,7 @@ failure; the sync wrappers SHALL let an `OperationCanceledException` from the cl
 ### Requirement: Filter-based bulk delete reads before deleting and localizes the filter
 
 The system SHALL implement `Delete(filter)` by reading the matching entities from the inner store with the
-**rewritten** filter on a non-default culture (and the original filter on the default culture), deleting
+**rewritten** filter on a non-default culture — every chunk, when the rewrite is chunked — (and the original filter on the default culture), deleting
 that materialized set through the inner store, and then deleting their translations through `DeleteMany` — never
 using the inner store's native filter-delete.
 
@@ -832,7 +871,8 @@ culture and the original filter on the default culture, where it delegates the a
 non-default culture it SHALL show the action each entity with the current culture's translations applied,
 write translations only for the localizable fields the action **changed**, keep each entity's own column on
 the default-culture value, and write those translation rows only **after** the inner store's update for
-that entity has returned. The sync and async wrappers SHALL take the same path: read the matched entities, read
+that entity has returned. The sync and async wrappers SHALL take the same path: read the matched entities (every chunk
+of a chunked rewrite), read
 their translations in one batched read, run the action on a detached copy of each, write each entity, and then
 save every changed translation in one batched save. An entity whose inner update throws `EntityNotFoundException`
 (deleted since the read) SHALL be skipped, with no translation saved for it, and the update SHALL continue. When the
@@ -908,7 +948,10 @@ run through it, as one `Run` / `RunAsync` call per public method:
   a filter delete makes.
 
 A default-culture create, update or filter update writes the entity store only and SHALL NOT enter the boundary; nor
-SHALL reads, counts, a native `PropertyUpdate`, `Init` or `Destroy`. `ILocalizedWriteBoundary.IsAtomic` SHALL be
+SHALL reads, counts, a default-culture native `PropertyUpdate`, `Init` or `Destroy`. A non-default-culture native
+`PropertyUpdate` SHALL resolve its filter and run its update(s) as one `Run` / `RunAsync`, so the GUID sets are read in
+an atomic boundary's transaction and a retry resolves them again; a chunked one applies all chunks or none there, and on
+a best-effort boundary a failure part way leaves the earlier chunks applied. `ILocalizedWriteBoundary.IsAtomic` SHALL be
 true only when a write that throws leaves neither store changed; `BestEffortWriteBoundary` SHALL report false and
 run the write inline, even inside a caller's transaction that would in fact make it atomic. The async create returns
 the GUID the last run of the write produced.
@@ -924,6 +967,12 @@ the GUID the last run of the write produced.
 - **Given** the same wrapper on the default culture
 - **When** a create, an update or a filter update runs
 - **Then** the boundary is not entered; a delete still enters it, because it removes translation rows on every culture
+
+#### Scenario: A chunked native update enters the boundary once
+
+- **Given** a wrapper with a recording boundary on `"sk"` and a `PropertyUpdate` on a non-localizable field whose filter's translated match is chunked
+- **When** `Update(filter, updates)` / `UpdateAsync(filter, updates)` runs
+- **Then** the boundary is entered once and one native update per chunk runs inside it, covering every match and nothing else
 
 #### Scenario: No boundary given
 
@@ -1018,7 +1067,7 @@ field: those are strings, which `Increment` does not accept, and a numeric one i
 
 - **Given** the update assigns only `x => x.Active`
 - **When** `Update(filter, updates)` runs on a non-default culture
-- **Then** `TouchesLocalizableField` returns false and the native `PropertyUpdate` is delegated, preserving the backend's SET — with the **rewritten** filter on a non-default culture, because the predicate may name a localizable field even when no assignment does
+- **Then** `TouchesLocalizableField` returns false and the native `PropertyUpdate` is delegated, preserving the backend's SET — with the **rewritten** filter on a non-default culture, because the predicate may name a localizable field even when no assignment does; a chunked rewrite issues one native update per chunk, inside the write boundary
 
 #### Scenario: PropertyUpdate on a localizable field falls back
 
@@ -1318,10 +1367,12 @@ exceptEntityGuid)` from one producer: the filter `x.field == value`, with `&& x.
 given, rewritten for a non-default culture by `LocalizedFilterResolution` with the entity store as the candidate source —
 exactly as a wrapper's read is — so an entity with a translation for the field matches only on it and one without
 matches on its base value. The rewritten filter SHALL be read from the entity store with a limit (2 for Find, 1 for
-Exists), no ordering and no offset, and entities without a GUID SHALL be dropped. On the default culture the filter SHALL
+Exists), no ordering and no offset — when the rewrite is chunked, the chunks in turn, each with the part of the limit
+still unfilled, stopping once it is filled — and entities without a GUID SHALL be dropped. On the default culture the filter SHALL
 test the base column as written, with no translation read. On a non-default culture a lookup SHALL cost one translation
 read by value hash, one entity read of the base-value candidates, one translation read per 500 candidates (none when
-there are none) and the final entity read — at most four for up to 500 candidates. `FindEntityAsync` SHALL return
+there are none) and the final entity read — at most four for up to 500 candidates; a chunked rewrite makes the final
+read one per chunk until the limit is filled. `FindEntityAsync` SHALL return
 `null` for no match and the GUID for one, and SHALL throw `InvalidOperationException` naming the type, field, culture,
 value and two of the GUIDs when more than one entity matches. `ExistsAsync` SHALL return whether any entity other than
 `exceptEntityGuid` matches. The recorded limits of the filter rewrite (base-column collation, a translation created

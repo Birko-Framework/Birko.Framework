@@ -289,6 +289,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Broad matches on translated fields run in chunks (2026-10-20)
+[[TASK-686]]. A filter on a translated field matching more than 500 entities in its translation sets runs as several
+queries over at most 500 GUIDs each. It used to be one `IN` / `NOT IN` list, refused by SQL Server past about 2 100
+parameters. Reads concatenate, counts sum, ordered pages sort in memory, and updates and deletes cover every chunk. A
+plain `IStore` inner store keeps one query up to 2 000 GUIDs and refuses beyond. Measured with a 2 200-entity match on
+all four providers. **Breaking:** the wrappers' `RewriteFilter` is no longer visible to subclasses.
 ### MySQL holds the translation key (2026-10-20)
 [[TASK-684]]. `EntityTranslationMapping` bounds `EntityType` and `FieldName` to 128 and `Culture` to 85, through the
 fluent length [[TASK-691]] made work. The key is 1 508 bytes on MySQL utf8mb4, so MySQL now creates it. Measured live on
@@ -368,11 +374,6 @@ two old methods are unchanged (decided by the user).
 - PrefetchCount is Redis's read batch and in-memory's handlers in flight; MQTT still refuses it.
 - The distributed bus applies `RetryPolicy` and `DeadLetterOptions` through the new `IRedeliveryCapability`: a re-send in
   memory, a reclaim on Redis. MQTT refuses them, and Priority stays refused (decided by the user).
-### OwnerAccess: one owner-or-admin rule; Security.AspNetCore imports Communication.AspNetCore (2026-10-18)
-[[TASK-541]]. `OwnerAccess.CanAccess(caller, owner, seesEverything)` covers Guid and string owners; a missing identity
-never matches, and a denial is 404. `OwnedCrudResults` decides through it, and `ICurrentUser.CanAccess(owner, viewAll)`
-wraps it. **Breaking for aggregators:** importing Birko.Security.AspNetCore now also needs Birko.Communication.AspNetCore
-(decided by the user). Symbio, DraCode, FisData.Stock.Angular and GrantsSmoke must add it.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

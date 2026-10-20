@@ -32,11 +32,19 @@ namespace Birko.Data.Localization.Decorators;
 /// insensitive on SQL Server and MySQL by default) while translations match exactly; and a translation created between
 /// the candidate read and the query can let that entity match on its base value once.</description></item>
 /// </list>
-/// The matched GUIDs still reach the entity store as <c>IN</c> lists (SH-L087, TASK-686).
+/// Above <see cref="LocalizedTranslationRows.ReadBatchSize"/> GUIDs the filter becomes chunked queries over one positive
+/// set (TASK-686, SH-L087), run through <see cref="LocalizedChunkedReads"/>.
 /// </remarks>
 internal static class LocalizedFilterResolution
 {
-    public static Expression<Func<T, bool>>? Rewrite<T, TTranslation>(
+    /// <summary>
+    /// The most GUIDs an entity store that cannot list may receive in one query (TASK-686). Its exclusion set is the
+    /// field's whole translation slice, which cannot be chunked, so it stays one query up to here, under SQL Server's
+    /// ~2 100 parameters, and is refused beyond it (decided by the user) instead of failing at the driver.
+    /// </summary>
+    public const int NonListingQueryLimit = 2000;
+
+    public static LocalizedQueries<T> Rewrite<T, TTranslation>(
         Expression<Func<T, bool>>? filter,
         IReadOnlyList<string> localizableFields,
         IBulkStore<TTranslation> translations,
@@ -48,16 +56,12 @@ internal static class LocalizedFilterResolution
         var split = LocalizedExpressionAnalyzer.Split(filter, localizableFields);
         if (!split.HasLocalizedConditions)
         {
-            return filter;
+            return LocalizedQueries<T>.One(filter);
         }
 
         var param = filter!.Parameters[0];
         var entityType = LocalizedTranslationRows.EntityTypeOf<T>();
-        var terms = new List<Expression>();
-        if (split.RemainingFilter != null)
-        {
-            terms.Add(split.RemainingFilter.Body);
-        }
+        var resolved = new List<Resolved>();
 
         foreach (var condition in split.LocalizedConditions)
         {
@@ -71,17 +75,18 @@ internal static class LocalizedFilterResolution
                 ? Matching(slice, condition)
                 : Matching(ByHash(condition.Values!).SelectMany(hashes => translations.Read(LocalizedTranslationRows.Where<TTranslation>(
                     entityType: entityType, fieldName: condition.FieldName, culture: culture, valueHashes: hashes))), condition);
-            var translated = entities == null
+            var candidates = entities == null ? null : Candidates(entities, split.RemainingFilter, condition, param);
+            var translated = candidates == null
                 ? slice!.Select(t => t.EntityGuid).ToHashSet()
-                : Translated(translations, Candidates(entities, split.RemainingFilter, condition, param), entityType, condition.FieldName, culture);
+                : Translated(translations, candidates, entityType, condition.FieldName, culture);
 
-            terms.Add(Term(param, matched, condition.Part, translated));
+            resolved.Add(new Resolved(condition, matched, translated, candidates));
         }
 
-        return Expression.Lambda<Func<T, bool>>(terms.Aggregate(Expression.AndAlso), param);
+        return Finish(split.RemainingFilter, param, resolved);
     }
 
-    public static async Task<Expression<Func<T, bool>>?> RewriteAsync<T, TTranslation>(
+    public static async Task<LocalizedQueries<T>> RewriteAsync<T, TTranslation>(
         Expression<Func<T, bool>>? filter,
         IReadOnlyList<string> localizableFields,
         IAsyncBulkStore<TTranslation> translations,
@@ -94,16 +99,12 @@ internal static class LocalizedFilterResolution
         var split = LocalizedExpressionAnalyzer.Split(filter, localizableFields);
         if (!split.HasLocalizedConditions)
         {
-            return filter;
+            return LocalizedQueries<T>.One(filter);
         }
 
         var param = filter!.Parameters[0];
         var entityType = LocalizedTranslationRows.EntityTypeOf<T>();
-        var terms = new List<Expression>();
-        if (split.RemainingFilter != null)
-        {
-            terms.Add(split.RemainingFilter.Body);
-        }
+        var resolved = new List<Resolved>();
 
         foreach (var condition in split.LocalizedConditions)
         {
@@ -131,13 +132,14 @@ internal static class LocalizedFilterResolution
             }
 
             HashSet<Guid> translated;
+            List<Guid>? candidates = null;
             if (entities == null)
             {
                 translated = slice!.Select(t => t.EntityGuid).ToHashSet();
             }
             else
             {
-                var candidates = (await entities.ReadAsync(BaseFilter(split.RemainingFilter, condition, param), null, null, null, ct))
+                candidates = (await entities.ReadAsync(BaseFilter(split.RemainingFilter, condition, param), null, null, null, ct))
                     .Where(e => e.Guid.HasValue).Select(e => e.Guid!.Value).ToList();
                 translated = new HashSet<Guid>();
                 foreach (var chunk in candidates.Distinct().Chunk(LocalizedTranslationRows.ReadBatchSize))
@@ -148,10 +150,76 @@ internal static class LocalizedFilterResolution
                 }
             }
 
-            terms.Add(Term(param, matched, condition.Part, translated));
+            resolved.Add(new Resolved(condition, matched, translated, candidates));
         }
 
-        return Expression.Lambda<Func<T, bool>>(terms.Aggregate(Expression.AndAlso), param);
+        return Finish(split.RemainingFilter, param, resolved);
+    }
+
+    /// <summary>One localized condition, resolved: T (matched), H (translated candidates) and the candidates C, if read.</summary>
+    private sealed record Resolved(LocalizedFieldCondition Condition, HashSet<Guid> Matched, HashSet<Guid> Translated, List<Guid>? Candidates);
+
+    /// <summary>
+    /// The queries the entity store runs. Up to <see cref="LocalizedTranslationRows.ReadBatchSize"/> GUIDs across every
+    /// T and H, it is today's one query, each condition <c>guid ∈ T ∨ (Part ∧ guid ∉ H)</c>. Above it (TASK-686) the sets
+    /// would reach the entity store as unbounded <c>IN</c> lists, past SQL Server's ~2 100 parameters, so the filter is
+    /// rewritten to one positive set: H is a subset of the candidates C (rows matching <c>remaining ∧ Part</c>), so under
+    /// <c>remaining</c> the fallback <c>Part ∧ guid ∉ H</c> is <c>guid ∈ C \ H</c>, and the whole filter is
+    /// <c>remaining ∧ guid ∈ S</c> with S = ∩ (T ∪ (C \ H)) at no extra read. S is split into disjoint chunks.
+    /// </summary>
+    /// <remarks>
+    /// A NOT IN cannot be divided across separate queries, which is why the conversion, not a split of H. Above the budget
+    /// the fallback is answered from the candidates read moments earlier: a row written since is not matched (the same
+    /// race TASK-681 recorded, in the other direction).
+    /// </remarks>
+    /// <exception cref="NotSupportedException">
+    /// An entity store that cannot list, past <see cref="NonListingQueryLimit"/> (decided by the user, TASK-686): there are
+    /// no candidates to turn the exclusion into a positive set, and one query would exceed the provider's parameter limit.
+    /// Below it such a store keeps the one query it always had.
+    /// </exception>
+    private static LocalizedQueries<T> Finish<T>(Expression<Func<T, bool>>? remaining, ParameterExpression param, List<Resolved> resolved)
+        where T : AbstractModel
+    {
+        var size = resolved.Sum(r => (long)r.Matched.Count + r.Translated.Count);
+        var listing = resolved.All(r => r.Candidates != null);
+        if (size <= (listing ? LocalizedTranslationRows.ReadBatchSize : NonListingQueryLimit))
+        {
+            var terms = new List<Expression>();
+            if (remaining != null)
+            {
+                terms.Add(remaining.Body);
+            }
+            terms.AddRange(resolved.Select(r => Term(param, r.Matched, r.Condition.Part, r.Translated)));
+            return LocalizedQueries<T>.One(Expression.Lambda<Func<T, bool>>(terms.Aggregate(Expression.AndAlso), param));
+        }
+        if (!listing)
+        {
+            throw new NotSupportedException(
+                $"A filter on a translated field of {typeof(T).Name} needs {size} entities in one query, more than "
+                + $"{NonListingQueryLimit}, and the entity store cannot list them to split the query. Use a bulk store "
+                + "(IBulkStore / IAsyncBulkStore) as the localized wrapper's inner store, or narrow the filter.");
+        }
+
+        HashSet<Guid>? matching = null;
+        foreach (var r in resolved)
+        {
+            var set = new HashSet<Guid>(r.Matched);
+            set.UnionWith(r.Candidates!.Where(guid => !r.Translated.Contains(guid)));
+            if (matching == null)
+            {
+                matching = set;
+            }
+            else
+            {
+                matching.IntersectWith(set);
+            }
+        }
+
+        var chunks = matching!.OrderBy(guid => guid).Chunk(LocalizedTranslationRows.ReadBatchSize)
+            .Select(chunk => Expression.Lambda<Func<T, bool>>(
+                remaining == null ? InSet(param, chunk.ToHashSet()) : Expression.AndAlso(remaining.Body, InSet(param, chunk.ToHashSet())), param))
+            .ToList();
+        return LocalizedQueries<T>.Chunked(chunks);
     }
 
     /// <summary>The value hashes of an <c>==</c> / <c>IN</c> condition, in batches that keep each IN list bounded.</summary>

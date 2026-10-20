@@ -168,10 +168,11 @@ public class EntityTranslations<T, TTranslation> : IEntityTranslations<T>
         }
         var filter = Expression.Lambda<Func<T, bool>>(body, x);
 
-        var effective = IsDefault(culture)
-            ? filter
+        var queries = IsDefault(culture)
+            ? LocalizedQueries<T>.One(filter)
             : await LocalizedFilterResolution.RewriteAsync(filter, _fields, _translations, _entities, culture.Name, ct);
-        return (await _entities.ReadAsync(effective, null, limit, null, ct))
+        // TASK-686: the limit is counted across chunks, so Find still sees a second match in another chunk.
+        return (await LocalizedChunkedReads.ReadUpToAsync(_entities, queries, limit, ct))
             .Where(e => e.Guid.HasValue).Select(e => e.Guid!.Value).ToList();
     }
 

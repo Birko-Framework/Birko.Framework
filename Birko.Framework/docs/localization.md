@@ -377,3 +377,11 @@ base-value fallback, and "is this value taken in this language". Register it wit
 `services.AddEntityTranslations<Product>()`. See the
 [project README](../../Birko.Data.Localization/README.md#6-the-explicit-api--ientitytranslationst) for an example per
 method.
+
+### 8. Broad matches
+
+A filter on a translated field that matches more than 500 entities in its translation sets runs as several queries
+over disjoint chunks of at most 500 GUIDs (TASK-686), so SQL Server's ~2 100-parameter limit is never reached. Reads,
+counts, updates and deletes cover every chunk; ordered or paged reads sort and page the whole match in memory. A
+wrapper over a plain `IStore` refuses such a filter. See the
+[project README](../../Birko.Data.Localization/README.md#filters-on-localizable-fields).

@@ -19,9 +19,8 @@ public static class LocalizedFilterHelper
     /// <remarks>
     /// CR-L136: the membership test is built over a <see cref="List{T}"/> rather than a
     /// <see cref="HashSet{T}"/> because more query providers translate <c>List&lt;Guid&gt;.Contains</c>
-    /// to a SQL <c>IN</c> clause (in-memory evaluation works either way). Localized-field filtering is
-    /// still best-effort across providers — a very large guid set produces an oversized IN-list and is
-    /// not chunked here.
+    /// to a SQL <c>IN</c> clause (in-memory evaluation works either way). Callers pass at most
+    /// <c>LocalizedTranslationRows.ReadBatchSize</c> GUIDs at a time (TASK-686), so the IN list stays bounded.
     /// </remarks>
     public static Expression<Func<T, bool>> BuildGuidFilter<T>(HashSet<Guid> guids)
         where T : Data.Models.AbstractModel, ILocalizable

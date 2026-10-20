@@ -59,8 +59,7 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
             return ((IReadStore<T>)_innerStore).Read(filter);
         }
 
-        var rewritten = RewriteFilter(filter);
-        var result = ((IReadStore<T>)_innerStore).Read(rewritten);
+        var result = LocalizedChunkedReads.ReadFirst(_innerStore, RewriteFilter(filter));
         return result == null ? null : Localize(result);
     }
 
@@ -82,7 +81,14 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
             return _innerStore.Read(filter, orderBy, limit, offset).ToList();
         }
 
-        var rewritten = RewriteFilter(filter);
+        var queries = RewriteFilter(filter);
+        if (queries.IsChunked)
+        {
+            // TASK-686 (decided by the user): every chunk, the whole match localized, then sorted and paged in memory.
+            return LocalizedChunkedReads.OrderAndPage(
+                LocalizeAll(LocalizedChunkedReads.ReadAll(_innerStore, queries)), orderBy, limit, offset, _context.CurrentCulture);
+        }
+        var rewritten = queries.Single;
         var localizableFields = GetLocalizableFieldsFromInstance();
         var needsInMemorySort = LocalizedOrderByHelper.ReferencesLocalizedField(orderBy, localizableFields);
 
@@ -111,8 +117,7 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
             return _innerStore.Count(filter);
         }
 
-        var rewritten = RewriteFilter(filter);
-        return _innerStore.Count(rewritten);
+        return LocalizedChunkedReads.Count(_innerStore, RewriteFilter(filter));
     }
 
     public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
@@ -286,7 +291,7 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
         }
 
         var fields = GetLocalizableFieldsFromInstance();
-        var items = _innerStore.Read(RewriteFilter(filter)).ToList();
+        var items = LocalizedChunkedReads.ReadAll(_innerStore, RewriteFilter(filter));
         // TASK-690: the matched entities' translations in one read, not one per entity.
         var rows = LocalizedTranslationRows.ReadMany(
             _translationStore, LocalizedTranslationRows.GuidsOf(items), LocalizedTranslationRows.EntityTypeOf<T>(), _context.CurrentCulture.Name);
@@ -367,7 +372,26 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
 
         // SH-H018: a native PropertyUpdate that touches no localizable field still needs its *filter*
         // resolved, because the predicate may name one.
-        _innerStore.Update(IsNonDefaultCulture() ? RewriteFilter(filter)! : filter, updates);
+        if (!IsNonDefaultCulture())
+        {
+            _innerStore.Update(filter, updates);
+            return;
+        }
+        // TASK-686: resolved inside the boundary, as the other writes are, so an atomic boundary reads the GUID sets in its
+        // transaction and a retry resolves them again; the chunks are one unit there.
+        _boundary.Run(() =>
+        {
+            var queries = RewriteFilter(filter);
+            if (!queries.IsChunked)
+            {
+                _innerStore.Update(queries.Single!, updates);
+                return;
+            }
+            foreach (var chunk in queries.Chunks)
+            {
+                _innerStore.Update(chunk, updates);
+            }
+        });
     }
 
     public void Delete(IEnumerable<T> data)
@@ -392,7 +416,9 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
 
     private void DeleteWithTranslations(Expression<Func<T, bool>> filter)
     {
-        var items = _innerStore.Read(IsNonDefaultCulture() ? RewriteFilter(filter) : filter).ToList();
+        var items = IsNonDefaultCulture()
+            ? LocalizedChunkedReads.ReadAll(_innerStore, RewriteFilter(filter))
+            : _innerStore.Read(filter).ToList();
         _innerStore.Delete(items);
         DeleteTranslations(items);
     }
@@ -429,7 +455,7 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
         => _context.CurrentCulture.Name != _context.DefaultCulture.Name;
 
     /// <summary>The filter rewritten for the current culture — see <see cref="LocalizedFilterResolution"/> (TASK-681).</summary>
-    protected Expression<Func<T, bool>>? RewriteFilter(Expression<Func<T, bool>>? filter)
+    internal LocalizedQueries<T> RewriteFilter(Expression<Func<T, bool>>? filter)
         => LocalizedFilterResolution.Rewrite(
             filter, GetLocalizableFieldsFromInstance(), _translationStore, _innerStore, _context.CurrentCulture.Name);
 
@@ -516,11 +542,15 @@ public class LocalizedBulkStoreWrapper<TStore, T, TTranslation> : IBulkStore<T>,
             return result;
         }
 
-        foreach (var stored in _innerStore.Read(LocalizedFilterHelper.BuildGuidFilter<T>(guids)))
+        // TASK-686: one read per ReadBatchSize GUIDs, so a large collection stays under the provider's parameter limit.
+        foreach (var chunk in guids.Chunk(LocalizedTranslationRows.ReadBatchSize))
         {
-            if (stored.Guid is Guid g)
+            foreach (var stored in _innerStore.Read(LocalizedFilterHelper.BuildGuidFilter<T>(chunk.ToHashSet())))
             {
-                result[g] = LocalizedEntityFields.Capture(stored, fields);
+                if (stored.Guid is Guid g)
+                {
+                    result[g] = LocalizedEntityFields.Capture(stored, fields);
+                }
             }
         }
 

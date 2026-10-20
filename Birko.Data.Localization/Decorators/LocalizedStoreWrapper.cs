@@ -58,8 +58,9 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
             return _innerStore.Read(filter);
         }
 
-        var rewritten = RewriteFilter(filter);
-        var entity = _innerStore.Read(rewritten);
+        var queries = RewriteFilter(filter);
+        // Chunked only over a bulk inner store: the resolver refuses to chunk one that cannot list (TASK-686).
+        var entity = queries.IsChunked ? LocalizedChunkedReads.ReadFirst((IBulkStore<T>)_innerStore, queries) : _innerStore.Read(queries.Single);
         return entity == null ? null : Localize(entity);
     }
 
@@ -70,8 +71,8 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
             return _innerStore.Count(filter);
         }
 
-        var rewritten = RewriteFilter(filter);
-        return _innerStore.Count(rewritten);
+        var queries = RewriteFilter(filter);
+        return queries.IsChunked ? LocalizedChunkedReads.Count((IBulkStore<T>)_innerStore, queries) : _innerStore.Count(queries.Single);
     }
 
     public Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
@@ -214,7 +215,7 @@ public class LocalizedStoreWrapper<TStore, T, TTranslation> : IStore<T>, IStoreW
         => _context.CurrentCulture.Name != _context.DefaultCulture.Name;
 
     /// <summary>The filter rewritten for the current culture — see <see cref="LocalizedFilterResolution"/> (TASK-681).</summary>
-    protected Expression<Func<T, bool>>? RewriteFilter(Expression<Func<T, bool>>? filter)
+    internal LocalizedQueries<T> RewriteFilter(Expression<Func<T, bool>>? filter)
         => LocalizedFilterResolution.Rewrite(
             filter, GetLocalizableFieldsFromInstance(), _translationStore, _innerStore as IBulkStore<T>, _context.CurrentCulture.Name);
 

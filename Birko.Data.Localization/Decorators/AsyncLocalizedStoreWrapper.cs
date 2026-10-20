@@ -60,8 +60,11 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
             return await _innerStore.ReadAsync(filter, ct);
         }
 
-        var rewritten = await RewriteFilterAsync(filter, ct);
-        var entity = await _innerStore.ReadAsync(rewritten, ct);
+        var queries = await RewriteFilterAsync(filter, ct);
+        // Chunked only over a bulk inner store: the resolver refuses to chunk one that cannot list (TASK-686).
+        var entity = queries.IsChunked
+            ? await LocalizedChunkedReads.ReadFirstAsync((IAsyncBulkStore<T>)_innerStore, queries, ct)
+            : await _innerStore.ReadAsync(queries.Single, ct);
         return entity == null ? null : await LocalizeAsync(entity, ct);
     }
 
@@ -72,8 +75,10 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
             return await _innerStore.CountAsync(filter, ct);
         }
 
-        var rewritten = await RewriteFilterAsync(filter, ct);
-        return await _innerStore.CountAsync(rewritten, ct);
+        var queries = await RewriteFilterAsync(filter, ct);
+        return queries.IsChunked
+            ? await LocalizedChunkedReads.CountAsync((IAsyncBulkStore<T>)_innerStore, queries, ct)
+            : await _innerStore.CountAsync(queries.Single, ct);
     }
 
     public async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
@@ -187,7 +192,7 @@ public class AsyncLocalizedStoreWrapper<TStore, T, TTranslation> : IAsyncStore<T
         => _context.CurrentCulture.Name != _context.DefaultCulture.Name;
 
     /// <summary>The filter rewritten for the current culture — see <see cref="LocalizedFilterResolution"/> (TASK-681).</summary>
-    protected Task<Expression<Func<T, bool>>?> RewriteFilterAsync(
+    internal Task<LocalizedQueries<T>> RewriteFilterAsync(
         Expression<Func<T, bool>>? filter, CancellationToken ct)
         => LocalizedFilterResolution.RewriteAsync(
             filter, GetLocalizableFieldsFromInstance(), _translationStore, _innerStore as IAsyncBulkStore<T>, _context.CurrentCulture.Name, ct);

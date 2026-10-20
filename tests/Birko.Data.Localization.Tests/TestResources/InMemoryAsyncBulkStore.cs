@@ -35,6 +35,9 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
     /// <summary>Runs before every delete call — single, collection or filter; a test makes it throw to fail the delete.</summary>
     public Action? BeforeDelete { get; set; }
 
+    /// <summary>Every filter this store was handed (reads, counts, filter updates and deletes) — TASK-686 inspects their IN lists.</summary>
+    public List<System.Linq.Expressions.LambdaExpression?> SeenFilters { get; } = new();
+
     public int InitCalls { get; private set; }
 
     /// <summary>How many filtered collection reads ran — what a test counts to prove a read is batched.</summary>
@@ -62,6 +65,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
+        SeenFilters.Add(filter);
         var items = _data.Values.AsQueryable();
         if (filter != null) items = items.Where(filter);
         return Task.FromResult(items.FirstOrDefault());
@@ -72,6 +76,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
     {
+        SeenFilters.Add(filter);
         FilteredReadCalls++;
         var items = _data.Values.AsQueryable();
         if (filter != null) items = items.Where(filter);
@@ -84,6 +89,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
+        SeenFilters.Add(filter);
         var items = _data.Values.AsQueryable();
         if (filter != null) items = items.Where(filter);
         return Task.FromResult((long)items.Count());
@@ -147,6 +153,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
     {
+        SeenFilters.Add(filter);
         UpdateCalls++;
         var items = _data.Values.AsQueryable().Where(filter).ToList();
         foreach (var item in items)
@@ -158,6 +165,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
     {
+        SeenFilters.Add(filter);
         UpdateCalls++;
         var items = _data.Values.AsQueryable().Where(filter).ToList();
         foreach (var item in items)
@@ -181,6 +189,7 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
 
     public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
     {
+        SeenFilters.Add(filter);
         DeleteCalls++;
         ct.ThrowIfCancellationRequested();
         BeforeDelete?.Invoke();

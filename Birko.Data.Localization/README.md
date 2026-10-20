@@ -31,6 +31,20 @@ Under a non-default culture, a filter condition on a localizable field is answer
 
 **Cost:** `==` and `IN` look translation rows up by `ValueHash` (SHA-256 of the value) and read only the matching rows; the other shapes read the field's translations in that culture and test them in memory. The fallback reads the entity store's rows that match on the base column, plus their translations in one batched read — for `!=` that can be most of the table.
 
+**Broad matches are chunked** (TASK-686). When the translated matches and the translated base-value candidates together exceed 500 entities, the filter is no longer one query with large `IN` / `NOT IN` lists, which SQL Server refuses past about 2 100 parameters. Instead it runs as several queries over disjoint chunks of at most 500 matching GUIDs each, at no extra read. Then:
+- reads concatenate the chunks and counts sum them;
+- an ordered or paged read loads the whole match, then sorts and pages it in memory;
+- filter updates and deletes cover every chunk, and a chunked native update runs inside the write boundary.
+
+Three things differ above that size:
+- The base-value fallback is answered from the candidates read moments earlier, so a row written in between is not matched.
+- Ordering compares in .NET (culture collation), not in the database.
+- With a best-effort boundary, a native update that fails part way leaves the earlier chunks applied.
+
+A wrapper over a plain `IStore` / `IAsyncStore` cannot list, so it cannot chunk. It keeps its one query up to 2 000 GUIDs (under SQL Server's limit) and refuses a larger one with `NotSupportedException` instead of failing at the driver.
+
+**Breaking (TASK-686):** the wrappers' `RewriteFilter` / `RewriteFilterAsync` are no longer visible to subclasses. A rewritten filter can now be several queries, run only through the wrappers' own paths.
+
 **Limits:** translations match exactly (ordinal), while the base-column fallback is evaluated by the entity store under its collation — case-insensitive by default on SQL Server and MySQL, so `Name == "lavica"` can find an untranslated "Lavica" there but never a translated one. An IN over a set with a non-ordinal comparer is refused for that reason. A translation row stored without its `ValueHash` (written around the wrappers by a model that does not compute it, or before the column existed) is still found, by a read of the field's unhashed rows; backfill the column to keep lookups cheap. Ordering by a localizable field sorts the translated text in memory, collated with the current culture — so it loads every matching entity, not just the page; an order-by naming a property that doesn't exist, or a negative offset or limit, is refused.
 
 Anything else that reads a localizable field throws `NotSupportedException` instead of silently testing the default-culture column: a condition inside `||` or `!`, a chained call (`x.Name.ToLower()`), a static call (`string.IsNullOrEmpty(x.Name)`) or a comparison with another column. `x.Name == null` / `!= null` is the one exception: it tests the base column.

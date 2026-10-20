@@ -61,8 +61,7 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T, TTranslation> : IAsyncBul
             return await _innerStore.ReadAsync(filter, ct);
         }
 
-        var rewritten = await RewriteFilterAsync(filter, ct);
-        var result = await _innerStore.ReadAsync(rewritten, ct);
+        var result = await LocalizedChunkedReads.ReadFirstAsync(_innerStore, await RewriteFilterAsync(filter, ct), ct);
         return result == null ? null : await LocalizeAsync(result, ct);
     }
 
@@ -80,7 +79,14 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T, TTranslation> : IAsyncBul
             return (await _innerStore.ReadAsync(filter, orderBy, limit, offset, ct)).ToList();
         }
 
-        var rewritten = await RewriteFilterAsync(filter, ct);
+        var queries = await RewriteFilterAsync(filter, ct);
+        if (queries.IsChunked)
+        {
+            // TASK-686 (decided by the user): every chunk, the whole match localized, then sorted and paged in memory.
+            var matched = await LocalizeAllAsync(await LocalizedChunkedReads.ReadAllAsync(_innerStore, queries, ct), ct);
+            return LocalizedChunkedReads.OrderAndPage(matched, orderBy, limit, offset, _context.CurrentCulture);
+        }
+        var rewritten = queries.Single;
         var localizableFields = GetLocalizableFieldsFromInstance();
         var needsInMemorySort = LocalizedOrderByHelper.ReferencesLocalizedField(orderBy, localizableFields);
 
@@ -110,8 +116,7 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T, TTranslation> : IAsyncBul
             return await _innerStore.CountAsync(filter, ct);
         }
 
-        var rewritten = await RewriteFilterAsync(filter, ct);
-        return await _innerStore.CountAsync(rewritten, ct);
+        return await LocalizedChunkedReads.CountAsync(_innerStore, await RewriteFilterAsync(filter, ct), ct);
     }
 
     public async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
@@ -235,8 +240,9 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T, TTranslation> : IAsyncBul
     private async Task UpdateWithTranslationsAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct)
     {
         var localized = IsNonDefaultCulture();
-        var effective = localized ? await RewriteFilterAsync(filter, ct) : filter;
-        var items = (await _innerStore.ReadAsync(effective, null, null, null, ct)).ToList();
+        var items = localized
+            ? await LocalizedChunkedReads.ReadAllAsync(_innerStore, await RewriteFilterAsync(filter, ct), ct)
+            : (await _innerStore.ReadAsync(filter, null, null, null, ct)).ToList();
         if (!localized)
         {
             foreach (var item in items)
@@ -347,8 +353,21 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T, TTranslation> : IAsyncBul
     private async Task UpdateNativeWithRewrittenFilterAsync(
         Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct)
     {
-        var rewritten = await RewriteFilterAsync(filter, ct);
-        await _innerStore.UpdateAsync(rewritten!, updates, ct);
+        // TASK-686: resolved inside the boundary, as the other writes are, so an atomic boundary reads the GUID sets in its
+        // transaction and a retry resolves them again; the chunks are one unit there.
+        await _boundary.RunAsync(async c =>
+        {
+            var queries = await RewriteFilterAsync(filter, c);
+            if (!queries.IsChunked)
+            {
+                await _innerStore.UpdateAsync(queries.Single!, updates, c);
+                return;
+            }
+            foreach (var chunk in queries.Chunks)
+            {
+                await _innerStore.UpdateAsync(chunk, updates, c);
+            }
+        }, ct);
     }
 
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
@@ -370,8 +389,9 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T, TTranslation> : IAsyncBul
 
     private async Task DeleteWithTranslationsAsync(Expression<Func<T, bool>> filter, CancellationToken ct)
     {
-        var effective = IsNonDefaultCulture() ? await RewriteFilterAsync(filter, ct) : filter;
-        var items = (await _innerStore.ReadAsync(effective, null, null, null, ct)).ToList();
+        var items = IsNonDefaultCulture()
+            ? await LocalizedChunkedReads.ReadAllAsync(_innerStore, await RewriteFilterAsync(filter, ct), ct)
+            : (await _innerStore.ReadAsync(filter, null, null, null, ct)).ToList();
         await _innerStore.DeleteAsync(items, ct);
         await DeleteTranslationsAsync(items, ct);
     }
@@ -405,7 +425,7 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T, TTranslation> : IAsyncBul
         => _context.CurrentCulture.Name != _context.DefaultCulture.Name;
 
     /// <summary>The filter rewritten for the current culture — see <see cref="LocalizedFilterResolution"/> (TASK-681).</summary>
-    protected Task<Expression<Func<T, bool>>?> RewriteFilterAsync(
+    internal Task<LocalizedQueries<T>> RewriteFilterAsync(
         Expression<Func<T, bool>>? filter, CancellationToken ct)
         => LocalizedFilterResolution.RewriteAsync(
             filter, GetLocalizableFieldsFromInstance(), _translationStore, _innerStore, _context.CurrentCulture.Name, ct);
@@ -484,15 +504,19 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T, TTranslation> : IAsyncBul
             return result;
         }
 
-        // Spelled out in full: ReadAsync(filter, ct) and ReadAsync(filter, orderBy, limit, offset, ct)
-        // are both applicable here, and only the second returns the collection this needs.
-        var stored = await _innerStore.ReadAsync(
-            LocalizedFilterHelper.BuildGuidFilter<T>(guids), null, null, null, ct);
-        foreach (var entity in stored)
+        // TASK-686: one read per ReadBatchSize GUIDs, so a large collection stays under the provider's parameter limit.
+        foreach (var chunk in guids.Chunk(LocalizedTranslationRows.ReadBatchSize))
         {
-            if (entity.Guid is Guid g)
+            // Spelled out in full: ReadAsync(filter, ct) and ReadAsync(filter, orderBy, limit, offset, ct)
+            // are both applicable here, and only the second returns the collection this needs.
+            var stored = await _innerStore.ReadAsync(
+                LocalizedFilterHelper.BuildGuidFilter<T>(chunk.ToHashSet()), null, null, null, ct);
+            foreach (var entity in stored)
             {
-                result[g] = LocalizedEntityFields.Capture(entity, fields);
+                if (entity.Guid is Guid g)
+                {
+                    result[g] = LocalizedEntityFields.Capture(entity, fields);
+                }
             }
         }
 

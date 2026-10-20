@@ -765,6 +765,51 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     }
 
     [Fact]
+    public async Task A_broad_match_on_a_translated_field_runs_in_chunks_on_the_provider()
+    {
+        if (!RequireServer()) return;
+        // TASK-686. 1 100 translated to match (T), 1 100 untranslated matching on their base value (F) and 1 100 translated
+        // away (H): 2 200 GUIDs in T and H. As one query that is past SQL Server's ~2 100 parameters (pinned there; the
+        // other providers allow more, so they pass either way and assert the chunked results).
+        var context = new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") };
+        var products = Store<SqlProduct>();
+        var translations = Store<EntityTranslationModel>();
+        await products.InitAsync();
+        await translations.InitAsync();
+        var run = Guid.NewGuid().ToString("N")[..8];
+        var items = new List<SqlProduct>();
+        var rows = new List<(Guid EntityGuid, IReadOnlyDictionary<string, string?> Values)>();
+        for (var i = 0; i < 3300; i++)
+        {
+            var guid = Guid.NewGuid();
+            var kind = i % 3;
+            items.Add(new SqlProduct { Guid = guid, Name = kind == 0 ? $"b{run}-{i}" : $"m{run}-{i:D4}", Code = run });
+            if (kind != 1)
+            {
+                rows.Add((guid, new Dictionary<string, string?> { ["Name"] = kind == 0 ? $"m{run}-{i:D4}" : $"x{run}-{i}" }));
+            }
+        }
+        await products.CreateAsync(items);
+        await LocalizedTranslationRows.SaveManyAsync(translations, nameof(SqlProduct), "sk", rows, CancellationToken.None);
+        var bulk = new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<SqlProduct>, SqlProduct>(products, translations, context);
+        Expression<Func<SqlProduct, bool>> matching = x => x.Code == run && x.Name.StartsWith("m" + run);
+
+        (await bulk.CountAsync(matching)).Should().Be(2200);
+        var page = (await bulk.ReadAsync(matching, OrderBy<SqlProduct>.By(x => x.Name), 10, 100)).Select(x => x.Name).ToList();
+        page.Should().Equal(Enumerable.Range(0, 3300).Where(i => i % 3 != 2).Select(i => $"m{run}-{i:D4}")
+            .OrderBy(n => n, StringComparer.Create(context.CurrentCulture, false)).Skip(100).Take(10));
+
+        await bulk.DeleteAsync(matching);
+
+        (await products.CountAsync(x => x.Code == run)).Should().Be(1100, "only the entities translated away remain");
+
+        // The live tables are shared across runs: what this test left behind goes too.
+        var left = (await products.ReadAsync(x => x.Code == run, null, null, null)).Select(x => x.Guid!.Value).ToList();
+        await LocalizedTranslationRows.DeleteManyAsync(translations, left, nameof(SqlProduct), CancellationToken.None);
+        await products.DeleteAsync(x => x.Code == run);
+    }
+
+    [Fact]
     public async Task A_provider_that_could_not_hold_the_key_holds_it_now()
     {
         if (!RequireServer()) return;

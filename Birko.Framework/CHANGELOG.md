@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — OwnerAccess: one owner-or-admin rule; Security.AspNetCore imports Communication.AspNetCore
+
+[[TASK-541]]. `OwnerAccess.CanAccess(caller, owner, seesEverything)` covers Guid and string owners; a missing identity
+never matches, and a denial is 404. `OwnedCrudResults` decides through it, and `ICurrentUser.CanAccess(owner, viewAll)`
+wraps it. **Breaking for aggregators:** importing Birko.Security.AspNetCore now also needs Birko.Communication.AspNetCore
+(decided by the user). Symbio, DraCode, FisData.Stock.Angular and GrantsSmoke must add it.
+
 ## 2026-10-18 — The WebSocket proxy forwards sub-protocols
 
 [[TASK-569]]. `MapWebSocketProxy` offers the client's requested sub-protocols upstream, in the client's order, and

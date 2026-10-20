@@ -23,7 +23,8 @@ Birko.Data.Localization.SQL.Tests/
 │                                       deletes; sync and async) through a FailingStore wrapper, a caller's
 │                                       SqlUnitOfWork joined and poisoned, the key race retried once (PostgreSQL,
 │                                       SQL Server), a best-effort delete's TranslationCleanupException; a
-│                                       consumer model on its own table
+│                                       consumer model on its own table; TASK-686: a 2 200-entity match counted,
+│                                       paged and deleted in chunks (past SQL Server's parameter limit as one query)
 │                                       through the wrappers; TASK-684: every provider holds the key (the MySQL
 │                                       failure test inverted), the catalogue reports the bounded lengths, an
 │                                       over-long Culture is refused, and an old-shape MySQL table is reported.

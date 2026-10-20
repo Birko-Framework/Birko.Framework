@@ -26,6 +26,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedEntityFields.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedTranslationRows.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedFilterResolution.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedQueries.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncLocalizedStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedBulkStoreWrapper.cs" />

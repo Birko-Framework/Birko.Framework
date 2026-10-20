@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691 and TASK-684 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 23      | —     |
-| todo         | —     | —       | 151   |
-| in-progress  | 9     | 12      | 0     |
+| todo         | —     | —       | 150   |
+| in-progress  | 8     | 12      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 2     | 27      | 392   |
+| done         | 3     | 27      | 393   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 101× P2 · 41× P3.
+`todo` by priority: 9× P1 · 100× P2 · 41× P3.
 
 ## In progress now
 
@@ -625,7 +625,7 @@ _None._
 
 <details><summary>3 closed epic(s)</summary>
 
-- **EPIC-021** Entity localization for real catalogues — in-progress (8/9 tasks done)
+- **EPIC-021** Entity localization for real catalogues — done (9/9 tasks done)
   - [x] [TASK-679](EPIC-021-entity-localization-for-catalogues/TASK-679-batched-localization-of-list-reads.md) A localized list read costs one translation query per entity — batch it (P1)
   - [x] [TASK-680](EPIC-021-entity-localization-for-catalogues/TASK-680-translation-model-generic-and-unique-key.md) The translation model is fixed and unkeyed — make it the consumer's type, with a unique key (P1)
   - [x] [TASK-681](EPIC-021-entity-localization-for-catalogues/TASK-681-translated-field-filters-in-sql-with-fallback.md) A filter on a translated field reads every translation into memory, and never matches an untranslated entity (P1)
@@ -634,7 +634,7 @@ _None._
   - [x] [TASK-683](EPIC-021-entity-localization-for-catalogues/TASK-683-entity-and-translation-writes-share-no-boundary.md) The entity write and its translation write share no boundary, so a failure desynchronises them (P2)
   - [x] [TASK-684](EPIC-021-entity-localization-for-catalogues/TASK-684-translation-key-too-long-on-mysql.md) The translation table's unique key is too long for MySQL, and a fluent mapping cannot bound the columns (P2)
   - [x] [TASK-691](EPIC-021-entity-localization-for-catalogues/TASK-691-fluent-max-length-reaches-the-ddl.md) A fluent `HasMaxLength` is accepted and dropped — make it reach the DDL (P2)
-  - [ ] [TASK-686](EPIC-021-entity-localization-for-catalogues/TASK-686-matched-guids-as-one-unbounded-in-list.md) A filter on a translated field reaches the entity store as one unbounded `IN` list (P2)
+  - [x] [TASK-686](EPIC-021-entity-localization-for-catalogues/TASK-686-matched-guids-as-one-unbounded-in-list.md) A filter on a translated field reaches the entity store as one unbounded `IN` list (P2)
 
 - **EPIC-009** Birko.Communication — Remaining protocols — done (2/2 tasks done)
   - STORY-019 gRPC support — done (1/1 done) (done)

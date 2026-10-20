@@ -33,6 +33,9 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
     /// <summary>Runs before every delete call — single, collection or filter; a test makes it throw to fail the delete.</summary>
     public Action? BeforeDelete { get; set; }
 
+    /// <summary>Every filter this store was handed (reads, counts, filter updates and deletes) — TASK-686 inspects their IN lists.</summary>
+    public List<System.Linq.Expressions.LambdaExpression?> SeenFilters { get; } = new();
+
     public int InitCalls { get; private set; }
 
     /// <summary>How many filtered collection reads ran — what a test counts to prove a read is batched.</summary>
@@ -59,6 +62,7 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 
     public T? Read(Expression<Func<T, bool>>? filter = null)
     {
+        SeenFilters.Add(filter);
         var items = _data.Values.AsQueryable();
         if (filter != null) items = items.Where(filter);
         return items.FirstOrDefault();
@@ -68,6 +72,7 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 
     public IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
+        SeenFilters.Add(filter);
         FilteredReadCalls++;
         var items = _data.Values.AsQueryable();
         if (filter != null) items = items.Where(filter);
@@ -80,6 +85,7 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 
     public long Count(Expression<Func<T, bool>>? filter = null)
     {
+        SeenFilters.Add(filter);
         var items = _data.Values.AsQueryable();
         if (filter != null) items = items.Where(filter);
         return items.Count();
@@ -149,6 +155,7 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
     {
+        SeenFilters.Add(filter);
         // Mirrors AbstractBulkStore: the callback runs, then each entity is written through Update(T).
         UpdateCalls++;
         var items = _data.Values.AsQueryable().Where(filter).ToList();
@@ -161,6 +168,7 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
     {
+        SeenFilters.Add(filter);
         UpdateCalls++;
         var items = _data.Values.AsQueryable().Where(filter).ToList();
         foreach (var item in items)
@@ -178,6 +186,7 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
 
     public void Delete(Expression<Func<T, bool>> filter)
     {
+        SeenFilters.Add(filter);
         DeleteCalls++;
         BeforeDelete?.Invoke();
         var items = _data.Values.AsQueryable().Where(filter).ToList();
