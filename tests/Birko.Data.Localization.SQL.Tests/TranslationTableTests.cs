@@ -38,6 +38,18 @@ public sealed class TenantTranslation : TenantBase, IEntityTranslation
     public string ValueHash { get; set; } = string.Empty;
 }
 
+/// <summary>TASK-684: stored in a table created by hand in TASK-680's shape, to show it is reported, never altered.</summary>
+public sealed class LegacyTranslation : AbstractModel, IEntityTranslation
+{
+    public Guid EntityGuid { get; set; }
+    public string EntityType { get; set; } = string.Empty;
+    public string FieldName { get; set; } = string.Empty;
+    public string Culture { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public DateTime? UpdatedAt { get; set; }
+    public string ValueHash { get; set; } = string.Empty;
+}
+
 public sealed class Product : AbstractModel, ILocalizable
 {
     public string Name { get; set; } = string.Empty;
@@ -47,6 +59,7 @@ public sealed class Product : AbstractModel, ILocalizable
 
 public static class TestModels
 {
+    public const string LegacyTable = "BirkoTestLegacyTranslations";
     public const string TenantTable = "BirkoTestTenantTranslations";
     public const string ProductTable = "BirkoTestLocalizedProducts";
 }
@@ -78,7 +91,45 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     {
         _output = output;
         TranslationMappings.EnsureApplied();
+        DropOldShapeTablesOnce();
     }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> Reset = new();
+
+    /// <summary>
+    /// TASK-684: a live database keeps the tables earlier runs created, with key columns of VARCHAR(255), and
+    /// schema-ensure never alters a column. They are dropped once per database per process, before any store uses them,
+    /// never in a teardown (rules 7 and 61). Only this class uses these tables in this assembly, and its tests do not
+    /// run in parallel with each other, so the drop cannot pull a table from under a sibling. SQLite starts from a new
+    /// file each time.
+    /// </summary>
+    private void DropOldShapeTablesOnce()
+    {
+        if (HostVariable == null || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(HostVariable)))
+        {
+            return;
+        }
+        var settings = Settings();
+        if (!Reset.TryAdd(settings.GetId(), true))
+        {
+            return;
+        }
+        var connector = Store<EntityTranslationModel>().Connector!;
+        using var connection = connector.CreateConnection(connector.Settings);
+        connection.Open();
+        foreach (var table in new[] { EntityTranslationMapping<EntityTranslationModel>.DefaultTable, TestModels.TenantTable, TestModels.LegacyTable })
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = $"DROP TABLE IF EXISTS {connector.QuoteIdentifier(table)}";
+            command.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>The provider's DDL for the translation table as TASK-680 created it (key columns unbounded), or null.</summary>
+    protected virtual string? OldShapeTableDdl(string table) => null;
+
+    /// <summary>The SQL expression naming the connection's own schema in <c>information_schema</c>, or null for SQLite.</summary>
+    protected virtual string? CurrentSchemaSql => null;
 
     protected abstract string Label { get; }
 
@@ -90,26 +141,11 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     protected abstract IIndexManager Indexes(AbstractConnectorBase connector);
 
     /// <summary>
-    /// False where the provider cannot hold the key as mapped: MySQL refuses a key over 3 072 bytes, and four columns
-    /// of VARCHAR(255) utf8mb4 make 3 204 (measured, ERROR 1071). The tests that need the key skip there, and
-    /// <see cref="A_provider_that_cannot_hold_the_key_reports_it"/> pins the reported failure until the column
-    /// lengths can be bounded (TASK-684).
-    /// </summary>
-    protected virtual bool HoldsTheKey => true;
-
-    /// <summary>
     /// What a racing writer does to an upsert running inside the caller's <c>SqlUnitOfWork</c>: true — the retry
     /// succeeds in the transaction (SQL Server, measured); false — the refused INSERT aborts the transaction and the
     /// upsert surfaces the unique violation (PostgreSQL, measured: 25P02 otherwise hid it); null — not exercised here.
     /// </summary>
     protected virtual bool? RetriesInsideATransaction => null;
-
-    private bool RequireKey()
-    {
-        if (HoldsTheKey) return true;
-        _output.WriteLine($"SKIPPED on {Label}: the provider cannot hold the unique key as mapped (TASK-684).");
-        return false;
-    }
 
     public virtual void Dispose()
     {
@@ -157,7 +193,7 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     [Fact]
     public async Task Schema_ensure_creates_the_unique_key_over_the_four_columns()
     {
-        if (!RequireServer() || !RequireKey()) return;
+        if (!RequireServer()) return;
         var store = Store<EntityTranslationModel>();
         await store.InitAsync();
 
@@ -168,7 +204,7 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     [Fact]
     public async Task A_second_create_of_one_key_is_refused_by_the_store()
     {
-        if (!RequireServer() || !RequireKey()) return;
+        if (!RequireServer()) return;
         var store = Store<EntityTranslationModel>();
         var entity = Guid.NewGuid();
         await store.CreateAsync(Row(entity, "first"));
@@ -182,7 +218,7 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     [Fact]
     public async Task A_racing_writer_leaves_one_row_carrying_the_last_value()
     {
-        if (!RequireServer() || !RequireKey()) return;
+        if (!RequireServer()) return;
         var inner = Store<EntityTranslationModel>();
         var entity = Guid.NewGuid();
         // The other writer stores the key after our read found nothing, and before our create.
@@ -199,7 +235,7 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     [Fact]
     public async Task A_racing_writer_inside_the_callers_transaction_is_retried_or_reported()
     {
-        if (!RequireServer() || !RequireKey() || RetriesInsideATransaction is not bool retries) return;
+        if (!RequireServer() || RetriesInsideATransaction is not bool retries) return;
         var store = Store<EntityTranslationModel>();
         await store.InitAsync();
         var entity = Guid.NewGuid();
@@ -318,7 +354,7 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     [Fact]
     public async Task A_consumer_model_maps_with_its_own_key_and_serves_the_wrappers()
     {
-        if (!RequireServer() || !RequireKey()) return;
+        if (!RequireServer()) return;
         var translations = Store<TenantTranslation>();
         await translations.InitAsync();
         (await KeyColumnsAsync(translations, TestModels.TenantTable)).Should().Equal("entityguid", "entitytype", "fieldname", "culture");
@@ -354,7 +390,7 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     [Fact]
     public async Task A_racing_writer_on_one_key_of_a_batch_leaves_one_row_per_key()
     {
-        if (!RequireServer() || !RequireKey()) return;
+        if (!RequireServer()) return;
         var inner = Store<EntityTranslationModel>();
         var entity = Guid.NewGuid();
         // The other writer stores one of the two keys after our read: the batch's create is refused as a whole.
@@ -665,8 +701,8 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     [Fact]
     public async Task A_key_race_inside_the_boundary_is_retried_once_in_a_new_transaction()
     {
-        // SQLite has one writer: the competing insert would wait on our transaction. MySQL holds no key (TASK-684).
-        if (!RequireServer() || !RequireKey() || RetriesInsideATransaction is null) return;
+        // SQLite has one writer: the competing insert would wait on our transaction.
+        if (!RequireServer() || RetriesInsideATransaction is null) return;
         var products = Store<SqlProduct>();
         var rows = Store<EntityTranslationModel>();
         await products.InitAsync();
@@ -729,16 +765,115 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     }
 
     [Fact]
-    public async Task A_provider_that_cannot_hold_the_key_reports_it()
+    public async Task A_provider_that_could_not_hold_the_key_holds_it_now()
     {
-        if (!RequireServer() || HoldsTheKey) return;
+        if (!RequireServer()) return;
         var store = Store<EntityTranslationModel>();
 
         await store.InitAsync();
 
-        // Lazy schema-ensure degrades and reports (rule 49): the store works, the missing key is on the record.
+        // TASK-684 inverted this (rule 56): MySQL reported the key here (ERROR 1071, 3 204 bytes over 3 072).
         store.Connector!.IndexCreationFailures.Select(f => f.IndexName)
-            .Should().Contain(EntityTranslationMapping<EntityTranslationModel>.KeyIndexName(EntityTranslationMapping<EntityTranslationModel>.DefaultTable));
+            .Should().NotContain(EntityTranslationMapping<EntityTranslationModel>.KeyIndexName(EntityTranslationMapping<EntityTranslationModel>.DefaultTable));
+        (await KeyColumnsAsync(store, EntityTranslationMapping<EntityTranslationModel>.DefaultTable))
+            .Should().Equal("entityguid", "entitytype", "fieldname", "culture");
+    }
+
+    [Fact]
+    public async Task The_key_columns_are_bounded_in_the_catalogue()
+    {
+        if (!RequireServer() || HostVariable == null) return;
+        var store = Store<EntityTranslationModel>();
+        await store.InitAsync();
+        var table = EntityTranslationMapping<EntityTranslationModel>.DefaultTable;
+
+        var lengths = await ColumnLengthsAsync(store.Connector!, table);
+
+        lengths["entitytype"].Should().Be(EntityTranslationMapping<EntityTranslationModel>.MaxEntityTypeLength);
+        lengths["fieldname"].Should().Be(EntityTranslationMapping<EntityTranslationModel>.MaxFieldNameLength);
+        lengths["culture"].Should().Be(EntityTranslationMapping<EntityTranslationModel>.MaxCultureLength);
+        store.Connector!.DetectDrift(typeof(EntityTranslationModel)).Drifts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_culture_longer_than_its_bound_is_refused_by_the_database()
+    {
+        if (!RequireServer() || HostVariable == null) return;
+        var store = Store<EntityTranslationModel>();
+        var entity = Guid.NewGuid();
+        var row = Row(entity, "x");
+        row.Culture = new string('c', EntityTranslationMapping<EntityTranslationModel>.MaxCultureLength + 1);
+
+        var act = async () => await store.CreateAsync(row);
+
+        // The database's own refusal (MySQL 1406 under strict mode, SQL Server 2628, PostgreSQL 22001), not any exception.
+        var thrown = (await act.Should().ThrowAsync<Exception>()).Which;
+        Chain(thrown).OfType<System.Data.Common.DbException>().Should().NotBeEmpty($"{Label} must refuse the value itself");
+        (await store.CountAsync(t => t.EntityGuid == entity)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task An_existing_table_with_unbounded_key_columns_is_reported_never_altered()
+    {
+        if (!RequireServer() || OldShapeTableDdl(TestModels.LegacyTable) is not string ddl) return;
+        var store = Store<LegacyTranslation>();
+        var connector = store.Connector!;
+        using (var connection = connector.CreateConnection(connector.Settings))
+        {
+            connection.Open();
+            using var drop = connection.CreateCommand();
+            drop.CommandText = $"DROP TABLE IF EXISTS {connector.QuoteIdentifier(TestModels.LegacyTable)}";
+            drop.ExecuteNonQuery();
+            using var create = connection.CreateCommand();
+            create.CommandText = ddl;
+            create.ExecuteNonQuery();
+        }
+
+        await store.InitAsync();
+
+        connector.IndexCreationFailures.Select(f => f.IndexName)
+            .Should().Contain(EntityTranslationMapping<LegacyTranslation>.KeyIndexName(TestModels.LegacyTable));
+        connector.DetectDrift(typeof(LegacyTranslation)).Drifts
+            .Select(d => (d.Kind, Column: d.Column.ToLowerInvariant()))
+            .Should().BeEquivalentTo(new[]
+            {
+                (Birko.Data.SQL.SchemaDrift.ColumnDriftKind.TypeMismatch, "entitytype"),
+                (Birko.Data.SQL.SchemaDrift.ColumnDriftKind.TypeMismatch, "fieldname"),
+                (Birko.Data.SQL.SchemaDrift.ColumnDriftKind.TypeMismatch, "culture"),
+            }, "only the bounded key columns differ from TASK-680's shape");
+        (await ColumnLengthsAsync(connector, TestModels.LegacyTable))["culture"].Should().Be(255, "schema-ensure never alters a column");
+    }
+
+    /// <summary>
+    /// Each string column's length as the catalogue reports it (rule 63), keyed by lower-cased column name: information_schema
+    /// on MySQL, PostgreSQL and SQL Server.
+    /// </summary>
+    private static IEnumerable<Exception> Chain(Exception error)
+    {
+        for (Exception? current = error; current != null; current = current.InnerException)
+        {
+            yield return current;
+        }
+    }
+
+    private async Task<Dictionary<string, long?>> ColumnLengthsAsync(AbstractConnectorBase connector, string table)
+    {
+        await using var connection = connector.CreateConnection(connector.Settings);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COLUMN_NAME, CHARACTER_MAXIMUM_LENGTH FROM information_schema.columns "
+            + $"WHERE LOWER(TABLE_NAME) = LOWER(@table) AND TABLE_SCHEMA = {CurrentSchemaSql}";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "@table";
+        parameter.Value = table;
+        command.Parameters.Add(parameter);
+        var result = new Dictionary<string, long?>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            result[reader.GetString(0).ToLowerInvariant()] = reader.IsDBNull(1) ? null : Convert.ToInt64(reader.GetValue(1));
+        }
+        return result;
     }
 
     private sealed class Context : IEntityLocalizationContext
@@ -898,6 +1033,7 @@ internal static class TranslationMappings
             }
             var registry = LocalizationSqlMappings.Register(new ModelMapRegistry());
             LocalizationSqlMappings.Register<TenantTranslation>(registry, TestModels.TenantTable);
+            LocalizationSqlMappings.Register<LegacyTranslation>(registry, TestModels.LegacyTable);
             registry.Register(new SqlProductMapping());
             registry.ApplyToDatabase();
             _applied = true;

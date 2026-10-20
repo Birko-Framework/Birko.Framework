@@ -1,6 +1,6 @@
 ---
 area: entity-localization
-generated-at: 5412e88ffb2ce10bb83d75189e3c79e70e7fd3b4
+generated-at: 85f66d7d54c1cc5fc8be999ba18ad163be37b3ba
 generated-on: 2026-10-20
 sources:
   - ../Birko.Data.Localization/Boundaries/BestEffortWriteBoundary.cs
@@ -985,7 +985,7 @@ first run made to the caller's objects (a create's assigned `Guid` stays set).
 
 #### Scenario: A unique-key race in its own transaction is retried once
 
-- **Given** PostgreSQL, the boundary owning its transaction, and another writer storing a translation key after this write's read found nothing
+- **Given** PostgreSQL or MySQL (where the in-place retry cannot see the other writer's row: PostgreSQL aborts the transaction, MySQL re-reads its REPEATABLE READ snapshot), the boundary owning its transaction, and another writer storing a translation key after this write's read found nothing
 - **When** the translation create is refused with `StoreUniqueViolationException`
 - **Then** the transaction is rolled back and the whole write re-runs once; the second pass updates the other writer's row, leaving one row with this write's value
 - **And** inside a caller's transaction the typed violation reaches the caller instead
@@ -1170,20 +1170,28 @@ delegate `CreateInstance` to the inner store, and SHALL expose the inner store v
 The system SHALL map, through `Birko.Data.Localization.SQL`, any `IEntityTranslation` model to a table (default
 `BirkoEntityTranslations`) with a Guid primary key, the four key columns and `Value` required, and a **unique** index
 `UX_{table}_Key` over `(EntityGuid, EntityType, FieldName, Culture)`, created by schema-ensure; it SHALL declare no index
-on `Value`. Where a provider cannot hold the key, schema-ensure SHALL report it in `IndexCreationFailures` rather than
-fail the store.
+on `Value`. The key's string columns SHALL be bounded, `EntityType` and `FieldName` to 128 characters and `Culture` to
+85, through the mapping's `HasMaxLength` (TASK-684), so the key fits every provider. Where a provider still cannot hold
+it (a table created before the bound, whose columns schema-ensure never alters), schema-ensure SHALL report it in
+`IndexCreationFailures` rather than fail the store.
 
 #### Scenario: The key exists after schema-ensure
 
-- **Given** the default mapping registered and applied, on SQLite, PostgreSQL or SQL Server
+- **Given** the default mapping registered and applied, on SQLite, PostgreSQL, SQL Server or MySQL
 - **When** the translation store is initialised
 - **Then** the catalogue holds a unique index `UX_BirkoEntityTranslations_Key` over `EntityGuid, EntityType, FieldName, Culture` in that order, and a second create of one key is refused with `StoreUniqueViolationException`
 
-#### Scenario: MySQL cannot hold the key
+#### Scenario: The key columns are bounded
 
-- **Given** MySQL 8.4 with `utf8mb4`
+- **Given** the default mapping on MySQL 8.4 (`utf8mb4`), PostgreSQL or SQL Server
 - **When** the translation store is initialised
-- **Then** the three string key columns are `VARCHAR(255)`, the key (3 204 bytes) exceeds InnoDB's 3 072, the index is not created, and `IndexCreationFailures` names it (TASK-684 bounds the columns)
+- **Then** the catalogue reports `EntityType` and `FieldName` at 128 and `Culture` at 85 characters, the key (1 508 bytes on MySQL) is created, and a `Culture` of 86 characters is refused by the database
+
+#### Scenario: A table created before the bound is reported, never altered
+
+- **Given** a MySQL translation table whose key columns are `VARCHAR(255)`
+- **When** the store is initialised
+- **Then** the columns stay 255, the key is not created and `IndexCreationFailures` names it, and `DetectDrift` reports the three columns as a type mismatch
 
 #### Scenario: The value hash and its index
 

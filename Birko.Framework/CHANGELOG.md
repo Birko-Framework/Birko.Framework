@@ -4,6 +4,18 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-18 — The WebSocket proxy forwards sub-protocols
+
+[[TASK-569]]. `MapWebSocketProxy` offers the client's requested sub-protocols upstream, in the client's order, and
+accepts the client with the upstream's choice. Measured: a client asking for one (`graphql-transport-ws`, `mqtt`) was
+accepted with none, and refused the handshake.
+
+## 2026-10-18 — Birko.Communication.SSE.AspNetCore: SSE results with heartbeat and terminal stop
+
+[[TASK-540]]. New project. `SseResults.Stream` streams a `ChannelReader` or `IAsyncEnumerable` as SSE. It sends
+proxy-friendly headers and a `: heartbeat` when idle, and stops after a terminal item. A disconnect ends it, and an owned
+subscription is always disposed. Frames come from `SseEvent`, and `KeyedEventBroadcaster` feeds it directly.
+
 ## 2026-10-18 — Opt-in loopback-only auth bypass
 
 [[TASK-522]]. `BirkoSecurityOptions.LoopbackBypass` with `UseBirkoLoopbackBypass()` lets local tools call a loopback-only

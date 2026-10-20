@@ -34,9 +34,18 @@ Birko.Data.Localization.SQL/
   SQL Server (rule 37), capping every translation. Exact-value lookups use `IX_{table}_ValueHash` on `ValueHash` (SHA-256
   hex, 64 characters) and confirm the value in memory (TASK-681). The table name is at most 50 characters so both index
   names fit PostgreSQL's 63.
-- **MySQL cannot hold the key yet**: four columns of VARCHAR(255) utf8mb4 are 3 204 bytes, over InnoDB's 3 072 (ERROR
-  1071, measured). Schema-ensure reports it (`IndexCreationFailures`, rule 49); bounding the columns needs a fluent
-  length the mapping registry does not apply — TASK-684.
+- **The key's string columns are bounded** (TASK-684): `EntityType` and `FieldName` 128, `Culture` 85 (decided by the
+  user), through the fluent `HasMaxLength` TASK-691 made reach the DDL. Left at rule 37's 255, the key was 3 204 bytes
+  under MySQL's utf8mb4, over InnoDB's 3 072 (ERROR 1071, measured), and MySQL could not hold it. Bounded it is 1 508
+  bytes on MySQL and 698 on SQL Server. Measured live: the key exists on all four providers, the catalogue reports the
+  lengths, and a longer `Culture` is refused by MySQL, PostgreSQL and SQL Server (SQLite does not enforce lengths).
+- **A table created before TASK-684 keeps its VARCHAR(255) columns.** On MySQL its key stays refused and is reported in
+  `IndexCreationFailures` on every init. On every provider `DetectDrift` names the three columns, so
+  `SchemaDriftHealthCheck` reads Degraded until they are narrowed. The README gives the remedy per provider.
+- **MySQL refuses an over-long value only under a strict `sql_mode`;** without it, MySQL truncates.
+- **Inside a caller's transaction, a key race is not retried in place on PostgreSQL or MySQL** (measured). PostgreSQL
+  aborts the transaction. MySQL keeps it, but the re-read runs on the transaction's REPEATABLE READ snapshot and finds
+  no row. SQL Server retries in place. An owned `SqlLocalizedWriteBoundary` re-runs the whole write (TASK-683).
 - A changed mapping is not applied to an existing table: schema-ensure never alters an index or column.
 - **One database means one settings id** (`Connector.Settings.GetId()`), the key `AmbientSqlTransaction` itself uses,
   never connector identity (rule 16).

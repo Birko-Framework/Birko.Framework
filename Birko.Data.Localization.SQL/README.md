@@ -58,8 +58,29 @@ match:
 
 See [the pairing table](../Birko.Data.Localization/README.md#atomicity-which-store-pairings-are-one-unit).
 
-**MySQL:** the key is 3 204 bytes under utf8mb4, over InnoDB's 3 072, so it is not created there yet (reported in
-`IndexCreationFailures`; TASK-684).
+**Key column lengths** (TASK-684): `EntityType` and `FieldName` are 128 characters, and `Culture` is 85
+(`CultureInfo.Name`, e.g. `sk-SK`). That keeps the key at 1 508 bytes on MySQL utf8mb4, under InnoDB's 3 072. A longer
+value is refused by PostgreSQL, SQL Server and MySQL. MySQL refuses only under a strict `sql_mode`
+(`STRICT_TRANS_TABLES`, the default); without it, MySQL truncates the value with a warning. SQLite does not enforce
+lengths.
+
+**A table created before TASK-684** keeps its 255-character columns: schema-ensure never alters a column.
+- **MySQL:** the key is still refused (`IndexCreationFailures`).
+- **PostgreSQL and SQL Server:** the key works.
+- **Every provider:** `DetectDrift` reports the three columns, so `SchemaDriftHealthCheck` reads Degraded until they
+  are narrowed.
+
+To narrow them, for your table name:
+1. Remove any rows that duplicate a key. On MySQL, two writers may have stored both before the key existed.
+2. Alter the three columns:
+   - **MySQL:** `ALTER TABLE <table> MODIFY EntityType VARCHAR(128) NOT NULL, MODIFY FieldName VARCHAR(128) NOT NULL,
+     MODIFY Culture VARCHAR(85) NOT NULL`
+   - **PostgreSQL:** `ALTER TABLE "<table>" ALTER COLUMN entitytype TYPE VARCHAR(128), ALTER COLUMN fieldname TYPE
+     VARCHAR(128), ALTER COLUMN culture TYPE VARCHAR(85)`
+   - **SQL Server:** drop `UX_<table>_Key` first (a column in an index cannot be altered), then
+     `ALTER TABLE [<table>] ALTER COLUMN EntityType NVARCHAR(128) NOT NULL`, and the same for `FieldName` (128) and
+     `Culture` (85).
+3. The next schema-ensure creates the key, or recreates it.
 
 ## Running tests
 

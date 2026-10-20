@@ -60,6 +60,7 @@ public sealed class PostgreSqlTranslationTableTests : TranslationTableTests<Post
         Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432 };
     protected override IIndexManager Indexes(AbstractConnectorBase connector) => new PostgreSqlIndexManager(connector);
+    protected override string? CurrentSchemaSql => "current_schema()";
     protected override bool? RetriesInsideATransaction => false;
 }
 
@@ -78,7 +79,16 @@ public sealed class MySqlTranslationTableTests : TranslationTableTests<MySQLConn
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306 };
     protected override IIndexManager Indexes(AbstractConnectorBase connector) => new MySqlIndexManager(connector);
-    protected override bool HoldsTheKey => false;
+    protected override string? CurrentSchemaSql => "DATABASE()";
+    // Measured (TASK-684): the refused INSERT leaves the transaction usable, but the re-read runs on the snapshot taken at
+    // the transaction's first read (InnoDB REPEATABLE READ), before the other writer committed, so it finds no row and
+    // the refusal stands.
+    protected override bool? RetriesInsideATransaction => false;
+    protected override string? OldShapeTableDdl(string table) =>
+        $"CREATE TABLE `{table}` (`EntityGuid` char(36) NOT NULL, `EntityType` varchar(255) NOT NULL, "
+        + "`FieldName` varchar(255) NOT NULL, `Culture` varchar(255) NOT NULL, `Value` longtext NOT NULL, "
+        + "`UpdatedAt` datetime(6) DEFAULT NULL, `ValueHash` varchar(255) DEFAULT NULL, `Guid` char(36) NOT NULL, "
+        + "PRIMARY KEY (`Guid`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 }
 
 public sealed class MSSqlTranslationTableTests : TranslationTableTests<MSSqlConnector>
@@ -97,5 +107,6 @@ public sealed class MSSqlTranslationTableTests : TranslationTableTests<MSSqlConn
         int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433)
     { TrustServerCertificate = true };
     protected override IIndexManager Indexes(AbstractConnectorBase connector) => new MSSqlIndexManager(connector);
+    protected override string? CurrentSchemaSql => "SCHEMA_NAME()";
     protected override bool? RetriesInsideATransaction => true;
 }

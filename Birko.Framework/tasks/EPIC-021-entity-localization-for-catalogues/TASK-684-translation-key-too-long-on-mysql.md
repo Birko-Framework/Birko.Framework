@@ -3,7 +3,7 @@ id: TASK-684
 parent: EPIC-021
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-19
@@ -39,12 +39,12 @@ when this lands (rule 56).
 
 ## Acceptance criteria
 
-- [ ] A fluent mapping can bound a string column's length, honoured by every SQL provider's DDL (or another way to
+- [x] A fluent mapping can bound a string column's length, honoured by every SQL provider's DDL (or another way to
       bound the translation key columns is chosen and written down)
-- [ ] `EntityTranslationMapping` bounds `EntityType`, `FieldName` and `Culture` so the key fits MySQL's 3 072 bytes
-- [ ] On live MySQL the unique key exists, a second create of one key is refused, and the race test leaves one row;
+- [x] `EntityTranslationMapping` bounds `EntityType`, `FieldName` and `Culture` so the key fits MySQL's 3 072 bytes
+- [x] On live MySQL the unique key exists, a second create of one key is refused, and the race test leaves one row;
       the MySQL reported-failure test is inverted and the skipped key tests run there
-- [ ] An existing MySQL table without the key is reported (schema-ensure never alters an existing column; say so in the
+- [x] An existing MySQL table without the key is reported (schema-ensure never alters an existing column; say so in the
       README)
 
 ## Out of scope
@@ -54,6 +54,42 @@ when this lands (rule 56).
 ## Human test plan
 
 N/A — asserted by the live MySQL suite.
+
+## Outcome (2026-10-20)
+
+All criteria met; measured live on SQLite, PostgreSQL 16, SQL Server 2022 and MySQL 8.4.
+
+- **AC 1:** chosen and written down. A fluent `HasMaxLength` now reaches the DDL, split out as [[TASK-691]] (done,
+  `85f66d7d`).
+- **AC 2:** `EntityTranslationMapping` bounds `EntityType` and `FieldName` at 128 and `Culture` at 85 (decided by the
+  user), as public consts. The key is 1 508 bytes on MySQL utf8mb4 and 698 on SQL Server.
+- **AC 3:**
+  - On MySQL the key exists, a second create is refused, both race tests leave one row, and the boundary race is
+    retried in a new transaction.
+  - `A_provider_that_cannot_hold_the_key_reports_it` is inverted into `…could_not_hold_the_key_holds_it_now` (rule 56).
+  - `HoldsTheKey` / `RequireKey` are removed, because every provider holds the key (rule 53).
+  - The catalogue reports the three lengths on MySQL, PostgreSQL and SQL Server, `DetectDrift` is clean (rule 63), and
+    an 86-character `Culture` is refused there.
+  - **Measured, as AC 3's reading required:** MySQL inside a caller's transaction does **not** retry in place. The
+    refused INSERT leaves the transaction usable, but the re-read runs on the REPEATABLE READ snapshot taken before the
+    other writer committed, so it finds no row and the refusal stands. MySQL's `RetriesInsideATransaction` is `false`.
+- **AC 4:** an old-shape MySQL table (TASK-680's DDL, read from the live database) keeps `VARCHAR(255)`. Its key is
+  reported in `IndexCreationFailures`, and `DetectDrift` names the three columns. The README gives the remedy: remove
+  duplicates, `ALTER … MODIFY`, re-init.
+- **Live tables:** the old-shape `BirkoEntityTranslations` and `BirkoTestTenantTranslations` are dropped once per
+  database per process, before first use, never in a teardown (rules 7 and 61).
+- **Mutation:** removing the three `HasMaxLength` calls turns 15 red: 11 MySQL tests (the key, races, inverted test,
+  read-back, refusal, old table) plus read-back and refusal on PostgreSQL and SQL Server.
+- **Tests:** SQL 116/116 live (+4 per provider, minus the removed key gates); unit suites unchanged.
+- **Close review** (8 findings, all fixed):
+  - The catalogue read is scoped to the connection's schema.
+  - PostgreSQL / SQL Server upgrades are documented: an existing table there now drifts, with a remedy per provider for
+    any table name.
+  - MySQL refuses only under strict `sql_mode`; without it, it truncates.
+  - The refusal test asserts a `DbException` in the chain, not any exception.
+  - The old-table test pins exactly the three drifting columns.
+  - The Culture comment no longer claims nothing exceeds 85.
+  - The table drop states why it cannot hit a sibling.
 
 ## Implementation plan
 

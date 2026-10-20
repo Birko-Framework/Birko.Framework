@@ -325,8 +325,8 @@ registry.ApplyToDatabase();
 A filter on a translated field matches an entity on its translation, or — when it has none in that culture — on its base value, so an untranslated product is still found by its slug. `==` and `IN` are looked up by `ValueHash` (SHA-256 of the value, part of `IEntityTranslation`), which the SQL mapping indexes.
 
 The mapping declares a **unique** key over `(EntityGuid, EntityType, FieldName, Culture)`. Two writers saving one key at
-once then leave one row: the second create is refused by the key and retried as an update. On MySQL the key does not
-fit yet (3 204 bytes over InnoDB's 3 072; schema-ensure reports it in `IndexCreationFailures`) — TASK-684.
+once then leave one row: the second create is refused by the key and retried as an update. The key's string columns
+are bounded (128, 128 and 85 characters), so it fits on all four providers, MySQL included (TASK-684).
 
 ### Available Wrappers
 

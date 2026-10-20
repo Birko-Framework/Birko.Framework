@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### MySQL holds the translation key (2026-10-20)
+[[TASK-684]]. `EntityTranslationMapping` bounds `EntityType` and `FieldName` to 128 and `Culture` to 85, through the
+fluent length [[TASK-691]] made work. The key is 1 508 bytes on MySQL utf8mb4, so MySQL now creates it. Measured live on
+all four providers. Inside a caller's transaction a MySQL key race surfaces the typed violation. Tables made before
+this keep 255-character columns and are reported; the README has the `ALTER` remedy.
 ### Fluent HasMaxLength reaches the DDL (2026-10-20)
 [[TASK-691]]. `ModelMapRegistry.ApplyToDatabase` applies `HasMaxLength`. It was accepted and dropped. A string
 becomes the bounded column `[MaxLengthField]` gives, and the fluent value wins. A `byte[]` is bounded likewise, and any
@@ -368,14 +373,6 @@ two old methods are unchanged (decided by the user).
 never matches, and a denial is 404. `OwnedCrudResults` decides through it, and `ICurrentUser.CanAccess(owner, viewAll)`
 wraps it. **Breaking for aggregators:** importing Birko.Security.AspNetCore now also needs Birko.Communication.AspNetCore
 (decided by the user). Symbio, DraCode, FisData.Stock.Angular and GrantsSmoke must add it.
-### The WebSocket proxy forwards sub-protocols (2026-10-18)
-[[TASK-569]]. `MapWebSocketProxy` offers the client's requested sub-protocols upstream, in the client's order, and
-accepts the client with the upstream's choice. Measured: a client asking for one (`graphql-transport-ws`, `mqtt`) was
-accepted with none, and refused the handshake.
-### Birko.Communication.SSE.AspNetCore: SSE results with heartbeat and terminal stop (2026-10-18)
-[[TASK-540]]. New project. `SseResults.Stream` streams a `ChannelReader` or `IAsyncEnumerable` as SSE. It sends
-proxy-friendly headers and a `: heartbeat` when idle, and stops after a terminal item. A disconnect ends it, and an owned
-subscription is always disposed. Frames come from `SseEvent`, and `KeyedEventBroadcaster` feeds it directly.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

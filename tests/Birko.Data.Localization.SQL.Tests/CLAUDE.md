@@ -24,7 +24,10 @@ Birko.Data.Localization.SQL.Tests/
 │                                       SqlUnitOfWork joined and poisoned, the key race retried once (PostgreSQL,
 │                                       SQL Server), a best-effort delete's TranslationCleanupException; a
 │                                       consumer model on its own table
-│                                       through the wrappers; on MySQL, the reported key failure (TASK-684)
+│                                       through the wrappers; TASK-684: every provider holds the key (the MySQL
+│                                       failure test inverted), the catalogue reports the bounded lengths, an
+│                                       over-long Culture is refused, and an old-shape MySQL table is reported.
+│                                       Old-shape live tables are dropped once per database per process
 └── ProviderTranslationTableTests.cs  — SQLite, PostgreSQL, MySQL, SQL Server subclasses
 ```
 
