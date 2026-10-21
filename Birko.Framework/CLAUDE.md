@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SMTP sends keep their timeout and say whether to retry (2026-10-21)
+[[TASK-675]]. `SmtpEmailSender` ignored `EmailSettings.Timeout` on async sends (Symbio measured 2000 ms taking 4096 ms).
+The whole send now returns at the deadline as a `Transient` failure; the caller's cancellation still throws. New
+`MessageResult.FailureKind` (Transient / Permanent / Unknown), set from the SMTP reply code and inner exception.
+Measured with a real `SmtpClient` against a stub server. Symbio can drop its linked-CTS and reclassification workarounds.
 ### A decorator's retry no longer poisons the caller's unit (2026-10-21)
 [[TASK-697]]. A slug decorator over a localized store with `SqlLocalizedWriteBoundary`, in your `SqlUnitOfWork`, retried
 a refused write successfully, yet your commit threw `TransactionRollbackOnlyException`. Measured on PostgreSQL and SQL
@@ -367,11 +372,6 @@ queries over at most 500 GUIDs each. It used to be one `IN` / `NOT IN` list, ref
 parameters. Reads concatenate, counts sum, ordered pages sort in memory, and updates and deletes cover every chunk. A
 plain `IStore` inner store keeps one query up to 2 000 GUIDs and refuses beyond. Measured with a 2 200-entity match on
 all four providers. **Breaking:** the wrappers' `RewriteFilter` is no longer visible to subclasses.
-### MySQL holds the translation key (2026-10-20)
-[[TASK-684]]. `EntityTranslationMapping` bounds `EntityType` and `FieldName` to 128 and `Culture` to 85, through the
-fluent length [[TASK-691]] made work. The key is 1 508 bytes on MySQL utf8mb4, so MySQL now creates it. Measured live on
-all four providers. Inside a caller's transaction a MySQL key race surfaces the typed violation. Tables made before
-this keep 255-character columns and are reported; the README has the `ALTER` remedy.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -14,7 +14,9 @@ Core messaging framework providing unified interfaces for email, SMS, and push n
 - **IMessageTemplate** - Template definition (Name, Subject, BodyTemplate, IsHtml)
 - **MessageAddress** - Recipient address (Value + DisplayName), case-insensitive equality
 - **MessageAttachment** - File attachment (FileName, ContentType, Stream, IsInline, ContentId)
-- **MessageResult** - Result with static factories (Succeeded/Failed), includes MessageId and Timestamp
+- **MessageResult** - Result with static factories (Succeeded/Failed), includes MessageId, Timestamp and `FailureKind`
+- **MessageFailureKind** - TASK-675: None / Transient / Permanent / Unknown, so a caller decides whether to retry without parsing `Error`
+- **SmtpFailureClassifier** - TASK-675: an SMTP failure's kind from its reply code (4xx transient, 5xx permanent), failed recipients (transient if any refusal was temporary) and inner exception (socket / IO / timeout: transient); never from `SmtpException` alone
 - **MessagingException** - Base exception hierarchy (MessageDeliveryException, InvalidRecipientException, TemplateRenderException)
 
 ### Email (`Birko.Messaging.Email`)
@@ -45,6 +47,7 @@ Core messaging framework providing unified interfaces for email, SMS, and push n
 - MessageResult uses static factory pattern (Succeeded/Failed), not constructors
 - EmailSettings extends RemoteSettings for host/port/credentials consistency
 - SmtpEmailSender is IDisposable (wraps SmtpClient)
+- SmtpEmailSender keeps `EmailSettings.Timeout` itself (TASK-675): `SmtpClient.Timeout` bounds only the synchronous `Send`, so the async path ignored it (Symbio measured 2000 ms taking 4096 ms). The whole send, including the wait for another send, is abandoned at the deadline through a linked token and `WaitAsync`, so a send that ignores its token still returns. An abandoned send keeps the client (and the send lock) until it really ends, so the next send never meets a busy `SmtpClient`. A deadline is a failed `Transient` result; the caller's own cancellation still throws. `Timeout <= 0`: no deadline
 - SmtpEmailSender MIME shape (TASK-585): `IsHtml` + `PlainTextBody` → `multipart/alternative`, text/plain first and text/html last, both UTF-8; an inline attachment with a `ContentId` is a `LinkedResource` of the HTML view (`multipart/related`). One body → one part. Never mix `Body`/`IsBodyHtml` with an `AlternateView`: System.Net.Mail then sends the body as text/plain. `SmtpEmailSenderWireTests` asserts the `.eml`, not `MailMessage`
 - StringTemplateEngine uses GeneratedRegex for performance
 - All senders return MessageResult (never throw for delivery failures)

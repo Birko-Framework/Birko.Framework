@@ -3,7 +3,7 @@ id: TASK-675
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -49,19 +49,19 @@ transport failure the caller should see as a failed, retryable result, not as it
 
 ## Acceptance criteria
 
-- [ ] `SendAsync` is abandoned at `EmailSettings.Timeout`, async path included. A test with a send
+- [x] `SendAsync` is abandoned at `EmailSettings.Timeout`, async path included. A test with a send
       delegate that never completes (the existing `_sendMail` test seam) returns within the deadline
       plus a small margin, and goes red if the linked deadline is removed.
-- [ ] A send that hits the sender's deadline returns a failed result marked transient. A cancellation
+- [x] A send that hits the sender's deadline returns a failed result marked transient. A cancellation
       of the **caller's** token still throws `OperationCanceledException`. Both have a test.
-- [ ] `MessageResult` tells a caller whether a failure is worth retrying, without parsing `Error` text.
+- [x] `MessageResult` tells a caller whether a failure is worth retrying, without parsing `Error` text.
       The shape is decided in the task (e.g. a `MessageFailureKind` of Transient / Permanent / Unknown),
       and is something the other senders (SMS, push, API email providers) can use too.
-- [ ] Classification is decided from the SMTP status code / failed-recipient exception / inner
+- [x] Classification is decided from the SMTP status code / failed-recipient exception / inner
       exception, never from `SmtpException` alone. Tests cover at least: connection refused →
       transient, mailbox unavailable (`SmtpFailedRecipientException`, 5xx) → permanent, `InvalidRecipientException` → permanent.
-- [ ] `SendBatchAsync` gets the same deadline and classification per message.
-- [ ] Docs (`Birko.Messaging/CLAUDE.md`, `README.md`, `docs/`) say what `Timeout` bounds and how a
+- [x] `SendBatchAsync` gets the same deadline and classification per message.
+- [x] Docs (`Birko.Messaging/CLAUDE.md`, `README.md`, `docs/`) say what `Timeout` bounds and how a
       caller decides whether to retry. The Recent Updates entry names Symbio as able to drop its
       linked-CTS and inner-exception workarounds.
 
@@ -77,4 +77,34 @@ N/A — covered by automated tests through the `_sendMail` test seam.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-675` — leave empty until then._
+_Decided by the user 2026-10-21: TASK-675 after TASK-697. Shape as the task suggested._
+
+1. `MessageFailureKind` (None / Transient / Permanent / Unknown) on `MessageResult`; `Failed` takes it, default Unknown.
+2. `SmtpEmailSender.SendAsync`: a linked deadline at `Timeout`, awaited with `WaitAsync`, so a send ignoring its token
+   still returns; the lock and the message are released when the abandoned send really ends.
+3. `SmtpFailureClassifier`: reply code, failed recipients, inner exception.
+4. Tests through the seam, classifier tests, and a real `SmtpClient` against an in-process stub server.
+
+## Outcome
+
+Done 2026-10-21.
+
+**Measured with a real `SmtpClient` against an in-process stub server:**
+- a server that never answers, `Timeout = 1000`: abandoned at 1 014 ms, a `Transient` failure (the async path used to
+  ignore `SmtpClient.Timeout`);
+- a refused connection: `SmtpException` with an inner `SocketException` → `Transient`;
+- `421` at greeting: `SmtpException(ServiceNotAvailable)` → `Transient`;
+- `550` to RCPT: `SmtpFailedRecipientException(MailboxUnavailable)` → `Permanent`.
+
+**Decisions:** several refused recipients are `Transient` if any refusal was temporary (a retry resends to all), else
+`Permanent`. Failures the sender finds itself (no recipients, no sender, a malformed address, a null batch element)
+are `Permanent`. Anything it cannot tell is `Unknown`. The deadline covers the wait for another send too, so a queue
+behind a hung send fails fast rather than stalling. An abandoned send holds the client until it ends.
+
+**Tests:** `Task675SmtpTimeoutAndClassificationTests` (19: deadline, caller's cancellation, no deadline, client release,
+batch, result kinds, classifier, four real-client cases).
+
+**Mutations, all red:** deadline not kept (2 red); send awaited without the deadline (hangs); timeout reported Unknown (4); caller's cancellation not rethrown (1); lock released at once (2); reply codes ignored (10); inner exception ignored (2); several recipients, any permanent wins (1).
+
+**Symbio** can drop its linked-CTS deadline and its inner-exception reclassification (Symbio § TASK-445, § TASK-561)
+once its aggregator picks this up; that is Symbio's to do.

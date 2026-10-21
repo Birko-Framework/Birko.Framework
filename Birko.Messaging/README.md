@@ -23,7 +23,8 @@ Core messaging framework for the Birko Framework. Provides unified interfaces fo
 | `IMessageTemplate` | Template with Name, Subject, BodyTemplate |
 | `MessageAddress` | Recipient address (Value + DisplayName) |
 | `MessageAttachment` | File attachment (FileName, ContentType, Stream) |
-| `MessageResult` | Send result (Succeeded/Failed with MessageId) |
+| `MessageResult` | Send result (Succeeded/Failed with MessageId); `FailureKind` says whether a failure is worth retrying |
+| `MessageFailureKind` | None / Transient / Permanent / Unknown |
 
 ## Email
 

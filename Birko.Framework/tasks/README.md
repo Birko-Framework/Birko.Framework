@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 23      | —     |
-| todo         | —     | —       | 146   |
+| todo         | —     | —       | 145   |
 | in-progress  | 8     | 12      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 4     | 27      | 407   |
+| done         | 4     | 27      | 408   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 99× P2 · 38× P3.
+`todo` by priority: 9× P1 · 98× P2 · 38× P3.
 
 ## In progress now
 
@@ -619,7 +619,7 @@ _None._
 - [x] [TASK-607](_loose/TASK-607-ci-test-loop-runs-dotnet-test-on-shared-sources.md) build-and-test runs `dotnet test` on `tests/Shared`, which has no project, so the job is red with every suite green (P2)
 - [x] [TASK-608](_loose/TASK-608-finstat-rating-color-hand-edited-into-generated-css.md) `--b-rating-color` was hand-edited into the generated `finstat.css`, so token parity is red (P2)
 - [ ] [TASK-673](_loose/TASK-673-sql-bulk-upsert-by-key.md) The SQL stores have no batch upsert, so an idempotent feed import costs a read per row (P3)
-- [ ] [TASK-675](_loose/TASK-675-smtp-sender-ignores-its-timeout-and-cannot-classify-failures.md) `SmtpEmailSender` ignores its own timeout, and a caller cannot tell a transient failure from a permanent one (P2)
+- [x] [TASK-675](_loose/TASK-675-smtp-sender-ignores-its-timeout-and-cannot-classify-failures.md) `SmtpEmailSender` ignores its own timeout, and a caller cannot tell a transient failure from a permanent one (P2)
 - [ ] [TASK-677](_loose/TASK-677-a-telemetry-update-stamps-the-audit-columns.md) A counter update through the decorator chain stamps `UpdatedBy` / `UpdatedAt`, so an anonymous hit erases who last edited the row (P3)
 - [x] [TASK-688](_loose/TASK-688-abstractconnector-holds-raw-nul-bytes-so-git-treats-it-as-binary.md) `AbstractConnector.cs` holds raw NUL bytes, so git treats it as binary (P3)
 - [x] [TASK-689](_loose/TASK-689-spec-map-coverage-unverified-207-source-files-unexplained.md) The spec map was never coverage-checked: 207 source files are unexplained and `ignore:` matches nothing (P3)

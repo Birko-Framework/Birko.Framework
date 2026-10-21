@@ -46,6 +46,13 @@ if (result.Success)
     Console.WriteLine($"Sent: {result.MessageId}");
 else
     Console.WriteLine($"Error: {result.Error}");
+
+// TASK-675: whether a failure is worth retrying, without parsing Error.
+if (result.FailureKind == MessageFailureKind.Transient)
+    queue.RetryLater(email);          // timeout, refused connection, 4xx
+else if (result.FailureKind == MessageFailureKind.Permanent)
+    MarkUndeliverable(email);         // rejected or malformed recipient, 5xx
+// Unknown: the sender could not tell; retry with a limit, if at all.
 ```
 
 ### MessageAddress
@@ -73,7 +80,7 @@ Extends `RemoteSettings` from Birko.Settings (namespace `Birko.Configuration`) (
 var settings = new EmailSettings("smtp.example.com", 587, "user", "pass")
 {
     UseSecure = true,      // inherited from RemoteSettings, defaults to true
-    Timeout = 30000,       // ms, default 30s
+    Timeout = 30000,       // ms, default 30s: the deadline of the whole SendAsync (0 = none), async path included
     DefaultFrom = new MessageAddress("noreply@example.com", "My App")
 };
 ```

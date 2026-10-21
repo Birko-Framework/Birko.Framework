@@ -52,6 +52,14 @@ public sealed class SmtpEmailSender : IEmailSender, IDisposable
         _client = null;
     }
 
+    /// <remarks>
+    /// TASK-675: the whole send, including the wait for another send to finish, is abandoned at
+    /// <see cref="EmailSettings.Timeout"/> (milliseconds; 0 or less: no deadline). <c>SmtpClient.Timeout</c> bounds only
+    /// the synchronous <c>Send</c>, so the async path ignored it: 2000 ms took 4096 ms (measured by Symbio). A send
+    /// abandoned at the deadline is a failed, <see cref="MessageFailureKind.Transient"/> result, not the caller's
+    /// cancellation, which still throws <see cref="OperationCanceledException"/>. Every failure says whether it is worth
+    /// retrying (<see cref="MessageResult.FailureKind"/>, decided by <see cref="SmtpFailureClassifier"/>).
+    /// </remarks>
     public async Task<MessageResult> SendAsync(EmailMessage message, CancellationToken ct = default)
     {
         if (message == null)
@@ -61,48 +69,93 @@ public sealed class SmtpEmailSender : IEmailSender, IDisposable
 
         if (message.Recipients.Count == 0)
         {
-            return MessageResult.Failed("No recipients specified.");
+            return MessageResult.Failed("No recipients specified.", kind: MessageFailureKind.Permanent);
         }
 
         var from = message.From ?? _settings.DefaultFrom;
         if (from == null)
         {
-            return MessageResult.Failed("No sender address specified and no default configured.");
+            return MessageResult.Failed("No sender address specified and no default configured.", kind: MessageFailureKind.Permanent);
         }
 
         var messageId = message.Id ?? Guid.NewGuid().ToString();
 
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (_settings.Timeout > 0)
+        {
+            deadline.CancelAfter(_settings.Timeout);
+        }
+        MailMessage? mailMessage = null;
         try
         {
-            using var mailMessage = BuildMailMessage(message, from);
+            mailMessage = BuildMailMessage(message, from);
             // Serialize concurrent sends — SmtpClient is not safe for concurrent SendMailAsync (CR-M210).
-            await _sendLock.WaitAsync(ct).ConfigureAwait(false);
-            try
+            await _sendLock.WaitAsync(deadline.Token).ConfigureAwait(false);
+            var send = StartSend(mailMessage, deadline.Token);
+            var sent = mailMessage;
+            mailMessage = null;
+            // A send that ignores the token still returns at the deadline. The lock and the message are released when
+            // it really ends, so the next send never meets a client that is still busy.
+            _ = send.ContinueWith(_ =>
             {
-                await _sendMail(mailMessage, ct).ConfigureAwait(false);
-            }
-            finally
-            {
+                sent.Dispose();
                 _sendLock.Release();
-            }
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            await send.WaitAsync(deadline.Token).ConfigureAwait(false);
             return MessageResult.Succeeded(messageId);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException ex) when (deadline.IsCancellationRequested)
+        {
+            CancelPendingSend();
+            return MessageResult.Failed($"SMTP send abandoned after its {_settings.Timeout} ms timeout.", ex,
+                kind: MessageFailureKind.Transient);
         }
         catch (SmtpException ex)
         {
-            return MessageResult.Failed($"SMTP error: {ex.Message}", ex);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
+            return MessageResult.Failed($"SMTP error: {ex.Message}", ex, kind: SmtpFailureClassifier.Classify(ex));
         }
         catch (InvalidRecipientException ex)
         {
             // CR-L296: a bad address surfaces with its dedicated reason, not the generic failure message.
-            return MessageResult.Failed(ex.Message, ex);
+            return MessageResult.Failed(ex.Message, ex, kind: MessageFailureKind.Permanent);
         }
         catch (Exception ex)
         {
-            return MessageResult.Failed($"Failed to send email: {ex.Message}", ex);
+            return MessageResult.Failed($"Failed to send email: {ex.Message}", ex, kind: SmtpFailureClassifier.Classify(ex));
+        }
+        finally
+        {
+            mailMessage?.Dispose();
+        }
+    }
+
+    // Starts the send; a delegate that throws synchronously becomes a faulted task, so the release below still runs.
+    private Task StartSend(MailMessage mail, CancellationToken token)
+    {
+        try
+        {
+            return _sendMail(mail, token);
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException(ex);
+        }
+    }
+
+    // SendMailAsync cancels through the token already; this also stops a client whose send does not watch it.
+    private void CancelPendingSend()
+    {
+        try
+        {
+            _client?.SendAsyncCancel();
+        }
+        catch (Exception)
+        {
+            // Best effort: the send was abandoned either way.
         }
     }
 
@@ -122,7 +175,7 @@ public sealed class SmtpEmailSender : IEmailSender, IDisposable
             // collected) — the batch contract is result-collecting, so capture it as a Failed result.
             if (message == null)
             {
-                results.Add(MessageResult.Failed("Null message."));
+                results.Add(MessageResult.Failed("Null message.", kind: MessageFailureKind.Permanent));
                 continue;
             }
             var result = await SendAsync(message, ct).ConfigureAwait(false);

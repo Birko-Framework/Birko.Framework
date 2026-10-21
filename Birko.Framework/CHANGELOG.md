@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-20 — MySQL holds the translation key
+
+[[TASK-684]]. `EntityTranslationMapping` bounds `EntityType` and `FieldName` to 128 and `Culture` to 85, through the
+fluent length [[TASK-691]] made work. The key is 1 508 bytes on MySQL utf8mb4, so MySQL now creates it. Measured live on
+all four providers. Inside a caller's transaction a MySQL key race surfaces the typed violation. Tables made before
+this keep 255-character columns and are reported; the README has the `ALTER` remedy.
+
 ## 2026-10-20 — Fluent HasMaxLength reaches the DDL
 
 [[TASK-691]]. `ModelMapRegistry.ApplyToDatabase` applies `HasMaxLength`. It was accepted and dropped. A string

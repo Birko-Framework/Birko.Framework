@@ -16,12 +16,14 @@
     <Compile Include="$(MSBuildThisFileDirectory)Core\MessageAddress.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\MessageAttachment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\MessageResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\MessageFailureKind.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\MessagingException.cs" />
     <!-- Email -->
     <Compile Include="$(MSBuildThisFileDirectory)Email\IEmailSender.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Email\EmailMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Email\EmailSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Email\SmtpEmailSender.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Email\SmtpFailureClassifier.cs" />
     <!-- Sms -->
     <Compile Include="$(MSBuildThisFileDirectory)Sms\ISmsSender.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sms\SmsMessage.cs" />
