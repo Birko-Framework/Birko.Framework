@@ -1,7 +1,7 @@
 ---
 area: views-and-aggregation
-generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
-generated-on: 2026-10-16
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
   - ../Birko.Data.CosmosDB.Views/CosmosViewStore.cs
@@ -20,12 +20,46 @@ sources:
   - ../Birko.Data.RavenDB.Views/RavenViewStore.cs
   - ../Birko.Data.RavenDB.Views/RavenViewTranslator.cs
   - ../Birko.Data.RavenDB/Aggregation/FacetAggregationHelper.cs
+  - ../Birko.Data.SQL.MSSql.View/Database/Connector/MSSqlConnector_View.cs
+  - ../Birko.Data.SQL.MySQL.View/Database/Connectors/MySQLConnector_View.cs
+  - ../Birko.Data.SQL.PostgreSQL.View/Database/Connectors/PostgreSQLConnector_View.cs
+  - ../Birko.Data.SQL.SqLite.View/Database/Connectors/SqLiteConnector_View.cs
+  - ../Birko.Data.SQL.View/Attributes/AggregateField.cs
+  - ../Birko.Data.SQL.View/Attributes/AvgField.cs
+  - ../Birko.Data.SQL.View/Attributes/CountField.cs
+  - ../Birko.Data.SQL.View/Attributes/MaxField.cs
+  - ../Birko.Data.SQL.View/Attributes/MinField.cs
+  - ../Birko.Data.SQL.View/Attributes/SumField.cs
+  - ../Birko.Data.SQL.View/Attributes/View.cs
+  - ../Birko.Data.SQL.View/Attributes/ViewField.cs
+  - ../Birko.Data.SQL.View/MaterializedViewType.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractAsyncConnector_CreateView.cs
   - ../Birko.Data.SQL.View/SQL/Connectors/AbstractAsyncConnector_SelectView.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractAsyncConnector_SelectViewCount.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnectorBase_View.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_CreateSelectCommand.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_CreateView.cs
   - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_SelectView.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_SelectViewCount.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/ViewSelectSqlBuilder.cs
+  - ../Birko.Data.SQL.View/SQL/DataBase_View.cs
+  - ../Birko.Data.SQL.View/SQL/DataBase_ViewConditions.cs
   - ../Birko.Data.SQL.View/SQL/DataBase_ViewOrderBy.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/BooleanFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/CharFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/DateTimeFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/DecimalFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/FunctionField.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/GuidFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/IntegerFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Fields/StringFunction.cs
+  - ../Birko.Data.SQL.View/SQL/Tables/View.cs
+  - ../Birko.Data.SQL.View/ViewQueryMode.cs
   - ../Birko.Data.SQL.Views/SqlViewManager.cs
   - ../Birko.Data.SQL.Views/SqlViewStore.cs
   - ../Birko.Data.SQL.Views/SqlViewTranslator.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Aggregate.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Aggregate.cs
   - ../Birko.Data.Stores/AggregateHelper.cs
   - ../Birko.Data.Stores/AggregateMath.cs
   - ../Birko.Data.Stores/AggregateQuery.cs
@@ -48,14 +82,13 @@ sources:
   - ../Birko.Data.Views/ViewMapRegistry.cs
   - ../Birko.Data.Views/ViewQueryMode.cs
   - ../Birko.Data.Views/ViewResult.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Fluent view definitions and aggregation queries
 
@@ -78,6 +111,13 @@ Alongside the view layer sits a lower-level, store-facing aggregation contract:
 and the shared `OrderBy<T>`, `OrderByHelper` and `TimeIntervalParser` utilities that both
 layers depend on.
 
+Beneath the portable SQL backend sits `Birko.Data.SQL.View`, the SQL view engine both it and an
+older, attribute-declared API (`[View]`, `[ViewField]`, `[SumField]` …) run on: the `Tables.View`
+metadata, the view `SELECT` / `CREATE VIEW` builders, the connectors' view read, count and DDL
+operations, the per-provider overrides (SQL Server, MySQL, PostgreSQL, SQLite) including SQL
+Server indexed views and PostgreSQL materialized views, and the SQL connectors' native
+`SelectAggregate` for `AggregateQuery<T>`.
+
 The backends do **not** behave uniformly. Persistent-view support, on-the-fly support and
 join support all differ per backend; where a backend cannot honour part of a definition it
 refuses it with an exception rather than answering a differently-shaped result. Those
@@ -85,6 +125,10 @@ divergences are recorded explicitly below because they are the operational reali
 capability.
 
 ## Regen provenance
+
+Regen at `50828c68` (TASK-696): the area now covers the whole of `Birko.Data.SQL.View`, so most of this run is new
+requirements for files the map newly reaches. Two existing scenarios were amended rather than kept verbatim: the persistent
+view's sort key is the view property for every field, unquoted (TASK-209, `728243ea`), which the old text contradicted.
 
 Full regen at `a62ec94`. Supersedes a partial regen that carried its scope as prose in the `generated-at`
 stamp itself, making it unparseable as a sha so the staleness check reported this area stale on format alone
@@ -99,6 +143,13 @@ them cannot have drifted.
 
 Sibling-repo shas are recorded here rather than in the stamp because this repo cannot resolve them — every
 source in this area lives in a sibling repo, so `generated-at` can only ever name this aggregator's HEAD.
+
+Regen of 2026-10-21 widened the area to the whole of `Birko.Data.SQL.View`, the four provider
+`*.View` connector partials and the SQL connectors' aggregate entry points (79 sources). Requirements
+already present were kept verbatim where the code still satisfies them; the persistent sort-key form was
+corrected to the TASK-209 code (view property for every column, no quoted alias), and requirements were
+added for the attribute-declared view build, the `Tables.View` metadata, the view `SELECT` / count / DDL
+builders, the connector view operations, the provider overrides and `SelectAggregate`.
 
 ## Requirements
 
@@ -574,7 +625,7 @@ before each operation; and SHALL materialize each row by reading reader columns
 
 - **Given** an aggregate view whose `Sum` of `Order.Total` targets `TView.Total`, queried with `OrderBy<TView>.By(v => v.Total)`
 - **When** the select command is built
-- **Then** the key is resolved by `DataBase.ResolveViewOrderFields` before it reaches the clause, and the resolved form follows the path: on the on-the-fly path `ORDER BY SUM(Order.Total) ASC` (what that SELECT list projects, aliased `as Total` — the aggregate's view property, read off `AbstractField.Property`), and on the persistent path `ORDER BY Total ASC` — emitted bare, while the column the view DDL created is `AS "Total"`, which is the pre-existing three-way quoting disagreement this area's sort requirement notes and TASK-209 owns. Before resolution existed the raw key was interpolated, so neither an aggregate nor a renamed view property matched an emitted column
+- **Then** the key is resolved by `DataBase.ResolveViewOrderFields` before it reaches the clause, and the resolved form follows the path: on the on-the-fly path `ORDER BY SUM(Order.Total) ASC` (what that SELECT list projects, aliased `as Total` — the aggregate's view property, read off `AbstractField.Property`), and on the persistent path `ORDER BY Total ASC` — emitted bare, matching the bare `AS Total` alias the view DDL creates and the bare persistent SELECT list (TASK-209 brought all three into line). Before resolution existed the raw key was interpolated, so neither an aggregate nor a renamed view property matched an emitted column
 
 ### Requirement: View sort keys are resolved against the view's field metadata, per path
 
@@ -601,22 +652,19 @@ entry (last direction wins) rather than throwing.
 
 The resolved form SHALL follow the path, because the two expose their columns under different names:
 **on-the-fly** → `field.GetSelectName(true)`, the `Table.Column` form `View.GetSelectFields()` always
-projects; **persistent** → `field.IsAggregate && field.Property != null ? field.Property.Name : field.Name`,
-matching `GetPersistentViewSelectFields()` and the `AS "<ViewProperty>"` alias the view DDL emits for
-aggregates. That DDL alias is the one column identifier the system quotes, because it *creates* the column and
-the persistent SELECT list quotes it when reading it back; a bare alias would fold to lower case on PostgreSQL
-and be unfindable. The `Property != null` arm is load-bearing rather than defensive: `AbstractField.Property` is
-declared non-nullable but is assigned by the view builders, and a key matched on `Name` alone can reach this
-point, so an aggregate field with no `Property` SHALL fall back to its source name instead of raising
-`NullReferenceException` from a sort. The resolved identifier SHALL NOT be quoted, matching the on-the-fly
-SELECT list (note the persistent SELECT list *does* quote its columns, so on that path alone the two
-disagree).
+projects; **persistent** → `field.Property != null ? field.Property.Name : field.Name` for **every** field,
+aggregate or not, matching `GetPersistentViewSelectFields()` and the bare `AS <ViewProperty>` alias the view
+DDL emits for every column (TASK-209). The `Property != null` arm is load-bearing rather than defensive:
+`AbstractField.Property` is declared non-nullable but is assigned by the view builders, and a key matched on
+`Name` alone can reach this point, so a field with no `Property` SHALL fall back to its source name instead of
+raising `NullReferenceException` from a sort. The resolved identifier SHALL NOT be quoted on either path,
+matching both the on-the-fly and the persistent SELECT lists ("quote tables, never quote columns").
 
 #### Scenario: Sorting by a renamed view property works
 
 - **Given** a view projecting `Person.Name` as the view property `PersonName`, queried with `OrderBy<TView>.By(v => v.PersonName)`
 - **When** the read is enumerated
-- **Then** the on-the-fly clause is `ORDER BY Persons.Name ASC` and the persistent clause is `ORDER BY Name ASC`, and the rows come back sorted. Before resolution both raised `no such column: PersonName` — so sorting a view by one of its own properties did not work at all, and only `ByName("<source column>")` did
+- **Then** the on-the-fly clause is `ORDER BY Persons.Name ASC` and the persistent clause is `ORDER BY PersonName ASC` (the view's own column since TASK-209), and the rows come back sorted. Before resolution both raised `no such column: PersonName` — so sorting a view by one of its own properties did not work at all, and only `ByName("<source column>")` did
 
 #### Scenario: An injection payload is rejected on both paths
 
@@ -675,7 +723,7 @@ disagree).
   `Property` being unset
 - **When** the resolved form is computed
 - **Then** `field.Name` is emitted rather than dereferencing the null `Property` — the persistent branch tests
-  `Property != null` before preferring the alias, so a sort cannot throw `NullReferenceException`
+  `Property != null` before preferring the view property, so a sort cannot throw `NullReferenceException`
 
 #### Scenario: A non-property sort expression is rejected at the key-extraction step
 
@@ -685,6 +733,321 @@ disagree).
 - **Then** a null expression raises `ArgumentNullException` and a non-property selector raises
   `ArgumentException` naming the expression — the failure is at key extraction, before any resolution or
   command building
+
+### Requirement: Attribute-declared SQL view metadata
+
+The system SHALL build `DataBase.LoadView(type)` from the type's `[View]` attributes
+(`AllowMultiple`) and its public instance properties' `[ViewField]` / `[SumField]` / `[AvgField]` /
+`[MinField]` / `[MaxField]` / `[CountField]` attributes, and cache the result per type. For each
+`[View]` whose two model types load as tables, it SHALL add a join from `ModelLeft`'s table to
+`ModelRight`'s: a field-to-field condition when both `ModelProperyLeft` and `ModelProperyRight` are
+strings naming a mapped property, a field-to-constant condition when only one does (the other
+argument is the value), and no join when neither does. The join type SHALL be `LeftOuter` for
+`ViewConnect.Check` and `Inner` for `ViewConnect.CheckExisting` and the default `ViewConnect.None`
+(TASK-626). A non-aggregate view field SHALL be the source field(s) from `LoadField`, re-pointed at
+the view property; an aggregate one SHALL be a `FunctionField` keyed by the view property. The view's
+`QueryMode` SHALL come from the first `[View]` attribute (default `OnTheFly`), its `Name` from the
+first attribute's non-empty `Name`, otherwise the distinct table names concatenated. A `[ViewField]`'s
+own `name` argument SHALL have no effect on the built view. A type yielding no table — no `[View]`
+attribute, or no field that resolves — SHALL make `LoadView` return `null` (uncached); the
+`TableAttributeException("No view attributes in type")` branch is unreachable. `ReadView` SHALL throw
+`TableAttributeException` when the data object's type has no view. The view field resolver SHALL be
+registered as `DataBase.ResolveFieldSelectName` by a module initializer, idempotently, so the first
+`ToConditions<TView>` in a process resolves view fields (TASK-111).
+
+#### Scenario: Default ViewConnect is an inner join
+
+- **Given** `[View(typeof(Customer), typeof(Order), "Guid", "CustomerGuid")]` with no `connect` argument
+- **When** `LoadView` builds the view
+- **Then** its single join is `JoinType.Inner` with condition `Customers.Guid = Orders.CustomerGuid` — it used to be `Cross`, whose condition was not rendered, answering the cartesian product
+
+#### Scenario: Check is a left outer join
+
+- **Given** the same attribute with `ViewConnect.Check`
+- **When** `LoadView` builds the view
+- **Then** the join is `JoinType.LeftOuter`
+
+#### Scenario: Name defaults to the concatenated table names
+
+- **Given** `[View]` attributes with no `Name` over tables `Customers` and `Orders`
+- **When** `LoadView` builds the view
+- **Then** `Name` is `"CustomersOrders"`; with `Name = "customer_orders"` on the first attribute it is `"customer_orders"`
+
+#### Scenario: A type with no view attributes yields null
+
+- **Given** a class with no `[View]` attribute
+- **When** `LoadView` runs
+- **Then** `null` is returned rather than an exception, so `SelectView` over it yields no rows and `SelectCountView` returns `0`
+
+### Requirement: View field metadata is keyed by the view property
+
+The system SHALL store each `Tables.View` field in its table's dictionary under the **view property**
+it populates (`field.Property.Name`, falling back to `field.Name` when no property is attached), or
+under an explicit `name` passed to `AddField`; a table is created on first use. Re-adding a field equal
+by value (same type, `Name`, `IsAggregate`, property name and declaring type) SHALL be a no-op, and a
+different field under a taken key SHALL throw `FieldAttributeException` naming both (TASK-207).
+`AddJoin` SHALL merge the conditions of a join with the same `Left`, `Right` and `JoinType` into the
+existing join, and append any other. The constructor SHALL derive `Name` from the table names only when
+no name is supplied (CR-M147). `GetPersistentViewSelectFields()` SHALL return, by position, the view
+property (else `Name`) of every field of every table; `HasAggregateFields()` SHALL be true when any
+table has an aggregate field.
+
+#### Scenario: Two view properties over one source column are two fields
+
+- **Given** `[ViewField(typeof(Person), "Name")] DisplayName` and `[ViewField(typeof(Person), "Name")] SortName`
+- **When** both are added
+- **Then** the table holds keys `DisplayName` and `SortName`, both with source `Name`
+
+#### Scenario: A key collision is refused
+
+- **Given** a view whose table already holds key `Total` for one field
+- **When** `AddField` presents a different field under `Total` (an explicit `name`, or `AddTable` of source fields)
+- **Then** `FieldAttributeException` is thrown — the second field is not dropped silently
+
+#### Scenario: A repeated [View] attribute re-adds fields idempotently
+
+- **Given** a view type with three `[View]` attributes, so `LoadView`'s per-property loop runs three times and presents fresh `AbstractField` instances
+- **When** the fields are added
+- **Then** each later add is recognised as the same field by value and nothing is thrown or duplicated
+
+### Requirement: Aggregate view columns are typed by function and source
+
+The system SHALL create an aggregate view column as a `FunctionField` whose single parameter is the
+source column name and whose `IsAggregate` is true: `COUNT` as an integer function and `AVG` as a
+decimal function, each nullable exactly when the source column is; `SUM`, `MIN` and `MAX` typed by the
+source field — integer, decimal, date-time, boolean and Guid sources giving the same-typed function
+(nullable when the source is), a char source a `CharFunction` of its length, and anything else a
+`StringFunction`, both of which are non-nullable regardless of the source. An aggregate attribute other
+than the five SHALL throw `NotSupportedException`. Each typed function SHALL read its column with the
+matching typed reader getter (`GetInt32`, `GetDecimal`, `GetDateTime`, `GetBoolean`, `GetGuid`,
+`GetString`), the nullable forms first assigning `null` for `DBNull`.
+
+#### Scenario: Average over an integer column is decimal
+
+- **Given** `[AvgField(typeof(Order), "Quantity")]` over a non-null integer column
+- **When** the view is built
+- **Then** the field is a `DecimalFunction` named `AVG` and read with `GetDecimal`
+
+#### Scenario: A nullable source gives a nullable aggregate column
+
+- **Given** `[MaxField(typeof(Order), "ShippedAt")]` over a nullable date-time column
+- **When** a row whose maximum is `NULL` is read
+- **Then** the field is a `NullableDateTimeFunction` and the view property is set to `null`
+
+#### Scenario: A string aggregate is always non-nullable
+
+- **Given** `[MinField(typeof(Person), "Nickname")]` over a nullable string column
+- **When** a group whose every `Nickname` is `NULL` is read
+- **Then** the field is a `StringFunction`, and `GetString` on the `DBNull` column throws
+
+### Requirement: The view SELECT body has one builder
+
+The system SHALL build the `SELECT` that defines a view's body — used by `CREATE VIEW`, PostgreSQL
+materialized views and SQL Server indexed views — in `ViewSelectSqlBuilder.BuildViewSelectSql(view,
+quoteIdentifier, qualifyTableName)`, throwing `ArgumentNullException` for a null view or quoting
+delegate, `InvalidOperationException("View has no source table to select from.")` when no table has a
+name and `InvalidOperationException("View must have at least one field.")` when nothing is projected. A
+view with no join SHALL select from its one table (TASK-151). Each column SHALL be the table-qualified
+projection with the table quoted and the column bare, aliased `AS <ViewProperty>` bare when the field
+has a property (TASK-209); aggregates SHALL be projected without their own alias so only one `AS`
+appears (TASK-129). The `FROM` SHALL list the tables no join brings in, each followed by its joins
+grouped by right table and join type, the keyword from `Join.Keyword` (which refuses a `Cross` join with
+conditions and an `Inner`/`LeftOuter` join without), and `ON (…)` conditions joined by `AND`: a
+field-to-field condition as `"Left".Column = "Right".Column`, a constant condition as `"Table".Column =
+<literal>` — `TRUE`/`FALSE` for a bool, an invariant-culture number, or a single-quoted string with its
+quotes doubled — and a constant condition with a null value omitted. An aggregate view SHALL end with
+`GROUP BY` over its non-aggregate projections. `qualifyTableName` SHALL change only the `FROM`/`JOIN`
+table token; the connector passes `ViewRelation`, which renders a schema-placed table as its relation
+aliased by the quoted logical name (TASK-272).
+
+#### Scenario: A grouped join view body
+
+- **Given** a view joining `Customers` to `Orders` inner on `Guid = CustomerGuid`, selecting `Customers.Name → CustomerName` and `COUNT(Orders.Guid) → OrderCount`
+- **When** the body is built with double-quote quoting
+- **Then** it reads `SELECT "Customers".Name AS CustomerName, COUNT("Orders".Guid) AS OrderCount FROM "Customers" INNER JOIN "Orders" ON ("Customers".Guid = "Orders".CustomerGuid) GROUP BY "Customers".Name` — one alias per column, tables quoted, columns bare
+
+#### Scenario: A constant join condition is rendered as a literal
+
+- **Given** a `[View]` whose right property is the string constant `"O'Brien"` rather than a mapped property
+- **When** the body is built
+- **Then** the condition is `"Table".Column = 'O''Brien'`; a `true` constant renders `TRUE` and `1.5` renders `1.5` under any culture
+
+#### Scenario: A view with no table is refused
+
+- **Given** a `Tables.View` with no named table
+- **When** `BuildViewSelectSql` runs
+- **Then** `InvalidOperationException("View has no source table to select from.")` is thrown
+
+### Requirement: On-the-fly view read and count commands
+
+The system SHALL build the on-the-fly view read through the entity `CreateSelectCommand` with the view's
+`FROM` tables (`ViewFromTables`: the tables no join's right side names, or every table when there is no
+join), `GetSelectFields()`, the view's joins, the conditions, the non-aggregate projections as `GROUP BY`
+when the view aggregates, and the resolved order, limit and offset; a null view SHALL throw
+`ArgumentNullException`. The on-the-fly count SHALL be `SELECT COUNT(*) FROM (<inner>) birko_view_count`,
+where the inner select projects the constant `1 AS birko_one` grouped as the view is — or `COUNT(*) AS
+birko_one` with no grouping for an aggregate view with no non-aggregate field — so it counts the rows a
+query returns (TASK-151).
+
+#### Scenario: A grouped view counts its groups
+
+- **Given** a view grouping 1 000 000 orders into 12 statuses
+- **When** `SelectCount(view)` runs on-the-fly
+- **Then** the inner select is grouped by the status column and the count is `12` — it used to count the joined source rows
+
+#### Scenario: A whole-table aggregate counts one row
+
+- **Given** a view whose only field is `SUM(Orders.Amount)`
+- **When** it is counted on-the-fly
+- **Then** the inner select is `SELECT COUNT(*) AS birko_one …` with no `GROUP BY`, and the count is `1`
+
+### Requirement: Persistent-path selection and the view-existence cache
+
+The system SHALL decide per read and per count whether to query the persistent view:
+`OnTheFly` never, `Persistent` always, and `Auto` only when the view has a name and the existence check
+answers true. In `Auto` it SHALL cache only a positive answer, per connector instance and view name, so a
+`false` (absent, or a swallowed transient failure) is re-checked on the next query (CR-M149).
+`CreateView`, `DropView`, `CreateIndexedView` and `DropIndexedView` SHALL invalidate the name's cache
+entry; `ClearViewExistsCache` and `InvalidateViewExistsCache` SHALL be public. Both the sync and the
+async read and count funnels SHALL use the **synchronous** `ViewExists` for this check. A null view SHALL
+make the read yield nothing and the count return `0`.
+
+#### Scenario: Auto falls back while the view is absent, then uses it
+
+- **Given** an `Auto` view named `"order_summary"` that does not yet exist
+- **When** it is read, the view is created through `CreateView`, and it is read again
+- **Then** the first read runs on-the-fly, the existence check runs again on the second read (the `false` was not cached) and the second read queries the view
+
+#### Scenario: Persistent never checks existence
+
+- **Given** a `Persistent` view
+- **When** it is read
+- **Then** no existence check runs and the persistent command is issued — a missing view surfaces as the database's error
+
+### Requirement: Persistent view read and count commands
+
+The system SHALL read a persistent view as `SELECT <persistent columns, bare> FROM <QuoteIdentifier(name)>`,
+with the resolved conditions, the resolved `ORDER BY` when sort keys are given, otherwise
+`ORDER BY <PagingPlaceholderOrderBy>` when paging on a provider whose `RequiresOrderByForPaging` is set
+(SQL Server, TASK-278), and the provider's limit/offset clause whenever either is set (TASK-151). It
+SHALL throw `InvalidOperationException` for an empty view name or a view with no fields. Rows SHALL be
+transformed with `GetPersistentViewSelectFields()` on this path and `GetSelectFields()` on the
+on-the-fly path. A persistent count SHALL be `SELECT COUNT(*) FROM <quoted name>` with the resolved
+conditions; when the persistent path is chosen but the view's name is empty, the count SHALL instead run
+the on-the-fly count (the read throws).
+
+#### Scenario: Offset alone pages on SQL Server
+
+- **Given** a persistent view on SQL Server and a read with `offset: 20`, no limit and no order
+- **When** the command is built
+- **Then** it carries the placeholder `ORDER BY` followed by the provider's offset clause
+
+#### Scenario: Persistent count
+
+- **Given** a persistent view `"order_summary"` and a filter on `PersonName`
+- **When** `SelectCount` runs
+- **Then** the command is `SELECT COUNT(*) FROM "order_summary"` followed by a `WHERE` on `PersonName` (the condition already resolved to the view's column)
+
+### Requirement: Connector view DDL operations
+
+The system SHALL offer on both connector families: `CreateView(Async)` from a view type (throwing
+`InvalidOperationException` when `LoadView` yields no tables) or from `Tables.View` (throwing
+`ArgumentNullException` for null and `InvalidOperationException` when neither the `viewName` argument nor
+`View.Name` is non-blank), issuing `BuildCreateViewSql(name, BuildViewSelectSql(view))` as DDL —
+`CREATE OR REPLACE VIEW <quoted> AS …` by default; `CreateViews(Async)` over a list (a null list a
+no-op); `DropView(Async)` by type or name as `DROP VIEW IF EXISTS <quoted>` (a blank name
+`ArgumentException`, an unnamed type `InvalidOperationException`); `DropViews(Async)` skipping blank
+names; `RecreateView(Async)` as drop then create; and `CreateViewIfNotExists(Async)`, creating only when
+`ViewExists(Async)` answers false. The base `ViewExists(Async)` SHALL throw `ArgumentException` for a
+blank name, run `SELECT 1 FROM <quoted> WHERE 1=0`, and answer `false` on **any** exception — so it
+answers `true` for a table of that name as well as a view.
+
+#### Scenario: Default CREATE VIEW replaces
+
+- **Given** a provider with no `BuildCreateViewSql` override (MySQL, PostgreSQL)
+- **When** `CreateView(typeof(CustomerOrders))` runs
+- **Then** `CREATE OR REPLACE VIEW "<name>" AS <body>` is executed and the name's existence-cache entry is removed
+
+#### Scenario: The base existence check swallows every failure
+
+- **Given** a connector without a provider override and a lost connection
+- **When** `ViewExists("order_summary")` runs
+- **Then** `false` is returned and no exception escapes
+
+### Requirement: Provider view DDL and existence overrides
+
+The system SHALL override view DDL and existence per provider: **SQL Server** creates with
+`CREATE OR ALTER VIEW` and checks `sys.views WHERE name = @viewName`; **SQLite** creates with
+`CREATE VIEW IF NOT EXISTS` — so an existing view of that name is kept, not replaced — and checks
+`sqlite_master WHERE type = 'view'`; **MySQL** keeps `CREATE OR REPLACE VIEW` and checks
+`information_schema.VIEWS` in `DATABASE()`; **PostgreSQL** keeps `CREATE OR REPLACE VIEW` and checks
+`information_schema.views` in `current_schema()` (CR-L191). Every override binds the name as the
+parameter `@viewName`, throws `ArgumentException` for a blank name, and lets a database error propagate
+rather than answering `false`. SQLite and MySQL override both `ViewExists` and `ViewExistsAsync`; SQL
+Server and PostgreSQL override only the synchronous `ViewExists`, their `ViewExistsAsync` being the
+base relation probe.
+
+#### Scenario: SQLite does not replace an existing view
+
+- **Given** a SQLite view `"order_summary"` created from an older definition
+- **When** `CreateView` is called with a new definition
+- **Then** `CREATE VIEW IF NOT EXISTS` keeps the old view; only `SqlViewManager.EnsureAsync`'s drop-then-create (or `RecreateView`) brings the new definition in
+
+#### Scenario: A same-named table is not a view on SQLite, MySQL and PostgreSQL
+
+- **Given** a table, not a view, named `"order_summary"`
+- **When** the provider's `ViewExists("order_summary")` runs
+- **Then** SQLite, MySQL, PostgreSQL and SQL Server answer `false` from their catalogue queries, whereas the base probe used by SQL Server's and PostgreSQL's `ViewExistsAsync` answers `true`
+
+### Requirement: SQL Server indexed views
+
+The system SHALL let `MSSqlConnector.CreateIndexedView(Async)(viewType, viewName)` create a
+`WITH SCHEMABINDING` view with `CREATE OR ALTER VIEW`, its body built by the shared builder with two-part
+table names (the table's own schema, else `GetSchemaName()`, default `dbo`; TASK-272), and then
+`CREATE UNIQUE CLUSTERED INDEX "IX_<name>" ON <quoted name> (<key columns>)`, invalidating the name's
+existence-cache entry (CR-H090). It SHALL refuse an aggregate view with `NotSupportedException`
+(SCHEMABINDING aggregates need `COUNT_BIG(*)`, which the builder does not emit), and throw
+`InvalidOperationException` for a type with no view tables, an empty name, or no field to index. The key
+columns SHALL be the primary-key fields of the first table that has any, else the unique fields of the
+first table that has any, else the first table's first field, each rendered as quoted
+`"Table"."Column"`. `DropIndexedView(Async)` SHALL issue `DROP VIEW IF EXISTS` and invalidate the cache;
+`IndexedViewExists(Async)` SHALL answer whether a non-shipped view of that name has a clustered index. The
+async forms SHALL use the connector's async primitives with the token (CR-M139).
+
+#### Scenario: An aggregate indexed view is refused
+
+- **Given** a view type with a `[CountField]`
+- **When** `CreateIndexedView` runs
+- **Then** `NotSupportedException` is thrown before any DDL
+
+#### Scenario: Index key columns come from the primary key
+
+- **Given** a non-aggregate view over `Orders` whose primary key is `Guid`
+- **When** `CreateIndexedView(typeof(OrderView), "order_view")` runs
+- **Then** the index statement is `CREATE UNIQUE CLUSTERED INDEX [IX_order_view] ON [order_view] ([Orders].[Guid])` — a table-qualified source column, although the view's own column is aliased by its view property
+
+### Requirement: PostgreSQL materialized views
+
+The system SHALL let `PostgreSQLConnector` create a materialized view from a view type with
+`CREATE MATERIALIZED VIEW IF NOT EXISTS <quoted> AS <body>` (an existing one is kept), refresh it with
+`REFRESH MATERIALIZED VIEW [CONCURRENTLY] <quoted>`, drop it with `DROP MATERIALIZED VIEW IF EXISTS`, and
+check it in `pg_matviews` for `current_schema()`, throwing `ArgumentException` for a blank name and
+`InvalidOperationException` for a type with no view tables or no name. The async forms SHALL run the
+synchronous operation on `Task.Run`, observing the token only before the work starts. Materialized views
+SHALL NOT be reached by `ViewExists`, the existence cache, or `SqlViewManager.RefreshAsync`;
+`MaterializedViewType` SHALL be an unreferenced enum.
+
+#### Scenario: Concurrent refresh
+
+- **Given** a materialized view `"order_summary"`
+- **When** `RefreshMaterializedView("order_summary", concurrently: true)` runs
+- **Then** `REFRESH MATERIALIZED VIEW CONCURRENTLY "order_summary"` is executed
+
+#### Scenario: Auto mode does not see a materialized view
+
+- **Given** an `Auto` view whose name exists only as a materialized view
+- **When** it is read
+- **Then** `ViewExists` (over `information_schema.views`) answers `false` and the read runs on-the-fly
 
 ### Requirement: MongoDB pipeline translation
 
@@ -1335,6 +1698,47 @@ Grouping SHALL NOT mutate the source entities.
 - **Given** aggregate results and `OrderBy == { ["sum_Total"] = true }`, `Offset == 2`, `Limit == 3`
 - **When** `ApplyOrderingAndPaging` runs
 - **Then** the rows are sorted descending by the boxed value of `sum_Total`, the first two are skipped and at most three are returned; multiple order entries chain via `ThenBy`/`ThenByDescending` in the dictionary's enumeration order
+
+### Requirement: SQL native aggregation
+
+The system SHALL let a SQL connector answer an `AggregateQuery<T>` with one `GROUP BY` statement
+through `SelectAggregate<T>(type, query)` (sync) and `SelectAggregateAsync<T>(type, query, ct)`
+(async, streaming), yielding nothing when `DataBase.LoadTable(type)` returns null. The statement
+SHALL select from the type's one table with no joins; each group-by field SHALL be both selected
+and grouped by; a time bucket, when both `TimeBucketInterval` and `TimeColumn` are set, SHALL be
+selected as `time_bucket('{TimeIntervalParser.ToSqlInterval(interval)}', {column}) AS bucket_time`
+and grouped by `bucket_time`; each aggregate SHALL be selected as `{FN}({column}) AS
+{QuoteIdentifier(ResolvedAlias)}`, a `Count` always as `COUNT(*)` whatever its source property; the
+filter SHALL be parsed with `DataBase.ParseConditionExpression`; and `query.OrderBy`, `Limit` and
+`Offset` SHALL be passed to the entity `CreateSelectCommand`. Every property name — group-by field,
+time column, aggregate source — SHALL be resolved to its SQL column by `ResolveSqlName`, which matches
+the type's field metadata case-insensitively on property name and, when nothing matches, **uses the
+supplied name as-is**. Each row SHALL become an `AggregateResult` keyed by the reader's column names,
+`DBNull` read as `null`.
+
+#### Scenario: A grouped sum is one GROUP BY statement
+
+- **Given** `AggregateQuery<Order>` with `GroupByFields == ["Status"]` and `Sum` of `Total`
+- **When** `SelectAggregate` builds the command
+- **Then** it selects `Status` and `SUM(Total) AS <quoted "sum_Total">` from the order table, grouped by `Status`, and each row's result carries the reader's column names as keys
+
+#### Scenario: Count ignores its source property
+
+- **Given** an `AggregateField(Count, "Guid", "n")`
+- **When** the select list is built
+- **Then** the column is `COUNT(*) AS <quoted "n">` — the source property is not consulted
+
+#### Scenario: An unknown property name reaches the statement verbatim
+
+- **Given** a group-by field, time column or aggregate source naming no property of the type
+- **When** the select list is built
+- **Then** `ResolveSqlName` returns the supplied text unchanged and it is interpolated into the SELECT / GROUP BY — no refusal is raised before the database sees it
+
+#### Scenario: Time bucketing emits time_bucket
+
+- **Given** `TimeBucketInterval == "1 hour"` and `TimeColumn == "Created"`
+- **When** the select list is built
+- **Then** it contains `time_bucket('1 hours', Created) AS bucket_time` and `bucket_time` is a GROUP BY key — a TimescaleDB function, so on a provider without it the statement fails at the database; an interval `TimeIntervalParser` cannot parse is embedded between the quotes verbatim
 
 ### Requirement: Pure aggregate computation
 

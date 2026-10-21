@@ -1,8 +1,30 @@
 ---
 area: llm-provider-and-agents
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
+  - ../Birko.AI.Agents/Agents/AgentRegistration.cs
+  - ../Birko.AI.Agents/Agents/Coding/DebugAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/DocumentationAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/RefactorAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/AngularCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/AssemblerCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/CSharpCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/CppCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/CssCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/HtmlCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/JavaScriptTypeScriptCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/PhpCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/PythonCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/Specialized/ReactCodingAgent.cs
+  - ../Birko.AI.Agents/Agents/Coding/TestAgent.cs
+  - ../Birko.AI.Agents/Agents/CodingAgent.cs
+  - ../Birko.AI.Agents/Agents/DiagrammingAgent.cs
+  - ../Birko.AI.Agents/Agents/Media/BitmapAgent.cs
+  - ../Birko.AI.Agents/Agents/Media/ImageAgent.cs
+  - ../Birko.AI.Agents/Agents/Media/SvgAgent.cs
+  - ../Birko.AI.Agents/Agents/MediaAgent.cs
+  - ../Birko.AI.Agents/Agents/OrchestratorAgent.cs
   - ../Birko.AI.Contracts/AgentOptions.cs
   - ../Birko.AI.Contracts/LlmProviderFactory.cs
   - ../Birko.AI.Contracts/Models/ContentBlock.cs
@@ -15,8 +37,50 @@ sources:
   - ../Birko.AI.Contracts/Models/TokenUsage.cs
   - ../Birko.AI.Contracts/Providers/ILlmProvider.cs
   - ../Birko.AI.Contracts/Tools/Tool.cs
+  - ../Birko.AI.Orchestration/Dispatch/DirectTaskDispatcher.cs
+  - ../Birko.AI.Orchestration/Dispatch/ITaskDispatcher.cs
+  - ../Birko.AI.Orchestration/Models/AgentTaskRecord.cs
+  - ../Birko.AI.Orchestration/Models/AgentTaskStatus.cs
+  - ../Birko.AI.Orchestration/Models/EscalationAlert.cs
+  - ../Birko.AI.Orchestration/Models/ExecutionMetrics.cs
+  - ../Birko.AI.Orchestration/Models/ImplementationPlan.cs
+  - ../Birko.AI.Orchestration/Models/TaskAssignment.cs
+  - ../Birko.AI.Orchestration/Services/StepDependencyAnalyzer.cs
+  - ../Birko.AI.Orchestration/Validation/IStepValidator.cs
+  - ../Birko.AI.Orchestration/Validation/StepValidationService.cs
+  - ../Birko.AI.Orchestration/Validation/StepValidators.cs
+  - ../Birko.AI.Providers/ProviderRegistration.cs
+  - ../Birko.AI.Providers/Providers/AzureOpenAiProvider.cs
+  - ../Birko.AI.Providers/Providers/ClaudeProvider.cs
+  - ../Birko.AI.Providers/Providers/DeepSeekProvider.cs
+  - ../Birko.AI.Providers/Providers/GeminiProvider.cs
+  - ../Birko.AI.Providers/Providers/GitHubCopilotProvider.cs
+  - ../Birko.AI.Providers/Providers/GroqProvider.cs
+  - ../Birko.AI.Providers/Providers/LlamaCppProvider.cs
+  - ../Birko.AI.Providers/Providers/LmStudioProvider.cs
+  - ../Birko.AI.Providers/Providers/MistralProvider.cs
+  - ../Birko.AI.Providers/Providers/OllamaProvider.cs
+  - ../Birko.AI.Providers/Providers/OpenAiCompatibleProviderBase.cs
+  - ../Birko.AI.Providers/Providers/OpenAiProvider.cs
+  - ../Birko.AI.Providers/Providers/OpenRouterProvider.cs
+  - ../Birko.AI.Providers/Providers/SglangProvider.cs
+  - ../Birko.AI.Providers/Providers/VllmProvider.cs
+  - ../Birko.AI.Providers/Providers/ZAiProvider.cs
+  - ../Birko.AI.Resilience.Data/Models/CircuitBreakerStateModel.cs
+  - ../Birko.AI.Resilience.Data/Models/UsageRecordModel.cs
+  - ../Birko.AI.Resilience.Data/Stores/StoreCircuitBreakerStore.cs
+  - ../Birko.AI.Resilience.Data/Stores/StoreUsageRepository.cs
+  - ../Birko.AI.Resilience/Configuration/CostTrackingConfiguration.cs
+  - ../Birko.AI.Resilience/Configuration/RateLimitConfiguration.cs
+  - ../Birko.AI.Resilience/Services/CostTrackingService.cs
+  - ../Birko.AI.Resilience/Services/ProviderCircuitBreaker.cs
+  - ../Birko.AI.Resilience/Services/ProviderRateLimiter.cs
+  - ../Birko.AI.Resilience/Services/TrackedLlmProvider.cs
+  - ../Birko.AI.Resilience/Stores/ICircuitBreakerStore.cs
+  - ../Birko.AI.Resilience/Stores/IUsageRepository.cs
   - ../Birko.AI/Agents/Agent.cs
   - ../Birko.AI/Agents/AgentHooks.cs
+  - ../Birko.AI/Agents/AgentRunResult.cs
   - ../Birko.AI/Factories/AgentFactory.cs
   - ../Birko.AI/Providers/LlmProviderBase.cs
   - ../Birko.AI/Tools/AppendToFileTool.cs
@@ -29,16 +93,14 @@ sources:
   - ../Birko.AI/Tools/SearchCodeTool.cs
   - ../Birko.AI/Tools/WorkspacePath.cs
   - ../Birko.AI/Tools/WriteFileTool.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
-shaped-by: [FEATURE-006]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
+shaped-by: [FEATURE-006, FEATURE-014]
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
-
 # LLM provider contract, agent run loop and tool execution
 
 ## Purpose
@@ -54,6 +116,16 @@ execute-tools loop; and nine built-in tools give an agent filesystem, search, sh
 user-interaction capabilities inside a confined working directory. Consumers depend on this
 layer through the two static registries (`LlmProviderFactory`, `AgentFactory`) so no consumer
 needs a compile-time reference to a concrete provider or agent type.
+
+Around that core sit four satellite projects. `Birko.AI.Providers` holds the concrete HTTP providers
+(OpenAI, Azure OpenAI, Claude, Gemini, Ollama, Z.AI, GitHub Copilot and an OpenAI-compatible base
+shared by llama.cpp, vLLM, SGLang, Mistral, DeepSeek, Groq, LM Studio and OpenRouter) and registers
+them with `LlmProviderFactory`. `Birko.AI.Agents` holds the prompt-only agent catalogue (coding,
+language-specialised, task, media and orchestrator agents) and registers it with `AgentFactory`.
+`Birko.AI.Resilience` decorates a provider with rate limiting and cost/budget tracking and offers a
+per-provider circuit breaker; `Birko.AI.Resilience.Data` persists both over any `IAsyncBulkStore`.
+`Birko.AI.Orchestration` holds the plan/step model, file-dependency analysis, step validators and an
+in-process task dispatcher that multi-agent hosts build on.
 
 ## Requirements
 
@@ -174,11 +246,12 @@ code numerically `>= 500`. The default `RetryPolicy` for a provider SHALL be `Ma
 - **Then** it is treated as a retryable timeout; a `TaskCanceledException` from caller
   cancellation (no inner `TimeoutException`) matches no catch clause and propagates immediately
 
-#### Scenario: Policy with negative MaxRetries performs no request
+#### Scenario: Policy with negative MaxRetries still sends once
 
 - **Given** a `RetryPolicy` with `MaxRetries = -1`
-- **When** `SendWithRetryAsync` is invoked
-- **Then** the loop body never runs and `(null, null)` is returned
+- **When** `SendWithRetryAsync` or `ConnectStreamingAsync` is invoked
+- **Then** the policy is clamped to `MaxRetries = 0` and exactly one request is sent (TASK-173, SH-L148: the loop
+  body never ran and `(null, null)` was returned)
 
 ### Requirement: The returned HTTP response is already disposed
 
@@ -206,7 +279,10 @@ underlying exception.
 
 - **Given** a streaming endpoint returning 401
 - **When** `SendStreamingWithRetryAsync` is invoked
-- **Then** `"{providerName} API Error: 401"` is emitted, the response is disposed and `null` is returned
+- **Then** `"{providerName} API Error (Unauthorized): {detail}"` is emitted — or
+  `"{providerName} API Error: Unauthorized"` when no detail can be extracted from the body, the status rendered as
+  its `HttpStatusCode` name (TASK-173, SH-L146: the provider's explanation used to be dropped) — the response is
+  disposed and `null` is returned
 
 #### Scenario: Streaming network error diverges from the non-streaming path
 
@@ -354,6 +430,20 @@ becomes the empty string; and any other content is passed through as-is.
 - **When** the branch check fails
 - **Then** the raw object list is emitted as the `content` of a single `{role, content}` entry
 
+#### Scenario: A message with no role is refused with its position
+
+- **Given** a conversation whose third message has a null or empty `Role`
+- **When** `BuildOpenAiStyleMessages` runs
+- **Then** `InvalidOperationException("Message 2 has no role.")` is thrown (TASK-173, SH-L154: it went out as
+  `"role": null` and the API refused the whole request without naming the turn)
+
+#### Scenario: Block types are matched exactly
+
+- **Given** an assistant `ContentBlock` whose `Type` is `"Tool_Use"`
+- **When** `BuildOpenAiStyleMessages` runs
+- **Then** it is neither a text block nor a tool call, as the agent's own dispatch treats it (TASK-173, SH-L153);
+  `ConvertJsonElementMessage`, by contrast, lower-cases a `JsonElement` block's `type` before matching
+
 ### Requirement: JsonElement content is converted with tool-result precedence
 
 The system SHALL convert a `JsonElement` array content, in `ConvertJsonElementMessage`, by
@@ -407,7 +497,8 @@ SH-M160: `finish_reason` was never read). Every probe is shape-guarded (SH-M157.
 read by `ReadTokenCount` (a whole-valued fraction rounds, anything else is 0). An `error` object or string SHALL yield
 `LlmResponse.Error($"API returned error: {type} - {message}")`, and any thrown exception during
 parsing SHALL yield `LlmResponse.Error($"Error parsing OpenAI-style response: {ex.Message}")`.
-Both error paths SHALL also invoke the supplied message callback with type `"error"`.
+Both error paths SHALL also invoke the supplied message callback with type `"error"`, and both SHALL carry
+`Failure.Kind = InvalidResponse` (permanent) — including an `error` object whose `type` names a rate limit.
 
 #### Scenario: Tool call response
 
@@ -433,9 +524,9 @@ Both error paths SHALL also invoke the supplied message callback with type `"err
 
 #### Scenario: Missing choices array
 
-- **Given** a body with neither `error` nor `choices`
-- **When** `result.GetProperty("choices")` throws
-- **Then** the result is an error `LlmResponse` with `StopReason = "error"`
+- **Given** a body with neither `error` nor `choices` (or a `choices` that is not a non-empty array)
+- **When** the parser throws `JsonException("The response has no choices.")`
+- **Then** the result is an error `LlmResponse` with `StopReason = "error"` and `Failure.Kind = InvalidResponse`
 
 #### Scenario: Usage and model capture
 
@@ -527,8 +618,8 @@ SHALL be skipped or read as 0, never thrown mid-stream (SH-M162, SH-M163).
 
 - **Given** a stream whose final `finish_reason` is `"length"`, with or without tool calls
 - **When** the stream completes
-- **Then** `StopReason` is `"max_tokens"` and no tool call is returned; the agent's stop-reason switch treats it as an
-  unexpected reason and stops the loop
+- **Then** `StopReason` is `"max_tokens"` and no tool call is returned; the agent's stop-reason switch ends the run
+  with the `Truncated` outcome (TASK-660)
 
 #### Scenario: Unparseable chunk is skipped
 
@@ -540,9 +631,8 @@ SHALL be skipped or read as 0, never thrown mid-stream (SH-M162, SH-M163).
 
 - **Given** a chunk with a non-empty `choices` array whose element has no `delta` property
 - **When** the tool-capture parser reads it
-- **Then** the `TryGetProperty("delta")` guard skips it, while the simpler
-  `ParseOpenAiStreamChunks` calls `choices[0].GetProperty("delta")` and throws
-  `KeyNotFoundException` out of the enumerator
+- **Then** the `TryGetProperty("delta")` guard skips it, and the simpler `ParseOpenAiStreamChunks` skips it the
+  same way (TASK-160, SH-M163: it called `GetProperty("delta")` and threw `KeyNotFoundException` out of the enumerator)
 
 ### Requirement: Message text is read shape-independently
 
@@ -618,12 +708,18 @@ SH-M171: scalars were copied unconditionally, so merging options that set only a
 - **When** `Clone()` is called and the clone's list is mutated
 - **Then** the original list is unaffected
 
-#### Scenario: Merging a default instance resets scalars
+#### Scenario: Merging a default instance changes nothing
 
 - **Given** options with `MaxIterations = 50` and `Verbose = false`
 - **When** `Merge(new AgentOptions())` is called
-- **Then** `MaxIterations` becomes 10 and `Verbose` becomes `true`, because scalar fields are
-  copied without an "is specified" guard
+- **Then** `MaxIterations` stays 50 and `Verbose` stays `false`, because a field the other instance left at its
+  default is "not set" (TASK-160, SH-M171: both used to be reset to their defaults)
+
+#### Scenario: Merge cannot restore a default
+
+- **Given** options with `MaxIterations = 50`
+- **When** `Merge` is called with an `other` whose `MaxIterations` is explicitly 10 (the default)
+- **Then** `MaxIterations` stays 50; restoring a default needs a direct assignment
 
 #### Scenario: Merging preserves a working directory the caller did not set
 
@@ -658,6 +754,13 @@ including `checkpointInterval`, whose option was removed — SHALL be ignored.
 - **When** `FromDictionary` runs
 - **Then** `AllowedExternalPaths` is an empty list rather than a list holding one empty string
 
+#### Scenario: Blank working directory keeps the default
+
+- **Given** the config `{"workingDirectory": "  "}`
+- **When** `FromDictionary` runs
+- **Then** `WorkingDirectory` remains `"./"` (TASK-173, SH-L162: the empty value replaced it and every file tool
+  then failed); a null `config` is an `ArgumentNullException`
+
 #### Scenario: Null default prompt response is omitted
 
 - **Given** options with `DefaultPromptResponse = null`
@@ -687,6 +790,19 @@ flight was given.
 - **Given** `llmProvider = null`
 - **When** the constructor runs
 - **Then** `ArgumentNullException` is thrown for `llmProvider`
+
+#### Scenario: Tool list changes never touch a list already handed out
+
+- **Given** a reference to `agent.Tools` taken before `AddTool(t)` or `RemoveTool(name)`
+- **When** the change is made
+- **Then** the earlier reference is unchanged and the next model call receives the new list; `AddTool(null)` throws
+  `ArgumentNullException` (TASK-173, SH-L158)
+
+#### Scenario: Fewer than one iteration is refused
+
+- **Given** `Options.MaxIterations = 0`, or `RunAsync(task, maxIterations: 0)`
+- **When** the run starts
+- **Then** `ArgumentOutOfRangeException` is thrown and no provider call is made
 
 #### Scenario: Removing an unknown tool
 
@@ -730,7 +846,9 @@ tools plus `SystemPrompt` to the provider, invoking `Options.OnLlmResponseReceiv
 streaming after the stream has been read, never for a stream that failed (TASK-173, SH-L156) —
 appending the assistant turn to the conversation, then dispatching on the stop reason. When the
 loop finishes without a terminal stop reason it SHALL emit a `"warning"` (when `Verbose`) stating
-the maximum was reached and return the conversation.
+the maximum was reached and return the conversation with the `MaxIterationsReached` outcome. That exit is not
+reached today: a `tool_use` turn on the last iteration already ends the run as `MaxIterationsReached` (below).
+The iteration message SHALL carry a `" (streaming)"` suffix on the streamed call.
 
 #### Scenario: RunAsync seeds a single user turn
 
@@ -850,9 +968,10 @@ converted into `InvalidOperationException($"Streaming failed: {error}")`.
 The system SHALL dispatch on `LlmResponse.StopReason`: `"tool_use"` executes the requested tools
 and normally continues; `"end_turn"` emits every text block as `"assistant_final"` and stops;
 `"error"` emits `"LLM request failed: {ErrorMessage ?? "Unknown LLM error"}"` and stops;
-`"NotConfigured"` emits the provider-not-configured error and stops; any other value (including
-`null`) emits a `"warning"` when `Verbose` and stops. For the `"error"` and `"NotConfigured"`
-cases the system SHALL ensure the assistant turn carries the error text.
+`"NotConfigured"` emits the provider-not-configured error and stops; `"max_tokens"` emits the `"warning"`
+`"The model's output was cut off by its token limit. Stopping."` when `Verbose` and stops; any other value (including
+`null`) emits a `"warning"` `"Unexpected stop reason: {reason ?? "unknown"}. Stopping."` when `Verbose` and stops. For
+the `"error"` and `"NotConfigured"` cases the system SHALL ensure the assistant turn carries the error text.
 
 The system SHALL report how the run ended (TASK-660, decided by the user: a result type from new overloads).
 `RunWithOutcomeAsync` / `ContinueWithOutcomeAsync` / `ResumeWithOutcomeAsync` return an `AgentRunResult(Conversation,
@@ -883,6 +1002,20 @@ never written into the conversation (an unexpected stop injects no text, whateve
 - **Given** a response with `StopReason = "content_filter"`
 - **When** the run is made through `RunAsync` and through `RunWithOutcomeAsync`
 - **Then** both conversations are equal, and the result's outcome is `UnexpectedStop` with `StopReason = "content_filter"`
+
+#### Scenario: A hook stop before any model call carries no stop reason
+
+- **Given** an iteration hook that calls `Stop("budget")` at iteration 1
+- **When** `RunWithOutcomeAsync` runs
+- **Then** the outcome is `StoppedByHook`, `Detail = "budget"`, `StopReason` and `Failure` are null and `IsCompleted`
+  is false; `IsCompleted` is true only for `Completed`
+
+#### Scenario: The outcome methods share the refusals of their conversation siblings
+
+- **Given** an empty conversation
+- **When** `ResumeWithOutcomeAsync` is called
+- **Then** `ArgumentException` is thrown, as `ResumeAsync` throws; `ContinueWithOutcomeAsync` copies the caller's
+  history as `ContinueAsync` does
 
 #### Scenario: Error response with no content gets error text injected
 
@@ -1169,13 +1302,14 @@ the check fails.
 - **When** `search_code` executes
 - **Then** the directory is searched, as every other file tool would read it
 
-#### Scenario: Absolute-looking path handling differs between tools
+#### Scenario: A single leading slash is workspace-relative for every path-taking file tool
 
-- **Given** `file_path = "/etc/passwd"`
-- **When** `read_file` or `list_files` runs
-- **Then** the leading `/` is stripped and the path is resolved relative to the workspace,
-  whereas `write_file`, `edit_file` and `append_to_file` pass it straight to `Path.Combine`,
-  where a rooted path discards the workspace prefix and the safety check then denies it
+- **Given** `file_path = "/etc/passwd"` (or `directory = "/etc"` for `list_files`)
+- **When** `read_file`, `write_file`, `edit_file`, `append_to_file` or `list_files` runs
+- **Then** the leading `/` is stripped and the path is resolved under the workspace (`etc/passwd`); a `//` prefix or a
+  drive-rooted path stays absolute and must pass the allow-list (TASK-173, SH-L171: the three write tools used a bare
+  `Path.Combine`, so a rooted path discarded the workspace and was denied). `search_code` still joins `directory` with
+  a bare `Path.Combine`
 
 ### Requirement: read_file returns raw content or an error string
 
@@ -1228,6 +1362,12 @@ The system SHALL resolve a model-supplied path through `WorkspacePath.Resolve` i
 `edit_file` and `append_to_file` (TASK-173, SH-L171): a single leading `/` is workspace-relative, and the result is
 a full path checked against the workspace and the allow-list. `write_file` and the other two used a bare
 `Path.Combine`, so `/src/x.cs` was read but denied for writing.
+
+#### Scenario: Read and write agree on a slash-prefixed path
+
+- **Given** `file_path = "/src/x.cs"` in workspace `C:\repo`
+- **When** `write_file` creates it and `read_file` then reads it
+- **Then** both resolve `C:\repo\src\x.cs`, the write returns `"OK"` and the read returns the written content
 
 ### Requirement: write_file refuses to clobber by default
 
@@ -1344,9 +1484,11 @@ return an `"Error: the regex timed out …"` string, and the caller's cancellati
 
 The system SHALL require a non-empty `command`, an existing `workingDirectory` and a positive
 `timeout_seconds` (default 120), and run the process through `Birko.Helpers.ProcessRunner` (TASK-534, the one
-runner): both standard streams drained concurrently from the start, the process tree killed on timeout. It SHALL
-return stderr appended to stdout when stderr is non-empty or stdout alone otherwise, and SHALL let the caller's
-cancellation propagate as `OperationCanceledException`.
+runner): both standard streams drained concurrently from the start, the process tree killed on timeout. No shell
+runs the command (the schema says so: builtins, pipes and redirection need an explicit `cmd /c` or `sh -c`, TASK-173
+SH-L168). On exit code 0 it SHALL return stdout, a newline and stderr when both are non-empty, stderr alone when
+stdout is empty, or stdout alone otherwise, and SHALL let the caller's cancellation propagate as
+`OperationCanceledException`.
 
 #### Scenario: Successful command
 
@@ -1357,14 +1499,16 @@ cancellation propagate as `OperationCanceledException`.
 #### Scenario: Command writing to stderr
 
 - **Given** a process producing both stdout and stderr
-- **When** it exits
+- **When** it exits with code 0
 - **Then** the result is stdout, a newline, then stderr — with no indication of the exit code
 
 #### Scenario: Timeout kills the process tree
 
 - **Given** `timeout_seconds = 1` and a process that runs longer
 - **When** the timeout elapses
-- **Then** `ProcessRunner` kills the tree and reports `TimedOut`, and `"Error: Process timed out"` is returned
+- **Then** `ProcessRunner` kills the tree and reports `TimedOut`, and `"Error: Process timed out"` is returned,
+  followed by a newline and whatever the process printed to stdout and stderr before it was killed (TASK-173, SH-L166:
+  that output was thrown away)
 
 #### Scenario: Caller cancellation propagates
 
@@ -1404,6 +1548,13 @@ text then goes nowhere (TASK-173, SH-L170).
 - **Given** `text = "   "`
 - **When** `display_text` executes
 - **Then** `"Error: text parameter is required"` is returned and no message is emitted
+
+#### Scenario: No callback attached
+
+- **Given** a `display_text` tool whose `MessageCallback` is null
+- **When** it executes with non-blank text
+- **Then** `"Error: no output is attached, so the text was not displayed."` is returned, which the agent counts as a
+  failed tool execution
 
 ### Requirement: ask_user honours non-interactive mode and a prompt timeout
 
@@ -1448,3 +1599,519 @@ it SHALL emit `"prompt_console"` and return
 - **When** the prompt is emitted
 - **Then** the message body is `"Context: {context}\n\nQuestion: {question}"` while the callback
   still receives question and context as separate arguments
+
+### Requirement: Built-in providers register once under fixed names and defaults
+
+The system SHALL register, in `ProviderRegistration.RegisterAll()`, exactly once per process (double-checked lock,
+safe to call concurrently), the providers `openai`, `azureopenai`, `claude`, `gemini`, `ollama`, `llamacpp`, `vllm`,
+`sglang`, `githubcopilot`, `zai`, `mistral`, `deepseek`, `groq`, `lmstudio` and `openrouter`, plus `zhipu` and
+`zhipuai` as delegates that create `zai`. Each factory SHALL read its config keys case-sensitively as given
+(`apiKey`, `model`, `baseUrl`, `endpoint`, `deployment`, `clientId`, `deepThinking`, `useCodingEndpoint`) and SHALL
+treat an absent, null-config or blank value as the provider's default (`openai` → `gpt-4o`, `claude` →
+`claude-sonnet-4-6`, `gemini` → `gemini-2.0-flash-exp`, `ollama` → `llama3.2` at `http://localhost:11434`, `zai` →
+`ZAiProvider.DefaultModel`, …). `deepThinking` and `useCodingEndpoint` SHALL be true only for a case-insensitive
+`"true"`.
+
+#### Scenario: Blank config value falls back to the default
+
+- **Given** `RegisterAll()` and the config `{"apiKey": "k", "model": "  "}`
+- **When** `LlmProviderFactory.Create("claude", config)` is called
+- **Then** a `ClaudeProvider` for model `claude-sonnet-4-6` at `https://api.anthropic.com/v1/messages` is returned
+
+#### Scenario: A Zhipu alias creates Z.AI
+
+- **Given** `RegisterAll()`
+- **When** `LlmProviderFactory.Create("zhipuai", config)` is called
+- **Then** the `zai` factory runs with the same config and a `ZAiProvider` is returned
+
+#### Scenario: Repeated registration is a no-op
+
+- **Given** `RegisterAll()` has run and a consumer re-registered `"openai"` with its own delegate
+- **When** `RegisterAll()` is called again
+- **Then** nothing is re-registered and the consumer's delegate stays in place
+
+### Requirement: Every HTTP provider follows one request/response shape
+
+The system SHALL have every concrete HTTP provider (OpenAI, Azure OpenAI, Claude, Gemini, Ollama, Z.AI, GitHub
+Copilot and `OpenAiCompatibleProviderBase`) answer `SendMessageAsync` by: returning `NotConfigured()` when its
+`IsConfigured()` fails, sending through `SendWithRetryAsync`, answering a null response with
+`LlmResponse.Error("{Name}: No response received")` (an `Unknown` failure), answering a non-success status with
+`"{Name} API Error ({status}): {detail or raw body}"` emitted as `"error"` and classified by `ClassifyResponse`, and
+answering any other exception except the caller's cancellation with `"Error calling {Name} API: {message}"` classified
+by `ClassifyException`. A non-success status therefore emits two `"error"` messages: one from the retry loop and one
+from the provider. Its streaming path SHALL return an `LlmStreamingResponse` with `Error = "Not configured"` (and no
+`FinalResponse`) when not configured, a `StreamingFailure` when the connection fails, and otherwise a response whose
+`Resource` is the live HTTP response and whose `GetStreamAsync` parses the body lazily. `IsConfigured()` SHALL check:
+API key and model (OpenAI, Claude, Gemini), API key and deployment (Azure — the endpoint is not checked), API key
+(Z.AI), model (Ollama, Copilot streaming), base URL (OpenAI-compatible — an empty API key is never refused).
+
+#### Scenario: A missing key never reaches the network
+
+- **Given** an `OpenAiProvider` constructed with an empty API key
+- **When** `SendMessageAsync` is called
+- **Then** `StopReason = "NotConfigured"` and `Failure.Kind = NotConfigured` are returned and no request is sent
+
+#### Scenario: DeepSeek without a key is sent anyway
+
+- **Given** a `DeepSeekProvider` constructed with an empty API key
+- **When** `SendMessageAsync` is called
+- **Then** the request is sent without an `Authorization` header and the provider's 401 comes back as an
+  `Unauthorized` failure
+
+#### Scenario: Not-configured streaming has no final response
+
+- **Given** a `ClaudeProvider` with no API key
+- **When** `SendMessageStreamingAsync` is awaited
+- **Then** `Error = "Not configured"`, `FinalResponse` is null and `GetStreamAsync` faults with
+  `InvalidOperationException`; the agent turns the error into `InvalidOperationException("Streaming failed: Not configured")`
+
+### Requirement: OpenAI-compatible providers share a base with its own parser
+
+The system SHALL build llama.cpp, vLLM, SGLang, Mistral, DeepSeek, Groq, LM Studio and OpenRouter on
+`OpenAiCompatibleProviderBase`, whose `Name` is `"{ProviderName} ({Model})"`, whose `HttpClient` timeout is 5 minutes,
+which sends `Authorization: Bearer {apiKey}` only when a key is given, and which posts to `ChatCompletionsUrl`: the
+base URL as-is when it already ends in `/chat/completions` (case-insensitive), otherwise `{baseUrl}/v1/chat/completions`
+(CR-H004). Payloads SHALL carry `model`, the OpenAI-style messages and tools, `temperature` (default 0.7) and
+`max_tokens` (default 8192; llama.cpp `-1`). Its sync parser `ParseResponse` SHALL NOT use `ParseOpenAiStyleResponse`:
+it reads `tool_calls` (an array with at least one entry → `"tool_use"`, generating a `Guid` id when a call has none)
+or else the text (`"end_turn"`, an empty text adds no block), ignores `finish_reason` and `usage`, and drops a text
+block that accompanies tool calls. Its streaming path SHALL use `ParseOpenAiStreamChunksWithToolCapture`.
+
+#### Scenario: Bare host gets the path appended
+
+- **Given** a `VllmProvider` with base URL `http://localhost:8000/`
+- **When** a request is sent
+- **Then** it goes to `http://localhost:8000/v1/chat/completions`, while a `MistralProvider` keeps
+  `https://api.mistral.ai/v1/chat/completions` unchanged
+
+#### Scenario: A truncated sync completion reads as finished
+
+- **Given** a compatible provider answering `finish_reason = "length"` with text only
+- **When** `SendMessageAsync` parses it
+- **Then** `StopReason` is `"end_turn"` (not `"max_tokens"`) and `Usage` is null, so a `TrackedLlmProvider` records no usage
+
+#### Scenario: A null error field fails the call
+
+- **Given** a compatible server that sends `"error": null` beside a valid completion
+- **When** `ParseResponse` reads it
+- **Then** `TryGetProperty("message")` on the null value throws, and the call becomes
+  `"Error calling {ProviderName} API: …"` with `Failure.Kind = InvalidResponse`
+
+#### Scenario: Mistral gets a placeholder between a tool result and a user turn
+
+- **Given** a conversation ending in a tool-result turn followed by a hook's appended user message
+- **When** `MistralProvider` builds the request
+- **Then** an `{role="assistant", content=" "}` message is inserted between the `tool` and `user` entries in the
+  request only; the agent's conversation is unchanged (TASK-546)
+
+### Requirement: Claude speaks the Messages API natively
+
+The system SHALL send Claude requests to the configured URL with headers `x-api-key` and
+`anthropic-version: 2023-06-01`, a body of `model`, `max_tokens = 8192`, `system`, `messages` and `tools`
+(`{name, description, input_schema}`), mapping a `ContentBlock` list to `{type, text}` / `{type, id, name, input}`
+dictionaries and passing any other content (a string, the agent's anonymous tool_result objects) through as-is. The
+sync parser SHALL take `StopReason` verbatim from `stop_reason`, keep text and tool_use blocks in order (tool input
+deserialised whole, CR-L011), read `usage.input_tokens` / `output_tokens` and `model`, classify a body `error` object
+by its `type` (`rate_limit_error` RateLimited, `overloaded_error`/`api_error` ServerError, `timeout_error` Timeout,
+`invalid_request_error`/`request_too_large` BadRequest, `authentication_error` Unauthorized, `billing_error` Billing,
+`permission_error` Forbidden, `not_found_error` NotFound, else Unknown) and turn any parse exception into
+`"Error parsing Claude response: …"` (`InvalidResponse`). The streaming parser SHALL yield `text_delta` text,
+assemble each `tool_use` block from `input_json_delta` fragments at `content_block_stop` (falling back to
+`{"_raw": …}` when they do not parse), take `stop_reason` from `message_delta` and token counts from `message_start` /
+`message_delta`, and default the stop reason to `"end_turn"` when none arrived.
+
+#### Scenario: Claude stop reasons pass through
+
+- **Given** a Claude body with `stop_reason = "max_tokens"` and a `tool_use` block
+- **When** it is parsed
+- **Then** `StopReason` is `"max_tokens"`, the tool_use block is still in `Content`, and the agent ends the run as
+  `Truncated` without executing it
+
+#### Scenario: A stream that ends without a message_delta reads as finished
+
+- **Given** a Claude stream that delivers text deltas and then an `error` event (or simply ends) with no `message_delta`
+- **When** the stream completes
+- **Then** the `error` event is ignored and `FinalResponse.StopReason` is `"end_turn"`
+
+#### Scenario: A streamed truncated tool call is still returned
+
+- **Given** a Claude stream whose tool input fragments do not form valid JSON and whose `stop_reason` is `"max_tokens"`
+- **When** the stream completes
+- **Then** the tool_use block carries `{"_raw": …}` and `StopReason` is `"max_tokens"`
+
+### Requirement: Gemini translates the conversation into alternating contents
+
+The system SHALL send Gemini requests to `{baseUrl}{model}:generateContent?key={apiKey}` (streaming:
+`:streamGenerateContent?alt=sse&key=…`) with `contents`, `systemInstruction` and `generationConfig.maxOutputTokens =
+8192`, adding `tools[].functionDeclarations` only when tools exist. A tool call SHALL become a `functionCall` part and
+a tool result a `functionResponse` part whose `name` is the function name looked up by the tool-use id in the
+conversation's assistant turns, or the id itself when no such call is present (TASK-554). Consecutive messages mapped
+to the same role (`assistant` → `model`, anything else → `user`) SHALL be merged into one content in the request only
+(TASK-546), and a message contributing no part SHALL be skipped. Gemini supplies no call ids, so each parsed
+`functionCall` SHALL get a new `Guid` id. A `finishReason` of `SAFETY` or `RECITATION` SHALL be an error
+(`"Gemini blocked response: {reason}"`, `Unknown` failure) in the sync parser and a bare `StopReason = "error"` in the
+streaming parser. The sync stop reason SHALL be set per part in order — `"end_turn"` for a text part, `"tool_use"`
+for a `functionCall` part — so the last part decides it; the streaming stop reason SHALL be `"tool_use"` whenever any
+call was captured.
+
+#### Scenario: A tool result names the function, not the id
+
+- **Given** an assistant turn with tool_use `{id: "g1", name: "read_file"}` and a tool_result for `"g1"`
+- **When** the Gemini payload is built
+- **Then** the `functionResponse.name` is `"read_file"`
+
+#### Scenario: Text after a function call hides the call
+
+- **Given** a sync Gemini response whose parts are `[functionCall read_file, text "done"]`
+- **When** it is parsed
+- **Then** `StopReason` is `"end_turn"`, so the agent ends the run as `Completed` and never executes the call
+
+#### Scenario: A blocked stream fails with no message
+
+- **Given** a Gemini stream ending with `finishReason = "SAFETY"` and no function call
+- **When** the agent handles it
+- **Then** `StopReason = "error"` with no `ErrorMessage` or `Failure`, so the run ends `LlmFailed` with
+  `Detail = "Unknown LLM error"` and a null `Failure`
+
+### Requirement: Ollama, Z.AI and GitHub Copilot add provider-specific behaviour
+
+The system SHALL post Ollama requests to `{baseUrl}/api/chat` with `stream = false` and `num_predict = -1`, a 5-minute
+timeout and `Name = "Ollama ({model})"`, parse `message.tool_calls` with a new `Guid` id per call and
+`function.arguments` read as a JSON string, and otherwise `message.content` as `"end_turn"`. Z.AI SHALL post to
+`{baseUrl}/chat/completions` where the base URL is the given one (trailing `/` trimmed), else
+`https://api.z.ai/api/coding/paas/v4` when `useCodingEndpoint`, else `https://api.z.ai/api/paas/v4`; add
+`thinking: {type: "enabled"}` when deep thinking is on; send `max_tokens` per model (131 072 for GLM-5.1/5.1 Turbo/5.3,
+128 000 for GLM-5/5 Turbo, 65 536 for 5.3 Flash, 8192 for GLM-4.7/4.8, 4096 otherwise); emit a `"thinking"` message
+from the first of `thinking_content`, `reasoning_content`, `thinking` present on a text turn; map `finish_reason =
+"length"` to `"max_tokens"`; and replace unparseable tool arguments by an empty input after an `"error"` message.
+GitHub Copilot SHALL obtain an OAuth token through its `IOAuthClient` (re-fetched when within 60 s of expiry), answer
+a failed authentication with `NotConfigured()` (sync) or `Error = "Authentication failed"` (streaming), send
+`Editor-Version` / `Editor-Plugin-Version` headers on every request (CR-H005), and on a 401 refresh the token once and
+retry — in streaming by reading the `Unauthorized` classification from `ConnectStreamingAsync` (TASK-531).
+
+#### Scenario: Ollama's native arguments object fails the parse
+
+- **Given** an Ollama `/api/chat` response whose `function.arguments` is a JSON object (Ollama's native shape)
+- **When** `ParseResponse` calls `GetString()` on it
+- **Then** `InvalidOperationException` is thrown and the call becomes `"Error calling Ollama API: …"` with
+  `Failure.Kind = InvalidResponse`
+
+#### Scenario: Copilot refreshes a rejected token once
+
+- **Given** a Copilot request answered 401, then 200 after `RefreshTokenAsync`
+- **When** `SendMessageAsync` or `SendMessageStreamingAsync` runs
+- **Then** the token is refreshed once and the second attempt's response is returned
+
+#### Scenario: Z.AI length limit
+
+- **Given** a Z.AI completion with `finish_reason = "length"`
+- **When** it is parsed
+- **Then** `StopReason` is `"max_tokens"` even when tool calls were parsed
+
+### Requirement: The built-in agent catalogue registers once with aliases
+
+The system SHALL register, in `AgentRegistration.RegisterAll()`, exactly once per process and after
+`ProviderRegistration.RegisterAll()`, the agent types `coding`, `csharp`, `cpp`, `assembler`, `javascript` and
+`typescript` (both `JavaScriptTypeScriptCodingAgent`), `css`, `html`, `react`, `angular`, `php`, `python`,
+`documentation`, `debug`, `refactor`, `test`, `diagramming`, `media`, `image`, `svg` and `bitmap`, and the aliases
+`general` → `coding`, `docs` → `documentation`, `debugging` → `debug`, `refactoring` → `refactor`, `testing` →
+`test`, `diagram` → `diagramming`. Every catalogue agent SHALL be prompt-only: it overrides `SystemPrompt` (and the
+four task agents `GetDepthGuidance`) and keeps the nine default tools. `IsCodingAgent(type)` SHALL be true,
+case-insensitively, for `coding`, the eleven language types, `debug`, `refactor`, `test` and `svg`.
+`AgentRegistration.Create(provider, options, config, agentType)` SHALL register both catalogues, inject
+`useCodingEndpoint = "true"` into the config for `zai` / `zhipu` / `zhipuai` when the resolved type is a coding agent
+and the key is absent, then create the provider through `LlmProviderFactory` and the agent through `AgentFactory`.
+
+#### Scenario: Z.AI coding endpoint is chosen by agent type
+
+- **Given** `AgentRegistration.Create("zai", null, new() { ["apiKey"] = "k" }, "csharp")`
+- **When** the provider is created
+- **Then** the config carries `useCodingEndpoint = "true"` and the provider posts to the coding endpoint; for
+  `agentType = "documentation"` no flag is added
+
+#### Scenario: The caller's config is mutated
+
+- **Given** a config dictionary passed to `AgentRegistration.Create` for `zai` with a coding agent type
+- **When** the call returns
+- **Then** the caller's own dictionary now contains `useCodingEndpoint = "true"`
+
+#### Scenario: Alias resolves to a catalogue agent
+
+- **Given** `RegisterAll()`
+- **When** `AgentFactory.Create(provider, null, "docs")` is called
+- **Then** a `DocumentationAgent` is returned
+
+### Requirement: Orchestrator agents extract text and JSON from model output
+
+The system SHALL give `OrchestratorAgent` an opt-in `GetOrchestratorGuidance()` text, a three-band depth guidance of
+its own, and two static helpers. `ExtractTextFromContent(content)` SHALL return a string as-is; a single
+`ContentBlock`'s `Text` whatever its `Type`; the newline-join of non-empty `text` blocks of a block list, of a
+`JsonElement` array or of an object list (a `ContentBlock`, a string, or any object with `Type`/`type` and
+`Text`/`text` properties); a `JsonElement` string's value; the empty string for a `List<>` or enumerable it could not
+read; and `ToString()` of anything else. `ExtractJson(content)` SHALL throw `InvalidOperationException` for blank
+content or content starting with `Error:`, and otherwise return the first brace-balanced object — from the start when
+the trimmed content starts with `{`, else from a fenced (```` ```json ```` or ```` ``` ````) block that starts with `{`,
+else from the first `{` anywhere — honouring string literals and escapes, and SHALL throw when braces never balance or
+no `{` exists (naming the first 100 characters).
+
+#### Scenario: JSON inside a fenced block
+
+- **Given** a reply of prose followed by a ```` ```json ```` block holding `{"a": "}"}`
+- **When** `ExtractJson` runs
+- **Then** it returns `{"a": "}"}`, the brace inside the string literal not closing the object
+
+#### Scenario: An error reply is not parsed
+
+- **Given** the content `Error: LLM request failed: 429`
+- **When** `ExtractJson` runs
+- **Then** `InvalidOperationException("LLM request failed: Error: …")` is thrown
+
+#### Scenario: A tool_use block is read as text
+
+- **Given** a single `ContentBlock { Type = "tool_use", Text = "x" }`
+- **When** `ExtractTextFromContent` runs
+- **Then** it returns `"x"`, unlike `MessageText.From`, which returns the empty string for a non-text block
+
+### Requirement: A tracked provider waits for rate limits, refuses over budget and records usage
+
+The system SHALL let `TrackedLlmProvider` decorate any `ILlmProvider`, forwarding `Name` and `MessageCallback`, and on
+each call (sync or streaming): wait for a rate-limit slot by re-checking `CanMakeRequest(Name)` up to
+`MaxRateLimitWaitAttempts` (10) times, each wait being the limiter's retry-after (else 1 s) capped at
+`MaxSingleRateLimitWait` (60 s), and refuse with `LlmResponse.Error("Rate limit for {Name} could not be satisfied after
+waiting.")` when the final re-check fails; then refuse with `LlmResponse.Error("Budget exceeded ({type}): ${spend:F2} /
+${limit:F2}")` when `CheckBudgetAsync(ProjectId)` reports the budget exceeded; then call the inner provider. Both
+refusals carry an `Unknown` (permanent) failure, and a budget warning does not refuse; a streaming refusal returns an
+empty stream with `Error` and `FinalResponse` set. Usage SHALL be recorded after a sync response, and after a stream has
+been fully enumerated, only when the response's `Usage` has a non-zero token count: the limiter's
+`RecordRequest(Name, TotalTokens)` and the cost tracker's `RecordUsageAsync` with `ProjectId`, `TaskId`, `AgentType`
+and `CallerContext`, without the caller's token, logging rather than throwing a recording failure. The streaming
+wrapper SHALL keep the inner response's `Resource`. The limiter and the pricing are keyed by the provider's `Name`
+(e.g. `"Claude"`, `"Ollama (llama3.2)"`).
+
+#### Scenario: A response without usage is never counted
+
+- **Given** a rate limit of 1 request per minute and an inner provider whose responses carry no `Usage`
+- **When** three calls are made within a minute
+- **Then** all three proceed, because a request is recorded against the limiter only together with its tokens
+
+#### Scenario: Budget exceeded
+
+- **Given** a daily budget of $5 and $5.20 already recorded today
+- **When** `SendMessageAsync` is called
+- **Then** `StopReason = "error"` with `"Budget exceeded (daily): $5.20 / $5.00"` is returned and the inner provider is
+  not called
+
+#### Scenario: Cancellation while waiting for a slot
+
+- **Given** a blocked rate limit and a token cancelled during the wait
+- **When** the wait's `Task.Delay` observes it
+- **Then** `TaskCanceledException` propagates
+
+### Requirement: Rate limits are counted in fixed per-provider windows
+
+The system SHALL key `ProviderRateLimiter` limits and windows by the lower-cased provider name (a later config entry
+for the same name wins, CR-L013), allow every request when disabled or when no limit exists for the provider, and keep
+one minute window (shared by request and token counts) and one day window per provider. A window SHALL reset entirely
+once its length has elapsed since its start — a fixed window, although the type describes itself as sliding.
+`CanMakeRequest` SHALL refuse when the minute request count, minute token count, day request count or day token count
+has reached a positive limit. `GetRetryAfter` SHALL return the time until the latest blocking window resets, or null
+when nothing blocks, the limiter is disabled or the provider has no limit. `GetAllStatuses` SHALL report counts and
+limits for every configured provider.
+
+#### Scenario: Case-insensitive provider names
+
+- **Given** a limit configured for `"OpenAI"` of 2 requests per minute
+- **When** `RecordRequest("openai")` is called twice
+- **Then** `CanMakeRequest("OPENAI")` is false and `GetRetryAfter("OpenAI")` is the time left in the minute window
+
+#### Scenario: A burst straddling a window boundary
+
+- **Given** a limit of 10 requests per minute and 10 requests recorded in the window's last second
+- **When** the window's minute elapses
+- **Then** the counts reset and 10 more requests are allowed immediately
+
+### Requirement: A circuit breaker opens per provider and can persist its state
+
+The system SHALL track circuits by lower-cased provider name, ignoring a blank name (`CanRetry` true, `GetState`
+`Closed`). `RecordFailure` SHALL increment the consecutive failures, stamp the last failure, open a closed circuit once
+failures reach the threshold (default 3) and re-open a half-open one. `RecordSuccess` SHALL close the circuit and zero
+its failures. `CanRetry` SHALL move an open circuit to half-open once the open duration (default 10 min) has elapsed,
+zero a closed circuit's failures once the last failure is older than the reset window (default 5 min), and return
+whether the circuit is not open — so every caller passes while half-open. Every `RecordFailure`, `RecordSuccess`,
+`Reset` and `ResetAll` SHALL persist a snapshot to the optional `ICircuitBreakerStore`, chained per provider so saves
+apply in the order the changes happened (CR-M013), logging rather than throwing a failed save (TASK-530: resets used to
+stay in memory, so a reload brought a reset circuit back open); `CanRetry`'s transitions are not persisted.
+`LoadPersistedStateAsync` SHALL restore every stored circuit, and `FlushPersistenceAsync` SHALL await pending saves. The
+breaker is standalone: `TrackedLlmProvider` does not consult it.
+
+#### Scenario: Threshold opens the circuit
+
+- **Given** a breaker with threshold 3
+- **When** `RecordFailure("Claude")` is called three times
+- **Then** `GetState("claude")` is `Open` and `CanRetry("CLAUDE")` is false until the open duration elapses
+
+#### Scenario: A reset survives a restart
+
+- **Given** a breaker with a store, an open circuit for `"openai"`, then `Reset("openai")` and `FlushPersistenceAsync()`
+- **When** a new breaker over the same store calls `LoadPersistedStateAsync`
+- **Then** the circuit is `Closed` with zero failures
+
+### Requirement: Cost tracking prices usage and checks budgets in a fixed order
+
+The system SHALL price usage, in `CostTrackingService.CalculateCost`, by the pricing entry for `"{provider}:{model}"`
+(case-insensitive), else `"{provider}:*"`, else 0, as `prompt / 1e6 × input price + completion / 1e6 × output price`.
+`RecordUsageAsync` SHALL do nothing when disabled and otherwise persist a `UsageRecordEntity` with the computed cost
+when a repository exists. `CheckBudgetAsync(projectId)` SHALL report within budget with type `"none"` when disabled
+(CR-L012) or without a repository, and otherwise check, in order, the daily budget (UTC day), the monthly budget (UTC
+month) and — when a project id is given — the project's all-time spend, each only when positive; the first budget that
+is exceeded (spend ≥ limit) or at warning (spend ≥ limit × `WarningThresholdPercent` / 100, default 80) SHALL be
+returned at once, so a warning on an earlier budget stops the later ones from being checked.
+
+#### Scenario: Wildcard pricing
+
+- **Given** pricing `{Provider: "Claude", Model: "*", Input: 3, Output: 15}`
+- **When** `CalculateCost("claude", "claude-sonnet-4-6", 1_000_000, 100_000)` is called
+- **Then** it returns 4.5
+
+#### Scenario: A daily warning masks an exceeded monthly budget
+
+- **Given** a daily budget of $10 with $9 spent today and a monthly budget of $100 with $120 spent this month
+- **When** `CheckBudgetAsync` runs
+- **Then** it returns `IsWithinBudget = true`, `IsWarning = true`, type `"daily"`, and a tracked call is not refused
+
+### Requirement: Resilience state persists over any bulk store
+
+The system SHALL implement `ICircuitBreakerStore` as `StoreCircuitBreakerStore` over an
+`IAsyncBulkStore<CircuitBreakerStateModel>` (TASK-530): one row per provider whose `Guid` is a name-based (version 3,
+MD5) Guid of `"Birko.AI.Resilience/circuit/" + provider`, saved by upsert (`SaveAsync`); a null state is an
+`ArgumentNullException` and a blank provider an `ArgumentException`. It SHALL implement `IUsageRepository` as
+`StoreUsageRepository` over an `IAsyncBulkStore<UsageRecordModel>` that also implements `IAsyncAggregatableStore`,
+refusing any other store at construction with `ArgumentException`; every total SHALL be one `AggregateAsync` (count of
+`Guid`, sum of `TotalTokens`, sum of `EstimatedCostUsd`) over a half-open `[from, to)` window on `RecordedAt`, provider
+summaries grouped by `Provider` and ordered ordinally, and a project with no calls in the window SHALL yield `null`.
+Both interfaces take a `CancellationToken`.
+
+#### Scenario: A second save replaces the first
+
+- **Given** a `StoreCircuitBreakerStore` over InMemory
+- **When** two states for `"openai"` are saved
+- **Then** `LoadAllAsync` returns one state, the later one
+
+#### Scenario: A store that cannot aggregate is refused
+
+- **Given** an `IAsyncBulkStore<UsageRecordModel>` that does not implement `IAsyncAggregatableStore`
+- **When** `new StoreUsageRepository(store)` runs
+- **Then** `ArgumentException` naming the store type is thrown
+
+#### Scenario: Spend for one provider
+
+- **Given** usage rows for `"Claude"` and `"OpenAI"` today
+- **When** `GetTotalSpendAsync(today, tomorrow, "Claude")` is called
+- **Then** only Claude's cost is summed, matched by the store's own string equality
+
+### Requirement: Implementation plans track step state, retries and metrics
+
+The system SHALL model a plan as `ImplementationPlan` with ordered `ImplementationStep`s and a 0-based
+`CurrentStepIndex`. `AdvanceToNextStep` SHALL stop at `Steps.Count`; `CurrentStep` SHALL be null past the end;
+`ProgressPercentage` SHALL be completed × 100 / count rounded down (0 for no steps). `MarkInProgress`, `MarkCompleted`
+(which also runs `CaptureLessonsLearned`) and `MarkFailed` SHALL set the status, timestamps and a log entry, and every
+mutator SHALL touch `UpdatedAt`. `GetAssignedSteps(worker)` SHALL return every step when no assignment exists at all,
+none for an unassigned worker once the plan is split, and only in-range indices otherwise. A step's
+`RetryOrFail(error, category, retryable)` SHALL keep the error and category and, when retryable with retries left
+(`RetryCount < MaxRetries`, default 3), return the step to `Pending` with `RetryCount + 1` and cleared times; otherwise
+it SHALL `Fail` — with `"Max retries ({n}) exhausted. Last error: {error}"` when retryable — and return false.
+`RetryOrFail(error, LlmFailure)` SHALL be retryable exactly when the failure is transient (TASK-531).
+`CaptureLessonsLearned` SHALL add each entry at most once: resolved issues and "required N iterations" lessons only for
+completed steps that were retried, an average-iterations pattern when more than one completed step took 1–3
+iterations, and a files-touched lesson. `GetAggregatedMetrics` SHALL sum step counts, iterations, tokens and durations.
+`PlanStatus`, `StepStatus`, `AgentTaskStatus` and the escalation enums SHALL keep pinned numeric values
+(`StepStatus.Skipped = 3`, `Failed = 4`), and `AgentTaskRecord.ErrorCategory` / `ImplementationStep.ErrorCategory`
+SHALL be the typed `ErrorCategory` (TASK-531).
+
+#### Scenario: A transient LLM failure is retried
+
+- **Given** a step with `MaxRetries = 3` and `RetryCount = 0`
+- **When** `RetryOrFail("rate limited", new LlmFailure(RateLimited, 429))` is called
+- **Then** it returns true, `Status = Pending`, `RetryCount = 1` and `ErrorCategory = Transient`
+
+#### Scenario: Retries run out
+
+- **Given** a step with `RetryCount = 3` and `MaxRetries = 3`
+- **When** `RetryOrFail("boom", ErrorCategory.Transient, true)` is called
+- **Then** it returns false, `Status = Failed` and `ErrorMessage = "Max retries (3) exhausted. Last error: boom"`
+
+#### Scenario: A split plan gives an unknown worker nothing
+
+- **Given** a plan with `AssignSteps("w1", [0, 1])`
+- **When** `GetAssignedSteps("w2")` is called
+- **Then** an empty list is returned, never the whole plan
+
+#### Scenario: A slow step that was never retried teaches nothing
+
+- **Given** a completed step that took 20 iterations with `RetryCount = 0`
+- **When** `MarkCompleted` runs
+- **Then** no "required 20 iterations" lesson is recorded
+
+### Requirement: Step order and parallel groups follow file dependencies
+
+The system SHALL, in `StepDependencyAnalyzer`, treat "step A modifies a file step B creates" as A depending on B.
+`SuggestOptimalOrder` SHALL return a dependencies-first order by post-order DFS (CR-H003), silently breaking a cycle.
+`ValidateOrdering` SHALL list each step that modifies a file a later step creates. `Reorder(plan)` SHALL refuse with
+`InvalidOperationException` a plan that has started (a non-pending step or a moved `CurrentStepIndex`) or has step
+assignments, return false when the order is unchanged, and otherwise reorder, renumber `Index` 1..n and log it.
+`AnalyzeParallelGroups` SHALL greedily group, in plan order, steps none of whose modified or created files were touched
+by an earlier member of the group. `HasDependency` SHALL be true when either step creates what the other modifies, or
+both modify or both create the same file.
+
+#### Scenario: Creator moves before modifier
+
+- **Given** steps `1: modify a.cs` and `2: create a.cs`
+- **When** `Reorder(plan)` runs
+- **Then** the create step becomes step 1, the modify step step 2, and `ValidateOrdering` then returns no violations
+
+#### Scenario: A started plan is not reordered
+
+- **Given** a plan whose first step is `InProgress`
+- **When** `Reorder(plan)` is called
+- **Then** `InvalidOperationException` is thrown and the steps are unchanged
+
+#### Scenario: Two steps editing one file run in separate groups
+
+- **Given** steps `1: modify a.cs`, `2: modify a.cs`, `3: create b.cs`
+- **When** `AnalyzeParallelGroups` runs
+- **Then** the groups are `[1, 3]` and `[2]`
+
+### Requirement: Step validators check that a step's work exists
+
+The system SHALL run, in `StepValidationService.ValidateStepAsync`, every validator in order (by default
+`FileCreation`, `FileModification`, `ContentExpectation`), count one `ValidationAttempts`, prefix each issue with
+`[{validator}]`, record a validator that throws as the issue `"Validation error: {message}"` (never a pass), let
+cancellation propagate, and succeed only with no issues. Step paths SHALL resolve under the working directory unless
+rooted, with no workspace confinement. `FileCreation` SHALL require every `FilesToCreate` to exist;
+`FileModification` every `FilesToModify` to exist and, once the step has started, to have been written after
+`StartedAt`; `ContentExpectation` SHALL pass a step with no non-blank expected content, fail one that declares content
+but names no files, report an unreadable file, and require each expected string (ordinal) in at least one existing file.
+
+#### Scenario: Touching a file without doing the work
+
+- **Given** a step expecting `"GetUserById"` in `a.cs`, and `a.cs` modified but without that text
+- **When** `ValidateStepAsync` runs
+- **Then** it fails with `[ContentExpectation] Expected content not found: 'GetUserById' in [a.cs]`
+
+#### Scenario: A throwing validator fails the step
+
+- **Given** a custom validator that throws `IOException("locked")`
+- **When** `ValidateStepAsync` runs
+- **Then** `AllIssues` contains `[{name}] Validation error: locked` and `Success` is false
+
+### Requirement: Tasks dispatch in-process through a callback
+
+The system SHALL let `DirectTaskDispatcher` (`IsDistributed = false`) dispatch a `TaskAssignment` by awaiting its
+callback with the assignment and token, and, without a callback, SHALL log a warning and dispatch nothing. A
+`TaskAssignment` SHALL default `MaxIterations` to 100 and generate a `CorrelationId`.
+
+#### Scenario: No callback drops the task
+
+- **Given** a `DirectTaskDispatcher` constructed without a callback
+- **When** `DispatchTaskAsync(assignment)` is awaited
+- **Then** it completes without error, the task is not run, and a warning naming the task id is logged

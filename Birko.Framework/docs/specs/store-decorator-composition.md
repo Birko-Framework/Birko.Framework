@@ -1,9 +1,19 @@
 ---
 area: store-decorator-composition
-generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
-generated-on: 2026-10-16
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
   - ../Birko.Data.Composition/StoreWrapperBuilder.cs
+  - ../Birko.Data.EventSourcing/Events/DomainEvent.cs
+  - ../Birko.Data.EventSourcing/Events/EventStoreConcurrencyException.cs
+  - ../Birko.Data.EventSourcing/Events/IEvent.cs
+  - ../Birko.Data.EventSourcing/Events/IEventStore.cs
+  - ../Birko.Data.EventSourcing/Models/IEventSourced.cs
+  - ../Birko.Data.EventSourcing/Stores/AsyncEventSourcingBulkStoreWrapper.cs
+  - ../Birko.Data.EventSourcing/Stores/AsyncEventSourcingStoreWrapper.cs
+  - ../Birko.Data.EventSourcing/Stores/EventSourcingBulkStoreWrapper.cs
+  - ../Birko.Data.EventSourcing/Stores/EventSourcingStoreExtensions.cs
+  - ../Birko.Data.EventSourcing/Stores/EventSourcingStoreWrapper.cs
   - ../Birko.Data.Patterns/Concurrency/AsyncVersionedStoreWrapper.cs
   - ../Birko.Data.Patterns/Concurrency/ConcurrentUpdateException.cs
   - ../Birko.Data.Patterns/Concurrency/IVersioned.cs
@@ -20,6 +30,7 @@ sources:
   - ../Birko.Data.Patterns/Decorators/AuditBulkStoreWrapper.cs
   - ../Birko.Data.Patterns/Decorators/AuditStoreWrapper.cs
   - ../Birko.Data.Patterns/Decorators/DefaultStoreWrapper.cs
+  - ../Birko.Data.Patterns/Decorators/EntitySoftDeletedException.cs
   - ../Birko.Data.Patterns/Decorators/SlugGenerator.cs
   - ../Birko.Data.Patterns/Decorators/SluggableBulkStoreWrapper.cs
   - ../Birko.Data.Patterns/Decorators/SluggableStoreWrapper.cs
@@ -33,17 +44,23 @@ sources:
   - ../Birko.Data.Patterns/Models/IDefaultMarker.cs
   - ../Birko.Data.Patterns/Models/ISluggable.cs
   - ../Birko.Data.Patterns/Models/ISoftDeletable.cs
+  - ../Birko.Data.Stores/ISoftDeleteStoreWrapper.cs
+  - ../Birko.Telemetry/AsyncInstrumentedBulkStoreWrapper.cs
+  - ../Birko.Telemetry/AsyncInstrumentedStoreWrapper.cs
+  - ../Birko.Telemetry/InstrumentedBulkStoreWrapper.cs
+  - ../Birko.Telemetry/InstrumentedStoreWrapper.cs
+  - ../Birko.Telemetry/StoreInstrumentation.cs
+  - ../Birko.Telemetry/StoreInstrumentationExtensions.cs
   - ../Birko.Time.Abstractions/Core/IDateTimeProvider.cs
   - ../Birko.Time.Abstractions/Providers/SystemDateTimeProvider.cs
   - ../Birko.Time.Abstractions/Providers/TestDateTimeProvider.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Store decorator wrappers and runtime composition
 
@@ -58,7 +75,9 @@ assembles a chain of these decorators at runtime by probing which marker interfa
 implements, because the marker checks cannot be expressed as C# generic constraints. Anything that
 persists a Birko entity — repositories, services, tenant-scoped stores — sits on top of whatever chain
 the builder produced, so the decorators' ordering and their sync/async differences are directly visible
-in what gets written to storage.
+in what gets written to storage. Two further decorators share the same shape: the event-sourcing wrappers
+(`Birko.Data.EventSourcing`), which the builder places innermost, and the telemetry wrappers
+(`Birko.Telemetry`), which record metrics and traces around every operation and are composed by hand.
 
 ## Requirements
 
@@ -555,6 +574,27 @@ to every row with `WholeTableWriteException`, and SHALL otherwise combine the fi
 - **When** a caller needs to list soft-deleted rows
 - **Then** no member of the decorator can return them — the not-deleted condition is unconditional on all read/count paths and the caller must reach the inner store via `GetInnerStore()`
 
+### Requirement: Soft-delete decorators are recognisable below the Patterns layer
+
+The system SHALL declare the marker interface `ISoftDeleteStoreWrapper : IStoreWrapper` in the
+`Birko.Data.Stores` namespace (moved from `Birko.Data.Patterns` in TASK-698), with no members of its own, and
+SHALL implement it on `SoftDeleteStoreWrapper` and `AsyncSoftDeleteStoreWrapper` — and so, by inheritance, on
+`SoftDeleteBulkStoreWrapper` and `AsyncSoftDeleteBulkStoreWrapper` — so that code which cannot reference
+`Birko.Data.Patterns` can tell that a chain hides soft-deleted rows. The Sluggable decorators SHALL look for it
+on their immediate inner store only (one hop).
+
+#### Scenario: A soft-delete chain is detected through the Stores namespace
+
+- **Given** an `AsyncSoftDeleteBulkStoreWrapper<IAsyncBulkStore<T>, T>`
+- **When** a caller in a project referencing only `Birko.Data.Stores` tests `store is Birko.Data.Stores.ISoftDeleteStoreWrapper`
+- **Then** the test succeeds, and `GetInnerStore()` on it returns the store that also sees soft-deleted rows
+
+#### Scenario: Only the immediate inner store is inspected by the slug probe
+
+- **Given** a Sluggable decorator whose inner store is some other decorator wrapping a soft-delete decorator
+- **When** the Sluggable decorator chooses where to probe (`SlugProbe`)
+- **Then** its immediate inner store is not an `ISoftDeleteStoreWrapper`, so the probe asks that inner store and reads through the soft-delete filter
+
 ### Requirement: Slug normalization
 
 The system SHALL normalize slug source text in `SlugGenerator.Normalize` by lowercasing with the invariant
@@ -863,6 +903,12 @@ exception filter (TASK-685).
 - **When** they create or update, single or batch, and one attempt is refused
 - **Then** each attempt's write that can still be retried runs through `RunRetryable` / `RunRetryableAsync` once: not the last attempt, not a default decorator write that promotes no default, and not the demotions written before a promotion (those run as is, `RetryableWrite.Run(null, …)`)
 
+#### Scenario: A retried write is declared for the flow, except on the last attempt
+
+- **Given** a slug or default decorator writing an attempt that can still be retried
+- **When** it hands the write to `RetryableWrite.Run` / `RunAsync` with its inner store as the `store` argument
+- **Then** `RetryableWrite.IsDeclared` is true while the write runs (sync: restored afterwards; async: set inside the async method so it flows into the write and never back to the caller), so a participant beneath — such as a joined localized write boundary — leaves the caller's transaction committable when the write fails; on the caller's last attempt the decorator passes `store: null`, the write runs as is, and nothing is declared (TASK-697)
+
 #### Scenario: MySQL's snapshot hides the other writer
 
 - **Given** the same race on MySQL
@@ -1034,6 +1080,156 @@ update that missed and the create that follows it.
 - **Given** an entity with `IsDefault = true` and a null `Guid`
 - **When** `AsyncDefaultStoreWrapper.SaveAsync(data)` is called
 - **Then** `UnsetOtherDefaultsAsync(data.Guid)` runs and then `_innerStore.CreateAsync` is called directly, so the decorator's own `CreateAsync` (and its second probe) is not re-entered
+
+### Requirement: Event recording on single-entity writes
+
+The system SHALL, in `EventSourcingStoreWrapper` / `AsyncEventSourcingStoreWrapper`, record one `DomainEvent` per
+create, update and delete BEFORE writing to the inner store: apply the caller's store delegate, (on create) assign
+the entity's Guid with `EnsureGuid()`, read the aggregate's current version from the event store
+(`GetVersion` / `GetVersionAsync`, 0 for an unknown aggregate), build an event with version `current + 1`, event
+type `"Created"` / `"Updated"` / `"Deleted"`, the serialized entity as `EventData`, the wrapper's
+`CurrentUserGuid` as `UserGuid` and `OccurredAt` from the wrapper's clock, append it, then — on create and update
+— set the entity's `Version` to the new version and forward the write to the inner store with no store
+delegate. An update or delete of a null entity or an entity with a null `Guid` SHALL return without recording or
+writing anything. Reads, counts, `Init`, `Destroy` and `CreateInstance` SHALL be forwarded unchanged.
+
+#### Scenario: Create records a Created event under the persisted Guid
+
+- **Given** an `IEventSourced` entity with a null `Guid` and an event store holding no events for any aggregate
+- **When** `AsyncEventSourcingStoreWrapper.CreateAsync(item)` is called
+- **Then** the entity's Guid is assigned first, one event with that `AggregateGuid`, `Version = 1` and `EventType = "Created"` is appended, `item.Version` becomes 1, and the inner create receives the same entity — so the event and the row share one Guid (CR-C06)
+
+#### Scenario: The event payload is serialized before the version is bumped
+
+- **Given** a stored aggregate at event version 3 and an entity whose `Version` is 3
+- **When** it is updated through the event-sourcing wrapper
+- **Then** the appended event has `Version = 4` but its `EventData` was serialized while the entity's `Version` was still 3; the entity reaches the inner store with `Version = 4`
+
+#### Scenario: The event is appended even when the inner write then fails
+
+- **Given** an inner store whose update throws
+- **When** `UpdateAsync(data)` is called through the event-sourcing wrapper
+- **Then** the "Updated" event has already been appended and stays in the event store, `data.Version` has been incremented, and the inner exception propagates — the append and the write are not atomic
+
+#### Scenario: A concurrent append is refused before anything is written
+
+- **Given** another writer appends an event for the same aggregate between this wrapper's version read and its append
+- **When** the event store refuses the append with `EventStoreConcurrencyException`
+- **Then** that exception (carrying `AggregateGuid` and the taken `Version`) propagates and the inner store is not written
+
+#### Scenario: Update without a Guid is silently skipped
+
+- **Given** an entity whose `Guid` is null
+- **When** `EventSourcingStoreWrapper.Update(data)` or `Delete(data)` is called
+- **Then** no event is appended, the inner store is not called, and no exception is thrown
+
+#### Scenario: Audit user is the wrapper's property, not a context
+
+- **Given** an event-sourcing wrapper whose `CurrentUserGuid` was never set (as in every chain `StoreWrapperBuilder` builds)
+- **When** any write is recorded
+- **Then** the event's `UserGuid` is null
+
+### Requirement: Event recording on bulk and filter-based writes
+
+The system SHALL, in `EventSourcingBulkStoreWrapper` / `AsyncEventSourcingBulkStoreWrapper`, materialize a
+bulk write's items into a list, build one event per item (skipping items with a null `Guid` on update and delete
+— but still passing them to the inner store), append them all with one `AppendRange` / `AppendRangeAsync`, and
+then make one inner bulk write with the list. The filter-based `Action<T>` update and filter delete SHALL read
+the matching rows from the inner store, apply the action (update), record one event per row, append them, and
+then write the rows back with the inner entity-collection update or delete — never the inner filter overload.
+The `PropertyUpdate<T>` update SHALL do nothing when it has no assignments, and otherwise take the `Action<T>`
+path with `updates.ApplyTo(entity)`. A null bulk collection SHALL be a no-op. No filter-based path refuses a
+null or whole-table filter.
+
+#### Scenario: One append for a whole batch
+
+- **Given** a batch of three new entities
+- **When** `AsyncEventSourcingBulkStoreWrapper.CreateAsync(items)` is called
+- **Then** each item gets a Guid and its own `"Created"` event at its own next version, the three events are appended in one `AppendRangeAsync`, and the inner collection create receives the three items with their `Version` set
+
+#### Scenario: A filtered update becomes read, apply, write
+
+- **Given** a filter matching two stored rows and a `PropertyUpdate<T>` setting a business field
+- **When** `AsyncEventSourcingBulkStoreWrapper.UpdateAsync(filter, updates)` is called
+- **Then** the two rows are read with that filter, the update is applied to each in memory, two `"Updated"` events are appended, and the rows are written with the inner collection update — the native filter update of the inner store is not used
+
+#### Scenario: A soft delete in a built chain is recorded as an update
+
+- **Given** a chain built for a `T` implementing `IEventSourced` and `ISoftDeletable` with an event store supplied
+- **When** an entity is deleted through the chain
+- **Then** the SoftDelete decorator turns it into an update, so the event-sourcing wrapper beneath records an `"Updated"` event carrying the non-null `DeletedAt`, not a `"Deleted"` event
+
+#### Scenario: An empty PropertyUpdate writes nothing
+
+- **Given** a `PropertyUpdate<T>` with no assignments
+- **When** `UpdateAsync(filter, updates)` / `Update(filter, updates)` is called on the event-sourcing bulk wrapper
+- **Then** nothing is read, appended or written (SH-M032)
+
+### Requirement: Event-sourcing wrapper construction and access
+
+The system SHALL require a non-null inner store and event store in the event-sourcing wrappers' constructors
+(`ArgumentNullException`), default the serializer to `SystemJsonSerializer` and the clock to a new
+`SystemDateTimeProvider`, and offer `WithEventSourcing` extensions that return the bulk wrapper when the given
+store is a bulk store and the single-entity wrapper otherwise. The wrappers SHALL implement `IStoreWrapper<T>`
+(`GetInnerStore()` and `GetInnerStoreAs<TInner>()`), expose the event store, rebuild an aggregate with
+`Replay` / `ReplayAsync` (a new instance loaded from the aggregate's events through `LoadFromEvents`, which
+applies each and then clears the uncommitted list) and return the history with `GetHistory` /
+`GetHistoryAsync`. `AsyncEventSourcingBulkStoreWrapper` SHALL implement `IAsyncAggregatableStore<T>` and forward
+`AggregateAsync` unchanged through `StoreChain.AggregateThrough`; the sync wrappers SHALL NOT aggregate. `Save` /
+`SaveAsync` SHALL route through `StoreSave` with the wrapper's own create and update.
+
+#### Scenario: Extension picks the bulk wrapper for a bulk store
+
+- **Given** an `IAsyncStore<T>` reference whose object is also an `IAsyncBulkStore<T>`
+- **When** `store.WithEventSourcing(eventStore)` is called
+- **Then** an `AsyncEventSourcingBulkStoreWrapper<IAsyncBulkStore<T>, T>` is returned
+
+#### Scenario: A built chain aggregates through the event-sourcing link
+
+- **Given** a chain whose innermost decorator is `AsyncEventSourcingBulkStoreWrapper` over an aggregatable raw store
+- **When** `AggregateAsync(query)` is called on the outermost decorator
+- **Then** the event-sourcing link forwards the query unchanged and the raw store aggregates it
+
+#### Scenario: Replay rebuilds from events
+
+- **Given** an aggregate with three stored events
+- **When** `ReplayAsync(aggregateId)` is called
+- **Then** a new instance from `CreateInstance()` has each event applied in order, its `Version` equals the last event's version (for `EventSourcedAggregate`), and its uncommitted events are empty
+
+### Requirement: Telemetry instrumentation wrappers
+
+The system SHALL provide `InstrumentedStoreWrapper`, `InstrumentedBulkStoreWrapper`,
+`AsyncInstrumentedStoreWrapper` and `AsyncInstrumentedBulkStoreWrapper`, each forwarding every operation to the
+inner store unchanged (arguments, store delegates and return value) while timing it: on success it records the
+duration histogram and operation counter and sets the activity status to Ok; on any exception (cancellation
+included) it additionally increments the error counter, sets the activity status to Error with the exception's
+message, and rethrows the original exception. Each measurement SHALL be tagged with the store type
+(`typeof(TStore).FullName`), the entity type (`typeof(T).FullName`), the operation name (`Init`, `Destroy`,
+`Count`, `Read`, `Create`, `Update`, `Delete`, `Save`) and whether the call is a bulk one, and each activity SHALL
+be named `"{storeType}.{operation}"`. `CreateInstance` SHALL be forwarded uninstrumented, and the bulk wrappers'
+`ReadFirst` / `ReadFirstAsync` SHALL call the inner store's own `ReadFirst` (CR-M252). The constructors SHALL
+refuse a null inner store with `ArgumentNullException`. The wrappers SHALL implement `IStoreWrapper<T>` and
+SHALL NOT implement `IAsyncAggregatableStore<T>`. `StoreWrapperBuilder` SHALL NOT add them; the
+`WithInstrumentation` / `WithBulkInstrumentation` / `WithAsyncInstrumentation` / `WithAsyncBulkInstrumentation`
+extensions construct them.
+
+#### Scenario: A failed operation is counted as an error and rethrown
+
+- **Given** an `AsyncInstrumentedBulkStoreWrapper` whose inner `DeleteAsync(filter)` throws
+- **When** `DeleteAsync(filter)` is called
+- **Then** the duration and count are recorded with `operation = Delete` and the bulk tag true, the error counter is incremented, the activity status is Error, and the same exception reaches the caller
+
+#### Scenario: Store type tag names the type argument
+
+- **Given** a wrapper constructed as `AsyncInstrumentedBulkStoreWrapper<IAsyncBulkStore<T>, T>`
+- **When** any operation is recorded
+- **Then** the store-type tag is the full name of `IAsyncBulkStore<T>`, not of the concrete store behind it
+
+#### Scenario: Instrumentation hides aggregation
+
+- **Given** an instrumented wrapper around an aggregatable chain
+- **When** a caller casts the wrapper to `IAsyncAggregatableStore<T>`
+- **Then** the cast fails, and a Patterns decorator placed above the instrumented wrapper throws `NotSupportedException` from `AggregateAsync`, because its inner store is not an `IAsyncAggregatableStore<T>`
 
 ### Requirement: Clock abstraction
 

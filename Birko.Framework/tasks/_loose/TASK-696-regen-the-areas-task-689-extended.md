@@ -3,7 +3,7 @@ id: TASK-696
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-10-20
@@ -37,9 +37,9 @@ intended is a finding (CLAUDE.md, lifecycle step 9), not churn.
 
 ## Acceptance criteria
 
-- [ ] `/specs regen` over the 14 areas (batched), each diff reviewed; unexplained behaviour raised as tasks.
-- [ ] `backend-store-implementations.md` written, with a scenario per backend divergence it finds.
-- [ ] `/specs verify` reports the 14 areas fresh.
+- [x] `/specs regen` over the 14 areas (batched), each diff reviewed; unexplained behaviour raised as tasks.
+- [x] `backend-store-implementations.md` written, with a scenario per backend divergence it finds.
+- [x] `/specs verify` reports the 14 areas fresh.
 
 ## Out of scope
 
@@ -51,4 +51,26 @@ N/A — documentation, reviewed as diffs.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-696` — leave empty until then._
+1. One evidence pass for `shaped-by` over all areas; one harvest agent per area writing the body to the scratchpad and
+   reporting its behavioural changes and suspected bugs; diffs reviewed with the user; frontmatter stamped at HEAD.
+2. Also `entity-localization`, which EPIC-022 changed after TASK-689.
+
+## Outcome
+
+Done 2026-10-21. 15 areas regenerated at `50828c68`: the 14 listed plus `entity-localization`. `backend-store-implementations`
+is new (21 requirements, one scenario per backend divergence). The map gained six files added this session (decided by the
+user): `AmbientSession`, `RetryableWrite`, `SqlRetryableWrite`, `SqlSavepoint` → unit-of-work-and-transactions;
+`IRealtimeReadStore` → store-crud-contract; `ISoftDeleteStoreWrapper` → store-decorator-composition. Unmapped files: 0 of 5 007.
+
+**Diff review:** every changed or removed requirement traces to a closed task (TASK-209, 160/173/660, 641, 692/693/695,
+214/219, 259/279/332/656, 668, 697–705); several predate a stale old spec. The rest is new coverage. Confirmed intended by
+the user. `shaped-by`: FEATURE-014 newly on backend-store-implementations and security-and-authorization, FEATURE-006
+kept on llm-provider-and-agents; 376 feature-linked tasks, 259 unresolved, 1 subject-led commit the state gate refuses.
+
+**Found and fixed during the run:**
+- [[TASK-704]] (1d877b67): ElasticSearch read a bare `x.Flag.Value` on a `bool?` as a value-less term — a regression from
+  TASK-703, found by the `filter-expression-translation` harvest.
+- [[TASK-705]] (50828c68): a savepoint lost what an entity-not-found collection write stored, and a failed rollback to it
+  left the caller's unit committable — found by the `entity-localization` harvest.
+
+**Suspected bugs:** 23 groups, filed as a review-intake epic (decided by the user).

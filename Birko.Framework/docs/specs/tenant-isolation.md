@@ -1,7 +1,7 @@
 ---
 area: tenant-isolation
-generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
-generated-on: 2026-10-16
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
   - ../Birko.Data.Sync.Tenant/Models/TenantSyncOptions.cs
   - ../Birko.Data.Sync.Tenant/Models/TenantSyncResult.cs
@@ -28,20 +28,20 @@ sources:
   - ../Birko.EventBus.Tenant/TenantEventEnricher.cs
   - ../Birko.EventBus.Tenant/TenantEventScopeAccessor.cs
   - ../Birko.Security.AspNetCore/Extensions/TenantHeaderGuardExtensions.cs
+  - ../Birko.Security.AspNetCore/Extensions/TenantHeaderGuardStartupCheck.cs
   - ../Birko.Security.AspNetCore/Tenant/HeaderTenantResolver.cs
   - ../Birko.Security.AspNetCore/Tenant/ITenantResolver.cs
   - ../Birko.Security.AspNetCore/Tenant/SubdomainTenantResolver.cs
   - ../Birko.Security.AspNetCore/Tenant/TenantContextAdapter.cs
   - ../Birko.Security.AspNetCore/Tenant/TenantHeaderClaimGuardMiddleware.cs
   - ../Birko.Security.AspNetCore/Tenant/TenantMiddleware.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Multi-tenant isolation across stores, HTTP and events
 
@@ -58,6 +58,12 @@ implementing `ITenant` depends on this capability; so does any host that wants a
 be a `400` and a wrong tenant to be a `403` instead of both being a `500`.
 
 ## Regen provenance
+
+Regen at `48d89611` produced **no behavioural change**. The only source commit since the `4b5bf7e6` stamp is
+`87ba5575` (TASK-650: `ApplyTenantFiltering` refuses a tenant-scoped run whose `TenantGuid` is neither `Guid`
+nor `Guid?`), and that commit already updated this spec. `Birko.Security.AspNetCore/Extensions/TenantHeaderGuardStartupCheck.cs`
+is newly listed among the sources; its behaviour was already specified under *Header-guard wiring* and was
+re-verified against the file.
 
 Scoped regen at `42297ca` for TASK-113 (SH-H050 / SH-H051 / SH-H052), rewriting the three
 `TenantSyncProvider` requirements the fix contradicted — tenant resolution, fetch-vs-save scoping, and

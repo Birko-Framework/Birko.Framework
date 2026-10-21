@@ -389,6 +389,7 @@ areas:
   - name: store-crud-contract
     title: Store CRUD contract and template-method hierarchy
     sources:
+      - ../Birko.Data.Stores/IRealtimeReadStore.cs
       - ../Birko.Data.Stores/IStore.cs
       - ../Birko.Data.Stores/IAsyncStore.cs
       - ../Birko.Data.Stores/AbstractStore.cs
@@ -545,6 +546,7 @@ areas:
   - name: store-decorator-composition
     title: Store decorator wrappers and runtime composition
     sources:
+      - ../Birko.Data.Stores/ISoftDeleteStoreWrapper.cs
       - ../Birko.Data.Patterns/Decorators/*.cs
       - ../Birko.Data.Patterns/Concurrency/*.cs
       - ../Birko.Data.Patterns/Models/*.cs
@@ -679,6 +681,10 @@ areas:
   - name: unit-of-work-and-transactions
     title: Unit of work and transactional store boundaries
     sources:
+      - ../Birko.Data.SQL/Stores/SqlRetryableWrite.cs
+      - ../Birko.Data.SQL/Stores/SqlSavepoint.cs
+      - ../Birko.Data.Stores/AmbientSession.cs
+      - ../Birko.Data.Stores/RetryableWrite.cs
       - ../Birko.Data.Patterns/UnitOfWork/*.cs
       - ../Birko.Data.Stores/ITransactionalStore.cs
       - ../Birko.Data.SQL/UnitOfWork/*.cs

@@ -1,7 +1,7 @@
 ---
 area: settings-configuration-chain
-generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
-generated-on: 2026-10-16
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
   - ../Birko.Configuration/Settings.cs
   - ../Birko.Data.CosmosDB/Stores/Settings.cs
@@ -13,17 +13,17 @@ sources:
   - ../Birko.Data.SQL.MySQL/Stores/MySqlSettings.cs
   - ../Birko.Data.SQL.PostgreSQL/Stores/PostgreSqlSettings.cs
   - ../Birko.Data.SQL.SqLite/Stores/SqLiteSettings.cs
+  - ../Birko.Data.SQL/Stores/ISqlSchemaSettings.cs
   - ../Birko.Data.SQL/Stores/SqlSettings.cs
   - ../Birko.Data.TimescaleDB/Stores/Settings.cs
   - ../Birko.Redis/RedisSettings.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Settings inheritance chain and connection-string contract
 
@@ -41,10 +41,12 @@ folded into a pre-existing instance. Provider subclasses additionally know how t
 into whatever their driver needs — a connection string, a `CosmosClientOptions`, or a fully
 initialized RavenDB `DocumentStore`.
 
-This document records what the thirteen settings classes in the family actually do. They do not all
-do the same thing: the identity format changes shape three times down the chain, connection-string
-escaping is implemented on exactly one provider, and three classes never override the copy hook at
-all, so their own fields are silently dropped when copied through a base-typed reference.
+This document records what the settings classes in the family (fourteen source files, including the
+`ISqlSchemaSettings` interface) actually do. They do not all do the same thing: the identity format
+changes shape three times down the chain, connection-string escaping is implemented only on the SQL
+providers (through their drivers' builders) while MongoDB and Redis still interpolate, and three
+classes never override the copy hook at all, so their own fields are silently dropped when copied
+through a base-typed reference.
 
 ## Requirements
 
@@ -363,6 +365,9 @@ SHALL have one producer, used by its settings type **and** by its connector's pl
 
 The `RemoteSettings` paths SHALL keep their key set: no timeouts, the provider's default port when `Port <= 0`,
 and the secure mode when `UseSecure`. `Settings.GetId()`, the connector cache key, is not affected.
+The SQL Server and MySQL producers SHALL leave a key out when its source field (`Name`, `UserName`, `Password`,
+and for MySQL `Location`) is `null`, rather than assigning the null to the builder; the MySQL and PostgreSQL
+producers SHALL leave a timeout key out when the timeout argument is `null`.
 
 #### Scenario: A credential with separators and quotes reaches the server unchanged
 
@@ -404,6 +409,21 @@ and the secure mode when `UseSecure`. `Settings.GetId()`, the connector cache ke
   `SSL Mode=Require` with `UseSecure`. The builder emits these keys at their Npgsql defaults too, measured on
   TASK-653 (an earlier note said they were omitted). `UseBinaryImport`, `TimeColumn` and `ChunkTimeInterval` never
   reach the string
+
+#### Scenario: A default-constructed SQL Server settings composes without the unset keys
+
+- **Given** `new MSSqlSettings()`, whose `Name` and `UserName` are left at their `null!` defaults
+- **When** `GetConnectionString()` is called
+- **Then** no exception is thrown and the string carries no `Initial Catalog` and no `User ID` key, because the
+  producer assigns those builder properties only when the field is non-null
+
+#### Scenario: A null timeout leaves its key out
+
+- **Given** `MySqlSettings.ComposeConnectionString("srv", 3306, "u", "p", "db", null, false)` and
+  `PostgreSqlSettings.ComposeConnectionString("srv", 5432, "u", "p", "db", null, null, false)`
+- **When** the composed strings are read
+- **Then** the MySQL builder's `ConnectionTimeout` and the PostgreSQL builder's `Timeout` and `CommandTimeout` are
+  never assigned — the `RemoteSettings` fallback paths rely on this to keep their timeout-free key set
 
 ### Requirement: SqLiteSettings derives its file path from Location and Name and yields null when either is missing
 
@@ -589,6 +609,13 @@ for a null `Location` and `6379` for a `Port` that is not greater than zero — 
 - **Given** a `RedisSettings` with `Location = "srv"`, `Port = 6380`, `Password = "pw"`, `UserName = "acl"`, `UseSecure = true`, `Database = 3`, `Name = "client1"`
 - **When** `GetConnectionString()` is called
 - **Then** it returns `srv:6380,password=pw,user=acl,ssl=True,sslHost=srv,defaultDatabase=3,name=client1`
+
+#### Scenario: Composed Redis option values are not escaped
+
+- **Given** a `RedisSettings` with `Location = "srv"`, `Port = 6380` and `Password = "x,ssl=False"`
+- **When** `GetConnectionString()` is called
+- **Then** it returns `srv:6380,password=x,ssl=False` — the value is appended verbatim, so a `,` in a credential
+  becomes an option separator (unlike the SQL providers, which compose through their drivers' builders)
 
 #### Scenario: Default-constructed Redis settings target localhost
 

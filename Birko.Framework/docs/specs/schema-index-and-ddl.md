@@ -1,13 +1,15 @@
 ---
 area: schema-index-and-ddl
-generated-at: 3a7af0793e9111ea84b8adcd2b022ac3c5a529e9
-generated-on: 2026-10-20
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
   - ../Birko.Data.CosmosDB/IndexManagement/CosmosDBIndexManager.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/IndexInfo.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/IndexManager.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/ReindexHelper.cs
+  - ../Birko.Data.ElasticSearch/Stores/MappingDrift.cs
+  - ../Birko.Data.ElasticSearch/Stores/MappingRepairPlan.cs
   - ../Birko.Data.MongoDB/IndexManagement/MongoDBIndexManager.cs
   - ../Birko.Data.Patterns/IndexManagement/IIndexManager.cs
   - ../Birko.Data.Patterns/IndexManagement/IndexDeclarationDrift.cs
@@ -28,6 +30,20 @@ sources:
   - ../Birko.Data.SQL.SqLite/IndexManagement/SqLiteIndexManager.cs
   - ../Birko.Data.SQL/Attributes/Field.cs
   - ../Birko.Data.SQL/Attributes/Table.cs
+  - ../Birko.Data.SQL/Exceptions/FieldAttributeException.cs
+  - ../Birko.Data.SQL/Exceptions/TableAttributeException.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Alter_Add.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Alter_Drop.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Create.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Drop.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Alter_Add.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Alter_Drop.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Create.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Drop.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_EnsureColumns.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_SchemaDrift.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_SchemaRepair.cs
+  - ../Birko.Data.SQL/SQL/Connectors/SchemaEnsureFailureLog.cs
   - ../Birko.Data.SQL/SQL/DataBase_Field.cs
   - ../Birko.Data.SQL/SQL/DataBase_Table.cs
   - ../Birko.Data.SQL/SQL/Fields/AbstractField.cs
@@ -46,16 +62,23 @@ sources:
   - ../Birko.Data.SQL/SQL/Fields/TimeOnlyField.cs
   - ../Birko.Data.SQL/SQL/Fields/UtcDateTimeField.cs
   - ../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs
+  - ../Birko.Data.SQL/SQL/SchemaDrift/ColumnDrift.cs
+  - ../Birko.Data.SQL/SQL/SchemaDrift/SchemaRepairPlan.cs
   - ../Birko.Data.SQL/SQL/Tables/IndexDefinition.cs
   - ../Birko.Data.SQL/SQL/Tables/Table.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+  - ../Birko.Health.Data.IndexManagement/IndexDeclarationDriftHealthCheck.cs
+  - ../Birko.Health.Data.SQL/SchemaDriftHealthCheck.cs
+  - ../Birko.Models.SQL/Mapping/FieldBuilder.cs
+  - ../Birko.Models.SQL/Mapping/IModelMapping.cs
+  - ../Birko.Models.SQL/Mapping/ModelMap.cs
+  - ../Birko.Models.SQL/Mapping/ModelMapRegistry.cs
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-20 over 376 feature-linked tasks: 121 resolved, 255 did not — no reachable
-# first-parent commit whose subject leads with the task id (single-branch: `pr:` is null by design), or a
-# state the gate refuses (todo/cancelled; 1 of those leads a commit subject). Earlier entries kept append-only.
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
+# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 255
+shaped-by-unresolved: 259
 ---
 # Schema descriptors, index management and attribute-driven DDL
 
@@ -87,6 +110,14 @@ PostgreSQL, SQLite) and an ElasticSearch pair where "index" means a *container*,
 own `IIndexManager` implementations — `MongoDBIndexManager`, `RavenDBIndexManager` and
 `CosmosDBIndexManager` — each translating the portable definition into that backend's native index shape.
 
+Two further surfaces sit on top of the reflected model. **Fluent mapping** (`Birko.Models.SQL.Mapping`):
+`ModelMap<T>` / `FieldBuilder<T>` collect portable `FieldDescriptor`s, and `ModelMapRegistry.ApplyToDatabase`
+patches them onto the loaded tables — table names, column names, flags, lengths, decimal precision and
+indexes. **Connector DDL and drift** (`AbstractConnector` / `AbstractAsyncConnector`): `CREATE TABLE`,
+`CREATE INDEX` with degrade-and-report on schema-ensure, `ALTER TABLE ADD/DROP`, the on-demand
+`DetectDrift` / `EnsureColumns` / `PlanRepair` trio, the health checks that surface them, and the
+ElasticSearch mapping-drift twin.
+
 The layers are deliberately *not* isomorphic, and the divergences below are load-bearing: the portable
 `FieldType` enum names types the SQL field factory cannot map, and the portable `IndexDefinition` carries
 flags several providers cannot honour and therefore refuse.
@@ -98,8 +129,11 @@ flags several providers cannot honour and therefore refuse.
 The system SHALL expose `FieldDescriptor` as a mutable, backend-neutral description of one column/field,
 carrying name, `FieldType`, optional physical column name, the flags `IsPrimary` / `IsUnique` /
 `IsRequired` / `IsIgnored` / `IsAutoIncrement`, the optional sizing hints `MaxLength` / `Precision` /
-`Scale`, a `DefaultValue`, and inline index participation via `IndexName` / `IndexOrder` /
-`IndexDescending`; all flags SHALL default to `false`, all nullable hints to `null`, and `IndexOrder` to `0`.
+`Scale`, a `DefaultValue`, and index participation as the list `Indexes` of `FieldIndex` (name, order,
+descending, unique — one entry per index the column belongs to, in declaration order, TASK-695), with the
+read-only `IndexName` / `IndexOrder` / `IndexDescending` / `IndexUnique` reporting the **first** entry
+(`null` / `0` / `false` / `false` when the list is empty); all flags SHALL default to `false`, all nullable
+hints to `null`, `Indexes` to an empty list, and `IndexOrder` to `0`.
 
 #### Scenario: Default-constructed descriptor
 
@@ -114,6 +148,13 @@ carrying name, `FieldType`, optional physical column name, the flags `IsPrimary`
 - **Given** the convenience constructor
 - **When** `new FieldDescriptor("Number")` is created
 - **Then** `Name` is `"Number"` and every other property retains its default
+
+#### Scenario: The single-index properties read the first membership
+
+- **Given** a descriptor whose `Indexes` holds `IX_User` (order 1) and then `UX_Resource` (order 0, unique)
+- **When** `IndexName`, `IndexOrder` and `IndexUnique` are read
+- **Then** they answer `"IX_User"`, `1` and `false` — the second membership is visible only through `Indexes`,
+  and none of the four can be assigned
 
 ### Requirement: Portable field type vocabulary
 
@@ -603,13 +644,13 @@ qualifier to `avpersons`, and the statement failed with *missing FROM-clause ent
 #### Scenario: A post-load column rename desynchronises the keys
 
 - **Given** a loaded table whose field for property `Sku` was keyed — and whose index columns were resolved —
-  under the column name `"Sku"`, and a fluent mapping that afterwards assigns `field.Name = "sku_code"` on the
-  cached `AbstractField` (as `ModelMapRegistry.ApplyToDatabase` does for `HasColumnName`, `AbstractField.Name`
-  being a public setter)
+  under the column name `"Sku"`, and code that afterwards assigns `field.Name = "sku_code"` on the cached
+  `AbstractField` (`AbstractField.Name` being a public setter) without re-keying the table
 - **When** the table is used after that assignment
 - **Then** `Fields` is still keyed `"Sku"` and `Table.Indexes` still names the column `"Sku"`, while the
   field's own `Name` reads `"sku_code"` — neither the dictionary key nor the index columns are recomputed,
-  because both were fixed when `ComputeTable` ran
+  because both were fixed when `ComputeTable` ran; `ModelMapRegistry.ApplyToDatabase` is the one caller that
+  repairs this after its own `HasColumnName` assignment (see the fluent-mapping requirements)
 
 ### Requirement: Column exclusion attributes
 
@@ -791,6 +832,42 @@ property is never read, and one for another CLR type reaches `CreateAbstractFiel
 - **When** `D`'s table is loaded, and `GetField<M, string>(x => x.Slug)` builds a field from the lambda
 - **Then** both are a `CharField` of length 48 — the lambda's member is reflected from the base type, and the model type
   it was read through is consulted first
+
+### Requirement: A registered precision and scale reach a decimal as PrecisionField / ScaleField would
+
+The system SHALL expose `DataBase.RegisterPrecision(modelType, propertyName, precision, scale)` for fluent mapping
+systems (`HasPrecision` / `HasScale`, TASK-692), throwing `ArgumentNullException` for a null type, `ArgumentException`
+for a null or empty property name, and `ArgumentOutOfRangeException` for a precision that is not positive or a
+negative scale; a call with both values null SHALL register nothing and leave any earlier registration in place.
+`LoadField` SHALL find a registration through the **same** lookup `RegisterMaxLength` uses (model type then reflected
+type, each with base types, most derived first) and append a `PrecisionField` for a non-null precision and a
+`ScaleField` for a non-null scale **after** the property's own attributes and after any registered length, so the
+registered values win in `CreateAbstractField`, while a null half leaves that half to the property's own attribute or
+the provider default. A different (precision, scale) pair SHALL drop the type's `_fieldsCache` and `_tableCache`
+entries; the same pair again SHALL change nothing. `DataBase.RegisterPrecision` SHALL NOT check the property's type:
+on a `string` or `byte[]` the appended `PrecisionField` is read by `CreateAbstractField`'s backwards-compatible
+length fallback when no positive `MaxLengthField` is present (type checking is `ModelMapRegistry`'s).
+
+#### Scenario: A registered precision and scale shape a decimal column
+
+- **Given** `public decimal WeightKg { get; set; }` with no attribute and `RegisterPrecision(typeof(M), "WeightKg", 6, 2)`
+- **When** the table is loaded
+- **Then** `WeightKg` is a `DecimalField` with precision `6` and scale `2`; over a `[PrecisionField(18)] [ScaleField(4)]`
+  property the registered values win
+
+#### Scenario: A scale registered alone keeps the attribute's precision
+
+- **Given** `[PrecisionField(10)] public decimal Rate { get; set; }` and `RegisterPrecision(typeof(M), "Rate", null, 3)`
+- **When** the field is created
+- **Then** its precision is `10` and its scale `3`
+
+#### Scenario: Invalid values are refused, an empty registration is ignored
+
+- **Given** any model type and property
+- **When** `RegisterPrecision(type, "Rate", 0, null)` or `RegisterPrecision(type, "Rate", 5, -1)` is called, and
+  separately `RegisterPrecision(type, "Rate", null, null)`
+- **Then** the first two throw `ArgumentOutOfRangeException`; the third returns without registering or dropping any
+  cache
 
 ### Requirement: Cross-assembly field attributes are rebuilt by short type name
 
@@ -1049,7 +1126,8 @@ rather than being skipped.
 - **Given** repeated `DataBase.Write(entity)` / `DataBase.Read(reader, entity)` calls for the same CLR type
 - **When** they run
 - **Then** `LoadFields` serves the field list from the static `_fieldsCache` `ConcurrentDictionary`, whose entry
-  for a type is dropped only when `RegisterMaxLength` registers a different length for one of its properties
+  for a type is dropped only when `RegisterMaxLength` registers a different length, or `RegisterPrecision` a
+  different precision/scale, for one of its properties
 
 ### Requirement: A field reports the stored form of an unassigned value
 
@@ -1669,6 +1747,112 @@ columns disagree on uniqueness SHALL be refused. Applying the registry twice SHA
 - **Given** the same mapping, whose `Provider` is a `string` bounded by `HasMaxLength(50)`
 - **Then** after `ApplyToDatabase`, `Provider`, `ProviderKey` and `UserGuid` have `IsIndexed = true`, and an
   unindexed column does not
+
+#### Scenario: One index declared twice on a column in one chain is refused
+
+- **Given** `map.Property(x => x.Code).HasIndex("IX_Code").HasUniqueIndex("IX_Code")`
+- **When** the second call runs
+- **Then** `InvalidOperationException` is thrown stating that the property already belongs to `IX_Code`; a blank
+  index name throws `ArgumentException("An index needs a name.")`. The check is per `FieldDescriptor`: a second
+  `Property(x => x.Code)` call creates a separate descriptor, its duplicate membership is not refused, and
+  `ApplyToDatabase` skips the repeated column instead
+
+#### Scenario: Mixed uniqueness under one index name is refused
+
+- **Given** `A.HasIndex("IX_AB", 0)` and `B.HasUniqueIndex("IX_AB", 1)`
+- **When** `ApplyToDatabase` runs
+- **Then** `InvalidOperationException` is thrown naming the index and table and stating that it mixes `HasIndex` and
+  `HasUniqueIndex`; an index membership naming a property the table does not map throws `InvalidOperationException`
+  too
+
+### Requirement: Fluent model maps collect portable descriptors per model type
+
+The system SHALL let an `IModelMapping<T>.Configure(ModelMap<T>)` describe a model: `ToTable(name)` and
+`ToTable(name, schema)` set `TableName` / `TableSchema`; `Property(x => x.P)` SHALL always append a **new**
+`FieldDescriptor` named after the member and return a `FieldBuilder<T>` whose `HasColumnName`, `IsUnique`,
+`IsPrimary`, `IsRequired`, `IsAutoIncrement`, `IsIgnored`, `HasPrecision`, `HasScale`, `HasMaxLength`, `HasIndex` and
+`HasUniqueIndex` set that descriptor and return the builder (`And()` returning the map); and `HasUnique`,
+`HasPrimary` and `Ignore` SHALL set the flag on the first existing descriptor for the member, appending one only
+when none exists. A member expression SHALL be a `MemberExpression` or a `UnaryExpression` over one, else
+`ArgumentException("Expression must be a member access expression.")`. `ModelMapRegistry.Register` SHALL configure a
+fresh map and replace any map for the type; `RegisterFromAssembly` SHALL instantiate every non-abstract,
+non-interface type implementing `IModelMapping<>` through its parameterless constructor and register each model type
+it maps; `GetMap<T>`, `HasMap`, `GetTableNames` (only maps with a non-empty table name) and `GetPropertyMaps` (an
+empty list for an unregistered type) SHALL read the registered maps.
+
+#### Scenario: Property appends, HasUnique reuses
+
+- **Given** `map.Property(x => x.Code).HasMaxLength(20)` followed by `map.HasUnique(x => x.Code)`
+- **When** `map.Properties` is read
+- **Then** it holds one descriptor for `Code` with `MaxLength == 20` and `IsUnique == true`; a further
+  `map.Property(x => x.Code)` would append a second descriptor for the same member
+
+#### Scenario: An unregistered type has no property maps
+
+- **Given** a registry with no map for `Foo`
+- **When** `GetPropertyMaps(typeof(Foo))` and `GetMap<Foo>()` are called
+- **Then** an empty list and `null` are returned
+
+### Requirement: ApplyToDatabase patches registered maps onto the loaded tables in a fixed order
+
+The system SHALL, on `ModelMapRegistry.ApplyToDatabase`, first register every map's table name
+(`DataBase.RegisterTableNames`) and, for a map with both a table name and a schema, the schema; then, for every map,
+register its `HasMaxLength` and `HasPrecision` / `HasScale` values **before any table loads**; then, for every map with
+at least one descriptor, load the table and per descriptor whose property maps to a field: apply `HasColumnName`
+(recording the rename), `IsPrimary` through `Table.DeclarePrimary`, and set `IsUnique`, `IsNotNull` (from
+`IsRequired`) and `IsAutoincrement`; then re-key the table's `Fields` by the new column names and rename every index
+column and predicate column that named an old one; then apply the fluent indexes. A descriptor whose property maps to
+no field SHALL be skipped silently for these flags. The flags SHALL be set on the already-loaded field, after
+`LoadIndexes` ran, so a fluent `IsUnique` on a nullable column receives no synthesised `ux_{table}_{column}` index
+and no inline `UNIQUE` (which needs `IsNotNull` or `IsPrimary`).
+
+#### Scenario: A fluent column rename keeps indexes and lookups consistent
+
+- **Given** a model whose `Sku` property carries `[IndexedField("IX_Sku")]` and a mapping
+  `Property(x => x.Sku).HasColumnName("sku_code")`
+- **When** `ApplyToDatabase` runs
+- **Then** the field's `Name` is `"sku_code"`, `table.Fields` is keyed `"sku_code"`, and `IX_Sku`'s column is
+  `"sku_code"`, so `CREATE INDEX` names a column the table has
+
+#### Scenario: A fluent unique flag on a nullable column constrains nothing
+
+- **Given** a mapping `Property(x => x.ExternalId).IsUnique()` on a nullable `string` with no `IsRequired()`
+- **When** `ApplyToDatabase` runs and the table is created
+- **Then** the field has `IsUnique == true`, but no `ux_…` filtered index was synthesised and
+  `UsesInlineUniqueConstraint` is `false`, so the DDL carries no uniqueness for the column; with `IsRequired()` the
+  column gets an inline `UNIQUE`
+
+### Requirement: A fluent length or precision that cannot be honoured is refused
+
+The system SHALL, in `ApplyToDatabase`, refuse with `InvalidOperationException` — naming the call, the type and the
+property, before any table loads — a `HasMaxLength` that is not positive, on a property that is neither `string`
+nor `byte[]`, or on a property that is no column (the descriptor `IsIgnored`, the property has no setter, or it
+carries `[IgnoreField]`); and a `HasPrecision` / `HasScale` on a `string` (the message pointing to
+`HasMaxLength(n)`), on any other non-`decimal` / `decimal?` type, with a precision that is not positive, with a scale
+that is negative or above the declared precision, or on a property that is no column. A property name the model does
+not declare as a public instance property SHALL be refused too; the most derived declaration SHALL be used, so a
+property hidden with `new` is not ambiguous. Accepted values SHALL reach `DataBase.RegisterMaxLength` /
+`DataBase.RegisterPrecision` (TASK-691, TASK-692). The `FieldBuilder.HasPrecision` / `HasScale` doc comments still
+describe them as metadata that `ApplyToDatabase` does not apply; the registry applies them.
+
+#### Scenario: A string HasPrecision is refused with the way out
+
+- **Given** `Property(x => x.Code).HasPrecision(256)` where `Code` is a `string`
+- **When** `ApplyToDatabase` runs
+- **Then** `InvalidOperationException` is thrown whose message contains `HasPrecision(256) on M.Code, a string` and
+  `A string's length is HasMaxLength(n)`, and no table has been loaded by the call
+
+#### Scenario: A decimal precision is applied
+
+- **Given** `Property(x => x.WeightKg).HasPrecision(6).HasScale(2)` on a `decimal`
+- **When** `ApplyToDatabase` runs and the table is created on MySQL
+- **Then** the column is `DECIMAL(6,2)` rather than the provider default
+
+#### Scenario: A length on a non-string is refused
+
+- **Given** `Property(x => x.Count).HasMaxLength(10)` where `Count` is an `int`
+- **When** `ApplyToDatabase` runs
+- **Then** `InvalidOperationException` is thrown stating that only a string or byte[] column has a length
 
 ### Requirement: Index-management SQL is composed by string interpolation
 
@@ -2318,3 +2502,315 @@ paths are in the policy.
   single descending field
 - **When** `CreateAsync` runs
 - **Then** `NotSupportedException` is thrown before the container or the registry is read
+
+### Requirement: CREATE TABLE is a recorded, schema-first template method
+
+The system SHALL create a table through the non-virtual `AbstractConnector.CreateTable(name, fields)`, which first
+runs the provider's ensure-schema statement when the table has a schema the provider supports (`EnsureSchemaSqlFor`),
+then the overridable `CreateTableCore` — by default `CREATE TABLE IF NOT EXISTS <TableIdentifier> (<non-empty
+definitions joined by ", ">)` — and only after that statement returns SHALL record the table as created
+(`RecordTableCreated`), so a create that threw is not recorded and one rolled back by a caller's transaction stays
+recorded. The type and table overloads SHALL load the tables (`DataBase.LoadTables`) and dispatch per table whose field
+list is non-empty, building the definitions with each provider's `FieldDefinition`.
+
+#### Scenario: A provider override cannot skip the bookkeeping
+
+- **Given** a provider that overrides `CreateTableCore` to emit its own statement
+- **When** a store's schema-ensure calls `CreateTable`
+- **Then** the override's statement runs and the table is still recorded in `TablesCreated`, because the recording
+  lives in the non-virtual wrapper (TASK-295)
+
+#### Scenario: A schema-qualified table gets its schema first
+
+- **Given** an entity declared in schema `reporting` on a provider with schemas
+- **When** `CreateTable` runs
+- **Then** the ensure-schema statement executes before `CREATE TABLE`, and a provider without schemas runs none
+
+### Requirement: Several primary fields render one table-level composite key
+
+The system SHALL, on the synchronous table-dictionary path, emit every field's definition and — when more than one
+field is primary — append `PRIMARY KEY (<primary columns in declaration order>)`, the inline clause being suppressed
+through `UsesInlinePrimaryConstraint`; and SHALL throw `TableAttributeException` before any DDL when a composite key
+includes an auto-increment column. The asynchronous `CreateTableAsync(IDictionary…)` SHALL instead render each field
+with `FieldDefinition` alone — no table-level key clause and no auto-increment refusal — creating all the tables
+concurrently (`Task.WhenAll`), and `AbstractAsyncConnector.CreateTableAsync(name, fields)` is a separate virtual that
+runs the ensure-schema statement and the default `CREATE TABLE IF NOT EXISTS` but does not record the table as created
+and does not route through `CreateTableCore`.
+
+#### Scenario: A composite key is declared once
+
+- **Given** a table whose fields `Ts` and `DeviceId` both carry `[PrimaryField]`
+- **When** `CreateTable(types)` runs
+- **Then** neither column carries an inline `PRIMARY KEY` and the statement ends with `PRIMARY KEY (Ts, DeviceId)`
+
+#### Scenario: An auto-increment column cannot join a composite key
+
+- **Given** two primary fields, one carrying `[IncrementField]`
+- **When** the sync path builds the definitions
+- **Then** `TableAttributeException` is thrown naming the table and the auto-increment column, and no statement runs
+
+#### Scenario: The async table path omits the composite key
+
+- **Given** the same two-primary-field table
+- **When** `CreateTableAsync(types)` runs
+- **Then** the definitions are emitted without the table-level `PRIMARY KEY (…)` clause, and the table is not added to
+  `TablesCreated`
+
+### Requirement: Schema-ensure records an unbuildable index instead of failing the table
+
+The system SHALL, after creating the tables in `CreateTable(IEnumerable<Table>)` / `CreateTableAsync(IEnumerable<Table>)`,
+create each table's declared indexes **one at a time**, clear any recorded failure for an index that is built, and
+record (`RecordIndexCreationFailure`) rather than throw any exception an index raises — except that the async path
+SHALL rethrow `OperationCanceledException`. The public `CreateIndexes` / `CreateIndexesAsync` SHALL, per index, first
+call `RequireExpressiblePredicates` outside the command (so its refusal arrives unwrapped), then run
+`CreateIndexSql(table, index, conditional: !throwIfExists)`, and with `throwIfExists` false (the default) tolerate an
+error the connector classifies as "already exists" (`IsIndexAlreadyExistsException`), every other failure
+propagating; `throwIfExists: true` SHALL emit no conditional form and let an existing index throw on every provider.
+`DropIndexes` / `DropIndexesAsync` SHALL run `DropIndexSql` per index and tolerate nothing.
+
+#### Scenario: One unbuildable unique index leaves the entity usable
+
+- **Given** a table whose declared unique index cannot be built because duplicate rows already exist
+- **When** schema-ensure runs `CreateTable(tables)`
+- **Then** the table is usable, the indexes declared after the failing one are still attempted, and the failure is
+  listed in `IndexCreationFailures`; once the rows are repaired, a later schema-ensure builds the index and clears the
+  record
+
+#### Scenario: An explicit create still fails loudly
+
+- **Given** the same unbuildable index
+- **When** a caller invokes `CreateIndexes(table, new[] { index })`
+- **Then** the provider's exception propagates; on MySQL an already-present index (1061) is tolerated while an
+  unbuildable one (1062) is not
+
+#### Scenario: Cancellation is not an index failure
+
+- **Given** `CreateTableAsync(tables, ct)` whose token is cancelled during an index statement
+- **When** the exception reaches the per-index catch
+- **Then** `OperationCanceledException` propagates and nothing is recorded
+
+### Requirement: Schema-ensure failures are kept as keyed current state
+
+The system SHALL keep schema-ensure failures in `SchemaEnsureFailureLog<TFailure>`: one entry per key (compared
+case-insensitively), `Record` overwriting the entry and returning `true` only on the transition into failure so the
+caller raises its event once, `Clear` removing the key, and `Snapshot` returning the current entries ordered
+case-insensitively by the caller's sort key; every operation SHALL be synchronised on one lock, and a null sort key
+SHALL throw `ArgumentNullException`.
+
+#### Scenario: Repeated failures do not grow the log
+
+- **Given** an index that fails on every schema-ensure run, across many requests sharing one connector
+- **When** each run records it
+- **Then** `Snapshot` holds one entry carrying the latest error, and only the first `Record` returned `true`
+
+#### Scenario: A repaired condition drops out
+
+- **Given** a recorded failure
+- **When** `Clear` is called for its key
+- **Then** the entry is absent from the next `Snapshot`
+
+### Requirement: Tables are dropped and columns altered one statement at a time
+
+The system SHALL drop each non-empty table name with `DROP TABLE IF EXISTS <TableIdentifier>`, skipping null tables and
+empty names; SHALL add each non-null field with `ALTER TABLE <TableIdentifier> <AddColumnClause> <AddColumnDefinition>`
+(`AddColumnSql`, shared by the sync and async paths; `ADD COLUMN` by default, `ADD` on SQL Server), where
+`AddColumnDefinition` appends `DEFAULT <DefaultStoredValue literal>` to a NOT NULL column that is neither identity nor
+primary and has a non-null stored default; and SHALL drop each non-null field with
+`ALTER TABLE <TableIdentifier> DROP COLUMN <field.Name>`, the column name bare. A null/empty table name, a null table
+or an empty field list SHALL do nothing.
+
+#### Scenario: A NOT NULL column added to a populated table is back-filled
+
+- **Given** `public int Count { get; set; }` added to an entity whose table already has rows
+- **When** `AlterTableAdd(type, new[] { countField })` runs
+- **Then** the statement is `ALTER TABLE "<T>" ADD COLUMN Count <type> NOT NULL DEFAULT 0` (with `ADD` on SQL
+  Server), so existing rows read back as `0`
+
+#### Scenario: Dropping an absent table is not an error
+
+- **Given** no table `Legacy`
+- **When** `DropTable(new[] { "Legacy" })` runs
+- **Then** `DROP TABLE IF EXISTS "Legacy"` executes without error
+
+### Requirement: DetectDrift compares declared columns and indexes with the catalogue, on demand
+
+The system SHALL provide `AbstractConnector.DetectDrift(type)`, never called from schema-ensure, returning a
+`SchemaDriftReport`: unsupported (`Supported == false`, with a reason) for a type `TryLoadTable` cannot map or a
+provider whose `StoredColumnsSql` is null; supported with `TableExists == false` when the catalogue lists no columns;
+otherwise, per declared field compared by the stored-name comparer: `Missing`; `CaseMismatch` when the column exists
+only under a different case (carrying `StoredColumn`); `TypeMismatch` when `ConvertType(field)` and the provider's
+rendering of the stored type differ after removing whitespace and upper-casing; `KeyMismatch` when the catalogue
+reports key membership and it differs from what the connector emits; `NullabilityMismatch` when the catalogue reports
+nullability, the field is not one of `DataBase.GetPrimaryFields`, and it differs from `IsNotNull`; and `Unexpected` for
+every stored column no field claimed. A null type SHALL throw `ArgumentNullException`. The stored-name comparer SHALL
+be asked of the database once per connector where the provider supplies `IdentifierCaseSensitivitySql` (SQL Server),
+else the dialect's. Index drift SHALL be computed through the provider's `CreateIndexManager()` (none → no index drift):
+per declared index, `Missing` by name, else `ColumnsDiffer` when the ordered stored-name columns differ, else
+`UniquenessDiffers`; undeclared stored indexes and partial-index predicates SHALL NOT be compared, and a listing failure
+SHALL propagate out of `DetectDrift`. `IsClean` SHALL be true only when supported, the table exists and there are
+neither column nor index drifts.
+
+#### Scenario: A money column that lost its scale is reported
+
+- **Given** a `decimal` property declared `(18,2)` over a stored `DECIMAL(18,0)` column
+- **When** `DetectDrift` runs
+- **Then** a `TypeMismatch` drift is reported — width and scale are not normalised away
+
+#### Scenario: An untouched entity is not drift and not clean
+
+- **Given** an entity whose table has not been created yet
+- **When** `DetectDrift` runs
+- **Then** the report is supported, `TableExists == false`, carries no drifts, and `IsClean` is false
+
+#### Scenario: A DTO is reported, not thrown on
+
+- **Given** a type with no `[Table]` and no registration
+- **When** `DetectDrift` runs
+- **Then** an unsupported report naming the type as not a mapped entity is returned instead of an exception
+
+#### Scenario: A column reachable only under its stored case
+
+- **Given** PostgreSQL, a model column `SupplierVatin` emitted bare, and a table holding only the quoted `"SupplierVatin"`
+- **When** `DetectDrift` runs
+- **Then** a `CaseMismatch` drift carries `StoredColumn == "SupplierVatin"` and the stored column is not also
+  reported `Unexpected`
+
+### Requirement: EnsureColumns adds only the missing columns it can add honestly
+
+The system SHALL provide the explicit `AbstractConnector.EnsureColumns(type)`, never called from schema-ensure: it SHALL
+throw `ArgumentNullException` for a null type and `NotSupportedException` when `DetectDrift` is unsupported, return an
+empty list when the table does not exist, and otherwise, for the `Missing` drifts only, refuse with
+`InvalidOperationException` — naming every such column and before any DDL — a primary key, a unique column, an identity
+column, or a NOT NULL column whose `DefaultStoredValue` is null; when nothing is refused it SHALL add each missing
+column through `AlterTableAdd` and return the drifts it closed. Type, case, nullability, key and unexpected drifts SHALL
+be left untouched, and a second call SHALL find nothing to add.
+
+#### Scenario: A newly mapped property gets its column
+
+- **Given** a table created before property `Note` (`string?`) was mapped
+- **When** `EnsureColumns(type)` runs
+- **Then** `ALTER TABLE … ADD COLUMN Note …` executes and the returned list holds that one `Missing` drift; a second
+  call returns an empty list
+
+#### Scenario: A required string is refused before anything is altered
+
+- **Given** two missing columns, a nullable `int?` and a `[Required] string`
+- **When** `EnsureColumns(type)` runs
+- **Then** `InvalidOperationException` is thrown naming the string column as NOT NULL with no value-type default, and
+  neither column was added
+
+### Requirement: PlanRepair writes the lossless repairs and lists the rest
+
+The system SHALL provide the explicit `AbstractConnector.PlanRepair(type)`, which never executes anything: it SHALL
+throw `ArgumentNullException` for a null type and `NotSupportedException` when drift detection is unsupported, return
+an empty plan when the table does not exist, and otherwise emit — in drift order — `AddColumnSql` for a `Missing` column
+that `EnsureColumns` would add (listing a refused one as not actioned with the reason and "add it with a migration that
+supplies the value"), and `RenameColumnSql(table, storedSpelling, StoredColumnName(column))` (both names quoted;
+`sp_rename` on SQL Server) for a `CaseMismatch`; every `TypeMismatch`, `NullabilityMismatch`, `KeyMismatch` and
+`Unexpected` drift and every index drift SHALL be listed in `NotActioned` with its reason. `Requirements` SHALL carry
+the distinct non-null `StatementRequirement` answers for the statements (SQLite: a decimal column needs a registered
+collation), and `IsComplete` SHALL be true only when nothing is left to an operator. The `ColumnDriftKind.CaseMismatch`
+doc comment still says "never actioned", which holds for `EnsureColumns` but not for `PlanRepair`.
+
+#### Scenario: A plan for a mixed drift
+
+- **Given** a table missing a nullable column, holding another only under a different case, and holding a column with
+  the wrong type
+- **When** `PlanRepair(type)` runs
+- **Then** `Statements` holds one `ALTER TABLE … ADD …` and one `ALTER TABLE … RENAME COLUMN "<stored>" TO "<declared>"`,
+  `NotActioned` lists the type mismatch ("a type change can lose data or fail on existing values"), and `IsComplete`
+  is false
+
+#### Scenario: An index drift is the operator's
+
+- **Given** a declared unique index missing from the table
+- **When** `PlanRepair(type)` runs
+- **Then** no statement is written for it and `NotActioned` lists it, because a unique index can fail on existing
+  duplicates
+
+### Requirement: The schema drift health check reports drift as Degraded
+
+The system SHALL provide `SchemaDriftHealthCheck(connectorFactory, entityTypes)` (null arguments throwing
+`ArgumentNullException`) that calls `DetectDrift` for each listed type and returns: `Unhealthy` when the factory returns
+null or any exception other than cancellation is thrown (cancellation propagates); `Degraded` when there is any column
+drift, index drift or entry in the connector's `IndexCreationFailures`, the description counting each; otherwise
+`Degraded` when any report is unsupported; otherwise `Healthy`, saying how many types were verified and how many tables
+were not created yet when some are absent. Its data SHALL carry `checked`, `drifted`, `indexDrifted`, `indexFailures`,
+`tablesNotYetCreated` and `unsupported`, plus the `drift` and `indexFailure` lines when non-empty.
+
+#### Scenario: An unbuilt index degrades the check with no drift
+
+- **Given** no column or index drift and one entry in `IndexCreationFailures`
+- **When** `CheckAsync` runs
+- **Then** the result is `Degraded` and `indexFailure` lists `<table>.<index>: <message>`
+
+#### Scenario: Absent tables are healthy but say so
+
+- **Given** two listed types, one of whose tables does not exist yet
+- **When** `CheckAsync` runs with no drift
+- **Then** the result is `Healthy` with "Schema matches the models for 1 of 2 type(s); 1 table(s) not created yet, so
+  they were not checked."
+
+#### Scenario: A catalogue failure is Unhealthy
+
+- **Given** `DetectDrift` throwing, for example because the index listing query fails
+- **When** `CheckAsync` runs
+- **Then** the result is `Unhealthy` with "Schema drift check failed: …", although the check is documented as
+  "Degraded, never Unhealthy"
+
+### Requirement: The index declaration health check reports document-store index drift
+
+The system SHALL provide `IndexDeclarationDriftHealthCheck(probes)` (null throwing `ArgumentNullException`), running
+each probe — typically `IndexDeclarationDriftDetector.DetectAsync` for one scope — in turn and returning `Degraded` when
+any drift is reported, else `Degraded` when any declared index could not be compared (listing them), else `Healthy`;
+cancellation SHALL propagate and any other exception SHALL be `Unhealthy`. Its data SHALL carry `scopes`, `declared`,
+`drifted` and `unverified`, plus `drift` and `notCompared` when non-empty.
+
+#### Scenario: An uncomparable index is never healthy
+
+- **Given** a probe whose report has no drifts and one unverified index
+- **When** `CheckAsync` runs
+- **Then** the result is `Degraded` with "1 of N declared index(es) could not be compared: …"
+
+### Requirement: ElasticSearch mapping drift compares flattened field paths
+
+The system SHALL compare an ElasticSearch store's declared mapping — the `Mappings` its own create-index descriptor
+produces — with the stored one by flattening both to dotted paths (object children and multi-field sub-fields
+included, compared ordinally), giving an object without a type the type `"object"`, and letting a later entry for the
+same path replace the earlier one together with its whole sub-tree; it SHALL report `Missing` (declared, not stored),
+`TypeMismatch` (types differ) and `Unexpected` (stored, not declared). `MappingDriftReport.IsClean` SHALL require
+`Supported`, `IndexExists` and no drifts.
+
+#### Scenario: A keyword declared over a stored text field
+
+- **Given** a declared `code: keyword` and a stored `code: text` with a dynamic `code.keyword` sub-field
+- **When** the mappings are compared
+- **Then** `code` is a `TypeMismatch` (`declared keyword, mapped as text`) and `code.keyword` is `Unexpected`
+
+#### Scenario: An overridden auto-mapped property keeps only the override
+
+- **Given** `AutoMap().Properties(...)` declaring `name` first as `text` with `name.keyword`, then overriding it as `keyword`
+- **When** the declared side is flattened
+- **Then** only `name: keyword` remains; the stale `name.keyword` is not declared
+
+### Requirement: ElasticSearch mapping repair adds only missing fields
+
+The system SHALL turn a mapping drift report into a `MappingRepairPlan` without sending anything: an empty plan when the
+index does not exist; otherwise one `PUT /<index>/_mapping` request whose body is the serialised declared top-level
+fields containing a `Missing` path, excluding any top-level field that also has a `TypeMismatch` beneath it; every type
+mismatch, every missing path under such a field and every unexpected field SHALL be listed in `NotActioned` with the
+remedy (a new index, `_reindex`, an alias swap via `ReindexHelper`, or "cannot be removed in place"). `IsComplete` SHALL
+be true only when nothing is left to an operator.
+
+#### Scenario: A missing field and a mismatched one
+
+- **Given** a report with `note` missing and `code` a type mismatch
+- **When** the plan is built
+- **Then** it holds one `PUT /<index>/_mapping` whose body declares `note` only, and `NotActioned` lists `code` with the
+  reindex remedy
+
+#### Scenario: A missing sub-field under a mismatched field waits for the reindex
+
+- **Given** `code` a type mismatch and `code.raw` missing
+- **When** the plan is built
+- **Then** no request is written for `code`, and `code.raw` is listed as repaired by the same reindex

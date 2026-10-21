@@ -1,25 +1,48 @@
 ---
 area: security-and-authorization
-generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
-generated-on: 2026-10-16
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
+  - ../Birko.Communication.AspNetCore/OwnedCrud/OwnedCrudResults.cs
+  - ../Birko.Communication.AspNetCore/OwnedCrud/OwnerAccess.cs
+  - ../Birko.Communication.REST.Server/Middleware/RestAuthenticationConfiguration.cs
+  - ../Birko.Communication.REST.Server/Middleware/RestAuthenticationMiddleware.cs
+  - ../Birko.Communication.REST.Server/Middleware/RestAuthenticationService.cs
+  - ../Birko.Communication.SOAP/Middleware/SoapAuthenticationConfiguration.cs
+  - ../Birko.Communication.SOAP/Middleware/SoapAuthenticationService.cs
+  - ../Birko.Communication.SSE/Middleware/SseAuthenticationConfiguration.cs
+  - ../Birko.Communication.SSE/Middleware/SseAuthenticationMiddleware.cs
+  - ../Birko.Communication.SSE/Middleware/SseAuthenticationService.cs
+  - ../Birko.Communication.WebSocket/Middleware/WebSocketAuthenticationGate.cs
+  - ../Birko.Communication.WebSocket/Services/WebSocketAuthenticationConfiguration.cs
+  - ../Birko.Communication.WebSocket/Services/WebSocketAuthenticationService.cs
+  - ../Birko.Health.Security.Grants/StaleGrantHealthCheck.cs
   - ../Birko.Security.AspNetCore/Authentication/JwtAuthenticationOptions.cs
   - ../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs
   - ../Birko.Security.AspNetCore/Authentication/JwtClaimNames.cs
+  - ../Birko.Security.AspNetCore/Authentication/LoopbackBypass.cs
   - ../Birko.Security.AspNetCore/Authentication/TokenServiceAdapter.cs
   - ../Birko.Security.AspNetCore/Authorization/ClaimsPermissionChecker.cs
   - ../Birko.Security.AspNetCore/Authorization/IUserPermissionResolver.cs
   - ../Birko.Security.AspNetCore/Authorization/PermissionEndpointFilter.cs
   - ../Birko.Security.AspNetCore/Authorization/PermissionResolutionMiddleware.cs
+  - ../Birko.Security.AspNetCore/Extensions/LoopbackBypassExtensions.cs
   - ../Birko.Security.AspNetCore/Extensions/PermissionResolutionExtensions.cs
   - ../Birko.Security.AspNetCore/Extensions/SecurityServiceExtensions.cs
   - ../Birko.Security.AspNetCore/User/ClaimMappingOptions.cs
   - ../Birko.Security.AspNetCore/User/ClaimsCurrentUser.cs
+  - ../Birko.Security.AspNetCore/User/CurrentUserOwnerAccessExtensions.cs
   - ../Birko.Security.AspNetCore/User/ICurrentUser.cs
   - ../Birko.Security.AspNetCore/User/ResolvedPermissionsCurrentUser.cs
   - ../Birko.Security.AzureKeyVault/AzureKeyVaultSecretProvider.cs
   - ../Birko.Security.AzureKeyVault/AzureKeyVaultSettings.cs
   - ../Birko.Security.BCrypt/Hashing/BCryptPasswordHasher.cs
+  - ../Birko.Security.Grants.AspNetCore/Authorization/GrantAwareUserPermissionResolver.cs
+  - ../Birko.Security.Grants.AspNetCore/Authorization/RequireGrantEndpointFilter.cs
+  - ../Birko.Security.Grants.AspNetCore/Authorization/UserPermissionResolverAdminSource.cs
+  - ../Birko.Security.Grants.AspNetCore/Extensions/GrantEndpointExtensions.cs
+  - ../Birko.Security.Grants.AspNetCore/Extensions/GrantServiceExtensions.cs
+  - ../Birko.Security.Grants.AspNetCore/GrantsAspNetCoreOptions.cs
   - ../Birko.Security.Grants.SQL/GrantSqlIndexes.cs
   - ../Birko.Security.Grants.SQL/GrantSqlMappings.cs
   - ../Birko.Security.Grants.SQL/Mappings/InvitationMapping.cs
@@ -47,6 +70,7 @@ sources:
   - ../Birko.Security.Grants/Services/IGrantSignInService.cs
   - ../Birko.Security.Grants/Services/IInvitationService.cs
   - ../Birko.Security.Grants/Services/InvitationService.cs
+  - ../Birko.Security.Grants/Services/StaleGrantDetector.cs
   - ../Birko.Security.Grants/Stores/GrantPredicates.cs
   - ../Birko.Security.Grants/Stores/IInvitationStore.cs
   - ../Birko.Security.Grants/Stores/IResourceGrantStore.cs
@@ -78,14 +102,13 @@ sources:
   - ../Birko.Security/Encryption/AesEncryptionProvider.cs
   - ../Birko.Security/Encryption/FieldCipher.cs
   - ../Birko.Security/Hashing/Pbkdf2PasswordHasher.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
-shaped-by: []
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
+shaped-by: [FEATURE-014]
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Hashing, encryption, tokens, secrets and permission enforcement
 
@@ -98,7 +121,9 @@ pre-shared token bound to an IP), where secrets come from (HashiCorp Vault, Azur
 `ISecretProvider` — optionally projected straight into `IConfiguration`), how an authenticated caller's
 permissions are read and enforced on an endpoint, and — through `Birko.Security.Grants` — which role a user
 holds on one particular resource, who may share it, and how an invitation or a bootstrap identity turns into
-such a grant at sign-in.
+such a grant at sign-in. Around those it carries the HTTP layer over grants (`Birko.Security.Grants.AspNetCore`:
+`RequireGrant`, grant-aware permission resolution), the one owner-or-admin rule for owned data (`OwnerAccess`),
+and the static-token adapters the REST, SOAP, SSE and WebSocket transports authenticate through.
 
 Consumers are ASP.NET Core applications (via `AddBirkoSecurity` / `AddBirkoJwtBearer` / `RequirePermission`),
 console and worker processes (the hashers, the encryption provider, the token provider and the secret
@@ -1647,8 +1672,9 @@ The system SHALL make `GrantService.CanAsync(user, type, resourceId, action, ten
 otherwise when the union of the actions of the user's grants on that type — type-wide grants
 (`ResourceId == null`) plus grants whose `ResourceId` equals `resourceId` — contains the action. With
 `resourceId` null only type-wide grants count. `ResourceVisibility` SHALL never change the answer. Nothing is
-cached, so a revoke takes effect on the next check. A stored grant whose role is no longer declared makes the
-check throw `GrantConfigurationException`.
+cached, so a revoke takes effect on the next check. A stored grant whose role is no longer declared contributes
+no actions to the check (TASK-641); a resource type or action the caller passes in that is undeclared still throws
+`GrantConfigurationException`.
 
 #### Scenario: Type-wide grant
 
@@ -1909,12 +1935,16 @@ The system SHALL provide `SqlResourceGrantStore<DB>` and `SqlInvitationStore<DB>
 `AsyncDataBaseBulkStore` subclasses whose lookups are the store interfaces' default methods, and
 `GrantSqlMappings.Register`, which maps `ResourceGrant` to table `BirkoResourceGrants` (required `UserGuid`,
 `ResourceType`, `Role`) and `Invitation` to `BirkoInvitations` (`TokenHash` required and declared unique;
-required `Email`, `ResourceType`, `Role`). `GrantSqlIndexes.EnsureAsync(grants, invitations, indexManager)`
-SHALL initialise both stores and create, when absent, `IX_BirkoResourceGrants_User` (UserGuid, ResourceType),
-`IX_BirkoResourceGrants_Resource` (ResourceType, ResourceId) and `IX_BirkoInvitations_Email` (Email) through
-the caller-supplied provider index manager, throwing `ArgumentNullException` for a null argument and
-`InvalidOperationException` for a store without a connector. No unique index is declared on a grant's
-(user, type, resource, tenant) key, which is why updates and deletes go by the key rather than by the entity.
+required `Email`, `ResourceType`, `Role`). The mappings SHALL declare the three lookup indexes with the fluent
+`HasIndex` — `IX_BirkoResourceGrants_User` (UserGuid, ResourceType), `IX_BirkoResourceGrants_Resource`
+(ResourceType, ResourceId; `ResourceType` belongs to both) and `IX_BirkoInvitations_Email` (Email) — so
+schema-ensure creates them and treats those columns as index keys, bounding the string ones on MySQL and SQL Server
+instead of `LONGTEXT` / `NVARCHAR(MAX)` (TASK-693). `GrantSqlIndexes.EnsureAsync(grants, invitations, indexManager)`
+SHALL initialise both stores and then verify each of the three indexes through the caller-supplied
+`Func<AbstractConnectorBase, IIndexManager>`, creating any that is absent (schema-ensure reports rather than throws
+when it could not), throwing `ArgumentNullException` for a null argument and `InvalidOperationException` for a
+store without a connector. No unique index is declared on a grant's (user, type, resource, tenant) key, which is
+why updates and deletes go by the key rather than by the entity.
 
 #### Scenario: Idempotent index ensure
 
@@ -1927,3 +1957,262 @@ the caller-supplied provider index manager, throwing `ArgumentNullException` for
 - **Given** valid stores
 - **When** `EnsureAsync(grants, invitations, null!)` is called
 - **Then** `ArgumentNullException` is thrown before either store is initialised
+
+#### Scenario: Indexes on MySQL or SQL Server
+
+- **Given** `GrantSqlMappings.Register` and `ApplyToDatabase()` on a fresh MySQL or SQL Server database
+- **When** the stores initialise and `EnsureAsync` runs
+- **Then** the indexed string columns are created bounded rather than as an unindexable `LONGTEXT` / `NVARCHAR(MAX)`, the three indexes exist, and nothing throws (before TASK-693 `EnsureAsync` threw on both providers)
+
+### Requirement: A health check reports stored grants the role table no longer declares
+
+The system SHALL provide `StaleGrantHealthCheck(store, table)` (TASK-654), throwing `ArgumentNullException` for a
+null argument, whose `CheckAsync` runs `StaleGrantDetector.FindAsync` and answers `Healthy` with `Data["stale"] = 0`
+when nothing is stale; `Degraded` — never `Unhealthy` — when any stored grant names an undeclared role or resource
+type, with `Data` holding `stale` (the full count), `roleNotDeclared`, `resourceTypeNotDeclared` and `staleGrants`
+(at most `MaxListed` = 50 descriptions) and a description naming the undeclared roles; and `Degraded` carrying the
+exception when the store cannot be read. A cancellation of the caller's own token SHALL propagate. The check never
+revokes anything, and the reserved admin grant is never reported.
+
+#### Scenario: A role renamed in configuration
+
+- **Given** stored grants holding role `editor`, which the table no longer declares
+- **When** the check runs
+- **Then** it answers `Degraded`, `Data["roleNotDeclared"]` counts them, and the description names `'editor'`
+
+#### Scenario: The store cannot be read
+
+- **Given** a grant store that throws on read
+- **When** the check runs
+- **Then** it answers `Degraded` with that exception, not `Healthy`
+
+### Requirement: RequireGrant answers 401, 404 or 403 by what the caller may know
+
+The system SHALL make `RequireGrant(resourceType, action, routeParam = "id")` add a filter that answers, in order:
+a JSON `401` `{ error = "Unauthorized" }` when `ICurrentUser` is unresolvable or unauthenticated, decided before
+any lookup; a `401` with `code = "Grant.UnmappedSubject"` when the caller is authenticated but has no `UserGuid`;
+a bare `404` when the route value does not parse as a `Guid`; the next filter when `IGrantService.CanAsync` allows
+the action (tenant from `ICurrentUser.TenantGuid`, `Guid.Empty` read as no tenant); a bare `404` when the type's
+visibility is `Granted`, a resource id was given and the caller may not perform `GrantsAspNetCoreOptions.ReadAction`
+(default `read`) on it; and otherwise a JSON `403` `{ error = "Forbidden", required = "{type}:{action}" }`. A
+`Public` type and a type-wide check (`routeParam` null) always answer the denial with 403 (rule 65).
+
+#### Scenario: Denied on a Granted resource the caller cannot see
+
+- **Given** a `Granted` type and a caller with no grant on resource A
+- **When** an endpoint guarded by `.RequireGrant("presentation", "edit")` is called with A's id
+- **Then** a bare 404 is returned, identical to a missing resource
+
+#### Scenario: Denied on a resource the caller may read
+
+- **Given** a caller holding `viewer` (allows `read`) on A
+- **When** the same endpoint is called with A's id
+- **Then** 403 is returned naming `required = "presentation:edit"`
+
+#### Scenario: Unmapped external subject
+
+- **Given** an authenticated caller whose token subject is a provider's raw id, so `UserGuid` is null
+- **When** a `RequireGrant` endpoint is called
+- **Then** 401 is returned with `code = "Grant.UnmappedSubject"`
+
+#### Scenario: Unparseable id
+
+- **Given** an authenticated caller
+- **When** the endpoint is called with `/presentations/not-a-guid`
+- **Then** a 404 is returned and no grant is looked up
+
+### Requirement: RequireGrant validates its declaration when the endpoint is built
+
+The system SHALL throw `ArgumentNullException` from `RequireGrant` for a null resource type or action, and SHALL,
+when the endpoint is built (normally the first enumeration of the endpoint data source), throw
+`InvalidOperationException` when the route pattern has no parameter named `routeParam` or makes it optional, when no
+`GrantRoleTable` is registered (`AddBirkoGrants` not called), and `GrantConfigurationException` when the resource
+type, the action or the read action is undeclared. `GrantsAspNetCoreOptions` SHALL default to a new instance when
+none is registered. A request that still reaches the filter without the route value SHALL throw
+`InvalidOperationException`.
+
+#### Scenario: Optional route parameter
+
+- **Given** `app.MapGet("/p/{id?}", …).RequireGrant("presentation", "read")`
+- **When** the endpoint is built
+- **Then** `InvalidOperationException` is thrown saying the route makes `id` optional
+
+#### Scenario: Typo in the action
+
+- **Given** `.RequireGrant("presentation", "raed")`
+- **When** the endpoint is built
+- **Then** `GrantConfigurationException` is thrown, not a per-request 403
+
+### Requirement: AddBirkoGrants registers the grant services over the host's stores
+
+The system SHALL make `AddBirkoGrants(configure, configureSignIn?, configureHttp?)` throw `ArgumentNullException`
+for a null collection or configure delegate, build the `GrantRoleTable` immediately (an invalid table fails at
+startup), register it, `GrantSignInOptions` and `GrantsAspNetCoreOptions` as singletons, `SystemDateTimeProvider`
+only when no `IDateTimeProvider` is registered, `BootstrapAdminGrantSource` as `IGrantAdminSource` only when the
+host registered no non-keyed one, and `IGrantService`, `IInvitationService`, `IAdminGrantService` and
+`IGrantSignInService` as scoped. The `IResourceGrantStore` and `IInvitationStore` are the host's; resolving a
+service without them fails at that moment.
+
+#### Scenario: Invalid role table
+
+- **Given** a configure delegate whose owner role cannot share
+- **When** `AddBirkoGrants` is called
+- **Then** `GrantConfigurationException` is thrown at registration, not at the first request
+
+#### Scenario: Host admin source kept
+
+- **Given** a host that registered its own `IGrantAdminSource` before `AddBirkoGrants`
+- **When** `IGrantService` is resolved
+- **Then** it uses the host's source
+
+### Requirement: Grant-aware permission resolution surfaces admin and type-wide grants only
+
+The system SHALL make `WithGrantPermissions()` replace the last non-keyed `IUserPermissionResolver` with
+`GrantAwareUserPermissionResolver` over it, keeping its lifetime and disposing a resolver it built from a type or
+factory, and replace the `IGrantAdminSource` with `UserPermissionResolverAdminSource` over the host's undecorated
+resolver. It SHALL throw `InvalidOperationException` when no resolver is registered, when it was already applied,
+or when the host registered its own `IGrantAdminSource`. The decorator SHALL return the host's permissions plus
+`"*"` for a holder of the reserved admin grant in scope and `"{type}:{action}"` for every action of each in-scope
+type-wide grant, and the host's roles plus `"{type}:{role}"` per such grant; per-resource grants are not surfaced,
+and a type-wide grant whose role or resource type is undeclared is skipped rather than thrown. The admin source
+SHALL count a user as admin when they hold the admin grant or the host resolver gives them `"*"`. Both constructors
+SHALL refuse a `GrantAwareUserPermissionResolver` as the inner resolver with `ArgumentException`.
+
+#### Scenario: Type-wide grant reaches RequirePermission
+
+- **Given** a user holding type-wide `viewer` (allows `read`) on `presentation`, with resolved permissions wired
+- **When** the request's permissions are resolved
+- **Then** they contain `"presentation:read"` and the roles contain `"presentation:viewer"`
+
+#### Scenario: Retired role in a type-wide grant
+
+- **Given** a stored type-wide grant whose role the table no longer declares
+- **When** the decorator resolves the user's permissions
+- **Then** that grant contributes nothing and no exception is thrown, so the user's other endpoints keep working
+
+#### Scenario: Host superadmin is a grant admin
+
+- **Given** a host resolver giving user U `"*"` and no admin grant for U
+- **When** `CanAsync(U, …)` is called through `IGrantService`
+- **Then** it returns `true`
+
+#### Scenario: Applied twice
+
+- **Given** `AddBirkoGrants(...).WithGrantPermissions()`
+- **When** `WithGrantPermissions()` is called again
+- **Then** `InvalidOperationException("WithGrantPermissions was already applied.")` is thrown
+
+### Requirement: Owned data is accessible to its owner or to a caller who sees everything, and a denial is 404
+
+The system SHALL decide owner access through `OwnerAccess.CanAccess(caller, owner, seesEverything = false)`
+(TASK-541): `true` when `seesEverything`, otherwise only when caller and owner are both present and equal — for
+`Guid?` by value, for strings non-empty and ordinal. `OwnedCrudResults` SHALL decide through it: `ReadOwned` answers
+404 for an absent or foreign entity and 200 with the DTO otherwise; `CreateClash` answers `null` when there is no
+clash, 409 when the clashing id is the caller's and 404 when it is someone else's; `RequireOwned` answers 404 for an
+absent or foreign entity and `null` (proceed) with the entity otherwise. For an `ICurrentUser`,
+`SeesEverything(viewAllPermission?)` SHALL be true when the permissions contain `"*"` or the given non-empty
+view-all permission (throwing `ArgumentNullException` for a null user), and `CanAccess(owner, viewAllPermission?)`
+SHALL compare `UserGuid` — for a string owner in its `"D"` form — through `OwnerAccess`.
+
+#### Scenario: Two absent identities do not match
+
+- **Given** a caller with no `UserGuid` and an entity with no owner
+- **When** `OwnerAccess.CanAccess(null, null)` is evaluated
+- **Then** it returns `false`
+
+#### Scenario: A foreign id on create is not revealed
+
+- **Given** a POST carrying an id that already belongs to another owner
+- **When** `CreateClash` runs
+- **Then** 404 is returned, not 409
+
+#### Scenario: View-all permission
+
+- **Given** a user with permission `orders:view-all` and an order owned by someone else
+- **When** `user.CanAccess(order.OwnerGuid, "orders:view-all")` is evaluated
+- **Then** it returns `true`
+
+#### Scenario: String owner
+
+- **Given** a user whose `UserGuid` is G and a resource whose owner string is `G.ToString("D")`
+- **When** `user.CanAccess(ownerString)` is evaluated
+- **Then** it returns `true`; the upper-case or `"N"` form of G does not match
+
+### Requirement: Transport adapters authenticate through the shared static-token service
+
+The system SHALL make `RestAuthenticationService`, `SoapAuthenticationService`, `SseAuthenticationService` and
+`WebSocketAuthenticationService` each wrap one `AuthenticationService` over their configuration (a subclass of
+`AuthenticationConfiguration`, a null one replaced by defaults), delegate `ValidateToken` and
+`IsAuthenticationEnabled` to it, resolve the client IP with `ResolveClientIp`, and dispose it. Each SHALL extract the
+token as follows:
+
+- REST: the `AuthorizationHeader` (default `Authorization`) value, with a leading `Bearer ` (case-insensitive)
+  stripped and any other value returned whole; else the `ApiKeyHeader` (default `X-API-Key`); else, when
+  `AllowQueryToken` (default true), the `QueryTokenName` (default `token`) query parameter. `RestAuthenticationMiddleware`
+  SHALL answer `RestResponse.Unauthorized` when validation fails.
+- SOAP: the text of `soap:Header/{SoapHeaderName}/{TokenElementName}` (defaults `Authentication` / `Token`, matched by
+  local name), null — logged, never thrown — for unparseable XML; from a query string, the first `name=value` pair
+  whose name equals `QueryTokenName` exactly, split on the first `=` and URL-unescaped. `CreateAuthenticationFault`
+  builds a `Client` SOAP fault.
+- SSE: the `ApiKeyHeader` value; else, when an `Authorization` header is present, its value after
+  `{AuthorizationHeaderPrefix} ` (default `Bearer`, case-insensitive) or null; else, when `AllowQueryToken`, the
+  `QueryTokenName` pair matched case-insensitively, split on the first `=` and URL-unescaped.
+- WebSocket: only the `token` query parameter.
+
+#### Scenario: Bearer header on REST
+
+- **Given** a REST request with `Authorization: Bearer abc`
+- **When** the token is extracted
+- **Then** it is `"abc"`, and the API-key header and query string are not consulted
+
+#### Scenario: Padded token in a SOAP query string
+
+- **Given** the query string `?token=abc%3D%3D`
+- **When** `ExtractTokenFromQueryString` is called
+- **Then** `"abc=="` is returned
+
+#### Scenario: SSE Authorization header with another scheme
+
+- **Given** an SSE request with `Authorization: Basic xyz` and `?token=good`
+- **When** the connection is authenticated
+- **Then** the extracted token is null — the query string is not consulted — and the connection is refused 401
+
+### Requirement: An SSE connection is allowed without a token only when authentication is switched off
+
+The system SHALL make `SseAuthenticationService.AuthenticateConnection` return `Success` with a fresh client id when
+`IsAuthenticationDisabled`; when `IsMisconfigured`, log an error and fail with the same `"Invalid authentication
+token"` message an invalid token gets; fail with `"Authentication required: valid token not found"` when no token
+was extracted; and otherwise succeed with a fresh client id exactly when `ValidateToken` accepts the token and IP.
+Failures carry status 401. `SseAuthenticationMiddleware` SHALL answer `SseResponse.Denied(status, message)` on
+failure and otherwise set `context.ClientId` and continue.
+
+#### Scenario: Enabled but nothing configured
+
+- **Given** `Enabled = true` with no tokens or bindings
+- **When** an SSE connection arrives with any token
+- **Then** it is refused 401 with `"Invalid authentication token"`, indistinguishable from a bad token
+
+#### Scenario: Switched off
+
+- **Given** `Enabled = false`
+- **When** an SSE connection arrives without a token
+- **Then** it is accepted with a generated client id
+
+### Requirement: A WebSocket endpoint that requires authentication fails closed without the service
+
+The system SHALL make the WebSocket mapping paths, when `requireAuthentication` is true (the default), throw
+`InvalidOperationException` at map time when the container reports that `WebSocketAuthenticationService` is not
+registered, and SHALL otherwise, per request, answer 401 `"Unauthorized: WebSocket authentication is not configured"`
+when the service cannot be resolved, and 401 when `ValidateToken` rejects the query token and client IP (TASK-536).
+
+#### Scenario: Service never registered
+
+- **Given** `MapWebSocketEndpoint("/ws", handler)` with no `WebSocketAuthenticationService` registered
+- **When** the endpoint is mapped
+- **Then** `InvalidOperationException` is thrown naming the endpoint, instead of accepting anonymous upgrades
+
+#### Scenario: Wrong token
+
+- **Given** a registered service and an upgrade to `/ws?token=wrong`
+- **When** the gate runs
+- **Then** 401 is written and the handler is not invoked

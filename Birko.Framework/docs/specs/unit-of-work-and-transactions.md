@@ -1,7 +1,7 @@
 ---
 area: unit-of-work-and-transactions
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
   - ../Birko.Data.CosmosDB/UnitOfWork/CosmosDbUnitOfWork.cs
   - ../Birko.Data.ElasticSearch/UnitOfWork/ElasticSearchUnitOfWork.cs
@@ -11,17 +11,22 @@ sources:
   - ../Birko.Data.Patterns/UnitOfWork/IUnitOfWork.cs
   - ../Birko.Data.Patterns/UnitOfWork/UnitOfWorkException.cs
   - ../Birko.Data.RavenDB/UnitOfWork/RavenDbUnitOfWork.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AmbientSqlTransaction.cs
+  - ../Birko.Data.SQL/Stores/ISqlConnectedStore.cs
+  - ../Birko.Data.SQL/Stores/SqlRetryableWrite.cs
+  - ../Birko.Data.SQL/Stores/SqlSavepoint.cs
   - ../Birko.Data.SQL/Stores/SqlTransactionContext.cs
   - ../Birko.Data.SQL/UnitOfWork/SqlUnitOfWork.cs
+  - ../Birko.Data.Stores/AmbientSession.cs
   - ../Birko.Data.Stores/ITransactionalStore.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+  - ../Birko.Data.Stores/RetryableWrite.cs
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Unit of work and transactional store boundaries
 
@@ -37,7 +42,10 @@ one Elasticsearch Bulk call on commit, which is neither atomic nor isolated. `Mo
 `RavenDbUnitOfWork`, `CosmosDbUnitOfWork` and `InfluxDbUnitOfWork` sit between those two shapes, and every
 unit of work states which shape it is through `IUnitOfWork.Capabilities`. Anything that needs
 "these writes land together" depends on this capability, and needs to know which of those shapes
-it is actually getting.
+it is actually getting. The SQL, MongoDB and RavenDB units of work also publish their transaction for the
+current async flow (`AmbientSqlTransaction`, `AmbientSession<TSession>`), so stores on the same database
+join it without being handed the context, and a write a caller means to retry can run through
+`RetryableWrite` so that its refusal leaves the caller's transaction usable.
 
 ## Requirements
 
@@ -445,6 +453,66 @@ outside these owners runs no callbacks.
 - **When** `RollbackAsync` runs
 - **Then** the callback never runs
 
+#### Scenario: Null registration arguments are refused
+
+- **Given** a call `AmbientSqlTransaction.OnCommitted(transaction, key, callback)` with any of the three arguments null
+- **When** it runs
+- **Then** `ArgumentNullException` naming that argument is thrown and nothing is registered
+
+#### Scenario: A second registration under the same key is ignored
+
+- **Given** a callback registered on a transaction under key `"k"`
+- **When** a second callback is registered on the same transaction under `"k"` (ordinal comparison) and the owner commits
+- **Then** only the first callback runs
+
+### Requirement: The ambient SQL boundary is flow-private, skips ended entries and can be suppressed
+
+The system SHALL keep the ambient SQL boundary chain in a mutable cell carried by an `AsyncLocal`:
+`AmbientSqlTransaction.InstallCell()` SHALL install a fresh cell seeded with the inherited head and return a handle that
+restores the previous cell; `Enter(settingsId, connection, transaction)` SHALL refuse a null or empty settings id and a
+null connection or transaction with `ArgumentNullException`, push an `Entry` (creating a cell when the flow has none) and
+return a handle whose disposal marks the entry ended and pops it only if it is still the head; `Find(settingsId)` SHALL
+return the innermost entry that is not ended and whose `SettingsId` matches ordinally (null for a null or empty id), and
+`Current` the innermost entry that is not ended for any database. `Suppress()` SHALL hide the whole chain behind a fresh
+empty cell until its handle is disposed, ending, committing and rolling back nothing.
+
+#### Scenario: Two flows forked from one ancestor do not see each other's boundaries
+
+- **Given** two concurrent flows that each called `InstallCell()` after forking from a common ancestor
+- **When** one of them enters a boundary
+- **Then** `Find` in the other flow does not return it, while both still see the ancestor's boundary
+
+#### Scenario: An ended entry is never resolved
+
+- **Given** a flow holding a cell that still references an entry whose scope has been disposed
+- **When** `Find` or `Current` is read in that flow
+- **Then** the ended entry is skipped, so no lookup resolves a connection its owner has already disposed
+
+#### Scenario: Out-of-order disposal removes only its own entry
+
+- **Given** two entries entered in order A then B
+- **When** A's handle is disposed first
+- **Then** A is marked ended, B stays the head, and no exception is thrown
+
+#### Scenario: Suppression hides boundaries for every database
+
+- **Given** a flow inside boundaries against settings ids `X` and `Y`
+- **When** code runs inside `using (AmbientSqlTransaction.Suppress())`
+- **Then** `Find("X")`, `Find("Y")` and `Current` are all null, and after disposal both boundaries are found again
+
+### Requirement: A SQL store exposes its connector without its generic arguments
+
+The system SHALL define `ISqlConnectedStore` (namespace `Birko.Data.SQL.Stores`) exposing the store's
+`AbstractConnector? Connector` (null until its settings are set) and the `SqlTransactionContext? TransactionContext`
+given with `SetTransactionContext`, implemented by `DataBaseStore` and `AsyncDataBaseStore`, so code composing stores it
+did not create can tell whether two stores share one database by comparing `Connector.Settings.GetId()` (TASK-683).
+
+#### Scenario: Two stores on one database
+
+- **Given** two SQL stores of different model types configured with settings of the same id
+- **When** each is read as `ISqlConnectedStore` and their `Connector.Settings.GetId()` values are compared
+- **Then** they are equal — the same key the ambient transaction is looked up by
+
 ### Requirement: A nested SQL unit of work joins the enclosing boundary
 
 The system SHALL, when `SqlUnitOfWork.BeginAsync` finds a live enclosing ambient boundary for the same
@@ -799,6 +867,61 @@ session without saving.
   Nothing was applied. Before TASK-658 the session stayed held: every retry after a conflict hit the same conflict,
   and a retry after a cancellation wrote the changes late
 
+### Requirement: Document-store sessions are published per flow through AmbientSession
+
+The system SHALL provide `AmbientSession<TSession>` (namespace `Birko.Data.Stores`, `TSession : class`, one chain per
+session type) with the same mechanics as `AmbientSqlTransaction`: `InstallCell()` installs a fresh cell seeded with the
+inherited head and returns a handle restoring the previous one; `Enter(key, session)` refuses a null or empty key
+(`ArgumentException`) and a null session (`ArgumentNullException`), publishes the session and returns a `Scope` whose
+disposal marks the entry ended and pops it only if it is still the head; `Find(key)` returns the innermost published
+session for the key that is not ended (null for a null or empty key); `MarkRollbackOnly(key)` marks that innermost entry
+rollback-only and returns `true`, or returns `false` when nothing is published for the key; `Scope.IsRollbackOnly`
+reports the mark. Publishing opens, commits and disposes nothing (TASK-700).
+
+#### Scenario: A published session is found by its key
+
+- **Given** a flow that entered `AmbientSession<S>.Enter("db1", session)`
+- **When** `Find("db1")` and `Find("db2")` are called in that flow
+- **Then** the first returns `session` and the second returns null; after the scope is disposed `Find("db1")` returns null
+
+#### Scenario: Marking with nothing published
+
+- **Given** a flow with no session published for `"db1"`
+- **When** `MarkRollbackOnly("db1")` is called
+- **Then** it returns `false` and marks nothing
+
+### Requirement: MongoDB and RavenDB units of work publish their session and honour rollback-only
+
+The system SHALL, in `MongoDbUnitOfWork` constructed from a Birko `MongoDBClient` (keyed by `client.Settings.GetId()`) and
+in `RavenDbUnitOfWork` (keyed by `RavenAmbientKey.Of(documentStore)`), install an `AmbientSession` cell synchronously in
+the constructor and, on `BeginAsync`, publish the new session under that key, so an async store on that database given no
+session of its own (`TransactionContext ?? AmbientSession.Find(AmbientKey)`) writes inside it. The publication SHALL be
+withdrawn when the transaction ends (commit, rollback, failed commit) and on disposal, which also releases the cell. A
+`MongoDbUnitOfWork` built from a bare `IMongoClient` SHALL publish nothing. `CommitAsync` SHALL throw
+`TransactionRollbackOnlyException` without committing when a participant marked the published session rollback-only,
+leaving the unit of work active for `RollbackAsync` (TASK-700). The RavenDB unit of work publishes an
+`IAsyncDocumentSession`, so the synchronous `RavenDBStore` (which looks up `IDocumentSession`) does not join.
+
+#### Scenario: A store in the same flow joins the MongoDB transaction
+
+- **Given** a `MongoDbUnitOfWork` built from the store's `MongoDBClient` in the caller's flow, and begun
+- **When** an `AsyncMongoDBStore` on the same database with no `TransactionContext` writes, and the unit of work rolls back
+- **Then** the write ran in the unit of work's session and is undone with it
+
+#### Scenario: A failed participant poisons the commit
+
+- **Given** an active `MongoDbUnitOfWork` or `RavenDbUnitOfWork` whose published session a joined write boundary marked
+  with `AmbientSession.MarkRollbackOnly(key)`
+- **When** `CommitAsync()` is called
+- **Then** `TransactionRollbackOnlyException` is thrown, nothing is committed or saved, `IsActive` stays `true`, and
+  `RollbackAsync()` then ends the boundary
+
+#### Scenario: Unit of work over a bare driver client does not publish
+
+- **Given** a `MongoDbUnitOfWork` constructed from an `IMongoClient`
+- **When** it begins and a store on the same database writes without a context
+- **Then** the store's write does not run in the unit of work's session
+
 ### Requirement: Cosmos DB unit of work wraps a single-partition transactional batch
 
 The system SHALL implement `CosmosDbUnitOfWork` as `IUnitOfWork<TransactionalBatch>`, constructed from a
@@ -883,3 +1006,119 @@ SHALL otherwise ignore the token, performing no `ThrowIfCancellationRequested` o
 - **When** `CommitAsync(cancelledToken)` is called
 - **Then** the disposed and active checks pass and cancellation is observed only when the provider's
   `DbTransaction.CommitAsync(ct)` reacts to it
+
+### Requirement: A retried write runs through the retryable store beneath any decorators
+
+The system SHALL define `IRetryableWriteStore` (`RunRetryable(Action)`, `RunRetryableAsync(Func<Task>, CancellationToken)`)
+and the static `RetryableWrite`, whose `Find(store)` returns the first `IRetryableWriteStore` at or beneath the store
+along `StoreChain.Walk` (null for a null store), and whose `Run` / `RunAsync` overloads (plain and result-returning)
+refuse a null write with `ArgumentNullException`, run the write as is when the store is null (a caller's last attempt),
+and otherwise run it through the found retryable store, or as is when none is found (TASK-694).
+
+#### Scenario: Decorated SQL store
+
+- **Given** a decorator over a SQL store that implements `IRetryableWriteStore`
+- **When** `RetryableWrite.RunAsync(decorator, write)` is called
+- **Then** the write runs through the SQL store's `RunRetryableAsync`
+
+#### Scenario: No retryable store beneath
+
+- **Given** an InMemory store, which implements no `IRetryableWriteStore`
+- **When** `RetryableWrite.Run(store, write)` is called
+- **Then** the write runs directly, once
+
+### Requirement: A retried write is declared to the participants beneath it
+
+The system SHALL expose `RetryableWrite.IsDeclared`, true while a write run through `Run` / `RunAsync` with a non-null
+store executes (an `AsyncLocal` counter, restored when the write returns or throws, and never flowing back to an async
+caller), so a participant beneath — such as a joined SQL localized write boundary — leaves its caller's transaction as it
+was on failure instead of marking it rollback-only (TASK-697). A write run with a null store is not declared.
+
+#### Scenario: A retry after a refusal can still commit
+
+- **Given** a slug or default decorator inside a `SqlUnitOfWork` whose first write is refused and retried through
+  `RetryableWrite`
+- **When** a joined localized write boundary beneath sees the refused write fail while `IsDeclared` is true
+- **Then** the boundary had run the write in its own `SqlSavepoint` (nested inside a PostgreSQL store's), rolled it back
+  without marking the boundary rollback-only, the retry succeeds, and the owner's `CommitAsync()` commits
+
+#### Scenario: The declaration ends with the write
+
+- **Given** code that awaited `RetryableWrite.RunAsync(store, write)`
+- **When** it reads `RetryableWrite.IsDeclared` afterwards
+- **Then** it is `false`, whether the write succeeded or threw
+
+#### Scenario: A last attempt is not declared
+
+- **Given** a call `RetryableWrite.Run(null, write)`
+- **When** the write reads `RetryableWrite.IsDeclared`
+- **Then** it is `false` (unless an outer declared write is running)
+
+### Requirement: SQL stores take a savepoint for a retried write only where a refusal aborts the transaction
+
+The system SHALL, in the SQL stores' `IRetryableWriteStore` (produced only by `SqlRetryableWrite`), run the write inside
+a savepoint only when the connector's `AbortsTransactionOnError` is true (PostgreSQL) and a transaction is active —
+the store's own `SqlTransactionContext.Transaction`, else the ambient boundary found for
+`connector.Settings.GetId()`; with no connector, a provider whose refusal does not abort, or no transaction, the write
+SHALL run as is (TASK-694).
+
+#### Scenario: PostgreSQL inside a unit of work
+
+- **Given** a PostgreSQL store with no explicit context, inside a `SqlUnitOfWork` on its database
+- **When** a retryable write runs
+- **Then** it runs inside a savepoint of the unit of work's transaction
+
+#### Scenario: SQL Server or MySQL
+
+- **Given** a SQL Server or MySQL store inside a `SqlUnitOfWork`
+- **When** a retryable write runs
+- **Then** no savepoint is taken, so it costs no extra round trips
+
+#### Scenario: No transaction active
+
+- **Given** a PostgreSQL store with no context and no ambient boundary
+- **When** a retryable write runs
+- **Then** it runs as is
+
+### Requirement: SqlSavepoint is the one producer of savepoints
+
+The system SHALL provide `SqlSavepoint.Run(transaction, write)` and `RunAsync(transaction, write, ct)` (null
+arguments → `ArgumentNullException`), which save a savepoint named `birko_retry_{n}` with a process-wide increasing `n`,
+run the write, release the savepoint when the write succeeds or throws `EntityNotFoundException` (rethrown, so a
+collection write keeps what it applied, TASK-555, TASK-705), and when it throws anything else roll back to the savepoint
+and rethrow the write's own exception; a failure of that rollback SHALL NOT replace it but SHALL be recorded as its message under
+`exception.Data["Birko.SavepointRollbackFailure"]` (`SqlSavepoint.RollbackFailureKey`). The async form SHALL pass the
+caller's token only to the save, and `CancellationToken.None` to the rollback and the release (TASK-694, TASK-697).
+
+#### Scenario: A collection write that met a missing entity keeps what it stored
+
+- **Given** a collection update inside `SqlSavepoint.Run` / `RunAsync` that applies two entities and then throws
+  `EntityNotFoundException` for a third
+- **When** the savepoint handles the exception
+- **Then** the savepoint is released rather than rolled back, `EntityNotFoundException` is rethrown, and the two applied
+  updates remain in the transaction (TASK-705)
+
+#### Scenario: A refused write leaves the transaction usable
+
+- **Given** a PostgreSQL transaction with one created row
+- **When** `SqlSavepoint.RunAsync(transaction, createDuplicate, ct)` runs and the create is refused
+- **Then** the unique-violation exception propagates, the transaction is rolled back to the savepoint, and it still
+  commits the first row
+
+#### Scenario: Nested savepoints roll back only their own
+
+- **Given** a savepointed write that itself runs a second savepointed write
+- **When** the inner write throws and the outer catches it
+- **Then** only the inner savepoint is rolled back, because each has its own name
+
+#### Scenario: A failed rollback to the savepoint is recorded
+
+- **Given** a write that throws inside a savepoint whose rollback also throws
+- **When** `Run` returns by throwing
+- **Then** the exception is the write's, carrying the rollback's message under `"Birko.SavepointRollbackFailure"`
+
+#### Scenario: Cancellation after the write applied
+
+- **Given** a write that succeeded inside `RunAsync` while the caller's token was cancelled
+- **When** the savepoint is released
+- **Then** the release runs with `CancellationToken.None`, so the applied write is not reported as cancelled

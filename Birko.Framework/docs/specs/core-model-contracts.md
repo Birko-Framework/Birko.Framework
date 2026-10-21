@@ -1,7 +1,7 @@
 ---
 area: core-model-contracts
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
   - ../Birko.Contracts/Models/ICopyable.cs
   - ../Birko.Contracts/Models/IDefault.cs
@@ -15,16 +15,22 @@ sources:
   - ../Birko.Data.Core/Models/IDefault.cs
   - ../Birko.Data.Core/Models/ILoadable.cs
   - ../Birko.Data.Core/Models/ITimestamped.cs
+  - ../Birko.Data.CosmosDB/Serialization/CosmosGuidIdSerializer.cs
+  - ../Birko.Data.MongoDB/Models/MongoDBLogModel.cs
   - ../Birko.Data.MongoDB/Models/MongoDBModel.cs
   - ../Birko.Data.MongoDB/Serialization/MongoSerialization.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+  - ../Birko.Data.SQL/Models/AbstractDatabasePercentage.cs
+  - ../Birko.Data.SQL/Models/AbstractDatabaseTree.cs
+  - ../Birko.Data.SQL/Models/AbstractLogModel.cs
+  - ../Birko.Data.SQL/Models/AbstractModel.cs
+  - ../Birko.Data.SQL/Models/DatabaseValueData.cs
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Zero-dependency model contracts (loadable, copyable, default, timestamped)
 
@@ -40,7 +46,14 @@ enforce a single default row by testing for `IDefault`, and filters address enti
 base classes supply the identity property, the state-copy operation and the state-load operation that the rest
 of the framework (stores, repositories, sync, view models) assumes is present on every model.
 
-Two structural facts shape everything below. First, all of these types live in the namespace
+Around that core sit the backend-specific model bases and wire adapters that consume it: the SQL bases
+(`AbstractDatabaseModel`, `AbstractDatabaseLogModel`) that mark the identity as the primary key, the SQL
+storage-shape overrides of three `Birko.Models` types (`DatabaseValueData`, `AbstractDatabasePercentage`,
+`AbstractDatabaseTree`), the MongoDB bases (`MongoDBModel`, `MongoDBLogModel`) and the one-time MongoDB
+driver registration for the canonical identity, and the Cosmos DB serializer that projects the identity onto
+the document `id`.
+
+Two structural facts shape everything below. First, all of the core types live in the namespace
 `Birko.Data.Models` even though they are split across two shared projects. Second, `AbstractLogModel`
 **overrides** the `AbstractModel` copy/load virtuals and also keeps its typed overloads, so the copy/load
 behaviour is the same through a base-typed reference as through the derived one (TASK-323 — before it, the
@@ -303,7 +316,8 @@ the timestamps unchanged.
 
 ### Requirement: Contract types share one namespace across two projects
 
-The system SHALL declare every type in this capability in the namespace `Birko.Data.Models`, and the compiled
+The system SHALL declare every contract interface and both abstract bases of this capability (and the SQL
+bases `AbstractDatabaseModel` / `AbstractDatabaseLogModel`) in the namespace `Birko.Data.Models`, and the compiled
 definitions of `ICopyable<T>`, `ILoadable<T>`, `IDefault`, `ITimestamped`, `IGuidEntity` and `ILogEntity` SHALL
 come from `Birko.Contracts`, which `Birko.Data.Core` imports.
 
@@ -360,7 +374,11 @@ SHALL invoke it from the `MongoDBClient` constructor — the single point throug
 
 This requirement replaces the `[BsonRepresentation(BsonType.String)]` override that `MongoDBModel` used to
 declare. Both `TryRegisterSerializer` and `TryRegisterClassMap` are used, so a consumer that configured its
-own Guid serializer or `AbstractModel` class map before constructing a store keeps its own choice.
+own Guid serializer, or an `AbstractModel` class map that maps `Guid` as the id, before constructing a store
+keeps its own choice. When the registration is refused because the slot is already taken by something that is
+not a deliberate, compatible choice — the driver's own binary `GuidSerializer` with
+`GuidRepresentation.Unspecified`, or an `AbstractModel` class map whose id member is not `Guid` — the system
+SHALL throw `InvalidOperationException` instead of continuing.
 
 #### Scenario: A model deriving MongoDBModel can be class-mapped
 
@@ -404,6 +422,30 @@ own Guid serializer or `AbstractModel` class map before constructing a store kee
 - **When** `EnsureRegistered()` runs on each construction
 - **Then** only the first performs the registration and no duplicate-registration exception is raised
 
+#### Scenario: A pre-cached broken default Guid serializer is refused, not kept
+
+- **Given** a process in which the driver resolved and cached its own default `GuidSerializer` (binary representation, `GuidRepresentation.Unspecified`) before the first `MongoDBClient` was constructed
+- **When** `EnsureRegistered()` runs and `TryRegisterSerializer` is refused
+- **Then** `InvalidOperationException` is thrown naming the cause, because `IsBrokenDefaultGuidSerializer` treats a binary-encoded serializer with no representation chosen as never deliberate
+
+#### Scenario: A consumer string Guid serializer is not mistaken for the broken default
+
+- **Given** a consumer registered `new GuidSerializer(BsonType.String)` before the first store, which also reports `GuidRepresentation.Unspecified`
+- **When** `EnsureRegistered()` runs
+- **Then** no exception is thrown and the consumer's serializer stays in effect, because only a `BsonType.Binary` serializer with an unspecified representation counts as broken
+
+#### Scenario: A pre-existing AbstractModel class map that disagrees on identity is refused
+
+- **Given** an `AbstractModel` class map registered before the first store whose `IdMemberMap` is absent or names a member other than `Guid`
+- **When** `EnsureRegistered()` runs and `TryRegisterClassMap` is refused
+- **Then** `InvalidOperationException` is thrown; a pre-existing map whose id member is `Guid` is accepted silently
+
+#### Scenario: A convention that unmaps the canonical id fails registration loudly
+
+- **Given** a convention pack registered before the first store that filters `AbstractModel.Guid` out of `AutoMap`
+- **When** the framework's class map is configured
+- **Then** `InvalidOperationException` is thrown stating that `AbstractModel.Guid` has no member map, rather than registering a map without an id
+
 ### Requirement: MongoDBModel declares no state of its own
 
 The system SHALL keep `MongoDBModel` free of declared members. It exists solely as the type constraint of the
@@ -416,3 +458,148 @@ than at compile time.
 - **Given** `typeof(MongoDBModel)` queried for public instance properties declared on that type only
 - **When** the result is counted
 - **Then** it is empty
+
+### Requirement: MongoDBLogModel is a timestamped Mongo base outside the log-model hierarchy
+
+The system SHALL provide `MongoDBLogModel` as an `abstract partial` class deriving `MongoDBModel` (not
+`AbstractLogModel`) that declares `virtual` `CreatedAt` and `UpdatedAt` initialised to `DateTime.UtcNow` at
+construction and a `virtual` nullable `PrevUpdatedAt` initialised to `null`, and that implements
+`ICopyable<AbstractLogModel>` and `ILoadable<LogViewModel>` but neither `ITimestamped` nor `ILogEntity`.
+
+#### Scenario: A freshly constructed Mongo log model is pre-stamped
+
+- **Given** a concrete class deriving `MongoDBLogModel`
+- **When** an instance is created with `new`
+- **Then** `CreatedAt` and `UpdatedAt` hold the UTC construction time (not `0001-01-01` as on `AbstractLogModel`) and `PrevUpdatedAt` is `null`
+
+#### Scenario: Timestamp infrastructure does not recognise it
+
+- **Given** a `MongoDBLogModel` instance
+- **When** it is tested with `is ITimestamped` or `is ILogEntity`
+- **Then** both tests are false, because the class declares the three properties without implementing the contracts — so a decorator that stamps by testing for `ITimestamped` does not stamp it
+
+#### Scenario: The typed copy transfers identity and timestamps onto an AbstractLogModel
+
+- **Given** a `MongoDBLogModel` source and a non-null `AbstractLogModel` target
+- **When** `source.CopyTo(target)` binds to `CopyTo(AbstractLogModel? clone = null)`
+- **Then** `base.CopyTo(target)` copies `Guid`, then `CreatedAt`, `UpdatedAt` and `PrevUpdatedAt` are copied, and the target is returned
+
+#### Scenario: The typed copy with no target throws
+
+- **Given** a `MongoDBLogModel` source
+- **When** `source.CopyTo((AbstractLogModel?)null)` is called
+- **Then** `ArgumentNullException` is thrown by `AbstractModel.CopyTo` before any timestamp is touched (SH-M424; it used to return the null target)
+
+#### Scenario: A base-typed copy moves only the identity
+
+- **Given** a `MongoDBLogModel` source held as `AbstractModel`, and a target of the same concrete type
+- **When** `CopyTo(target)` is called through the base reference
+- **Then** only `Guid` is copied, because `MongoDBLogModel` does not override `CopyTo(AbstractModel?)` and its own type cannot be passed to the `AbstractLogModel` overload
+
+#### Scenario: Loading from a LogViewModel takes identity and timestamps, tolerating null
+
+- **Given** a `MongoDBLogModel` target and a `LogViewModel` source carrying `Guid`, `CreatedAt`, `UpdatedAt` and `PrevUpdatedAt`
+- **When** `target.LoadFrom(source)` is called, and separately with a null `LogViewModel`
+- **Then** all four values are loaded in the first case, and the null call throws nothing and leaves the target unmodified
+
+### Requirement: SQL base models mark the identity as the primary key
+
+The system SHALL provide `AbstractDatabaseModel` (`abstract partial`, deriving `AbstractModel`) and
+`AbstractDatabaseLogModel` (`abstract`, deriving `AbstractLogModel` directly, not `AbstractDatabaseModel`),
+each overriding `Guid` as a `Guid?` initialised to `null` and attributed `[UniqueField]` and `[PrimaryField]`, so
+the SQL field mapper treats the identity as a unique primary-key column. `AbstractDatabaseLogModel` SHALL
+also override `CreatedAt` and `UpdatedAt` with initial value `DateTime.UtcNow` and `PrevUpdatedAt` with `null`.
+
+#### Scenario: The identity column is primary and unique
+
+- **Given** a concrete class deriving `AbstractDatabaseModel` or `AbstractDatabaseLogModel`
+- **When** the SQL field mapper loads its `Guid` property
+- **Then** the field is created with `primary = true` and `unique = true` from the two attributes, as a Guid field
+
+#### Scenario: An SQL log model is pre-stamped at construction
+
+- **Given** a concrete class deriving `AbstractDatabaseLogModel`
+- **When** an instance is created with `new`
+- **Then** `CreatedAt` and `UpdatedAt` hold the UTC construction time, `PrevUpdatedAt` is `null`, and `Guid` is `null`
+
+#### Scenario: Copy and load behaviour is inherited unchanged
+
+- **Given** an `AbstractDatabaseLogModel` instance
+- **When** `CopyTo` or `LoadFrom` is called
+- **Then** the `AbstractLogModel` behaviour applies, because neither SQL base declares copy or load members
+
+#### Scenario: The SQL log base is not an AbstractDatabaseModel
+
+- **Given** an `AbstractDatabaseLogModel` instance
+- **When** it is tested with `is AbstractDatabaseModel`
+- **Then** the test is false — the two SQL bases are siblings that each re-declare the attributed `Guid`
+
+### Requirement: SQL storage shape of shared domain value types
+
+The system SHALL declare, for the SQL backends, `DatabaseValueData : ValueData` overriding `Price`, `PriceVAT`
+and `VAT`, and `AbstractDatabasePercentage : AbstractPercentage` overriding `Percentage`, each attributed
+`[PrecisionField(ValueData.StoreDecimalPrecision)]` (22) and `[ScaleField(ValueData.StoreDecimalPlaces)]` (6); and
+`AbstractDatabaseTree : AbstractTree` overriding `Path` attributed `[PrecisionField(1024)]` with initial value
+`string.Empty`. These three types live in the namespace `Birko.Models`.
+
+#### Scenario: Monetary and percentage columns are DECIMAL(22,6)
+
+- **Given** a `DatabaseValueData` or a concrete `AbstractDatabasePercentage`
+- **When** the SQL field mapper loads `Price`, `PriceVAT`, `VAT` or `Percentage`
+- **Then** a decimal field is created with precision 22 and scale 6 (nullable for the three `decimal?` prices, non-null for `Percentage`)
+
+#### Scenario: A tree path is a bounded 1024-character column through the attribute
+
+- **Given** a concrete `AbstractDatabaseTree`
+- **When** the SQL field mapper loads `Path`, a `string` carrying `[PrecisionField(1024)]` and no `[MaxLengthField]`
+- **Then** a bounded character field of length 1024 is created, because for a string the mapper falls back to `PrecisionField` when no max length is declared — the attribute path is not refused the way a fluent `HasPrecision` on a string is (TASK-692)
+
+#### Scenario: A new SQL tree node has an empty, non-null path
+
+- **Given** a concrete `AbstractDatabaseTree`
+- **When** an instance is created with `new`
+- **Then** `Path` is `string.Empty`, whereas the base `AbstractTree` initialises it to `null!`
+
+### Requirement: Cosmos DB documents carry an id derived from the canonical identity
+
+The system SHALL configure every Cosmos DB client created from `Settings.GetCosmosClientOptions()` with
+`CosmosGuidIdSerializer`, which serializes with System.Text.Json (default options when none are given) and, on
+write, adds a string `id` equal to `Guid.ToString()` to the JSON object of any `AbstractModel` whose `Guid` has a
+value and whose serialized form has no non-null `id` — while still emitting the model's own `Guid` property
+(CR-C04).
+
+#### Scenario: A model with a Guid gains an id equal to it
+
+- **Given** an `AbstractModel`-derived entity whose `Guid` is `g`
+- **When** it is written through `CosmosGuidIdSerializer.ToStream`
+- **Then** the JSON carries `"id": "<g as text>"` and also the PascalCase `Guid` property, so point operations keyed by `g.ToString()` against a `/id` partition key resolve
+
+#### Scenario: A model without a Guid gets no id
+
+- **Given** an `AbstractModel`-derived entity whose `Guid` is `null`
+- **When** it is written
+- **Then** no `id` is injected — the serializer does not assign an identity itself
+
+#### Scenario: An existing id is not overwritten
+
+- **Given** a model whose serialized form already has a non-null `id` element
+- **When** it is written
+- **Then** that `id` is kept unchanged
+
+#### Scenario: Non-model payloads and streams pass through
+
+- **Given** a payload that is not an `AbstractModel` (a query response, settings object), or a `Stream`
+- **When** it is written
+- **Then** the non-model is serialized normally with no `id` added, and a `Stream` input is returned as-is
+
+#### Scenario: Reading ignores the injected id and tolerates an empty body
+
+- **Given** a stored document carrying both `id` and `Guid`, or an empty seekable stream
+- **When** `FromStream<T>` reads it
+- **Then** the model deserializes with System.Text.Json and the extra `id` is ignored as an unmapped member; an empty seekable stream yields `default(T)`
+
+#### Scenario: A Stream result is returned from inside the disposing block
+
+- **Given** a `FromStream<T>` call where `T` is assignable to `Stream`
+- **When** it returns
+- **Then** the same stream object is returned, but from inside `using (stream)`, so it is disposed by the time the caller receives it

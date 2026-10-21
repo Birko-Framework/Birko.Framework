@@ -1,7 +1,7 @@
 ---
 area: migrations
-generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
-generated-on: 2026-10-16
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBMigrationContext.cs
@@ -58,14 +58,15 @@ sources:
   - ../Birko.Data.Migrations/IMigrationStore.cs
   - ../Birko.Data.Migrations/MigrationDirection.cs
   - ../Birko.Data.Migrations/MigrationResult.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+  - ../Birko.Data.SQL.View.Migrations/Migrations/ViewMigrationExtensions.cs
+  - ../Birko.Data.SQL.View.Migrations/Migrations/ViewSqlGenerator.cs
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Schema/data migration runner and backend contexts
 
@@ -85,6 +86,10 @@ the contract — SQL (with MSSql/MySQL/PostgreSQL/SQLite dialects through a conn
 (a specialisation of SQL), MongoDB, ElasticSearch, RavenDB, CosmosDB and InfluxDB — and they do
 **not** all honour the neutral contract to the same degree. The divergences are recorded explicitly
 below because they are what a consumer actually has to plan around.
+
+A small integration layer, `Birko.Data.SQL.View.Migrations`, adds `CreateView` / `DropView`
+extension methods on `IMigrationContext` that render a SQL view from `Birko.Data.SQL.View` metadata and
+execute it on the SQL migration's own connection and transaction.
 
 ## Requirements
 
@@ -448,11 +453,26 @@ each migration and version write on the shared open connection with no transacti
 ### Requirement: The SQL migration store provisions and reads its own tracking table
 
 The system SHALL, on `Initialize()`/`InitializeAsync()`, probe for the migrations table and create it
-when absent with columns `Version BIGINT PRIMARY KEY`, `Name VARCHAR(255) NOT NULL`, `Description
-TEXT`, `CreatedAt TIMESTAMP NOT NULL` and `AppliedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`.
-The existence probe SHALL be `SELECT 1 FROM {FullTableName} WHERE 1 = 0` executed as a non-query,
-SHALL treat a `DbException` as "table absent", and SHALL let any non-`DbException` propagate.
-`GetAppliedVersions()` SHALL return an empty set when the probe reports the table absent.
+when absent with the columns `Version` (`FieldType.Long`, `NOT NULL PRIMARY KEY`), `Name`
+(`FieldType.String`, max length 255, `NOT NULL`), `Description` (`FieldType.String`), `CreatedAt`
+(`FieldType.DateTime`, `NOT NULL`) and `AppliedAt` (`FieldType.DateTime`, `NOT NULL DEFAULT
+{connector.CurrentTimestampDefault}`). Each column's type SHALL come from the connector's `ConvertType`
+over a `SchemaField.For` descriptor — the same producer entity tables use — and each column name SHALL be
+quoted through the connector's `QuoteIdentifier` (TASK-332). The `AppliedAt` default SHALL be the
+connector's `CurrentTimestampDefault`, which is `CURRENT_TIMESTAMP(6)` on MySQL, whose `DATETIME(6)`
+column refuses a bare `CURRENT_TIMESTAMP` (TASK-656). The sync and async paths SHALL render the
+statement from the one internal `CreateMigrationsTableSql()`. The existence probe SHALL be
+`SELECT 1 FROM {table} WHERE 1 = 0` executed as a non-query, SHALL treat a `DbException` as "table
+absent", and SHALL let any non-`DbException` propagate. `GetAppliedVersions()` SHALL return an empty set
+when the probe reports the table absent.
+
+#### Scenario: The tracking table's DDL is rendered per provider
+
+- **Given** a `SqlMigrationStore` built over a MySQL, SQL Server, PostgreSQL or SQLite connector
+- **When** `CreateMigrationsTableSql()` renders the statement
+- **Then** identifiers use that connector's delimiters (backticks on MySQL, brackets on SQL Server) and
+  the column types are that dialect's (`DATETIME2` / `NVARCHAR(MAX)` on SQL Server rather than the
+  `TIMESTAMP` that T-SQL reads as `ROWVERSION`), so the statement is valid on all four providers
 
 #### Scenario: First run creates the tracking table
 
@@ -487,47 +507,47 @@ SHALL treat a `DbException` as "table absent", and SHALL let any non-`DbExceptio
 - **Then** the store opens its own connection, begins a transaction, writes the row, commits — and
   on failure rolls back and rethrows
 
-### Requirement: SQL migration table naming and quoting are configurable
+### Requirement: SQL migration table naming is configurable, and its rendering belongs to the connector
 
 The system SHALL default `SqlMigrationSettings.MigrationsTable` to `"__Migrations"`, `Schema` to
-`null`, `UseTransaction` to `true` and `TransactionTimeout` to `30`. `FullTableName` SHALL be the
-quoted table name alone when `Schema` is null or empty, and `"{quotedSchema}.{quotedTable}"`
-otherwise. `QuoteIdentifier` SHALL wrap the identifier in ANSI double quotes and double any embedded
-double quote. `SqlMigrationStore` SHALL take its own `quoteOpen`/`quoteClose` for the tracking
-table's column identifiers, both defaulting to `"` — and no shipped code path supplies anything else:
-`SqlMigrationRunner` constructs the store as `new SqlMigrationStore(factory, settings)` with both
-quote arguments left at their defaults, and no provider-specific `SqlMigrationSettings` subclass
-overriding the `protected virtual QuoteIdentifier` exists, so the tracking table is ANSI
-double-quoted on every provider regardless of the connector's own quoting.
+`null`, `UseTransaction` to `true` and `TransactionTimeout` to `30`. `QualifiedTableName` SHALL be the
+**unquoted** identity of the table: `MigrationsTable` alone when `Schema` is null or empty, and
+`"{Schema}.{MigrationsTable}"` otherwise (TASK-332; it replaced the ANSI-quoting `FullTableName`, and the
+settings class carries no quoting of its own). `SqlMigrationStore` SHALL require an `AbstractConnector`,
+throwing `ArgumentNullException` (naming `store.Connector` as the one to pass) for a null one, and SHALL
+render the table as `connector.QualifiedIdentifier(QualifiedTableName)` — each dot-separated part quoted
+with the provider's delimiters — and every column through `connector.QuoteIdentifier`.
+`SqlMigrationRunner` SHALL construct the store with the connector it holds.
 
 #### Scenario: Schema-qualified table name
 
 - **Given** `Schema = "audit"` and `MigrationsTable = "__Migrations"`
-- **When** `FullTableName` is read
-- **Then** it returns `"audit"."__Migrations"`
+- **When** `QualifiedTableName` is read, and the store renders it on a PostgreSQL connector
+- **Then** the property returns `audit.__Migrations`, and the statement names `"audit"."__Migrations"`,
+  quoted per part rather than as one identifier containing a period
 
-#### Scenario: Identifier with an embedded quote
+#### Scenario: A null connector is refused
 
-- **Given** `MigrationsTable = "we\"ird"`
-- **When** `FullTableName` is read
-- **Then** the embedded quote is doubled, producing `"we""ird"`
+- **Given** `new SqlMigrationStore(factory, null)`
+- **When** the constructor runs
+- **Then** `ArgumentNullException` with `paramName = "connector"` is thrown, its message stating that the
+  ANSI defaults the store used to fall back on were rejected by MySQL and SQL Server
 
 #### Scenario: Settings can be cloned off a RemoteSettings chain
 
 - **Given** an existing `Birko.Configuration.RemoteSettings` instance
-- **When** `new SqlMigrationStore(factory, remoteSettings)` is constructed
+- **When** `new SqlMigrationStore(factory, connector, remoteSettings)` is constructed
 - **Then** the whole inherited settings chain is copied via `settings.LoadFrom(remoteSettings)`
   rather than by hand-listing properties
 
-#### Scenario: The tracking table DDL does not vary by provider
+#### Scenario: Tracking-table columns stay quoted while entity columns are bare
 
-- **Given** a `SqlMigrationRunner` built over a `MySQLConnector` (backtick quoting) or an
-  `MSSqlConnector`
-- **When** `Initialize()` provisions the tracking table
-- **Then** the emitted DDL is the same ANSI-double-quoted `CREATE TABLE "__Migrations" ("Version"
-  BIGINT PRIMARY KEY, … "AppliedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)` as on SQLite —
-  neither the connector's `QuoteIdentifier` nor any provider type mapping is consulted, so the
-  statement is only valid on providers that accept ANSI quotes and that `TIMESTAMP` spelling
+- **Given** an existing PostgreSQL or SQLite deployment whose tracking table has quoted PascalCase
+  columns
+- **When** the store reads or writes version rows
+- **Then** it names `"Version"`, `"Name"`, `"Description"` and `"CreatedAt"` quoted with the connector's
+  delimiters — the tracking table is deliberately exempt from the bare-column rule entity DDL follows, so
+  PostgreSQL does not fold them to lower case
 
 ### Requirement: SqlScriptMigration executes raw scripts on the runner's connection
 
@@ -597,36 +617,92 @@ threads the PostgreSQL connector into its schema builder and data migrator.
 
 The system SHALL provide `TimescaleDBMigration` helpers that require a `SqlMigrationContext` —
 throwing `InvalidOperationException` (`"Expected SqlMigrationContext but got {type}."`) otherwise —
-and that emit: `create_hypertable(table, timeColumn[, chunk_time_interval => interval '…'])`;
-`create_hypertable(table, timeColumn, spaceColumn, partitions[, …])`; `ALTER TABLE … SET
-(timescaledb.compress, timescaledb.compress_orderby = '{orderByColumn}'[,
-timescaledb.compress_segmentby = '{segmentByColumn}'])` followed by `add_compression_policy`;
-`add_retention_policy`; `remove_compression_policy`; `remove_retention_policy`; a
-`CREATE MATERIALIZED VIEW … WITH (timescaledb.continuous)` continuous aggregate; and
-`CALL refresh_continuous_aggregate(view, NULL, NULL)`. `orderByColumn` SHALL default to `"time"` and
-`segmentByColumn` SHALL be omitted entirely when not supplied. All table/column/interval values SHALL
-be interpolated into the SQL text, not parameterised.
+and that render every name through the context's connector and run on the migration's connection and
+transaction. They SHALL emit: `SELECT create_hypertable('{regclass table}', '{time column}'[,
+chunk_time_interval => interval '…'])`; the space-partitioned form with a space column and partition
+count; `ALTER TABLE {qualified table} SET (timescaledb.compress, timescaledb.compress_orderby =
+'{orderByColumn}'[, timescaledb.compress_segmentby = '{segmentByColumn}'])` followed by
+`add_compression_policy`; `add_retention_policy`; `remove_compression_policy`; `remove_retention_policy`;
+a `CREATE MATERIALIZED VIEW … WITH (timescaledb.continuous) AS … WITH NO DATA` continuous aggregate;
+`add_continuous_aggregate_policy`; and `CALL refresh_continuous_aggregate('{view}', NULL, NULL)`. A table
+or view argument SHALL be rendered as the connector's `RegclassLiteral` (or `QualifiedIdentifier` in
+DDL position), so a schema-qualified name reaches the real object; a hypertable column argument SHALL be
+the connector's `CatalogueNameLiteral`; every interval, `orderByColumn` and `segmentByColumn` SHALL be a
+string literal escaped by `SqlLiteral.EscapeLiteral`. `orderByColumn` SHALL be **required** (no default;
+TASK-279) and `segmentByColumn` SHALL be omitted entirely when null or empty.
 
 #### Scenario: Compression policy without a segment-by column
 
-- **Given** `BuildCompressionPolicySql("readings", "7 days")`
+- **Given** `BuildCompressionPolicySql(connector, "readings", "7 days", "ts")`
 - **When** the SQL is generated
-- **Then** it sets `timescaledb.compress_orderby = 'time'` and contains no
+- **Then** it sets `timescaledb.compress_orderby = 'ts'` and contains no
   `timescaledb.compress_segmentby` clause
 
-#### Scenario: Continuous aggregate with an empty group-by
+#### Scenario: A quote in an interval cannot end the literal
 
-- **Given** `BuildContinuousAggregateSql("v", "src", "1 hour", "avg(x)", "")`
+- **Given** a chunk, compression or retention interval containing a single quote
+- **When** the corresponding SQL is built
+- **Then** the quote is escaped by `SqlLiteral.EscapeLiteral` and the value stays one literal
+
+### Requirement: TimescaleDB continuous aggregates are declared, not written as raw SQL
+
+The system SHALL build a continuous aggregate from `ContinuousAggregateProjection` and
+`ContinuousAggregateGrouping` values rather than raw SELECT / GROUP BY text (TASK-260). A projection SHALL be
+`Of(function, column, alias)` (a null column throwing `ArgumentNullException`), `OfAll(function, alias)` (rendering
+`function(*)`), or `OfPair(function, column, secondColumn, alias)`, rendered `fn(args) AS alias`. A grouping SHALL be
+`Of(column)` or `Expression(function, literalArgument, column, alias?)`, rendered `fn('literal', column)` with the
+literal escaped; its `AS alias` SHALL appear in the SELECT list only, never in `GROUP BY`. Every function, column and
+alias SHALL pass `DataBase.ValidateColumnIdentifier` and be emitted bare, and `timeColumn` likewise (TASK-255). A null
+projection sequence SHALL throw `ArgumentNullException` and an empty one `ArgumentException`. The statement SHALL end
+`WITH NO DATA`, so it performs no initial refresh inside the runner's transaction (TASK-281).
+
+#### Scenario: Continuous aggregate with no grouping
+
+- **Given** `BuildContinuousAggregateSql(connector, "v", "src", "1 hour", "ts", [Of("avg", "x", "avg_x")])`
 - **When** the SQL is generated
-- **Then** `groupBySql` is the empty string, so both the projection and the `GROUP BY bucket` clause
-  are emitted without a dangling comma
+- **Then** it selects `time_bucket('1 hour', ts) AS bucket, avg(x) AS avg_x` and groups `BY bucket`, with no
+  dangling comma in either clause
 
-#### Scenario: Continuous aggregate always buckets on a column literally named "time"
+#### Scenario: The bucket column is the one declared
 
 - **Given** a source table whose timestamp column is `recorded_at`
-- **When** `CreateContinuousAggregate` is used
-- **Then** the generated `time_bucket('{timeBucket}', time)` still references `time`, so the
-  statement fails on that table — the bucket column is not parameterised
+- **When** `CreateContinuousAggregate(..., timeColumn: "recorded_at", ...)` is used
+- **Then** the statement buckets `time_bucket('…', recorded_at)`; a `timeColumn` that is not a plain identifier throws
+  `ArgumentException`
+
+#### Scenario: Two aliased expression groupings do not collide
+
+- **Given** two `Expression` groupings using the same function, each with its own alias
+- **When** the SQL is generated
+- **Then** the SELECT list carries `… AS alias1`, `… AS alias2` while `GROUP BY` carries the bare expressions
+
+#### Scenario: Refreshing inside a transaction is refused
+
+- **Given** a migration run with `UseTransaction = true`
+- **When** it calls `RefreshContinuousAggregate(context, "v")`
+- **Then** `InvalidOperationException` is thrown before any statement, naming SQLSTATE `25001` and the two ways out —
+  `AddContinuousAggregatePolicy`, or running the migration with `UseTransaction = false`
+
+#### Scenario: An empty start offset is not "from the beginning"
+
+- **Given** `BuildContinuousAggregatePolicySql(connector, "v", "", "1 hour", "1 hour")`
+- **When** the SQL is generated
+- **Then** `start_offset => INTERVAL ''` is emitted, which PostgreSQL rejects like every other empty interval; only a
+  `null` `startOffset` renders `start_offset => NULL` (TASK-284)
+
+### Requirement: TimescaleDB hypertable introspection resolves the name as a relation
+
+The system SHALL answer `IsHypertable(context, table)` with a `COUNT(*)` over
+`timescaledb_information.hypertables`, and `GetChunkInterval(context, table)` with the first dimension's
+`time_interval` or `integer_interval` text from `timescaledb_information.dimensions` (null when there is none),
+matching rows by `(quote_ident(hypertable_schema) || '.' || quote_ident(hypertable_name))::regclass =
+to_regclass(@table)` with `@table` bound to `connector.QualifiedIdentifier(table)`.
+
+#### Scenario: A schema-qualified hypertable is found
+
+- **Given** a hypertable `reporting.evts`
+- **When** `IsHypertable(context, "reporting.evts")` runs
+- **Then** `@table` is `"reporting"."evts"`, `to_regclass` resolves it, and the answer is `true`
 
 #### Scenario: Hypertable introspection helpers omit the transaction
 
@@ -958,6 +1034,13 @@ MongoDB and RavenDB index builders override `IIndexBuilder.Build()` to create th
 ElasticSearch and InfluxDB index builders override it to **refuse** with `NotSupportedException`; the
 MongoDB/ElasticSearch/RavenDB/InfluxDB collection builders do **not** override `Build()`.
 
+`IIndexBuilder.Sparse()` and `WithProperty(key, value)` SHALL be honoured or refused, never silently
+dropped (TASK-274): SQL honours `Sparse()` as a partial index whose `WhereNotNull` predicate covers the one
+declared column and refuses it with `NotSupportedException` on a composite index; MongoDB sets
+`CreateIndexOptions.Sparse`; ElasticSearch, RavenDB and CosmosDB refuse `Sparse()` at the call. Every backend
+except InfluxDB refuses `WithProperty` with `NotSupportedException`; InfluxDB's chain methods are all no-ops
+because its `Build()` refuses the whole declaration.
+
 #### Scenario: SQL collection chain must be terminated
 
 - **Given** a SQL migration calling `context.Schema.CreateCollection("Foo").WithField("Id",
@@ -977,6 +1060,22 @@ MongoDB/ElasticSearch/RavenDB/InfluxDB collection builders do **not** override `
 - **Given** `context.Schema.CreateIndex("Foo", "IX_Foo")` with no `WithField` call
 - **When** `Build()` is called
 - **Then** `InvalidOperationException` (`"Index must have at least one field."`) is thrown
+
+#### Scenario: A sparse SQL index is a partial index over its one column
+
+- **Given** `CreateIndex("Users", "ux_email").WithField("Email").Unique().Sparse().Build()`
+- **When** the index is created
+- **Then** the connector receives an `IndexDefinition` carrying a `WhereNotNull` predicate on `Email`, so rows with a
+  null `Email` are not held to the uniqueness; the same chain with two `WithField` calls throws
+  `NotSupportedException`, because a Mongo sparse compound index (any key present) and a SQL partial index (all keys
+  present) mean different things
+
+#### Scenario: An index option a backend cannot express is refused
+
+- **Given** `CreateIndex("things", "ix").WithProperty("fillfactor", 80)` on SQL, MongoDB, ElasticSearch, RavenDB or
+  CosmosDB, or `.Sparse()` on ElasticSearch, RavenDB or CosmosDB
+- **When** the chain method is called
+- **Then** `NotSupportedException` is thrown naming the backend and the option, instead of an index built without it
 
 #### Scenario: ElasticSearch and InfluxDB CreateIndex refuse at Build
 
@@ -1010,11 +1109,14 @@ MongoDB/ElasticSearch/RavenDB/InfluxDB collection builders do **not** override `
 
 ### Requirement: The SQL schema builder requires a connector and has no raw-SQL fallback
 
-The system SHALL require a non-null `AbstractConnector` in `SqlSchemaBuilder`, `SqlMigrationContext` and
-`SqlDataMigrator`, throwing `ArgumentNullException` otherwise, and SHALL route `DropCollection`,
-`DropIndex`, `AddField`, `DropField`, `CreateCollection(...).Build()` and `CreateIndex(...).Build()`
-through that connector after calling `SetExternalTransaction(connection, transaction)`. Identifiers
-SHALL be quoted via `connector.QuoteIdentifier`. `RenameField` SHALL execute the connector's
+The system SHALL require a non-null `AbstractConnector` in `SqlSchemaBuilder` and `SqlMigrationContext`,
+throwing `ArgumentNullException` otherwise (`SqlDataMigrator` does not check its own argument; the context
+checks before constructing it), and SHALL route `DropCollection`, `DropIndex`, `AddField`, `DropField`,
+`CreateCollection(...).Build()` and `CreateIndex(...).Build()` through that connector inside an
+`AmbientSqlTransaction.Enter(connector.Settings.GetId(), connection, transaction)` scope that is left when
+the operation ends (TASK-259; it replaced `SetExternalTransaction`, which left one migration's disposed
+connection on the process-wide cached connector). When the migration has **no** transaction the scope
+SHALL NOT be entered, so the connector runs those statements on its own connection. `RenameField` SHALL execute the connector's
 `RenameColumnSql(collection, from, to, quoteColumns: false)` (TASK-272, TASK-637), so the table is named in
 its schema and SQL Server uses `sp_rename`; both column names SHALL be emitted **bare** — the old name
 resolved by `DataBase.MigrationColumn` (the stored column of a loaded entity's property of that name,
@@ -1031,6 +1133,22 @@ such query (SH-M181, TASK-152).
   was wrong on MySQL and PostgreSQL and that `SqlMigrationRunner` already holds a connector
 - **And** `SqlMigrationContext`'s `connector` parameter is required at compile time, so the optional
   argument that was the only door to the fallbacks no longer exists
+
+#### Scenario: A migration's connection does not outlive it on the shared connector
+
+- **Given** a migration run with `UseTransaction = true` that calls `context.Schema.AddField(...)`
+- **When** the migration finishes and a store later uses the same (cached) connector for that database
+- **Then** the connector's commands ran on the migration's connection and transaction only while the
+  `AddField` scope was open, and the later store's lazy schema-ensure uses its own connection rather than
+  the disposed one
+
+#### Scenario: A collection declaration honours ignored fields, column names and lengths
+
+- **Given** `CreateCollection("Docs")` with a descriptor marked `IsIgnored`, one with `ColumnName = "doc_title"`,
+  and a `FieldType.String` / `FieldType.Json` field declaring `maxLength: 80` (or, lacking it, a `precision`)
+- **When** `Build()` runs
+- **Then** the ignored field gets no column, the renamed field's column is `doc_title`, and the string field is built
+  as a `CharField` so the connector emits its bounded type (TASK-264)
 
 #### Scenario: Every schema operation delegates to the provider's own emitter
 
@@ -1420,7 +1538,14 @@ wait for completion; each update key SHALL pass `RqlField` (a plain dotted ident
 `PatchItemAsync` per document. InfluxDB `UpdateDocuments` SHALL throw `NotSupportedException` — points
 are immutable (SH-M191; it was a silent no-op). InfluxDB `DeleteDocuments` SHALL throw
 `InvalidOperationException` when the bucket is not found by exact name (SH-M193), and SHALL wait on the
-delete so that a refused predicate propagates (TASK-619).
+delete so that a refused predicate propagates (TASK-619). The InfluxDB delete SHALL cover only the time range
+`[UtcNow - 100 years, UtcNow]`.
+
+#### Scenario: An InfluxDB delete does not reach future-dated points
+
+- **Given** a bucket holding a point timestamped after the moment the migration runs
+- **When** `DeleteDocuments(bucket, "")` runs
+- **Then** the delete's range stops at `DateTime.UtcNow`, so that point remains
 
 #### Scenario: RavenDB names cannot change what the RQL means
 
@@ -1664,3 +1789,44 @@ failed during {Direction}."`. `Migration` SHALL be null when a message-only cons
 - **When** the exception is inspected
 - **Then** `Migration` is null and `Direction` is the enum default `Up`, even if the failing batch was
   a rollback
+
+### Requirement: A migration can create and drop a SQL view from view-type metadata
+
+The system SHALL provide `CreateView(viewType, viewName?, quoteChar)`, `DropView(viewType, viewName?, quoteChar)`
+and `DropView(viewName, quoteChar)` extension methods on `IMigrationContext`, each with an `…Async` twin taking a
+`CancellationToken`. They SHALL throw `ArgumentNullException` for a null context or view type and `ArgumentException`
+for a null or whitespace view name, SHALL throw `InvalidOperationException` (`"Expected SqlMigrationContext but got
+{type}."`) on a non-SQL context, and SHALL execute the generated statement as one non-query on the context's
+`Connection` with its `Transaction`. `ViewSqlGenerator.GenerateCreateViewSql` SHALL load the view through
+`DataBase.LoadView`, throw `InvalidOperationException` when the type has no tables, and return
+`CREATE OR REPLACE VIEW {quoted name} AS {select}`, the SELECT rendered by the shared `ViewSelectSqlBuilder`.
+`GenerateDropViewSql` SHALL return `DROP VIEW IF EXISTS {quoted name}`. The view name SHALL be `viewName` when given,
+else the first `ViewAttribute.Name`, else the distinct table names concatenated, else the type name. Identifiers SHALL
+be quoted with the single `quoteChar` (default `"`) on both sides, an embedded `quoteChar` doubled; no connector is
+consulted, so bracket quoting is not expressible.
+
+#### Scenario: A view is dropped by name with a provider's quote
+
+- **Given** `context.DropView("order_totals", '`')` in a SQL migration
+- **When** it runs
+- **Then** `` DROP VIEW IF EXISTS `order_totals` `` is executed on the migration's connection and transaction
+
+#### Scenario: A view over a schema-scoped table is refused
+
+- **Given** a view type whose fields or joins read a table declared with `[Table(Schema = "reporting")]`
+- **When** `CreateView` runs
+- **Then** `NotSupportedException` is thrown naming the table and pointing at the connector's `CreateView`, because
+  this generator has no connector to render a schema (TASK-272); nothing is executed
+
+#### Scenario: A view migration under a non-SQL runner fails
+
+- **Given** a migration calling `context.CreateView(typeof(OrderTotals))` through a `MongoMigrationContext`
+- **When** it runs
+- **Then** `InvalidOperationException` is thrown after the SQL is generated and before anything is executed
+
+#### Scenario: The statement form is fixed, whatever the provider
+
+- **Given** `CreateView` on a SQL Server or SQLite migration
+- **When** the statement executes
+- **Then** it is still `CREATE OR REPLACE VIEW …`, which neither of those providers accepts, so the migration fails;
+  the generator offers no per-provider form

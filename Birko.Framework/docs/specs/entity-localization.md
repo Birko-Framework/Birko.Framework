@@ -1,8 +1,14 @@
 ---
 area: entity-localization
-generated-at: fbb41e30bc5ba8ba197c6feae24ec07bfecb3c2f
-generated-on: 2026-10-20
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
+  - ../Birko.Data.Localization.MongoDB/LocalizationMongoIndexes.cs
+  - ../Birko.Data.Localization.MongoDB/MongoLocalizedWriteBoundary.cs
+  - ../Birko.Data.Localization.RavenDB/RavenLocalizedWriteBoundary.cs
+  - ../Birko.Data.Localization.SQL/LocalizationSqlMappings.cs
+  - ../Birko.Data.Localization.SQL/Mappings/EntityTranslationMapping.cs
+  - ../Birko.Data.Localization.SQL/SqlLocalizedWriteBoundary.cs
   - ../Birko.Data.Localization/Boundaries/BestEffortWriteBoundary.cs
   - ../Birko.Data.Localization/Boundaries/ILocalizedWriteBoundary.cs
   - ../Birko.Data.Localization/Boundaries/LocalizedCleanup.cs
@@ -21,34 +27,20 @@ sources:
   - ../Birko.Data.Localization/Expressions/LocalizedPropertyUpdateHelper.cs
   - ../Birko.Data.Localization/Filters/EntityTranslationFilter.cs
   - ../Birko.Data.Localization/Models/EntityTranslationModel.cs
-  - ../Birko.Data.Localization/Models/IEntityTranslation.cs
-  - ../Birko.Data.Localization/Models/LocalizedValueHash.cs
   - ../Birko.Data.Localization/Models/IEntityLocalizationContext.cs
+  - ../Birko.Data.Localization/Models/IEntityTranslation.cs
   - ../Birko.Data.Localization/Models/ILocalizable.cs
+  - ../Birko.Data.Localization/Models/LocalizedValueHash.cs
   - ../Birko.Data.Localization/Translations/EntityTranslations.cs
   - ../Birko.Data.Localization/Translations/EntityTranslationsServiceCollectionExtensions.cs
   - ../Birko.Data.Localization/Translations/IEntityTranslations.cs
-  - ../Birko.Data.Localization.SQL/LocalizationSqlMappings.cs
-  - ../Birko.Data.Localization.SQL/Mappings/EntityTranslationMapping.cs
-  - ../Birko.Data.Localization.SQL/SqlLocalizedWriteBoundary.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
-# 2026-10-19 regens (TASK-168, TASK-194, TASK-679, TASK-680, TASK-681): the evidence pass was not re-run; FEATURE-014 is already listed
-# (TASK-679 has no feature).
-# 2026-10-20 regen (TASK-690, harvested from the uncommitted working tree): the evidence pass was not re-run;
-# TASK-690 has no feature.
-# 2026-10-20 regen (TASK-682, harvested from the uncommitted working tree): the evidence pass was not re-run;
-# TASK-682 has no feature.
-# 2026-10-20 regen (TASK-683, harvested from the uncommitted working tree): the evidence pass was not re-run;
-# TASK-683 has no feature.
-# 2026-10-20 regen (TASK-686, harvested from the uncommitted working tree): the evidence pass was not re-run;
-# TASK-686 has no feature.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Entity-level localization via store decoration
 
@@ -92,6 +84,10 @@ default, `BestEffortWriteBoundary`, runs it as it is: a failure after the entity
 delete whose translation cleanup fails reports the entities whose rows remain (`TranslationCleanupException`).
 `Birko.Data.Localization.SQL`'s `SqlLocalizedWriteBoundary.For` makes the write one transaction when both stores reach
 SQL stores on one database (the same `Settings.GetId()`), joining a caller's transaction when one is open.
+`Birko.Data.Localization.MongoDB`'s `MongoLocalizedWriteBoundary.For` and `Birko.Data.Localization.RavenDB`'s
+`RavenLocalizedWriteBoundary.For` do the same for two MongoDB or two RavenDB stores on one database, and
+`LocalizationMongoIndexes.EnsureAsync` gives a MongoDB translation collection the unique key and the value-hash index the
+SQL mapping declares.
 
 ## Requirements
 
@@ -666,6 +662,12 @@ create, one bulk update and one bulk delete, sent in that order and each skipped
 entity listed twice is merged, the later value winning. An updated row SHALL receive its new value only when the
 update is sent, so a create that is refused and cannot be retried leaves nothing applied.
 
+A created row SHALL take the Guid `LocalizedTranslationRows.KeyGuid(EntityGuid, EntityType, FieldName, Culture)`. The
+first bulk create SHALL run through `RetryableWrite.Run` / `RunAsync` on the translation store, so a store beneath it
+that implements `IRetryableWriteStore` runs it in a savepoint where a refusal would abort the caller's transaction
+(PostgreSQL), and the re-read and retry that follow can run in that transaction (TASK-694); the retry's second create
+SHALL run without one.
+
 #### Scenario: First write creates a translation row
 
 - **Given** `CurrentCulture = "sk"`, `DefaultCulture = "en"`, and no existing `"sk"` translation for entity `G`
@@ -695,13 +697,19 @@ update is sent, so a create that is refused and cannot be retried leaves nothing
 - **Given** a store that enforces the unique key, and another writer storing `(G, "Product", "Name", "sk")` after this save's read found nothing, while the same batch also creates `(G, "Product", "Description", "sk")`
 - **When** this save's bulk create is refused with `StoreUniqueViolationException`
 - **Then** it re-reads the keys it was creating once, updates the row the other writer holds with its own value and creates the rest again — one row per key, the last value, no exception; a store that inserted part of the batch before refusing has its own rows found and updated the same way
-- **And** when the re-read finds none of the keys held, or the second create is refused too, the original refusal propagates; when the re-read itself fails (PostgreSQL's aborted transaction), a `StoreUniqueViolationException` wrapping the original and naming the read failure is thrown
+- **And** when the second create is refused too, the original refusal propagates; when the re-read finds none of the keys held, a `StoreUniqueViolationException` wrapping the original is thrown, saying that another unique key refused it or that the key is held outside the store's scope; when the re-read itself fails (a transaction the refusal aborted), a `StoreUniqueViolationException` wrapping the original and naming the read failure is thrown
+
+#### Scenario: Inside a caller's PostgreSQL transaction the race is retried in place
+
+- **Given** a caller's `SqlUnitOfWork` on PostgreSQL, a SQL translation store, and another writer that committed `(G, "Product", "Name", "sk")` after this save's read found nothing
+- **When** this save's bulk create is refused
+- **Then** the create ran in a savepoint that is rolled back to, so the transaction is still usable, the re-read finds the other writer's row and the save updates it inside the caller's transaction (TASK-694); a store with no `IRetryableWriteStore` beneath it, or a refusal that does not abort the transaction, runs the create as it is
 
 #### Scenario: A race is refused and retried on every provider through the key's Guid
 
 - **Given** any provider (InMemory, JSON, XML, MongoDB, ElasticSearch, RavenDB, Cosmos DB, or SQL), and another writer saving `(G, "Product", "Name", "sk")` after this save's read found nothing
 - **When** this save creates the row
-- **Then** the row's Guid is `LocalizedTranslationRows.KeyGuid(G, "Product", "Name", "sk")`, an RFC 4122 v5 UUID of the four values the save passes, so the store refuses the second create of that Guid; the re-read (by key, and by that Guid through `IAsyncRealtimeReadStore` where the translation store handed in offers one, as ElasticSearch and RavenDB do; never beneath a decorator) finds the other writer's row and updates it; one row, the last value (TASK-698)
+- **Then** the row's Guid is `LocalizedTranslationRows.KeyGuid(G, "Product", "Name", "sk")`, an RFC 4122 v5 UUID of the four values the save passes, so the store refuses the second create of that Guid; the re-read (by key, and, for each refused key the key query did not return, by that Guid through `IRealtimeReadStore` / `IAsyncRealtimeReadStore` where the translation store handed in offers one, as ElasticSearch and RavenDB do; never beneath a decorator) finds the other writer's row and updates it; one row, the last value (TASK-698)
 
 #### Scenario: A key held outside the store's scope is refused and named
 
@@ -1008,8 +1016,14 @@ An atomic boundary SHALL run each write as follows, checking in this order:
   transaction, published as the ambient transaction for the settings id so the other store joins it; nothing is
   committed, rolled back, marked or retried.
 - **A caller's boundary:** when an ambient transaction for the settings id is open (a caller's `SqlUnitOfWork` or a
-  store's own bulk transaction), the write takes part in it; any failure other than `EntityNotFoundException` marks it
-  rollback-only and propagates, with no retry.
+  store's own bulk transaction), the write takes part in it, sync and async alike; any failure other than
+  `EntityNotFoundException` marks it rollback-only and propagates, with no retry. When the write runs declared retried
+  (`RetryableWrite.IsDeclared`, set by a decorator above that retries it on a refusal), it SHALL instead run in a
+  savepoint of that transaction (`SqlSavepoint`): any failure rolls back to the savepoint and propagates, and the
+  caller's transaction is left unmarked, so the decorator's retry can commit (TASK-697). An `EntityNotFoundException`
+  SHALL release the savepoint and be rethrown, keeping what the write stored; a failure whose rollback to the savepoint
+  itself failed (the exception carries `SqlSavepoint.RollbackFailureKey`) SHALL mark the caller's transaction
+  rollback-only and propagate (TASK-705).
 - **Its own transaction:** otherwise it opens a transaction (sync: its own connection in a flow-local ambient cell; async:
   a `SqlUnitOfWork` built in the running flow), commits when the write returns, and rolls back and rethrows when it
   throws — a failed rollback never replacing the write's exception. An `EntityNotFoundException` commits the stored part
@@ -1046,10 +1060,28 @@ first run made to the caller's objects (a create's assigned `Guid` stays set).
 
 #### Scenario: A unique-key race in its own transaction is retried once
 
-- **Given** PostgreSQL or MySQL (where the in-place retry cannot see the other writer's row: PostgreSQL aborts the transaction, MySQL re-reads its REPEATABLE READ snapshot), the boundary owning its transaction, and another writer storing a translation key after this write's read found nothing
-- **When** the translation create is refused with `StoreUniqueViolationException`
-- **Then** the transaction is rolled back and the whole write re-runs once; the second pass updates the other writer's row, leaving one row with this write's value
-- **And** inside a caller's transaction the typed violation reaches the caller instead
+- **Given** MySQL (where the in-place retry cannot see the other writer's row: MySQL re-reads its REPEATABLE READ snapshot), or an entity write refused by a unique key on any provider, the boundary owning its transaction, and another writer storing the key after this write's read found nothing
+- **When** the write is refused with `StoreUniqueViolationException` that escapes the translation upsert's in-place retry
+- **Then** the transaction is rolled back and the whole write re-runs once; the second pass updates the other writer's row, leaving one row with this write's value; on PostgreSQL a translation race is already retried in place, because the upsert's create runs in a savepoint (TASK-694)
+- **And** inside a caller's transaction there is no re-run: the upsert's in-place retry is all there is, and on MySQL the typed violation reaches the caller
+
+#### Scenario: A decorator's retried write does not poison the caller's unit of work
+
+- **Given** a caller's `SqlUnitOfWork` on the boundary's database, and a decorator above the localized wrapper that runs its write through `RetryableWrite` and retries it on a refusal
+- **When** the first attempt fails inside the boundary
+- **Then** the boundary had run it in a savepoint, rolls back to it and leaves the caller's transaction unmarked; the decorator's retry succeeds and the caller's commit is accepted (TASK-697), where without the declaration the failure would have marked the unit rollback-only
+
+#### Scenario: A declared-retried collection update keeps what it stored
+
+- **Given** a caller's `SqlUnitOfWork` on the boundary's database, a declared-retried write, and a collection update whose inner store stores some items and throws `EntityNotFoundException` for the rest
+- **When** the write runs through the boundary
+- **Then** the savepoint is released, not rolled back, the stored items and their translations stay in the caller's transaction, the unit is not marked and the `EntityNotFoundException` is rethrown (TASK-705)
+
+#### Scenario: A failed rollback to the savepoint marks the caller's unit
+
+- **Given** a caller's `SqlUnitOfWork` and a declared-retried write that throws inside the boundary's savepoint, whose rollback to the savepoint then fails
+- **When** the failure propagates carrying `SqlSavepoint.RollbackFailureKey`
+- **Then** the caller's unit is marked rollback-only, so its commit cannot keep the half write (TASK-705)
 
 #### Scenario: A store's own transaction context is honoured
 
@@ -1062,6 +1094,97 @@ first run made to the caller's objects (a create's assigned `Guid` stays set).
 - **Given** the boundary owning its transaction and a collection update whose inner store throws `EntityNotFoundException` for some items
 - **When** the write runs
 - **Then** the stored items and their translations are committed and the `EntityNotFoundException` is rethrown
+
+### Requirement: MongoDB write boundary for one database
+
+The system SHALL provide, in `Birko.Data.Localization.MongoDB`, `MongoLocalizedWriteBoundary.For(entityStore,
+translationStore, requireAtomic = false)`, which rejects a null store with `ArgumentNullException`, walks each store's
+chain (`StoreChain.Walk`) to the first link implementing `IMongoConnectedStore` with a non-null `Client`, and returns an
+atomic boundary when both are found and their `AmbientKey` (the settings id) is non-null and equal. Otherwise it SHALL
+return `BestEffortWriteBoundary.Instance`, or, with `requireAtomic`, throw `InvalidOperationException` describing each
+store's database or that it is not a MongoDB store or has no settings yet. The client and key SHALL be captured when
+`For` runs.
+
+An atomic boundary SHALL run each write as follows, checking in this order:
+
+- **A given session:** when either store was given `SetTransactionContext`, the write runs in that session, published as
+  the ambient session for the key so the other store joins it; nothing is committed, aborted, marked or retried.
+- **A caller's boundary:** when an ambient session for the key is open (a caller's `MongoDbUnitOfWork`), the write takes
+  part in it; any failure other than `EntityNotFoundException` marks it rollback-only and propagates, with no retry. A
+  declared-retried write gets no savepoint here and is marked the same way.
+- **Its own transaction:** otherwise it starts one (sync: a session of the entity store's client; async: a
+  `MongoDbUnitOfWork`), commits when the write returns, and aborts and rethrows when it throws — a failed abort never
+  replacing the write's exception. An `EntityNotFoundException` commits the stored part and is rethrown. A failure whose
+  chain carries a `MongoException` labelled `TransientTransactionError` (a write conflict with another writer) on the
+  first attempt aborts and re-runs the **whole** write once in a new transaction; a `StoreUniqueViolationException` is not
+  re-run.
+
+A standalone `mongod` refuses writes in a transaction, so every write through an atomic boundary fails there.
+
+#### Scenario: A translation failure rolls back the entity write on MongoDB
+
+- **Given** an entity store and a translation store on one MongoDB replica set with the same settings id, and a boundary from `For`
+- **When** a translation write throws after the entity write
+- **Then** the transaction is aborted, the exception propagates and the entity write is not stored
+
+#### Scenario: Different databases are best effort, or refused, on MongoDB
+
+- **Given** two MongoDB stores on settings with different ids, a store that is not MongoDB, or one whose settings are not set
+- **When** `For` runs
+- **Then** it returns the best-effort boundary, and with `requireAtomic: true` throws `InvalidOperationException` naming both sides
+
+#### Scenario: A write conflict is re-run once
+
+- **Given** the boundary owning its transaction, and another writer taking a translation key after the transaction began
+- **When** the write fails with a `TransientTransactionError`-labelled error
+- **Then** the transaction is aborted and the whole write re-runs once in a new one, which reads the other writer's row and updates it; a second conflict propagates
+
+#### Scenario: A caller's MongoDB unit of work is joined
+
+- **Given** a caller's `MongoDbUnitOfWork` open on the same database
+- **When** a localized write through the boundary fails
+- **Then** it ran in the caller's session, the unit is marked rollback-only so its commit is refused, and no re-run was made
+
+### Requirement: RavenDB write boundary for one database
+
+The system SHALL provide, in `Birko.Data.Localization.RavenDB`, `RavenLocalizedWriteBoundary.For(entityStore,
+translationStore, requireAtomic = false)`, which rejects a null store with `ArgumentNullException`, walks each store's
+chain to the first link implementing `IRavenConnectedStore` with a non-null `DocumentStore`, and returns an atomic
+boundary when both are found and their `AmbientKey` (URLs and database) is non-null and equal. Otherwise it SHALL return
+`BestEffortWriteBoundary.Instance`, or, with `requireAtomic`, throw `InvalidOperationException` describing each side.
+
+An atomic boundary SHALL run each write as follows, checking in this order:
+
+- **A given session:** when either store was given a session of the matching kind (`IDocumentSession` for `Run`,
+  `IAsyncDocumentSession` for `RunAsync`), the write runs in it, published for the key; nothing is saved, marked or
+  retried.
+- **A caller's boundary:** when an ambient session of that kind is open for the key (a caller's `RavenDbUnitOfWork` for
+  the async path), the write goes into it; any failure other than `EntityNotFoundException` marks it rollback-only and
+  propagates, with no retry, even for a declared-retried write. The sync `Run` looks only for an `IDocumentSession`, so it
+  does not join an async unit of work.
+- **Its own session:** otherwise it opens a cluster-wide session (sync: `OpenSession` with `TransactionMode.ClusterWide`;
+  async: a `RavenDbUnitOfWork`), saves it when the write returns and discards it when the write throws. An
+  `EntityNotFoundException` saves the stored part and is rethrown. A `ConcurrencyException` on the first attempt (a key
+  another writer saved first, surfacing when the session is saved) re-runs the **whole** write once in a new session; a
+  `StoreUniqueViolationException` is not re-run.
+
+#### Scenario: A translation failure discards the entity write on RavenDB
+
+- **Given** an entity store and a translation store on one RavenDB database, and a boundary from `For`
+- **When** a translation write throws after the entity write
+- **Then** the session is discarded unsaved, the exception propagates and neither store's write reaches the server
+
+#### Scenario: A concurrency conflict on save is re-run once
+
+- **Given** the boundary owning its session, and another writer saving a translation key after this write checked it
+- **When** saving the session throws `ConcurrencyException`
+- **Then** the whole write re-runs once in a new session; a second conflict propagates
+
+#### Scenario: A caller's RavenDB unit of work is joined
+
+- **Given** a caller's `RavenDbUnitOfWork` open on the same database
+- **When** an async localized write through the boundary fails
+- **Then** it went into the caller's session, the unit is marked rollback-only so its commit is refused, and no re-run was made
 
 ### Requirement: Native PropertyUpdate falls back when it touches a localizable field
 
@@ -1267,6 +1390,35 @@ it (a table created before the bound, whose columns schema-ensure never alters),
 - **Given** `EntityTranslationModel` and the SQL mapping
 - **When** a row is written and the store initialised
 - **Then** `ValueHash` is the lower-case hex SHA-256 of `Value`, computed by the model (its setter is ignored) and written by the upsert for any model; the table has a non-unique `IX_{table}_ValueHash` on it alone, and the table name is at most 50 characters so that name fits PostgreSQL's 63
+
+### Requirement: MongoDB indexes for the translation collection
+
+The system SHALL provide, in `Birko.Data.Localization.MongoDB`, `LocalizationMongoIndexes`, whose `Definitions(collection)`
+(refusing a null or empty name with `ArgumentException`) declares a **unique** index `UX_{collection}_Key` ascending over
+`(EntityGuid, EntityType, FieldName, Culture)` and a non-unique `IX_{collection}_ValueHash` ascending over `ValueHash`, and
+whose `EnsureAsync(AsyncMongoDBStore<TTranslation> store)` initialises the store and creates each index on the collection
+named `typeof(TTranslation).Name` only when an index of that name does not exist. It SHALL refuse a null store with
+`ArgumentNullException` and a store with no client with `InvalidOperationException`; an index MongoDB refuses (the unique
+key over a collection already holding a duplicate key) SHALL surface as the index manager's exception. Only the async
+store is accepted (TASK-699).
+
+#### Scenario: Both indexes are created once
+
+- **Given** an `AsyncMongoDBStore<EntityTranslationModel>` with settings set
+- **When** `EnsureAsync` is called twice
+- **Then** after the first call the collection `EntityTranslationModel` holds `UX_EntityTranslationModel_Key` (unique, the four key fields in order) and `IX_EntityTranslationModel_ValueHash`, and the second call creates nothing
+
+#### Scenario: A collection holding a duplicate key
+
+- **Given** a translation collection with two rows of one key under different Guids
+- **When** `EnsureAsync` runs
+- **Then** the unique key fails to build and the failure propagates; the duplicates must be removed first
+
+#### Scenario: A store without settings
+
+- **Given** an `AsyncMongoDBStore` whose settings were never set, so it has no client
+- **When** `EnsureAsync` runs and the store's `InitAsync` returns
+- **Then** `InvalidOperationException` names the collection and says to call `SetSettings` first, before any index call
 
 ### Requirement: Explicit translation API construction
 

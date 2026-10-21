@@ -1,7 +1,7 @@
 ---
 area: filter-expression-translation
-generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
-generated-on: 2026-10-16
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
   - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
   - ../Birko.Data.Core/Expressions/DateTruncation.cs
@@ -15,6 +15,7 @@ sources:
   - ../Birko.Data.ElasticSearch/ElasticSearch/ElasticSearch.cs
   - ../Birko.Data.ElasticSearch/Stores/AsyncElasticSearchStore.cs
   - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs
+  - ../Birko.Data.RavenDB/Expressions/RavenFilterRewriter.cs
   - ../Birko.Data.SQL.MSSql/Database/Connector/MSSqlConnector.cs
   - ../Birko.Data.SQL.MySQL/Database/Connectors/MySQLConnector.cs
   - ../Birko.Data.SQL.PostgreSQL/Database/Connectors/PostgreSQLConnector.cs
@@ -36,14 +37,15 @@ sources:
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/SQL/DataBase_RuleField.cs
   - ../Birko.Data.SQL/SQL/DataBase_Table.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+  - ../Birko.Data.SQL/SQL/SqlLiteral.cs
+  - ../Birko.Data.TimescaleDB/Database/Connectors/TimescaleDBConnector.cs
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # LINQ filter expression translation to backend queries
 
@@ -1186,6 +1188,15 @@ funnel its value through it because those overrides do not chain to the base imp
   than `timestamptz` and the server does not shift the instant by the session's time zone into the
   timezone-less column (TASK-256)
 
+#### Scenario: SQL Server binds a new DateTime parameter as DATETIME2
+
+- **Given** a `DateTime` value bound through `MSSqlConnector.AddParameter` under a name the command does not yet hold
+- **When** the parameter is created with `AddWithValue`
+- **Then** its `SqlDbType` is set to `DateTime2`, so the value keeps every tick and a filter on the exact value
+  matches the stored row. Before TASK-656 SqlClient inferred `DateTime` and rounded to ~3.33 ms (`...56.1234567`
+  bound as `...56.1233333`), and the filter matched nothing. A parameter that already exists has only its `Value`
+  replaced; its `SqlDbType` is not touched
+
 #### Scenario: Null becomes DBNull
 
 - **Given** a `null` value
@@ -2100,7 +2111,11 @@ collection.
 ### Requirement: ElasticSearch nullable and negation handling
 
 `ParseMember` SHALL translate `Nullable<T>.HasValue` on a direct member of the parameter into an
-`ExistsQuery`, SHALL evaluate a parameter-free member as a value-only `TermQuery` (or `null` when the
+`ExistsQuery`, SHALL translate `Nullable<T>.Value` on a direct member of the parameter as that member's
+field — a field-only `TermQuery` named by `ExactFieldName` of the underlying member, the same field the
+member itself yields (TASK-703), except that in predicate position `ParsePredicate` SHALL read a bare
+`x.Flag.Value` on a `bool?` direct member as `Flag == true`, a `TermQuery { Value = true }` on its
+`StoredFieldName`, exactly as it reads a bare `bool` member (TASK-704) — SHALL evaluate a parameter-free member as a value-only `TermQuery` (or `null` when the
 value is null), and SHALL return `null` for a parameter-bound member that is not a direct member of the
 parameter (`x.Sub.Prop`), rather than recursing to the parent member (SH-M142, TASK-153).
 `ParseUnary` SHALL make `Convert` transparent, wrap `Not` in `BoolQuery.MustNot`, and return `null` for
@@ -2111,6 +2126,36 @@ every other unary node type.
 - **Given** `x => x.ClosedAt.HasValue`
 - **When** `ParseMember` matches the `HasValue` branch
 - **Then** an `ExistsQuery { Field = "closedAt" }` is returned
+
+#### Scenario: A list Contains of a nullable member's Value is a terms query on that member (TASK-703)
+
+- **Given** `x => x.Guid != null && guids.Contains(x.Guid.Value)` — the shape `ModelsByGuid` and the localized
+  filters on a translated field render
+- **When** `ParseFilterQuery` translates it
+- **Then** the result holds an `ExistsQuery` and a `TermsQuery`, both on `guid`, the terms being the listed guids —
+  the same field `guids.Contains(x.Guid)` names. Before TASK-703 `x.Guid.Value` was refused as a non-direct
+  member, so every filter on a translated field threw `NotSupportedException` on ElasticSearch
+
+#### Scenario: An equality on a nullable member's Value is a term on that member
+
+- **Given** `x => x.Guid!.Value == guid`
+- **When** `ParseComparison` translates it
+- **Then** a `TermQuery { Field = "guid", Value = guid }` is produced
+
+#### Scenario: A bare nullable bool Value is a term on true, never a valueless term (TASK-704)
+
+- **Given** `bool? Flag` and `x => x.Flag.Value`, `x => !x.Flag.Value`, or `x => x.Flag.Value && x.Status == active`
+- **When** `ParsePredicate` meets `x.Flag.Value` in predicate position
+- **Then** it yields `TermQuery { Field = "flag", Value = true }` (wrapped in `MustNot` when negated, kept as a
+  `Must` clause inside `&&`). Between TASK-703 and TASK-704 it reached `ParseMember`'s nullable-`Value` branch and
+  produced a term with no value, which NEST drops as conditionless, so the clause vanished and widened the query
+
+#### Scenario: Value on a nested nullable member stays refused
+
+- **Given** `x => x.Sub.ClosedAt.Value == instant`, where `x.Sub.ClosedAt` is not a direct member of the parameter
+- **When** `ParseMember` checks the `Value` branch
+- **Then** the branch does not match, the member falls through to the nested-member refusal, `null` is returned,
+  and `ParseFilterQuery` throws
 
 #### Scenario: A nested member is refused rather than read as its parent
 

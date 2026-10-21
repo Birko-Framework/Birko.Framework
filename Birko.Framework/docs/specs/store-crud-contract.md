@@ -1,28 +1,42 @@
 ---
 area: store-crud-contract
-generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
-generated-on: 2026-10-16
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
+  - ../Birko.Data.Core/Exceptions/EntityNotFoundException.cs
+  - ../Birko.Data.Core/Exceptions/StoreConcurrencyException.cs
   - ../Birko.Data.Core/Exceptions/StoreException.cs
   - ../Birko.Data.InMemory/Stores/AbstractAsyncInMemoryStore.cs
   - ../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs
   - ../Birko.Data.InMemory/Stores/AsyncInMemoryStore.cs
   - ../Birko.Data.InMemory/Stores/InMemoryStore.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Insert.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_SelectCount.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Insert.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_SelectCount.cs
+  - ../Birko.Data.SQL/Stores/AsyncDataBaseStore.cs
+  - ../Birko.Data.SQL/Stores/DataBaseStore.cs
+  - ../Birko.Data.SQL/Stores/DuplicateCreate.cs
   - ../Birko.Data.Stores/AbstractAsyncStore.cs
   - ../Birko.Data.Stores/AbstractStore.cs
   - ../Birko.Data.Stores/IAsyncStore.cs
+  - ../Birko.Data.Stores/IRealtimeReadStore.cs
   - ../Birko.Data.Stores/IStore.cs
   - ../Birko.Data.Stores/IStoreWrapper.cs
+  - ../Birko.Data.Stores/StoreChain.cs
+  - ../Birko.Data.Stores/StoreDelegates.cs
   - ../Birko.Data.Stores/StoreExtensions.cs
   - ../Birko.Data.Stores/StoreLocator.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+  - ../Birko.Data.Stores/StoreSave.cs
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Store CRUD contract and template-method hierarchy
 
@@ -40,6 +54,14 @@ hands out store singletons keyed by settings identity; the `IStoreWrapper` unwra
 caller reach past decorator layers to the real backend; and `Birko.Data.InMemory`, the simplest concrete
 implementation of the whole contract — a thread-safe dictionary with no persistence, used as the canonical
 test double and as the reference for what a `*Core` override is obliged to do.
+
+The contract also carries the shared producers every store and decorator routes through — `StoreSave` (the
+create-or-update decision), `StoreDelegates` (what a store data delegate's return means), `StoreChain` (reaching an
+unscoped capability of the raw store beneath decorators), the optional `IRealtimeReadStore<T>` /
+`IAsyncRealtimeReadStore<T>` capability, and the store exception family (`StoreException`,
+`StoreUniqueViolationException`, `EntityNotFoundException`, `StoreConcurrencyException`). The single-item SQL stores
+(`DataBaseStore<DB,T>` / `AsyncDataBaseStore<DB,T>`) and the connector insert and count funnels beneath them are
+specced here as the contract's database-backed reference; the other backends' store bodies are specced separately.
 
 ## Requirements
 
@@ -157,6 +179,40 @@ stores therefore never have to repeat the initialization call.
 - **Then** `_initialized` was never set to `true` (it is assigned only after `InitCore()` returns), so the
   retry attempts initialization again rather than proceeding against an uninitialized store
 
+### Requirement: A remembered initialization is remembered only when durable and trusted only while it holds
+
+The system SHALL assign `_initialized` from the `protected virtual bool CanRememberInitialization` hook after
+`InitCore()` / `InitCoreAsync` returns (TASK-244), and SHALL take the `_initialized` fast path — outside and inside the
+lock — only while the `protected virtual bool CanTrustRememberedInitialization` hook is also `true` (TASK-288). Both
+hooks default to `true` in `AbstractStore<T>` and `AbstractAsyncStore<T>`. The SQL stores override them:
+`CanRememberInitialization` is `Connector == null || _initDdlSurvivedRollback`, where `_initDdlSurvivedRollback` is the
+connector's `DdlSurvivesRollback` read inside `InitCore` while the store's transaction scope is still published
+(TASK-290); `CanTrustRememberedInitialization` is `Connector == null || Connector.SchemaGeneration ==
+_initSchemaGeneration`, the generation captured after `CreateTable`. A "no" costs one idempotent re-run of
+schema-ensure; the hooks are pulled per operation, never subscribed, because connectors are cached process-wide.
+
+#### Scenario: Schema-ensure inside a caller's transaction is not remembered
+
+- **Given** a SQL store whose first operation runs with a `SqlTransactionContext` set on a provider with
+  transactional DDL
+- **When** `InitCore` creates the table inside that transaction
+- **Then** `DdlSurvivesRollback` is `false`, `_initialized` stays `false`, and the next operation runs schema-ensure
+  again — so a rollback of the caller's transaction cannot leave the store believing a removed table exists
+
+#### Scenario: A table dropped beneath an initialized store is recreated
+
+- **Given** an initialized SQL store, and its connector later reports a table it created as missing (bumping
+  `SchemaGeneration`)
+- **When** the store's next operation runs
+- **Then** `CanTrustRememberedInitialization` is `false`, the gate runs `InitCore` again, and the table is recreated
+  before the operation — before TASK-288 five consecutive writes threw and only a new store instance recovered
+
+#### Scenario: A backend with no caller-owned transaction
+
+- **Given** a store that does not override either hook (the in-memory stores)
+- **When** it initializes
+- **Then** both hooks answer `true` and the store initializes once, as before
+
 ### Requirement: Init and InitAsync are idempotent aliases of the initialization gate
 
 The system SHALL implement `Init()` as a call to `EnsureInitialized()` and `InitAsync(ct)` as a call to
@@ -181,6 +237,10 @@ The system SHALL call `ct.ThrowIfCancellationRequested()` at the top of `EnsureI
 `_initialized` fast-path check, so that a cancelled token aborts an operation even on an already-initialized
 store. The synchronous gate has no cancellation equivalent, because no synchronous member accepts a token.
 
+The system SHALL run `InitCoreAsync` with `CancellationToken.None`, on the winning caller's own flow, and SHALL check
+that caller's token again after the lock is released (SH-M425, TASK-324): one-time setup is shared, so no single
+caller's token may abort it mid-flight for every other caller.
+
 #### Scenario: Cancelled token on an already-initialized async store
 
 - **Given** an `AbstractAsyncStore<T>` that has completed initialization
@@ -194,6 +254,13 @@ store. The synchronous gate has no cancellation equivalent, because no synchrono
 - **When** a second caller awaits `_initLock.WaitAsync(ct)` and its token is cancelled
 - **Then** the wait throws, the `try` block is never entered, and the semaphore is not released by the second
   caller because `Release()` sits in the `finally` of that same `try`
+
+#### Scenario: The caller that won the lock is cancelled during initialization
+
+- **Given** a never-initialized async store and a caller whose token is cancelled while `InitCoreAsync` runs
+- **When** the initialization completes
+- **Then** `InitCoreAsync` ran to completion (it received `CancellationToken.None`), the store is initialized for every
+  other caller, and only then does this caller get `OperationCanceledException` from the post-lock check
 
 ### Requirement: Read by identifier is expressed as a filter in the abstract bases
 
@@ -215,6 +282,30 @@ initialization gate itself; the gate is opened by the filter overload it delegat
 - **When** the base `Read(Guid.Empty)` is called
 - **Then** the predicate is `x => x.Guid == Guid.Empty`, which matches entities whose `Guid` is explicitly
   `Guid.Empty` and does not match entities whose `Guid` is `null`
+
+### Requirement: A store whose queries lag its writes may offer a realtime read by identifier
+
+The system SHALL declare the optional capability interfaces `IRealtimeReadStore<T>` (`T? ReadRealtime(Guid guid)`) and
+`IAsyncRealtimeReadStore<T>` (`Task<T?> ReadRealtimeAsync(Guid guid, CancellationToken ct = default)`), both
+constrained to `T : Models.AbstractModel` and part of neither `IStore<T>` nor `IAsyncStore<T>`. An implementation SHALL
+return the entity stored under `guid` including a write not yet visible to queries, and `null` when none is stored. It is
+offered by stores whose queries see a write only after an index refresh (ElasticSearch's realtime GET; RavenDB), and a
+caller finds it beneath decorators (TASK-698: the translation upsert re-reads a key another writer just stored by its
+pre-known Guid, because a search inside the refresh window missed it).
+
+#### Scenario: Re-reading a row written a moment ago
+
+- **Given** an ElasticSearch-backed store into which another writer has just created an entity under a known `Guid`,
+  before the index refreshed
+- **When** a caller asks `ReadRealtimeAsync(guid)`
+- **Then** the entity is returned, where a filtered `ReadAsync` inside the refresh window could answer `null`
+
+#### Scenario: A store without the capability
+
+- **Given** a store that does not implement `IAsyncRealtimeReadStore<T>` (the in-memory and SQL stores)
+- **When** a caller tests for the capability
+- **Then** the test fails and the caller uses the ordinary `ReadAsync(Guid)`, whose reads are already current on those
+  backends
 
 ### Requirement: Save routes between create and update by identifier presence and never throws on null
 
@@ -361,6 +452,13 @@ persist the original, so a delegate in the functional style was silently ignored
 - **Given** a delegate that builds and returns a new, modified copy of the entity
 - **When** `Create`, `Update`, bulk `Create` or bulk `Update` runs, sync or async, on any provider
 - **Then** the returned copy is what is stored (`DelegateContract`, run on every provider — it used to be thrown away)
+
+#### Scenario: Delegate returns null or a copy without an identity
+
+- **Given** a delegate that returns `null`, or one that returns a new instance whose `Guid` is `null` or `Guid.Empty`
+- **When** `StoreDelegates.Apply` runs it
+- **Then** a `null` return persists the original entity, and the identity-less copy is given the original's `Guid`
+  before it is persisted; a copy that sets its own non-empty `Guid` keeps it
 
 #### Scenario: Delegate parameter name differs between sync and async
 
@@ -839,6 +937,13 @@ when the identity string is non-empty and the new instance is assignable to `ISe
   store running on the first caller's credentials (SH-M305). Only public properties of value-like types (primitives,
   enums, strings, `decimal`, `TimeSpan`, `DateTime(Offset)`, `Guid`, and their nullable forms) are compared
 
+#### Scenario: Settings of a different type under the same identity
+
+- **Given** a store cached under a non-empty identity for one settings type
+- **When** `GetStore` is called for the same store type with a settings instance of another type whose `GetId()`
+  returns the same identity
+- **Then** the value comparison answers "different" on the type alone and `InvalidOperationException` is thrown
+
 ### Requirement: Store wrappers expose their inner store for unwrapping
 
 The system SHALL define `IStoreWrapper` with `object? GetInnerStore()` and
@@ -913,6 +1018,38 @@ or the innermost store `GetUnwrappedStore` reaches `is TStore` — the store a b
 - **When** `IsStoreOfType<Invoice, TStore>()` is called
 - **Then** `false` is returned rather than throwing
 
+### Requirement: StoreChain delivers unscoped capabilities to the store that takes them, and forwards aggregation
+
+The system SHALL provide `StoreChain.Walk(store)`, which yields the store and then each `IStoreWrapper.GetInnerStore()`
+beneath it down to the raw store, stopping at a `null` inner store and at an instance already visited (reference
+equality) (TASK-631, SH-M336). `SetTransactionContext<T, TContext>(store, context)` SHALL hand the context to the first
+link implementing `IAsyncTransactionalStore<T, TContext>` or `ITransactionalStore<T, TContext>`, and
+`SetSettings<TSettings>(store, settings)` to the first link implementing `ISettingsStore<TSettings>`; each SHALL throw
+`NotSupportedException` naming the outer store's type when no link takes it. `AggregateThrough<T>(inner, query, ct)`
+SHALL run the query on `inner` when it is an `IAsyncAggregatableStore<T>` and otherwise throw `NotSupportedException`;
+it is what a decorator calls after adding its own scope, and the class offers no way to reach a scoped capability of
+the raw store directly.
+
+#### Scenario: A transaction context through a decorator chain
+
+- **Given** a tenant wrapper around a soft-delete wrapper around an `AsyncDataBaseStore`
+- **When** `StoreChain.SetTransactionContext<T, SqlTransactionContext>(chain, ctx)` is called
+- **Then** the `AsyncDataBaseStore` receives `ctx` — where `chain as IAsyncTransactionalStore<T, SqlTransactionContext>`
+  was `null`, and reaching it through `GetInnerStore()` would have sent operations past both decorators' scope
+
+#### Scenario: No link takes the capability
+
+- **Given** a chain whose raw store is an in-memory store
+- **When** `SetTransactionContext<T, SqlTransactionContext>` is called on it
+- **Then** `NotSupportedException` ("No store in the chain of … takes a SqlTransactionContext transaction context") is
+  thrown
+
+#### Scenario: A wrapper chain that points back at itself
+
+- **Given** two wrappers whose inner stores reference each other
+- **When** `StoreChain.Walk` enumerates the chain
+- **Then** each instance is yielded once and the walk ends — unlike `GetUnwrappedStore`, which has no visited set
+
 ### Requirement: A write refused for a key or unique value already held surfaces as StoreUniqueViolationException
 
 The system SHALL wrap `CreateCore` / `CreateCoreAsync` and `UpdateCore` / `UpdateCoreAsync` in the public `Create` /
@@ -978,6 +1115,119 @@ matches the search index as of its last refresh. So a condition that must hold a
 - **When** `UpdateIfAsync(id, c => c.State == "closed", c => c.Hits = 99)` is called
 - **Then** it returns `null` and the stored item is unchanged
 
+### Requirement: A SQL store refuses to initialize without a connector and ensures its table inside the caller's scope
+
+The system SHALL, in `DataBaseStore<DB,T>.InitCore` and `AsyncDataBaseStore<DB,T>.InitCoreAsync`, throw
+`InvalidOperationException` ("… has no database connector: call SetSettings with the database's settings first.") when
+`SetSettings` has never supplied a connector (SH-M031, TASK-170) — so every public operation, which passes through the
+gate first, refuses instead of answering as if it had worked. Otherwise it SHALL enter the store's transaction scope
+(`EnterTransactionScope`, which publishes an explicit `SqlTransactionContext` through `AmbientSqlTransaction` for this
+operation only, and is `null` when none is set), run `CreateTable` for `T` and the connector's init, and record
+`SchemaGeneration` and `DdlSurvivesRollback` for the remember/trust hooks. `SetSettings(ISettings)` SHALL obtain the
+process-cached connector from `DataBase.GetConnector<DB>` only for a `PasswordSettings` and ignore any other settings.
+`DestroyCore` SHALL drop `T`'s table. Every `*Core` body enters the same transaction scope.
+
+#### Scenario: A store whose settings were never applied
+
+- **Given** a `new DataBaseStore<SqLiteConnector, Invoice>()` on which `SetSettings` was never called
+- **When** `Count()`, `Read(guid)`, `Create(entity)` or `Delete(entity)` is called
+- **Then** `InvalidOperationException` is thrown from the initialization gate — it used to answer 0, `null`, or a
+  delete that wrote nothing (measured, TASK-170)
+
+#### Scenario: A non-password settings object
+
+- **Given** a SQL store
+- **When** `SetSettings(new Settings(...))` is called with a plain `Settings`
+- **Then** no connector is assigned and the next operation is refused by `InitCore`
+
+### Requirement: SQL single-item writes translate a key collision and detect a miss from the matched count
+
+The system SHALL, in the SQL single-item `CreateCore` / `CreateCoreAsync`, assign the identity with `EnsureGuid()`,
+apply the store delegate through `StoreDelegates.Apply`, insert the result through the connector, and return its
+`Guid`; an insert the connector's `IsUniqueViolationException` classifies as a unique violation SHALL be rethrown as
+`StoreException.DuplicateCreate(typeof(T), ex)` (TASK-567), translated at the store and never at the connector, whose
+`Insert` keeps throwing the driver's exception for callers that classify it themselves (rule 9). The stores' override of
+`IsDuplicateKeyException` is the same classifier, so the public `Update` translates a unique collision too (TASK-632).
+`UpdateCore` / `UpdateCoreAsync` SHALL build the `WHERE` conditions from `DataBase.GetPrimaryFields(typeof(T))` on the
+entity **as passed in**, then apply the delegate, then run the connector `Update`, and SHALL throw
+`EntityNotFoundException` when the statement matched 0 rows (SH-M306, TASK-555). `DeleteCore` / `DeleteCoreAsync` SHALL
+delete by the same primary-key conditions and report nothing about a miss. `ReadCore` SHALL select with limit 1 and
+return the first `T`; `CountCore` SHALL return the connector's `SelectCount`.
+
+The sync and async stores differ on `null`: the async `CreateCoreAsync` returns `Guid.Empty` and the async
+`UpdateCoreAsync` / `DeleteCoreAsync` return silently for a `null` entity (or a `null` connector), while the sync
+`DeleteCore` returns for `null` and the sync `CreateCore` / `UpdateCore` dereference it and throw
+`NullReferenceException`. When the connector is not an `AbstractAsyncConnector`, the async store runs the sync connector
+call on `Task.Run`, and its `ReadCoreAsync` fallback selects without a limit and returns the first `T`.
+
+#### Scenario: Creating over a stored key
+
+- **Given** a SQL table holding a row under `g`
+- **When** `Create(entity)` is called with `entity.Guid == g`
+- **Then** `StoreUniqueViolationException` with the `DuplicateCreate` message is thrown, the driver's exception is its
+  `InnerException`, and the stored row is unchanged
+
+#### Scenario: Updating a row that is not there
+
+- **Given** an entity whose `Guid` matches no row
+- **When** `Update(entity)` runs
+- **Then** the `UPDATE` matches 0 rows and `EntityNotFoundException` naming that `Guid` is thrown
+
+#### Scenario: A delegate that returns a copy with a different Guid on update
+
+- **Given** a stored row under `g` and an update delegate that returns a copy carrying its own `Guid` `h`
+- **When** `Update(entity, delegate)` runs on a SQL store
+- **Then** the `WHERE` clause still addresses `g`, because the conditions were built before the delegate ran, and the
+  copy's values — `h` included — are written to that row
+
+#### Scenario: Creating null on the sync and the async store
+
+- **Given** a SQL store pair over the same table
+- **When** `CreateAsync(null!)` and `Create(null!)` are called
+- **Then** the async store returns `Guid.Empty` and the sync store throws `NullReferenceException`
+
+### Requirement: The SQL connector inserts a batch as one statement shape, one row at a time, inside one transaction
+
+The system SHALL funnel every connector `Insert` / `InsertAsync` overload (object, type, table, dictionary, collection)
+into `Insert(string tableName, IEnumerable<IDictionary<string, object>> values)` / its async twin, which SHALL: do
+nothing for a `null` source, materialize the source once, do nothing when it is empty or any row has no columns,
+throw `ArgumentException` ("All rows in a bulk insert must have the same column set as the first row.") when any row's
+key set differs from the first row's (CR-L174), and otherwise build one `INSERT INTO <quoted table> (<columns>) VALUES
+(<@params>)` from the first row — the table identifier quoted, the columns bare, `.` stripped from parameter names —
+and execute it once per row, rebinding parameters by key. The execution SHALL go through `DoCommandWithTransaction` /
+`DoCommandWithTransactionAsync` with `isLock: true`: on an ambient transaction it runs on that connection and
+transaction; otherwise in an owned transaction serialized by the connector's lock (`_lock` for sync, the
+`SemaphoreSlim _asyncLock` for async). `null` models in a model collection SHALL be skipped. The async insert passes
+its token only to `ExecuteNonQueryAsync`, not to `DoCommandWithTransactionAsync`.
+
+#### Scenario: A heterogeneous batch
+
+- **Given** two row dictionaries of which the second has an extra key
+- **When** `Insert(tableName, rows)` is called
+- **Then** `ArgumentException` is thrown before any command is created, instead of binding the first row's stale value
+  into the second
+
+#### Scenario: Inserting inside a unit of work
+
+- **Given** an ambient `SqlTransactionContext` published for the connector's settings identity
+- **When** a store creates an entity
+- **Then** the `INSERT` runs on the ambient connection and transaction, so a rollback of the unit of work removes it
+
+### Requirement: The SQL count of a missing table is zero
+
+The system SHALL answer `SelectCount` / `SelectCountAsync` with `0` when the statement fails with an exception whose
+chain `IsMissingTableExceptionChain` recognises (TASK-285), the same answer a reader gives for a missing table's rows,
+and SHALL record nothing at this site (the anomaly is recorded once, in `EnsureSchemaAndReport`, TASK-288). Writes keep
+reporting a missing table. A `null` or all-empty table list SHALL answer `0` without a command. The sync table-overload
+skips `null` tables; the async one does not.
+
+#### Scenario: Counting before the table exists
+
+- **Given** a SQL store whose table was dropped outside the store, so the `SELECT count(*)` fails with a missing-table
+  error
+- **When** `Count()` is called
+- **Then** `0` is returned rather than an exception — where a write in the identical condition throws
+
 ### Requirement: StoreException is the store-layer exception type and carries an optional inner exception
 
 The system SHALL declare `Birko.Data.Exceptions.StoreException : Exception` with a `(string message)`
@@ -1000,3 +1250,39 @@ subclass `StoreUniqueViolationException(string message, Exception? innerExceptio
   `Guid.Empty`, `null`, `false` or a silent no-op. `StoreLocator` refuses with `ArgumentException` (not a store) and
   `InvalidOperationException` (colliding settings); reflection failures (`MissingMethodException`) and
   cancellation (`OperationCanceledException`) surface as before
+
+### Requirement: The store exception family names what was refused and what a retry may still do
+
+The system SHALL declare, as subclasses of `StoreException`: `EntityNotFoundException` (`EntityType`, `Guids` — a
+missing `Guid` recorded as `Guid.Empty`; `ArgumentNullException` for a `null` entity type) with the single-Guid message
+"No stored {Type} has Guid {g}; Update writes only an entity that exists — use Create or Save." and the multi-Guid
+message "{n} {Type} entities are not stored and were not updated: {guids}.", plus `ThrowIfAny(type, missing)`, which
+throws only when `missing` is non-empty (a bulk update's one producer); and `StoreConcurrencyException(message, applied,
+conflicts, inner)` carrying `Applied` and `Conflicts`, thrown when a filtered write lost a race part-way, so the write is
+**partial** when it surfaces (TASK-502). `StoreException` SHALL also provide `ProbeAfterRefusal(probe, violation)` /
+`ProbeAfterRefusalAsync`, which run the query deciding whether a refused write may be retried and, when that query
+fails with anything but `OperationCanceledException`, throw `UnretryableUniqueViolation(violation, readFailure)` — a
+`StoreUniqueViolationException` wrapping the original refusal and naming the read failure — instead of the probe's own
+exception; `UnretryableUniqueViolation` with no read failure rethrows the original violation with its stack preserved
+(TASK-685).
+
+#### Scenario: A refused write's re-check fails inside an aborted transaction
+
+- **Given** a slug decorator inside a PostgreSQL `SqlUnitOfWork` whose create was refused by a unique key, aborting the
+  transaction
+- **When** its re-check runs through `ProbeAfterRefusalAsync` and fails with `25P02`
+- **Then** the caller receives `StoreUniqueViolationException` whose message appends "The retry could not query the
+  store after the refusal …" and whose `InnerException` is the original refusal — not the raw driver error
+
+#### Scenario: A bulk update with nothing missing
+
+- **Given** a bulk update that wrote every entity
+- **When** `EntityNotFoundException.ThrowIfAny(typeof(T), missing)` is called with an empty list
+- **Then** nothing is thrown
+
+#### Scenario: A filtered write aborted by a version conflict
+
+- **Given** an Elasticsearch `update_by_query` that applied some documents and conflicted on others
+- **When** the store reports it
+- **Then** `StoreConcurrencyException` is thrown with `Applied` and `Conflicts` set, and the documents counted in
+  `Applied` stay written

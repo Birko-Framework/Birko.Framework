@@ -1,7 +1,7 @@
 ---
 area: event-bus-and-messaging
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
+generated-on: 2026-10-21
 sources:
   - ../Birko.EventBus.EventSourcing/DomainEventPublished.cs
   - ../Birko.EventBus.EventSourcing/EventReplayService.cs
@@ -12,6 +12,8 @@ sources:
   - ../Birko.EventBus.MessageQueue/DistributedEventBusOptions.cs
   - ../Birko.EventBus.MessageQueue/DistributedEventBusServiceCollectionExtensions.cs
   - ../Birko.EventBus.MessageQueue/EventEnvelope.cs
+  - ../Birko.EventBus.Outbox.SQL/Models/OutboxEntryModel.cs
+  - ../Birko.EventBus.Outbox.SQL/SqlOutboxStore.cs
   - ../Birko.EventBus.Outbox/Core/IOutboxStore.cs
   - ../Birko.EventBus.Outbox/Core/OutboxEntry.cs
   - ../Birko.EventBus.Outbox/Core/OutboxOptions.cs
@@ -23,6 +25,7 @@ sources:
   - ../Birko.EventBus.Outbox/Stores/InMemoryOutboxStore.cs
   - ../Birko.EventBus/Core/EventBase.cs
   - ../Birko.EventBus/Core/EventContext.cs
+  - ../Birko.EventBus/Core/ICorrelatedEvent.cs
   - ../Birko.EventBus/Core/IEvent.cs
   - ../Birko.EventBus/Core/IEventBus.cs
   - ../Birko.EventBus/Core/IEventHandler.cs
@@ -54,6 +57,7 @@ sources:
   - ../Birko.MessageQueue.MQTT/MqttLastWill.cs
   - ../Birko.MessageQueue.MQTT/MqttMessageQueue.cs
   - ../Birko.MessageQueue.MQTT/MqttProducer.cs
+  - ../Birko.MessageQueue.MQTT/MqttProtocol.cs
   - ../Birko.MessageQueue.MQTT/MqttQualityOfService.cs
   - ../Birko.MessageQueue.MQTT/MqttSettings.cs
   - ../Birko.MessageQueue.MQTT/MqttSubscription.cs
@@ -68,12 +72,14 @@ sources:
   - ../Birko.MessageQueue/Core/IMessageHandler.cs
   - ../Birko.MessageQueue/Core/IMessageProducer.cs
   - ../Birko.MessageQueue/Core/IMessageQueue.cs
+  - ../Birko.MessageQueue/Core/IRedeliveryCapability.cs
   - ../Birko.MessageQueue/Core/ISubscription.cs
   - ../Birko.MessageQueue/Core/MessageAckMode.cs
   - ../Birko.MessageQueue/Core/MessageContext.cs
   - ../Birko.MessageQueue/Core/MessageFingerprint.cs
   - ../Birko.MessageQueue/Core/MessageHeaders.cs
   - ../Birko.MessageQueue/Core/QueueMessage.cs
+  - ../Birko.MessageQueue/Core/TransportSupport.cs
   - ../Birko.MessageQueue/Patterns/IPublisher.cs
   - ../Birko.MessageQueue/Patterns/IReceiver.cs
   - ../Birko.MessageQueue/Patterns/ISender.cs
@@ -84,14 +90,13 @@ sources:
   - ../Birko.MessageQueue/Serialization/IMessageSerializer.cs
   - ../Birko.MessageQueue/Serialization/JsonMessageSerializer.cs
   - ../Birko.MessageQueue/Transactions/ITransactionalProducer.cs
-# source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
-# repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
+# source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
+# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 259
 ---
 # Event publication, handlers, outbox and message-queue transport
 
@@ -1105,7 +1110,7 @@ original lifetime.
 
 #### Scenario: A store the container cannot activate is supplied by a factory
 
-- **Given** `AddOutbox(sp => new SqlOutboxStore(settings, connectorType))` — the factory overload
+- **Given** `AddOutbox(sp => new SqlOutboxStore<PostgreSQLConnector>(settings))` — the factory overload
 - **When** the registrations are built
 - **Then** the factory is registered as the `IOutboxStore` source and the processor plus hosted service are
   wired exactly as the generic overload wires them, both paths sharing one `AddOutboxProcessor` helper so the
@@ -1114,8 +1119,8 @@ original lifetime.
 
 #### Scenario: Why the generic overload is not sufficient on its own
 
-- **Given** a SQL-backed outbox store parameterised by settings and a connector type chosen from
-  configuration
+- **Given** a SQL-backed outbox store, `SqlOutboxStore<DB>`, whose constructor takes `SqlSettings` (and an
+  optional claim timeout and attempt cap)
 - **When** a consumer tries `AddOutbox<TStore>()`
 - **Then** container activation cannot supply those constructor arguments, because they are not themselves
   registered services — which without the factory overload forces the consumer to re-implement the processor
@@ -1145,6 +1150,117 @@ original lifetime.
 - **Given** two `IEventBus` descriptors in the collection
 - **When** the decorator looks up the inner registration
 - **Then** it decorates the **last** one (the search walks the collection backwards)
+
+### Requirement: The SQL outbox store persists entries and claims them by a conditional update and a token
+
+The system SHALL provide `SqlOutboxStore<DB>` (an `IOutboxStore` over an
+`AsyncDataBaseBulkStore<DB, OutboxEntryModel>`, built from `SqlSettings` or from a supplied store, a null
+store throwing `ArgumentNullException`) whose `SaveAsync` creates one `__Outbox` row per entry (a null
+entry throwing `ArgumentNullException`), and whose `GetPendingAsync(batchSize)` returns an empty list for
+a `batchSize` of 0 or less and otherwise reads up to `batchSize` candidates ordered by `CreatedAt` —
+`Pending` rows, plus `Publishing` rows whose non-null `ClaimedAt` is older than the claim timeout (default
+5 minutes) — and claims each by an update conditional on the row's `Guid` and the status it was read in,
+setting `Status = Publishing`, a fresh `ClaimToken` and `ClaimedAt = DateTime.UtcNow`, then re-reading the
+row and returning it only when the stored `ClaimToken` is its own. `now` SHALL be the system clock; this
+store takes no `IDateTimeProvider`.
+
+#### Scenario: Two processors claim the same pending batch
+
+- **Given** pending rows and two processors calling `GetPendingAsync` concurrently
+- **When** both try to claim a row that was `Pending` when each read it
+- **Then** only the first update's `Status == Pending` condition matches, the second processor re-reads a
+  foreign `ClaimToken` and omits the row, so it is returned to one processor only
+
+#### Scenario: Non-positive batch size
+
+- **Given** a `SqlOutboxStore`
+- **When** `GetPendingAsync(0)` is called
+- **Then** an empty list is returned and the database is not queried
+
+#### Scenario: Publishing row with no claim time
+
+- **Given** a row in `Publishing` whose `ClaimedAt` is null
+- **When** `GetPendingAsync` runs
+- **Then** the row is not a candidate and is never reclaimed (unlike `InMemoryOutboxStore`, which reclaims
+  a null `ClaimedAt`)
+
+### Requirement: The SQL outbox store reclaims stale claims within an attempt budget
+
+The system SHALL, in `SqlOutboxStore.GetPendingAsync`, count a reclaim of a stale `Publishing` row as an
+attempt (`Attempts + 1` written with the claim), and when that would reach the store's own `maxAttempts`
+(constructor argument, default 5, independent of `OutboxOptions.MaxAttempts`) SHALL instead mark the row
+`Failed` with `Attempts` incremented, `ClaimToken`/`ClaimedAt` cleared and `LastError` starting
+`"Abandoned: held in Publishing for longer than …"`, and skip it, so the batch returned may hold fewer than
+`batchSize` entries (TASK-451).
+
+#### Scenario: Processor died holding a claim
+
+- **Given** a row claimed six minutes ago with `Attempts = 0` and the default 5-minute claim timeout
+- **When** another processor calls `GetPendingAsync`
+- **Then** the row is claimed again with `Attempts = 1` and returned (at-least-once delivery)
+
+#### Scenario: Attempt budget spent by reclaims
+
+- **Given** a stale `Publishing` row with `Attempts = 4` and the default `maxAttempts` of 5
+- **When** `GetPendingAsync` reaches it
+- **Then** it becomes `Failed` with `Attempts = 5` and an `"Abandoned: …"` `LastError`, and it is not
+  returned
+
+#### Scenario: Two processors reclaim the same stale row
+
+- **Given** a stale `Publishing` row read as a candidate by two processors
+- **When** each runs its conditional update (`Status == Publishing`, which the first claim leaves true) and
+  then re-reads the row
+- **Then** the condition does not exclude the second claim, so a processor that re-reads before the other's
+  update returns the row as well and both may publish it
+
+### Requirement: The SQL outbox store marks, fails and prunes entries
+
+The system SHALL, in `SqlOutboxStore`, make `MarkPublishedAsync` set `Status = Published`, `PublishedAt =
+DateTime.UtcNow` and clear `ClaimToken`; make `MarkFailedAsync` increment `Attempts`, store `LastError`
+truncated to 2000 characters, clear `ClaimToken` and `ClaimedAt`, and set `Failed` when `Attempts` reaches
+the passed `maxAttempts`, else `Pending`; complete both with no effect for an unknown id, without checking
+the claim token; and make `CleanupAsync(cutoff)` delete only `Published` and `Failed` rows whose
+`CreatedAt` is before the cutoff, never `Pending` or `Publishing` ones.
+
+#### Scenario: Failure below and at the cap
+
+- **Given** a claimed row with `Attempts = 0`
+- **When** `MarkFailedAsync(id, error, maxAttempts: 3)` is called, then twice more
+- **Then** it returns to `Pending` after the first two calls and is `Failed` with `Attempts = 3` after the
+  third
+
+#### Scenario: Very long error
+
+- **Given** an error message of 5000 characters
+- **When** `MarkFailedAsync` records it
+- **Then** `LastError` holds its first 2000 characters
+
+#### Scenario: Old unpublished row at cleanup
+
+- **Given** a `Pending` row created 30 days ago and a 7-day cutoff
+- **When** `CleanupAsync` runs
+- **Then** the row is kept, while a `Published` or `Failed` row of the same age is deleted
+
+### Requirement: The SQL outbox row maps every entry field and tolerates unreadable headers
+
+The system SHALL map an `OutboxEntry` to `OutboxEntryModel` (table `__Outbox`, primary key `Guid`) field
+for field, storing `Headers` as JSON in the `Headers` column only when the dictionary is non-empty (else
+null), and SHALL map a row back with `Status` cast from its integer, a null `Guid` replaced by a new one,
+and `Headers` deserialized from that JSON; JSON that does not parse SHALL leave the entry's default empty
+headers rather than fail.
+
+#### Scenario: Round trip with headers
+
+- **Given** an entry with two headers, a correlation and a tenant id
+- **When** it is saved and claimed back
+- **Then** the returned entry carries the same headers, ids, `EventType`, `Payload` and `Source`
+
+#### Scenario: Corrupt headers column
+
+- **Given** a row whose `Headers` column is not valid JSON
+- **When** it is mapped to an `OutboxEntry`
+- **Then** the entry is returned with empty headers and is still deliverable
 
 ### Requirement: Event-store decoration publishes appended domain events
 
@@ -1270,6 +1386,13 @@ the queue is disposed.
 - **When** `ConnectAsync` is awaited
 - **Then** the MQTTnet options carry TLS with that certificate, the will topic/payload/QoS/retain, the
   configured client id (or `birko-{guid}` when null), clean-session flag, keep-alive and timeout
+
+#### Scenario: MQTT protocol version
+
+- **Given** `MqttSettings.ProtocolVersion` left at its default `MqttProtocol.V311`, or set to `V500`
+- **When** `ConnectAsync` is awaited
+- **Then** the client connects with MQTT 3.1.1, or with MQTT 5 respectively (TASK-668; Birko always
+  connected 3.1.1 before), and `LoadFrom(MqttSettings)` copies `ProtocolVersion` with the other MQTT options
 
 ### Requirement: In-memory transport fans every message out to all subscribers of a destination
 
@@ -1428,6 +1551,28 @@ The `ReplyTo` and `GroupId` message headers SHALL be carried on the wire with no
 - **When** it is sent and received on any of the three transports
 - **Then** the header values travel with the message's headers (on MQTT, only as MQTT5 user properties),
   and no transport acts on them (SH-L111; unchanged — documented as carried-only)
+
+### Requirement: Transports declare how a failed delivery comes back
+
+The system SHALL let a transport implement `IRedeliveryCapability.GetRedeliveryMode(ConsumerOptions?)`,
+answering `RedeliveryMode.Resend` for `InMemoryMessageQueue` (always), `Redelivered` for
+`RedisStreamQueue` when `ConsumerOptions.GroupId ?? RedisStreamSettings.ConsumerGroup` is non-null and
+`PendingRetryMilliseconds > 0`, and `None` otherwise; a transport that does not implement the interface
+(`MqttMessageQueue`) SHALL be treated as `None` (TASK-668).
+
+#### Scenario: Redis without reclaim
+
+- **Given** a `RedisStreamQueue` with a consumer group and `PendingRetryMilliseconds = 0`
+- **When** `GetRedeliveryMode` is asked
+- **Then** it answers `None`, so a `DistributedEventBus` with a retry policy over it is refused at
+  construction
+
+#### Scenario: Group supplied through the consumer options
+
+- **Given** a `RedisStreamQueue` whose settings name no consumer group, `PendingRetryMilliseconds > 0`, and
+  `ConsumerOptions.GroupId = "workers"`
+- **When** `GetRedeliveryMode(options)` is asked
+- **Then** it answers `Redelivered`
 
 ### Requirement: Acknowledgment semantics differ per transport
 
@@ -2053,14 +2198,20 @@ throwing `ArgumentNullException` otherwise, and SHALL default `DeliveryCount` to
 ### Requirement: In-memory queue options supply channel capacity
 
 The system SHALL accept an `InMemoryMessageQueueOptions` whose `ChannelCapacity` (default 1000) is
-forwarded to the per-destination bounded channels, throwing `ArgumentNullException` when the options
-object is null.
+forwarded to the per-destination bounded channels, and whose optional `Clock` (`TimeProvider`) is the
+clock time-to-live expiry is measured on, throwing `ArgumentNullException` when the options object is null.
 
 #### Scenario: Custom capacity
 
 - **Given** `new InMemoryMessageQueueOptions { ChannelCapacity = 10 }`
 - **When** an `InMemoryMessageQueue` is constructed from it and 10 messages are buffered unconsumed
 - **Then** the eleventh `SendAsync` waits for space
+
+#### Scenario: Substituted clock drives expiry
+
+- **Given** options whose `Clock` is a fake `TimeProvider` and a message sent with `TimeToLive = 1s`
+- **When** the fake clock advances past the TTL before the message is dispatched
+- **Then** the message is dropped as expired, with no real time elapsing (TASK-668)
 
 #### Scenario: Null options
 
@@ -2143,12 +2294,14 @@ set, otherwise the source destination with `Suffix` (default `".dlq"`) appended.
 - **When** the method is called for any source destination
 - **Then** the result is `"all-failures"`
 
-#### Scenario: Disabled option is not enforced here
+#### Scenario: Disabled option
 
 - **Given** `Enabled = false`
 - **When** `GetDeadLetterDestination` is called
-- **Then** a name is still returned — none of the transports in this area consume `DeadLetterOptions`,
-  so the flag has no effect on delivery
+- **Then** a name is still returned — the flag is read only by `DistributedEventBus`, which, for a delivery
+  whose retries are spent, drops it with a `MessageDropped` report instead of dead-lettering it; set at all
+  (even disabled), the options still turn on the bus's retry handling and its transport check (TASK-668; no
+  transport in this area consumes `DeadLetterOptions` itself)
 
 ### Requirement: MQTT settings identity and copy semantics
 
