@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A decorator's retry no longer poisons the caller's unit (2026-10-21)
+[[TASK-697]]. A slug decorator over a localized store with `SqlLocalizedWriteBoundary`, in your `SqlUnitOfWork`, retried
+a refused write successfully, yet your commit threw `TransactionRollbackOnlyException`. Measured on PostgreSQL and SQL
+Server. A write declared retried (`RetryableWrite.IsDeclared`) now runs in a savepoint: a failure is undone and your
+unit stays committable. New `SqlSavepoint`. MongoDB and RavenDB have no savepoints and still refuse the commit.
 ### The 500-GUID chunk budget is measured off SQL (2026-10-21)
 [[TASK-701]]. A broad match on a translated field (2 200 of 3 300 entities) was counted, paged and deleted live on
 MongoDB, ElasticSearch, RavenDB and Cosmos DB. Each also took 10 000 GUIDs in one query. The budget stays 500
@@ -367,11 +372,6 @@ all four providers. **Breaking:** the wrappers' `RewriteFilter` is no longer vis
 fluent length [[TASK-691]] made work. The key is 1 508 bytes on MySQL utf8mb4, so MySQL now creates it. Measured live on
 all four providers. Inside a caller's transaction a MySQL key race surfaces the typed violation. Tables made before
 this keep 255-character columns and are reported; the README has the `ALTER` remedy.
-### Fluent HasMaxLength reaches the DDL (2026-10-20)
-[[TASK-691]]. `ModelMapRegistry.ApplyToDatabase` applies `HasMaxLength`. It was accepted and dropped. A string
-becomes the bounded column `[MaxLengthField]` gives, and the fluent value wins. A `byte[]` is bounded likewise, and any
-other type is refused. An index-key column keeps its declared length instead of 255. New
-`DataBase.RegisterMaxLength`. Groundwork for [[TASK-684]]. `HasPrecision`/`HasScale` followed in [[TASK-692]].
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

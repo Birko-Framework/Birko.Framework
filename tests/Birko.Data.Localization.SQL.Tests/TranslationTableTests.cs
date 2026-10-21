@@ -79,6 +79,21 @@ public static class TestModels
 }
 
 /// <summary>Products stored in SQL too, so the rewritten filter (OR, NOT IN) runs through the provider's translator.</summary>
+/// <summary>TASK-697: a localized entity with a unique slug, in a table of its own (rule 61).</summary>
+[Birko.Data.SQL.Attributes.Table("T697Products")]
+public sealed class T697Product : AbstractModel, ILocalizable, Birko.Data.Patterns.Models.ISluggable
+{
+    public string Name { get; set; } = string.Empty;
+
+    [Birko.Data.SQL.Attributes.MaxLengthField(100)]
+    [Birko.Data.SQL.Attributes.IndexedField("UX_T697Products_Slug", IsUnique: true)]
+    public string? Slug { get; set; }
+
+    public string? GetSlugSource() => Name;
+
+    public IReadOnlyList<string> GetLocalizableFields() => new[] { nameof(Name) };
+}
+
 public sealed class SqlProduct : AbstractModel, ILocalizable
 {
     public string Name { get; set; } = string.Empty;
@@ -962,6 +977,177 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
             result[reader.GetString(0).ToLowerInvariant()] = reader.IsDBNull(1) ? null : Convert.ToInt64(reader.GetValue(1));
         }
         return result;
+    }
+
+    // ---------------------------------------------------------------- TASK-697: a refusal a decorator above retries
+
+    /// <summary>
+    /// TASK-697: a slug decorator above a localized wrapper with an atomic boundary, inside the caller's unit. Another
+    /// writer takes the slug after the decorator's probe, so the entity write is refused inside the joined boundary, and
+    /// the decorator retries with the next slug. Every write the caller asked for succeeded, so its commit must too.
+    /// </summary>
+    [Fact]
+    public async Task TASK697_a_refusal_the_slug_decorator_retries_does_not_poison_the_callers_unit()
+    {
+        if (!RequireServer() || RetriesInsideATransaction is not bool retries) return;
+        var products = new AsyncDataBaseBulkStore<DB, T697Product>();
+        products.SetSettings(Settings());
+        try { products.Connector!.DropTable(new[] { typeof(T697Product) }); } catch { }
+        await products.InitAsync();
+        var rows = Store<EntityTranslationModel>();
+        await rows.InitAsync();
+        var context = new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") };
+        var localized = new AsyncLocalizedBulkStoreWrapper<IAsyncBulkStore<T697Product>, T697Product>(
+            products, rows, context, SqlLocalizedWriteBoundary.For(products, rows));
+        var racer = new SlugRacer<T697Product>(localized, () =>
+        {
+            Task other;
+            using (ExecutionContext.SuppressFlow())
+            {
+                other = Task.Run(async () =>
+                {
+                    var store = new AsyncDataBaseBulkStore<DB, T697Product>();
+                    store.SetSettings(Settings());
+                    await store.CreateAsync(new T697Product { Name = "Widget", Slug = "widget" });
+                });
+            }
+            return other;
+        });
+        var slugs = new Birko.Data.Patterns.Decorators.AsyncSluggableStoreWrapper<SlugRacer<T697Product>, T697Product>(racer);
+        var mine = new T697Product { Name = "Widget" };
+
+        Exception? thrown = null;
+        await using (var uow = SqlUnitOfWork.FromStore(products))
+        {
+            await uow.BeginAsync();
+            try
+            {
+                await slugs.CreateAsync(mine);
+                await uow.CommitAsync();
+            }
+            catch (Exception error)
+            {
+                thrown = error;
+                if (uow.IsActive) await uow.RollbackAsync();
+            }
+        }
+
+        racer.Raced.Should().BeTrue("the test must actually have raced");
+        _output.WriteLine(thrown == null ? "no exception" : thrown.ToString());
+        if (!retries)
+        {
+            // MySQL: the decorator's re-probe reads the snapshot from before the other commit, so the refusal stands.
+            thrown.Should().BeAssignableTo<StoreUniqueViolationException>();
+            return;
+        }
+        thrown.Should().BeNull("the decorator retried the refused write, so every write the caller asked for succeeded");
+        (await products.ReadAsync(null, null, null, null)).Select(x => x.Slug).Should().BeEquivalentTo("widget", "widget-2");
+        (await rows.ReadAsync(t => t.EntityGuid == mine.Guid!.Value, null, null, null)).Select(t => t.Value).Should().Equal("Widget");
+    }
+
+    /// <summary>
+    /// TASK-697, the safety half: a write declared retried that fails after its entity write is undone by its savepoint,
+    /// so the caller's unit stays committable and holds nothing of the failed write.
+    /// </summary>
+    [Fact]
+    public async Task TASK697_a_declared_retried_write_that_fails_is_undone_and_leaves_the_callers_unit_committable()
+    {
+        if (!RequireServer()) return;
+        var (products, rows, failing, bulk, _, run) = await BoundaryFixtureAsync();
+        var kept = new SqlProduct { Name = "sk-kept", Code = run };
+
+        await using (var uow = SqlUnitOfWork.FromStore(products))
+        {
+            await uow.BeginAsync();
+            await bulk.CreateAsync(kept);
+            failing.Fail = true;
+            var act = async () => await RetryableWrite.RunAsync(bulk, () => bulk.CreateAsync(new SqlProduct { Name = "sk-fails", Code = run }));
+            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("injected*");
+            failing.Fail = false;
+            await uow.CommitAsync();
+        }
+
+        (await CodesAsync(products, run)).Should().Equal($"{run}:sk-kept");
+        (await TranslationsAsync(rows, new[] { kept.Guid })).Should().Equal("sk-kept");
+    }
+
+    /// <inheritdoc cref="TASK697_a_declared_retried_write_that_fails_is_undone_and_leaves_the_callers_unit_committable"/>
+    [Fact]
+    public async Task TASK697_the_sync_path_undoes_a_declared_retried_write_too()
+    {
+        if (!RequireServer()) return;
+        var products = new DataBaseBulkStore<DB, SqlProduct>();
+        products.SetSettings(Settings());
+        var rows = new DataBaseBulkStore<DB, EntityTranslationModel>();
+        rows.SetSettings(Settings());
+        products.Init();
+        rows.Init();
+        var failing = new FailingSyncStore<EntityTranslationModel>(rows);
+        var context = new Context { CurrentCulture = new CultureInfo("sk"), DefaultCulture = new CultureInfo("en") };
+        var bulk = new LocalizedBulkStoreWrapper<IBulkStore<SqlProduct>, SqlProduct>(products, failing, context, SqlLocalizedWriteBoundary.For(products, failing));
+        var run = Guid.NewGuid().ToString("N")[..8];
+
+        await using (var uow = SqlUnitOfWork.FromStore(Store<SqlProduct>()))
+        {
+            await uow.BeginAsync();
+            bulk.Create(new SqlProduct { Name = "sk-kept", Code = run });
+            failing.Fail = true;
+            var act = () => RetryableWrite.Run(bulk, () => bulk.Create(new SqlProduct { Name = "sk-fails", Code = run }));
+            act.Should().Throw<InvalidOperationException>();
+            failing.Fail = false;
+            await uow.CommitAsync();
+        }
+
+        products.Read(x => x.Code == run, null, null, null).Select(x => x.Name).Should().Equal("sk-kept");
+    }
+
+    /// <summary>
+    /// TASK-697: delegates to a real store; the first single read (the slug decorator's probe) runs, then lets another
+    /// writer store the slug.
+    /// </summary>
+    private sealed class SlugRacer<T> : IAsyncBulkStore<T>, IStoreWrapper where T : AbstractModel
+    {
+        private readonly IAsyncBulkStore<T> _inner;
+        private Func<Task>? _race;
+
+        public SlugRacer(IAsyncBulkStore<T> inner, Func<Task> race)
+        {
+            _inner = inner;
+            _race = race;
+        }
+
+        public bool Raced { get; private set; }
+
+        public object? GetInnerStore() => _inner;
+        public async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+        {
+            var result = await ((IAsyncReadStore<T>)_inner).ReadAsync(filter, ct);
+            var race = _race;
+            if (race != null)
+            {
+                _race = null;
+                await race();
+                Raced = true;
+            }
+            return result;
+        }
+        public Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default) => _inner.ReadAsync(filter, orderBy, limit, offset, ct);
+        public Task<T?> ReadAsync(Guid guid, CancellationToken ct = default) => _inner.ReadAsync(guid, ct);
+        public Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default) => _inner.ReadAsync(ct);
+        public Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default) => _inner.CountAsync(filter, ct);
+        public Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) => _inner.CreateAsync(data, processDelegate, ct);
+        public Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) => _inner.CreateAsync(data, storeDelegate, ct);
+        public Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) => _inner.UpdateAsync(data, processDelegate, ct);
+        public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default) => _inner.UpdateAsync(data, storeDelegate, ct);
+        public Task DeleteAsync(T data, CancellationToken ct = default) => _inner.DeleteAsync(data, ct);
+        public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default) => _inner.UpdateAsync(filter, updateAction, ct);
+        public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default) => _inner.UpdateAsync(filter, updates, ct);
+        public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default) => _inner.DeleteAsync(data, ct);
+        public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default) => _inner.DeleteAsync(filter, ct);
+        public Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default) => _inner.SaveAsync(data, processDelegate, ct);
+        public Task InitAsync(CancellationToken ct = default) => _inner.InitAsync(ct);
+        public Task DestroyAsync(CancellationToken ct = default) => _inner.DestroyAsync(ct);
+        public T CreateInstance() => _inner.CreateInstance();
     }
 
     private sealed class Context : IEntityLocalizationContext

@@ -22,7 +22,9 @@ namespace Birko.Data.Localization.SQL;
 /// databases, which is safe but best effort.</description></item>
 /// <item><description><b>A caller's boundary is joined.</b> Inside a caller's <c>SqlUnitOfWork</c> or a store's bulk
 /// transaction for the same database, the write takes part in it. A failure marks it rollback-only, so the caller cannot
-/// commit half a write.</description></item>
+/// commit half a write. Unless the write is one a decorator above will retry on a refusal (TASK-697): then it runs in a
+/// savepoint, a failure is rolled back to it, and the caller's transaction is left unmarked, so the retry that follows
+/// can commit.</description></item>
 /// <item><description><b>Otherwise the write gets its own transaction.</b> It commits when the write returns and rolls back
 /// when the write throws. The exception is <see cref="EntityNotFoundException"/> from a collection update (TASK-555): the
 /// stored part is committed, then it is rethrown, as a SQL store's own bulk transaction does.</description></item>
@@ -166,6 +168,12 @@ public sealed class SqlLocalizedWriteBoundary : ILocalizedWriteBoundary
             }
             return;
         }
+        var enclosing = AmbientSqlTransaction.Find(_connector.Settings.GetId());
+        if (enclosing != null)
+        {
+            await RunJoinedAsync(enclosing, write, ct);
+            return;
+        }
         for (var attempt = 1; ; attempt++)
         {
             // Built here, in the flow that runs the write: its constructor installs the ambient cell (see SqlUnitOfWork).
@@ -197,9 +205,40 @@ public sealed class SqlLocalizedWriteBoundary : ILocalizedWriteBoundary
 
     private static void RunJoined(AmbientSqlTransaction.Entry enclosing, Action write)
     {
+        // TASK-697: a write a caller declared retried runs in a savepoint, so a failure is undone and leaves nothing to
+        // poison. Under a retrying store's own savepoint (PostgreSQL) this one nests inside it.
+        if (RetryableWrite.IsDeclared)
+        {
+            SqlSavepoint.Run(enclosing.Transaction, write);
+            return;
+        }
         try
         {
             write();
+        }
+        catch (EntityNotFoundException)
+        {
+            throw;
+        }
+        catch
+        {
+            // As a participating SqlUnitOfWork does: the owner must not commit half a write.
+            enclosing.MarkRollbackOnly();
+            throw;
+        }
+    }
+
+    /// <inheritdoc cref="RunJoined"/>
+    private static async Task RunJoinedAsync(AmbientSqlTransaction.Entry enclosing, Func<CancellationToken, Task> write, CancellationToken ct)
+    {
+        if (RetryableWrite.IsDeclared)
+        {
+            await SqlSavepoint.RunAsync(enclosing.Transaction, () => write(ct), ct);
+            return;
+        }
+        try
+        {
+            await write(ct);
         }
         catch (EntityNotFoundException)
         {

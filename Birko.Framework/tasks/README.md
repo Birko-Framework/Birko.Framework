@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 23      | —     |
-| todo         | —     | —       | 147   |
+| todo         | —     | —       | 146   |
 | in-progress  | 8     | 12      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 4     | 27      | 406   |
+| done         | 4     | 27      | 407   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 9× P1 · 99× P2 · 39× P3.
+`todo` by priority: 9× P1 · 99× P2 · 38× P3.
 
 ## In progress now
 
@@ -310,7 +310,7 @@ _None._
   - [x] [TASK-692](EPIC-014-code-review-remediation/TASK-692-fluent-precision-and-scale-accepted-and-dropped.md) Fluent `HasPrecision` / `HasScale` are accepted and dropped (P3)
   - [x] [TASK-693](EPIC-014-code-review-remediation/TASK-693-grants-sql-unbounded-index-columns-on-mysql.md) Birko.Security.Grants.SQL's indexes over unbounded string columns — unmeasured on MySQL (P3)
   - [x] [TASK-694](EPIC-014-code-review-remediation/TASK-694-savepoint-scoped-writes-inside-a-callers-transaction.md) Savepoint-scoped writes inside a caller's transaction, so PostgreSQL can retry after a refusal (P3)
-  - [ ] [TASK-697](EPIC-014-code-review-remediation/TASK-697-a-joined-localized-boundary-marks-rollback-only-on-a-refusal-a-decorator-retries.md) A joined localized write boundary marks the caller's unit rollback-only on a refusal a decorator above it retries (P3)
+  - [x] [TASK-697](EPIC-014-code-review-remediation/TASK-697-a-joined-localized-boundary-marks-rollback-only-on-a-refusal-a-decorator-retries.md) A joined localized write boundary marks the caller's unit rollback-only on a refusal a decorator above it retries (P3)
   - [x] [TASK-695](EPIC-014-code-review-remediation/TASK-695-a-fluent-column-belongs-to-one-index-only.md) A fluent column can belong to one index only, and a second `HasIndex` silently replaces the first (P2)
   - STORY-024 Critical findings — done (0/0 done) (done)
   - STORY-025 High findings — done (0/0 done) (done)

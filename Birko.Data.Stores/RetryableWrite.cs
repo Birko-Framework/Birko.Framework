@@ -34,22 +34,48 @@ namespace Birko.Data.Stores
     /// </summary>
     public static class RetryableWrite
     {
+        private static readonly AsyncLocal<int> _declared = new();
+
+        /// <summary>
+        /// True while a write a caller will retry on a refusal runs (TASK-697): a participant beneath, such as a joined
+        /// localized write boundary, must then leave its caller's transaction as it was when the write fails rather
+        /// than mark it rollback-only, or the retry that follows succeeds and the caller's commit is refused anyway.
+        /// </summary>
+        public static bool IsDeclared => _declared.Value > 0;
+
         /// <summary>The <see cref="IRetryableWriteStore"/> at or beneath <paramref name="store"/>, or null.</summary>
         public static IRetryableWriteStore? Find(object? store)
             // StoreChain.Walk is the one chain walker (rule 16), with its cycle guard.
             => store == null ? null : StoreChain.Walk(store).OfType<IRetryableWriteStore>().FirstOrDefault();
 
-        /// <summary>Runs <paramref name="write"/> through the store beneath <paramref name="store"/>.</summary>
+        /// <summary>
+        /// Runs <paramref name="write"/> through the store beneath <paramref name="store"/>, declared retried
+        /// (<see cref="IsDeclared"/>). A null <paramref name="store"/> is a caller's last attempt: the write runs as is.
+        /// </summary>
         public static void Run(object? store, Action write)
         {
             ArgumentNullException.ThrowIfNull(write);
-            var retryable = Find(store);
-            if (retryable == null)
+            if (store == null)
             {
                 write();
                 return;
             }
-            retryable.RunRetryable(write);
+            var retryable = Find(store);
+            var previous = _declared.Value;
+            _declared.Value = previous + 1;
+            try
+            {
+                if (retryable == null)
+                {
+                    write();
+                    return;
+                }
+                retryable.RunRetryable(write);
+            }
+            finally
+            {
+                _declared.Value = previous;
+            }
         }
 
         /// <inheritdoc cref="Run(object?, Action)"/>
@@ -62,11 +88,23 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc cref="Run(object?, Action)"/>
-        public static Task RunAsync(object? store, Func<Task> write, CancellationToken ct = default)
+        public static async Task RunAsync(object? store, Func<Task> write, CancellationToken ct = default)
         {
             ArgumentNullException.ThrowIfNull(write);
+            if (store == null)
+            {
+                await write();
+                return;
+            }
             var retryable = Find(store);
-            return retryable == null ? write() : retryable.RunRetryableAsync(write, ct);
+            // Set in this async method, so it flows into the write and never back to the caller.
+            _declared.Value++;
+            if (retryable == null)
+            {
+                await write();
+                return;
+            }
+            await retryable.RunRetryableAsync(write, ct);
         }
 
         /// <inheritdoc cref="Run(object?, Action)"/>

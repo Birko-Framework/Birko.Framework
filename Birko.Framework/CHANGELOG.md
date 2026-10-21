@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-20 — Fluent HasMaxLength reaches the DDL
+
+[[TASK-691]]. `ModelMapRegistry.ApplyToDatabase` applies `HasMaxLength`. It was accepted and dropped. A string
+becomes the bounded column `[MaxLengthField]` gives, and the fluent value wins. A `byte[]` is bounded likewise, and any
+other type is refused. An index-key column keeps its declared length instead of 255. New
+`DataBase.RegisterMaxLength`. Groundwork for [[TASK-684]]. `HasPrecision`/`HasScale` followed in [[TASK-692]].
+
 ## 2026-10-20 — Localized writes: the entity and its translations in one transaction
 
 [[TASK-683]]. Wrappers and `EntityTranslations` take an optional `ILocalizedWriteBoundary`. With

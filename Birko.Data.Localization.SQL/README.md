@@ -53,7 +53,9 @@ var api = new EntityTranslations<Product, ProductTranslation>(productStore, tran
 `For` follows each store's decorator chain to its SQL store and compares `Connector.Settings.GetId()`. When the IDs
 match:
 - A write that touches both stores commits or rolls back as one.
-- It joins a `SqlUnitOfWork` you opened, and a failure marks yours rollback-only.
+- It joins a `SqlUnitOfWork` you opened, and a failure marks yours rollback-only. A write a decorator above retries
+  (`RetryableWrite`) runs in a savepoint instead: a failure is rolled back to it and your unit stays committable
+  (TASK-697).
 - In its own transaction, a unique-key race is retried once by re-running the whole write.
 
 See [the pairing table](../Birko.Data.Localization/README.md#atomicity-which-store-pairings-are-one-unit).

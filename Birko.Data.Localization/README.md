@@ -215,7 +215,11 @@ Every write that touches both stores runs through an `ILocalizedWriteBoundary` (
 - Inside your own `SqlUnitOfWork` the boundary joins instead, and does not re-run the write. The translation upsert
   then retries in place: on PostgreSQL its create runs in a savepoint (TASK-694), so the refused insert does not abort
   your transaction. On MySQL the race still reaches you as `StoreUniqueViolationException`, because its snapshot hides
-  the other writer. Any failure marks your unit of work rollback-only.
+  the other writer. Any failure marks your unit of work rollback-only, except in a write a decorator above will
+  retry (a slug or default decorator): that write runs in a savepoint, a failure is rolled back to it, and your unit
+  stays committable, so the decorator's retry can succeed (TASK-697). On MongoDB and RavenDB, which have no
+  savepoints, a joined failure still marks your unit, even when a decorator then retries: the commit is refused
+  rather than risk half a write.
 
 
 ## License
