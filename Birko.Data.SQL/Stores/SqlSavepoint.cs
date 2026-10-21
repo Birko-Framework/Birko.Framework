@@ -2,13 +2,15 @@ using System;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Data.Exceptions;
 
 namespace Birko.Data.SQL.Stores
 {
     /// <summary>
     /// The one producer of the framework's savepoints (TASK-694, TASK-697): a write run inside a savepoint of a transaction
     /// it does not own, rolled back to it when the write throws and released when it succeeds, so a failed write leaves
-    /// the transaction as it was.
+    /// the transaction as it was. An <see cref="EntityNotFoundException"/> is a write that applied what it could
+    /// (TASK-555): the savepoint is released and the exception rethrown (TASK-705).
     /// </summary>
     /// <remarks>
     /// Uses <see cref="DbTransaction.Save"/> / <see cref="DbTransaction.Rollback(string)"/> /
@@ -35,6 +37,13 @@ namespace Birko.Data.SQL.Stores
             {
                 write();
             }
+            catch (EntityNotFoundException)
+            {
+                // TASK-705: a collection write that met a missing entity applied the rest and says so (TASK-555); undoing
+                // that here would lose it on exactly the paths that retry.
+                transaction.Release(name);
+                throw;
+            }
             catch (Exception error)
             {
                 RollBack(transaction, name, error);
@@ -53,6 +62,11 @@ namespace Birko.Data.SQL.Stores
             try
             {
                 await write().ConfigureAwait(false);
+            }
+            catch (EntityNotFoundException)
+            {
+                await transaction.ReleaseAsync(name, CancellationToken.None).ConfigureAwait(false);
+                throw;
             }
             catch (Exception error)
             {

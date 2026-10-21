@@ -188,7 +188,7 @@ public sealed class SqlLocalizedWriteBoundary : ILocalizedWriteBoundary
                 await unit.CommitAsync(ct);
                 throw;
             }
-            catch (StoreUniqueViolationException) when (attempt == 1 && !unit.IsParticipant)
+            catch (StoreUniqueViolationException) when (attempt == 1)
             {
                 await RollBackAsync(unit);
                 continue;
@@ -209,7 +209,7 @@ public sealed class SqlLocalizedWriteBoundary : ILocalizedWriteBoundary
         // poison. Under a retrying store's own savepoint (PostgreSQL) this one nests inside it.
         if (RetryableWrite.IsDeclared)
         {
-            SqlSavepoint.Run(enclosing.Transaction, write);
+            RunInSavepoint(enclosing, write);
             return;
         }
         try
@@ -233,7 +233,7 @@ public sealed class SqlLocalizedWriteBoundary : ILocalizedWriteBoundary
     {
         if (RetryableWrite.IsDeclared)
         {
-            await SqlSavepoint.RunAsync(enclosing.Transaction, () => write(ct), ct);
+            await RunInSavepointAsync(enclosing, write, ct);
             return;
         }
         try
@@ -247,6 +247,38 @@ public sealed class SqlLocalizedWriteBoundary : ILocalizedWriteBoundary
         catch
         {
             // As a participating SqlUnitOfWork does: the owner must not commit half a write.
+            enclosing.MarkRollbackOnly();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// TASK-697 / TASK-705: a declared-retried joined write in a savepoint. A failure is rolled back to it and leaves the
+    /// unit unmarked, unless the rollback itself failed: then the write may still be in the transaction, and the unit is
+    /// marked. (An <see cref="EntityNotFoundException"/> keeps what it stored; <c>SqlSavepoint</c> releases on it.)
+    /// </summary>
+    private static void RunInSavepoint(AmbientSqlTransaction.Entry enclosing, Action write)
+    {
+        try
+        {
+            SqlSavepoint.Run(enclosing.Transaction, write);
+        }
+        catch (Exception error) when (error.Data.Contains(SqlSavepoint.RollbackFailureKey))
+        {
+            enclosing.MarkRollbackOnly();
+            throw;
+        }
+    }
+
+    /// <inheritdoc cref="RunInSavepoint"/>
+    private static async Task RunInSavepointAsync(AmbientSqlTransaction.Entry enclosing, Func<CancellationToken, Task> write, CancellationToken ct)
+    {
+        try
+        {
+            await SqlSavepoint.RunAsync(enclosing.Transaction, () => write(ct), ct);
+        }
+        catch (Exception error) when (error.Data.Contains(SqlSavepoint.RollbackFailureKey))
+        {
             enclosing.MarkRollbackOnly();
             throw;
         }

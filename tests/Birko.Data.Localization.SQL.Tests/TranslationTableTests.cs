@@ -1102,6 +1102,63 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
     }
 
     /// <summary>
+    /// TASK-705: a declared-retried collection update that meets a missing entity keeps what it stored, as every other path
+    /// does (TASK-555): the savepoint is released, not rolled back, and the exception still reaches the caller.
+    /// </summary>
+    [Fact]
+    public async Task TASK705_a_declared_retried_update_that_misses_an_entity_keeps_what_it_stored()
+    {
+        if (!RequireServer()) return;
+        var (products, _, _, bulk, _, run) = await BoundaryFixtureAsync();
+        var kept = new SqlProduct { Name = "sk-a", Code = $"{run}-1" };
+        await bulk.CreateAsync(kept);
+
+        await using (var uow = SqlUnitOfWork.FromStore(products))
+        {
+            await uow.BeginAsync();
+            var act = async () => await RetryableWrite.RunAsync(bulk, () => bulk.UpdateAsync(new[]
+            {
+                new SqlProduct { Guid = kept.Guid, Name = "sk-a!", Code = $"{run}-2" },
+                new SqlProduct { Guid = Guid.NewGuid(), Name = "missing", Code = $"{run}-2" },
+            }));
+            await act.Should().ThrowAsync<EntityNotFoundException>();
+            await uow.CommitAsync();
+        }
+
+        (await products.ReadAsync(x => x.Code.StartsWith(run), null, null, null)).Select(x => x.Code).Should().Equal($"{run}-2");
+    }
+
+    /// <summary>
+    /// TASK-705: when the rollback to the savepoint itself fails, the write is still in the caller's transaction, so the
+    /// unit is marked rollback-only. Here the write ends the caller's transaction under the savepoint.
+    /// </summary>
+    [Fact]
+    public async Task TASK705_a_savepoint_that_cannot_be_rolled_back_marks_the_callers_unit()
+    {
+        if (!RequireServer()) return;
+        var (products, _, failing, bulk, _, run) = await BoundaryFixtureAsync();
+        var settingsId = products.Connector!.Settings.GetId();
+
+        await using var uow = SqlUnitOfWork.FromStore(products);
+        await uow.BeginAsync();
+        var enclosing = AmbientSqlTransaction.Find(settingsId)!;
+        failing.OnWrite = () =>
+        {
+            using var command = enclosing.Connection.CreateCommand();
+            command.Transaction = enclosing.Transaction;
+            command.CommandText = "ROLLBACK";
+            command.ExecuteNonQuery();
+            throw new InvalidOperationException("injected after the transaction ended");
+        };
+
+        var act = async () => await RetryableWrite.RunAsync(bulk, () => bulk.CreateAsync(new SqlProduct { Name = "sk", Code = run }));
+
+        var thrown = (await act.Should().ThrowAsync<InvalidOperationException>()).Which;
+        thrown.Data.Contains(Birko.Data.SQL.Stores.SqlSavepoint.RollbackFailureKey).Should().BeTrue("the rollback to the savepoint failed");
+        enclosing.IsRollbackOnly.Should().BeTrue("the write may still be in the transaction, so it must not be committed");
+    }
+
+    /// <summary>
     /// TASK-697: delegates to a real store; the first single read (the slug decorator's probe) runs, then lets another
     /// writer store the slug.
     /// </summary>
@@ -1169,7 +1226,14 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
 
         public bool Fail { get; set; }
 
-        private Task Write(Func<Task> write) => Fail ? throw new InvalidOperationException("injected translation write failure") : write();
+        /// <summary>TASK-705: run before every write, so a test can act inside the transaction first.</summary>
+        public Action? OnWrite { get; set; }
+
+        private Task Write(Func<Task> write)
+        {
+            OnWrite?.Invoke();
+            return Fail ? throw new InvalidOperationException("injected translation write failure") : write();
+        }
 
         public object? GetInnerStore() => _inner;
         public Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default) => _inner.ReadAsync(filter, orderBy, limit, offset, ct);
