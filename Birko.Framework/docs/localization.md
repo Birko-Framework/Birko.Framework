@@ -392,7 +392,9 @@ method.
 ### 8. Broad matches
 
 A filter on a translated field that matches more than 500 entities in its translation sets runs as several queries
-over disjoint chunks of at most 500 GUIDs (TASK-686), so SQL Server's ~2 100-parameter limit is never reached. Reads,
+over disjoint chunks of at most 500 GUIDs (TASK-686), so SQL Server's ~2 100-parameter limit is never reached. The
+same budget was measured on MongoDB, ElasticSearch, RavenDB and Cosmos DB (TASK-701): each accepts 10 000 GUIDs in one
+query, so 500 is far from their limits. Reads,
 counts, updates and deletes cover every chunk; ordered or paged reads sort and page the whole match in memory. A
 wrapper over a plain `IStore` refuses such a filter. See the
 [project README](../../Birko.Data.Localization/README.md#filters-on-localizable-fields).

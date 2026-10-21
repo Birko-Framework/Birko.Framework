@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### The 500-GUID chunk budget is measured off SQL (2026-10-21)
+[[TASK-701]]. A broad match on a translated field (2 200 of 3 300 entities) was counted, paged and deleted live on
+MongoDB, ElasticSearch, RavenDB and Cosmos DB. Each also took 10 000 GUIDs in one query. The budget stays 500
+everywhere: nothing refuses it, and a chunk query costs 4–181 ms of operations taking 0.3–2.6 s. New shared
+`BroadMatchContract`. EPIC-022 is done.
 ### ElasticSearch runs filters on translated fields (2026-10-21)
 [[TASK-703]]. Every filter on a translated field threw `NotSupportedException` on ElasticSearch: the localized wrappers
 render `x.Guid != null && guids.Contains(x.Guid.Value)`, and the translator refused the nullable `.Value`. It now reads
@@ -367,12 +372,6 @@ this keep 255-character columns and are reported; the README has the `ALTER` rem
 becomes the bounded column `[MaxLengthField]` gives, and the fluent value wins. A `byte[]` is bounded likewise, and any
 other type is refused. An index-key column keeps its declared length instead of 255. New
 `DataBase.RegisterMaxLength`. Groundwork for [[TASK-684]]. `HasPrecision`/`HasScale` followed in [[TASK-692]].
-### Localized writes: the entity and its translations in one transaction (2026-10-20)
-[[TASK-683]]. Wrappers and `EntityTranslations` take an optional `ILocalizedWriteBoundary`. With
-`SqlLocalizedWriteBoundary.For(entityStore, translationStore)` and both stores on one SQL database, a failed
-translation write rolls the entity write back. It joins your `SqlUnitOfWork`, and in its own transaction re-runs a
-write once after a key race (PostgreSQL). Measured on SQLite, PostgreSQL, SQL Server and MySQL. Other pairings are best
-effort. A failed delete cleanup throws `TranslationCleanupException` listing the GUIDs. New `ISqlConnectedStore`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

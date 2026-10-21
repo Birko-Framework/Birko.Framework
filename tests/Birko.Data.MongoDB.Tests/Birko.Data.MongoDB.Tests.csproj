@@ -39,6 +39,7 @@
     <Compile Include="..\Shared\StoreContract\IdentityContract.cs" Link="Shared\IdentityContract.cs" />
     <Compile Include="..\Shared\StoreContract\DelegateContract.cs" Link="Shared\DelegateContract.cs" />
     <Compile Include="..\Shared\LocalizationContract\TranslationRaceContract.cs" Link="Shared\TranslationRaceContract.cs" />
+    <Compile Include="..\Shared\LocalizationContract\BroadMatchContract.cs" Link="Shared\BroadMatchContract.cs" />
   </ItemGroup>
 
 </Project>

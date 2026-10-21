@@ -4,6 +4,14 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-20 — Localized writes: the entity and its translations in one transaction
+
+[[TASK-683]]. Wrappers and `EntityTranslations` take an optional `ILocalizedWriteBoundary`. With
+`SqlLocalizedWriteBoundary.For(entityStore, translationStore)` and both stores on one SQL database, a failed
+translation write rolls the entity write back. It joins your `SqlUnitOfWork`, and in its own transaction re-runs a
+write once after a key race (PostgreSQL). Measured on SQLite, PostgreSQL, SQL Server and MySQL. Other pairings are best
+effort. A failed delete cleanup throws `TranslationCleanupException` listing the GUIDs. New `ISqlConnectedStore`.
+
 ## 2026-10-20 — IEntityTranslations: explicit, batched translations
 
 [[TASK-682]]. New `IEntityTranslations<T>`, with `AddEntityTranslations<T>()`, works on a given culture rather than the

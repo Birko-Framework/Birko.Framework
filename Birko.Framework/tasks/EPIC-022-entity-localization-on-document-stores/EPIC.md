@@ -1,7 +1,7 @@
 ---
 id: EPIC-022
 # status — one of: planned, in-progress, done, cancelled
-status: in-progress
+status: done
 created: 2026-10-20
 owner: ai
 affects: [Birko.Data.Localization, Birko.Data.MongoDB, Birko.Data.RavenDB, Birko.Data.CosmosDB, Birko.Data.ElasticSearch]
@@ -44,3 +44,15 @@ Filed at the user's request, 2026-10-20 (all four follow-ups chosen).
 ## Out of scope
 
 - The SQL providers (EPIC-021, TASK-694).
+
+## Outcome
+
+Done 2026-10-21. Measured, not read from source:
+- a translation race leaves one row on every provider (TASK-698);
+- MongoDB holds the key and the value index (TASK-699);
+- MongoDB and RavenDB make the entity and its translations one transaction; Cosmos DB cannot and stays best effort
+  (TASK-700);
+- the 500-GUID chunk budget holds on every provider (TASK-701).
+
+Two defects found on the way and fixed: RavenDB updates inside a unit of work (TASK-702), and ElasticSearch refusing
+every filter on a translated field (TASK-703).
