@@ -421,3 +421,9 @@ Every new public functionality must have corresponding unit tests. When adding n
 - Follow existing test patterns (xUnit + FluentAssertions)
 - Test both success and failure cases
 - Include edge cases and boundary conditions
+
+## Nullable `.Value` (TASK-703)
+`x.Nullable.Value` on a direct member of the entity translates as that member's field, in a term or a terms query, as
+`.HasValue` translates to `exists`. The localized wrappers render `x.Guid != null && guids.Contains(x.Guid.Value)` for
+every filter on a translated field, which the translator used to refuse, so those filters all threw here. Pinned by
+`Task703NullableValueTranslationTests`.

@@ -880,6 +880,19 @@ namespace Birko.Data.ElasticSearch
                 return name != null ? new ExistsQuery { Field = name } : null;
             }
 
+            // TASK-703: x.NullableProp.Value is the property itself, as the field of a term or a terms query. The
+            // localized filters render `x.Guid != null && guids.Contains(x.Guid.Value)`, which this refused, so every
+            // filter on a translated field threw on ElasticSearch.
+            if (member.Member.Name == "Value"
+                && member.Expression is MemberExpression valueInner
+                && member.Member.ReflectedType != null
+                && Nullable.GetUnderlyingType(member.Member.ReflectedType) != null
+                && exprType != null && IsDirectMemberOfParameter(valueInner, exprType))
+            {
+                var name = ExactFieldName(valueInner.Member, valueInner.Type, fieldPrefix);
+                return name != null ? new TermQuery { Field = name } : null;
+            }
+
             // Direct member access (e.g., x => x.Name)
             if (exprType != null && IsDirectMemberOfParameter(member, exprType))
             {
