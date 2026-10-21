@@ -225,6 +225,17 @@ namespace Birko.Data.ElasticSearch
                 return name != null ? new TermQuery { Field = name, Value = true } : null;
             }
 
+            // TASK-704: x => x.Flag.Value on a bool? member is Flag == true, as the bare member is. Without this it reached
+            // ParseMember's nullable-Value branch (TASK-703), which answers with the FIELD alone for an operand, and a term
+            // with no value is conditionless: dropped, it widened the query (rules 3 and 42).
+            if (expr is MemberExpression nullableValue && nullableValue.Member.Name == "Value" && nullableValue.Type == typeof(bool)
+                && nullableValue.Expression is MemberExpression flag && flag.Type == typeof(bool?)
+                && exprType != null && IsDirectMemberOfParameter(flag, exprType))
+            {
+                var name = StoredFieldName(flag.Member, fieldPrefix);
+                return name != null ? new TermQuery { Field = name, Value = true } : null;
+            }
+
             return ParseExpression(expr, exprType, fieldPrefix);
         }
 

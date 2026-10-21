@@ -40,6 +40,7 @@ Filed at the user's request, 2026-10-20 (all four follow-ups chosen).
 - [[TASK-701]] Measure the chunk budget on the non-SQL providers
 - [[TASK-702]] RavenDB: an update inside a unit of work fails on a document a cluster transaction wrote (spawned from TASK-700)
 - [[TASK-703]] ElasticSearch refuses every filter on a translated field (spawned from TASK-701)
+- [[TASK-704]] ElasticSearch: a bare nullable bool value became a term with no value (regression from TASK-703, found by TASK-696)
 
 ## Out of scope
 

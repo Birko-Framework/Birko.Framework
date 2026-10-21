@@ -25,6 +25,12 @@ public sealed class Task703Product : Birko.Data.Models.AbstractModel, ILocalizab
     public IReadOnlyList<string> GetLocalizableFields() => new[] { nameof(Name) };
 }
 
+public sealed class Task704Model : Birko.Data.Models.AbstractModel
+{
+    public bool? Flag { get; set; }
+    public string? Name { get; set; }
+}
+
 /// <summary>
 /// TASK-703: <c>x.Nullable.Value</c> on a member of the entity is that member's field. The localized filters render
 /// <c>x.Guid != null &amp;&amp; guids.Contains(x.Guid.Value)</c>, which the translator refused, so every filter on a
@@ -63,6 +69,25 @@ public sealed class Task703NullableValueTranslationTests : IDisposable
         term.Value.Should().Be(guid);
     }
 
+    /// <summary>
+    /// TASK-704: a bare <c>x.Flag.Value</c> on a <c>bool?</c> is <c>Flag == true</c>, also negated and inside <c>&amp;&amp;</c>.
+    /// TASK-703 made it a term with a field and no value, which NEST drops as conditionless: the clause vanished.
+    /// </summary>
+    [Fact]
+    public void TASK704_a_bare_nullable_bool_value_is_a_term_on_true_never_a_valueless_term()
+    {
+        var bare = Birko.Data.ElasticSearch.ElasticSearch.ParseRequiredFilterQuery<Task704Model>(x => x.Flag!.Value);
+        var negated = Birko.Data.ElasticSearch.ElasticSearch.ParseRequiredFilterQuery<Task704Model>(x => !x.Flag!.Value);
+        var combined = Birko.Data.ElasticSearch.ElasticSearch.ParseRequiredFilterQuery<Task704Model>(x => x.Flag!.Value && x.Name == "a");
+
+        foreach (var query in new[] { bare, negated, combined })
+        {
+            var flag = Flatten(query).OfType<TermQuery>().Single(t => t.Field.Name == "flag");
+            flag.Value.Should().Be(true);
+        }
+        negated.Should().BeOfType<BoolQuery>().Which.MustNot.Should().ContainSingle();
+    }
+
     [Fact]
     public void A_filter_on_a_translated_field_runs_on_the_store()
     {
@@ -96,7 +121,8 @@ public sealed class Task703NullableValueTranslationTests : IDisposable
     }
 
     private static QueryBase? Unwrap(IQueryContainer container)
-        => (QueryBase?)container.Bool ?? (QueryBase?)container.Terms ?? (QueryBase?)container.Term ?? (QueryBase?)container.Exists;
+        => (QueryBase?)container.Bool ?? (QueryBase?)container.Terms ?? (QueryBase?)container.Term ?? (QueryBase?)container.Exists
+            ?? (QueryBase?)container.Match;
 
     private sealed class Slovak : IEntityLocalizationContext
     {

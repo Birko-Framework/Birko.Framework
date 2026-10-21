@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed; TASK-704 found by TASK-696 and closed). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -17,7 +17,7 @@ which this regeneration never touches._
 | in-progress  | 8     | 12      | 0     |
 | verify       | —     | —       | 4     |
 | blocked      | —     | —       | 1     |
-| done         | 4     | 27      | 408   |
+| done         | 4     | 27      | 409   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
@@ -645,6 +645,7 @@ _None._
   - [x] [TASK-699](EPIC-022-entity-localization-on-document-stores/TASK-699-mongodb-translation-indexes.md) MongoDB: declare the translation key and ValueHash indexes (P3)
   - [x] [TASK-700](EPIC-022-entity-localization-on-document-stores/TASK-700-localized-write-boundary-for-document-stores.md) A localized write boundary for MongoDB, RavenDB and Cosmos DB (P3)
   - [x] [TASK-702](EPIC-022-entity-localization-on-document-stores/TASK-702-raven-update-in-cluster-session-loses-the-guard.md) RavenDB: an update inside a unit of work fails on a document a cluster transaction wrote (P2)
+  - [x] [TASK-704](EPIC-022-entity-localization-on-document-stores/TASK-704-elastic-bare-nullable-bool-value-became-a-valueless-term.md) ElasticSearch: a bare nullable bool value became a term with no value (P1)
   - [x] [TASK-703](EPIC-022-entity-localization-on-document-stores/TASK-703-elastic-refuses-the-localized-guid-filter.md) ElasticSearch refuses every filter on a translated field (P2)
   - [x] [TASK-701](EPIC-022-entity-localization-on-document-stores/TASK-701-measure-chunk-budget-on-non-sql-providers.md) Measure the localized filter chunk budget on the non-SQL providers (P3)
 

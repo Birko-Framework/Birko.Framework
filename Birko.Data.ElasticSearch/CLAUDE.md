@@ -427,3 +427,5 @@ Every new public functionality must have corresponding unit tests. When adding n
 `.HasValue` translates to `exists`. The localized wrappers render `x.Guid != null && guids.Contains(x.Guid.Value)` for
 every filter on a translated field, which the translator used to refuse, so those filters all threw here. Pinned by
 `Task703NullableValueTranslationTests`.
+A bare `x.Flag.Value` on a `bool?` in predicate position is `Flag == true` (TASK-704): before, it reached the field-only
+branch above and became a term with no value, which NEST drops as conditionless.
