@@ -10,7 +10,7 @@ created: 2026-08-09
 depends-on: []
 blocks: []
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
-findings: [SH-L197, SH-L198, SH-L199, SH-L200, SH-L201, SH-L202, SH-L203, SH-L204, SH-L205, SH-L206, SH-L392]
+findings: [SH-L197, SH-L198, SH-L199, SH-L200, SH-L201, SH-L202, SH-L203, SH-L204, SH-L205, SH-L206, SH-L392, SH-T696-23]
 pr: null
 github-issue: null
 jira-key: null
@@ -86,3 +86,10 @@ explicitly with its reason rather than leaving the section as-is.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-193` — leave empty until then._
+
+## Linked evidence — TASK-696 spec harvest (2026-10-21)
+
+SH-T696-23: the `backend-store-implementations` harvest found the double destroy still present in
+`AsyncRavenDBModelRepository.cs:69-72`, `AsyncMongoDBModelRepository.cs:72-75`, `AsyncSqLiteModelRepository.cs:96-99`, the
+PostgreSQL / MySQL / SQL Server repositories (`:83`), Cosmos DB, InfluxDB, and the sync MongoDB / InfluxDB `Destroy`;
+RavenDB's second database delete may throw. Not measured.
