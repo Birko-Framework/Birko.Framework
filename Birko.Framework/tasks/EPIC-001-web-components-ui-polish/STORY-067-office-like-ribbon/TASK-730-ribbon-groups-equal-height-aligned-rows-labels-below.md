@@ -2,7 +2,7 @@
 id: TASK-730
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified headlessly 2026-10-22; the human test plan is left
+status: done  # signed off by the user 2026-10-22
 priority: P2
 assignee: ai
 created: 2026-10-22
@@ -38,8 +38,8 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Human test plan
 
-- [ ] Open the Playground ribbon in light and dark: every divider runs the full height, rows line up, labels sit below
-- [ ] Narrow the window step by step: groups shrink to small and to folded buttons without clipping a label
+- [x] Open the Playground ribbon in light and dark: every divider runs the full height, rows line up, labels sit below
+- [x] Narrow the window step by step: groups shrink to small and to folded buttons without clipping a label
 
 ## Outcome (2026-10-22)
 
@@ -80,3 +80,9 @@ gap sat before it.
 - **Found, not fixed here.** The measure pass reads `--b-ribbon-group-gap` with `parseFloat`, so `1.5rem` counted as
   1.5px a gap and the fold decision under-counted the row: [TASK-746](TASK-746-ribbon-measure-pass-reads-the-gap-token-as-pixels.md).
 
+## Sign-off (2026-10-22)
+
+Signed off by the user in the Playground: spacing, the look in every theme, hover, key tips with Alt+Win and the
+overall feel are good. The screen-reader checks were done through Chromium's accessibility tree instead of a live
+screen reader, as the user asked (`ribbon-a11y-check.mjs`, 22/22; it found and fixed a menu shortcut announced
+twice). Behaviour is covered by the automated suites: keyboard-check 195/195, `verify.mjs` clean.

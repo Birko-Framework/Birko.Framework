@@ -21,23 +21,23 @@ generated: 2026-10-22
 
 ## Build progress
 
-1 / 16 tasks done (14 built, awaiting sign-off).
+15 / 16 tasks done: the web ribbon is signed off. Left: the desktop (Avalonia) ribbon, TASK-742.
 
-- [~] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — built, awaiting your check
-- [~] TASK-731 b-ribbon: arrow-key navigation between commands and groups — built, awaiting your check
-- [~] TASK-732 b-ribbon: split buttons and dropdown menu buttons — built, awaiting your check
-- [~] TASK-733 b-ribbon: group dialog launcher — built, awaiting your check
-- [~] TASK-734 b-ribbon: contextual tabs — built, awaiting your check
-- [~] TASK-735 b-ribbon: collapse by double-clicking a tab, and Ctrl+F1 — built, awaiting your check
-- [~] TASK-736 b-ribbon: key tips (Alt shows letters for keyboard access) — built, awaiting your check
-- [~] TASK-737 b-ribbon: Quick Access Toolbar — built, awaiting your check
-- [~] TASK-738 b-ribbon: rich tooltips (title, description, shortcut) — built, awaiting your check
-- [~] TASK-739 b-ribbon: toggle buttons with a pressed state — built, awaiting your check
-- [~] TASK-740 b-ribbon: galleries — built, awaiting your check
-- [~] TASK-741 b-ribbon: inputs and comboboxes inside the ribbon — built, awaiting your check
+- [x] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — signed off
+- [x] TASK-731 b-ribbon: arrow-key navigation between commands and groups — signed off
+- [x] TASK-732 b-ribbon: split buttons and dropdown menu buttons — signed off
+- [x] TASK-733 b-ribbon: group dialog launcher — signed off
+- [x] TASK-734 b-ribbon: contextual tabs — signed off
+- [x] TASK-735 b-ribbon: collapse by double-clicking a tab, and Ctrl+F1 — signed off
+- [x] TASK-736 b-ribbon: key tips (Alt shows letters for keyboard access) — signed off
+- [x] TASK-737 b-ribbon: Quick Access Toolbar — signed off
+- [x] TASK-738 b-ribbon: rich tooltips (title, description, shortcut) — signed off
+- [x] TASK-739 b-ribbon: toggle buttons with a pressed state — signed off
+- [x] TASK-740 b-ribbon: galleries — signed off
+- [x] TASK-741 b-ribbon: inputs and comboboxes inside the ribbon — signed off
 - [ ] TASK-742 Avalonia Ribbon: parity with the Office-like b-ribbon (FEATURE-019)
-- [~] TASK-743 b-ribbon: a folded group without an icon is an empty 7px button — built, awaiting your check
-- [~] TASK-746 b-ribbon: groups fold at the right width (some were cut off at the right edge), and a narrow group centres its commands — built, awaiting your check
+- [x] TASK-743 b-ribbon: a folded group without an icon is an empty 7px button — signed off
+- [x] TASK-746 b-ribbon: groups fold at the right width (some were cut off at the right edge), and a narrow group centres its commands — signed off
 - [x] TASK-747 b-ribbon: every size is a CSS token — done, no visible change
 
 ## What can be tested now

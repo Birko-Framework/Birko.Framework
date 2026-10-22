@@ -2,7 +2,7 @@
 id: TASK-743
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified headlessly 2026-10-22; the human test plan is left
+status: done  # signed off by the user 2026-10-22
 priority: P3
 assignee: ai
 created: 2026-10-22
@@ -41,7 +41,7 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Human test plan
 
-- [ ] Narrow the Playground ribbon until every group folds, with and without group icons: every button is visible
+- [x] Narrow the Playground ribbon until every group folds, with and without group icons: every button is visible
       and pressable
 
 ## Outcome (2026-10-22)
@@ -60,3 +60,9 @@ Committed to Birko.Web and the Playground, not pushed.
   defect as filed: six empty 7px buttons. `verify.mjs` clean twice; keyboard-check 195/195; `tsc` clean. Checked in
   Chrome, mixed with a group that has an icon.
 
+## Sign-off (2026-10-22)
+
+Signed off by the user in the Playground: spacing, the look in every theme, hover, key tips with Alt+Win and the
+overall feel are good. The screen-reader checks were done through Chromium's accessibility tree instead of a live
+screen reader, as the user asked (`ribbon-a11y-check.mjs`, 22/22; it found and fixed a menu shortcut announced
+twice). Behaviour is covered by the automated suites: keyboard-check 195/195, `verify.mjs` clean.

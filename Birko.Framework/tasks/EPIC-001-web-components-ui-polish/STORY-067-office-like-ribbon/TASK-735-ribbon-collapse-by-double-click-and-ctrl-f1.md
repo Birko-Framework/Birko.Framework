@@ -2,7 +2,7 @@
 id: TASK-735
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified with a real double-click and keys 2026-10-22; the human test plan is left
+status: done  # signed off by the user 2026-10-22
 priority: P3
 assignee: ai
 created: 2026-10-22
@@ -35,7 +35,7 @@ Only the ▲ button collapses the panel today.
 
 ## Human test plan
 
-- [ ] Double-click tabs and press Ctrl+F1: the ribbon collapses and comes back, pinned state respected
+- [x] Double-click tabs and press Ctrl+F1: the ribbon collapses and comes back, pinned state respected
 
 ## Outcome (2026-10-22)
 
@@ -56,3 +56,10 @@ Committed to Birko.Web and the Playground, not pushed.
     the ribbon both ways, an app handler that prevented it, `none`, rebinding, the button names the shortcut, and no
     listener left after removal.
   - 5 of them fail on the TASK-739 ribbon. `verify.mjs` clean; entry-points 409/409; `tsc` clean.
+
+## Sign-off (2026-10-22)
+
+Signed off by the user in the Playground: spacing, the look in every theme, hover, key tips with Alt+Win and the
+overall feel are good. The screen-reader checks were done through Chromium's accessibility tree instead of a live
+screen reader, as the user asked (`ribbon-a11y-check.mjs`, 22/22; it found and fixed a menu shortcut announced
+twice). Behaviour is covered by the automated suites: keyboard-check 195/195, `verify.mjs` clean.

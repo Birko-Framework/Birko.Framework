@@ -2,7 +2,7 @@
 id: TASK-733
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified with real clicks and keys 2026-10-22; the human test plan is left
+status: done  # signed off by the user 2026-10-22
 priority: P3
 assignee: ai
 created: 2026-10-22
@@ -36,7 +36,7 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Human test plan
 
-- [ ] Click and keyboard-activate a launcher; check its tooltip and the event in the Playground
+- [x] Click and keyboard-activate a launcher; check its tooltip and the event in the Playground
 
 ## Outcome (2026-10-22)
 
@@ -61,3 +61,10 @@ Committed to Birko.Web and the Playground, not pushed.
     after three hover previews.
   - The check crashes at its first launcher step on the TASK-736 ribbon. `verify.mjs` clean; entry-points 409/409;
     `tsc` clean. Checked in Chrome (Font ↘ in the gallery).
+
+## Sign-off (2026-10-22)
+
+Signed off by the user in the Playground: spacing, the look in every theme, hover, key tips with Alt+Win and the
+overall feel are good. The screen-reader checks were done through Chromium's accessibility tree instead of a live
+screen reader, as the user asked (`ribbon-a11y-check.mjs`, 22/22; it found and fixed a menu shortcut announced
+twice). Behaviour is covered by the automated suites: keyboard-check 195/195, `verify.mjs` clean.

@@ -2,7 +2,7 @@
 id: TASK-738
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified with real hover and keys 2026-10-22; the human test plan is left
+status: done  # signed off by the user 2026-10-22
 priority: P2
 assignee: ai
 created: 2026-10-22
@@ -36,7 +36,7 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Human test plan
 
-- [ ] Hover and keyboard-focus commands: the tooltip shows, reads in a screen reader, and hides on Escape
+- [x] Hover and keyboard-focus commands: the tooltip shows, reads in a screen reader, and hides on Escape (screen reader: through the accessibility tree, ribbon-a11y-check, as the user asked)
 
 ## Outcome (2026-10-22)
 
@@ -71,3 +71,10 @@ Committed to Birko.Web and the Playground.
   - `verify.mjs` clean twice; entry-points 409/409; `tsc` clean. Checked in Chrome (Cut's tooltip, light).
 - **Test notes.** Hit-testing cannot see the tooltip (`pointer-events: none`), so on-top is checked as "top layer,
   opened later". A click on `#kb-after` landed inside the hanging flyout, so that check clicks `#kb-before`.
+
+## Sign-off (2026-10-22)
+
+Signed off by the user in the Playground: spacing, the look in every theme, hover, key tips with Alt+Win and the
+overall feel are good. The screen-reader checks were done through Chromium's accessibility tree instead of a live
+screen reader, as the user asked (`ribbon-a11y-check.mjs`, 22/22; it found and fixed a menu shortcut announced
+twice). Behaviour is covered by the automated suites: keyboard-check 195/195, `verify.mjs` clean.

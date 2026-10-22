@@ -2,7 +2,7 @@
 id: TASK-737
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified with real clicks and keys 2026-10-22; the human test plan is left
+status: done  # signed off by the user 2026-10-22
 priority: P3
 assignee: ai
 created: 2026-10-22
@@ -37,7 +37,7 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Human test plan
 
-- [ ] Add and remove commands, reload: the toolbar keeps them; check it at a narrow width
+- [x] Add and remove commands, reload: the toolbar keeps them; check it at a narrow width
 
 ## Outcome (2026-10-22)
 
@@ -86,3 +86,10 @@ it.
   the user can fill, and `null` turns it off.
 - New checks in keyboard-check: no toolbar or menu without the call, `[]` fillable, `null` off. 119/119; the first check
   fails without the right-click guard.
+
+## Sign-off (2026-10-22)
+
+Signed off by the user in the Playground: spacing, the look in every theme, hover, key tips with Alt+Win and the
+overall feel are good. The screen-reader checks were done through Chromium's accessibility tree instead of a live
+screen reader, as the user asked (`ribbon-a11y-check.mjs`, 22/22; it found and fixed a menu shortcut announced
+twice). Behaviour is covered by the automated suites: keyboard-check 195/195, `verify.mjs` clean.

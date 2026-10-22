@@ -2,7 +2,7 @@
 id: TASK-740
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified with real clicks and keys 2026-10-22; the human test plan is left
+status: done  # signed off by the user 2026-10-22
 priority: P3
 assignee: ai
 created: 2026-10-22
@@ -37,7 +37,7 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Human test plan
 
-- [ ] Scroll, expand and pick from a gallery by mouse and keyboard at a wide and a narrow width
+- [x] Scroll, expand and pick from a gallery by mouse and keyboard at a wide and a narrow width
 
 ## Outcome (2026-10-22)
 
@@ -72,3 +72,10 @@ Committed to Birko.Web and the Playground, not pushed.
     per-gallery dropdown; key tips for ▾ and the grid; the mobile radios and a pick there; the folded flyout and grid.
   - The checks fail on the TASK-734 ribbon. entry-points 409/409; `tsc` clean. Checked in Chrome: the framed gallery
     and its open grid.
+
+## Sign-off (2026-10-22)
+
+Signed off by the user in the Playground: spacing, the look in every theme, hover, key tips with Alt+Win and the
+overall feel are good. The screen-reader checks were done through Chromium's accessibility tree instead of a live
+screen reader, as the user asked (`ribbon-a11y-check.mjs`, 22/22; it found and fixed a menu shortcut announced
+twice). Behaviour is covered by the automated suites: keyboard-check 195/195, `verify.mjs` clean.

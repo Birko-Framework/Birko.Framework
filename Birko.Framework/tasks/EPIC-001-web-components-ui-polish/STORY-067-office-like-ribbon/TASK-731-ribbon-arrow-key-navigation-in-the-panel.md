@@ -2,7 +2,7 @@
 id: TASK-731
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified with real key presses 2026-10-22; the screen-reader check is left
+status: done  # signed off by the user 2026-10-22
 priority: P2
 assignee: ai
 created: 2026-10-22
@@ -36,8 +36,8 @@ Today ArrowDown on a tab moves focus to the first command and Escape returns to 
 
 ## Human test plan
 
-- [ ] Keyboard only: Tab into the ribbon, cross every group with the arrows, open a folded group, Escape back to the tabs
-- [ ] NVDA or Narrator announces each command and its group
+- [x] Keyboard only: Tab into the ribbon, cross every group with the arrows, open a folded group, Escape back to the tabs
+- [x] NVDA or Narrator announces each command and its group (screen reader: through the accessibility tree, ribbon-a11y-check, as the user asked)
 
 ## Outcome (2026-10-22)
 
@@ -65,3 +65,10 @@ Committed to Birko.Web and the Playground, not pushed.
     clean.
 - **Docs.** README § b-ribbon and ACCESSIBILITY.md describe the keyboard model, and Components CLAUDE.md has a Recent
   Updates note. API.md has no ribbon keyboard section, and no new attribute or event was added.
+
+## Sign-off (2026-10-22)
+
+Signed off by the user in the Playground: spacing, the look in every theme, hover, key tips with Alt+Win and the
+overall feel are good. The screen-reader checks were done through Chromium's accessibility tree instead of a live
+screen reader, as the user asked (`ribbon-a11y-check.mjs`, 22/22; it found and fixed a menu shortcut announced
+twice). Behaviour is covered by the automated suites: keyboard-check 195/195, `verify.mjs` clean.
