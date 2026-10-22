@@ -63,3 +63,20 @@ Committed to Birko.Web and the Playground, not pushed.
 - **Found, not changed.** A folded group without an `icon` shows an empty 7px button in compact mode, on the old code
   too: compact hides the name. Filed as TASK-743. The panel also gets shorter when groups fold (98 → 26px), by the
   content-sized design. Office keeps one height; TASK-743 asks whether that should change.
+
+## Follow-up (2026-10-22): the divider sits halfway between groups
+
+Reported by the user from the Playground: a group's first command touched the divider, while the space after the
+previous group was too big. Measured: 1px and 21px. The divider was the next group's `border-left`, and the whole flex
+gap sat before it.
+
+- **Decided by the user** from a live preview of three real ribbons: centred and tighter (Office), over centred with
+  the same spacing. "I hope it uses css token": `--b-ribbon-group-gap` is now `var(--b-space-lg)` (16px), was 1.5rem.
+- The divider is a `::before` drawn halfway into the gap in force (`--b-ribbon-gap-now`, which also tightens with the
+  small and folded rows). It is out of flow, so it adds no width the measure pass cannot see.
+- Measured after: 6.5px on each side of every divider at the Playground's 14px base.
+- **Gate.** Playground `ribbon-layout-smoke` checks the divider is halfway at 1100, 520 and 260px (17/17). The check
+  fails on the code before. `verify.mjs` twice; its only failure was `carousel-smoke` (TASK-745).
+- **Found, not fixed here.** The measure pass reads `--b-ribbon-group-gap` with `parseFloat`, so `1.5rem` counted as
+  1.5px a gap and the fold decision under-counted the row: [TASK-746](TASK-746-ribbon-measure-pass-reads-the-gap-token-as-pixels.md).
+
