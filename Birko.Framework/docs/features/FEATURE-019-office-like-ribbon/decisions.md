@@ -59,3 +59,4 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-10-22 — D8 built (TASK-737, awaiting sign-off): in the tab row by default, customised from a right-click menu and a ▾ menu, remembered per app.
 - 2026-10-22 — D8 refined after the user asked whether the toolbar is optional: each app chooses to have one. Until it does, no toolbar and no "Add to Quick Access Toolbar" on a right-click.
 - 2026-10-22 — D7 refined by the user from a live preview: dark squares as in desktop Office (over a light card and an accent colour), and letters chosen automatically unless an app sets its own. Built (TASK-736, awaiting sign-off).
+- 2026-10-22 — D4 refined by the user from a live preview: Office's small corner arrow beside the group's name (over "more" dots and a clickable name). Built (TASK-733, awaiting sign-off).

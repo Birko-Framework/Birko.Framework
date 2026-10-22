@@ -2,7 +2,7 @@
 id: TASK-733
 parent: STORY-067
 feature: FEATURE-019
-status: todo
+status: verify  # verified with real clicks and keys 2026-10-22; the human test plan is left
 priority: P3
 assignee: ai
 created: 2026-10-22
@@ -25,10 +25,10 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Acceptance criteria
 
-- [ ] A group can opt in to a launcher; it sits beside the bottom label and emits a group-launcher event with the group id
-- [ ] Named for screen readers (i18n, per-group label), keyboard-reachable in the arrow-key order
-- [ ] Hidden or moved into the flyout header when the group is folded
-- [ ] Components README, API.md and CLAUDE.md inventory updated; i18n keys under `bwc.ribbon.*`
+- [x] A group can opt in to a launcher; it sits beside the bottom label and emits a group-launcher event with the group id
+- [x] Named for screen readers (i18n, per-group label), keyboard-reachable in the arrow-key order
+- [x] Hidden or moved into the flyout header when the group is folded
+- [x] Components README, API.md and CLAUDE.md inventory updated; i18n keys under `bwc.ribbon.*`
 
 ## Out of scope
 
@@ -37,3 +37,27 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 ## Human test plan
 
 - [ ] Click and keyboard-activate a launcher; check its tooltip and the event in the Playground
+
+## Outcome (2026-10-22)
+
+Committed to Birko.Web and the Playground, not pushed.
+
+- **Look, picked by the user from three:** option A, Office's corner arrow. The ↘ is an inline SVG drawn in
+  `currentColor`, muted and tinted on hover.
+- **API.**
+  - `RibbonGroup.launcher?: boolean` and `launcherLabel?: string` (default "More {label} options",
+    `bwc.ribbon.launcher`).
+  - Event `group-launcher` → `{ tabId, groupId }`, never an `item-click`. An unpinned ribbon collapses after it, as
+    after a command.
+- **Placement.** Absolute at the group's bottom-right, with the label padded so the name stays centred and clear of
+  it.
+  - A folded group shows it in a flyout header ("Font ↘"); a click there closes the flyout.
+  - The mobile menu lists it under the group's commands.
+- **Reach.** An arrow-key stop: it sits under the right end of the bottom row, so ↓ from the group's last command
+  reaches it. A tooltip target with its name, and a key-tip target. In a flyout it is also reachable with the arrows.
+- **Gate.** Playground `keyboard-check.mjs` 147/147, with 9 new checks using real clicks and keys.
+  - The checks: only groups that ask get one, named; corner placement clear of the name; a click emits and runs no
+    command; tooltip; ↓ reaches it and Enter emits; key tip; flyout header and closing; the mobile item firing once
+    after three hover previews.
+  - The check crashes at its first launcher step on the TASK-736 ribbon. `verify.mjs` clean; entry-points 409/409;
+    `tsc` clean. Checked in Chrome (Font ↘ in the gallery).
