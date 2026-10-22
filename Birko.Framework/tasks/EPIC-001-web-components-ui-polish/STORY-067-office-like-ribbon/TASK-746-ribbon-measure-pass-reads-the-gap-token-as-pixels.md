@@ -2,7 +2,7 @@
 id: TASK-746
 parent: STORY-067
 feature: FEATURE-019
-status: todo
+status: verify  # verified headlessly 2026-10-22; the human test plan is left
 priority: P2
 assignee: ai
 created: 2026-10-22
@@ -30,10 +30,32 @@ The suites passed because a group that does not fit is not something they measur
 
 ## Acceptance criteria
 
-- [ ] The gap is resolved to pixels (any unit, `var()`, `calc()`), with the column gap as a fallback
-- [ ] A regression check: at widths just below what the old count allowed, no command is clipped by the panel
-- [ ] The `SEPARATOR_SLACK` comment no longer names the border, which TASK-730's follow-up removed
+- [x] The gap is resolved to pixels (any unit, `var()`, `calc()`), with the column gap as a fallback
+- [x] A regression check: at widths just below what the old count allowed, no command is clipped by the panel
+- [x] The `SEPARATOR_SLACK` comment no longer names the border, which TASK-730's follow-up removed
 
 ## Human test plan
 
 - [ ] Narrow the Playground ribbon slowly: at no width does a command get cut off at the right edge of the panel
+
+## Outcome (2026-10-22)
+
+Committed to Birko.Web and the Playground, not pushed.
+
+- **Reproduced.** Six groups swept from 1200 to 200px in steps of 5: at 19 widths the last group ran past the panel.
+  Between 470 and 525px the overrun was up to 49px; between 200 and 230px, up to 32px.
+- **Fixed at the cause.** The measure pass's probe takes `var(--b-ribbon-group-gap, …)` as its width and reads the
+  pixels, so any unit, `var()` or `calc()` resolves. The column gap remains the fallback. `SEPARATOR_SLACK` is now
+  `ROUNDING_SLACK`: the border it once covered is gone.
+- **After.** Nothing is clipped between 235 and 1200px. Below about 230px six folded, compact groups still do not
+  fit: there is no smaller variant, so that floor is unchanged and not claimed as fixed.
+- **Decided by the user along the way.** Folding at the right width made a small group narrower than its name
+  ("Records" over three icons), with all the extra space before the next divider. The user picked Office's centring
+  from a live preview: a group's commands are centred over its name.
+- **Gate.** Playground `ribbon-layout-smoke` 23/23.
+  - The new sweep (460–540px, no group clipped) fails on the code before, by up to 48px.
+  - The new centring check passes on the code before as well: before the fix no group got narrower than its name at
+    the widths checked.
+  - The divider check now measures group edges, since the extra space of a narrow group sits inside it.
+  - `verify.mjs` clean twice; keyboard-check 195/195; entry-points 409/409; `tsc` clean.
+
