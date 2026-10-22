@@ -2,7 +2,7 @@
 id: TASK-732
 parent: STORY-067
 feature: FEATURE-019
-status: in-progress
+status: verify  # verified headlessly and with real clicks/keys 2026-10-22; the human test plan is left
 priority: P2
 assignee: ai
 created: 2026-10-22
@@ -25,12 +25,12 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Acceptance criteria
 
-- [ ] RibbonItem can declare a menu (list of items) as a menu button or a split button
-- [ ] The menu opens below the command in the top layer (not clipped by the panel), keyboard-operable, with Escape and light dismiss; choosing an item emits item-click with the item id and its parent
-- [ ] Works at every group size and inside a folded group's flyout
-- [ ] ARIA: aria-haspopup / aria-expanded, menu roles
-- [ ] A Playground smoke suite covers it
-- [ ] Components README, API.md and CLAUDE.md inventory updated; i18n keys under `bwc.ribbon.*`
+- [x] RibbonItem can declare a menu (list of items) as a menu button or a split button
+- [x] The menu opens below the command in the top layer (not clipped by the panel), keyboard-operable, with Escape and light dismiss; choosing an item emits item-click with the item id and its parent
+- [x] Works at every group size and inside a folded group's flyout
+- [x] ARIA: aria-haspopup / aria-expanded, menu roles
+- [x] A Playground smoke suite covers it
+- [x] Components README, API.md and CLAUDE.md inventory updated; i18n keys under `bwc.ribbon.*`
 
 ## Out of scope
 
@@ -40,3 +40,40 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 - [ ] Open a split button by mouse and by keyboard, pick an option, check the main part still runs its own command
 - [ ] Open one inside a folded group on a narrow window
+
+## Outcome (2026-10-22)
+
+Committed to Birko.Web and the Playground, not pushed.
+
+- **Look, picked by the user from a three-option preview:** option A, Office-like, where the ▾ part's divider shows on
+  hover. Menu items carry an icon, a label, a right-aligned shortcut, and separators.
+- **API.** `RibbonItem.menu?: RibbonMenuEntry[]` and `split?: boolean`. An entry is `RibbonMenuItem { id, label, icon?,
+  shortcut?, disabled? }` or `{ separator: true }`.
+  - A choice emits `item-click` with `{ tabId, groupId, itemId: <choice>, parentId: <command> }`.
+  - The ▾ part is named "More options: {label}" (`bwc.ribbon.moreOptions`). Labels and shortcuts are escaped.
+- **Layout.** Medium and small: command and ▾ side by side. Large and in a flyout: the parts stack, the icon runs the
+  command and "Label ▾" opens the menu. The menu opens under the whole split frame, kept inside the viewport.
+  - In a folded group, the menu is the flyout's DOM descendant, so opening it keeps the flyout open, and a choice
+    closes both.
+  - On mobile, choices are listed under their command, and a menu-only command is their heading.
+- **Keyboard.** Enter or Space on ▾ or on a menu-only command, and Alt+↓ on the command, open the menu at its first
+  choice. ↑/↓ wrap and skip disabled choices; Home/End; Enter runs a choice; Escape or Tab closes, back to the button.
+  - Both split parts are panel stops (TASK-731's roving tabindex).
+- **Bug found and fixed: TASK-731's flyout stole focus.** It returned focus to its button on any close while focus was
+  outside the ribbon. A click elsewhere, or another popover or modal opening, pulled focus back into the ribbon.
+  - `_returnFocusOnClose` reads `beforetoggle` and restores only when focus was inside and nobody has taken it since.
+    Menus use it too.
+  - Found because verify.mjs's gallery-smoke and modal-focus-smoke lost their focus checks. The new "closed by a click
+    elsewhere leaves focus there" check fails on the TASK-731 ribbon.
+- **Gate.**
+  - Playground `keyboard-check.mjs` 66/66 with real clicks and keys, stable over three runs. Its new menu checks plus
+    the flyout focus check are red on the TASK-731 ribbon.
+  - `ribbon-menu-smoke` 21/21: markup, ARIA, escaping, large, mobile. It opens no popover: verify.mjs runs every suite
+    at once, an auto popover closes the others, and opening menus there broke `ribbon-scaling-smoke`'s flyout checks
+    intermittently.
+  - `verify.mjs` clean three times; entry-points 409/409; `tsc` clean.
+  - Checked in Chrome on the gallery ribbon: Paste ▾ hover and open menu.
+- **Gallery.** The Playground ribbon now has a split Paste and a CSV menu, so its demo differs from the Avalonia
+  gallery's until TASK-742.
+- **Not changed.** Existing ribbon labels (tabs, commands, groups) are still interpolated as markup; only the new menu
+  text is escaped. b-tabs moved to text labels in TASK-525. Whether the ribbon follows is a user decision, not filed yet.
