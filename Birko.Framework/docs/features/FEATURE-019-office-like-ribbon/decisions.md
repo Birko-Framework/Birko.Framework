@@ -11,7 +11,7 @@ created: 2026-10-22
 
 | ID | Decision | State | Rationale | Date | By | → Tasks |
 |----|----------|-------|-----------|------|----|---------|
-| D1 | Every group in the open ribbon is the same height, so the dividers between groups run the full height; commands sit in three rows that line up across groups; each group's name sits centred underneath it, as in Office. | approved | Picked "Full preview" of three variants shown live (heights + rows + labels below / heights + rows / heights only). | 2026-10-22 | user | TASK-730 |
+| D1 | Every group in the open ribbon is the same height, so the dividers between groups run the full height; commands sit in three rows that line up across groups; each group's name sits centred underneath it, as in Office. | approved | Picked "Full preview" of three variants shown live (heights + rows + labels below / heights + rows / heights only). | 2026-10-22 | user | TASK-730, TASK-743 |
 | D2 | Inside the open ribbon, the arrow keys move between commands and from one group to the next, the way Office does. | approved | Picked "Yes, task it". | 2026-10-22 | user | TASK-731 |
 | D3 | A command can open a menu of options (like Office's "Paste" with its small arrow): either the whole button opens the menu, or the main part runs the command and the arrow opens the menu. | approved | Picked "Yes, task it". | 2026-10-22 | user | TASK-732 |
 | D4 | A group can show a small corner button (↘) next to its name that opens "more options" for that group. | approved | Picked "Yes, task it". | 2026-10-22 | user | TASK-733 |
@@ -47,3 +47,4 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-10-22 — D11 approved by the user (picked "yes, all" (toggle buttons, galleries and inputs)); decomposed → TASK-740.
 - 2026-10-22 — D12 approved by the user (picked "yes, all" (toggle buttons, galleries and inputs)); decomposed → TASK-741.
 - 2026-10-22 — D13 approved by the user (picked "web first, avalonia later" over parallel or web-only); decomposed → TASK-742.
+- 2026-10-22 — D1 built (TASK-730, awaiting sign-off). TASK-743 spawned from it: a folded group without an icon shows an empty button (it predates D1), and whether the ribbon keeps one height while groups fold.

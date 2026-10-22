@@ -21,9 +21,9 @@ generated: 2026-10-22
 
 ## Build progress
 
-0 / 13 tasks done.
+0 / 14 tasks done (1 built, awaiting sign-off).
 
-- [ ] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom
+- [~] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — built, awaiting your check
 - [ ] TASK-731 b-ribbon: arrow-key navigation between commands and groups
 - [ ] TASK-732 b-ribbon: split buttons and dropdown menu buttons
 - [ ] TASK-733 b-ribbon: group dialog launcher
@@ -36,10 +36,11 @@ generated: 2026-10-22
 - [ ] TASK-740 b-ribbon: galleries
 - [ ] TASK-741 b-ribbon: inputs and comboboxes inside the ribbon
 - [ ] TASK-742 Avalonia Ribbon: parity with the Office-like b-ribbon (FEATURE-019)
+- [ ] TASK-743 b-ribbon: a folded group without an icon is an empty 7px button
 
 ## What can be tested now
 
-Nothing yet: no part has been built. The layout fix (equal-height groups) was shown as a live preview only.
+The layout fix: in the Birko.Web Playground, every ribbon group is now one height, commands line up in rows across groups, and each group's name sits underneath it. Please look at it in light and dark and at a narrow window.
 
 ## Prototype
 
@@ -48,5 +49,5 @@ look preview inside their own tasks.
 
 ## Next step
 
-Start with TASK-730 (the layout fix): `/tasks pick TASK-730`. Arrow-key navigation (TASK-731) unblocks key tips,
+Check and sign off the layout fix (TASK-730), then TASK-731 (arrow keys). Arrow-key navigation (TASK-731) unblocks key tips,
 inputs and, with split buttons (TASK-732), galleries.

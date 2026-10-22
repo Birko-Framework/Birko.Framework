@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed; TASK-704 and TASK-705 found by TASK-696 and closed; TASK-696 closed; EPIC-023 filed from its harvest with TASK-706–724; TASK-725 filed for the ClientApi.CSharp tester and built, awaiting verification; TASK-726 spawned from its sr-only follow-up; TASK-727 filed and built, awaiting verification; TASK-728 filed, needs a decision; TASK-729 filed and fixed, awaiting verification; FEATURE-019 filed from the ribbon review: STORY-067 under EPIC-001 with TASK-730–742). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed; TASK-704 and TASK-705 found by TASK-696 and closed; TASK-696 closed; EPIC-023 filed from its harvest with TASK-706–724; TASK-725 filed for the ClientApi.CSharp tester and built, awaiting verification; TASK-726 spawned from its sr-only follow-up; TASK-727 filed and built, awaiting verification; TASK-728 filed, needs a decision; TASK-729 filed and fixed, awaiting verification; FEATURE-019 filed from the ribbon review: STORY-067 under EPIC-001 with TASK-730–742; TASK-730 built, awaiting verification, TASK-743 spawned from it). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -15,14 +15,14 @@ which this regeneration never touches._
 | planned      | 11    | 28      | —     |
 | todo         | —     | —       | 178   |
 | in-progress  | 8     | 12      | 0     |
-| verify       | —     | —       | 7     |
+| verify       | —     | —       | 8     |
 | blocked      | —     | —       | 1     |
 | done         | 4     | 27      | 411   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 15× P1 · 115× P2 · 48× P3.
+`todo` by priority: 15× P1 · 114× P2 · 49× P3.
 
 ## In progress now
 
@@ -36,6 +36,7 @@ _None._
 - [TASK-725](_loose/TASK-725-json-diff-engine-and-b-json-diff.md) — A generic JSON diff in Birko.Web.Core and a `b-json-diff` component (P2, ai)
 - [TASK-727](_loose/TASK-727-xml-mode-for-the-json-diff.md) — XML mode for the JSON diff: `xmlToTree` in Birko.Web.Core, `format="xml"` in `b-json-diff` (P2, ai)
 - [TASK-729](_loose/TASK-729-b-tag-input-loses-focus-after-a-commit.md) — `b-tag-input` loses focus after a tag is committed, so the next value typed goes nowhere (P2, ai)
+- [TASK-730](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-730-ribbon-groups-equal-height-aligned-rows-labels-below.md) — b-ribbon: equal-height groups, aligned rows, group labels at the bottom (P2, ai)
 - [TASK-599](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-599-semantic-text-colours-sub-aa.md) — Every semantic colour-on-tint pairing is below the AA contrast floor, in both themes (P1, ai)
 
 ## Blocked
@@ -99,7 +100,7 @@ _None._
   - STORY-057 Input adornments — prefix / suffix slots on text-like controls — planned (1/2 done)
     - [x] [TASK-484](EPIC-001-web-components-ui-polish/STORY-057-input-adornments/TASK-484-b-input-prefix-suffix-slots-clearable.md) b-input: `prefix` / `suffix` slots + `clearable` (P2) · FEATURE-001
     - [ ] [TASK-485](EPIC-001-web-components-ui-polish/STORY-057-input-adornments/TASK-485-adornment-slots-other-text-controls.md) Extend adornment slots to the other text-like controls; move `b-search-input` onto them (P3) · FEATURE-001
-  - STORY-067 An Office-like `b-ribbon` — planned (0/13 done)
+  - STORY-067 An Office-like `b-ribbon` — in-progress (0/14 done)
     - [ ] [TASK-730](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-730-ribbon-groups-equal-height-aligned-rows-labels-below.md) b-ribbon: equal-height groups, aligned rows, group labels at the bottom (P2) · FEATURE-019
     - [ ] [TASK-731](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-731-ribbon-arrow-key-navigation-in-the-panel.md) b-ribbon: arrow-key navigation between commands and groups (P2) · FEATURE-019
     - [ ] [TASK-732](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-732-ribbon-split-and-menu-buttons.md) b-ribbon: split buttons and dropdown menu buttons (P2) · FEATURE-019
@@ -113,6 +114,7 @@ _None._
     - [ ] [TASK-740](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-740-ribbon-galleries.md) b-ribbon: galleries (P3) · FEATURE-019
     - [ ] [TASK-741](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-741-ribbon-inputs-and-comboboxes.md) b-ribbon: inputs and comboboxes inside the ribbon (P3) · FEATURE-019
     - [ ] [TASK-742](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-742-avalonia-ribbon-parity-with-the-office-like-b-ribbon.md) Avalonia Ribbon: parity with the Office-like b-ribbon (FEATURE-019) (P3) · FEATURE-019
+    - [ ] [TASK-743](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-743-ribbon-folded-group-without-an-icon-is-empty.md) b-ribbon: a folded group without an icon is an empty 7px button (P3) · FEATURE-019
 - **EPIC-002** Birko.Data.Redis — planned (0/1 tasks done)
   - [ ] [TASK-004](EPIC-002-birko-data-redis/TASK-004-implement-birko-data-redis.md) Implement Birko.Data.Redis (P2) · FEATURE-002
 - **EPIC-003** Birko.Caching.NCache — planned (0/1 tasks done)

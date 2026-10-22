@@ -2,7 +2,7 @@
 id: STORY-067
 parent: EPIC-001
 feature: FEATURE-019
-status: planned
+status: in-progress
 created: 2026-10-22
 ---
 
@@ -37,3 +37,4 @@ TASK-731 (arrow keys) unblocks TASK-736 (key tips) and TASK-741 (inputs); TASK-7
 - TASK-740 — b-ribbon: galleries
 - TASK-741 — b-ribbon: inputs and comboboxes inside the ribbon
 - TASK-742 — Avalonia Ribbon: parity with the Office-like b-ribbon (FEATURE-019)
+- TASK-743 — b-ribbon: a folded group without an icon is an empty 7px button (found by TASK-730)
