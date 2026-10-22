@@ -27,7 +27,8 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 - [ ] The app declares the toolbar's default commands; the user can add a command (context menu "Add to Quick Access Toolbar") and remove one
 - [ ] The choice persists under a key (localStorage, as split-panel sizes do), hostile stored values ignored
-- [ ] Position above or below the ribbon; keyboard-reachable; announced
+- [ ] Default position in the tab row, before the tabs (decided by the user from a live preview, Q3); an attribute
+      moves it to its own row above the tabs or below the ribbon; keyboard-reachable; announced
 - [ ] Components README, API.md and CLAUDE.md inventory updated; i18n keys under `bwc.ribbon.*`
 
 ## Out of scope

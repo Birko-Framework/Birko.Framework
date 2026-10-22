@@ -24,7 +24,8 @@ Only the ▲ button collapses the panel today.
 ## Acceptance criteria
 
 - [ ] Double-click on a tab toggles expanded (and emits expand as the button does); a single click still selects
-- [ ] Ctrl+F1 toggles while focus is inside the ribbon (decide whether it is app-wide: an app may own the shortcut)
+- [ ] Ctrl+F1 toggles anywhere in the app (decided by the user, Q1); an attribute switches it off or rebinds it, and a
+      key press the app already handled (`defaultPrevented`) is left alone
 - [ ] Documented, and the shortcut shown in the collapse button's tooltip
 - [ ] Components README, API.md and CLAUDE.md inventory updated; i18n keys under `bwc.ribbon.*`
 

@@ -25,7 +25,9 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Acceptance criteria
 
-- [ ] Alt (released alone) or a configurable key shows tab tips; a letter opens the tab and shows command tips; Escape goes back one level
+- [ ] Alt+Windows key (Ctrl+Option on a Mac) shows tab tips, as in Microsoft 365 in the browser (decided by the user,
+      Q2); an attribute changes the combination; a letter opens the tab and shows command tips; Escape goes back one
+      level
 - [ ] Tips are declared or derived (first free letter) without collisions, per locale
 - [ ] Menus and galleries get their own level
 - [ ] Does not break typing in inputs, nor the browser's own Alt behaviour
