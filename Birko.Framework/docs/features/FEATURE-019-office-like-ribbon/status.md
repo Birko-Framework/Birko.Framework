@@ -21,7 +21,7 @@ generated: 2026-10-22
 
 ## Build progress
 
-0 / 14 tasks done (10 built, awaiting sign-off).
+0 / 14 tasks done (11 built, awaiting sign-off).
 
 - [~] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — built, awaiting your check
 - [~] TASK-731 b-ribbon: arrow-key navigation between commands and groups — built, awaiting your check
@@ -33,7 +33,7 @@ generated: 2026-10-22
 - [~] TASK-737 b-ribbon: Quick Access Toolbar — built, awaiting your check
 - [~] TASK-738 b-ribbon: rich tooltips (title, description, shortcut) — built, awaiting your check
 - [~] TASK-739 b-ribbon: toggle buttons with a pressed state — built, awaiting your check
-- [ ] TASK-740 b-ribbon: galleries
+- [~] TASK-740 b-ribbon: galleries — built, awaiting your check
 - [ ] TASK-741 b-ribbon: inputs and comboboxes inside the ribbon
 - [ ] TASK-742 Avalonia Ribbon: parity with the Office-like b-ribbon (FEATURE-019)
 - [ ] TASK-743 b-ribbon: a folded group without an icon is an empty 7px button
@@ -59,6 +59,8 @@ Key tips: press Alt and the Windows key together (Ctrl and Option on a Mac); let
 Group launcher: the Font group in the Playground ribbon has a small corner arrow beside its name, for more font options; it can also be reached with the arrow keys and from a key tip.
 
 Contextual tabs: the Playground ribbon shows a green "Table" set (Table Design, Layout) after the normal tabs, as it would while a table is selected.
+
+Galleries: the Playground ribbon's Styles group shows text styles as tiles; pick one, step through them with the small arrows, or open them all with the button below the arrows.
 
 ## Prototype
 
