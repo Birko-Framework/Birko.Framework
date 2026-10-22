@@ -21,7 +21,7 @@ generated: 2026-10-22
 
 ## Build progress
 
-0 / 14 tasks done (4 built, awaiting sign-off).
+0 / 14 tasks done (5 built, awaiting sign-off).
 
 - [~] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — built, awaiting your check
 - [~] TASK-731 b-ribbon: arrow-key navigation between commands and groups — built, awaiting your check
@@ -32,7 +32,7 @@ generated: 2026-10-22
 - [ ] TASK-736 b-ribbon: key tips (Alt shows letters for keyboard access)
 - [ ] TASK-737 b-ribbon: Quick Access Toolbar
 - [~] TASK-738 b-ribbon: rich tooltips (title, description, shortcut) — built, awaiting your check
-- [ ] TASK-739 b-ribbon: toggle buttons with a pressed state
+- [~] TASK-739 b-ribbon: toggle buttons with a pressed state — built, awaiting your check
 - [ ] TASK-740 b-ribbon: galleries
 - [ ] TASK-741 b-ribbon: inputs and comboboxes inside the ribbon
 - [ ] TASK-742 Avalonia Ribbon: parity with the Office-like b-ribbon (FEATURE-019)
@@ -48,6 +48,8 @@ Menus: in the Playground ribbon, "Paste" has a small arrow that opens more paste
 
 Tooltips: rest the pointer on "Cut" or "Paste" in the Playground ribbon; a light card shows its name, shortcut and a short description. Moving to the next command shows its tooltip at once, and reaching a command with the keyboard shows it too.
 
+On/off buttons: in the Playground ribbon, "Bold" and "Italic" switch on and off, and "Columns" / "Rows" form a pair where only one can be on.
+
 ## Prototype
 
 The layout fix was previewed live in the Playground on 2026-10-22 and the full variant picked; later behaviours get a
@@ -55,5 +57,5 @@ look preview inside their own tasks.
 
 ## Next step
 
-Check and sign off the layout fix (TASK-730) and the arrow keys (TASK-731); and the menus (TASK-732); then TASK-739 (toggle buttons). Arrow-key navigation (TASK-731) unblocks key tips,
+Check and sign off the layout fix (TASK-730) and the arrow keys (TASK-731); and the menus (TASK-732); then the remaining behaviours (launcher, contextual tabs, double-click collapse, key tips, Quick Access Toolbar, galleries, inputs). Arrow-key navigation (TASK-731) unblocks key tips,
 inputs and, with split buttons (TASK-732), galleries.

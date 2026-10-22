@@ -38,7 +38,7 @@ Questions still to settle inside the work (each belongs to its task):
 | Q1 | Is Ctrl+F1 handled only while the ribbon has focus, or app-wide? | decision | — | open | — |
 | Q2 | Which key shows key tips in a browser, where Alt can belong to the browser? | decision | — | open | — |
 | Q3 | Does the Quick Access Toolbar sit above or below the tabs by default? | decision | — | open | — |
-| Q4 | Are "only one can be on" toggle sets (alignment left/centre/right) in scope? | decision | — | open | — |
+| Q4 | Are "only one can be on" toggle sets (alignment left/centre/right) in scope? | decision | — | resolved → D10 | — |
 
 **Fog** — concerns not yet precise enough to state as a question:
 
