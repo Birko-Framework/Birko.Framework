@@ -21,7 +21,7 @@ generated: 2026-10-22
 
 ## Build progress
 
-0 / 14 tasks done (6 built, awaiting sign-off).
+0 / 14 tasks done (7 built, awaiting sign-off).
 
 - [~] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — built, awaiting your check
 - [~] TASK-731 b-ribbon: arrow-key navigation between commands and groups — built, awaiting your check
@@ -30,7 +30,7 @@ generated: 2026-10-22
 - [ ] TASK-734 b-ribbon: contextual tabs
 - [~] TASK-735 b-ribbon: collapse by double-clicking a tab, and Ctrl+F1 — built, awaiting your check
 - [ ] TASK-736 b-ribbon: key tips (Alt shows letters for keyboard access)
-- [ ] TASK-737 b-ribbon: Quick Access Toolbar
+- [~] TASK-737 b-ribbon: Quick Access Toolbar — built, awaiting your check
 - [~] TASK-738 b-ribbon: rich tooltips (title, description, shortcut) — built, awaiting your check
 - [~] TASK-739 b-ribbon: toggle buttons with a pressed state — built, awaiting your check
 - [ ] TASK-740 b-ribbon: galleries
@@ -51,6 +51,8 @@ Tooltips: rest the pointer on "Cut" or "Paste" in the Playground ribbon; a light
 On/off buttons: in the Playground ribbon, "Bold" and "Italic" switch on and off, and "Columns" / "Rows" form a pair where only one can be on.
 
 Collapsing: double-click a ribbon tab, or press Ctrl+F1 anywhere in the app, to hide the ribbon down to its tabs; do it again to bring it back.
+
+Quick Access Toolbar: Save, Undo and Redo sit before the ribbon tabs in the Playground. Right-click a ribbon command to add it there, right-click a toolbar button to remove it, and use the small arrow to show, hide or reset; the choice is remembered after a reload.
 
 ## Prototype
 

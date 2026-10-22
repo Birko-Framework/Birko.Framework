@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed; TASK-704 and TASK-705 found by TASK-696 and closed; TASK-696 closed; EPIC-023 filed from its harvest with TASK-706–724; TASK-725 filed for the ClientApi.CSharp tester and built, awaiting verification; TASK-726 spawned from its sr-only follow-up; TASK-727 filed and built, awaiting verification; TASK-728 filed, needs a decision; TASK-729 filed and fixed, awaiting verification; FEATURE-019 filed from the ribbon review: STORY-067 under EPIC-001 with TASK-730–742; TASK-730 built, awaiting verification, TASK-743 spawned from it; TASK-731 built, awaiting verification; TASK-732 built, awaiting verification; TASK-738 built, awaiting verification; TASK-744 filed for Symbio TASK-955 and closed; TASK-739 built, awaiting verification; FEATURE-019 Q1–Q3 answered; TASK-735 built, awaiting verification). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed; TASK-704 and TASK-705 found by TASK-696 and closed; TASK-696 closed; EPIC-023 filed from its harvest with TASK-706–724; TASK-725 filed for the ClientApi.CSharp tester and built, awaiting verification; TASK-726 spawned from its sr-only follow-up; TASK-727 filed and built, awaiting verification; TASK-728 filed, needs a decision; TASK-729 filed and fixed, awaiting verification; FEATURE-019 filed from the ribbon review: STORY-067 under EPIC-001 with TASK-730–742; TASK-730 built, awaiting verification, TASK-743 spawned from it; TASK-731 built, awaiting verification; TASK-732 built, awaiting verification; TASK-738 built, awaiting verification; TASK-744 filed for Symbio TASK-955 and closed; TASK-739 built, awaiting verification; FEATURE-019 Q1–Q3 answered; TASK-735 built, awaiting verification; TASK-737 built, awaiting verification). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,16 +13,16 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 11    | 28      | —     |
-| todo         | —     | —       | 173   |
+| todo         | —     | —       | 172   |
 | in-progress  | 8     | 12      | 0     |
-| verify       | —     | —       | 13    |
+| verify       | —     | —       | 14    |
 | blocked      | —     | —       | 1     |
 | done         | 4     | 27      | 412   |
 | cancelled    | 0     | 0       | 6     |
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 15× P1 · 110× P2 · 48× P3.
+`todo` by priority: 15× P1 · 110× P2 · 47× P3.
 
 ## In progress now
 
@@ -42,6 +42,7 @@ _None._
 - [TASK-738](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-738-ribbon-rich-tooltips.md) — b-ribbon: rich tooltips (title, description, shortcut) (P2, ai)
 - [TASK-739](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-739-ribbon-toggle-buttons.md) — b-ribbon: toggle buttons with a pressed state (P2, ai)
 - [TASK-735](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-735-ribbon-collapse-by-double-click-and-ctrl-f1.md) — b-ribbon: collapse by double-clicking a tab, and Ctrl+F1 (P3, ai)
+- [TASK-737](EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/TASK-737-ribbon-quick-access-toolbar.md) — b-ribbon: Quick Access Toolbar (P3, ai)
 - [TASK-599](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-599-semantic-text-colours-sub-aa.md) — Every semantic colour-on-tint pairing is below the AA contrast floor, in both themes (P1, ai)
 
 ## Blocked

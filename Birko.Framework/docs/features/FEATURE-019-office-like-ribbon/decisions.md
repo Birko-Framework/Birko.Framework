@@ -56,3 +56,4 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-10-22 — D7 refined by the user (Q2), choosing from three suggestions: Alt+Windows key / Ctrl+Option, as in Microsoft 365 in the browser, over F10 (taken by browsers) and Alt alone (reliable only in an installed app); an app can change it.
 - 2026-10-22 — D8 refined by the user (Q3) from a live preview of three positions: in the tab row before the tabs, over its own row above the tabs and below the ribbon; an app can switch the position.
 - 2026-10-22 — D6 built (TASK-735, awaiting sign-off). Both triggers switch between the ribbon always shown and tabs only, as Office's "collapse the ribbon" does.
+- 2026-10-22 — D8 built (TASK-737, awaiting sign-off): in the tab row by default, customised from a right-click menu and a ▾ menu, remembered per app.

@@ -2,7 +2,7 @@
 id: TASK-737
 parent: STORY-067
 feature: FEATURE-019
-status: todo
+status: verify  # verified with real clicks and keys 2026-10-22; the human test plan is left
 priority: P3
 assignee: ai
 created: 2026-10-22
@@ -25,11 +25,11 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Acceptance criteria
 
-- [ ] The app declares the toolbar's default commands; the user can add a command (context menu "Add to Quick Access Toolbar") and remove one
-- [ ] The choice persists under a key (localStorage, as split-panel sizes do), hostile stored values ignored
-- [ ] Default position in the tab row, before the tabs (decided by the user from a live preview, Q3); an attribute
+- [x] The app declares the toolbar's default commands; the user can add a command (context menu "Add to Quick Access Toolbar") and remove one
+- [x] The choice persists under a key (localStorage, as split-panel sizes do), hostile stored values ignored
+- [x] Default position in the tab row, before the tabs (decided by the user from a live preview, Q3); an attribute
       moves it to its own row above the tabs or below the ribbon; keyboard-reachable; announced
-- [ ] Components README, API.md and CLAUDE.md inventory updated; i18n keys under `bwc.ribbon.*`
+- [x] Components README, API.md and CLAUDE.md inventory updated; i18n keys under `bwc.ribbon.*`
 
 ## Out of scope
 
@@ -38,3 +38,40 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 ## Human test plan
 
 - [ ] Add and remove commands, reload: the toolbar keeps them; check it at a narrow width
+
+## Outcome (2026-10-22)
+
+Committed to Birko.Web and the Playground, not pushed.
+
+- **API.** `setQuickAccess(items)`, `getQuickAccess()` (refs), attributes `qat-key` and `qat-position` (`tabs` default |
+  `above` | `below`), event `quick-access-change` → `{ refs }`. A button emits `item-click` with `source: 'qat'`; a
+  ribbon command added there also carries its `tabId` / `groupId`.
+- **Customising.**
+  - Right-click, Shift+F10 or the menu key (all fire `contextmenu`) on a ribbon command offers "Add to Quick Access
+    Toolbar". On a toolbar button it offers "Remove". Menu-only commands and links cannot be added.
+  - ▾ lists the commands as `menuitemcheckbox`es plus "Reset to default". A re-shown default returns to its declared
+    place, as in Office.
+  - Both menus are one shared popover, filled when it opens; focus returns to the opener.
+- **Storage.** Under `birko-ribbon-qat:<key>`: a list of refs, each matched against a strict pattern, de-duplicated,
+  capped at 50 and resolved against real commands. Anything else is ignored. Reset removes the stored list.
+- **Behaviour.**
+  - One Tab stop with ←/→/Home/End inside.
+  - Tooltips come from the shared b-tooltip.
+  - A toggle pressed in the toolbar is pressed in the ribbon too.
+  - Hidden below 48rem, where the mobile menu lists everything.
+- **Bug found and fixed.**
+  - `_showTabContent` (hover preview, scaling) re-runs `_bindMenus`, which bound the ribbon-menu click handler onto
+    every `.ribbon-menu-item`. That included an open shared menu, so after a hover across a tab, a choice was swallowed
+    and a stray item-click emitted.
+  - The shared menu is now excluded. It also explains a flaky failure: a check passed in isolation, where the pointer
+    never crossed a tab.
+- **Gate.**
+  - Playground `keyboard-check.mjs` 116/116 twice, with 23 new checks using real clicks and keys. They cover:
+    defaults; the tab-row position; a click's source; one Tab stop and arrows; adding by right-click and Enter (saved
+    and reported); running an added command; menu-only commands refused; a toggle kept in step; removing by Shift+F10;
+    ▾ checkboxes and hiding; a hover preview while ▾ is open; restoring after a remount; hostile, non-list and unknown
+    stored values; reset; and above/below.
+  - Without the menu exclusion, 2 fail (2 stray item-clicks).
+  - `verify.mjs` clean; entry-points 409/409; `tsc` clean.
+- **Not checked by eye.** The Chrome tab froze while showing this; headless runs at the same viewport and theme did
+  not reproduce it.
