@@ -2,7 +2,7 @@
 id: TASK-732
 parent: STORY-067
 feature: FEATURE-019
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-10-22
