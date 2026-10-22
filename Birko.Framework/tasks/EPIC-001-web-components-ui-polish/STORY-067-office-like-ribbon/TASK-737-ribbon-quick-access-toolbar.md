@@ -75,3 +75,14 @@ Committed to Birko.Web and the Playground, not pushed.
   - `verify.mjs` clean; entry-points 409/409; `tsc` clean.
 - **Not checked by eye.** The Chrome tab froze while showing this; headless runs at the same viewport and theme did
   not reproduce it.
+
+## Follow-up (2026-10-22): the toolbar is opt-in
+
+The user asked whether the toolbar can be left out. It could only partly: it showed only after `setQuickAccess()`, but a
+right-click on any command still offered "Add to Quick Access Toolbar", which created one in an app that never asked for
+it.
+
+- Now `setQuickAccess()` switches it on: there is no toolbar and no "Add" entry until then. `[]` gives an empty toolbar
+  the user can fill, and `null` turns it off.
+- New checks in keyboard-check: no toolbar or menu without the call, `[]` fillable, `null` off. 119/119; the first check
+  fails without the right-click guard.
