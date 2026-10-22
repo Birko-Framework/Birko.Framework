@@ -21,13 +21,13 @@ generated: 2026-10-22
 
 ## Build progress
 
-0 / 14 tasks done (9 built, awaiting sign-off).
+0 / 14 tasks done (10 built, awaiting sign-off).
 
 - [~] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — built, awaiting your check
 - [~] TASK-731 b-ribbon: arrow-key navigation between commands and groups — built, awaiting your check
 - [~] TASK-732 b-ribbon: split buttons and dropdown menu buttons — built, awaiting your check
 - [~] TASK-733 b-ribbon: group dialog launcher — built, awaiting your check
-- [ ] TASK-734 b-ribbon: contextual tabs
+- [~] TASK-734 b-ribbon: contextual tabs — built, awaiting your check
 - [~] TASK-735 b-ribbon: collapse by double-clicking a tab, and Ctrl+F1 — built, awaiting your check
 - [~] TASK-736 b-ribbon: key tips (Alt shows letters for keyboard access) — built, awaiting your check
 - [~] TASK-737 b-ribbon: Quick Access Toolbar — built, awaiting your check
@@ -57,6 +57,8 @@ Quick Access Toolbar: Save, Undo and Redo sit before the ribbon tabs in the Play
 Key tips: press Alt and the Windows key together (Ctrl and Option on a Mac); letters appear on the tabs. Press one to open the tab, then a command's letter to run it; Escape steps back.
 
 Group launcher: the Font group in the Playground ribbon has a small corner arrow beside its name, for more font options; it can also be reached with the arrow keys and from a key tip.
+
+Contextual tabs: the Playground ribbon shows a green "Table" set (Table Design, Layout) after the normal tabs, as it would while a table is selected.
 
 ## Prototype
 
