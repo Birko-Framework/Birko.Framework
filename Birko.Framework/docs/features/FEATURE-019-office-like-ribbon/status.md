@@ -21,14 +21,14 @@ generated: 2026-10-22
 
 ## Build progress
 
-0 / 14 tasks done (5 built, awaiting sign-off).
+0 / 14 tasks done (6 built, awaiting sign-off).
 
 - [~] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — built, awaiting your check
 - [~] TASK-731 b-ribbon: arrow-key navigation between commands and groups — built, awaiting your check
 - [~] TASK-732 b-ribbon: split buttons and dropdown menu buttons — built, awaiting your check
 - [ ] TASK-733 b-ribbon: group dialog launcher
 - [ ] TASK-734 b-ribbon: contextual tabs
-- [ ] TASK-735 b-ribbon: collapse by double-clicking a tab, and Ctrl+F1
+- [~] TASK-735 b-ribbon: collapse by double-clicking a tab, and Ctrl+F1 — built, awaiting your check
 - [ ] TASK-736 b-ribbon: key tips (Alt shows letters for keyboard access)
 - [ ] TASK-737 b-ribbon: Quick Access Toolbar
 - [~] TASK-738 b-ribbon: rich tooltips (title, description, shortcut) — built, awaiting your check
@@ -49,6 +49,8 @@ Menus: in the Playground ribbon, "Paste" has a small arrow that opens more paste
 Tooltips: rest the pointer on "Cut" or "Paste" in the Playground ribbon; a light card shows its name, shortcut and a short description. Moving to the next command shows its tooltip at once, and reaching a command with the keyboard shows it too.
 
 On/off buttons: in the Playground ribbon, "Bold" and "Italic" switch on and off, and "Columns" / "Rows" form a pair where only one can be on.
+
+Collapsing: double-click a ribbon tab, or press Ctrl+F1 anywhere in the app, to hide the ribbon down to its tabs; do it again to bring it back.
 
 ## Prototype
 
