@@ -2,7 +2,7 @@
 id: TASK-743
 parent: STORY-067
 feature: FEATURE-019
-status: todo
+status: verify  # verified headlessly 2026-10-22; the human test plan is left
 priority: P3
 assignee: ai
 created: 2026-10-22
@@ -29,11 +29,11 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 ## Acceptance criteria
 
-- [ ] A folded group without an icon still shows something to press in compact mode: a fallback glyph, its
+- [x] A folded group without an icon still shows something to press in compact mode: a fallback glyph, its
       initial, or compact is not applied to it (decide from a preview)
-- [ ] Decide, with the user, whether the open panel keeps one height while groups fold (Office) or stays
+- [x] Decide, with the user, whether the open panel keeps one height while groups fold (Office) or stays
       content-sized (today); if it changes, the scaling suites still pass
-- [ ] `ribbon-layout-smoke` covers an icon-less folded group
+- [x] `ribbon-layout-smoke` covers an icon-less folded group
 
 ## Out of scope
 
@@ -43,3 +43,20 @@ Look first: this changes what a stakeholder sees, so show a mockup or 2-3 option
 
 - [ ] Narrow the Playground ribbon until every group folds, with and without group icons: every button is visible
       and pressable
+
+## Outcome (2026-10-22)
+
+Committed to Birko.Web and the Playground, not pushed.
+
+- **Decided by the user** from a live preview of real ribbons at 260px:
+  - An icon-less compact folded group shows its group's initial in a small tile, over one generic glyph for all. A
+    third option, keeping the name, was dropped from the preview: compact exists because named buttons do not fit
+    the row, so they would be clipped.
+  - The panel stays content-sized (today), over Office's one height.
+- **Built.** The initial is the label's first letter, markup stripped and escaped, and it shows only in compact mode.
+  The name stays the button's accessible name and tooltip. A group with an icon is unchanged.
+- **Gate.** Playground `ribbon-layout-smoke` 19/19, with two new checks: six icon-less groups at 260px each show
+  their initial on a 25px button, and the initial is text, never markup. On the code before they fail with the
+  defect as filed: six empty 7px buttons. `verify.mjs` clean twice; keyboard-check 195/195; `tsc` clean. Checked in
+  Chrome, mixed with a group that has an icon.
+

@@ -21,7 +21,7 @@ generated: 2026-10-22
 
 ## Build progress
 
-0 / 14 tasks done (12 built, awaiting sign-off).
+0 / 14 tasks done (13 built, awaiting sign-off).
 
 - [~] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — built, awaiting your check
 - [~] TASK-731 b-ribbon: arrow-key navigation between commands and groups — built, awaiting your check
@@ -36,7 +36,7 @@ generated: 2026-10-22
 - [~] TASK-740 b-ribbon: galleries — built, awaiting your check
 - [~] TASK-741 b-ribbon: inputs and comboboxes inside the ribbon — built, awaiting your check
 - [ ] TASK-742 Avalonia Ribbon: parity with the Office-like b-ribbon (FEATURE-019)
-- [ ] TASK-743 b-ribbon: a folded group without an icon is an empty 7px button
+- [~] TASK-743 b-ribbon: a folded group without an icon is an empty 7px button — built, awaiting your check
 
 ## What can be tested now
 
