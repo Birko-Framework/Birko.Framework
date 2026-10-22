@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed; TASK-704 and TASK-705 found by TASK-696 and closed; TASK-696 closed; EPIC-023 filed from its harvest with TASK-706–724; TASK-725 filed for the ClientApi.CSharp tester and built, awaiting verification; TASK-726 spawned from its sr-only follow-up; TASK-727 filed and built, awaiting verification; TASK-728 filed, needs a decision). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed; TASK-704 and TASK-705 found by TASK-696 and closed; TASK-696 closed; EPIC-023 filed from its harvest with TASK-706–724; TASK-725 filed for the ClientApi.CSharp tester and built, awaiting verification; TASK-726 spawned from its sr-only follow-up; TASK-727 filed and built, awaiting verification; TASK-728 filed, needs a decision; TASK-729 filed and fixed, awaiting verification). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -15,7 +15,7 @@ which this regeneration never touches._
 | planned      | 11    | 27      | —     |
 | todo         | —     | —       | 165   |
 | in-progress  | 8     | 12      | 0     |
-| verify       | —     | —       | 6     |
+| verify       | —     | —       | 7     |
 | blocked      | —     | —       | 1     |
 | done         | 4     | 27      | 411   |
 | cancelled    | 0     | 0       | 6     |
@@ -35,6 +35,7 @@ _None._
 - [TASK-552](EPIC-001-web-components-ui-polish/TASK-552-b-editable-table-shows-stale-typed-values-after-setdata.md) — b-editable-table shows stale typed values after setData or a row removal (P2, ai)
 - [TASK-725](_loose/TASK-725-json-diff-engine-and-b-json-diff.md) — A generic JSON diff in Birko.Web.Core and a `b-json-diff` component (P2, ai)
 - [TASK-727](_loose/TASK-727-xml-mode-for-the-json-diff.md) — XML mode for the JSON diff: `xmlToTree` in Birko.Web.Core, `format="xml"` in `b-json-diff` (P2, ai)
+- [TASK-729](_loose/TASK-729-b-tag-input-loses-focus-after-a-commit.md) — `b-tag-input` loses focus after a tag is committed, so the next value typed goes nowhere (P2, ai)
 - [TASK-599](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/TASK-599-semantic-text-colours-sub-aa.md) — Every semantic colour-on-tint pairing is below the AA contrast floor, in both themes (P1, ai)
 
 ## Blocked
@@ -630,6 +631,7 @@ _None._
 - [ ] [TASK-726](_loose/TASK-726-sr-only-not-contained-in-four-components.md) `.sr-only` text in b-kanban, b-qty-stepper, b-rating and b-gallery does not scroll with its container (P3)
 - [ ] [TASK-727](_loose/TASK-727-xml-mode-for-the-json-diff.md) XML mode for the JSON diff: `xmlToTree` in Birko.Web.Core, `format="xml"` in `b-json-diff` (P2)
 - [ ] [TASK-728](_loose/TASK-728-general-text-line-diff-needs-a-decision.md) A general text / line diff (`diffText` + `b-text-diff`) — decide before building (P3)
+- [ ] [TASK-729](_loose/TASK-729-b-tag-input-loses-focus-after-a-commit.md) `b-tag-input` loses focus after a tag is committed, so the next value typed goes nowhere (P2)
 
 ## Completed
 
