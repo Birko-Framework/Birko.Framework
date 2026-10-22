@@ -47,3 +47,15 @@ Committed to Birko.Web and the Playground, not pushed (not in v0.1.14).
   - arrows reach it; Enter follows it and reports once; a disabled one neither navigates nor reports.
   - They fail on the code before. `ribbon-a11y-check` 22/22; `verify.mjs`'s only failure was `carousel-smoke`
     (TASK-745).
+
+## Checked in the FinStat tester (2026-10-22)
+
+By the ClientApi.CSharp session, against the tester built from BIRKO_SRC (automation, not a person):
+
+- Right-click on a link command offers "Add to Quick Access Toolbar".
+- The added command (CZ Premium) is `<a class="ribbon-qat-btn" href="#/cz/detail/premium">`.
+- Its ref is saved under `birko-ribbon-qat:finstat-tester` and survives a reload.
+- A click navigates.
+
+Middle-click (a new tab) was not tested, so the human test plan stays open on that one step.
+
