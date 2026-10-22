@@ -65,3 +65,16 @@ repo's rules). The tester consumes the source through `BIRKO_SRC`, so it can wir
   a11y checks pass, `tsc` clean on Core, Components and the Playground.
   - Mutation: dropping `oldSegments`, or ignoring nothing on one-sided nodes, fails 3 checks.
   - Screenshots checked in light and dark, at 1100px and 390px.
+
+## Follow-up (2026-10-22): the hidden text stretched the document
+
+Reported by the ClientApi.CSharp tester. `b-json-diff`'s `.sr-only` spans had no positioned ancestor inside the
+component, so inside BAppShell's scrolling `main` they extended the window: document 1524px in a 609px window.
+`b-tabs` did the same. Both now have `:host { position: relative; }`.
+
+- **Gate.** New Playground `sr-only-contain-smoke` scrolls a container and requires each `.sr-only` to move with it:
+  3/3 (json-diff, tabs, carousel). Red without the fix: json-diff and tabs fail. A document-height probe now reports
+  no overflow for either.
+- Four more (`b-kanban`, `b-qty-stepper`, `b-rating`, `b-gallery`) fail the scroll check but measured no document
+  growth, so they are TASK-726 rather than changed here.
+- Components CLAUDE.md § Accessibility records the rule.

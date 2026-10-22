@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed; TASK-704 and TASK-705 found by TASK-696 and closed; TASK-696 closed; EPIC-023 filed from its harvest with TASK-706–724; TASK-725 filed for the ClientApi.CSharp tester and built, awaiting verification). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-10-19 (patched: TASK-670–677 filed, EPIC-019 closed; TASK-678 filed, EPIC-021 filed with TASK-679–683, TASK-168, TASK-194, TASK-679, TASK-680 and TASK-681 closed; TASK-684, TASK-685, TASK-686 filed; adoption 2026-10-20: EPIC-019 reopened, TASK-687 done, TASK-688 and TASK-689 filed; TASK-690 spawned from TASK-682 and closed; TASK-682 and TASK-683 closed; TASK-691 split from TASK-684, TASK-692 and TASK-693 filed; TASK-691, TASK-684 and TASK-686 closed, EPIC-021 done; TASK-688 closed; TASK-685 closed, TASK-694 spawned; TASK-695 split from TASK-693 and closed; TASK-693 closed; TASK-692 closed; TASK-689 closed, TASK-696 filed; TASK-694 closed, TASK-697 spawned; EPIC-022 filed with TASK-698–701; TASK-698 and TASK-699 closed; TASK-702 spawned from TASK-700 and closed; TASK-700 closed; TASK-703 spawned from TASK-701 and closed; TASK-701 closed, EPIC-022 done; TASK-697 and TASK-675 closed; TASK-704 and TASK-705 found by TASK-696 and closed; TASK-696 closed; EPIC-023 filed from its harvest with TASK-706–724; TASK-725 filed for the ClientApi.CSharp tester and built, awaiting verification; TASK-726 spawned from its sr-only follow-up). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 _Hand-written notes (standing callouts, count corrections, measured drift) live in **[NOTES.md](NOTES.md)**,
 which this regeneration never touches._
@@ -13,7 +13,7 @@ which this regeneration never touches._
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 11    | 27      | —     |
-| todo         | —     | —       | 163   |
+| todo         | —     | —       | 164   |
 | in-progress  | 8     | 12      | 0     |
 | verify       | —     | —       | 5     |
 | blocked      | —     | —       | 1     |
@@ -22,7 +22,7 @@ which this regeneration never touches._
 
 `blocked`: 1 (1 also counted in their own state).
 
-`todo` by priority: 15× P1 · 110× P2 · 38× P3.
+`todo` by priority: 15× P1 · 110× P2 · 39× P3.
 
 ## In progress now
 
@@ -626,6 +626,7 @@ _None._
 - [x] [TASK-689](_loose/TASK-689-spec-map-coverage-unverified-207-source-files-unexplained.md) The spec map was never coverage-checked: 207 source files are unexplained and `ignore:` matches nothing (P3)
 - [x] [TASK-696](_loose/TASK-696-regen-the-areas-task-689-extended.md) Regenerate the 14 spec areas TASK-689 extended, including the new backend-store-implementations (P3)
 - [ ] [TASK-725](_loose/TASK-725-json-diff-engine-and-b-json-diff.md) A generic JSON diff in Birko.Web.Core and a `b-json-diff` component (P2)
+- [ ] [TASK-726](_loose/TASK-726-sr-only-not-contained-in-four-components.md) `.sr-only` text in b-kanban, b-qty-stepper, b-rating and b-gallery does not scroll with its container (P3)
 
 ## Completed
 
