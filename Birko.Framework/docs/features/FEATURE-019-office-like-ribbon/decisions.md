@@ -48,3 +48,4 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-10-22 — D12 approved by the user (picked "yes, all" (toggle buttons, galleries and inputs)); decomposed → TASK-741.
 - 2026-10-22 — D13 approved by the user (picked "web first, avalonia later" over parallel or web-only); decomposed → TASK-742.
 - 2026-10-22 — D1 built (TASK-730, awaiting sign-off). TASK-743 spawned from it: a folded group without an icon shows an empty button (it predates D1), and whether the ribbon keeps one height while groups fold.
+- 2026-10-22 — D2 built (TASK-731, awaiting a screen-reader check).

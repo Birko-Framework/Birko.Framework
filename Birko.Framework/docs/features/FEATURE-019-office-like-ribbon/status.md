@@ -21,10 +21,10 @@ generated: 2026-10-22
 
 ## Build progress
 
-0 / 14 tasks done (1 built, awaiting sign-off).
+0 / 14 tasks done (2 built, awaiting sign-off).
 
 - [~] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — built, awaiting your check
-- [ ] TASK-731 b-ribbon: arrow-key navigation between commands and groups
+- [~] TASK-731 b-ribbon: arrow-key navigation between commands and groups — built, awaiting your check
 - [ ] TASK-732 b-ribbon: split buttons and dropdown menu buttons
 - [ ] TASK-733 b-ribbon: group dialog launcher
 - [ ] TASK-734 b-ribbon: contextual tabs
@@ -42,6 +42,8 @@ generated: 2026-10-22
 
 The layout fix: in the Birko.Web Playground, every ribbon group is now one height, commands line up in rows across groups, and each group's name sits underneath it. Please look at it in light and dark and at a narrow window.
 
+Arrow keys: Tab into the ribbon, press the down arrow, then move between commands and groups with the arrow keys; a folded group opens with Enter. Please also try it with a screen reader (NVDA or Narrator).
+
 ## Prototype
 
 The layout fix was previewed live in the Playground on 2026-10-22 and the full variant picked; later behaviours get a
@@ -49,5 +51,5 @@ look preview inside their own tasks.
 
 ## Next step
 
-Check and sign off the layout fix (TASK-730), then TASK-731 (arrow keys). Arrow-key navigation (TASK-731) unblocks key tips,
+Check and sign off the layout fix (TASK-730) and the arrow keys (TASK-731); then TASK-732 (menu buttons). Arrow-key navigation (TASK-731) unblocks key tips,
 inputs and, with split buttons (TASK-732), galleries.
