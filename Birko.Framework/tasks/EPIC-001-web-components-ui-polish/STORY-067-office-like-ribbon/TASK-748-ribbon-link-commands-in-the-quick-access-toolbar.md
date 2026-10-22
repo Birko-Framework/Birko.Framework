@@ -2,7 +2,7 @@
 id: TASK-748
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified with real clicks and keys 2026-10-22; the human test plan is left
+status: done  # closed 2026-10-22: checked in the FinStat tester, middle-click by a real browser
 priority: P2
 assignee: ai
 created: 2026-10-22
@@ -32,7 +32,7 @@ reason recorded was that toolbar buttons were `<button>`s.
 
 ## Human test plan
 
-- [ ] In the FinStat tester: add an endpoint to the toolbar, click it, middle-click it (new tab), reload (kept)
+- [x] In the FinStat tester: add an endpoint to the toolbar, click it, middle-click it (new tab), reload (kept) (add, click and reload by the tester session; middle-click by a real browser in keyboard-check)
 
 ## Outcome (2026-10-22)
 
@@ -58,4 +58,10 @@ By the ClientApi.CSharp session, against the tester built from BIRKO_SRC (automa
 - A click navigates.
 
 Middle-click (a new tab) was not tested, so the human test plan stays open on that one step.
+
+## Closed (2026-10-22)
+
+Asked by the user. The one step left, middle-click, is now checked by a real middle-click in Playground
+`keyboard-check.mjs` (puppeteer's mouse, middle button, on the toolbar link): the browser opened a new tab at the link's
+address (`…#kb-elite`). 204/204.
 

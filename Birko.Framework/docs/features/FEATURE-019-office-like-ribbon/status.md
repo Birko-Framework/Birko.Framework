@@ -21,7 +21,7 @@ generated: 2026-10-22
 
 ## Build progress
 
-16 / 18 tasks done: the web ribbon is signed off. Left: links in the Quick Access Toolbar (TASK-748, built, awaiting a check in the FinStat tester) and the desktop (Avalonia) ribbon, TASK-742.
+17 / 18 tasks done: the web ribbon is signed off. Left: the desktop (Avalonia) ribbon, TASK-742.
 
 - [x] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — signed off
 - [x] TASK-731 b-ribbon: arrow-key navigation between commands and groups — signed off
@@ -39,7 +39,7 @@ generated: 2026-10-22
 - [x] TASK-743 b-ribbon: a folded group without an icon is an empty 7px button — signed off
 - [x] TASK-746 b-ribbon: groups fold at the right width (some were cut off at the right edge), and a narrow group centres its commands — signed off
 - [x] TASK-747 b-ribbon: every size is a CSS token — done, no visible change
-- [~] TASK-748 b-ribbon: link commands in the Quick Access Toolbar — built, awaiting a check in the FinStat tester
+- [x] TASK-748 b-ribbon: link commands in the Quick Access Toolbar — checked in the FinStat tester
 - [x] TASK-749 b-ribbon: an empty strip above the tabs — fixed
 
 ## What can be tested now
