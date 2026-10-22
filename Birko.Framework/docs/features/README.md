@@ -47,7 +47,7 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 | [FEATURE-016](FEATURE-016-birko-backports-from-reps/) | Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) | **review** | 6/0/0/0/0 | 14/14 | n/a (backfilled) | [EPIC-016](../../tasks/EPIC-016-birko-backports-from-reps/EPIC.md) |
 | [FEATURE-017](FEATURE-017-tenant-isolation-hardening/) | Tenant isolation hardening | building | 3/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-017](../../tasks/EPIC-017-tenant-isolation-hardening/EPIC.md) |
 | [FEATURE-018](FEATURE-018-birko-web-core-runtime/) | Birko.Web.Core — the browser-side runtime | building | 1/0/0/0/0 | 6/7 | n/a (already ships) | [EPIC-018](../../tasks/EPIC-018-birko-web-core-runtime/EPIC.md) |
-| [FEATURE-019](FEATURE-019-office-like-ribbon/) | An Office-like ribbon (`b-ribbon`) | building | 13/0/0/0/0 | 15/17 | built (live preview, not kept) | [STORY-067](../../tasks/EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/STORY.md) (EPIC-001) |
+| [FEATURE-019](FEATURE-019-office-like-ribbon/) | An Office-like ribbon (`b-ribbon`) | building | 13/0/0/0/0 | 16/18 | built (live preview, not kept) | [STORY-067](../../tasks/EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/STORY.md) (EPIC-001) |
 
 Phase ∈ idea · prototyping · deciding · building · review · done · dropped · superseded.
 Decisions column = approved/changed/deferred/removed/proposed counts.
