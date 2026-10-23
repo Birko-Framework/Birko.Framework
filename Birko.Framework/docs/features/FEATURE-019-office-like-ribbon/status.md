@@ -13,22 +13,22 @@ generated: 2026-10-22
 
 | State | Count |
 |-------|-------|
-| ✅ approved | 13 |
-| ✏️ changed | 0 |
+| ✅ approved | 12 |
+| ✏️ changed | 1 |
 | ⏸️ deferred | 0 |
 | ❌ removed | 0 |
 | 💭 proposed (undecided) | 0 |
 
 ## Build progress
 
-18 / 31 tasks done: the web ribbon is signed off. The desktop (Avalonia) ribbon, TASK-751–763, is all built and checked by automated tests; it awaits your check in the Birko.Xaml.Gallery app.
+17 / 31 tasks done: the web ribbon is signed off, except the collapse change (TASK-735, D6 changed 2026-10-23). The desktop (Avalonia) ribbon, TASK-751–763, is all built and checked by automated tests; it awaits your check in the Birko.Xaml.Gallery app.
 
 - [x] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — signed off
 - [x] TASK-731 b-ribbon: arrow-key navigation between commands and groups — signed off
 - [x] TASK-732 b-ribbon: split buttons and dropdown menu buttons — signed off
 - [x] TASK-733 b-ribbon: group dialog launcher — signed off
 - [x] TASK-734 b-ribbon: contextual tabs — signed off
-- [x] TASK-735 b-ribbon: collapse by double-clicking a tab, and Ctrl+F1 — signed off
+- [~] TASK-735 b-ribbon: collapse by double-clicking a tab, and Ctrl+F1 — reopened: collapse now always unpins and the pin moved onto the panel (D6 changed 2026-10-23), awaiting your check
 - [x] TASK-736 b-ribbon: key tips (Alt shows letters for keyboard access) — signed off
 - [x] TASK-737 b-ribbon: Quick Access Toolbar — signed off
 - [x] TASK-738 b-ribbon: rich tooltips (title, description, shortcut) — signed off
@@ -83,7 +83,7 @@ inputs and, with split buttons (TASK-732), galleries.
 - [~] TASK-754 Avalonia ribbon: toggle buttons and one-of sets — built, awaiting your check
 - [~] TASK-755 Avalonia ribbon: split buttons and menu buttons — built, awaiting your check
 - [~] TASK-756 Avalonia ribbon: group dialog launcher — built, awaiting your check
-- [~] TASK-757 Avalonia ribbon: collapse by double-clicking a tab — built, awaiting your check
+- [~] TASK-757 Avalonia ribbon: collapse by double-clicking a tab — built, with D6 changed 2026-10-23, awaiting your check
 - [~] TASK-758 Avalonia ribbon: key tips (plain Alt) — built, awaiting your check
 - [~] TASK-759 Avalonia ribbon: Quick Access Toolbar (the app saves it) — built, awaiting your check
 - [~] TASK-760 Avalonia ribbon: contextual tabs — built, awaiting your check

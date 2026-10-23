@@ -53,17 +53,25 @@ public partial class Ribbon : ContentControl
     public KeyGesture? CollapseShortcut { get => GetValue(CollapseShortcutProperty); set => SetValue(CollapseShortcutProperty, value); }
 
     /// <summary>
-    /// Collapses the ribbon to its tabs, or brings it back pinned open — what Ctrl+F1 and a double-click on a tab do
-    /// (TASK-757, as b-ribbon's <c>toggleRibbon</c>). Expanded and pinned, it collapses; collapsed or unpinned, it pins
-    /// the ribbon open.
+    /// Collapses the ribbon to its tabs, or brings it back pinned open — what Ctrl+F1, a double-click on a tab and the
+    /// ⌃ / ⌄ button do (TASK-757, as b-ribbon's <c>toggleRibbon</c>). Pinned, it unpins to the tabs (a tab then opens the
+    /// panel over the page); unpinned, it pins the ribbon open.
     /// </summary>
+    /// <remarks>
+    /// Collapsed and unpinned are one state, as Office's (FEATURE-019 D6, changed by the user 2026-10-23): pinning
+    /// always opens the panel and collapsing always unpins, so there is no "pinned, but only the tabs" ribbon. That
+    /// third state, reached by the chevron, a click on the open tab or this toggle, read as a broken ribbon.
+    /// </remarks>
     public void ToggleRibbon() => ApplyToggle(expanded: IsPinned && !IsCollapsed);
 
-    private void ApplyToggle(bool expanded)
+    private void ApplyToggle(bool expanded) => IsPinned = !expanded;
+
+    /// <summary>Keeps pinned and expanded one state: pinning opens the panel, collapsing or unpinning shows the tabs only.</summary>
+    private void KeepPinnedOpen(AvaloniaProperty changed)
     {
-        if (expanded) { IsCollapsed = true; return; }
-        IsPinned = true;
-        IsCollapsed = false;
+        if (changed == IsPinnedProperty) IsCollapsed = !IsPinned;
+        else if (IsCollapsed && IsPinned) IsPinned = false;
+        else if (!IsCollapsed && !IsPinned) IsPinned = true;
     }
 
     public static readonly StyledProperty<double> NarrowThresholdProperty =
@@ -133,9 +141,9 @@ public partial class Ribbon : ContentControl
             r.Rebuild();
         });
         SelectedIndexProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
-        IsCollapsedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+        IsCollapsedProperty.Changed.AddClassHandler<Ribbon>((r, _) => { r.KeepPinnedOpen(IsCollapsedProperty); r.Rebuild(); });
         PreferredGroupSizeProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
-        IsPinnedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+        IsPinnedProperty.Changed.AddClassHandler<Ribbon>((r, _) => { r.KeepPinnedOpen(IsPinnedProperty); r.Rebuild(); });
         QuickAccessPositionProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         ContextualStyleProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         GalleryStyleProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
@@ -217,18 +225,17 @@ public partial class Ribbon : ContentControl
             tabButton.Bind(ForegroundProperty, tabButton.GetResourceObservable(
                 i == selected ? "BColorPrimaryBrush" : "BTextSecondaryBrush"));
             Describe(tabButton, tabs[i].Label);
-            // Clicking the already-active tab toggles collapse (Office-style). Otherwise: pinned selects
-            // and expands for good; UNPINNED selects and reveals only temporarily, leaving IsCollapsed
-            // alone — "Show Tabs" is a mode you leave by pinning, not by clicking a tab (TASK-101).
+            // Pinned, a tab selects (the open one does nothing, as Office's: a click there used to collapse the
+            // ribbon into the "pinned, but only tabs" state the user found broken, D6 changed 2026-10-23). UNPINNED
+            // selects and reveals only temporarily — "Show Tabs" is a mode you leave by pinning (TASK-101).
             tabButton.Click += (_, _) =>
             {
                 // The second click of a double-click: the double-click has already toggled the ribbon (TASK-757).
                 if (_swallowTabClick) { _swallowTabClick = false; return; }
-                if (index == SelectedIndex && IsPinned) { IsCollapsed = !IsCollapsed; return; }
+                if (index == SelectedIndex && IsPinned) return;
 
                 SelectedIndex = index;
-                if (IsPinned) IsCollapsed = false;
-                else RevealTemporarily();
+                if (!IsPinned) RevealTemporarily();
             };
             AddFocusRing(tabButton);
             buttons.Add(tabButton);
@@ -237,14 +244,16 @@ public partial class Ribbon : ContentControl
 
         var chevron = Sized(new Button
         {
-            Content = new TextBlock { Text = IsCollapsed ? "⌄" : "⌃" },
+            // The state, not the panel on screen: an unpinned ribbon showing its panel over the page is still collapsed.
+            Content = new TextBlock { Text = IsPinned ? "⌃" : "⌄" },
             Background = Brushes.Transparent,
             HorizontalAlignment = HorizontalAlignment.Right,
-            [ToolTip.TipProperty] = IsCollapsed ? "Expand the ribbon" : "Collapse the ribbon",
+            [ToolTip.TipProperty] = IsPinned ? "Collapse the ribbon" : "Expand the ribbon",
         }, PaddingProperty, "BRibbonControlPadding");
         chevron.Bind(ForegroundProperty, chevron.GetResourceObservable("BTextSecondaryBrush"));
-        Describe(chevron, IsCollapsed ? "Expand the ribbon" : "Collapse the ribbon");
-        chevron.Click += (_, _) => IsCollapsed = !IsCollapsed;
+        Describe(chevron, IsPinned ? "Collapse the ribbon" : "Expand the ribbon");
+        // Office's collapse, the same as a double-click and Ctrl+F1 (D6 changed 2026-10-23): it unpins, and back pins open.
+        chevron.Click += (_, _) => ToggleRibbon();
         AddFocusRing(chevron);
 
         // The tab strip scrolls when the tabs overflow (Office Web / Fluent do this; the ribbon *body*
@@ -290,30 +299,21 @@ public partial class Ribbon : ContentControl
         var tabScroller = WrapScrollable(tabButtons, "Scroll tabs left", "Scroll tabs right", _tabRow, out var tabScrollViewer);
         CarryTabScrollAcrossRebuild(tabScrollViewer, buttons, selected);
 
-        var pin = Sized(new Button
-        {
-            Content = new TextBlock { Text = IsPinned ? "\U0001F4CC" : "\U0001F4CD" },
-            Background = Brushes.Transparent,
-            [ToolTip.TipProperty] = IsPinned ? "Unpin the ribbon" : "Pin the ribbon open",
-        }, PaddingProperty, "BRibbonPinPadding");
-        pin.Bind(ForegroundProperty, pin.GetResourceObservable("BTextSecondaryBrush"));
-        Describe(pin, IsPinned ? "Unpin the ribbon" : "Pin the ribbon open");
-        pin.Click += (_, _) => IsPinned = !IsPinned;
-        AddFocusRing(pin);
+        // One control for the one switch, where Office puts it (D6 changed by the user, 2026-10-23): pinned, the tab row
+        // has the collapse arrow; collapsed, it has none, and the panel a tab opens over the page carries the pin.
+        chevron.IsVisible = IsPinned;
 
-        var strip = Sized(new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto,Auto") }, MarginProperty, "BRibbonStripMargin");
+        var strip = Sized(new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto") }, MarginProperty, "BRibbonStripMargin");
         var leading = Reparent(_leadingHost);
         var trailing = Reparent(_trailingHost);
         Grid.SetColumn(leading, 0);
         Grid.SetColumn(tabScroller, 2);
         Grid.SetColumn(trailing, 3);
         Grid.SetColumn(chevron, 4);
-        Grid.SetColumn(pin, 5);
         strip.Children.Add(leading);
         strip.Children.Add(tabScroller);
         strip.Children.Add(trailing);
         strip.Children.Add(chevron);
-        strip.Children.Add(pin);
 
         // The Quick Access Toolbar (TASK-759): in the tab row before the tabs, or on a row of its own.
         var qat = BuildQuickAccess();
@@ -827,9 +827,31 @@ public partial class Ribbon : ContentControl
             args.Handled = true;
         };
 
+        // The pin, at the panel's bottom right as Office's: it keeps the ribbon open (pinned), the only way back from
+        // collapsed besides a double-click and Ctrl+F1 (D6 changed 2026-10-23).
+        var pin = Sized(new Button
+        {
+            Content = new TextBlock { Text = "\U0001F4CC" },
+            Background = Brushes.Transparent,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            [ToolTip.TipProperty] = "Pin the ribbon",
+        }, PaddingProperty, "BRibbonPinPadding");
+        pin.Bind(ForegroundProperty, pin.GetResourceObservable("BTextSecondaryBrush"));
+        Describe(pin, "Pin the ribbon");
+        AddFocusRing(pin);
+        pin.Click += (_, _) =>
+        {
+            _reveal?.Close();
+            IsPinned = true;
+        };
+        var body = new DockPanel();
+        DockPanel.SetDock(pin, Dock.Right);
+        body.Children.Add(pin);
+        body.Children.Add(groups);
+
         var surface = new Border
         {
-            Child = groups,
+            Child = body,
             // Full ribbon width, matching b-ribbon's `left: 0; right: 0` and Office: a temporary reveal
             // should read as the ribbon body appearing, not as a dropdown sized to its contents. MinWidth
             // rather than Width so unusually wide content can still grow past it.

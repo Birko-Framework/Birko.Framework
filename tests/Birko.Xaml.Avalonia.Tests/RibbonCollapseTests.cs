@@ -77,7 +77,7 @@ public class RibbonCollapseTests
         ribbon.IsCollapsed.Should().BeFalse("precondition");
         DoubleClick(ribbon, window, "Home");
         ribbon.IsCollapsed.Should().BeTrue("a double-click collapses the ribbon to its tabs");
-        ribbon.IsPinned.Should().BeTrue();
+        ribbon.IsPinned.Should().BeFalse("collapsed is unpinned, as Office's (D6 changed 2026-10-23)");
         DoubleClick(ribbon, window, "Home");
         ribbon.IsCollapsed.Should().BeFalse("and another brings it back, pinned open");
     }
@@ -135,5 +135,70 @@ public class RibbonCollapseTests
         ribbon.ToggleRibbon();
         ribbon.IsPinned.Should().BeTrue("ToggleRibbon on an unpinned ribbon pins it open");
         ribbon.IsCollapsed.Should().BeFalse();
+    }
+
+    // ── D6 changed (2026-10-23): collapsed and unpinned are one state, so there is no "pinned, only tabs" ribbon ──
+
+    private static Button Named(Ribbon ribbon, string name) =>
+        ribbon.GetVisualDescendants().OfType<Button>().First(b => global::Avalonia.Automation.AutomationProperties.GetName(b) == name);
+
+    private static void Press(Button b)
+    {
+        ((global::Avalonia.Automation.Provider.IInvokeProvider)global::Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(b)).Invoke();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static bool Visible(Ribbon ribbon, string name) =>
+        ribbon.GetVisualDescendants().OfType<Button>().Any(b => global::Avalonia.Automation.AutomationProperties.GetName(b) == name && b.IsEffectivelyVisible);
+
+    [AvaloniaFact]
+    public void One_control_at_a_time_the_arrow_while_open_the_pin_on_the_floating_panel()
+    {
+        // The user's pick (D6 changed 2026-10-23), Office's: pinned, the tab row has only the collapse arrow; collapsed,
+        // it has none, and the panel a tab opens over the page carries the pin.
+        var ribbon = Show(Build(), out _);
+        var chevron = Named(ribbon, "Collapse the ribbon");
+        chevron.GetVisualDescendants().OfType<TextBlock>().Single().Text.Should().Be("⌃");
+        Visible(ribbon, "Pin the ribbon").Should().BeFalse("no pin while the ribbon is pinned open");
+        Visible(ribbon, "Unpin the ribbon").Should().BeFalse("and no second button doing the same");
+
+        Press(chevron);
+        ribbon.IsPinned.Should().BeFalse("the arrow collapses as Office does: to the tabs, unpinned");
+        ribbon.IsCollapsed.Should().BeTrue();
+        Visible(ribbon, "Collapse the ribbon").Should().BeFalse("collapsed, the tab row has no arrow");
+        Visible(ribbon, "Expand the ribbon").Should().BeFalse();
+
+        Press(Named(ribbon, "Home"));
+        var overlay = ribbon.OpenOverlay;
+        overlay.Should().NotBeNull("a tab click opens the panel over the page");
+        var pin = overlay!.GetVisualDescendants().OfType<Button>().Single(b => global::Avalonia.Automation.AutomationProperties.GetName(b) == "Pin the ribbon");
+        Press(pin);
+        ribbon.IsPinned.Should().BeTrue("the pin keeps it open");
+        ribbon.IsCollapsed.Should().BeFalse();
+        ribbon.OpenOverlay.Should().BeNull("the floating panel gives way to the pinned one");
+        Visible(ribbon, "Collapse the ribbon").Should().BeTrue("and the arrow is back");
+    }
+
+    [AvaloniaFact]
+    public void Pinning_always_opens_the_panel_and_collapsing_always_unpins()
+    {
+        var ribbon = Show(Build(), out _);
+        ribbon.IsPinned = false;
+        ribbon.IsCollapsed.Should().BeTrue("unpinned shows the tabs only");
+        ribbon.IsPinned = true;
+        ribbon.IsCollapsed.Should().BeFalse("re-pinned, the panel is open again (the user's ask)");
+        ribbon.IsCollapsed = true;
+        ribbon.IsPinned.Should().BeFalse("an app collapsing a pinned ribbon unpins it, never leaving it pinned with tabs only");
+        ribbon.IsCollapsed = false;
+        ribbon.IsPinned.Should().BeTrue();
+    }
+
+    [AvaloniaFact]
+    public void A_click_on_the_open_tab_does_nothing()
+    {
+        var ribbon = Show(Build(), out var window);
+        Click(window, CentreOfTab(ribbon, window, "Home"));
+        ribbon.IsCollapsed.Should().BeFalse("a single click on the open tab used to collapse the ribbon into the broken-looking state");
+        ribbon.IsPinned.Should().BeTrue();
     }
 }

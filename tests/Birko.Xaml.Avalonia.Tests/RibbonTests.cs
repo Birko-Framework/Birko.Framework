@@ -252,14 +252,15 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
-    public void Clicking_the_active_tab_toggles_collapse()
+    public void Clicking_the_active_tab_keeps_the_ribbon_open()
     {
         var ribbon = Show(Build(out _)); // Home (index 0) is active
         var home = ribbon.GetVisualDescendants().OfType<Button>()
             .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Home"));
 
         home.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        ribbon.IsCollapsed.Should().BeTrue("clicking the active tab collapses the ribbon");
+        // It used to collapse the ribbon, leaving it pinned with only the tabs: D6 changed by the user, 2026-10-23.
+        ribbon.IsCollapsed.Should().BeFalse("as in Office, a click on the open tab does nothing; a double-click collapses");
     }
 
     // ── TASK-097: overflow must stay reachable at a narrow width ──────────────────

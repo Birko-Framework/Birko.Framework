@@ -2,7 +2,7 @@
 id: TASK-735
 parent: STORY-067
 feature: FEATURE-019
-status: done  # signed off by the user 2026-10-22
+status: verify  # reopened 2026-10-23 for D6 changed (signed off 2026-10-22 before it)
 priority: P3
 assignee: ai
 created: 2026-10-22
@@ -63,3 +63,25 @@ Signed off by the user in the Playground: spacing, the look in every theme, hove
 overall feel are good. The screen-reader checks were done through Chromium's accessibility tree instead of a live
 screen reader, as the user asked (`ribbon-a11y-check.mjs`, 22/22; it found and fixed a menu shortcut announced
 twice). Behaviour is covered by the automated suites: keyboard-check 195/195, `verify.mjs` clean.
+
+## Follow-up: D6 changed by the user (2026-10-23)
+
+- **No more "pinned, only tabs" ribbon.** Collapsed and unpinned are one state, as in Office: collapsing unpins, and
+  pinning opens the panel. Before, a pinned ribbon could show only its tabs with nothing open, which the user found
+  and read as broken.
+- **One control at a time, Office's (the user's pick).** While pinned, the tab row has only the collapse arrow, which
+  does what a double-click and Ctrl+F1 do. While collapsed, the tab row has no arrow and no pin; a tab opens the panel
+  over the page, and that panel carries a pin that keeps it open.
+- **A click on the tab that is already open does nothing**, as in Office.
+- **The web, specifically.** The collapse arrow calls `toggleRibbon()` (it used `toggleExpand()`, which left the
+  ribbon pinned); `collapse()` unpins a pinned ribbon and `unpin()` collapses; an `attributeChangedCallback` keeps the
+  attributes one state, so an app shell that saves `pinned` and `expanded` apart (b-app-shell does) no longer restores
+  "pinned, not expanded". The pin moved from the tab row to the panel (`.ribbon-panel-pin`).
+- **Gate.** `keyboard-check.mjs` +7 (arrow only while pinned, it collapses by unpinning, the pin on the panel, the pin
+  keeps it open, a restored `pinned` opens the panel, closing a pinned ribbon's panel unpins it): 211/211;
+  `verify.mjs` 0 failing; `ribbon-a11y-check.mjs` 22/22.
+
+## Human test plan (D6 change)
+
+- [ ] In the Playground: collapse with the arrow, open a tab (the panel over the page has a 📌), pin it; reload a page
+  saved pinned and check the panel is open; double-click and Ctrl+F1 as before

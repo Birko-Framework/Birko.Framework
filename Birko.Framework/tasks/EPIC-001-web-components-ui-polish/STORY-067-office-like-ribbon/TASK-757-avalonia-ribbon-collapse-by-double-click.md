@@ -60,3 +60,18 @@ Ctrl+F1 already collapses the desktop ribbon. Add Office's double-click on a tab
   - the shortcut is shared, rebindable and can be turned off.
   - Birko.Xaml.Avalonia.Tests 256/256.
 
+## Follow-up: D6 changed by the user (2026-10-23)
+
+- **No more "pinned, only tabs" ribbon.** Collapsed and unpinned are one state, as in Office: collapsing unpins, and
+  pinning opens the panel. Before, a pinned ribbon could show only its tabs with nothing open, which the user found
+  and read as broken.
+- **One control at a time, Office's (the user's pick).** While pinned, the tab row has only the collapse arrow, which
+  does what a double-click and Ctrl+F1 do. While collapsed, the tab row has no arrow and no pin; a tab opens the panel
+  over the page, and that panel carries a pin that keeps it open.
+- **A click on the tab that is already open does nothing**, as in Office.
+- **The desktop, specifically.** `ToggleRibbon()` now unpins (it collapsed and kept the ribbon pinned, so the
+  desktop's double-click and Ctrl+F1 also led to the third state); `IsPinned` and `IsCollapsed` keep each other in
+  step, whoever sets them; the 📌 moved from the tab row to the temporary reveal's bottom right.
+- **Gate.** `RibbonCollapseTests` +3 (one control at a time with the pin on the floating panel; pinning always opens
+  and collapsing always unpins; a click on the open tab does nothing), two tests updated to the new model:
+  Birko.Xaml.Avalonia.Tests 327/327. The Gallery's own pin button follows the ribbon now.
