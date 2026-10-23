@@ -43,6 +43,29 @@ public class Ribbon : ContentControl
     /// </remarks>
     public bool IsPinned { get => GetValue(IsPinnedProperty); set => SetValue(IsPinnedProperty, value); }
 
+    public static readonly StyledProperty<KeyGesture?> CollapseShortcutProperty =
+        AvaloniaProperty.Register<Ribbon, KeyGesture?>(nameof(CollapseShortcut), new KeyGesture(Key.F1, KeyModifiers.Control));
+
+    /// <summary>
+    /// The app-wide shortcut that collapses the ribbon and brings it back (TASK-757, as b-ribbon's
+    /// <c>collapse-shortcut</c>): Ctrl+F1 by default, as in Office; null turns it off.
+    /// </summary>
+    public KeyGesture? CollapseShortcut { get => GetValue(CollapseShortcutProperty); set => SetValue(CollapseShortcutProperty, value); }
+
+    /// <summary>
+    /// Collapses the ribbon to its tabs, or brings it back pinned open — what Ctrl+F1 and a double-click on a tab do
+    /// (TASK-757, as b-ribbon's <c>toggleRibbon</c>). Expanded and pinned, it collapses; collapsed or unpinned, it pins
+    /// the ribbon open.
+    /// </summary>
+    public void ToggleRibbon() => ApplyToggle(expanded: IsPinned && !IsCollapsed);
+
+    private void ApplyToggle(bool expanded)
+    {
+        if (expanded) { IsCollapsed = true; return; }
+        IsPinned = true;
+        IsCollapsed = false;
+    }
+
     public static readonly StyledProperty<double> NarrowThresholdProperty =
         AvaloniaProperty.Register<Ribbon, double>(nameof(NarrowThreshold), 240);
 
@@ -182,6 +205,8 @@ public class Ribbon : ContentControl
             // alone — "Show Tabs" is a mode you leave by pinning, not by clicking a tab (TASK-101).
             tabButton.Click += (_, _) =>
             {
+                // The second click of a double-click: the double-click has already toggled the ribbon (TASK-757).
+                if (_swallowTabClick) { _swallowTabClick = false; return; }
                 if (index == SelectedIndex && IsPinned) { IsCollapsed = !IsCollapsed; return; }
 
                 SelectedIndex = index;
@@ -567,6 +592,7 @@ public class Ribbon : ContentControl
         _topLevel?.AddHandler(
             global::Avalonia.Input.InputElement.KeyDownEvent, OnTopLevelKeyDown,
             global::Avalonia.Interactivity.RoutingStrategies.Tunnel | global::Avalonia.Interactivity.RoutingStrategies.Bubble);
+        AddHandler(PointerPressedEvent, OnTabPointerPressed, global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
 
         // Click-away is handled here too, for the same reason as Escape: Popup.IsLightDismissEnabled did
         // not actually dismiss on a press elsewhere in the app. Between this and Escape, light dismiss has
@@ -636,16 +662,60 @@ public class Ribbon : ContentControl
             return;
         }
 
-        // Ctrl+F1 is the shortcut users actually try, and Office has had it for two decades.
-        if (e.Key == global::Avalonia.Input.Key.F1
-            && e.KeyModifiers.HasFlag(global::Avalonia.Input.KeyModifiers.Control))
+        // Ctrl+F1 is the shortcut users actually try, and Office has had it for two decades. Rebindable, or off
+        // (TASK-757); an app that handled the key first wins.
+        if (!e.Handled && CollapseShortcut is { } gesture && gesture.Matches(e))
         {
-            IsCollapsed = !IsCollapsed;
+            ToggleRibbon();
             e.Handled = true;
         }
     }
 
     private Popup? _reveal;
+
+    // ── Double-click a tab (TASK-757, as b-ribbon's TASK-735) ──
+
+    /// <summary>Whether the ribbon was expanded and pinned when the first click of a possible double-click went down.</summary>
+    private bool _expandedAtFirstPress;
+    private bool _swallowTabClick;
+
+    private long _lastTabPress = -1;
+    private Point _lastTabPressAt;
+
+    /// <summary>
+    /// A double-click on a tab collapses the ribbon, or pins it back open, as in Office. Two things make it work with
+    /// the single click, which already selects (and, on the active tab, toggles): the toggle is decided from the state
+    /// BEFORE the first click, and the click that ends the double-click is swallowed.
+    /// </summary>
+    /// <remarks>
+    /// Timed here, not read from <c>ClickCount</c>: the first click rebuilds the tab strip, so the second press lands
+    /// on a NEW button, and Avalonia counts a double-click only on the same element, so <c>ClickCount</c> was always 1
+    /// (measured in the headless tests, and so in the app too).
+    /// </remarks>
+    private void OnTabPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_tabButtons is not { } strip || e.Source is not Visual v
+            || !strip.Children.Any(t => ReferenceEquals(t, v) || v.GetVisualAncestors().Contains(t))) return;
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        var settings = TopLevel.GetTopLevel(this)?.PlatformSettings;
+        var time = settings?.GetDoubleTapTime(e.Pointer.Type) ?? System.TimeSpan.FromMilliseconds(500);
+        var size = settings?.GetDoubleTapSize(e.Pointer.Type) ?? new Size(4, 4);
+        var at = e.GetPosition(this);
+        // The system clock, not e.Timestamp: the headless platform stamps every event 0.
+        long now = System.Environment.TickCount64;
+        bool second = _lastTabPress >= 0 && now - _lastTabPress <= (long)time.TotalMilliseconds
+            && System.Math.Abs(at.X - _lastTabPressAt.X) <= size.Width && System.Math.Abs(at.Y - _lastTabPressAt.Y) <= size.Height;
+        if (!second)
+        {
+            _lastTabPress = now;
+            _lastTabPressAt = at;
+            _expandedAtFirstPress = IsPinned && !IsCollapsed;
+            return;
+        }
+        _lastTabPress = -1; // a third press starts a new pair
+        _swallowTabClick = true;
+        ApplyToggle(_expandedAtFirstPress);
+    }
 
     /// <summary>
     /// The overlay currently shown over the page — the narrow menu, or an unpinned ribbon's temporary
@@ -705,6 +775,10 @@ public class Ribbon : ContentControl
             PlacementTarget = this,
             Placement = PlacementMode.BottomEdgeAlignedLeft,
             IsLightDismissEnabled = true,
+            // The press that dismisses it still reaches what is under it (TASK-757): without this, the second click
+            // of a double-click on a tab only closed the reveal, so an unpinned ribbon could never be pinned that way.
+            // It also lets a click on another tab switch to it in one press, as Office does.
+            OverlayDismissEventPassThrough = true,
         };
         ((ISetLogicalParent)_reveal).SetParent(this);
         _reveal.Open();

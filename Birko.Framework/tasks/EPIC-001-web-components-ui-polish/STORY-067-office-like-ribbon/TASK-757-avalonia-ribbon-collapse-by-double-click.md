@@ -2,7 +2,7 @@
 id: TASK-757
 parent: STORY-067
 feature: FEATURE-019
-status: todo
+status: verify  # verified headlessly 2026-10-23; the human test plan is left
 priority: P3
 assignee: ai
 created: 2026-10-23
@@ -23,9 +23,9 @@ Ctrl+F1 already collapses the desktop ribbon. Add Office's double-click on a tab
 
 ## Acceptance criteria
 
-- [ ] Double-clicking a tab collapses the ribbon and brings it back
-- [ ] Ctrl+F1 and the double-click share one toggle; the shortcut is rebindable or off
-- [ ] Headless tests
+- [x] Double-clicking a tab collapses the ribbon and brings it back
+- [x] Ctrl+F1 and the double-click share one toggle; the shortcut is rebindable or off
+- [x] Headless tests
 
 ## Out of scope
 
@@ -34,3 +34,29 @@ Ctrl+F1 already collapses the desktop ribbon. Add Office's double-click on a tab
 ## Human test plan
 
 - [ ] Double-click a tab and press Ctrl+F1 in the Gallery: the ribbon collapses and comes back
+
+## Outcome (2026-10-23)
+
+- **One toggle.** `ToggleRibbon()` is shared by a double-click on any tab and by the new `CollapseShortcut`: Ctrl+F1
+  by default, rebindable, null turns it off, and an app that handled the key first wins. Expanded and pinned, it
+  collapses; collapsed or unpinned, it pins the ribbon open, as b-ribbon's does.
+- **The single click keeps its behaviour**, which already selects, and on the active tab toggles. The double-click is
+  decided from the state before its first click, and the click that ends it is swallowed.
+- **Three things measured on the way**, each of which made a double-click impossible:
+  - `ClickCount` is always 1 on the second press. The first click rebuilds the tab strip, so the second press lands on
+    a new button, and Avalonia counts a double-click only on the same element. The ribbon times the two presses
+    itself, from the platform's double-tap time and size.
+  - The headless platform stamps every event 0, so the timing uses the system clock.
+  - Unpinned, the first click opens the reveal popup, and its light dismiss consumed the second press, so the reveal
+    only closed. The popup now passes the dismissing press through (`OverlayDismissEventPassThrough`). This also lets a
+    click on another tab switch to it in one press, as in Office.
+  - In the tests the ribbon is top-aligned, as an app docks it. Filling the window, a collapsed ribbon centred its
+    strip, and the tab moved about 100px between the clicks.
+- **Gate.** New `RibbonCollapseTests`, 5 tests with real headless mouse clicks, which do not compile against the code
+  before:
+  - double-click on the active tab collapses, and again brings it back;
+  - on another tab, it selects and collapses; unpinned, it pins open;
+  - a single click is unchanged;
+  - the shortcut is shared, rebindable and can be turned off.
+  - Birko.Xaml.Avalonia.Tests 256/256.
+
