@@ -1,13 +1,15 @@
 ---
 id: EPIC-021
 # status — one of: planned, in-progress, done, cancelled
-status: done
+status: in-progress
 created: 2026-10-19
 owner: ai
 affects: [Birko.Data.Localization]
 ---
 
 # Entity localization for real catalogues
+
+> Reopened 2026-10-23 — TASK-766 and TASK-767 are now todo (filed by /tasks new: the first consumer, Symbio TASK-945, cannot boot with the SQL mapping imported, and cannot base its translation model on its entity hierarchy).
 
 ## Area of concern
 
