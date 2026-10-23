@@ -97,6 +97,55 @@ public sealed class RibbonItem
 
     /// <summary>Makes this command a gallery of visual choices (TASK-761, as b-ribbon's TASK-740). See <see cref="RibbonGallery"/>.</summary>
     public RibbonGallery? Gallery { get; init; }
+
+    /// <summary>Makes this command a small input, like Office's font name and size (TASK-762, as b-ribbon's TASK-741).</summary>
+    public RibbonField? Field { get; init; }
+}
+
+/// <summary>What kind of box a <see cref="RibbonField"/> is.</summary>
+public enum RibbonFieldType { Text, Number, Select }
+
+/// <summary>
+/// How an input is captioned (TASK-762), the three looks the user kept on the web: <see cref="None"/> (Office: the
+/// tooltip and the accessible name say what it is), <see cref="Beside"/> or <see cref="Above"/> the box.
+/// </summary>
+public enum RibbonFieldCaption { None, Beside, Above }
+
+/// <summary>One choice of a dropdown input.</summary>
+public sealed class RibbonFieldOption
+{
+    public required string Value { get; init; }
+    public required string Label { get; init; }
+}
+
+/// <summary>
+/// A small input inside the ribbon (TASK-762): a text or number box, or a dropdown. A committed value (Enter, a pick, or
+/// leaving the box) is reported once, as <c>Ribbon.FieldChanged</c>.
+/// </summary>
+public sealed class RibbonField
+{
+    public RibbonFieldType Type { get; init; } = RibbonFieldType.Text;
+
+    /// <summary>The initial value. Later changes: <c>Ribbon.SetFieldValue</c>.</summary>
+    public string? Value { get; init; }
+
+    /// <summary>A dropdown's choices.</summary>
+    public IReadOnlyList<RibbonFieldOption> Options { get; init; } = Array.Empty<RibbonFieldOption>();
+
+    /// <summary>A dropdown that also takes a typed value not in its list (font size 13), decided per dropdown.</summary>
+    public bool FreeText { get; init; }
+    public string? Placeholder { get; init; }
+    public double? Min { get; init; }
+    public double? Max { get; init; }
+
+    /// <summary>What ↑ / ↓ add to a number (default 1).</summary>
+    public double? Step { get; init; }
+
+    /// <summary>Width in characters (default 8).</summary>
+    public int Width { get; init; } = 8;
+
+    /// <summary>Overrides the ribbon's field caption.</summary>
+    public RibbonFieldCaption? Caption { get; init; }
 }
 
 /// <summary>How a gallery is drawn (TASK-761), the three looks the user kept on the web.</summary>

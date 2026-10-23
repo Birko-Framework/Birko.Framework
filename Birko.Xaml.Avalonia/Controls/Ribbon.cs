@@ -128,6 +128,8 @@ public partial class Ribbon : ContentControl
             r._pressed.Clear();
             r._gallerySel.Clear();
             r._galleryOffset.Clear();
+            r._fieldDraft.Clear();
+            r._fieldCommitted.Clear();
             r.Rebuild();
         });
         SelectedIndexProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
@@ -137,6 +139,7 @@ public partial class Ribbon : ContentControl
         QuickAccessPositionProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         ContextualStyleProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         GalleryStyleProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+        FieldCaptionProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
 
         // Narrow/wide is a rebuild, so it is driven off the size change rather than polled — and only when
         // the state actually flips, otherwise every pixel of a drag would rebuild the whole chrome.
@@ -184,6 +187,7 @@ public partial class Ribbon : ContentControl
         bool focusWasInside = ContainsFocus();
         _toggleViews.Clear(); // every command is rebuilt, its views with it
         _galleryViews.Clear();
+        _fieldViews.Clear();
 
         // The SHOWN tabs: a contextual set's only while the app shows it (TASK-760). SelectedIndex counts these.
         var tabs = VisibleTabs();
@@ -551,6 +555,14 @@ public partial class Ribbon : ContentControl
                     if (item.Gallery is { Items.Count: > 0 })
                     {
                         AddNarrowGallery(list, tab, tab.Groups.ToList().IndexOf(group).ToString(System.Globalization.CultureInfo.InvariantCulture), item);
+                        continue;
+                    }
+                    if (item.Field is not null)
+                    {
+                        // An input: its caption beside the box, as the web's mobile list (TASK-762).
+                        _buildTab = tab.Id;
+                        list.Children.Add(BuildField(item, RibbonGroupSize.Medium, null,
+                            tab.Groups.ToList().IndexOf(group).ToString(System.Globalization.CultureInfo.InvariantCulture), narrow: true));
                         continue;
                     }
                     if (IsToggle(item))
@@ -1008,11 +1020,12 @@ public partial class Ribbon : ContentControl
     }
 
     /// <summary>
-    /// The buttons inside <paramref name="scope"/> a keyboard user can actually land on — enabled, visible,
-    /// and not parked off-screen by the scaling panel.
+    /// The stops inside <paramref name="scope"/> a keyboard user can actually land on — enabled, visible,
+    /// and not parked off-screen by the scaling panel: the buttons, and the input boxes (TASK-762).
     /// </summary>
-    private static List<Button> NavigableButtons(Visual scope) =>
-        scope.GetVisualDescendants().OfType<Button>()
+    private static List<Control> NavigableButtons(Visual scope) =>
+        scope.GetVisualDescendants().OfType<Control>()
+            .Where(c => c is Button || IsFieldBox(c))
             .Where(b => b.IsEffectivelyEnabled && b.IsVisible && b.Opacity > 0)
             .Where(b => b.TranslatePoint(default, scope) is { X: > -1000 })
             .ToList();
@@ -1094,6 +1107,8 @@ public partial class Ribbon : ContentControl
             // A gallery's tiles, steps and expand button (TASK-761): tile:{g}/{item}/{choice}, step:…, more:{g}/{item}.
             : (key.StartsWith("tile:", System.StringComparison.Ordinal) || key.StartsWith("step:", System.StringComparison.Ordinal)
                 || key.StartsWith("more:", System.StringComparison.Ordinal)) && key.IndexOf('/') is var s and > 5 ? key[5..s]
+            // An input box (TASK-762): field:{g}/{item}.
+            : key.StartsWith("field:", System.StringComparison.Ordinal) && key.IndexOf('/') is var fs and > 6 ? key[6..fs]
             : null;
     }
 
@@ -1101,7 +1116,7 @@ public partial class Ribbon : ContentControl
     private string? _rovingKey;
 
     /// <summary>The stop holding the panel's one Tab stop: the one focused last, else the first.</summary>
-    private Button? RovingStop(Visual panel)
+    private Control? RovingStop(Visual panel)
     {
         var stops = NavigableButtons(panel);
         return stops.FirstOrDefault(b => b.Tag as string == _rovingKey) ?? stops.FirstOrDefault();
@@ -1137,7 +1152,9 @@ public partial class Ribbon : ContentControl
         {
             var stops = NavigableButtons(panel);
             if (StopOf(panel, args.Source) is not { } from || stops.Count == 0) return;
-            Button? next = null;
+            // Keys inside an input edit it: the arrows, Home and End never leave the box (TASK-762, as the web's).
+            if (IsFieldBox(from) && args.Key is Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End) return;
+            Control? next = null;
             switch (args.Key)
             {
                 case Key.Home: next = stops[0]; break;
@@ -1184,7 +1201,8 @@ public partial class Ribbon : ContentControl
         {
             var items = NavigableButtons(scope);
             if (StopOf(scope, args.Source) is not { } from || items.Count == 0) return;
-            Button? next = args.Key switch
+            if (IsFieldBox(from) && args.Key is Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End) return;
+            Control? next = args.Key switch
             {
                 Key.Home => items[0],
                 Key.End => items[^1],
@@ -1198,8 +1216,8 @@ public partial class Ribbon : ContentControl
         };
     }
 
-    /// <summary>The navigable button the event came from (its source may be the button's content).</summary>
-    private static Button? StopOf(Visual scope, object? source) =>
+    /// <summary>The navigable stop the event came from (its source may be the stop's content).</summary>
+    private static Control? StopOf(Visual scope, object? source) =>
         NavigableButtons(scope).FirstOrDefault(b => ReferenceEquals(b, source)
             || (source is Visual v && v.GetVisualAncestors().Contains(b)));
 
@@ -1208,12 +1226,12 @@ public partial class Ribbon : ContentControl
     /// <c>nearestInDirection</c>): Left/Right take anything WHOLLY beyond it that way, weighting vertical distance so
     /// the same row wins; Up/Down stay in <paramref name="from"/>'s column, so they never jump to a neighbouring group.
     /// </summary>
-    private static Button? NearestInDirection(Button from, IReadOnlyList<Button> stops, Visual frame, Key dir)
+    private static Control? NearestInDirection(Control from, IReadOnlyList<Control> stops, Visual frame, Key dir)
     {
-        Rect RectOf(Button b) => b.TranslatePoint(default, frame) is { } p ? new Rect(p, b.Bounds.Size) : default;
+        Rect RectOf(Control b) => b.TranslatePoint(default, frame) is { } p ? new Rect(p, b.Bounds.Size) : default;
         var a = RectOf(from);
         double ax = a.X + a.Width / 2, ay = a.Y + a.Height / 2;
-        Button? best = null;
+        Control? best = null;
         double bestScore = double.PositiveInfinity;
         foreach (var b in stops)
         {
@@ -1440,31 +1458,38 @@ public partial class Ribbon : ContentControl
         // commands around it continue in the next column.
         var cells = new List<(int Row, int Column, bool Gallery)>();
         int nextRow = 0, nextColumn = 0;
+        var spans = new List<int>();
         foreach (var it in items)
         {
             if (it.Gallery is { Items.Count: > 0 })
             {
                 if (nextRow > 0) { nextColumn++; nextRow = 0; }
                 cells.Add((0, nextColumn++, true));
+                spans.Add(perColumn);
                 continue;
             }
-            cells.Add((nextRow, nextColumn, false));
-            if (++nextRow == perColumn) { nextRow = 0; nextColumn++; }
+            // A captioned-above input takes two rows (TASK-762, as the web's grid-row: span 2).
+            int rows = it.Field is { } fld && (fld.Caption ?? FieldCaption) == RibbonFieldCaption.Above ? System.Math.Min(2, perColumn) : 1;
+            if (nextRow + rows > perColumn) { nextRow = 0; nextColumn++; }
+            cells.Add((nextRow, nextColumn, rows > 1));
+            spans.Add(rows);
+            nextRow += rows;
+            if (nextRow >= perColumn) { nextRow = 0; nextColumn++; }
         }
         int columns = nextRow > 0 ? nextColumn + 1 : nextColumn;
         for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         for (int i = 0; i < items.Count; i++)
         {
             var item = BuildItem(items[i], size, onInvoke, groupKey);
-            var (row, column, spans) = cells[i];
+            var (row, column, spanning) = cells[i];
             Grid.SetRow(item, row);
             Grid.SetColumn(item, column);
-            if (spans) Grid.SetRowSpan(item, perColumn);
+            if (spanning) Grid.SetRowSpan(item, spans[i]);
             // Column spacing is the BRibbonItemGap token, as before; rows keep their 1px.
             if (column > 0) item.Bind(MarginProperty, item.GetResourceObservable(
                 "BRibbonItemGap", v => new Thickness(v is double gap ? gap : 0, row > 0 ? 1 : 0, 0, 0)));
             else if (row > 0) item.Margin = new Thickness(0, 1, 0, 0);
-            if (!spans) item.VerticalAlignment = VerticalAlignment.Stretch;
+            if (!spanning && items[i].Field is null) item.VerticalAlignment = VerticalAlignment.Stretch;
             grid.Children.Add(item);
         }
         return grid;
@@ -1476,6 +1501,7 @@ public partial class Ribbon : ContentControl
     private Control BuildItem(RibbonItem item, RibbonGroupSize size, System.Action? onInvoke = null, string? groupKey = null)
     {
         if (item.Gallery is { Items.Count: > 0 }) return BuildGallery(item, size, onInvoke, groupKey);
+        if (item.Field is not null) return BuildField(item, size, onInvoke, groupKey);
         if (item.Menu is { Count: > 0 }) return BuildMenuCommand(item, size, onInvoke, groupKey);
         return BuildCommand(item, size, onInvoke, groupKey, MenuPart.None);
     }

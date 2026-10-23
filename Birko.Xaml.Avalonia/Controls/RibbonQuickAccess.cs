@@ -94,8 +94,8 @@ public partial class Ribbon
         return tab.Groups[g].Items.FirstOrDefault(i => i.Id == parts[2]) is { } item ? (item, tab.Id, parts[1]) : null;
     }
 
-    /// <summary>Whether a ribbon command can be added: a command that runs something, not a menu-only button or a box.</summary>
-    private static bool CanAdd(RibbonItem item) => item.Menu is not { Count: > 0 } || item.Split;
+    /// <summary>Whether a ribbon command can be added: a command that runs something, not a menu-only button, a box or a gallery.</summary>
+    private static bool CanAdd(RibbonItem item) => (item.Menu is not { Count: > 0 } || item.Split) && item.Field is null && item.Gallery is null;
 
     private void EditQuickAccess(System.Func<List<string>, List<string>> change)
     {

@@ -264,7 +264,7 @@ public class RibbonGalleryTests
         overlay.Should().NotBeNull("precondition: the reveal is open");
         Press(overlay!.GetVisualDescendants().OfType<Button>().First(b => Name(b) == "More choices" && b.IsEffectivelyEnabled), window);
         ribbon.OpenOverlay.Should().BeSameAs(overlay, "the gallery redraws in place");
-        RowTiles(overlay).Should().Contain("Code");
+        RowTiles(overlay!).Should().Contain("Code");
     }
 
     [AvaloniaFact]

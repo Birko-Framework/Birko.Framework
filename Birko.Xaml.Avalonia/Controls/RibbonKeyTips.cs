@@ -175,7 +175,7 @@ public partial class Ribbon
             var choice = model.Items.FirstOrDefault(i => i.Id == tile[1])?.Gallery?.Items.FirstOrDefault(c => c.Id == tile[2]);
             return (choice?.Label ?? name, choice?.Keytip);
         }
-        if (key.StartsWith("item:", System.StringComparison.Ordinal) && model is not null)
+        if ((key.StartsWith("item:", System.StringComparison.Ordinal) || key.StartsWith("field:", System.StringComparison.Ordinal)) && model is not null)
         {
             string id = key[(key.IndexOf('/') + 1)..];
             var item = model.Items.FirstOrDefault(i => i.Id == id);
@@ -291,6 +291,13 @@ public partial class Ribbon
             if (!IsPinned) RevealTemporarily();
             else IsCollapsed = false;
             ShowAfterLayout(() => ShowKeyTips(TipLevel.Commands));
+            return;
+        }
+        // An input: focus with its text selected, ready to type over, as Office's (TASK-762).
+        if (IsFieldBox(target))
+        {
+            ExitKeyTips();
+            FocusFieldForTyping(target);
             return;
         }
         // A gallery's expand button: the grid, then the letters of its tiles (TASK-761).
