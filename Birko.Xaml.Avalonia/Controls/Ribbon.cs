@@ -99,7 +99,8 @@ public class Ribbon : ContentControl
     {
         LeadingContentProperty.Changed.AddClassHandler<Ribbon>((r, e) => r._leadingHost.Content = e.NewValue);
         TrailingContentProperty.Changed.AddClassHandler<Ribbon>((r, e) => r._trailingHost.Content = e.NewValue);
-        TabsProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+        // New tabs: their Pressed values are the state again (TASK-754), as b-ribbon's setTabs.
+        TabsProperty.Changed.AddClassHandler<Ribbon>((r, _) => { r._pressed.Clear(); r.Rebuild(); });
         SelectedIndexProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         IsCollapsedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         PreferredGroupSizeProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
@@ -149,6 +150,7 @@ public class Ribbon : ContentControl
     {
         // Captured before the tree is discarded — see the focus restore below.
         bool focusWasInside = ContainsFocus();
+        _toggleViews.Clear(); // every command is rebuilt, its views with it
 
         var tabs = Tabs?.ToList() ?? new List<RibbonTab>();
         int selected = tabs.Count == 0 ? -1 : System.Math.Clamp(SelectedIndex, 0, tabs.Count - 1);
@@ -343,6 +345,7 @@ public class Ribbon : ContentControl
     /// </remarks>
     private RibbonGroupsPanel BuildGroupsRow(RibbonTab tab, System.Action? onInvoke)
     {
+        _buildTab = tab.Id;
         var panel = new RibbonGroupsPanel { Margin = new Thickness(8), Preferred = PreferredGroupSize };
         panel.Bind(RibbonGroupsPanel.GapProperty, panel.GetResourceObservable("BRibbonGroupGap"));
         panel.Bind(RibbonGroupsPanel.DividerBrushProperty, panel.GetResourceObservable("BBorderBrush"));
@@ -420,6 +423,24 @@ public class Ribbon : ContentControl
     }
 
     /// <summary>Every tab → group → item as a flat scrollable menu, the active tab first.</summary>
+    /// <summary>A toggle in the narrow menu: the same state and look as in the ribbon (TASK-754).</summary>
+    private Control NarrowToggle(RibbonTab tab, RibbonGroup group, RibbonItem item)
+    {
+        string g = tab.Groups.ToList().IndexOf(group).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string key = PressKey(tab.Id, g, item.Id);
+        var entry = new RibbonToggleCommand
+        {
+            IsRadio = item.ToggleGroup is not null,
+            Content = new TextBlock { Text = (item.Icon is null ? "" : item.Icon + "  ") + item.Label },
+            Padding = new Thickness(15, 5),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+        };
+        Describe(entry, item.Label);
+        entry.Click += (_, _) => { ClickToggle(tab.Id, g, item); item.Run?.Invoke(); };
+        return FinishToggle(entry, key, item);
+    }
+
     private void OpenNarrowMenu(List<RibbonTab> tabs, int selected, Control anchor)
     {
         _reveal?.Close();
@@ -440,6 +461,11 @@ public class Ribbon : ContentControl
 
                 foreach (var item in group.Items)
                 {
+                    if (IsToggle(item))
+                    {
+                        list.Children.Add(NarrowToggle(tab, group, item));
+                        continue;
+                    }
                     var entry = new Button
                     {
                         Content = new TextBlock { Text = (item.Icon is null ? "" : item.Icon + "  ") + item.Label },
@@ -1240,20 +1266,26 @@ public class Ribbon : ContentControl
 
     private Control BuildItem(RibbonItem item, RibbonGroupSize size, System.Action? onInvoke = null, string? groupKey = null)
     {
-        var button = new Button
+        string? pressKey = IsToggle(item) && groupKey is not null && _buildTab is not null ? PressKey(_buildTab, groupKey, item.Id) : null;
+        Button button = pressKey is null ? new Button() : new RibbonToggleCommand { IsRadio = item.ToggleGroup is not null };
+        // The command's identity across size variants (TASK-752): the same command is a different Button at each size,
+        // and focus has to follow the command, not the control, when the row rescales.
+        button.Tag = groupKey is null ? null : StopKey.Item(groupKey, item.Id);
+        button.Background = Brushes.Transparent;
+        // b-ribbon's .ribbon-item box is padding var(--b-space-xs) var(--b-space-sm) = 4/8, and its focus ring is an
+        // outline, which takes no space. Here the ring is a permanent 2px border (AddFocusRing), so the padding is the
+        // web pair MINUS that border: border + padding = 8/4, the same content inset. At 8/4 on top of the border every
+        // row was 4px taller than the web's, 12px per three-row group. A toggle gives one more pixel to its pressed
+        // outline (below), so it is the same size as its neighbours.
+        button.Padding = pressKey is null ? new Thickness(6, 2) : new Thickness(5, 1);
+        if (pressKey is null) button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
+        if (pressKey is null)
+            button.Click += (_, _) => { item.Run?.Invoke(); onInvoke?.Invoke(); };
+        else
         {
-            // The command's identity across size variants (TASK-752): the same command is a different Button at
-            // each size, and focus has to follow the command, not the control, when the row rescales.
-            Tag = groupKey is null ? null : StopKey.Item(groupKey, item.Id),
-            Background = Brushes.Transparent,
-            // b-ribbon's .ribbon-item box is padding var(--b-space-xs) var(--b-space-sm) = 4/8, and its focus
-            // ring is an outline, which takes no space. Here the ring is a permanent 2px border (AddFocusRing),
-            // so the padding is the web pair MINUS that border: border + padding = 8/4, the same content inset.
-            // At 8/4 on top of the border every row was 4px taller than the web's, 12px per three-row group.
-            Padding = new Thickness(6, 2),
-        };
-        button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
-        button.Click += (_, _) => { item.Run?.Invoke(); onInvoke?.Invoke(); };
+            string tab = _buildTab!, group = groupKey!;
+            button.Click += (_, _) => { ClickToggle(tab, group, item); item.Run?.Invoke(); onInvoke?.Invoke(); };
+        }
         AddFocusRing(button);
 
         var icon = new TextBlock { Text = item.Icon ?? "•" };
@@ -1273,7 +1305,7 @@ public class Ribbon : ContentControl
             // (unreachable) for another (unnameable).
             icon.HorizontalAlignment = HorizontalAlignment.Center;
             button.Content = icon;
-            return button;
+            return FinishToggle(button, pressKey, item);
         }
 
         var label = new TextBlock { Text = item.Label, FontSize = 11 };
@@ -1288,7 +1320,7 @@ public class Ribbon : ContentControl
             stacked.Children.Add(icon);
             stacked.Children.Add(label);
             button.Content = stacked;
-            return button;
+            return FinishToggle(button, pressKey, item);
         }
 
         // Medium — icon then label on one line. Left-aligned: the button stretches to its column's width
@@ -1314,7 +1346,105 @@ public class Ribbon : ContentControl
         inline.Children.Add(icon);
         inline.Children.Add(label);
         button.Content = inline;
+        return FinishToggle(button, pressKey, item);
+    }
+
+    // ── Toggles and one-of sets (TASK-754, as b-ribbon's TASK-739) ──
+
+    /// <summary>Raised when a toggle or one-of member is pressed, with its new state, before its <c>Run</c>.</summary>
+    public event System.EventHandler<RibbonItemToggledEventArgs>? ItemToggled;
+
+    /// <summary>The state by tab/group/item, seeded from <see cref="RibbonItem.Pressed"/> and reset by new <see cref="Tabs"/>.</summary>
+    private readonly Dictionary<string, bool> _pressed = new();
+    /// <summary>Every on-screen copy of each toggle (one per size, the popup's, the narrow menu's), to keep in step.</summary>
+    private readonly Dictionary<string, List<Button>> _toggleViews = new();
+    private string? _buildTab;
+
+    private static bool IsToggle(RibbonItem item) => item.Toggle || item.ToggleGroup is not null;
+
+    private static string PressKey(string tab, string group, string item) => $"{tab}/{group}/{item}";
+
+    private bool PressedOf(string key, RibbonItem item) => _pressed.TryGetValue(key, out bool on) ? on : item.Pressed;
+
+    /// <summary>Turns a toggle on or off from the app, without an event; a one-of member turned on releases the others.</summary>
+    public void SetPressed(string itemId, bool pressed, string? tabId = null)
+    {
+        foreach (var (tab, g, group, item) in Find(itemId, tabId))
+            SetPressedState(tab.Id, g, group, item, pressed);
+    }
+
+    /// <summary>Whether a toggle or one-of member is on.</summary>
+    public bool IsPressed(string itemId, string? tabId = null)
+    {
+        foreach (var (tab, g, _, item) in Find(itemId, tabId))
+            return PressedOf(PressKey(tab.Id, g, item.Id), item);
+        return false;
+    }
+
+    private IEnumerable<(RibbonTab Tab, string Group, RibbonGroup GroupModel, RibbonItem Item)> Find(string itemId, string? tabId)
+    {
+        foreach (var tab in Tabs ?? System.Array.Empty<RibbonTab>())
+        {
+            if (tabId is not null && tab.Id != tabId) continue;
+            for (int g = 0; g < tab.Groups.Count; g++)
+                foreach (var item in tab.Groups[g].Items)
+                    if (item.Id == itemId && IsToggle(item))
+                        yield return (tab, g.ToString(System.Globalization.CultureInfo.InvariantCulture), tab.Groups[g], item);
+        }
+    }
+
+    private void ClickToggle(string tabId, string group, RibbonItem item)
+    {
+        var tab = (Tabs ?? System.Array.Empty<RibbonTab>()).FirstOrDefault(t => t.Id == tabId);
+        if (tab is null || !int.TryParse(group, out int g) || g >= tab.Groups.Count) return;
+        // A one-of member is turned ON by a press, never off: pressing the one that is on keeps it on.
+        bool pressed = item.ToggleGroup is not null || !PressedOf(PressKey(tabId, group, item.Id), item);
+        SetPressedState(tabId, group, tab.Groups[g], item, pressed);
+        ItemToggled?.Invoke(this, new RibbonItemToggledEventArgs(tabId, item.Id, pressed));
+    }
+
+    private void SetPressedState(string tabId, string group, RibbonGroup model, RibbonItem item, bool pressed)
+    {
+        if (pressed && item.ToggleGroup is { } set)
+            foreach (var other in model.Items.Where(i => i != item && i.ToggleGroup == set))
+                Apply(PressKey(tabId, group, other.Id), false);
+        Apply(PressKey(tabId, group, item.Id), pressed);
+
+        void Apply(string key, bool on)
+        {
+            _pressed[key] = on;
+            if (_toggleViews.TryGetValue(key, out var views))
+                foreach (var view in views) ApplyPressedLook(view, on);
+        }
+    }
+
+    /// <summary>Registers a toggle's copy and gives it its frame and its current state.</summary>
+    private Button FinishToggle(Button button, string? key, RibbonItem item)
+    {
+        if (key is null || button is not RibbonToggleCommand) return button;
+        // The pressed outline is a 1px frame inside the focus ring, always there and transparent when off, so pressing
+        // never shifts the row (b-ribbon draws it as an inset box-shadow).
+        var inner = button.Content as Control;
+        button.Content = null; // detached first: a control has one parent
+        button.Content = new Border { BorderThickness = new Thickness(1), Child = inner, CornerRadius = new CornerRadius(3) };
+        if (!_toggleViews.TryGetValue(key, out var views)) _toggleViews[key] = views = new List<Button>();
+        views.Add(button);
+        ApplyPressedLook(button, PressedOf(key, item));
+        button.ActualThemeVariantChanged += (_, _) => ApplyPressedLook(button, ((RibbonToggleCommand)button).IsPressed);
         return button;
+    }
+
+    /// <summary>
+    /// The pressed look the user picked (D10, option A): the primary tint, the primary text colour and a 1px primary
+    /// outline inside the button, the same size off and on.
+    /// </summary>
+    private static void ApplyPressedLook(Button button, bool on)
+    {
+        if (button is RibbonToggleCommand toggle) toggle.IsPressed = on;
+        IBrush? Find(string key) => button.TryFindResource(key, button.ActualThemeVariant, out var v) ? v as IBrush : null;
+        button.Background = on ? Find("BColorPrimaryLightBrush") ?? Brushes.Transparent : Brushes.Transparent;
+        button.Foreground = on ? Find("BColorPrimaryTextBrush") ?? Find("BColorPrimaryBrush") : Find("BTextBrush");
+        if (button.Content is Border frame) frame.BorderBrush = on ? Find("BColorPrimaryBrush") : Brushes.Transparent;
     }
 
     /// <summary>
@@ -1382,7 +1512,7 @@ public class Ribbon : ContentControl
         // Declared before the content so the items can dismiss the flyout they were invoked from — Office
         // closes a collapsed group's flyout as soon as a command runs.
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
-        var flyoutContent = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide());
+        var flyoutContent = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide(), groupKey: groupKey);
         flyout.Content = flyoutContent;
         button.Flyout = flyout;
 

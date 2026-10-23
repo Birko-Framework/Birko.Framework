@@ -63,6 +63,23 @@ public sealed class RibbonItem
     /// binds the key itself.
     /// </summary>
     public string? Shortcut { get; init; }
+
+    /// <summary>
+    /// An on/off command (Bold), TASK-754 as b-ribbon's <c>toggle</c>. A click flips it, raises
+    /// <c>Ribbon.ItemToggled</c> with the new state, then runs <see cref="Run"/>. <see cref="Pressed"/> is the initial
+    /// state; <c>Ribbon.SetPressed</c> changes it later without an event.
+    /// </summary>
+    public bool Toggle { get; init; }
+
+    /// <summary>The initial state of a <see cref="Toggle"/> or of a <see cref="ToggleGroup"/> member.</summary>
+    public bool Pressed { get; init; }
+
+    /// <summary>
+    /// Commands of one ribbon group sharing this name form a set where exactly one is on (alignment left / centre /
+    /// right): pressing one turns the others off, and pressing the one that is on keeps it on. Announced as radio
+    /// buttons. Implies <see cref="Toggle"/>.
+    /// </summary>
+    public string? ToggleGroup { get; init; }
 }
 
 /// <summary>A labeled group of related <see cref="RibbonItem"/>s within a ribbon tab.</summary>
