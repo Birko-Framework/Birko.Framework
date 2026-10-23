@@ -423,6 +423,23 @@ public class Ribbon : ContentControl
     }
 
     /// <summary>Every tab → group → item as a flat scrollable menu, the active tab first.</summary>
+    /// <summary>A plain narrow-menu entry: an indented button that runs <paramref name="run"/> and closes the menu.</summary>
+    private Button NarrowEntry(string? icon, string label, double indent, System.Action run)
+    {
+        var entry = new Button
+        {
+            Content = new TextBlock { Text = (icon is null ? "" : icon + "  ") + label },
+            Background = Brushes.Transparent,
+            Padding = new Thickness(indent, 6, 16, 6),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+        };
+        entry.Bind(ForegroundProperty, entry.GetResourceObservable("BTextBrush"));
+        Describe(entry, label);
+        entry.Click += (_, _) => { run(); _reveal?.Close(); };
+        return entry;
+    }
+
     /// <summary>A toggle in the narrow menu: the same state and look as in the ribbon (TASK-754).</summary>
     private Control NarrowToggle(RibbonTab tab, RibbonGroup group, RibbonItem item)
     {
@@ -464,6 +481,29 @@ public class Ribbon : ContentControl
                     if (IsToggle(item))
                     {
                         list.Children.Add(NarrowToggle(tab, group, item));
+                        continue;
+                    }
+                    if (item.Menu is { Count: > 0 } entries)
+                    {
+                        // A menu's choices are listed under their command; a menu-only command is just their heading.
+                        if (item.Split) list.Children.Add(NarrowEntry(item.Icon, item.Label, 16, () => item.Run?.Invoke()));
+                        else
+                        {
+                            var head = new TextBlock { Text = item.Label, FontSize = 12, Margin = new Thickness(16, 4, 0, 0) };
+                            head.Bind(TextBlock.ForegroundProperty, head.GetResourceObservable("BTextMutedBrush"));
+                            list.Children.Add(head);
+                        }
+                        foreach (var choice in entries.OfType<RibbonMenuItem>())
+                        {
+                            var c = choice;
+                            var choiceEntry = NarrowEntry(c.Icon, c.Label, 32, () =>
+                            {
+                                c.Run?.Invoke();
+                                MenuItemInvoked?.Invoke(this, new RibbonMenuItemInvokedEventArgs(tab.Id, c.Id, item.Id));
+                            });
+                            choiceEntry.IsEnabled = !c.Disabled;
+                            list.Children.Add(choiceEntry);
+                        }
                         continue;
                     }
                     var entry = new Button
@@ -914,9 +954,11 @@ public class Ribbon : ContentControl
     {
         public static string Item(string group, string item) => $"item:{group}/{item}";
         public static string Chunk(string group) => $"chunk:{group}";
+        public static string Arrow(string group, string item) => $"arrow:{group}/{item}";
         public static string? GroupOf(string key) =>
             key.StartsWith("chunk:", System.StringComparison.Ordinal) ? key[6..]
             : key.StartsWith("item:", System.StringComparison.Ordinal) && key.IndexOf('/') is var slash and > 5 ? key[5..slash]
+            : key.StartsWith("arrow:", System.StringComparison.Ordinal) && key.IndexOf('/') is var a and > 6 ? key[6..a]
             : null;
     }
 
@@ -1264,10 +1306,21 @@ public class Ribbon : ContentControl
         return grid;
     }
 
+    /// <summary>Which part of a menu command <see cref="BuildItem"/> is drawing (TASK-755).</summary>
+    private enum MenuPart { None, MenuOnly, SplitMain }
+
     private Control BuildItem(RibbonItem item, RibbonGroupSize size, System.Action? onInvoke = null, string? groupKey = null)
     {
-        string? pressKey = IsToggle(item) && groupKey is not null && _buildTab is not null ? PressKey(_buildTab, groupKey, item.Id) : null;
-        Button button = pressKey is null ? new Button() : new RibbonToggleCommand { IsRadio = item.ToggleGroup is not null };
+        if (item.Menu is { Count: > 0 }) return BuildMenuCommand(item, size, onInvoke, groupKey);
+        return BuildCommand(item, size, onInvoke, groupKey, MenuPart.None);
+    }
+
+    private Button BuildCommand(RibbonItem item, RibbonGroupSize size, System.Action? onInvoke, string? groupKey, MenuPart part)
+    {
+        string? pressKey = part == MenuPart.None && IsToggle(item) && groupKey is not null && _buildTab is not null
+            ? PressKey(_buildTab, groupKey, item.Id) : null;
+        Button button = part == MenuPart.MenuOnly ? new RibbonMenuButton()
+            : pressKey is null ? new Button() : new RibbonToggleCommand { IsRadio = item.ToggleGroup is not null };
         // The command's identity across size variants (TASK-752): the same command is a different Button at each size,
         // and focus has to follow the command, not the control, when the row rescales.
         button.Tag = groupKey is null ? null : StopKey.Item(groupKey, item.Id);
@@ -1279,7 +1332,8 @@ public class Ribbon : ContentControl
         // outline (below), so it is the same size as its neighbours.
         button.Padding = pressKey is null ? new Thickness(6, 2) : new Thickness(5, 1);
         if (pressKey is null) button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
-        if (pressKey is null)
+        if (part == MenuPart.MenuOnly) { } // the whole button opens its menu; the command itself has nothing to run
+        else if (pressKey is null)
             button.Click += (_, _) => { item.Run?.Invoke(); onInvoke?.Invoke(); };
         else
         {
@@ -1304,11 +1358,18 @@ public class Ribbon : ContentControl
             // command with no tooltip is unidentifiable, which would trade one accessibility problem
             // (unreachable) for another (unnameable).
             icon.HorizontalAlignment = HorizontalAlignment.Center;
-            button.Content = icon;
+            button.Content = part == MenuPart.MenuOnly ? WithCaret(icon, button) : icon;
             return FinishToggle(button, pressKey, item);
         }
 
         var label = new TextBlock { Text = item.Label, FontSize = 11 };
+        // Large split: the main part is the icon, its name sits in the ▾ part under it (b-ribbon's "Paste ▾").
+        if (size == RibbonGroupSize.Large && part == MenuPart.SplitMain)
+        {
+            icon.HorizontalAlignment = HorizontalAlignment.Center;
+            button.Content = new Border { Child = icon, MinWidth = 52 };
+            return button;
+        }
 
         if (size == RibbonGroupSize.Large)
         {
@@ -1318,7 +1379,7 @@ public class Ribbon : ContentControl
             label.TextAlignment = TextAlignment.Center;
             var stacked = new StackPanel { Spacing = 2, MinWidth = 52 };
             stacked.Children.Add(icon);
-            stacked.Children.Add(label);
+            stacked.Children.Add(part == MenuPart.MenuOnly ? WithCaret(label, button) : label);
             button.Content = stacked;
             return FinishToggle(button, pressKey, item);
         }
@@ -1345,8 +1406,137 @@ public class Ribbon : ContentControl
         };
         inline.Children.Add(icon);
         inline.Children.Add(label);
+        if (part == MenuPart.MenuOnly) inline.Children.Add(Caret(button));
         button.Content = inline;
         return FinishToggle(button, pressKey, item);
+    }
+
+    // ── Split and menu buttons (TASK-755, as b-ribbon's TASK-732) ──
+
+    /// <summary>Raised when a menu choice is picked, after its own <c>Run</c>: the choice and the command it belongs to.</summary>
+    public event System.EventHandler<RibbonMenuItemInvokedEventArgs>? MenuItemInvoked;
+
+    /// <summary>The ▾ that marks a menu: smaller and muted, as b-ribbon's <c>.ribbon-caret</c>.</summary>
+    private static TextBlock Caret(Control owner)
+    {
+        var caret = new TextBlock { Text = "▾", FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
+        caret.Bind(TextBlock.ForegroundProperty, owner.GetResourceObservable("BTextMutedBrush"));
+        global::Avalonia.Automation.AutomationProperties.SetAccessibilityView(caret, global::Avalonia.Automation.AccessibilityView.Raw);
+        return caret;
+    }
+
+    private static Control WithCaret(Control content, Control owner)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center };
+        row.Children.Add(content);
+        row.Children.Add(Caret(owner));
+        return row;
+    }
+
+    /// <summary>
+    /// A command with a menu. Without <c>Split</c>, one button that opens the menu. With it, the button runs the command
+    /// and a separate ▾ part, named "More options: {label}", opens the menu; a divider between them shows on hover or
+    /// focus (the look the user picked, D3 option A). Large stacks the parts, its name in the ▾ part. Alt+↓ opens the
+    /// menu from either part.
+    /// </summary>
+    private Control BuildMenuCommand(RibbonItem item, RibbonGroupSize size, System.Action? onInvoke, string? groupKey)
+    {
+        string tab = _buildTab ?? "";
+        if (!item.Split)
+        {
+            var only = BuildCommand(item, size, onInvoke, groupKey, MenuPart.MenuOnly);
+            only.Flyout = BuildMenu(item, tab, onInvoke);
+            WireAltDown(only, only);
+            return only;
+        }
+
+        var main = BuildCommand(item, size, onInvoke, groupKey, MenuPart.SplitMain);
+        bool large = size == RibbonGroupSize.Large;
+        string more = $"More options: {item.Label}";
+        var arrow = new RibbonMenuButton
+        {
+            Tag = groupKey is null ? null : StopKey.Arrow(groupKey, item.Id),
+            Background = Brushes.Transparent,
+            Padding = large ? new Thickness(6, 0, 6, 2) : new Thickness(2, 2),
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
+        arrow.Bind(ForegroundProperty, arrow.GetResourceObservable("BTextBrush"));
+        AddFocusRing(arrow);
+        Describe(arrow, more);
+        AttachTip(arrow, more, null, null);
+        if (large)
+        {
+            var name = new TextBlock { Text = item.Label, FontSize = 11, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap };
+            global::Avalonia.Automation.AutomationProperties.SetAccessibilityView(name, global::Avalonia.Automation.AccessibilityView.Raw);
+            arrow.Content = WithCaret(name, arrow);
+            arrow.HorizontalAlignment = HorizontalAlignment.Stretch;
+        }
+        else arrow.Content = Caret(arrow);
+        arrow.Flyout = BuildMenu(item, tab, onInvoke);
+
+        var divider = new Border { IsHitTestVisible = false, Background = Brushes.Transparent };
+        if (large) divider.Height = 1; else divider.Width = 1;
+        var frame = new StackPanel { Orientation = large ? Orientation.Vertical : Orientation.Horizontal };
+        if (large) main.HorizontalAlignment = HorizontalAlignment.Stretch;
+        frame.Children.Add(main);
+        frame.Children.Add(divider);
+        frame.Children.Add(arrow);
+
+        // The divider shows while the split is hovered or holds focus, as b-ribbon's border-left does.
+        void Sync()
+        {
+            bool on = frame.IsPointerOver || main.IsKeyboardFocusWithin || arrow.IsKeyboardFocusWithin;
+            divider.Background = on && frame.TryFindResource("BBorderBrush", frame.ActualThemeVariant, out var b) && b is IBrush brush
+                ? brush : Brushes.Transparent;
+        }
+        frame.PointerEntered += (_, _) => Sync();
+        frame.PointerExited += (_, _) => Sync();
+        frame.GotFocus += (_, _) => Sync();
+        frame.LostFocus += (_, _) => Dispatcher.UIThread.Post(Sync);
+        WireAltDown(main, arrow);
+        WireAltDown(arrow, arrow);
+        return frame;
+    }
+
+    /// <summary>Alt+↓ on <paramref name="from"/> opens <paramref name="trigger"/>'s menu at its first choice, as in Office.</summary>
+    private static void WireAltDown(Control from, Button trigger)
+    {
+        from.KeyDown += (_, args) =>
+        {
+            if (args.Key != Key.Down || !args.KeyModifiers.HasFlag(KeyModifiers.Alt) || trigger.Flyout is null) return;
+            trigger.Flyout.ShowAt(trigger);
+            args.Handled = true;
+        };
+    }
+
+    /// <summary>
+    /// A command's menu as a <see cref="MenuFlyout"/>, so arrows, Enter and Escape and the menu's automation roles are
+    /// the toolkit's: a choice with its icon, label and right-aligned shortcut, disabled ones greyed, separators.
+    /// </summary>
+    private MenuFlyout BuildMenu(RibbonItem item, string tabId, System.Action? onInvoke)
+    {
+        var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
+        foreach (var entry in item.Menu!)
+        {
+            if (entry is not RibbonMenuItem choice) { menu.Items.Add(new Separator()); continue; }
+            var mi = new MenuItem { Header = choice.Label, IsEnabled = !choice.Disabled };
+            if (choice.Icon is { } glyph) mi.Icon = new TextBlock { Text = glyph };
+            if (!string.IsNullOrWhiteSpace(choice.Shortcut))
+            {
+                try { mi.InputGesture = KeyGesture.Parse(choice.Shortcut); } // display only, as on the web
+                catch (System.ArgumentException) { }
+                global::Avalonia.Automation.AutomationProperties.SetAcceleratorKey(mi, choice.Shortcut);
+            }
+            global::Avalonia.Automation.AutomationProperties.SetName(mi, choice.Label);
+            mi.Click += (_, _) =>
+            {
+                choice.Run?.Invoke();
+                MenuItemInvoked?.Invoke(this, new RibbonMenuItemInvokedEventArgs(tabId, choice.Id, item.Id));
+                onInvoke?.Invoke();
+            };
+            menu.Items.Add(mi);
+        }
+        return menu;
     }
 
     // ── Toggles and one-of sets (TASK-754, as b-ribbon's TASK-739) ──

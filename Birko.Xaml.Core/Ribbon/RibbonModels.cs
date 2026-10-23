@@ -80,6 +80,44 @@ public sealed class RibbonItem
     /// buttons. Implies <see cref="Toggle"/>.
     /// </summary>
     public string? ToggleGroup { get; init; }
+
+    /// <summary>
+    /// Options this command opens as a menu (TASK-755, as b-ribbon's <c>menu</c>). Without <see cref="Split"/> the
+    /// whole button opens it (a menu button, drawn with ▾); with <see cref="Split"/> the button runs the command and a
+    /// separate ▾ part opens the menu (Office's "Paste ▾"). A choice runs its own <see cref="RibbonMenuItem.Run"/> and
+    /// raises <c>Ribbon.MenuItemInvoked</c> with this command as the parent. Not combined with <see cref="Toggle"/>.
+    /// </summary>
+    public IReadOnlyList<RibbonMenuEntry>? Menu { get; init; }
+
+    /// <summary>With <see cref="Menu"/>: the button runs the command and a ▾ part opens the menu.</summary>
+    public bool Split { get; init; }
+}
+
+/// <summary>A <see cref="RibbonItem.Menu"/> entry: a choice, or <see cref="Separator"/>, a line between sets of choices.</summary>
+public abstract class RibbonMenuEntry
+{
+    private protected RibbonMenuEntry() { }
+
+    /// <summary>The divider line between sets of choices.</summary>
+    public static RibbonMenuEntry Separator { get; } = new RibbonMenuSeparator();
+
+    private sealed class RibbonMenuSeparator : RibbonMenuEntry { }
+}
+
+/// <summary>One choice of a <see cref="RibbonItem.Menu"/>. Label and shortcut are text.</summary>
+public sealed class RibbonMenuItem : RibbonMenuEntry
+{
+    public required string Id { get; init; }
+    public required string Label { get; init; }
+    public string? Icon { get; init; }
+
+    /// <summary>Shown right-aligned, e.g. <c>Ctrl+Shift+V</c>. Display only: the app binds the key itself.</summary>
+    public string? Shortcut { get; init; }
+
+    public bool Disabled { get; init; }
+
+    /// <summary>Invoked when the choice is picked.</summary>
+    public Action? Run { get; init; }
 }
 
 /// <summary>A labeled group of related <see cref="RibbonItem"/>s within a ribbon tab.</summary>
