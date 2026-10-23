@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using Birko.Xaml.Core.Ribbon;
 
@@ -68,14 +69,41 @@ internal sealed class RibbonGroupsPanel : Panel
     /// </summary>
     public double Gap { get => GetValue(GapProperty); set => SetValue(GapProperty, value); }
 
+    public static readonly StyledProperty<IBrush?> DividerBrushProperty =
+        AvaloniaProperty.Register<RibbonGroupsPanel, IBrush?>(nameof(DividerBrush));
+
+    /// <summary>
+    /// The divider between groups, drawn by the panel halfway into the gap and the row's full height (TASK-751, as
+    /// b-ribbon since TASK-730). Each group used to draw its own right border, which put the divider on the group's
+    /// edge with the whole gap after it.
+    /// </summary>
+    public IBrush? DividerBrush { get => GetValue(DividerBrushProperty); set => SetValue(DividerBrushProperty, value); }
+
     static RibbonGroupsPanel()
     {
         AffectsMeasure<RibbonGroupsPanel>(GapProperty);
     }
 
+    /// <summary>
+    /// The divider lines, one per gap: 1px children the panel places halfway into each gap, the row's full height
+    /// (<c>Panel.Render</c> is sealed, so it cannot paint them itself). Not hit-testable and not focusable, and
+    /// outside the groups, so the scaling never measures them.
+    /// </summary>
+    private readonly List<Border> _dividers = new();
+
+    /// <summary>The dividers, for tests: each one's line, as arranged.</summary>
+    internal IReadOnlyList<Control> Dividers => _dividers;
+
     public void AddGroup(GroupVariants group)
     {
         ClipToBounds = true; // parked variants live off-screen; do not let them paint
+        if (_groups.Count > 0)
+        {
+            var line = new Border { Width = 1, IsHitTestVisible = false, Focusable = false };
+            line.Bind(Border.BackgroundProperty, this.GetObservable(DividerBrushProperty));
+            _dividers.Add(line);
+            Children.Add(line);
+        }
         _groups.Add(group);
         foreach (var control in group.Controls.Values) Children.Add(control);
         if (group.CompactPopup is not null) Children.Add(group.CompactPopup);
@@ -159,6 +187,7 @@ internal sealed class RibbonGroupsPanel : Panel
 
             picked.Measure(availableSize);
             if (i > 0) width += gap;
+            if (i > 0) _dividers[i - 1].Measure(new Size(1, double.PositiveInfinity));
             width += picked.DesiredSize.Width;
             height = System.Math.Max(height, picked.DesiredSize.Height);
         }
@@ -181,7 +210,12 @@ internal sealed class RibbonGroupsPanel : Panel
                 control.Arrange(new Rect(-100_000, 0, control.DesiredSize.Width, control.DesiredSize.Height));
             }
 
-            if (i > 0) x += gap;
+            if (i > 0)
+            {
+                // Halfway into the gap, on a whole pixel so the 1px line is one crisp device pixel.
+                _dividers[i - 1].Arrange(new Rect(System.Math.Floor(x + gap / 2), 0, 1, finalSize.Height));
+                x += gap;
+            }
             picked.Arrange(new Rect(x, 0, picked.DesiredSize.Width, finalSize.Height));
             x += picked.DesiredSize.Width;
         }

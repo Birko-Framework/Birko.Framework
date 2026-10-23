@@ -342,6 +342,7 @@ public class Ribbon : ContentControl
     {
         var panel = new RibbonGroupsPanel { Margin = new Thickness(8), Preferred = PreferredGroupSize };
         panel.Bind(RibbonGroupsPanel.GapProperty, panel.GetResourceObservable("BRibbonGroupGap"));
+        panel.Bind(RibbonGroupsPanel.DividerBrushProperty, panel.GetResourceObservable("BBorderBrush"));
 
         foreach (var group in tab.Groups)
             panel.AddGroup(new RibbonGroupsPanel.GroupVariants
@@ -945,6 +946,11 @@ public class Ribbon : ContentControl
         Control items = size == RibbonGroupSize.Large
             ? Row(group.Items, size, onInvoke, wrapItems)
             : Columns(group.Items, size, perColumn: 3, onInvoke);
+        // Centred over the group's name when the name is the wider of the two (a Small group's icons under
+        // "Records"), so the space splits evenly instead of all sitting before the next divider (TASK-751, as
+        // b-ribbon since TASK-746). A Large row keeps its commands at the top, as b-ribbon's flex-start does.
+        items.HorizontalAlignment = HorizontalAlignment.Center;
+        if (size == RibbonGroupSize.Large) items.VerticalAlignment = VerticalAlignment.Top;
 
         var label = new TextBlock
         {
@@ -953,25 +959,24 @@ public class Ribbon : ContentControl
             // b-ribbon's .ribbon-group-label is line-height: 1; the default line box added ~4px per group.
             LineHeight = 11,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 2, 0, 0),
+            // The bottom 3px are the descenders': the line box is the font size, and the row clips at its own
+            // bounds (parked variants live off-screen), so the "p" of "Clipboard" was cut off (TASK-751).
+            Margin = new Thickness(0, 4, 0, 3),
         };
         label.Bind(TextBlock.ForegroundProperty, label.GetResourceObservable("BTextMutedBrush"));
+        // Docked to the bottom, so every group's name sits on one line under the row however many commands the
+        // group has (TASK-751, as b-ribbon's TASK-730): the panel arranges every group at the row's full height.
+        DockPanel.SetDock(label, Dock.Bottom);
 
-        var stack = new StackPanel { Spacing = 2 };
-        stack.Children.Add(items);
-        stack.Children.Add(label);
+        var dock = new DockPanel { LastChildFill = true };
+        dock.Children.Add(label);
+        dock.Children.Add(items);
 
-        var box = new Border
-        {
-            // BSpaceXs horizontally, none vertically — b-ribbon's .ribbon-group is
-            // `padding: 0 var(--b-space-xs)`. The old 8/4 gave every group extra inner padding the web
-            // side does not have, which is what made the two look differently spaced inside a group.
-            Padding = new Thickness(4, 0),
-            BorderThickness = new Thickness(0, 0, 1, 0),
-            Child = stack,
-        };
-        box.Bind(Border.BorderBrushProperty, box.GetResourceObservable("BBorderBrush"));
-        return box;
+        // BSpaceXs horizontally, none vertically — b-ribbon's .ribbon-group is `padding: 0 var(--b-space-xs)`.
+        // No border: RibbonGroupsPanel draws the divider halfway into the gap (TASK-751). As this group's right
+        // border it sat on the group's edge with the whole gap after it, the mirror of the web defect TASK-730
+        // fixed.
+        return new Border { Padding = new Thickness(4, 0), Child = dock };
     }
 
     /// <summary>
@@ -996,22 +1001,33 @@ public class Ribbon : ContentControl
         return row;
     }
 
-    /// <summary>Items in columns of <paramref name="perColumn"/>, columns flowing left to right.</summary>
+    /// <summary>
+    /// Items in columns of <paramref name="perColumn"/>, columns flowing left to right, in <paramref name="perColumn"/>
+    /// EQUAL rows (TASK-751, as b-ribbon's TASK-730). Rows sized by their own content drifted with each command's
+    /// icon, so a command sat lower than the one beside it in the next group; with every group arranged at the row's
+    /// height, equal rows line up across groups. A group with fewer commands leaves its last rows empty rather than
+    /// spreading the ones it has.
+    /// </summary>
     private Control Columns(IReadOnlyList<RibbonItem> items, RibbonGroupSize size, int perColumn, System.Action? onInvoke)
     {
-        var host = new StackPanel { Orientation = Orientation.Horizontal };
-        host.Bind(StackPanel.SpacingProperty, host.GetResourceObservable("BRibbonItemGap"));
-        StackPanel? column = null;
+        var grid = new Grid();
+        for (int r = 0; r < perColumn; r++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
+        int columns = (items.Count + perColumn - 1) / perColumn;
+        for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         for (int i = 0; i < items.Count; i++)
         {
-            if (i % perColumn == 0)
-            {
-                column = new StackPanel { Spacing = 1 };
-                host.Children.Add(column);
-            }
-            column!.Children.Add(BuildItem(items[i], size, onInvoke));
+            var item = BuildItem(items[i], size, onInvoke);
+            int row = i % perColumn, column = i / perColumn;
+            Grid.SetRow(item, row);
+            Grid.SetColumn(item, column);
+            // Column spacing is the BRibbonItemGap token, as before; rows keep their 1px.
+            if (column > 0) item.Bind(MarginProperty, item.GetResourceObservable(
+                "BRibbonItemGap", v => new Thickness(v is double gap ? gap : 0, row > 0 ? 1 : 0, 0, 0)));
+            else if (row > 0) item.Margin = new Thickness(0, 1, 0, 0);
+            item.VerticalAlignment = VerticalAlignment.Stretch;
+            grid.Children.Add(item);
         }
-        return host;
+        return grid;
     }
 
     private Control BuildItem(RibbonItem item, RibbonGroupSize size, System.Action? onInvoke = null)
@@ -1102,7 +1118,12 @@ public class Ribbon : ContentControl
 
     private Control BuildChunk(RibbonGroup group, bool labelled = true)
     {
-        var icon = new TextBlock { Text = group.Icon ?? "▦", HorizontalAlignment = HorizontalAlignment.Center };
+        // A group without an icon shows its name (labelled), or its initial in a small tile (compact), as b-ribbon
+        // does since TASK-743, which the user picked over one generic glyph for every group. This used to be ▦ for
+        // all of them, so a row of compact chunks was a row of identical squares.
+        Control icon = group.Icon is { } glyph
+            ? new TextBlock { Text = glyph, HorizontalAlignment = HorizontalAlignment.Center }
+            : labelled ? new Panel() : ChunkInitial(group.Label);
         var label = new TextBlock
         {
             Text = group.Label + " ⌄",
@@ -1111,7 +1132,7 @@ public class Ribbon : ContentControl
             TextAlignment = TextAlignment.Center,
         };
 
-        var content = new StackPanel { Spacing = 2 };
+        var content = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(icon);
         // The extreme: even a row of labelled chunk buttons can be too wide, because a chunk shows
         // its group NAME and a name has a minimum width. Dropping it takes the six-group minimum from
@@ -1175,13 +1196,33 @@ public class Ribbon : ContentControl
             _openChunkButton = null;
         };
 
-        var box = new Border
+        // No border: RibbonGroupsPanel draws the dividers (TASK-751). The chunk fills the row's height, as
+        // b-ribbon's folded group is one full-height button.
+        button.VerticalAlignment = VerticalAlignment.Stretch;
+        button.VerticalContentAlignment = VerticalAlignment.Center;
+        return new Border { Padding = labelled ? new Thickness(8, 4) : new Thickness(1, 4), Child = button };
+    }
+
+    /// <summary>A compact folded group's initial: the first letter of its name in a small tile (TASK-751).</summary>
+    private static Control ChunkInitial(string label)
+    {
+        string text = label.Trim();
+        string initial = text.Length == 0 ? ""
+            : char.IsSurrogate(text, 0) && text.Length > 1 ? text[..2]
+            : text[..1].ToUpperInvariant();
+        var letter = new TextBlock
         {
-            Padding = labelled ? new Thickness(8, 4) : new Thickness(1, 4),
-            BorderThickness = labelled ? new Thickness(0, 0, 1, 0) : default,
-            Child = button,
+            Text = initial,
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
         };
-        box.Bind(Border.BorderBrushProperty, box.GetResourceObservable("BBorderBrush"));
-        return box;
+        var tile = new Border { Child = letter, HorizontalAlignment = HorizontalAlignment.Center, Padding = new Thickness(2) };
+        tile.Bind(Border.BackgroundProperty, tile.GetResourceObservable("BBgTertiaryBrush"));
+        tile.Bind(Border.CornerRadiusProperty, tile.GetResourceObservable("BRadiusSm"));
+        tile.Bind(MinWidthProperty, tile.GetResourceObservable("BRibbonIconSmall"));
+        tile.Bind(MinHeightProperty, tile.GetResourceObservable("BRibbonIconSmall"));
+        return tile;
     }
 }
