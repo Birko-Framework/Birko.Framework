@@ -128,6 +128,7 @@ public partial class Ribbon : ContentControl
         IsCollapsedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         PreferredGroupSizeProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         IsPinnedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+        QuickAccessPositionProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
 
         // Narrow/wide is a rebuild, so it is driven off the size change rather than polled — and only when
         // the state actually flips, otherwise every pixel of a drag would rebuild the whole chrome.
@@ -286,23 +287,46 @@ public partial class Ribbon : ContentControl
         pin.Click += (_, _) => IsPinned = !IsPinned;
         AddFocusRing(pin);
 
-        var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto"), Margin = new Thickness(8, 4, 8, 0) };
+        var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto,Auto"), Margin = new Thickness(8, 4, 8, 0) };
         var leading = Reparent(_leadingHost);
         var trailing = Reparent(_trailingHost);
         Grid.SetColumn(leading, 0);
-        Grid.SetColumn(tabScroller, 1);
-        Grid.SetColumn(trailing, 2);
-        Grid.SetColumn(chevron, 3);
-        Grid.SetColumn(pin, 4);
+        Grid.SetColumn(tabScroller, 2);
+        Grid.SetColumn(trailing, 3);
+        Grid.SetColumn(chevron, 4);
+        Grid.SetColumn(pin, 5);
         strip.Children.Add(leading);
         strip.Children.Add(tabScroller);
         strip.Children.Add(trailing);
         strip.Children.Add(chevron);
         strip.Children.Add(pin);
 
+        // The Quick Access Toolbar (TASK-759): in the tab row before the tabs, or on a row of its own.
+        var qat = BuildQuickAccess();
+        if (qat is not null && QuickAccessPosition == RibbonQuickAccessPosition.Tabs)
+        {
+            qat.Margin = new Thickness(0, 0, 8, 0);
+            Grid.SetColumn(qat, 1);
+            strip.Children.Add(qat);
+        }
+
         var body = new DockPanel();
+        if (qat is not null && QuickAccessPosition == RibbonQuickAccessPosition.Above)
+        {
+            qat.Margin = new Thickness(8, 2);
+            qat.HorizontalAlignment = HorizontalAlignment.Left;
+            DockPanel.SetDock(qat, Dock.Top);
+            body.Children.Add(qat);
+        }
         DockPanel.SetDock(strip, Dock.Top);
         body.Children.Add(strip);
+        if (qat is not null && QuickAccessPosition == RibbonQuickAccessPosition.Below)
+        {
+            qat.Margin = new Thickness(8, 2);
+            qat.HorizontalAlignment = HorizontalAlignment.Left;
+            DockPanel.SetDock(qat, Dock.Bottom);
+            body.Children.Add(qat);
+        }
 
         // Active tab groups — in flow only when PINNED. Unpinned, the body must not push page content
         // down, so it is built into the reveal popup instead (RevealTemporarily).
@@ -394,6 +418,7 @@ public partial class Ribbon : ContentControl
             });
         }
 
+        WireQuickAccessContext(panel, tab.Id);
         return panel;
     }
 

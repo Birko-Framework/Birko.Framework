@@ -189,6 +189,14 @@ public partial class Ribbon
             var tabs = Tabs?.ToList() ?? new List<RibbonTab>();
             for (int i = 0; i < strip.Children.Count && i < tabs.Count; i++)
                 entries.Add((strip.Children[i], tabs[i].Label, tabs[i].Keytip));
+            // Office numbers the Quick Access Toolbar (TASK-759): 1 to 9, kept off the tabs' letters.
+            if (_qatDefaults is not null)
+                for (int i = 0; i < _qatButtons.Count && i < 9; i++)
+                {
+                    string digit = ((char)('1' + i)).ToString();
+                    used.Add(digit);
+                    PlaceTip(digit, _qatButtons[i], centred: true);
+                }
         }
         else if (level == TipLevel.Commands && (_groupsPanel ?? _revealPanel) is { } panel)
         {
@@ -212,11 +220,16 @@ public partial class Ribbon
             }
         }
 
-        foreach (var (letter, target) in AssignTips(entries, used))
+        foreach (var (letter, target) in AssignTips(entries, used)) PlaceTip(letter, target, centred: level == TipLevel.Tabs);
+        _tipLevel = level;
+    }
+
+    private void PlaceTip(string letter, Control target, bool centred)
+    {
         {
             _tipTargets[letter] = target;
-            if (AdornerLayer.GetAdornerLayer(target) is not { } layer) continue;
-            var badge = Badge(letter, centred: level == TipLevel.Tabs, target);
+            if (AdornerLayer.GetAdornerLayer(target) is not { } layer) return;
+            var badge = Badge(letter, centred, target);
             AdornerLayer.SetAdornedElement(badge, target);
             // Unclipped: an adorner is clipped to its element by default, which cut off the half of the badge that sits
             // outside the command's corner (seen in the screenshot).
@@ -230,7 +243,6 @@ public partial class Ribbon
                 && _tipScopes.Add(presenter))
                 presenter.AddHandler(KeyDownEvent, OnTipKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
         }
-        _tipLevel = level;
     }
 
     /// <summary>
