@@ -2,7 +2,7 @@
 id: TASK-762
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified headlessly 2026-10-23; the human test plan is left
+status: done  # signed off by the user 2026-10-23
 priority: P3
 assignee: ai
 created: 2026-10-23
@@ -33,7 +33,7 @@ FEATURE-019 D13, split from TASK-742. Web counterpart: TASK-741. Desktop counter
 
 ## Human test plan
 
-- [ ] Type a font name and a size not in the list, step Height with the arrows, Escape, and narrow the window
+- [x] Type a font name and a size not in the list, step Height with the arrows, Escape, and narrow the window
 
 ## Outcome (2026-10-23)
 

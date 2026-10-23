@@ -2,7 +2,7 @@
 id: TASK-763
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified headlessly 2026-10-23; awaiting sign-off with the rest of the desktop ribbon
+status: done  # signed off by the user 2026-10-23
 priority: P3
 assignee: ai
 created: 2026-10-23

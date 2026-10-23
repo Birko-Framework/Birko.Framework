@@ -2,7 +2,7 @@
 id: TASK-752
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified headlessly 2026-10-23; the human test plan is left
+status: done  # signed off by the user 2026-10-23
 priority: P3
 assignee: ai
 created: 2026-10-23
@@ -34,7 +34,7 @@ Roving focus: Tab reaches the panel once; ←/→ move to the nearest command th
 
 ## Human test plan
 
-- [ ] Keyboard only in the Gallery: Tab into the ribbon, cross every group with the arrows, open a folded group, Escape back to the tabs
+- [x] Keyboard only in the Gallery: Tab into the ribbon, cross every group with the arrows, open a folded group, Escape back to the tabs
 
 ## Outcome (2026-10-23)
 

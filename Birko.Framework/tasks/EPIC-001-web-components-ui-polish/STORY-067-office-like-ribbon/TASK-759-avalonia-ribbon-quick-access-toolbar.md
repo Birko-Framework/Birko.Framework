@@ -2,7 +2,7 @@
 id: TASK-759
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified headlessly 2026-10-23; the human test plan is left
+status: done  # signed off by the user 2026-10-23
 priority: P3
 assignee: ai
 created: 2026-10-23
@@ -33,7 +33,7 @@ Opt-in favourite commands before the tabs (or above / below): add and remove fro
 
 ## Human test plan
 
-- [ ] Add and remove commands, reset, restart the Gallery: the app restores the toolbar
+- [x] Add and remove commands, reset, restart the Gallery: the app restores the toolbar
 
 ## Outcome (2026-10-23)
 

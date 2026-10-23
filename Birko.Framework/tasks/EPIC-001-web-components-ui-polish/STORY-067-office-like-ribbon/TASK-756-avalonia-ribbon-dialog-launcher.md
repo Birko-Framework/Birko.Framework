@@ -2,7 +2,7 @@
 id: TASK-756
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified headlessly 2026-10-23; the human test plan is left
+status: done  # signed off by the user 2026-10-23
 priority: P3
 assignee: ai
 created: 2026-10-23
@@ -33,7 +33,7 @@ FEATURE-019 D13, split from TASK-742. Web counterpart: TASK-733. Desktop counter
 
 ## Human test plan
 
-- [ ] Click and keyboard-activate the Font launcher in the Gallery, wide and folded
+- [x] Click and keyboard-activate the Font launcher in the Gallery, wide and folded
 
 ## Outcome (2026-10-23)
 

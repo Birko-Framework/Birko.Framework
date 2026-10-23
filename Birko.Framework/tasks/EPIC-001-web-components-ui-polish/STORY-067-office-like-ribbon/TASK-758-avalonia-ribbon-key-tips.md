@@ -2,7 +2,7 @@
 id: TASK-758
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified headlessly 2026-10-23; the human test plan is left
+status: done  # signed off by the user 2026-10-23
 priority: P3
 assignee: ai
 created: 2026-10-23
@@ -33,7 +33,7 @@ Tapping and releasing plain Alt shows letters on the tabs (decided 2026-10-23: p
 
 ## Human test plan
 
-- [ ] Reach three different commands with key tips only, one in a menu and one in a folded group
+- [x] Reach three different commands with key tips only, one in a menu and one in a folded group
 
 ## Outcome (2026-10-23)
 

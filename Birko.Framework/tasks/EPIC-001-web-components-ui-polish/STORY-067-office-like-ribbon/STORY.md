@@ -2,7 +2,7 @@
 id: STORY-067
 parent: EPIC-001
 feature: FEATURE-019
-status: in-progress
+status: done  # FEATURE-019 signed off by the user 2026-10-23
 created: 2026-10-22
 ---
 

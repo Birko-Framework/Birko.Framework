@@ -2,7 +2,7 @@
 id: TASK-757
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified headlessly 2026-10-23; the human test plan is left
+status: done  # signed off by the user 2026-10-23
 priority: P3
 assignee: ai
 created: 2026-10-23
@@ -33,7 +33,7 @@ Ctrl+F1 already collapses the desktop ribbon. Add Office's double-click on a tab
 
 ## Human test plan
 
-- [ ] Double-click a tab and press Ctrl+F1 in the Gallery: the ribbon collapses and comes back
+- [x] Double-click a tab and press Ctrl+F1 in the Gallery: the ribbon collapses and comes back
 
 ## Outcome (2026-10-23)
 

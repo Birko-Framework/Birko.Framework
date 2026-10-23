@@ -3,7 +3,7 @@ id: FEATURE-019
 created: 2026-10-22
 owner: ai
 # status — one of: idea, review (built, sign-off pending), done, dropped, superseded
-status: idea
+status: done
 ---
 
 # An Office-like ribbon (`b-ribbon`)

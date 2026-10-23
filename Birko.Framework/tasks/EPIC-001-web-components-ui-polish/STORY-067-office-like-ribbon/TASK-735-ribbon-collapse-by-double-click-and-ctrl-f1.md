@@ -2,7 +2,7 @@
 id: TASK-735
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # reopened 2026-10-23 for D6 changed (signed off 2026-10-22 before it)
+status: done  # signed off by the user 2026-10-23
 priority: P3
 assignee: ai
 created: 2026-10-22
@@ -83,5 +83,5 @@ twice). Behaviour is covered by the automated suites: keyboard-check 195/195, `v
 
 ## Human test plan (D6 change)
 
-- [ ] In the Playground: collapse with the arrow, open a tab (the panel over the page has a 📌), pin it; reload a page
+- [x] In the Playground: collapse with the arrow, open a tab (the panel over the page has a 📌), pin it; reload a page
   saved pinned and check the panel is open; double-click and Ctrl+F1 as before

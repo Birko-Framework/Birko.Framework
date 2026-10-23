@@ -2,7 +2,7 @@
 id: TASK-751
 parent: STORY-067
 feature: FEATURE-019
-status: verify  # verified headlessly 2026-10-23; the human test plan is left
+status: done  # signed off by the user 2026-10-23
 priority: P3
 assignee: ai
 created: 2026-10-23
@@ -35,7 +35,7 @@ Groups one height with the divider running the full height; three equal command 
 
 ## Human test plan
 
-- [ ] Open the Gallery ribbon in light and dark: dividers full height and halfway, rows aligned, names below; narrow the window until groups fold, with and without group icons
+- [x] Open the Gallery ribbon in light and dark: dividers full height and halfway, rows aligned, names below; narrow the window until groups fold, with and without group icons
 
 ## Outcome (2026-10-23)
 
