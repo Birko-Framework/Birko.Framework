@@ -17,7 +17,7 @@ namespace Birko.Xaml.Avalonia.Controls;
 /// active tab shows labeled groups of icon+label command buttons. Model-driven via <see cref="Tabs"/>;
 /// clicking an item runs its <see cref="RibbonItem.Run"/>. Token-styled and rebuilt on tab change.
 /// </summary>
-public class Ribbon : ContentControl
+public partial class Ribbon : ContentControl
 {
     public static readonly StyledProperty<IEnumerable<RibbonTab>?> TabsProperty =
         AvaloniaProperty.Register<Ribbon, IEnumerable<RibbonTab>?>(nameof(Tabs));
@@ -589,6 +589,8 @@ public class Ribbon : ContentControl
         // closed the narrow menu. (Both were "covered" by tests that raised the event straight at the
         // control, which proved the handler ran and nothing about whether a keystroke could reach it.)
         _topLevel = TopLevel.GetTopLevel(this);
+        // Key tips first, so a letter while they show is theirs before any other shortcut sees it (TASK-758).
+        if (_topLevel is not null) AttachKeyTips(_topLevel);
         _topLevel?.AddHandler(
             global::Avalonia.Input.InputElement.KeyDownEvent, OnTopLevelKeyDown,
             global::Avalonia.Interactivity.RoutingStrategies.Tunnel | global::Avalonia.Interactivity.RoutingStrategies.Bubble);
@@ -606,6 +608,8 @@ public class Ribbon : ContentControl
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
+        ExitKeyTips();
+        if (_topLevel is not null) DetachKeyTips(_topLevel);
         _topLevel?.RemoveHandler(global::Avalonia.Input.InputElement.KeyDownEvent, OnTopLevelKeyDown);
         _topLevel?.RemoveHandler(global::Avalonia.Input.InputElement.PointerPressedEvent, OnTopLevelPointerPressed);
         _topLevel = null;
@@ -749,6 +753,7 @@ public class Ribbon : ContentControl
 
         _reveal?.Close();
         var groups = BuildGroupsRow(_revealTabs[_revealSelected], () => _reveal?.Close());
+        _revealPanel = groups; // key tips reach an unpinned ribbon's commands here (TASK-758)
 
         groups.KeyDown += (_, args) =>
         {
@@ -1029,6 +1034,8 @@ public class Ribbon : ContentControl
         }
         return false;
     }
+
+    private static string? StopKeyGroup(string key) => StopKey.GroupOf(key);
 
     /// <summary>A panel stop's identity, kept in its <c>Tag</c>: a command (group/item) or a folded group.</summary>
     private static class StopKey
@@ -1668,7 +1675,7 @@ public class Ribbon : ContentControl
         foreach (var entry in item.Menu!)
         {
             if (entry is not RibbonMenuItem choice) { menu.Items.Add(new Separator()); continue; }
-            var mi = new MenuItem { Header = choice.Label, IsEnabled = !choice.Disabled };
+            var mi = new MenuItem { Header = choice.Label, IsEnabled = !choice.Disabled, Tag = choice.Keytip };
             if (choice.Icon is { } glyph) mi.Icon = new TextBlock { Text = glyph };
             if (!string.IsNullOrWhiteSpace(choice.Shortcut))
             {

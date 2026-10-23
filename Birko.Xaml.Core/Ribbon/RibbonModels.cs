@@ -49,6 +49,9 @@ public sealed class RibbonItem
     /// <summary>Optional glyph shown above the label.</summary>
     public string? Icon { get; init; }
 
+    /// <summary>Key tip letter or digit (TASK-758); unset, the first free letter of the label.</summary>
+    public string? Keytip { get; init; }
+
     /// <summary>Invoked when the item is clicked.</summary>
     public Action? Run { get; init; }
 
@@ -111,6 +114,9 @@ public sealed class RibbonMenuItem : RibbonMenuEntry
     public required string Label { get; init; }
     public string? Icon { get; init; }
 
+    /// <summary>Key tip letter or digit (TASK-758); unset, the first free letter of the label.</summary>
+    public string? Keytip { get; init; }
+
     /// <summary>Shown right-aligned, e.g. <c>Ctrl+Shift+V</c>. Display only: the app binds the key itself.</summary>
     public string? Shortcut { get; init; }
 
@@ -127,6 +133,9 @@ public sealed class RibbonGroup
     public string? Id { get; init; }
 
     public required string Label { get; init; }
+
+    /// <summary>Key tip letter of the group's folded button (TASK-758); unset, the first free letter of the label.</summary>
+    public string? Keytip { get; init; }
     public IReadOnlyList<RibbonItem> Items { get; init; } = Array.Empty<RibbonItem>();
 
     /// <summary>
@@ -172,5 +181,8 @@ public sealed class RibbonTab
 {
     public required string Id { get; init; }
     public required string Label { get; init; }
+
+    /// <summary>Key tip letter of the tab (TASK-758); unset, the first free letter of the label.</summary>
+    public string? Keytip { get; init; }
     public IReadOnlyList<RibbonGroup> Groups { get; init; } = Array.Empty<RibbonGroup>();
 }
