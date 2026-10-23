@@ -186,12 +186,12 @@ public partial class Ribbon
     {
         string? pressKey = tab is not null && group is not null && IsToggle(item) ? PressKey(tab, group, item.Id) : null;
         Button button = pressKey is null ? new Button() : new RibbonToggleCommand { IsRadio = item.ToggleGroup is not null };
-        var glyph = new TextBlock
+        var glyph = CentreInk(new TextBlock
         {
             Text = item.Icon ?? item.Label[..1],
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-        };
+        });
         glyph.Bind(TextBlock.FontSizeProperty, button.GetResourceObservable("BRibbonIconSmall"));
         button.Content = glyph;
         button.Tag = reference;

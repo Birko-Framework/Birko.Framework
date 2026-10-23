@@ -1630,7 +1630,7 @@ public partial class Ribbon : ContentControl
         }
         AddFocusRing(button);
 
-        var icon = new TextBlock { Text = item.Icon ?? "•" };
+        var icon = CentreInk(new TextBlock { Text = item.Icon ?? "•" });
         icon.Bind(TextBlock.FontSizeProperty, button.GetResourceObservable(
             size == RibbonGroupSize.Large ? "BRibbonIconLarge" : "BRibbonIconSmall"));
 

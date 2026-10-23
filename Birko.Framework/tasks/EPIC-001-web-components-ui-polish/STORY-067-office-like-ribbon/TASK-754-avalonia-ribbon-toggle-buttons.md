@@ -78,3 +78,8 @@ FEATURE-019 D13, split from TASK-742. Web counterpart: TASK-739. Desktop counter
   against 13px) and set them apart from the plain commands. All three are styled as `Button` now, so every ribbon command
   draws its label the same way. Measured in a headless probe: icon and label positions in a toggle now equal a plain
   command's.
+- **Icons sitting lower than their labels, fixed.** An icon is a character, and characters from different fonts sit at
+  different heights in the same line box: Bold's and Italic's math letters drew about 2px below the middle. Every
+  command's and toolbar button's icon is now centred by its measured ink, a draw-time shift that leaves every size
+  unchanged. Checked in the live Gallery: Bold, Italic, Colour, Columns, Rows, Paste and Cut line up with their labels.
+  Gate: `RibbonToggleTests` +1 (the ink of 𝐁, 𝑰 and ✂ is centred in its box), Birko.Xaml.Avalonia.Tests 324/324.

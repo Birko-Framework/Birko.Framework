@@ -250,4 +250,30 @@ public class RibbonToggleTests
         Dispatcher.UIThread.RunJobs();
         ReferenceEquals(bold.BorderBrush, Brushes.Transparent).Should().BeFalse("keyboard focus shows the ring");
     }
+
+    [AvaloniaFact]
+    public void An_icon_glyph_is_centred_by_its_ink_beside_its_label()
+    {
+        // The user saw Bold's 𝐁 and Italic's 𝑰 sit lower than their labels (2026-10-23): math letters come from a font
+        // whose ink sits about 2px under the line box's middle. The icon is shifted so its ink's middle is the box's.
+        var tab = new RibbonTab { Id = "t", Label = "T", Groups = new[] { new RibbonGroup { Label = "G", Items = new[]
+        {
+            new RibbonItem { Id = "b", Label = "Bold", Icon = "𝐁", Toggle = true },
+            new RibbonItem { Id = "i", Label = "Italic", Icon = "𝑰" },
+            new RibbonItem { Id = "c", Label = "Cut", Icon = "✂" },
+        } } } };
+        var ribbon = Show(new Ribbon { Tabs = new[] { tab } }, out var window);
+        Layout(window, 1000);
+        foreach (var name in new[] { "Bold", "Italic", "Cut" })
+        {
+            var icon = Shown(ribbon, name).GetVisualDescendants().OfType<TextBlock>().First(t => t.Text != name);
+            var face = new Typeface(icon.FontFamily, icon.FontStyle, icon.FontWeight, icon.FontStretch);
+            var text = new FormattedText(icon.Text!, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, face, icon.FontSize, Brushes.Black);
+            var ink = text.BuildGeometry(default)!.Bounds;
+            double top = icon.TextLayout.TextLines[0].Baseline + (ink.Top - text.Baseline);
+            double shift = icon.RenderTransform is TranslateTransform t ? t.Y : 0;
+            double middle = top + ink.Height / 2 + shift;
+            middle.Should().BeApproximately(icon.Bounds.Height / 2, 1, $"{name}'s icon ink is centred in its box");
+        }
+    }
 }
