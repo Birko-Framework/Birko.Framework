@@ -170,6 +170,11 @@ public partial class Ribbon
         string? group = StopKeyGroup(key);
         var model = group is not null && int.TryParse(group, out int g) && g < tab.Groups.Count ? tab.Groups[g] : null;
         if (key.StartsWith("chunk:", System.StringComparison.Ordinal)) return (model?.Label ?? name, model?.Keytip);
+        if (key.StartsWith("tile:", System.StringComparison.Ordinal) && model is not null && key.Split('/') is { Length: 3 } tile)
+        {
+            var choice = model.Items.FirstOrDefault(i => i.Id == tile[1])?.Gallery?.Items.FirstOrDefault(c => c.Id == tile[2]);
+            return (choice?.Label ?? name, choice?.Keytip);
+        }
         if (key.StartsWith("item:", System.StringComparison.Ordinal) && model is not null)
         {
             string id = key[(key.IndexOf('/') + 1)..];
@@ -286,6 +291,17 @@ public partial class Ribbon
             if (!IsPinned) RevealTemporarily();
             else IsCollapsed = false;
             ShowAfterLayout(() => ShowKeyTips(TipLevel.Commands));
+            return;
+        }
+        // A gallery's expand button: the grid, then the letters of its tiles (TASK-761).
+        if (target is Button { Tag: string more } && more.StartsWith("more:", System.StringComparison.Ordinal)
+            && ControlAutomationPeer.CreatePeerForElement((Button)target) is IInvokeProvider open)
+        {
+            ClearBadges();
+            open.Invoke();
+            if (OpenGalleryGridFlyout is not { } grid) { ExitKeyTips(); return; }
+            _tipPopup = grid;
+            ShowAfterLayout(() => ShowKeyTips(TipLevel.Popup, grid.Content as Control));
             return;
         }
         // A folded group or a menu: open it, then the letters inside.

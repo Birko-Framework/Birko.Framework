@@ -122,14 +122,21 @@ public partial class Ribbon : ContentControl
     {
         LeadingContentProperty.Changed.AddClassHandler<Ribbon>((r, e) => r._leadingHost.Content = e.NewValue);
         TrailingContentProperty.Changed.AddClassHandler<Ribbon>((r, e) => r._trailingHost.Content = e.NewValue);
-        // New tabs: their Pressed values are the state again (TASK-754), as b-ribbon's setTabs.
-        TabsProperty.Changed.AddClassHandler<Ribbon>((r, _) => { r._pressed.Clear(); r.Rebuild(); });
+        // New tabs: their Pressed and gallery Selected values are the state again (TASK-754, TASK-761), as b-ribbon's setTabs.
+        TabsProperty.Changed.AddClassHandler<Ribbon>((r, _) =>
+        {
+            r._pressed.Clear();
+            r._gallerySel.Clear();
+            r._galleryOffset.Clear();
+            r.Rebuild();
+        });
         SelectedIndexProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         IsCollapsedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         PreferredGroupSizeProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         IsPinnedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         QuickAccessPositionProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         ContextualStyleProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+        GalleryStyleProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
 
         // Narrow/wide is a rebuild, so it is driven off the size change rather than polled — and only when
         // the state actually flips, otherwise every pixel of a drag would rebuild the whole chrome.
@@ -176,6 +183,7 @@ public partial class Ribbon : ContentControl
         // Captured before the tree is discarded — see the focus restore below.
         bool focusWasInside = ContainsFocus();
         _toggleViews.Clear(); // every command is rebuilt, its views with it
+        _galleryViews.Clear();
 
         // The SHOWN tabs: a contextual set's only while the app shows it (TASK-760). SelectedIndex counts these.
         var tabs = VisibleTabs();
@@ -540,6 +548,11 @@ public partial class Ribbon : ContentControl
 
                 foreach (var item in group.Items)
                 {
+                    if (item.Gallery is { Items.Count: > 0 })
+                    {
+                        AddNarrowGallery(list, tab, tab.Groups.ToList().IndexOf(group).ToString(System.Globalization.CultureInfo.InvariantCulture), item);
+                        continue;
+                    }
                     if (IsToggle(item))
                     {
                         list.Children.Add(NarrowToggle(tab, group, item));
@@ -1078,6 +1091,9 @@ public partial class Ribbon : ContentControl
             : key.StartsWith("item:", System.StringComparison.Ordinal) && key.IndexOf('/') is var slash and > 5 ? key[5..slash]
             : key.StartsWith("arrow:", System.StringComparison.Ordinal) && key.IndexOf('/') is var a and > 6 ? key[6..a]
             : key.StartsWith("launcher:", System.StringComparison.Ordinal) ? key[9..]
+            // A gallery's tiles, steps and expand button (TASK-761): tile:{g}/{item}/{choice}, step:…, more:{g}/{item}.
+            : (key.StartsWith("tile:", System.StringComparison.Ordinal) || key.StartsWith("step:", System.StringComparison.Ordinal)
+                || key.StartsWith("more:", System.StringComparison.Ordinal)) && key.IndexOf('/') is var s and > 5 ? key[5..s]
             : null;
     }
 
@@ -1420,19 +1436,35 @@ public partial class Ribbon : ContentControl
     {
         var grid = new Grid();
         for (int r = 0; r < perColumn; r++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
-        int columns = (items.Count + perColumn - 1) / perColumn;
+        // A gallery takes a column of its own at every row (TASK-761, as the web's spans the group's rows), so the
+        // commands around it continue in the next column.
+        var cells = new List<(int Row, int Column, bool Gallery)>();
+        int nextRow = 0, nextColumn = 0;
+        foreach (var it in items)
+        {
+            if (it.Gallery is { Items.Count: > 0 })
+            {
+                if (nextRow > 0) { nextColumn++; nextRow = 0; }
+                cells.Add((0, nextColumn++, true));
+                continue;
+            }
+            cells.Add((nextRow, nextColumn, false));
+            if (++nextRow == perColumn) { nextRow = 0; nextColumn++; }
+        }
+        int columns = nextRow > 0 ? nextColumn + 1 : nextColumn;
         for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         for (int i = 0; i < items.Count; i++)
         {
             var item = BuildItem(items[i], size, onInvoke, groupKey);
-            int row = i % perColumn, column = i / perColumn;
+            var (row, column, spans) = cells[i];
             Grid.SetRow(item, row);
             Grid.SetColumn(item, column);
+            if (spans) Grid.SetRowSpan(item, perColumn);
             // Column spacing is the BRibbonItemGap token, as before; rows keep their 1px.
             if (column > 0) item.Bind(MarginProperty, item.GetResourceObservable(
                 "BRibbonItemGap", v => new Thickness(v is double gap ? gap : 0, row > 0 ? 1 : 0, 0, 0)));
             else if (row > 0) item.Margin = new Thickness(0, 1, 0, 0);
-            item.VerticalAlignment = VerticalAlignment.Stretch;
+            if (!spans) item.VerticalAlignment = VerticalAlignment.Stretch;
             grid.Children.Add(item);
         }
         return grid;
@@ -1443,6 +1475,7 @@ public partial class Ribbon : ContentControl
 
     private Control BuildItem(RibbonItem item, RibbonGroupSize size, System.Action? onInvoke = null, string? groupKey = null)
     {
+        if (item.Gallery is { Items.Count: > 0 }) return BuildGallery(item, size, onInvoke, groupKey);
         if (item.Menu is { Count: > 0 }) return BuildMenuCommand(item, size, onInvoke, groupKey);
         return BuildCommand(item, size, onInvoke, groupKey, MenuPart.None);
     }

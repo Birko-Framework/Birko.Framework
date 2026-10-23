@@ -94,6 +94,53 @@ public sealed class RibbonItem
 
     /// <summary>With <see cref="Menu"/>: the button runs the command and a ▾ part opens the menu.</summary>
     public bool Split { get; init; }
+
+    /// <summary>Makes this command a gallery of visual choices (TASK-761, as b-ribbon's TASK-740). See <see cref="RibbonGallery"/>.</summary>
+    public RibbonGallery? Gallery { get; init; }
+}
+
+/// <summary>How a gallery is drawn (TASK-761), the three looks the user kept on the web.</summary>
+public enum RibbonGalleryStyle
+{
+    /// <summary>Office: a framed row of tiles with ▲ ▼ ▾ beside it.</summary>
+    Framed,
+    /// <summary>‹ › around the row, "More ▾" under it.</summary>
+    Open,
+    /// <summary>The current choice only, opening the full grid.</summary>
+    Dropdown,
+}
+
+/// <summary>
+/// A row of choices inside the ribbon with a full grid behind it, like Office's Styles (TASK-761). Picking a tile makes
+/// it the current choice, runs it and reports it with this command as the parent.
+/// </summary>
+public sealed class RibbonGallery
+{
+    public IReadOnlyList<RibbonGalleryItem> Items { get; init; } = Array.Empty<RibbonGalleryItem>();
+
+    /// <summary>The current choice's id. Later changes: <c>Ribbon.SetGallerySelection</c>.</summary>
+    public string? Selected { get; init; }
+
+    /// <summary>Tiles shown in the row (default 4; a small group shows 2).</summary>
+    public int Visible { get; init; } = 4;
+
+    /// <summary>Columns of the full grid (default 4).</summary>
+    public int Columns { get; init; } = 4;
+
+    /// <summary>Overrides the ribbon's gallery style.</summary>
+    public RibbonGalleryStyle? Style { get; init; }
+}
+
+/// <summary>One tile of a gallery: <see cref="Preview"/> is a short text or glyph drawn large (Aa, H1).</summary>
+public sealed class RibbonGalleryItem
+{
+    public required string Id { get; init; }
+    public required string Label { get; init; }
+    public string? Preview { get; init; }
+
+    /// <summary>Key tip letter inside the grid (TASK-758); unset, the first free letter of the label.</summary>
+    public string? Keytip { get; init; }
+    public Action? Run { get; init; }
 }
 
 /// <summary>A <see cref="RibbonItem.Menu"/> entry: a choice, or <see cref="Separator"/>, a line between sets of choices.</summary>
