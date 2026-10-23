@@ -1694,6 +1694,7 @@ public partial class Ribbon : ContentControl
         Sized(inline, StackPanel.SpacingProperty, "BSpaceXs");
         inline.Children.Add(icon);
         inline.Children.Add(label);
+        AlignInkWith(icon, label);
         if (part == MenuPart.MenuOnly) inline.Children.Add(Caret(button));
         button.Content = inline;
         return FinishToggle(button, pressKey, item);

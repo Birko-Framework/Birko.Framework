@@ -83,3 +83,11 @@ FEATURE-019 D13, split from TASK-742. Web counterpart: TASK-739. Desktop counter
   command's and toolbar button's icon is now centred by its measured ink, a draw-time shift that leaves every size
   unchanged. Checked in the live Gallery: Bold, Italic, Colour, Columns, Rows, Paste and Cut line up with their labels.
   Gate: `RibbonToggleTests` +1 (the ink of 𝐁, 𝑰 and ✂ is centred in its box), Birko.Xaml.Avalonia.Tests 324/324.
+- **Still 1–2px off at your second check, fixed again.** Centring the icon's ink in its box was the wrong target: a
+  label's letters sit above its box's middle (the box keeps room for descenders), and a letter icon is read as text.
+  Now a letter icon (𝐁, 𝑰) stands on its label's baseline, and a picture icon (✂, 📋, ▥) has its ink centred on the
+  label's capital letters; an icon with no label beside it is still centred in its box. The shift is rounded to device
+  pixels so the glyph stays sharp, and positions are read from the layout, not through the icon's own shift (the first
+  version measured against its own transform). Checked at 3x zoom in the live Gallery: Bold and Italic share their
+  labels' baselines. `RibbonToggleTests.An_icon_glyph_lines_up_with_its_label` replaces the box-centring test;
+  Birko.Xaml.Avalonia.Tests 324/324.

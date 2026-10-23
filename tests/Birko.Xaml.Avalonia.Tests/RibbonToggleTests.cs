@@ -252,10 +252,11 @@ public class RibbonToggleTests
     }
 
     [AvaloniaFact]
-    public void An_icon_glyph_is_centred_by_its_ink_beside_its_label()
+    public void An_icon_glyph_lines_up_with_its_label()
     {
-        // The user saw Bold's 𝐁 and Italic's 𝑰 sit lower than their labels (2026-10-23): math letters come from a font
-        // whose ink sits about 2px under the line box's middle. The icon is shifted so its ink's middle is the box's.
+        // The user saw Bold's 𝐁 and Italic's 𝑰 sit lower than their labels (2026-10-23), and still 1-2px off once their
+        // ink was centred in the box. A letter icon now stands on the label's baseline; a picture icon has its ink centred
+        // on the label's capitals. Positions are layout positions plus the draw-time shift.
         var tab = new RibbonTab { Id = "t", Label = "T", Groups = new[] { new RibbonGroup { Label = "G", Items = new[]
         {
             new RibbonItem { Id = "b", Label = "Bold", Icon = "𝐁", Toggle = true },
@@ -266,14 +267,24 @@ public class RibbonToggleTests
         Layout(window, 1000);
         foreach (var name in new[] { "Bold", "Italic", "Cut" })
         {
-            var icon = Shown(ribbon, name).GetVisualDescendants().OfType<TextBlock>().First(t => t.Text != name);
+            var button = Shown(ribbon, name);
+            var icon = button.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text != name);
+            var label = button.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == name);
+            double shift = icon.RenderTransform is TranslateTransform t ? t.Y : 0;
+            double labelBaseline = label.Bounds.Y + label.TextLayout.TextLines[0].Baseline; // same panel as the icon
+            if (name != "Cut")
+            {
+                (icon.Bounds.Y + icon.TextLayout.TextLines[0].Baseline + shift).Should().BeApproximately(labelBaseline, 0.6,
+                    $"{name}'s letter icon stands on its label's baseline");
+                continue;
+            }
             var face = new Typeface(icon.FontFamily, icon.FontStyle, icon.FontWeight, icon.FontStretch);
             var text = new FormattedText(icon.Text!, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, face, icon.FontSize, Brushes.Black);
             var ink = text.BuildGeometry(default)!.Bounds;
-            double top = icon.TextLayout.TextLines[0].Baseline + (ink.Top - text.Baseline);
-            double shift = icon.RenderTransform is TranslateTransform t ? t.Y : 0;
-            double middle = top + ink.Height / 2 + shift;
-            middle.Should().BeApproximately(icon.Bounds.Height / 2, 1, $"{name}'s icon ink is centred in its box");
+            double inkMiddle = icon.Bounds.Y + icon.TextLayout.TextLines[0].Baseline + (ink.Top - text.Baseline) + ink.Height / 2 + shift;
+            var lface = new Typeface(label.FontFamily, label.FontStyle, label.FontWeight, label.FontStretch);
+            double cap = new FormattedText("H", System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, lface, label.FontSize, Brushes.Black).BuildGeometry(default)!.Bounds.Height;
+            inkMiddle.Should().BeApproximately(labelBaseline - cap / 2, 0.6, "a picture icon is centred on its label's capitals");
         }
     }
 }
