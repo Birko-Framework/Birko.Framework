@@ -129,6 +129,7 @@ public partial class Ribbon : ContentControl
         PreferredGroupSizeProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         IsPinnedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         QuickAccessPositionProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+        ContextualStyleProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
 
         // Narrow/wide is a rebuild, so it is driven off the size change rather than polled — and only when
         // the state actually flips, otherwise every pixel of a drag would rebuild the whole chrome.
@@ -176,19 +177,23 @@ public partial class Ribbon : ContentControl
         bool focusWasInside = ContainsFocus();
         _toggleViews.Clear(); // every command is rebuilt, its views with it
 
-        var tabs = Tabs?.ToList() ?? new List<RibbonTab>();
+        // The SHOWN tabs: a contextual set's only while the app shows it (TASK-760). SelectedIndex counts these.
+        var tabs = VisibleTabs();
         int selected = tabs.Count == 0 ? -1 : System.Math.Clamp(SelectedIndex, 0, tabs.Count - 1);
+        if (selected >= 0 && tabs[selected].ContextualSet is null) _lastNormalTab = tabs[selected].Id;
 
         // Below the threshold the ribbon stops being a ribbon (TASK-102). Scaling has nothing left to give
         // by then, so continuing to draw a tab strip and a groups row would only clip them.
         if (_isNarrow && tabs.Count > 0)
         {
+            _tabList = new List<Button>();
             Content = BuildNarrowChrome(tabs, selected);
             return;
         }
 
         // Tab strip (tabs on the left, a collapse chevron on the right)
         var tabButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        var buttons = new List<Button>();
         for (int i = 0; i < tabs.Count; i++)
         {
             int index = i;
@@ -215,8 +220,9 @@ public partial class Ribbon : ContentControl
                 else RevealTemporarily();
             };
             AddFocusRing(tabButton);
-            tabButtons.Children.Add(tabButton);
+            buttons.Add(tabButton);
         }
+        ArrangeTabs(tabButtons, tabs, buttons, selected);
 
         var chevron = new Button
         {
@@ -240,7 +246,7 @@ public partial class Ribbon : ContentControl
         // the groups row reachable without tabbing through the chrome in between.
         tabButtons.KeyDown += (_, args) =>
         {
-            int count = tabButtons.Children.Count;
+            int count = buttons.Count;
             if (count == 0) return;
 
             if (args.Key is Key.Left or Key.Right)
@@ -270,10 +276,9 @@ public partial class Ribbon : ContentControl
                 args.Handled = true;
             }
         };
-        _tabButtons = tabButtons;
 
         var tabScroller = WrapScrollable(tabButtons, "Scroll tabs left", "Scroll tabs right", _tabRow, out var tabScrollViewer);
-        CarryTabScrollAcrossRebuild(tabScrollViewer, tabButtons, selected);
+        CarryTabScrollAcrossRebuild(tabScrollViewer, buttons, selected);
 
         var pin = new Button
         {
@@ -355,9 +360,9 @@ public partial class Ribbon : ContentControl
         // the next Tab restarted from the top of the window, and the groups the tab had just opened were
         // unreachable. Put focus back on the tab that was activated so Tab continues from there, exactly as it
         // does after a mouse click. Posted at Loaded priority — the new tree is not laid out yet.
-        if (focusWasInside && selected >= 0 && selected < tabButtons.Children.Count)
+        if (focusWasInside && selected >= 0 && selected < buttons.Count)
         {
-            var restore = tabButtons.Children[selected];
+            var restore = buttons[selected];
             Dispatcher.UIThread.Post(() => restore.Focus(NavigationMethod.Tab), DispatcherPriority.Loaded);
         }
 
@@ -723,8 +728,7 @@ public partial class Ribbon : ContentControl
     /// </remarks>
     private void OnTabPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (_tabButtons is not { } strip || e.Source is not Visual v
-            || !strip.Children.Any(t => ReferenceEquals(t, v) || v.GetVisualAncestors().Contains(t))) return;
+        if (e.Source is not Visual v || !_tabList.Any(t => ReferenceEquals(t, v) || v.GetVisualAncestors().Contains(t))) return;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         var settings = TopLevel.GetTopLevel(this)?.PlatformSettings;
         var time = settings?.GetDoubleTapTime(e.Pointer.Type) ?? System.TimeSpan.FromMilliseconds(500);
@@ -846,7 +850,7 @@ public partial class Ribbon : ContentControl
     /// rebuild with the same selection (a collapse toggle, say) nothing moves at all.
     /// </para>
     /// </remarks>
-    private void CarryTabScrollAcrossRebuild(ScrollViewer scroller, Panel tabButtons, int selected)
+    private void CarryTabScrollAcrossRebuild(ScrollViewer scroller, IReadOnlyList<Button> tabButtons, int selected)
     {
         bool selectionChanged = selected != _lastSelected;
         _lastSelected = selected;
@@ -873,8 +877,8 @@ public partial class Ribbon : ContentControl
 
             scroller.LayoutUpdated -= restore;
 
-            if (selectionChanged && selected >= 0 && selected < tabButtons.Children.Count)
-                tabButtons.Children[selected].BringIntoView();
+            if (selectionChanged && selected >= 0 && selected < tabButtons.Count)
+                tabButtons[selected].BringIntoView();
 
             // Only start remembering once the restore has settled, for the same reason.
             scroller.ScrollChanged += (_, _) => _tabOffsetX = scroller.Offset.X;
@@ -1077,7 +1081,6 @@ public partial class Ribbon : ContentControl
             : null;
     }
 
-    private Panel? _tabButtons;
     /// <summary>The panel stop focused last, by key: the one Tab stop, and where ↓ from a tab enters (TASK-752).</summary>
     private string? _rovingKey;
 
@@ -1126,8 +1129,8 @@ public partial class Ribbon : ContentControl
                 case Key.Escape:
                     // A showing tooltip takes the first Escape (TASK-753, WCAG 1.4.13, as b-ribbon); the next one goes
                     // back to the active tab, as b-ribbon's panel does (TASK-752 follow-up).
-                    if (!HideOpenTip(from) && _tabButtons is { } strip && SelectedIndex >= 0 && SelectedIndex < strip.Children.Count)
-                        strip.Children[SelectedIndex].Focus(NavigationMethod.Directional);
+                    if (!HideOpenTip(from) && SelectedIndex >= 0 && SelectedIndex < _tabList.Count)
+                        _tabList[SelectedIndex].Focus(NavigationMethod.Directional);
                     args.Handled = true;
                     return;
                 case Key.Down when from is RibbonChunkButton { Flyout: Flyout flyout } chunk:
@@ -1140,10 +1143,9 @@ public partial class Ribbon : ContentControl
                     next = NearestInDirection(from, stops, panel, args.Key);
                     if (next is null && args.Key == Key.Right) next = stops[0];
                     if (next is null && args.Key == Key.Left) next = stops[^1];
-                    if (next is null && args.Key == Key.Up && _tabButtons is { } tabs
-                        && SelectedIndex >= 0 && SelectedIndex < tabs.Children.Count)
+                    if (next is null && args.Key == Key.Up && SelectedIndex >= 0 && SelectedIndex < _tabList.Count)
                     {
-                        tabs.Children[SelectedIndex].Focus(NavigationMethod.Directional);
+                        _tabList[SelectedIndex].Focus(NavigationMethod.Directional);
                         args.Handled = true;
                         return;
                     }

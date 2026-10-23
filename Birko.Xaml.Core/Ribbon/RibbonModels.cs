@@ -184,5 +184,32 @@ public sealed class RibbonTab
 
     /// <summary>Key tip letter of the tab (TASK-758); unset, the first free letter of the label.</summary>
     public string? Keytip { get; init; }
+
+    /// <summary>
+    /// The contextual set this tab belongs to (TASK-760, as b-ribbon's <c>contextualSet</c>): hidden until the app shows
+    /// that set, then after the normal tabs under the set's colour and name. Unset, a normal tab.
+    /// </summary>
+    public string? ContextualSet { get; init; }
     public IReadOnlyList<RibbonGroup> Groups { get; init; } = Array.Empty<RibbonGroup>();
+}
+
+/// <summary>The theme colour a contextual set is marked in (TASK-760).</summary>
+public enum RibbonContextualColor { Primary, Success, Warning, Danger, Info }
+
+/// <summary>
+/// How a shown contextual set is marked (TASK-760), the three looks the user kept on the web: <see cref="Band"/>
+/// (Office: a tinted band with the name above its tabs), <see cref="Pill"/> (the name as a pill), <see cref="Edge"/>
+/// (a coloured line, no name).
+/// </summary>
+public enum RibbonContextualStyle { Band, Pill, Edge }
+
+/// <summary>Tabs that appear only while something is selected, like Office's "Table Design" (TASK-760).</summary>
+public sealed class RibbonContextualSet
+{
+    public required string Id { get; init; }
+    public required string Label { get; init; }
+    public RibbonContextualColor Color { get; init; } = RibbonContextualColor.Primary;
+
+    /// <summary>Overrides the ribbon's style for this set; unset, the ribbon's.</summary>
+    public RibbonContextualStyle? Style { get; init; }
 }

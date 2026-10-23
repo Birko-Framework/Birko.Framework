@@ -86,7 +86,7 @@ inputs and, with split buttons (TASK-732), galleries.
 - [~] TASK-757 Avalonia ribbon: collapse by double-clicking a tab — built, awaiting your check
 - [~] TASK-758 Avalonia ribbon: key tips (plain Alt) — built, awaiting your check
 - [~] TASK-759 Avalonia ribbon: Quick Access Toolbar (the app saves it) — built, awaiting your check
-- [ ] TASK-760 Avalonia ribbon: contextual tabs
+- [~] TASK-760 Avalonia ribbon: contextual tabs — built, awaiting your check
 - [ ] TASK-761 Avalonia ribbon: galleries
 - [ ] TASK-762 Avalonia ribbon: input boxes and dropdowns
 - [ ] TASK-763 Avalonia ribbon: every size a theme resource

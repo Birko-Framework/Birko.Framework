@@ -160,7 +160,7 @@ public partial class Ribbon
     }
 
     private RibbonTab? ShownTab =>
-        Tabs?.ToList() is { Count: > 0 } tabs && SelectedIndex >= 0 && SelectedIndex < tabs.Count ? tabs[SelectedIndex] : null;
+        VisibleTabs() is { Count: > 0 } tabs && SelectedIndex >= 0 && SelectedIndex < tabs.Count ? tabs[SelectedIndex] : null;
 
     /// <summary>The label and declared letter of a ribbon stop, from its key.</summary>
     private (string Label, string? Keytip) DescribeStop(Control stop)
@@ -184,11 +184,11 @@ public partial class Ribbon
         ClearBadges();
         var used = new HashSet<string>();
         var entries = new List<(Control, string, string?)>();
-        if (level == TipLevel.Tabs && _tabButtons is { } strip)
+        if (level == TipLevel.Tabs)
         {
-            var tabs = Tabs?.ToList() ?? new List<RibbonTab>();
-            for (int i = 0; i < strip.Children.Count && i < tabs.Count; i++)
-                entries.Add((strip.Children[i], tabs[i].Label, tabs[i].Keytip));
+            var tabs = VisibleTabs();
+            for (int i = 0; i < _tabList.Count && i < tabs.Count; i++)
+                entries.Add((_tabList[i], tabs[i].Label, tabs[i].Keytip));
             // Office numbers the Quick Access Toolbar (TASK-759): 1 to 9, kept off the tabs' letters.
             if (_qatDefaults is not null)
                 for (int i = 0; i < _qatButtons.Count && i < 9; i++)
@@ -279,7 +279,7 @@ public partial class Ribbon
     private void ActOnKeyTip(Control target)
     {
         // A tab: select it (bringing the panel up if it is not), then the letters of its commands.
-        if (_tabButtons is { } strip && strip.Children.IndexOf(target) is var tabIndex and >= 0)
+        if (target is Button tabButton && _tabList.IndexOf(tabButton) is var tabIndex and >= 0)
         {
             ClearBadges();
             SelectedIndex = tabIndex;
