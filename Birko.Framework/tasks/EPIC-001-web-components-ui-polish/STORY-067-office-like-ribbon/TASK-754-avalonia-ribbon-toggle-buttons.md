@@ -73,3 +73,8 @@ FEATURE-019 D13, split from TASK-742. Web counterpart: TASK-739. Desktop counter
   keyboard focus only, as the web's `:focus-visible`; this applies to every ribbon button.
 - Gate: `RibbonToggleTests` +2 (the frame fills the button inside the ring; a real click shows no ring, Tab does),
   Birko.Xaml.Avalonia.Tests 322/322.
+- **A toggle's label not lined up with its icon, fixed.** The toggle, menu and folded-group buttons are subclasses of
+  `Button` and so got no Birko button theme: they fell back to the base theme, whose font made their labels taller (15px
+  against 13px) and set them apart from the plain commands. All three are styled as `Button` now, so every ribbon command
+  draws its label the same way. Measured in a headless probe: icon and label positions in a toggle now equal a plain
+  command's.

@@ -46,6 +46,10 @@ public sealed class RibbonGroupLauncherEventArgs : System.EventArgs
 /// </summary>
 internal sealed class RibbonMenuButton : Button
 {
+    // Styled as a Button: without this a subclass gets no Birko theme (Controls/Buttons.axaml is keyed by Button) and
+    // falls back to the base one, whose font set its labels apart from the plain commands' (seen by the user, 2026-10-23).
+    protected override System.Type StyleKeyOverride => typeof(Button);
+
     protected override AutomationPeer OnCreateAutomationPeer() => new Peer(this);
 
     private sealed class Peer : ButtonAutomationPeer, IExpandCollapseProvider
