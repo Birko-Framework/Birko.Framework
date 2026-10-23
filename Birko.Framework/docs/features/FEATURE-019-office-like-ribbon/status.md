@@ -79,7 +79,7 @@ Check and sign off the layout fix (TASK-730) and the arrow keys (TASK-731); and 
 inputs and, with split buttons (TASK-732), galleries.
 - [~] TASK-751 Avalonia ribbon: equal-height groups, aligned rows, labels below, dividers halfway — built, awaiting your check
 - [~] TASK-752 Avalonia ribbon: the panel is one Tab stop and the arrows move by position — built, awaiting your check
-- [ ] TASK-753 Avalonia ribbon: rich tooltips (name, description, shortcut)
+- [~] TASK-753 Avalonia ribbon: rich tooltips (name, description, shortcut) — built, awaiting your check
 - [ ] TASK-754 Avalonia ribbon: toggle buttons and one-of sets
 - [ ] TASK-755 Avalonia ribbon: split buttons and menu buttons
 - [ ] TASK-756 Avalonia ribbon: group dialog launcher

@@ -823,6 +823,66 @@ public class Ribbon : ContentControl
             .Where(b => b.TranslatePoint(default, scope) is { X: > -1000 })
             .ToList();
 
+    /// <summary>Hover delay before a command's tooltip shows, as b-ribbon's (TASK-738).</summary>
+    internal const int TooltipDelayMs = 500;
+
+    /// <summary>
+    /// A command's tooltip (TASK-753, as b-ribbon's TASK-738): its name, the shortcut beside it and the description
+    /// under it, in the light look the user picked for the ribbon (surface, text and border tokens, not the dark
+    /// tooltip ones). Shown after a hover delay, and at once on keyboard focus; the first Escape hides it. The
+    /// description is the automation help text and the shortcut the accelerator key.
+    /// </summary>
+    private static void AttachTip(Control target, string heading, string? text, string? shortcut)
+    {
+        var title = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        title.Inlines!.Add(new global::Avalonia.Controls.Documents.Run(heading) { FontWeight = FontWeight.SemiBold });
+        if (!string.IsNullOrWhiteSpace(shortcut))
+        {
+            var keys = new global::Avalonia.Controls.Documents.Run($" ({shortcut})");
+            keys.Bind(global::Avalonia.Controls.Documents.TextElement.ForegroundProperty, target.GetResourceObservable("BTextMutedBrush"));
+            title.Inlines.Add(keys);
+        }
+        var content = new StackPanel();
+        content.Children.Add(title);
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            var line = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
+            line.Bind(TextBlock.ForegroundProperty, target.GetResourceObservable("BTextSecondaryBrush"));
+            content.Children.Add(line);
+        }
+
+        var tip = new ToolTip { Content = content, Padding = new Thickness(8) };
+        tip.Bind(BackgroundProperty, target.GetResourceObservable("BBgElevatedBrush"));
+        tip.Bind(ForegroundProperty, target.GetResourceObservable("BTextBrush"));
+        tip.Bind(BorderBrushProperty, target.GetResourceObservable("BBorderBrush"));
+        tip.Bind(FontSizeProperty, target.GetResourceObservable("BTextSm"));
+        ToolTip.SetTip(target, tip);
+        ToolTip.SetShowDelay(target, TooltipDelayMs);
+
+        if (!string.IsNullOrWhiteSpace(text)) global::Avalonia.Automation.AutomationProperties.SetHelpText(target, text);
+        if (!string.IsNullOrWhiteSpace(shortcut)) global::Avalonia.Automation.AutomationProperties.SetAcceleratorKey(target, shortcut);
+
+        // Keyboard focus shows it at once (Avalonia tooltips are pointer-only); a click does not.
+        target.GotFocus += (_, args) =>
+        {
+            if (args.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional) ToolTip.SetIsOpen(target, true);
+        };
+        target.LostFocus += (_, _) => ToolTip.SetIsOpen(target, false);
+    }
+
+    /// <summary>Hides the tooltip of the control a key came from, if it is showing. True when one was hidden.</summary>
+    private static bool HideOpenTip(object? source)
+    {
+        for (var v = source as Visual; v is not null; v = v.GetVisualParent())
+        {
+            if (v is not Control c || ToolTip.GetTip(c) is null) continue;
+            if (!ToolTip.GetIsOpen(c)) return false;
+            ToolTip.SetIsOpen(c, false);
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>A panel stop's identity, kept in its <c>Tag</c>: a command (group/item) or a folded group.</summary>
     private static class StopKey
     {
@@ -880,6 +940,13 @@ public class Ribbon : ContentControl
             {
                 case Key.Home: next = stops[0]; break;
                 case Key.End: next = stops[^1]; break;
+                case Key.Escape:
+                    // A showing tooltip takes the first Escape (TASK-753, WCAG 1.4.13, as b-ribbon); the next one goes
+                    // back to the active tab, as b-ribbon's panel does (TASK-752 follow-up).
+                    if (!HideOpenTip(from) && _tabButtons is { } strip && SelectedIndex >= 0 && SelectedIndex < strip.Children.Count)
+                        strip.Children[SelectedIndex].Focus(NavigationMethod.Directional);
+                    args.Handled = true;
+                    return;
                 case Key.Down when from is RibbonChunkButton { Flyout: Flyout flyout } chunk:
                     flyout.ShowAt(chunk);
                     if (flyout.Content is Visual content)
@@ -1195,6 +1262,9 @@ public class Ribbon : ContentControl
 
         // Before the early returns below, so no variant can be left unnamed by a later edit.
         Describe(button, item.Label, icon);
+        // Every size, not only Small: the tooltip carries the description and the shortcut too (TASK-753). At Small
+        // it is also the only place the name is drawn.
+        AttachTip(button, item.Label, item.Description, item.Shortcut);
 
         if (size == RibbonGroupSize.Small)
         {
@@ -1203,7 +1273,6 @@ public class Ribbon : ContentControl
             // (unreachable) for another (unnameable).
             icon.HorizontalAlignment = HorizontalAlignment.Center;
             button.Content = icon;
-            ToolTip.SetTip(button, item.Label);
             return button;
         }
 
@@ -1297,7 +1366,7 @@ public class Ribbon : ContentControl
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
         button.Bind(TextBlock.FontSizeProperty, button.GetResourceObservable("BRibbonIconSmall"));
         if (labelled) button.Bind(MinWidthProperty, button.GetResourceObservable("BRibbonChunkWidth"));
-        ToolTip.SetTip(button, group.Label);
+        AttachTip(button, group.Label, null, null);
 
         // The accessible name is the GROUP's name. A compact chunk draws no label at all, so without this a
         // screen reader would announce "button" and nothing more; RibbonChunkButton's peer adds the
@@ -1324,6 +1393,7 @@ public class Ribbon : ContentControl
         flyoutContent.KeyDown += (_, args) =>
         {
             if (args.Key != global::Avalonia.Input.Key.Escape) return;
+            if (HideOpenTip(args.Source)) { args.Handled = true; return; } // a showing tooltip takes the first Escape
             flyout.Hide();
             button.Focus();
             args.Handled = true;

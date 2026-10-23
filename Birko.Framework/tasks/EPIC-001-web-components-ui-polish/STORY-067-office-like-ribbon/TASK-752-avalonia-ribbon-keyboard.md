@@ -60,3 +60,8 @@ Roving focus: Tab reaches the panel once; ←/→ move to the nearest command th
   - focus kept through a rescale from 1000 to 220px.
   - Birko.Xaml.Avalonia.Tests 223/223.
 
+## Follow-up (2026-10-23)
+
+Escape in the panel goes back to the active tab, as b-ribbon's panel does; it had not been ported. Built with TASK-753,
+where a showing tooltip takes the first Escape; covered by `RibbonTooltipTests`.
+

@@ -97,7 +97,7 @@ public class RibbonTests
 
     private static Button ChevronByTip(Control root, string tip) =>
         root.GetVisualDescendants().OfType<Button>()
-            .First(b => (b.GetValue(ToolTip.TipProperty) as string) == tip);
+            .First(b => TipText(b) == tip);
 
     /// <summary>
     /// A chevron is *shown* only when it is both in the layout and active. Once a row overflows, both
@@ -113,6 +113,17 @@ public class RibbonTests
     /// <summary>The scaling panel. Internal to the library, so resolved by type name rather than a cast.</summary>
     private static Layoutable PanelOf(Control ribbon) =>
         (Layoutable)ribbon.GetVisualDescendants().First(v => v.GetType().Name == "RibbonGroupsPanel");
+
+    /// <summary>
+    /// The tooltip's heading: the string itself, or, for a command's rich tooltip (TASK-753), the text of its first
+    /// line's first run, which is the command's name.
+    /// </summary>
+    internal static string? TipText(Control c) => ToolTip.GetTip(c) switch
+    {
+        string text => text,
+        ToolTip { Content: Panel { Children: [TextBlock title, ..] } } => title.Inlines?.OfType<global::Avalonia.Controls.Documents.Run>().FirstOrDefault()?.Text ?? title.Text,
+        _ => null,
+    };
 
     private static IEnumerable<string?> Texts(Control c) =>
         c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text);
@@ -361,7 +372,7 @@ public class RibbonTests
         IsReserved(ChevronByTip(ribbon, "Scroll tabs right")).Should().BeFalse("a row that fits reserves no slots");
         IsReserved(ChevronByTip(ribbon, "Scroll tabs left")).Should().BeFalse();
         ribbon.GetVisualDescendants().OfType<Button>()
-            .Should().NotContain(b => (b.GetValue(ToolTip.TipProperty) as string) == "Scroll groups right",
+            .Should().NotContain(b => TipText(b) == "Scroll groups right",
                 "the groups row has no scroller at all — it degrades instead");
 
         ribbon.GetVisualDescendants().OfType<ScrollViewer>().Should()
@@ -376,7 +387,7 @@ public class RibbonTests
         var tabScroller = ScrollerContaining(ribbon, "Home");
 
         tabScroller.GetVisualDescendants().OfType<Button>()
-            .Should().NotContain(b => (b.GetValue(ToolTip.TipProperty) as string) == "Collapse the ribbon",
+            .Should().NotContain(b => TipText(b) == "Collapse the ribbon",
                 "the collapse chevron must stay pinned and never scroll out of reach");
     }
 
@@ -483,7 +494,7 @@ public class RibbonTests
         // actually SHOWN. Identified by position, not IsHitTestVisible: that flag is set on the wrapping
         // Border, so reading it off the inner Button matches both copies.
         var chunks = ribbon.GetVisualDescendants().OfType<Button>()
-            .Where(b => (b.GetValue(ToolTip.TipProperty) as string) == "Export")
+            .Where(b => TipText(b) == "Export")
             .ToList();
         chunks.Should().HaveCount(2, "both the labelled and the compact chunk exist; one of them is parked");
 
@@ -493,7 +504,7 @@ public class RibbonTests
 
         shown.Should().HaveCount(1, "exactly one chunk button per collapsed group is on-screen");
         Texts(shown[0]).Should().NotContain("Export ⌄", "the name is dropped from the face of the button");
-        (shown[0].GetValue(ToolTip.TipProperty) as string).Should().Be("Export",
+        TipText(shown[0]).Should().Be("Export",
             "but it stays reachable as a tooltip, so the button is not anonymous");
     }
 
@@ -618,7 +629,8 @@ public class RibbonTests
 
         // Only inspect the VISIBLE variant: all three are in the tree by design.
         var visibleItemButtons = ribbon.GetVisualDescendants().OfType<Button>()
-            .Where(b => b.IsVisible && ToolTip.GetTip(b) is string tip && tip.StartsWith("Clipboard "))
+            // On screen, not merely IsVisible: parked variants stay visible, and since TASK-753 every size has a tooltip.
+            .Where(b => b.IsVisible && b.TranslatePoint(default, ribbon) is { X: > -1000 } && TipText(b) is string tip && tip.StartsWith("Clipboard "))
             .ToList();
 
         visibleItemButtons.Should().NotBeEmpty("every Small item carries its label as a tooltip");
@@ -791,7 +803,7 @@ public class RibbonTests
         ribbon.ResolvedGroupSizes.Should().AllBeEquivalentTo(RibbonGroupSize.Popup);
 
         var chunk = ribbon.GetVisualDescendants().OfType<Button>()
-            .First(b => (b.GetValue(ToolTip.TipProperty) as string) == "Clipboard" && b.IsHitTestVisible);
+            .First(b => TipText(b) == "Clipboard" && b.IsHitTestVisible);
         chunk.Flyout.Should().NotBeNull("the chunk button opens the group's items in a flyout");
 
         chunk.Flyout!.ShowAt(chunk);
@@ -935,7 +947,7 @@ public class RibbonTests
         ran = flags;
 
         var chunk = ribbon.GetVisualDescendants().OfType<Button>()
-            .Where(b => (b.GetValue(ToolTip.TipProperty) as string) == "Clipboard")
+            .Where(b => TipText(b) == "Clipboard")
             .First(b => b.TranslatePoint(default, ribbon) is { X: > -1000 });
         return (ribbon, chunk);
     }

@@ -51,6 +51,18 @@ public sealed class RibbonItem
 
     /// <summary>Invoked when the item is clicked.</summary>
     public Action? Run { get; init; }
+
+    /// <summary>
+    /// One line shown under the name in the command's tooltip, and its automation help text (TASK-753, as b-ribbon's
+    /// <c>description</c>). Text.
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Shown in the tooltip, e.g. <c>Ctrl+V</c>, and exposed as the automation accelerator key. Display only: the app
+    /// binds the key itself.
+    /// </summary>
+    public string? Shortcut { get; init; }
 }
 
 /// <summary>A labeled group of related <see cref="RibbonItem"/>s within a ribbon tab.</summary>
