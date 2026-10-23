@@ -117,12 +117,32 @@
       <x:Double x:Key="BModalWidthXl">960</x:Double>
       <x:Double x:Key="BModalWidthXxl">1280</x:Double>
       <x:Double x:Key="BPageBtnSize">32</x:Double>
+      <x:Double x:Key="BRibbonBadgePadding">3.2</x:Double>
       <x:Double x:Key="BRibbonChunkWidth">56</x:Double>
-      <x:Double x:Key="BRibbonGroupGap">24</x:Double>
+      <x:Double x:Key="BRibbonContextAccent">3</x:Double>
+      <x:Double x:Key="BRibbonFieldPadding">32</x:Double>
+      <x:Double x:Key="BRibbonFlyoutMaxWidth">512</x:Double>
+      <x:Double x:Key="BRibbonGalleryButtonWidth">16</x:Double>
+      <x:Double x:Key="BRibbonGalleryTileHeight">44</x:Double>
+      <x:Double x:Key="BRibbonGalleryTileWidth">64</x:Double>
+      <x:Double x:Key="BRibbonGroupGap">16</x:Double>
       <x:Double x:Key="BRibbonIconLarge">32</x:Double>
       <x:Double x:Key="BRibbonIconSmall">16</x:Double>
+      <x:Double x:Key="BRibbonItemBadgeSize">16</x:Double>
+      <x:Double x:Key="BRibbonItemBadgeText">9</x:Double>
       <x:Double x:Key="BRibbonItemGap">4</x:Double>
+      <x:Double x:Key="BRibbonItemMinWidth">52</x:Double>
+      <x:Double x:Key="BRibbonKeytipSize">17.6</x:Double>
+      <x:Double x:Key="BRibbonLauncherGlyph">9</x:Double>
+      <x:Double x:Key="BRibbonLauncherSize">16</x:Double>
+      <x:Double x:Key="BRibbonMenuMinWidth">192</x:Double>
+      <x:Double x:Key="BRibbonMobileHeaderHeight">48</x:Double>
       <x:Double x:Key="BRibbonPanelHeight">128</x:Double>
+      <x:Double x:Key="BRibbonQatButtonSize">28</x:Double>
+      <x:Double x:Key="BRibbonQatMoreWidth">20</x:Double>
+      <x:Double x:Key="BRibbonScrollGlyph">12</x:Double>
+      <x:Double x:Key="BRibbonTabBadgeSize">18</x:Double>
+      <x:Double x:Key="BRibbonTabDividerHeight">20</x:Double>
       <x:Double x:Key="BRibbonTabHeight">44</x:Double>
       <x:Double x:Key="BSidebarCollapsedWidth">56</x:Double>
       <x:Double x:Key="BSidebarWidth">240</x:Double>
@@ -173,7 +193,7 @@
       <FontFamily x:Key="BFont">-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif</FontFamily>
       <FontFamily x:Key="BFontHeading">-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif</FontFamily>
       <FontFamily x:Key="BFontMono">'SF Mono', 'Fira Code', 'Cascadia Code', monospace</FontFamily>
-      <!-- 24 composite/motion token(s) deferred (shadows, focus rings,
+      <!-- 25 composite/motion token(s) deferred (shadows, focus rings,
            transitions, easings, durations, gradients). -->
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
