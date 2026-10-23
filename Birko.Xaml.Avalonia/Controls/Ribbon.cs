@@ -476,6 +476,13 @@ public class Ribbon : ContentControl
                 groupLabel.Bind(TextBlock.ForegroundProperty, groupLabel.GetResourceObservable("BTextMutedBrush"));
                 list.Children.Add(groupLabel);
 
+                if (group.Launcher)
+                {
+                    var g = group;
+                    var t = tab;
+                    list.Children.Add(NarrowEntry(null, LauncherName(g), 16, () => RaiseLauncher(t.Id, g)));
+                }
+
                 foreach (var item in group.Items)
                 {
                     if (IsToggle(item))
@@ -955,10 +962,12 @@ public class Ribbon : ContentControl
         public static string Item(string group, string item) => $"item:{group}/{item}";
         public static string Chunk(string group) => $"chunk:{group}";
         public static string Arrow(string group, string item) => $"arrow:{group}/{item}";
+        public static string Launcher(string group) => $"launcher:{group}";
         public static string? GroupOf(string key) =>
             key.StartsWith("chunk:", System.StringComparison.Ordinal) ? key[6..]
             : key.StartsWith("item:", System.StringComparison.Ordinal) && key.IndexOf('/') is var slash and > 5 ? key[5..slash]
             : key.StartsWith("arrow:", System.StringComparison.Ordinal) && key.IndexOf('/') is var a and > 6 ? key[6..a]
+            : key.StartsWith("launcher:", System.StringComparison.Ordinal) ? key[9..]
             : null;
     }
 
@@ -1239,12 +1248,27 @@ public class Ribbon : ContentControl
             Margin = new Thickness(0, 4, 0, 3),
         };
         label.Bind(TextBlock.ForegroundProperty, label.GetResourceObservable("BTextMutedBrush"));
+
+        // The name, and the dialog launcher beside it at the bottom right (TASK-756). The name is padded by the
+        // launcher's width on BOTH sides, so it stays centred under the group, as b-ribbon's label is.
+        Control bottom = label;
+        if (group.Launcher)
+        {
+            var launcher = BuildLauncher(group, groupKey, onInvoke);
+            label.Bind(MarginProperty, label.GetResourceObservable(
+                "BRibbonLauncherSize", v => v is double w ? new Thickness(w + 4, 4, w + 4, 3) : new Thickness(0, 4, 0, 3)));
+            var row = new Panel();
+            row.Children.Add(label);
+            row.Children.Add(launcher);
+            bottom = row;
+        }
+
         // Docked to the bottom, so every group's name sits on one line under the row however many commands the
         // group has (TASK-751, as b-ribbon's TASK-730): the panel arranges every group at the row's full height.
-        DockPanel.SetDock(label, Dock.Bottom);
+        DockPanel.SetDock(bottom, Dock.Bottom);
 
         var dock = new DockPanel { LastChildFill = true };
-        dock.Children.Add(label);
+        dock.Children.Add(bottom);
         dock.Children.Add(items);
 
         // BSpaceXs horizontally, none vertically — b-ribbon's .ribbon-group is `padding: 0 var(--b-space-xs)`.
@@ -1410,6 +1434,57 @@ public class Ribbon : ContentControl
         button.Content = inline;
         return FinishToggle(button, pressKey, item);
     }
+
+    // ── Dialog launcher (TASK-756, as b-ribbon's TASK-733) ──
+
+    /// <summary>Raised when a group's dialog launcher is pressed: open that group's full dialog.</summary>
+    public event System.EventHandler<RibbonGroupLauncherEventArgs>? GroupLauncherInvoked;
+
+    private static string LauncherName(RibbonGroup group) => group.LauncherLabel ?? $"More {group.Label} options";
+
+    /// <summary>
+    /// The corner arrow at the group's bottom right (D4, the user's pick: Office's). A small button sized by the
+    /// <c>BRibbonLauncherSize</c> token with a vector arrow at <c>BRibbonLauncherGlyph</c>; named, tooltipped and a
+    /// keyboard stop. A press raises <see cref="GroupLauncherInvoked"/>, never a command click.
+    /// </summary>
+    private Button BuildLauncher(RibbonGroup group, string? groupKey, System.Action? onInvoke)
+    {
+        var arrow = new global::Avalonia.Controls.Shapes.Path
+        {
+            // A diagonal with its corner, as b-ribbon's SVG: Office's "open the full dialog" glyph.
+            Data = Geometry.Parse("M 1,1 L 8,8 M 8,3.5 L 8,8 L 3.5,8"),
+            StrokeThickness = 1.4,
+            Stretch = Stretch.Uniform,
+        };
+        arrow.Bind(global::Avalonia.Controls.Shapes.Shape.StrokeProperty, arrow.GetResourceObservable("BTextMutedBrush"));
+        arrow.Bind(WidthProperty, arrow.GetResourceObservable("BRibbonLauncherGlyph"));
+        arrow.Bind(HeightProperty, arrow.GetResourceObservable("BRibbonLauncherGlyph"));
+
+        var button = new Button
+        {
+            Tag = groupKey is null ? null : StopKey.Launcher(groupKey),
+            Content = arrow,
+            Background = Brushes.Transparent,
+            Padding = new Thickness(0),
+            BorderThickness = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        button.Bind(WidthProperty, button.GetResourceObservable("BRibbonLauncherSize"));
+        button.Bind(HeightProperty, button.GetResourceObservable("BRibbonLauncherSize"));
+        AddFocusRing(button);
+        string name = LauncherName(group);
+        Describe(button, name);
+        AttachTip(button, name, null, null);
+        string tab = _buildTab ?? "";
+        button.Click += (_, _) => { RaiseLauncher(tab, group); onInvoke?.Invoke(); };
+        return button;
+    }
+
+    private void RaiseLauncher(string tabId, RibbonGroup group) =>
+        GroupLauncherInvoked?.Invoke(this, new RibbonGroupLauncherEventArgs(tabId, group.Id ?? group.Label));
 
     // ── Split and menu buttons (TASK-755, as b-ribbon's TASK-732) ──
 

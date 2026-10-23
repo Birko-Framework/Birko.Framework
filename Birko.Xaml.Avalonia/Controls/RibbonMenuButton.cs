@@ -24,6 +24,21 @@ public sealed class RibbonMenuItemInvokedEventArgs : System.EventArgs
     public string ParentId { get; }
 }
 
+/// <summary><c>Ribbon.GroupLauncherInvoked</c>: a group's dialog launcher was pressed.</summary>
+public sealed class RibbonGroupLauncherEventArgs : System.EventArgs
+{
+    public RibbonGroupLauncherEventArgs(string tabId, string groupId)
+    {
+        TabId = tabId;
+        GroupId = groupId;
+    }
+
+    public string TabId { get; }
+
+    /// <summary>The group's <c>Id</c>, or its label when it has none.</summary>
+    public string GroupId { get; }
+}
+
 /// <summary>
 /// A button that opens a ribbon command's menu (TASK-755): a menu-only command, or a split command's ▾ part. A
 /// <see cref="Button"/> whose peer reports expand/collapse state, so a screen reader hears that it opens a menu and

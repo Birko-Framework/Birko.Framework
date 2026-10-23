@@ -123,6 +123,9 @@ public sealed class RibbonMenuItem : RibbonMenuEntry
 /// <summary>A labeled group of related <see cref="RibbonItem"/>s within a ribbon tab.</summary>
 public sealed class RibbonGroup
 {
+    /// <summary>Optional identity, reported by the launcher event (TASK-756). Without one, the label stands in.</summary>
+    public string? Id { get; init; }
+
     public required string Label { get; init; }
     public IReadOnlyList<RibbonItem> Items { get; init; } = Array.Empty<RibbonItem>();
 
@@ -153,6 +156,15 @@ public sealed class RibbonGroup
     /// further.
     /// </summary>
     public RibbonGroupSize MinSize { get; init; } = RibbonGroupSize.Popup;
+
+    /// <summary>
+    /// Office's dialog launcher (TASK-756, as b-ribbon's <c>launcher</c>): a small corner arrow at the group's bottom
+    /// right that opens the group's full dialog. It raises <c>Ribbon.GroupLauncherInvoked</c>.
+    /// </summary>
+    public bool Launcher { get; init; }
+
+    /// <summary>The launcher's name and tooltip; default "More {Label} options".</summary>
+    public string? LauncherLabel { get; init; }
 }
 
 /// <summary>A ribbon tab holding groups of commands (the <c>BAppShell</c> ribbon model).</summary>
