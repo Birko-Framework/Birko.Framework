@@ -21,7 +21,7 @@ generated: 2026-10-22
 
 ## Build progress
 
-17 / 18 tasks done: the web ribbon is signed off. Left: the desktop (Avalonia) ribbon, TASK-742.
+18 / 31 tasks done: the web ribbon is signed off. Left: the desktop (Avalonia) ribbon, split into TASK-751–763.
 
 - [x] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — signed off
 - [x] TASK-731 b-ribbon: arrow-key navigation between commands and groups — signed off
@@ -35,7 +35,7 @@ generated: 2026-10-22
 - [x] TASK-739 b-ribbon: toggle buttons with a pressed state — signed off
 - [x] TASK-740 b-ribbon: galleries — signed off
 - [x] TASK-741 b-ribbon: inputs and comboboxes inside the ribbon — signed off
-- [ ] TASK-742 Avalonia Ribbon: parity with the Office-like b-ribbon (FEATURE-019)
+- [x] TASK-742 Avalonia Ribbon: parity with the Office-like b-ribbon (FEATURE-019) — split into TASK-751–763
 - [x] TASK-743 b-ribbon: a folded group without an icon is an empty 7px button — signed off
 - [x] TASK-746 b-ribbon: groups fold at the right width (some were cut off at the right edge), and a narrow group centres its commands — signed off
 - [x] TASK-747 b-ribbon: every size is a CSS token — done, no visible change
@@ -77,3 +77,16 @@ look preview inside their own tasks.
 
 Check and sign off the layout fix (TASK-730) and the arrow keys (TASK-731); and the menus (TASK-732); then the remaining behaviours (launcher, contextual tabs, double-click collapse, key tips, Quick Access Toolbar, galleries, inputs). Arrow-key navigation (TASK-731) unblocks key tips,
 inputs and, with split buttons (TASK-732), galleries.
+- [ ] TASK-751 Avalonia ribbon: equal-height groups, aligned rows, labels below, dividers halfway
+- [ ] TASK-752 Avalonia ribbon: the panel is one Tab stop and the arrows move by position
+- [ ] TASK-753 Avalonia ribbon: rich tooltips (name, description, shortcut)
+- [ ] TASK-754 Avalonia ribbon: toggle buttons and one-of sets
+- [ ] TASK-755 Avalonia ribbon: split buttons and menu buttons
+- [ ] TASK-756 Avalonia ribbon: group dialog launcher
+- [ ] TASK-757 Avalonia ribbon: collapse by double-clicking a tab
+- [ ] TASK-758 Avalonia ribbon: key tips (plain Alt)
+- [ ] TASK-759 Avalonia ribbon: Quick Access Toolbar (the app saves it)
+- [ ] TASK-760 Avalonia ribbon: contextual tabs
+- [ ] TASK-761 Avalonia ribbon: galleries
+- [ ] TASK-762 Avalonia ribbon: input boxes and dropdowns
+- [ ] TASK-763 Avalonia ribbon: every size a theme resource
