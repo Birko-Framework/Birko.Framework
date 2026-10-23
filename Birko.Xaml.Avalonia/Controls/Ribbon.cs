@@ -235,12 +235,14 @@ public class Ribbon : ContentControl
             }
 
             if (args.Key != Key.Down) return;
-            if (_groupsPanel is { } panel && NavigableButtons(panel).FirstOrDefault() is { } first)
+            // Into the panel at its one Tab stop: the command focused there last, else the first (TASK-752).
+            if (_groupsPanel is { } panel && RovingStop(panel) is { } stop)
             {
-                first.Focus(NavigationMethod.Directional);
+                stop.Focus(NavigationMethod.Directional);
                 args.Handled = true;
             }
         };
+        _tabButtons = tabButtons;
 
         var tabScroller = WrapScrollable(tabButtons, "Scroll tabs left", "Scroll tabs right", _tabRow, out var tabScrollViewer);
         CarryTabScrollAcrossRebuild(tabScrollViewer, tabButtons, selected);
@@ -283,12 +285,13 @@ public class Ribbon : ContentControl
         if (!IsCollapsed && IsPinned && selected >= 0)
         {
             var groupsPanel = BuildGroupsRow(tabs[selected], onInvoke: null);
-            WireArrowNavigation(groupsPanel);
+            WirePanelKeyboard(groupsPanel);
             if (groupsPanel is RibbonGroupsPanel scaling)
             {
                 // Posted, not called inline: this fires from inside a MEASURE pass, and hiding a popup
                 // synchronously there re-enters layout.
                 scaling.GroupPromoted += () => Dispatcher.UIThread.Post(CloseChunkFlyoutOnPromotion);
+                scaling.FocusDisplaced += key => Dispatcher.UIThread.Post(() => RefocusAfterRescale(scaling, key), DispatcherPriority.Loaded);
             }
             body.Children.Add(groupsPanel);
             _groupsPanel = groupsPanel;
@@ -344,20 +347,24 @@ public class Ribbon : ContentControl
         panel.Bind(RibbonGroupsPanel.GapProperty, panel.GetResourceObservable("BRibbonGroupGap"));
         panel.Bind(RibbonGroupsPanel.DividerBrushProperty, panel.GetResourceObservable("BBorderBrush"));
 
-        foreach (var group in tab.Groups)
+        for (int g = 0; g < tab.Groups.Count; g++)
+        {
+            var group = tab.Groups[g];
+            string key = g.ToString(System.Globalization.CultureInfo.InvariantCulture);
             panel.AddGroup(new RibbonGroupsPanel.GroupVariants
             {
                 Controls = new Dictionary<RibbonGroupSize, Control>
                 {
-                    [RibbonGroupSize.Large] = BuildGroup(group, RibbonGroupSize.Large, onInvoke),
-                    [RibbonGroupSize.Medium] = BuildGroup(group, RibbonGroupSize.Medium, onInvoke),
-                    [RibbonGroupSize.Small] = BuildGroup(group, RibbonGroupSize.Small, onInvoke),
-                    [RibbonGroupSize.Popup] = BuildGroup(group, RibbonGroupSize.Popup, onInvoke),
+                    [RibbonGroupSize.Large] = BuildGroup(group, RibbonGroupSize.Large, onInvoke, groupKey: key),
+                    [RibbonGroupSize.Medium] = BuildGroup(group, RibbonGroupSize.Medium, onInvoke, groupKey: key),
+                    [RibbonGroupSize.Small] = BuildGroup(group, RibbonGroupSize.Small, onInvoke, groupKey: key),
+                    [RibbonGroupSize.Popup] = BuildGroup(group, RibbonGroupSize.Popup, onInvoke, groupKey: key),
                 },
-                CompactPopup = BuildChunk(group, labelled: false),
+                CompactPopup = BuildChunk(group, labelled: false, groupKey: key),
                 ScalingPriority = group.ScalingPriority,
                 MinSize = group.MinSize,
             });
+        }
 
         return panel;
     }
@@ -816,35 +823,168 @@ public class Ribbon : ContentControl
             .Where(b => b.TranslatePoint(default, scope) is { X: > -1000 })
             .ToList();
 
+    /// <summary>A panel stop's identity, kept in its <c>Tag</c>: a command (group/item) or a folded group.</summary>
+    private static class StopKey
+    {
+        public static string Item(string group, string item) => $"item:{group}/{item}";
+        public static string Chunk(string group) => $"chunk:{group}";
+        public static string? GroupOf(string key) =>
+            key.StartsWith("chunk:", System.StringComparison.Ordinal) ? key[6..]
+            : key.StartsWith("item:", System.StringComparison.Ordinal) && key.IndexOf('/') is var slash and > 5 ? key[5..slash]
+            : null;
+    }
+
+    private Panel? _tabButtons;
+    /// <summary>The panel stop focused last, by key: the one Tab stop, and where ↓ from a tab enters (TASK-752).</summary>
+    private string? _rovingKey;
+
+    /// <summary>The stop holding the panel's one Tab stop: the one focused last, else the first.</summary>
+    private Button? RovingStop(Visual panel)
+    {
+        var stops = NavigableButtons(panel);
+        return stops.FirstOrDefault(b => b.Tag as string == _rovingKey) ?? stops.FirstOrDefault();
+    }
+
+    /// <summary>Only the roving stop is in the Tab order, so the panel is one Tab stop, as b-ribbon's is.</summary>
+    private void ApplyRoving(Visual panel)
+    {
+        var current = RovingStop(panel);
+        foreach (var b in NavigableButtons(panel))
+        {
+            bool stop = ReferenceEquals(b, current);
+            if (KeyboardNavigation.GetIsTabStop(b) != stop) KeyboardNavigation.SetIsTabStop(b, stop);
+        }
+    }
+
     /// <summary>
-    /// Left/Right cycle between the buttons in <paramref name="scope"/>, wrapping at both ends — matching
-    /// <c>b-ribbon</c>'s panel handler, which is the behaviour the ribbon's accessibility criterion is
-    /// written against.
+    /// The groups row's keyboard (TASK-752, as b-ribbon's TASK-731). One Tab stop (roving); ←/→ move to the nearest
+    /// command that way by on-screen position, across groups, wrapping at the ends; ↑/↓ stay in the column, and ↑
+    /// from the top row goes back to the active tab; Home/End go to the first and last command; ↓ on a folded group
+    /// opens it and moves focus into its popup.
     /// </summary>
-    /// <remarks>
-    /// Needed because Avalonia's own directional navigation does not apply here: the flyout is a separate
-    /// visual root, and the groups row is a custom panel whose alternatives sit off-screen, so "the control
-    /// to the right" is not a question the built-in handler answers usefully. Wrapping is deliberate — the
-    /// web wraps, and a row of commands has no natural end to stop at.
-    /// </remarks>
-    private static void WireArrowNavigation(Control scope)
+    private void WirePanelKeyboard(Control panel)
+    {
+        panel.LayoutUpdated += (_, _) => ApplyRoving(panel);
+        panel.GotFocus += (_, args) =>
+        {
+            if (StopOf(panel, args.Source) is not { Tag: string key }) return;
+            _rovingKey = key;
+            ApplyRoving(panel);
+        };
+        panel.KeyDown += (_, args) =>
+        {
+            var stops = NavigableButtons(panel);
+            if (StopOf(panel, args.Source) is not { } from || stops.Count == 0) return;
+            Button? next = null;
+            switch (args.Key)
+            {
+                case Key.Home: next = stops[0]; break;
+                case Key.End: next = stops[^1]; break;
+                case Key.Down when from is RibbonChunkButton { Flyout: Flyout flyout } chunk:
+                    flyout.ShowAt(chunk);
+                    if (flyout.Content is Visual content)
+                        Dispatcher.UIThread.Post(() => NavigableButtons(content).FirstOrDefault()?.Focus(NavigationMethod.Directional), DispatcherPriority.Loaded);
+                    args.Handled = true;
+                    return;
+                case Key.Left or Key.Right or Key.Up or Key.Down:
+                    next = NearestInDirection(from, stops, panel, args.Key);
+                    if (next is null && args.Key == Key.Right) next = stops[0];
+                    if (next is null && args.Key == Key.Left) next = stops[^1];
+                    if (next is null && args.Key == Key.Up && _tabButtons is { } tabs
+                        && SelectedIndex >= 0 && SelectedIndex < tabs.Children.Count)
+                    {
+                        tabs.Children[SelectedIndex].Focus(NavigationMethod.Directional);
+                        args.Handled = true;
+                        return;
+                    }
+                    break;
+                default: return;
+            }
+            if (next is null) return;
+            next.Focus(NavigationMethod.Directional);
+            args.Handled = true;
+        };
+    }
+
+    /// <summary>
+    /// Arrows inside a folded group's popup: by position, Left/Right wrapping as in the row, Home/End; Escape is
+    /// handled by the popup itself.
+    /// </summary>
+    private static void WireFlyoutNavigation(Control scope)
     {
         scope.KeyDown += (_, args) =>
         {
-            if (args.Key is not (Key.Left or Key.Right)) return;
-
             var items = NavigableButtons(scope);
-            // The event source is whatever inside the button was hit, so walk up to the button itself.
-            int index = items.FindIndex(b => ReferenceEquals(b, args.Source)
-                || (args.Source is Visual v && v.GetVisualAncestors().Contains(b)));
-            if (index < 0 || items.Count == 0) return;
-
-            int next = args.Key == Key.Right
-                ? (index + 1) % items.Count
-                : (index - 1 + items.Count) % items.Count;
-            items[next].Focus(NavigationMethod.Directional);
+            if (StopOf(scope, args.Source) is not { } from || items.Count == 0) return;
+            Button? next = args.Key switch
+            {
+                Key.Home => items[0],
+                Key.End => items[^1],
+                Key.Left or Key.Right or Key.Up or Key.Down => NearestInDirection(from, items, scope, args.Key)
+                    ?? (args.Key == Key.Right ? items[0] : args.Key == Key.Left ? items[^1] : null),
+                _ => null,
+            };
+            if (next is null) return;
+            next.Focus(NavigationMethod.Directional);
             args.Handled = true;
         };
+    }
+
+    /// <summary>The navigable button the event came from (its source may be the button's content).</summary>
+    private static Button? StopOf(Visual scope, object? source) =>
+        NavigableButtons(scope).FirstOrDefault(b => ReferenceEquals(b, source)
+            || (source is Visual v && v.GetVisualAncestors().Contains(b)));
+
+    /// <summary>
+    /// The stop nearest to <paramref name="from"/> in a direction, by on-screen position (a port of b-ribbon's
+    /// <c>nearestInDirection</c>): Left/Right take anything WHOLLY beyond it that way, weighting vertical distance so
+    /// the same row wins; Up/Down stay in <paramref name="from"/>'s column, so they never jump to a neighbouring group.
+    /// </summary>
+    private static Button? NearestInDirection(Button from, IReadOnlyList<Button> stops, Visual frame, Key dir)
+    {
+        Rect RectOf(Button b) => b.TranslatePoint(default, frame) is { } p ? new Rect(p, b.Bounds.Size) : default;
+        var a = RectOf(from);
+        double ax = a.X + a.Width / 2, ay = a.Y + a.Height / 2;
+        Button? best = null;
+        double bestScore = double.PositiveInfinity;
+        foreach (var b in stops)
+        {
+            if (ReferenceEquals(b, from)) continue;
+            var r = RectOf(b);
+            if (r.Width == 0 && r.Height == 0) continue;
+            double dx = r.X + r.Width / 2 - ax, dy = r.Y + r.Height / 2 - ay;
+            double score;
+            if (dir is Key.Left or Key.Right)
+            {
+                if (dir == Key.Right ? r.Left < a.Right - 2 : r.Right > a.Left + 2) continue;
+                score = System.Math.Abs(dx) + System.Math.Abs(dy) * 4;
+            }
+            else
+            {
+                if (dir == Key.Down ? dy <= 1 : dy >= -1) continue;
+                if (r.Right <= a.Left || r.Left >= a.Right) continue;
+                score = System.Math.Abs(dy) + System.Math.Abs(dx) * 4;
+            }
+            if (score < bestScore) { bestScore = score; best = b; }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Put focus back after a rescale parked the focused command (TASK-752): on the same command at its new size,
+    /// or, when its group folded, on the group's button; a folded group that opened up gives focus to its first
+    /// command. Disabling the parked variant had dropped focus out of the ribbon.
+    /// </summary>
+    private void RefocusAfterRescale(Visual panel, string key)
+    {
+        var stops = NavigableButtons(panel);
+        string? group = StopKey.GroupOf(key);
+        var target = stops.FirstOrDefault(b => b.Tag as string == key)
+            ?? (group is null ? null : stops.FirstOrDefault(b => b.Tag as string == StopKey.Chunk(group)))
+            ?? (group is null ? null : stops.FirstOrDefault(b => b.Tag is string t && StopKey.GroupOf(t) == group));
+        if (target is null) return;
+        _rovingKey = target.Tag as string;
+        target.Focus(NavigationMethod.Directional);
     }
 
     /// <summary>
@@ -939,13 +1079,13 @@ public class Ribbon : ContentControl
     /// does — which is what makes them narrower rather than merely smaller.
     /// </summary>
     private Control BuildGroup(
-        RibbonGroup group, RibbonGroupSize size, System.Action? onInvoke = null, bool wrapItems = false)
+        RibbonGroup group, RibbonGroupSize size, System.Action? onInvoke = null, bool wrapItems = false, string? groupKey = null)
     {
-        if (size == RibbonGroupSize.Popup) return BuildChunk(group);
+        if (size == RibbonGroupSize.Popup) return BuildChunk(group, groupKey: groupKey);
 
         Control items = size == RibbonGroupSize.Large
-            ? Row(group.Items, size, onInvoke, wrapItems)
-            : Columns(group.Items, size, perColumn: 3, onInvoke);
+            ? Row(group.Items, size, onInvoke, wrapItems, groupKey)
+            : Columns(group.Items, size, perColumn: 3, onInvoke, groupKey);
         // Centred over the group's name when the name is the wider of the two (a Small group's icons under
         // "Records"), so the space splits evenly instead of all sitting before the next divider (TASK-751, as
         // b-ribbon since TASK-746). A Large row keeps its commands at the top, as b-ribbon's flex-start does.
@@ -986,18 +1126,18 @@ public class Ribbon : ContentControl
     /// and a flyout anchored near the right edge then has nowhere to go and gets cut off.
     /// </summary>
     private Control Row(
-        IReadOnlyList<RibbonItem> items, RibbonGroupSize size, System.Action? onInvoke, bool wrap = false)
+        IReadOnlyList<RibbonItem> items, RibbonGroupSize size, System.Action? onInvoke, bool wrap = false, string? groupKey = null)
     {
         if (wrap)
         {
             var wrapped = new WrapPanel { Orientation = Orientation.Horizontal };
-            foreach (var item in items) wrapped.Children.Add(BuildItem(item, size, onInvoke));
+            foreach (var item in items) wrapped.Children.Add(BuildItem(item, size, onInvoke, groupKey));
             return wrapped;
         }
 
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Bind(StackPanel.SpacingProperty, row.GetResourceObservable("BRibbonItemGap"));
-        foreach (var item in items) row.Children.Add(BuildItem(item, size, onInvoke));
+        foreach (var item in items) row.Children.Add(BuildItem(item, size, onInvoke, groupKey));
         return row;
     }
 
@@ -1008,7 +1148,8 @@ public class Ribbon : ContentControl
     /// height, equal rows line up across groups. A group with fewer commands leaves its last rows empty rather than
     /// spreading the ones it has.
     /// </summary>
-    private Control Columns(IReadOnlyList<RibbonItem> items, RibbonGroupSize size, int perColumn, System.Action? onInvoke)
+    private Control Columns(
+        IReadOnlyList<RibbonItem> items, RibbonGroupSize size, int perColumn, System.Action? onInvoke, string? groupKey = null)
     {
         var grid = new Grid();
         for (int r = 0; r < perColumn; r++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
@@ -1016,7 +1157,7 @@ public class Ribbon : ContentControl
         for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         for (int i = 0; i < items.Count; i++)
         {
-            var item = BuildItem(items[i], size, onInvoke);
+            var item = BuildItem(items[i], size, onInvoke, groupKey);
             int row = i % perColumn, column = i / perColumn;
             Grid.SetRow(item, row);
             Grid.SetColumn(item, column);
@@ -1030,10 +1171,13 @@ public class Ribbon : ContentControl
         return grid;
     }
 
-    private Control BuildItem(RibbonItem item, RibbonGroupSize size, System.Action? onInvoke = null)
+    private Control BuildItem(RibbonItem item, RibbonGroupSize size, System.Action? onInvoke = null, string? groupKey = null)
     {
         var button = new Button
         {
+            // The command's identity across size variants (TASK-752): the same command is a different Button at
+            // each size, and focus has to follow the command, not the control, when the row rescales.
+            Tag = groupKey is null ? null : StopKey.Item(groupKey, item.Id),
             Background = Brushes.Transparent,
             // b-ribbon's .ribbon-item box is padding var(--b-space-xs) var(--b-space-sm) = 4/8, and its focus
             // ring is an outline, which takes no space. Here the ring is a permanent 2px border (AddFocusRing),
@@ -1116,7 +1260,7 @@ public class Ribbon : ContentControl
     /// <summary>Border + padding a <c>FlyoutPresenter</c> adds around its content, measured from the theme.</summary>
     private const double FlyoutChrome = 26;
 
-    private Control BuildChunk(RibbonGroup group, bool labelled = true)
+    private Control BuildChunk(RibbonGroup group, bool labelled = true, string? groupKey = null)
     {
         // A group without an icon shows its name (labelled), or its initial in a small tile (compact), as b-ribbon
         // does since TASK-743, which the user picked over one generic glyph for every group. This used to be ▦ for
@@ -1142,6 +1286,7 @@ public class Ribbon : ContentControl
 
         var button = new RibbonChunkButton
         {
+            Tag = groupKey is null ? null : StopKey.Chunk(groupKey),
             Content = content,
             Background = Brushes.Transparent,
             // A compact chunk is already at the row's last resort, so it sheds every spare pixel: the
@@ -1183,7 +1328,7 @@ public class Ribbon : ContentControl
             button.Focus();
             args.Handled = true;
         };
-        WireArrowNavigation(flyoutContent);
+        WireFlyoutNavigation(flyoutContent);
 
         // Remembered so Escape can close it. A Flyout does NOT dismiss on Escape by itself — verified, not
         // assumed, after light dismiss failed to deliver both Escape and click-away for the reveal popup.

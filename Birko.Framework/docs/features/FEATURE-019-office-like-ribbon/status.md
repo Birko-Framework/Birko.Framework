@@ -78,7 +78,7 @@ look preview inside their own tasks.
 Check and sign off the layout fix (TASK-730) and the arrow keys (TASK-731); and the menus (TASK-732); then the remaining behaviours (launcher, contextual tabs, double-click collapse, key tips, Quick Access Toolbar, galleries, inputs). Arrow-key navigation (TASK-731) unblocks key tips,
 inputs and, with split buttons (TASK-732), galleries.
 - [~] TASK-751 Avalonia ribbon: equal-height groups, aligned rows, labels below, dividers halfway — built, awaiting your check
-- [ ] TASK-752 Avalonia ribbon: the panel is one Tab stop and the arrows move by position
+- [~] TASK-752 Avalonia ribbon: the panel is one Tab stop and the arrows move by position — built, awaiting your check
 - [ ] TASK-753 Avalonia ribbon: rich tooltips (name, description, shortcut)
 - [ ] TASK-754 Avalonia ribbon: toggle buttons and one-of sets
 - [ ] TASK-755 Avalonia ribbon: split buttons and menu buttons

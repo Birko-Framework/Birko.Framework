@@ -177,6 +177,11 @@ internal sealed class RibbonGroupsPanel : Panel
             foreach (var control in AllControls(_groups[i]))
             {
                 bool shown = control == picked;
+                // About to park the control that holds focus: say which command it was, so the ribbon can put
+                // focus on the same command at its new size (TASK-752). Disabling it drops focus out of the ribbon.
+                if (!shown && control.IsEnabled && control.IsKeyboardFocusWithin
+                    && TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is Control { Tag: string key })
+                    FocusDisplaced?.Invoke(key);
                 control.IsHitTestVisible = shown;
                 // IsEnabled, not just hit-testing: a parked variant is off-screen but still FOCUSABLE, so
                 // Tab walked into invisible controls — three extra stops per group for a keyboard user, on
@@ -290,4 +295,7 @@ internal sealed class RibbonGroupsPanel : Panel
     /// Raised during measure when at least one group has stopped being a <see cref="RibbonGroupSize.Popup"/>.
     /// </summary>
     internal event System.Action? GroupPromoted;
+
+    /// <summary>Raised during measure when the control holding focus is about to be parked, with its stop key.</summary>
+    internal event System.Action<string>? FocusDisplaced;
 }

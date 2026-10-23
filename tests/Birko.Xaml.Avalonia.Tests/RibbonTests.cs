@@ -1174,8 +1174,9 @@ public class RibbonTests
         Arrow(commands[0], Key.Right);
         Dispatcher.UIThread.RunJobs();
 
-        FocusedName(window).Should().Be(AccessibleName(commands[1]),
-            "the groups row cycles commands the same way the flyout does — one helper, one behaviour");
+        // TASK-752 (FEATURE-019 D2, as b-ribbon): Right moves by position, so from the first row of Clipboard it
+        // lands on the first row of the next group, not on the command below it.
+        FocusedName(window).Should().Be("Records A", "Right goes to the same row of the next group");
     }
 
     [AvaloniaFact]
@@ -1311,8 +1312,10 @@ public class RibbonTests
             if (ReferenceEquals(cur, after)) break;
         }
 
-        order.Should().ContainInOrder(new[] { "Home", "●Cut", "●Copy" },
-            "Tab reaches the tab strip, then the group's commands, in reading order");
+        // TASK-752 (FEATURE-019 D2, as b-ribbon): the open panel is ONE Tab stop, so Tab reaches the first command
+        // and the next Tab leaves the panel; the arrows move between commands.
+        order.Should().ContainInOrder(new[] { "Home", "●Cut" }, "Tab reaches the tab strip, then the panel's one stop");
+        order.Should().NotContain("●Copy", "the other commands are reached with the arrows, not with Tab");
         order.Should().EndWith(new[] { "After" }, "and leaves the ribbon rather than trapping focus");
     }
 
