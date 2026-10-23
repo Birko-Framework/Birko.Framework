@@ -60,3 +60,11 @@ FEATURE-019 D13, split from TASK-742. Web counterpart: TASK-741. Desktop counter
   - Birko.Xaml.Avalonia.Tests 317/317; Birko.Xaml.Core.Tests 60/60; the Gallery builds, with Font, Size and Height
     inputs and a caption picker.
 
+
+## Follow-up from your Gallery check (2026-10-23)
+
+- **No arrow on the Font and Size boxes, fixed.** A dropdown that takes typed values had no ▾, so its list only
+  appeared while typing, filtered to what was typed. It now has the web's ▾ (the closed list's chevron): a click opens
+  every choice and closes it again, as does Alt+Down; typed text stops short of the arrow. The ▾ is not a separate
+  keyboard stop.
+- Gate: `RibbonFieldTests` +1, Birko.Xaml.Avalonia.Tests 323/323.

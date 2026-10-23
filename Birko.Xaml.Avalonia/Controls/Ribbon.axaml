@@ -58,6 +58,9 @@
   <x:Double x:Key="BRibbonFieldCharWidth">7</x:Double>                  <!-- one character of a box's width (the web's 1ch at 13px) -->
   <x:Double x:Key="BRibbonFieldCaptionGap">4</x:Double>                 <!-- a caption beside its box -->
   <Thickness x:Key="BRibbonNarrowFieldMargin">16,2,16,2</Thickness>     <!-- a box in the narrow menu -->
+  <x:Double x:Key="BRibbonFieldArrowWidth">24</x:Double>                <!-- a free dropdown's ▾ slot at the box's right -->
+  <x:Double x:Key="BRibbonFieldChevronWidth">10</x:Double>              <!-- its chevron, the closed list's (Inputs.axaml) -->
+  <x:Double x:Key="BRibbonFieldChevronHeight">6</x:Double>
 
   <!-- The narrow menu -->
   <x:Double x:Key="BRibbonBurgerGlyph">18</x:Double>                    <!-- the ☰ -->

@@ -7,6 +7,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using Birko.Xaml.Core.Ribbon;
 
@@ -174,7 +175,15 @@ public partial class Ribbon
             {
                 if (e.NameScope.Find<TextBox>("PART_TextBox") is not { } inner) return;
                 inner.Bind(MinHeightProperty, inner.GetResourceObservable("BControlMinHeightSm"));
-                Sized(inner, PaddingProperty, "BRibbonFieldBoxPadding");
+                // The box's padding, its right side the ▾'s slot so typed text never runs under it.
+                SizedBy(inner, PaddingProperty, s =>
+                {
+                    var p = s.T("BRibbonFieldBoxPadding");
+                    return new Thickness(p.Left, p.Top, s.D("BRibbonFieldArrowWidth"), p.Bottom);
+                }, "BRibbonFieldBoxPadding", "BRibbonFieldArrowWidth");
+                // The ▾ the web's free dropdown shows (the user found none, 2026-10-23): without it the list only
+                // appeared while typing, filtered to what was typed. Not a Button, so it is no panel stop of its own.
+                if (inner.Parent is Panel host) host.Children.Add(FreeDropdownArrow(auto));
             };
             auto.TextChanged += (_, _) => { if (!seeding) _fieldDraft[key] = ValueOf(auto.Text ?? ""); };
             bool picked = false;
@@ -228,6 +237,10 @@ public partial class Ribbon
                     if (SelectedIndex >= 0 && SelectedIndex < _tabList.Count) _tabList[SelectedIndex].Focus(NavigationMethod.Directional);
                     args.Handled = true;
                     break;
+                case Key.Down when box is AutoCompleteBox free && args.KeyModifiers.HasFlag(KeyModifiers.Alt):
+                    OpenWholeList(free); // Alt+Down, as a list box and Office's font boxes
+                    args.Handled = true;
+                    break;
                 case Key.Up or Key.Down when f.Type == RibbonFieldType.Number:
                     double now = double.TryParse(Draft(key, item), NumberStyles.Float, CultureInfo.CurrentCulture, out var n) ? n : f.Min ?? 0;
                     double next = now + (args.Key == Key.Up ? 1 : -1) * (f.Step ?? 1);
@@ -251,6 +264,53 @@ public partial class Ribbon
         if (!_fieldViews.TryGetValue(key, out var views)) _fieldViews[key] = views = new List<(Control, System.Action<string>)>();
         views.Add((box, show));
         return box;
+    }
+
+    /// <summary>A free dropdown's ▾: opens (or closes) its whole list, as the closed list's chevron.</summary>
+    private static Control FreeDropdownArrow(AutoCompleteBox auto)
+    {
+        var chevron = new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse("M0,0 L5,5 L10,0"),
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        Sized(chevron, WidthProperty, "BRibbonFieldChevronWidth");
+        Sized(chevron, HeightProperty, "BRibbonFieldChevronHeight");
+        chevron.Bind(global::Avalonia.Controls.Shapes.Shape.FillProperty, chevron.GetResourceObservable("BTextSecondaryBrush"));
+        var arrow = new Border
+        {
+            Child = chevron,
+            Background = Brushes.Transparent, // hit-testable across its whole slot
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Cursor = new Cursor(StandardCursorType.Hand),
+        };
+        Sized(arrow, WidthProperty, "BRibbonFieldArrowWidth");
+        global::Avalonia.Automation.AutomationProperties.SetAccessibilityView(arrow, global::Avalonia.Automation.AccessibilityView.Raw);
+        arrow.PointerPressed += (_, e) =>
+        {
+            if (auto.IsDropDownOpen) auto.IsDropDownOpen = false;
+            else OpenWholeList(auto);
+            e.Handled = true;
+        };
+        return arrow;
+    }
+
+    /// <summary>Every choice, not only those starting with what is typed; the typing filter comes back once it closes.</summary>
+    private static void OpenWholeList(AutoCompleteBox auto)
+    {
+        auto.Focus();
+        var filter = auto.FilterMode;
+        auto.FilterMode = AutoCompleteFilterMode.None;
+        void Restore(object? sender, System.EventArgs e)
+        {
+            auto.DropDownClosed -= Restore;
+            auto.FilterMode = filter;
+        }
+        auto.DropDownClosed += Restore;
+        auto.IsDropDownOpen = true;
     }
 
     /// <summary>

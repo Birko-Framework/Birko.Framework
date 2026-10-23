@@ -326,4 +326,32 @@ public class RibbonFieldTests
             window.Close();
         }
     }
+
+    [AvaloniaFact]
+    public void A_free_dropdown_has_an_arrow_that_opens_its_whole_list()
+    {
+        var ribbon = Show(Build(), out var window);
+        var font = Box<AutoCompleteBox>(ribbon, "Font");
+        var arrow = font.GetVisualDescendants().OfType<Border>()
+            .Single(b => b.Child is global::Avalonia.Controls.Shapes.Path && b.HorizontalAlignment == global::Avalonia.Layout.HorizontalAlignment.Right);
+        arrow.Bounds.Width.Should().BeGreaterThan(0, "the user found no arrow on Font and Size (2026-10-23)");
+        var inner = font.GetVisualDescendants().OfType<TextBox>().First();
+        inner.Padding.Right.Should().BeGreaterThanOrEqualTo(arrow.Bounds.Width, "typed text never runs under the arrow");
+
+        var at = arrow.TranslatePoint(new Point(arrow.Bounds.Width / 2, arrow.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(at, MouseButton.Left);
+        window.MouseUp(at, MouseButton.Left);
+        Settle(window);
+        font.IsDropDownOpen.Should().BeTrue("the arrow opens the list");
+        ((Control)font.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.Popup>().First().Child!).GetVisualDescendants().OfType<ListBoxItem>().Count().Should().Be(2, "every choice, not only those starting with 'Calibri'");
+        window.MouseDown(at, MouseButton.Left);
+        window.MouseUp(at, MouseButton.Left);
+        Settle(window);
+        font.IsDropDownOpen.Should().BeFalse("and closes it again");
+
+        Box<AutoCompleteBox>(ribbon, "Font").Focus();
+        Settle(window);
+        Press(window, Key.Down, PhysicalKey.ArrowDown, RawInputModifiers.Alt);
+        font.IsDropDownOpen.Should().BeTrue("Alt+Down opens it too");
+    }
 }
