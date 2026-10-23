@@ -78,12 +78,16 @@ public class RibbonToggleTests
     private static IBrush Brush(Control c, string key) =>
         c.TryFindResource(key, c.ActualThemeVariant, out var v) && v is IBrush b ? b : throw new System.Exception(key);
 
+    // The tint and the outline are the frame's; the button behind it stays transparent (the user saw the button's own
+    // tinted shape as a second, larger outline around the frame, 2026-10-23).
     private static bool LooksPressed(Button b) =>
-        ReferenceEquals(b.Background, Brush(b, "BColorPrimaryLightBrush"))
-        && b.Content is Border { BorderBrush: var frame } && ReferenceEquals(frame, Brush(b, "BColorPrimaryBrush"));
+        ReferenceEquals(b.Background, Brushes.Transparent)
+        && b.Content is Border frame && ReferenceEquals(frame.Background, Brush(b, "BColorPrimaryLightBrush"))
+        && ReferenceEquals(frame.BorderBrush, Brush(b, "BColorPrimaryBrush"));
 
     private static bool LooksOff(Button b) =>
-        ReferenceEquals(b.Background, Brushes.Transparent) && b.Content is Border { BorderBrush: var frame } && ReferenceEquals(frame, Brushes.Transparent);
+        ReferenceEquals(b.Background, Brushes.Transparent) && b.Content is Border frame
+        && ReferenceEquals(frame.Background, Brushes.Transparent) && ReferenceEquals(frame.BorderBrush, Brushes.Transparent);
 
     [AvaloniaFact]
     public void A_toggle_flips_reports_and_runs_with_the_picked_look_and_no_size_change()
@@ -210,5 +214,40 @@ public class RibbonToggleTests
         LooksPressed(bold).Should().BeTrue();
         Click(bold);
         ribbon.IsPressed("bold").Should().BeFalse("a press there is a press");
+    }
+
+    [AvaloniaFact]
+    public void The_pressed_frame_fills_the_button_inside_the_focus_ring()
+    {
+        var ribbon = Show(new Ribbon { Tabs = new[] { Home() } }, out _);
+        foreach (var name in new[] { "Bold", "Columns" })
+        {
+            var button = Shown(ribbon, name);
+            var frame = (Border)button.Content!;
+            var at = frame.TranslatePoint(default, button)!.Value;
+            double ring = button.BorderThickness.Left;
+            at.X.Should().BeApproximately(ring, 0.01, $"{name}: the frame starts where the focus ring ends, not inside the padding");
+            at.Y.Should().BeApproximately(ring, 0.01);
+            frame.Bounds.Width.Should().BeApproximately(button.Bounds.Width - 2 * ring, 0.01, "one shape: no tint outside the frame");
+            frame.Bounds.Height.Should().BeApproximately(button.Bounds.Height - 2 * ring, 0.01);
+        }
+    }
+
+    [AvaloniaFact]
+    public void A_click_shows_no_focus_ring_and_the_keyboard_does()
+    {
+        var ribbon = Show(new Ribbon { Tabs = new[] { Home() } }, out var window);
+        var cols = Shown(ribbon, "Columns");
+        var at = cols.TranslatePoint(new Point(cols.Bounds.Width / 2, cols.Bounds.Height / 2), window)!.Value;
+        global::Avalonia.Headless.HeadlessWindowExtensions.MouseDown(window, at, global::Avalonia.Input.MouseButton.Left);
+        global::Avalonia.Headless.HeadlessWindowExtensions.MouseUp(window, at, global::Avalonia.Input.MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        var clicked = Shown(ribbon, "Columns");
+        ReferenceEquals(clicked.BorderBrush, Brushes.Transparent).Should().BeTrue("a click focuses without the ring, as the web's :focus-visible");
+
+        var bold = Shown(ribbon, "Bold");
+        bold.Focus(global::Avalonia.Input.NavigationMethod.Tab);
+        Dispatcher.UIThread.RunJobs();
+        ReferenceEquals(bold.BorderBrush, Brushes.Transparent).Should().BeFalse("keyboard focus shows the ring");
     }
 }

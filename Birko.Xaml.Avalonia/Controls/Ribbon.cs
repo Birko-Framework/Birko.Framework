@@ -1401,8 +1401,11 @@ public partial class Ribbon : ContentControl
         SizedBy(button, BorderThicknessProperty, s => new Thickness(s.D("BBorderWidthThick")), "BBorderWidthThick");
         button.BorderBrush = Brushes.Transparent;
 
-        button.GotFocus += (_, _) =>
+        button.GotFocus += (_, e) =>
         {
+            // Keyboard focus only, as the web's :focus-visible: a click focuses the button too, and the ring then sat
+            // around a toggle's pressed frame as a second border (seen by the user, 2026-10-23).
+            if (e.NavigationMethod == NavigationMethod.Pointer) return;
             // Token first, but NEVER nothing: a focus indicator that disappears because a theme did not load
             // is an accessibility failure dressed up as a styling detail. Caught by a test running without
             // the Birko theme merged, where the resource lookup yields null.
@@ -1952,8 +1955,30 @@ public partial class Ribbon : ContentControl
         // never shifts the row (b-ribbon draws it as an inset box-shadow).
         var inner = button.Content as Control;
         button.Content = null; // detached first: a control has one parent
-        button.Content = Sized(SizedBy(new Border { Child = inner }, Border.BorderThicknessProperty, s => new Thickness(s.D("BBorderWidth")), "BBorderWidth"),
+        var frame = Sized(SizedBy(new Border { Child = inner }, Border.BorderThicknessProperty, s => new Thickness(s.D("BBorderWidth")), "BBorderWidth"),
             Border.CornerRadiusProperty, "BRibbonFrameRadius");
+        // The frame spans the whole button inside the focus ring, with the button's padding inside it, so the tint and
+        // the outline are one shape at the button's edge, as the web's inset box-shadow. Inside the padding, the tint
+        // on the button spilled out past the frame (seen by the user in the Gallery, 2026-10-23). The negative margin
+        // takes back exactly what the padding gives, so the button's size does not change.
+        void Span()
+        {
+            var p = button.Padding;
+            frame.Margin = new Thickness(-p.Left, -p.Top, -p.Right, -p.Bottom);
+            frame.Padding = p;
+        }
+        Span();
+        button.PropertyChanged += (_, e) => { if (e.Property == PaddingProperty) Span(); };
+        // The frame fills the button (a Medium command is as wide as its column); the content keeps its alignment
+        // inside it.
+        if (inner is not null)
+        {
+            inner.HorizontalAlignment = button.HorizontalContentAlignment;
+            inner.VerticalAlignment = button.VerticalContentAlignment;
+        }
+        button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        button.VerticalContentAlignment = VerticalAlignment.Stretch;
+        button.Content = frame;
         if (!_toggleViews.TryGetValue(key, out var views)) _toggleViews[key] = views = new List<Button>();
         views.Add(button);
         ApplyPressedLook(button, PressedOf(key, item));
@@ -1969,9 +1994,13 @@ public partial class Ribbon : ContentControl
     {
         if (button is RibbonToggleCommand toggle) toggle.IsPressed = on;
         IBrush? Find(string key) => button.TryFindResource(key, button.ActualThemeVariant, out var v) ? v as IBrush : null;
-        button.Background = on ? Find("BColorPrimaryLightBrush") ?? Brushes.Transparent : Brushes.Transparent;
+        // The tint is the frame's, not the button's: the button's own background is the larger rounded shape around
+        // the focus ring, which showed as a second, bigger outline behind the frame.
+        button.Background = Brushes.Transparent;
         button.Foreground = on ? Find("BColorPrimaryTextBrush") ?? Find("BColorPrimaryBrush") : Find("BTextBrush");
-        if (button.Content is Border frame) frame.BorderBrush = on ? Find("BColorPrimaryBrush") : Brushes.Transparent;
+        if (button.Content is not Border frame) return;
+        frame.Background = on ? Find("BColorPrimaryLightBrush") ?? Brushes.Transparent : Brushes.Transparent;
+        frame.BorderBrush = on ? Find("BColorPrimaryBrush") : Brushes.Transparent;
     }
 
     /// <summary>

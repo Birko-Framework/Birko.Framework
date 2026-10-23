@@ -63,3 +63,13 @@ FEATURE-019 D13, split from TASK-742. Web counterpart: TASK-739. Desktop counter
   - Birko.Xaml.Avalonia.Tests 236/236; Birko.Xaml.Core.Tests 60/60; the Gallery builds. Checked on headless
     screenshots in light and dark.
 
+
+## Follow-up from your Gallery check (2026-10-23)
+
+- **Two outlines on a pressed toggle, fixed.** The tint was on the button and the 1px frame sat inside its padding, so
+  a larger tinted rounded shape showed around the frame. The tint and the frame are now one shape filling the button
+  inside the focus ring, as the web's inset outline; the button's size does not change.
+- **A second border on click, fixed.** The focus ring showed on any focus, a mouse click included. It now shows for
+  keyboard focus only, as the web's `:focus-visible`; this applies to every ribbon button.
+- Gate: `RibbonToggleTests` +2 (the frame fills the button inside the ring; a real click shows no ring, Tab does),
+  Birko.Xaml.Avalonia.Tests 322/322.
