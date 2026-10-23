@@ -141,7 +141,7 @@ public partial class Ribbon
         {
             var current = g.Items.FirstOrDefault(c => c.Id == selected) ?? g.Items.FirstOrDefault();
             var face = TileFace(current?.Preview ?? Initials(current?.Label), (current?.Label ?? item.Label) + " ▾");
-            var frame = new Border { Child = face, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(2) };
+            var frame = TileFrame(new Border { Child = face });
             frame.Bind(Border.BorderBrushProperty, frame.GetResourceObservable("BBorderBrush"));
             TileSize(frame);
             var dropdown = Expand(frame);
@@ -149,7 +149,7 @@ public partial class Ribbon
             return dropdown;
         }
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var row = Sized(new StackPanel { Orientation = Orientation.Horizontal }, StackPanel.SpacingProperty, "BSpace2xs");
         global::Avalonia.Automation.AutomationProperties.SetName(row, item.Label);
         foreach (var choice in g.Items.Skip(offset).Take(visible))
             row.Children.Add(GalleryTile(item, choice, choice.Id == selected, tab, group, key, onInvoke));
@@ -185,12 +185,14 @@ public partial class Ribbon
         if ((g.Style ?? GalleryStyle) == RibbonGalleryStyle.Open)
         {
             var line = new StackPanel { Orientation = Orientation.Horizontal, Children = { Step(-1, "‹"), row, Step(1, "›") } };
-            var moreFrame = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0), Child = new TextBlock { Text = "More ▾", FontSize = 11 } };
+            var moreFrame = Sized(SizedBy(new Border { Child = Sized(new TextBlock { Text = "More ▾" }, TextBlock.FontSizeProperty, "BTextXs") },
+                Border.BorderThicknessProperty, s => new Thickness(s.D("BBorderWidth")), "BBorderWidth"), Border.CornerRadiusProperty, "BRibbonFrameRadius");
+            SizedBy(moreFrame, Border.PaddingProperty, s => new Thickness(s.D("BSpaceXs"), 0), "BSpaceXs"); // the web's 0 var(--b-space-xs)
             moreFrame.Bind(Border.BorderBrushProperty, moreFrame.GetResourceObservable("BBorderBrush"));
             var more = Expand(moreFrame);
             more.HorizontalAlignment = HorizontalAlignment.Center;
             more.Bind(ForegroundProperty, more.GetResourceObservable("BTextSecondaryBrush"));
-            return new StackPanel { Spacing = 2, Children = { line, more } };
+            return Sized(new StackPanel { Children = { line, more } }, StackPanel.SpacingProperty, "BSpace2xs");
         }
 
         // Framed (Office): the row in a frame, with ▲ ▼ ▾ stacked beside it behind a divider.
@@ -201,20 +203,18 @@ public partial class Ribbon
         expandAll.Bind(WidthProperty, expandAll.GetResourceObservable("BRibbonGalleryButtonWidth"));
         foreach (var (b, r) in new[] { (up, 0), (down, 1), (expandAll, 2) })
         {
-            b.FontSize = 9;
+            Sized(b, TemplatedControl.FontSizeProperty, "BRibbonCaretSize");
             b.VerticalAlignment = VerticalAlignment.Stretch;
             Grid.SetRow(b, r);
             controls.Children.Add(b);
         }
-        var divider = new Border { BorderThickness = new Thickness(1, 0, 0, 0), Margin = new Thickness(2, 0, 0, 0), Child = controls };
+        var divider = SizedBy(SizedBy(new Border { Child = controls }, Border.BorderThicknessProperty, s => new Thickness(s.D("BBorderWidth"), 0, 0, 0), "BBorderWidth"),
+            MarginProperty, s => new Thickness(s.D("BSpace2xs"), 0, 0, 0), "BSpace2xs");
         divider.Bind(Border.BorderBrushProperty, divider.GetResourceObservable("BBorderBrush"));
-        var framed = new Border
-        {
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(2),
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { row, divider } },
-        };
+        var framed = new Border { Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { row, divider } } };
+        SizedBy(framed, Border.BorderThicknessProperty, s => new Thickness(s.D("BBorderWidth")), "BBorderWidth");
+        Sized(framed, Border.CornerRadiusProperty, "BRadiusSm");
+        SizedBy(framed, Border.PaddingProperty, s => new Thickness(s.D("BSpace2xs")), "BSpace2xs");
         framed.Bind(Border.BorderBrushProperty, framed.GetResourceObservable("BBorderBrush"));
         framed.Bind(Border.BackgroundProperty, framed.GetResourceObservable("BBgBrush"));
         return framed;
@@ -231,7 +231,16 @@ public partial class Ribbon
         small.Bind(TextBlock.FontSizeProperty, small.GetResourceObservable("BText2xs"));
         global::Avalonia.Automation.AutomationProperties.SetAccessibilityView(big, global::Avalonia.Automation.AccessibilityView.Raw);
         global::Avalonia.Automation.AutomationProperties.SetAccessibilityView(small, global::Avalonia.Automation.AccessibilityView.Raw);
-        return new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { big, small } };
+        return Sized(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { big, small } }, StackPanel.SpacingProperty, "BSpace2xs");
+    }
+
+    /// <summary>A tile's 1px frame inside the focus ring, as the toggle's pressed frame, with the web's 2xs padding.</summary>
+    private static Border TileFrame(Border frame)
+    {
+        SizedBy(frame, Border.BorderThicknessProperty, s => new Thickness(s.D("BBorderWidth")), "BBorderWidth");
+        Sized(frame, Border.CornerRadiusProperty, "BRibbonFrameRadius");
+        SizedBy(frame, Border.PaddingProperty, s => new Thickness(s.D("BSpace2xs")), "BSpace2xs");
+        return frame;
     }
 
     private static void TileSize(Control c)
@@ -246,13 +255,7 @@ public partial class Ribbon
     /// </summary>
     private Button GalleryTile(RibbonItem item, RibbonGalleryItem choice, bool on, string tab, string group, string key, System.Action? onInvoke)
     {
-        var frame = new Border
-        {
-            Child = TileFace(choice.Preview ?? Initials(choice.Label), choice.Label),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(3),
-            Padding = new Thickness(2),
-        };
+        var frame = TileFrame(new Border { Child = TileFace(choice.Preview ?? Initials(choice.Label), choice.Label) });
         TileSize(frame);
         var tile = new RibbonToggleCommand
         {
@@ -311,7 +314,7 @@ public partial class Ribbon
         for (int i = 0; i < g.Items.Count; i++)
         {
             var tile = GalleryTile(item, g.Items[i], g.Items[i].Id == selected, tab, group, key, onInvoke);
-            tile.Margin = new Thickness(2);
+            SizedBy(tile, MarginProperty, s => new Thickness(s.D("BSpace2xs")), "BSpace2xs");
             Grid.SetRow(tile, i / columns);
             Grid.SetColumn(tile, i % columns);
             grid.Children.Add(tile);
@@ -364,7 +367,7 @@ public partial class Ribbon
     /// <summary>A gallery in the narrow menu: its name, then its choices as radio entries.</summary>
     private void AddNarrowGallery(StackPanel list, RibbonTab tab, string group, RibbonItem item)
     {
-        var head = new TextBlock { Text = item.Label, FontSize = 12, Margin = new Thickness(16, 4, 0, 0) };
+        var head = Sized(Sized(new TextBlock { Text = item.Label }, TextBlock.FontSizeProperty, "BRibbonNarrowHeadingSize"), MarginProperty, "BRibbonNarrowItemMargin");
         head.Bind(TextBlock.ForegroundProperty, head.GetResourceObservable("BTextMutedBrush"));
         list.Children.Add(head);
         string key = PressKey(tab.Id, group, item.Id);
@@ -378,10 +381,10 @@ public partial class Ribbon
                 IsPressed = c.Id == selected,
                 Content = new TextBlock { Text = (c.Id == selected ? "✓  " : "    ") + c.Label },
                 Background = Brushes.Transparent,
-                Padding = new Thickness(32, 6, 16, 6),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
             };
+            NarrowPadding(entry, 2);
             entry.Bind(ForegroundProperty, entry.GetResourceObservable(c.Id == selected ? "BColorPrimaryTextBrush" : "BTextBrush"));
             Describe(entry, c.Label);
             entry.Click += (_, _) =>

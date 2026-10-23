@@ -120,7 +120,7 @@ public partial class Ribbon
     private Control? BuildQuickAccess()
     {
         if (_qatDefaults is null) return null;
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        var bar = Sized(new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center }, StackPanel.SpacingProperty, "BSpace2xs");
         global::Avalonia.Automation.AutomationProperties.SetName(bar, "Quick Access Toolbar");
         var buttons = new List<Button>();
         foreach (var reference in QuickAccess)
@@ -132,7 +132,7 @@ public partial class Ribbon
         }
         var more = new Button
         {
-            Content = new TextBlock { Text = "▾", FontSize = 10 },
+            Content = Sized(new TextBlock { Text = "▾" }, TextBlock.FontSizeProperty, "BText2xs"),
             Background = Brushes.Transparent,
             Padding = new Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -196,7 +196,8 @@ public partial class Ribbon
         button.Content = glyph;
         button.Tag = reference;
         button.Background = Brushes.Transparent;
-        button.Padding = new Thickness(pressKey is null ? 2 : 1);
+        // The web's 2xs, less the 1px pressed frame a toggle draws inside it.
+        SizedBy(button, PaddingProperty, s => new Thickness(s.D("BSpace2xs") - (pressKey is null ? 0 : s.D("BBorderWidth"))), "BSpace2xs", "BBorderWidth");
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
         button.VerticalContentAlignment = VerticalAlignment.Center;
         button.Bind(MinWidthProperty, button.GetResourceObservable("BRibbonQatButtonSize"));

@@ -21,7 +21,7 @@ generated: 2026-10-22
 
 ## Build progress
 
-18 / 31 tasks done: the web ribbon is signed off. Left: the desktop (Avalonia) ribbon, split into TASK-751–763.
+18 / 31 tasks done: the web ribbon is signed off. The desktop (Avalonia) ribbon, TASK-751–763, is all built and checked by automated tests; it awaits your check in the Birko.Xaml.Gallery app.
 
 - [x] TASK-730 b-ribbon: equal-height groups, aligned rows, group labels at the bottom — signed off
 - [x] TASK-731 b-ribbon: arrow-key navigation between commands and groups — signed off
@@ -89,4 +89,4 @@ inputs and, with split buttons (TASK-732), galleries.
 - [~] TASK-760 Avalonia ribbon: contextual tabs — built, awaiting your check
 - [~] TASK-761 Avalonia ribbon: galleries — built, awaiting your check
 - [~] TASK-762 Avalonia ribbon: input boxes and dropdowns — built, awaiting your check
-- [ ] TASK-763 Avalonia ribbon: every size a theme resource
+- [~] TASK-763 Avalonia ribbon: every size a theme resource — built, awaiting your check

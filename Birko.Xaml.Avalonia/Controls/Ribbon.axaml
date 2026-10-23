@@ -1,0 +1,75 @@
+<!--
+  The ribbon's own sizes (TASK-763, the desktop side of b-ribbon's TASK-747): every size the Ribbon control draws is a
+  theme resource, read with GetResourceObservable, never a literal in its code (RibbonSizeTests fails on one). An app
+  can override any of them in its own resources.
+
+  Two kinds of key reach the ribbon:
+  - the generated design tokens (Themes/, from Birko.DesignTokens/tokens.json): BSpace*, BText*, BRadius*,
+    BBorderWidth*, BRibbon* — used wherever the desktop size IS the web's token;
+  - the keys below, for sizes the web does not have as a token. Most are a web size adjusted for the desktop's
+    permanent 2px focus-ring border (a CSS outline takes no space; an Avalonia border does), or desktop-only chrome
+    (the narrow menu, the popups). Their values are the ones the control drew before they moved here, so moving them
+    changed nothing on screen (measured: every element's geometry in 21 states, and 35 screenshots, identical).
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Tab row -->
+  <x:Double x:Key="BRibbonTabSpacing">4</x:Double>                      <!-- between tabs, and between a set's tabs -->
+  <Thickness x:Key="BRibbonTabPadding">12,6</Thickness>                 <!-- a tab button -->
+  <Thickness x:Key="BRibbonControlPadding">10,6</Thickness>             <!-- the collapse chevron and the narrow ☰ -->
+  <Thickness x:Key="BRibbonPinPadding">8,6</Thickness>                  <!-- the pin -->
+  <Thickness x:Key="BRibbonStripMargin">8,4,8,0</Thickness>             <!-- the tab row inside the ribbon -->
+  <Thickness x:Key="BRibbonScrollPadding">4,0</Thickness>               <!-- a tab-strip or groups-row scroll arrow -->
+  <Thickness x:Key="BRibbonQatTabsMargin">0,0,8,0</Thickness>           <!-- the Quick Access Toolbar before the tabs -->
+  <Thickness x:Key="BRibbonQatRowMargin">8,2</Thickness>                <!-- the toolbar on its own row -->
+
+  <!-- Contextual sets -->
+  <Thickness x:Key="BRibbonContextMargin">4,0,0,0</Thickness>           <!-- a set's mark after the tab before it -->
+  <Thickness x:Key="BRibbonContextNameMargin">8,2,8,0</Thickness>       <!-- the band's name above its tabs -->
+  <Thickness x:Key="BRibbonContextPillPadding">8,2</Thickness>          <!-- the pill around the name -->
+
+  <!-- Groups row -->
+  <Thickness x:Key="BRibbonPanelMargin">8</Thickness>                   <!-- the groups row inside the ribbon -->
+  <Thickness x:Key="BRibbonGroupLabelMargin">0,4,0,3</Thickness>        <!-- a group's name; the 3px bottom is the descenders' (TASK-751) -->
+  <x:Double x:Key="BRibbonLauncherGap">4</x:Double>                     <!-- the name's inset beyond the launcher, both sides -->
+  <x:Double x:Key="BRibbonRowGap">1</x:Double>                          <!-- between the rows of a Medium / Small column -->
+  <Thickness x:Key="BRibbonCommandPadding">6,2</Thickness>              <!-- web 8/4 minus the 2px focus ring -->
+  <x:Double x:Key="BRibbonCaretSize">9</x:Double>                       <!-- a menu's ▾, and a gallery's ▲ ▼ ▾ -->
+  <x:Double x:Key="BRibbonSplitGap">3</x:Double>                        <!-- a Large split's name and its ▾ -->
+  <Thickness x:Key="BRibbonSplitArrowPadding">2,2</Thickness>           <!-- a split's ▾ part beside it -->
+  <Thickness x:Key="BRibbonSplitArrowPaddingLarge">6,0,6,2</Thickness>  <!-- a Large split's ▾ part under it -->
+  <CornerRadius x:Key="BRibbonFrameRadius">3</CornerRadius>             <!-- the 1px frame inside the focus ring: pressed, tile -->
+
+  <!-- Folded groups -->
+  <Thickness x:Key="BRibbonChunkPadding">6,4</Thickness>                <!-- a folded group's button, labelled -->
+  <Thickness x:Key="BRibbonChunkPaddingCompact">2,4</Thickness>         <!-- and compact -->
+  <Thickness x:Key="BRibbonChunkMargin">8,4</Thickness>                 <!-- around it, labelled -->
+  <Thickness x:Key="BRibbonChunkMarginCompact">1,4</Thickness>          <!-- and compact -->
+
+  <!-- Tooltips and key tips -->
+  <Thickness x:Key="BRibbonTipPadding">8</Thickness>                    <!-- a command's tooltip -->
+  <Thickness x:Key="BRibbonTipLineMargin">0,4,0,0</Thickness>           <!-- its description under the name -->
+  <Thickness x:Key="BRibbonKeytipOffset">0,0,-6,-6</Thickness>          <!-- a command's key tip, half outside its corner -->
+  <Thickness x:Key="BRibbonKeytipOffsetTab">0,0,0,-8</Thickness>        <!-- a tab's key tip, centred under it -->
+
+  <!-- Inputs -->
+  <Thickness x:Key="BRibbonFieldBoxPadding">6,2</Thickness>             <!-- the web's size="sm" box -->
+  <x:Double x:Key="BRibbonFieldCharWidth">7</x:Double>                  <!-- one character of a box's width (the web's 1ch at 13px) -->
+  <x:Double x:Key="BRibbonFieldCaptionGap">4</x:Double>                 <!-- a caption beside its box -->
+  <Thickness x:Key="BRibbonNarrowFieldMargin">16,2,16,2</Thickness>     <!-- a box in the narrow menu -->
+
+  <!-- The narrow menu -->
+  <x:Double x:Key="BRibbonBurgerGlyph">18</x:Double>                    <!-- the ☰ -->
+  <Thickness x:Key="BRibbonNarrowBarMargin">4,2</Thickness>             <!-- the narrow bar -->
+  <Thickness x:Key="BRibbonNarrowLabelMargin">4,0</Thickness>           <!-- the open tab's name beside the ☰ -->
+  <Thickness x:Key="BRibbonNarrowListMargin">8</Thickness>              <!-- the menu's list -->
+  <x:Double x:Key="BRibbonNarrowSpacing">2</x:Double>                   <!-- between its entries -->
+  <x:Double x:Key="BRibbonNarrowHeadingSize">12</x:Double>              <!-- a tab's and a menu's heading -->
+  <Thickness x:Key="BRibbonNarrowTabMargin">0,6,0,2</Thickness>         <!-- a tab's heading -->
+  <Thickness x:Key="BRibbonNarrowGroupMargin">8,2,0,0</Thickness>       <!-- a group's heading -->
+  <Thickness x:Key="BRibbonNarrowItemMargin">16,4,0,0</Thickness>       <!-- a menu's or a gallery's heading -->
+  <Thickness x:Key="BRibbonNarrowEntryPadding">16,6</Thickness>         <!-- an entry; a choice is indented by one more Left -->
+  <x:Double x:Key="BRibbonNarrowMaxHeight">420</x:Double>
+  <x:Double x:Key="BRibbonNarrowMinWidth">220</x:Double>
+</ResourceDictionary>

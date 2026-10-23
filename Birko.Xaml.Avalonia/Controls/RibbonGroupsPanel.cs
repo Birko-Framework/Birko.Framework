@@ -99,7 +99,8 @@ internal sealed class RibbonGroupsPanel : Panel
         ClipToBounds = true; // parked variants live off-screen; do not let them paint
         if (_groups.Count > 0)
         {
-            var line = new Border { Width = 1, IsHitTestVisible = false, Focusable = false };
+            var line = new Border { IsHitTestVisible = false, Focusable = false };
+            line.Bind(WidthProperty, line.GetResourceObservable("BBorderWidth")); // a divider is a border's width (TASK-763)
             line.Bind(Border.BackgroundProperty, this.GetObservable(DividerBrushProperty));
             _dividers.Add(line);
             Children.Add(line);
@@ -192,7 +193,7 @@ internal sealed class RibbonGroupsPanel : Panel
 
             picked.Measure(availableSize);
             if (i > 0) width += gap;
-            if (i > 0) _dividers[i - 1].Measure(new Size(1, double.PositiveInfinity));
+            if (i > 0) _dividers[i - 1].Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             width += picked.DesiredSize.Width;
             height = System.Math.Max(height, picked.DesiredSize.Height);
         }

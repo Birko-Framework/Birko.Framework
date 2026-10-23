@@ -97,7 +97,7 @@ public partial class Ribbon
                 strip.Children.Add(buttons[i++]);
                 continue;
             }
-            var members = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            var members = Sized(new StackPanel { Orientation = Orientation.Horizontal }, StackPanel.SpacingProperty, "BRibbonTabSpacing");
             string color = set.Color.ToString();
             for (; i < tabs.Count && tabs[i].ContextualSet == setId; i++)
             {
@@ -107,7 +107,7 @@ public partial class Ribbon
                 if (i == selected)
                 {
                     // The open contextual tab is underlined in the set's colour, as the web's; its text is already coloured.
-                    button.BorderThickness = new Thickness(0, 0, 0, 2);
+                    SizedBy(button, BorderThicknessProperty, s => new Thickness(0, 0, 0, s.D("BBorderWidthThick")), "BBorderWidthThick");
                     button.CornerRadius = default; // a straight line, not the button's rounded corners curling up
                     button.Bind(BorderBrushProperty, button.GetResourceObservable($"BColor{color}Brush"));
                 }
@@ -125,7 +125,7 @@ public partial class Ribbon
         var name = new TextBlock { Text = set.Label, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
         name.Bind(TextBlock.FontSizeProperty, name.GetResourceObservable("BTextXs"));
         name.Bind(TextBlock.ForegroundProperty, name.GetResourceObservable($"BColor{color}TextBrush"));
-        var mark = new Border { Margin = new Thickness(4, 0, 0, 0), Tag = $"ctx:{set.Id}" };
+        var mark = Sized(new Border { Tag = $"ctx:{set.Id}" }, MarginProperty, "BRibbonContextMargin");
         global::Avalonia.Automation.AutomationProperties.SetAccessibilityView(name, global::Avalonia.Automation.AccessibilityView.Raw);
 
         switch (set.Style ?? ContextualStyle)
@@ -134,14 +134,16 @@ public partial class Ribbon
                 mark.Bind(Border.BackgroundProperty, mark.GetResourceObservable(tint));
                 mark.Bind(Border.BorderBrushProperty, mark.GetResourceObservable($"BColor{color}Brush"));
                 mark.Bind(Border.BorderThicknessProperty, mark.GetResourceObservable("BRibbonContextAccent", v => v is double d ? new Thickness(0, d, 0, 0) : default));
-                name.Margin = new Thickness(8, 2, 8, 0);
+                Sized(name, MarginProperty, "BRibbonContextNameMargin");
                 mark.Child = new StackPanel { Children = { name, members } };
                 break;
             case RibbonContextualStyle.Pill:
-                var pill = new Border { Child = name, Padding = new Thickness(8, 2), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9999), VerticalAlignment = VerticalAlignment.Center };
+                var pill = Sized(Sized(SizedBy(new Border { Child = name, VerticalAlignment = VerticalAlignment.Center },
+                    Border.BorderThicknessProperty, s => new Thickness(s.D("BBorderWidth")), "BBorderWidth"),
+                    Border.PaddingProperty, "BRibbonContextPillPadding"), Border.CornerRadiusProperty, "BRadiusFull");
                 pill.Bind(Border.BackgroundProperty, pill.GetResourceObservable(tint));
                 pill.Bind(Border.BorderBrushProperty, pill.GetResourceObservable(frame));
-                mark.Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { pill, members } };
+                mark.Child = Sized(new StackPanel { Orientation = Orientation.Horizontal, Children = { pill, members } }, StackPanel.SpacingProperty, "BSpace2xs");
                 break;
             default:
                 mark.Bind(Border.BorderBrushProperty, mark.GetResourceObservable($"BColor{color}Brush"));

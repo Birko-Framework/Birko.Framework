@@ -204,17 +204,16 @@ public partial class Ribbon : ContentControl
         }
 
         // Tab strip (tabs on the left, a collapse chevron on the right)
-        var tabButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        var tabButtons = Sized(new StackPanel { Orientation = Orientation.Horizontal }, StackPanel.SpacingProperty, "BRibbonTabSpacing");
         var buttons = new List<Button>();
         for (int i = 0; i < tabs.Count; i++)
         {
             int index = i;
-            var tabButton = new Button
+            var tabButton = Sized(new Button
             {
                 Content = new TextBlock { Text = tabs[i].Label },
                 Background = Brushes.Transparent,
-                Padding = new Thickness(12, 6),
-            };
+            }, PaddingProperty, "BRibbonTabPadding");
             tabButton.Bind(ForegroundProperty, tabButton.GetResourceObservable(
                 i == selected ? "BColorPrimaryBrush" : "BTextSecondaryBrush"));
             Describe(tabButton, tabs[i].Label);
@@ -236,14 +235,13 @@ public partial class Ribbon : ContentControl
         }
         ArrangeTabs(tabButtons, tabs, buttons, selected);
 
-        var chevron = new Button
+        var chevron = Sized(new Button
         {
             Content = new TextBlock { Text = IsCollapsed ? "⌄" : "⌃" },
             Background = Brushes.Transparent,
-            Padding = new Thickness(10, 6),
             HorizontalAlignment = HorizontalAlignment.Right,
             [ToolTip.TipProperty] = IsCollapsed ? "Expand the ribbon" : "Collapse the ribbon",
-        };
+        }, PaddingProperty, "BRibbonControlPadding");
         chevron.Bind(ForegroundProperty, chevron.GetResourceObservable("BTextSecondaryBrush"));
         Describe(chevron, IsCollapsed ? "Expand the ribbon" : "Collapse the ribbon");
         chevron.Click += (_, _) => IsCollapsed = !IsCollapsed;
@@ -292,19 +290,18 @@ public partial class Ribbon : ContentControl
         var tabScroller = WrapScrollable(tabButtons, "Scroll tabs left", "Scroll tabs right", _tabRow, out var tabScrollViewer);
         CarryTabScrollAcrossRebuild(tabScrollViewer, buttons, selected);
 
-        var pin = new Button
+        var pin = Sized(new Button
         {
             Content = new TextBlock { Text = IsPinned ? "\U0001F4CC" : "\U0001F4CD" },
             Background = Brushes.Transparent,
-            Padding = new Thickness(8, 6),
             [ToolTip.TipProperty] = IsPinned ? "Unpin the ribbon" : "Pin the ribbon open",
-        };
+        }, PaddingProperty, "BRibbonPinPadding");
         pin.Bind(ForegroundProperty, pin.GetResourceObservable("BTextSecondaryBrush"));
         Describe(pin, IsPinned ? "Unpin the ribbon" : "Pin the ribbon open");
         pin.Click += (_, _) => IsPinned = !IsPinned;
         AddFocusRing(pin);
 
-        var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto,Auto"), Margin = new Thickness(8, 4, 8, 0) };
+        var strip = Sized(new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto,Auto") }, MarginProperty, "BRibbonStripMargin");
         var leading = Reparent(_leadingHost);
         var trailing = Reparent(_trailingHost);
         Grid.SetColumn(leading, 0);
@@ -322,7 +319,7 @@ public partial class Ribbon : ContentControl
         var qat = BuildQuickAccess();
         if (qat is not null && QuickAccessPosition == RibbonQuickAccessPosition.Tabs)
         {
-            qat.Margin = new Thickness(0, 0, 8, 0);
+            Sized(qat, MarginProperty, "BRibbonQatTabsMargin");
             Grid.SetColumn(qat, 1);
             strip.Children.Add(qat);
         }
@@ -330,7 +327,7 @@ public partial class Ribbon : ContentControl
         var body = new DockPanel();
         if (qat is not null && QuickAccessPosition == RibbonQuickAccessPosition.Above)
         {
-            qat.Margin = new Thickness(8, 2);
+            Sized(qat, MarginProperty, "BRibbonQatRowMargin");
             qat.HorizontalAlignment = HorizontalAlignment.Left;
             DockPanel.SetDock(qat, Dock.Top);
             body.Children.Add(qat);
@@ -339,7 +336,7 @@ public partial class Ribbon : ContentControl
         body.Children.Add(strip);
         if (qat is not null && QuickAccessPosition == RibbonQuickAccessPosition.Below)
         {
-            qat.Margin = new Thickness(8, 2);
+            Sized(qat, MarginProperty, "BRibbonQatRowMargin");
             qat.HorizontalAlignment = HorizontalAlignment.Left;
             DockPanel.SetDock(qat, Dock.Bottom);
             body.Children.Add(qat);
@@ -378,7 +375,7 @@ public partial class Ribbon : ContentControl
             Dispatcher.UIThread.Post(() => restore.Focus(NavigationMethod.Tab), DispatcherPriority.Loaded);
         }
 
-        var chrome = new Border { Child = body, BorderThickness = new Thickness(0, 0, 0, 1) };
+        var chrome = SizedBy(new Border { Child = body }, Border.BorderThicknessProperty, s => new Thickness(0, 0, 0, s.D("BBorderWidth")), "BBorderWidth");
         chrome.Bind(Border.BackgroundProperty, chrome.GetResourceObservable("BBgBrush"));
         chrome.Bind(Border.BorderBrushProperty, chrome.GetResourceObservable("BBorderBrush"));
         Content = chrome;
@@ -412,7 +409,7 @@ public partial class Ribbon : ContentControl
     private RibbonGroupsPanel BuildGroupsRow(RibbonTab tab, System.Action? onInvoke)
     {
         _buildTab = tab.Id;
-        var panel = new RibbonGroupsPanel { Margin = new Thickness(8), Preferred = PreferredGroupSize };
+        var panel = Sized(new RibbonGroupsPanel { Preferred = PreferredGroupSize }, MarginProperty, "BRibbonPanelMargin");
         panel.Bind(RibbonGroupsPanel.GapProperty, panel.GetResourceObservable("BRibbonGroupGap"));
         panel.Bind(RibbonGroupsPanel.DividerBrushProperty, panel.GetResourceObservable("BBorderBrush"));
 
@@ -452,11 +449,11 @@ public partial class Ribbon : ContentControl
     {
         var burger = new Button
         {
-            Content = new TextBlock { Text = "☰", FontSize = 18 },
+            Content = Sized(new TextBlock { Text = "☰" }, TextBlock.FontSizeProperty, "BRibbonBurgerGlyph"),
             Background = Brushes.Transparent,
-            Padding = new Thickness(10, 6),
             [ToolTip.TipProperty] = "Open the ribbon menu",
         };
+        Sized(burger, PaddingProperty, "BRibbonControlPadding");
         burger.Bind(ForegroundProperty, burger.GetResourceObservable("BTextBrush"));
         Describe(burger, "Open the ribbon menu");
 
@@ -464,14 +461,14 @@ public partial class Ribbon : ContentControl
         {
             Text = selected >= 0 ? tabs[selected].Label : string.Empty,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(4, 0),
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
+        Sized(active, MarginProperty, "BRibbonNarrowLabelMargin");
         active.Bind(TextBlock.ForegroundProperty, active.GetResourceObservable("BTextBrush"));
 
         burger.Click += (_, _) => OpenNarrowMenu(tabs, selected, burger);
 
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), Margin = new Thickness(4, 2) };
+        var row = Sized(new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto") }, MarginProperty, "BRibbonNarrowBarMargin");
         var leading = Reparent(_leadingHost);
         var trailing = Reparent(_trailingHost);
         Grid.SetColumn(leading, 0);
@@ -483,7 +480,7 @@ public partial class Ribbon : ContentControl
         row.Children.Add(active);
         row.Children.Add(trailing);
 
-        var chrome = new Border { Child = row, BorderThickness = new Thickness(0, 0, 0, 1) };
+        var chrome = SizedBy(new Border { Child = row }, Border.BorderThicknessProperty, s => new Thickness(0, 0, 0, s.D("BBorderWidth")), "BBorderWidth");
         chrome.Bind(Border.BackgroundProperty, chrome.GetResourceObservable("BBgBrush"));
         chrome.Bind(Border.BorderBrushProperty, chrome.GetResourceObservable("BBorderBrush"));
         return chrome;
@@ -491,21 +488,34 @@ public partial class Ribbon : ContentControl
 
     /// <summary>Every tab → group → item as a flat scrollable menu, the active tab first.</summary>
     /// <summary>A plain narrow-menu entry: an indented button that runs <paramref name="run"/> and closes the menu.</summary>
-    private Button NarrowEntry(string? icon, string label, double indent, System.Action run)
+    /// <summary>An entry of the narrow menu, indented <paramref name="level"/> steps (a choice under its command is 2).</summary>
+    private Button NarrowEntry(string? icon, string label, int level, System.Action run)
     {
         var entry = new Button
         {
             Content = new TextBlock { Text = (icon is null ? "" : icon + "  ") + label },
             Background = Brushes.Transparent,
-            Padding = new Thickness(indent, 6, 16, 6),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
         };
         entry.Bind(ForegroundProperty, entry.GetResourceObservable("BTextBrush"));
+        NarrowPadding(entry, level);
         Describe(entry, label);
         entry.Click += (_, _) => { run(); _reveal?.Close(); };
         return entry;
     }
+
+    /// <summary>
+    /// A narrow-menu entry's padding: the entry padding with its Left as many times over as the level, less the 1px pressed
+    /// frame a toggle draws inside it (<paramref name="framed"/>), so a toggle lines up with its neighbours.
+    /// </summary>
+    private static void NarrowPadding(Control entry, int level, bool framed = false) =>
+        SizedBy(entry, PaddingProperty, s =>
+        {
+            var p = s.T("BRibbonNarrowEntryPadding");
+            double f = framed ? s.D("BBorderWidth") : 0;
+            return new Thickness(p.Left * level - f, p.Top - f, p.Right - f, p.Bottom - f);
+        }, "BRibbonNarrowEntryPadding", "BBorderWidth");
 
     /// <summary>A toggle in the narrow menu: the same state and look as in the ribbon (TASK-754).</summary>
     private Control NarrowToggle(RibbonTab tab, RibbonGroup group, RibbonItem item)
@@ -516,10 +526,10 @@ public partial class Ribbon : ContentControl
         {
             IsRadio = item.ToggleGroup is not null,
             Content = new TextBlock { Text = (item.Icon is null ? "" : item.Icon + "  ") + item.Label },
-            Padding = new Thickness(15, 5),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
         };
+        NarrowPadding(entry, 1, framed: true);
         Describe(entry, item.Label);
         entry.Click += (_, _) => { ClickToggle(tab.Id, g, item); item.Run?.Invoke(); };
         return FinishToggle(entry, key, item);
@@ -529,17 +539,17 @@ public partial class Ribbon : ContentControl
     {
         _reveal?.Close();
 
-        var list = new StackPanel { Margin = new Thickness(8), Spacing = 2 };
+        var list = Sized(Sized(new StackPanel(), MarginProperty, "BRibbonNarrowListMargin"), StackPanel.SpacingProperty, "BRibbonNarrowSpacing");
         // Active tab first: it is what the ☰ label says you are looking at, so it should not need scrolling to.
         foreach (var tab in tabs.OrderByDescending(t => selected >= 0 && t == tabs[selected]))
         {
-            var heading = new TextBlock { Text = tab.Label, FontSize = 12, Margin = new Thickness(0, 6, 0, 2) };
+            var heading = Sized(Sized(new TextBlock { Text = tab.Label }, TextBlock.FontSizeProperty, "BRibbonNarrowHeadingSize"), MarginProperty, "BRibbonNarrowTabMargin");
             heading.Bind(TextBlock.ForegroundProperty, heading.GetResourceObservable("BColorPrimaryBrush"));
             list.Children.Add(heading);
 
             foreach (var group in tab.Groups)
             {
-                var groupLabel = new TextBlock { Text = group.Label, FontSize = 11, Margin = new Thickness(8, 2, 0, 0) };
+                var groupLabel = Sized(Sized(new TextBlock { Text = group.Label }, TextBlock.FontSizeProperty, "BTextXs"), MarginProperty, "BRibbonNarrowGroupMargin");
                 groupLabel.Bind(TextBlock.ForegroundProperty, groupLabel.GetResourceObservable("BTextMutedBrush"));
                 list.Children.Add(groupLabel);
 
@@ -547,7 +557,7 @@ public partial class Ribbon : ContentControl
                 {
                     var g = group;
                     var t = tab;
-                    list.Children.Add(NarrowEntry(null, LauncherName(g), 16, () => RaiseLauncher(t.Id, g)));
+                    list.Children.Add(NarrowEntry(null, LauncherName(g), 1, () => RaiseLauncher(t.Id, g)));
                 }
 
                 foreach (var item in group.Items)
@@ -573,17 +583,17 @@ public partial class Ribbon : ContentControl
                     if (item.Menu is { Count: > 0 } entries)
                     {
                         // A menu's choices are listed under their command; a menu-only command is just their heading.
-                        if (item.Split) list.Children.Add(NarrowEntry(item.Icon, item.Label, 16, () => item.Run?.Invoke()));
+                        if (item.Split) list.Children.Add(NarrowEntry(item.Icon, item.Label, 1, () => item.Run?.Invoke()));
                         else
                         {
-                            var head = new TextBlock { Text = item.Label, FontSize = 12, Margin = new Thickness(16, 4, 0, 0) };
+                            var head = Sized(Sized(new TextBlock { Text = item.Label }, TextBlock.FontSizeProperty, "BRibbonNarrowHeadingSize"), MarginProperty, "BRibbonNarrowItemMargin");
                             head.Bind(TextBlock.ForegroundProperty, head.GetResourceObservable("BTextMutedBrush"));
                             list.Children.Add(head);
                         }
                         foreach (var choice in entries.OfType<RibbonMenuItem>())
                         {
                             var c = choice;
-                            var choiceEntry = NarrowEntry(c.Icon, c.Label, 32, () =>
+                            var choiceEntry = NarrowEntry(c.Icon, c.Label, 2, () =>
                             {
                                 c.Run?.Invoke();
                                 MenuItemInvoked?.Invoke(this, new RibbonMenuItemInvokedEventArgs(tab.Id, c.Id, item.Id));
@@ -597,11 +607,11 @@ public partial class Ribbon : ContentControl
                     {
                         Content = new TextBlock { Text = (item.Icon is null ? "" : item.Icon + "  ") + item.Label },
                         Background = Brushes.Transparent,
-                        Padding = new Thickness(16, 6),
                         HorizontalAlignment = HorizontalAlignment.Stretch,
                         HorizontalContentAlignment = HorizontalAlignment.Left,
                     };
                     entry.Bind(ForegroundProperty, entry.GetResourceObservable("BTextBrush"));
+                    NarrowPadding(entry, 1);
                     var captured = item;
                     entry.Click += (_, _) => { captured.Run?.Invoke(); _reveal?.Close(); };
                     list.Children.Add(entry);
@@ -612,10 +622,11 @@ public partial class Ribbon : ContentControl
         var scroller = new ScrollViewer
         {
             Content = list,
-            MaxHeight = 420,
             HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
         };
-        var surface = new Border { Child = scroller, BorderThickness = new Thickness(1), MinWidth = 220 };
+        Sized(scroller, MaxHeightProperty, "BRibbonNarrowMaxHeight");
+        var surface = SizedBy(Sized(new Border { Child = scroller }, MinWidthProperty, "BRibbonNarrowMinWidth"),
+            Border.BorderThicknessProperty, s => new Thickness(s.D("BBorderWidth")), "BBorderWidth");
         surface.Bind(Border.BackgroundProperty, surface.GetResourceObservable("BBgElevatedBrush"));
         surface.Bind(Border.BorderBrushProperty, surface.GetResourceObservable("BBorderBrush"));
 
@@ -757,7 +768,7 @@ public partial class Ribbon : ContentControl
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         var settings = TopLevel.GetTopLevel(this)?.PlatformSettings;
         var time = settings?.GetDoubleTapTime(e.Pointer.Type) ?? System.TimeSpan.FromMilliseconds(500);
-        var size = settings?.GetDoubleTapSize(e.Pointer.Type) ?? new Size(4, 4);
+        var size = settings?.GetDoubleTapSize(e.Pointer.Type) ?? new Size(4, 4); // size-ok: the platform's double-tap slop when it reports none, not drawn
         var at = e.GetPosition(this);
         // The system clock, not e.Timestamp: the headless platform stamps every event 0.
         long now = System.Environment.TickCount64;
@@ -819,12 +830,12 @@ public partial class Ribbon : ContentControl
         var surface = new Border
         {
             Child = groups,
-            BorderThickness = new Thickness(1),
             // Full ribbon width, matching b-ribbon's `left: 0; right: 0` and Office: a temporary reveal
             // should read as the ribbon body appearing, not as a dropdown sized to its contents. MinWidth
             // rather than Width so unusually wide content can still grow past it.
             MinWidth = Bounds.Width,
         };
+        SizedBy(surface, Border.BorderThicknessProperty, s => new Thickness(s.D("BBorderWidth")), "BBorderWidth");
         surface.Bind(Border.BackgroundProperty, surface.GetResourceObservable("BBgElevatedBrush"));
         surface.Bind(Border.BorderBrushProperty, surface.GetResourceObservable("BBorderBrush"));
 
@@ -1053,12 +1064,12 @@ public partial class Ribbon : ContentControl
         content.Children.Add(title);
         if (!string.IsNullOrWhiteSpace(text))
         {
-            var line = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
+            var line = Sized(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap }, MarginProperty, "BRibbonTipLineMargin", from: target);
             line.Bind(TextBlock.ForegroundProperty, target.GetResourceObservable("BTextSecondaryBrush"));
             content.Children.Add(line);
         }
 
-        var tip = new ToolTip { Content = content, Padding = new Thickness(8) };
+        var tip = Sized(new ToolTip { Content = content }, PaddingProperty, "BRibbonTipPadding", from: target);
         tip.Bind(BackgroundProperty, target.GetResourceObservable("BBgElevatedBrush"));
         tip.Bind(ForegroundProperty, target.GetResourceObservable("BTextBrush"));
         tip.Bind(BorderBrushProperty, target.GetResourceObservable("BBorderBrush"));
@@ -1091,6 +1102,80 @@ public partial class Ribbon : ContentControl
     }
 
     private static string? StopKeyGroup(string key) => StopKey.GroupOf(key);
+
+    // ── Sizes (TASK-763) ──
+
+    /// <summary>
+    /// Binds <paramref name="property"/> to a size resource: a generated token, or one of the ribbon's own sizes in
+    /// <c>Controls/Ribbon.axaml</c>. Every size the ribbon draws goes through here or <see cref="SizedBy"/>, never a
+    /// literal (<c>RibbonSizeTests</c>).
+    /// </summary>
+    private static T Sized<T>(T control, AvaloniaProperty property, string key, Control? from = null) where T : Control
+    {
+        control.Bind(property, (from ?? control).GetResourceObservable(key));
+        return control;
+    }
+
+    /// <summary>
+    /// A size computed from size resources: a desktop size derived from a token, or two sizes combined. A binding, as
+    /// <see cref="Sized"/>'s, so a later local value still replaces it, as it replaced the literal it stands for.
+    /// </summary>
+    private static T SizedBy<T>(T control, AvaloniaProperty property, System.Func<SizeLookup, object> compute, params string[] keys) where T : Control
+    {
+        control.Bind(property, new SizeObservable(control, keys, compute));
+        return control;
+    }
+
+    /// <summary>The resolved sizes a <see cref="SizedBy"/> computation reads; a missing one reads as nothing.</summary>
+    private readonly struct SizeLookup
+    {
+        private readonly Dictionary<string, object?> _values;
+        public SizeLookup(Dictionary<string, object?> values) => _values = values;
+        public double D(string key) => _values.TryGetValue(key, out var v) && v is double d ? d : 0;
+        public Thickness T(string key) => _values.TryGetValue(key, out var v) && v is Thickness t ? t : default;
+    }
+
+    /// <summary>Recomputes a size whenever one of its resources changes (a theme switch, an app's override).</summary>
+    private sealed class SizeObservable : System.IObservable<object?>
+    {
+        private readonly Control _host;
+        private readonly string[] _keys;
+        private readonly System.Func<SizeLookup, object> _compute;
+
+        public SizeObservable(Control host, string[] keys, System.Func<SizeLookup, object> compute)
+        {
+            _host = host;
+            _keys = keys;
+            _compute = compute;
+        }
+
+        public System.IDisposable Subscribe(System.IObserver<object?> observer)
+        {
+            var latest = new Dictionary<string, object?>();
+            var subscriptions = _keys.Select(key => _host.GetResourceObservable(key).Subscribe(new SizeObserver(v =>
+            {
+                latest[key] = v;
+                if (latest.Count == _keys.Length) observer.OnNext(_compute(new SizeLookup(latest)));
+            }))).ToList();
+            return new SizeSubscriptions(subscriptions);
+        }
+    }
+
+    private sealed class SizeObserver : System.IObserver<object?>
+    {
+        private readonly System.Action<object?> _next;
+        public SizeObserver(System.Action<object?> next) => _next = next;
+        public void OnNext(object? value) => _next(value);
+        public void OnError(System.Exception error) { }
+        public void OnCompleted() { }
+    }
+
+    private sealed class SizeSubscriptions : System.IDisposable
+    {
+        private readonly List<System.IDisposable> _subscriptions;
+        public SizeSubscriptions(List<System.IDisposable> subscriptions) => _subscriptions = subscriptions;
+        public void Dispose() { foreach (var s in _subscriptions) s.Dispose(); }
+    }
 
     /// <summary>A panel stop's identity, kept in its <c>Tag</c>: a command (group/item) or a folded group.</summary>
     private static class StopKey
@@ -1313,7 +1398,7 @@ public partial class Ribbon : ContentControl
 
     private static void AddFocusRing(Button button)
     {
-        button.BorderThickness = new Thickness(2);
+        SizedBy(button, BorderThicknessProperty, s => new Thickness(s.D("BBorderWidthThick")), "BBorderWidthThick");
         button.BorderBrush = Brushes.Transparent;
 
         button.GotFocus += (_, _) =>
@@ -1346,13 +1431,13 @@ public partial class Ribbon : ContentControl
     {
         var button = new Button
         {
-            Content = new TextBlock { Text = glyph, FontSize = 11 },
+            Content = Sized(new TextBlock { Text = glyph }, TextBlock.FontSizeProperty, "BTextXs"),
             Background = Brushes.Transparent,
-            Padding = new Thickness(4, 0),
             VerticalAlignment = VerticalAlignment.Stretch,
             IsVisible = false, // Sync() reveals it once layout proves the row overflows.
             [ToolTip.TipProperty] = tip,
         };
+        Sized(button, PaddingProperty, "BRibbonScrollPadding");
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextSecondaryBrush"));
         // The tip doubles as the accessible name — a bare "◂" announces as the glyph or as nothing at all.
         Describe(button, tip);
@@ -1381,14 +1466,14 @@ public partial class Ribbon : ContentControl
         var label = new TextBlock
         {
             Text = group.Label,
-            FontSize = 11,
-            // b-ribbon's .ribbon-group-label is line-height: 1; the default line box added ~4px per group.
-            LineHeight = 11,
             HorizontalAlignment = HorizontalAlignment.Center,
-            // The bottom 3px are the descenders': the line box is the font size, and the row clips at its own
-            // bounds (parked variants live off-screen), so the "p" of "Clipboard" was cut off (TASK-751).
-            Margin = new Thickness(0, 4, 0, 3),
         };
+        Sized(label, TextBlock.FontSizeProperty, "BTextXs");
+        // b-ribbon's .ribbon-group-label is line-height: 1; the default line box added ~4px per group.
+        Sized(label, TextBlock.LineHeightProperty, "BTextXs");
+        // The bottom 3px are the descenders': the line box is the font size, and the row clips at its own
+        // bounds (parked variants live off-screen), so the "p" of "Clipboard" was cut off (TASK-751).
+        Sized(label, MarginProperty, "BRibbonGroupLabelMargin");
         label.Bind(TextBlock.ForegroundProperty, label.GetResourceObservable("BTextMutedBrush"));
 
         // The name, and the dialog launcher beside it at the bottom right (TASK-756). The name is padded by the
@@ -1397,8 +1482,12 @@ public partial class Ribbon : ContentControl
         if (group.Launcher)
         {
             var launcher = BuildLauncher(group, groupKey, onInvoke);
-            label.Bind(MarginProperty, label.GetResourceObservable(
-                "BRibbonLauncherSize", v => v is double w ? new Thickness(w + 4, 4, w + 4, 3) : new Thickness(0, 4, 0, 3)));
+            SizedBy(label, MarginProperty, s =>
+            {
+                var m = s.T("BRibbonGroupLabelMargin");
+                double inset = s.D("BRibbonLauncherSize") + s.D("BRibbonLauncherGap");
+                return new Thickness(inset, m.Top, inset, m.Bottom);
+            }, "BRibbonGroupLabelMargin", "BRibbonLauncherSize", "BRibbonLauncherGap");
             var row = new Panel();
             row.Children.Add(label);
             row.Children.Add(launcher);
@@ -1417,7 +1506,7 @@ public partial class Ribbon : ContentControl
         // No border: RibbonGroupsPanel draws the divider halfway into the gap (TASK-751). As this group's right
         // border it sat on the group's edge with the whole gap after it, the mirror of the web defect TASK-730
         // fixed.
-        return new Border { Padding = new Thickness(4, 0), Child = dock };
+        return SizedBy(new Border { Child = dock }, Border.PaddingProperty, s => new Thickness(s.D("BSpaceXs"), 0), "BSpaceXs");
     }
 
     /// <summary>
@@ -1485,10 +1574,10 @@ public partial class Ribbon : ContentControl
             Grid.SetRow(item, row);
             Grid.SetColumn(item, column);
             if (spanning) Grid.SetRowSpan(item, spans[i]);
-            // Column spacing is the BRibbonItemGap token, as before; rows keep their 1px.
-            if (column > 0) item.Bind(MarginProperty, item.GetResourceObservable(
-                "BRibbonItemGap", v => new Thickness(v is double gap ? gap : 0, row > 0 ? 1 : 0, 0, 0)));
-            else if (row > 0) item.Margin = new Thickness(0, 1, 0, 0);
+            // Column spacing is the BRibbonItemGap token, as before; rows keep their BRibbonRowGap.
+            if (column > 0 || row > 0)
+                SizedBy(item, MarginProperty, s => new Thickness(column > 0 ? s.D("BRibbonItemGap") : 0, row > 0 ? s.D("BRibbonRowGap") : 0, 0, 0),
+                    "BRibbonItemGap", "BRibbonRowGap");
             if (!spanning && items[i].Field is null) item.VerticalAlignment = VerticalAlignment.Stretch;
             grid.Children.Add(item);
         }
@@ -1521,7 +1610,12 @@ public partial class Ribbon : ContentControl
         // web pair MINUS that border: border + padding = 8/4, the same content inset. At 8/4 on top of the border every
         // row was 4px taller than the web's, 12px per three-row group. A toggle gives one more pixel to its pressed
         // outline (below), so it is the same size as its neighbours.
-        button.Padding = pressKey is null ? new Thickness(6, 2) : new Thickness(5, 1);
+        SizedBy(button, PaddingProperty, s =>
+        {
+            var p = s.T("BRibbonCommandPadding");
+            double f = pressKey is null ? 0 : s.D("BBorderWidth");
+            return new Thickness(p.Left - f, p.Top - f, p.Right - f, p.Bottom - f);
+        }, "BRibbonCommandPadding", "BBorderWidth");
         if (pressKey is null) button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
         if (part == MenuPart.MenuOnly) { } // the whole button opens its menu; the command itself has nothing to run
         else if (pressKey is null)
@@ -1553,12 +1647,12 @@ public partial class Ribbon : ContentControl
             return FinishToggle(button, pressKey, item);
         }
 
-        var label = new TextBlock { Text = item.Label, FontSize = 11 };
+        var label = Sized(new TextBlock { Text = item.Label }, TextBlock.FontSizeProperty, "BTextXs");
         // Large split: the main part is the icon, its name sits in the ▾ part under it (b-ribbon's "Paste ▾").
         if (size == RibbonGroupSize.Large && part == MenuPart.SplitMain)
         {
             icon.HorizontalAlignment = HorizontalAlignment.Center;
-            button.Content = new Border { Child = icon, MinWidth = 52 };
+            button.Content = Sized(new Border { Child = icon }, MinWidthProperty, "BRibbonItemMinWidth");
             return button;
         }
 
@@ -1568,7 +1662,7 @@ public partial class Ribbon : ContentControl
             label.HorizontalAlignment = HorizontalAlignment.Center;
             label.TextWrapping = TextWrapping.Wrap;
             label.TextAlignment = TextAlignment.Center;
-            var stacked = new StackPanel { Spacing = 2, MinWidth = 52 };
+            var stacked = Sized(Sized(new StackPanel(), StackPanel.SpacingProperty, "BSpace2xs"), MinWidthProperty, "BRibbonItemMinWidth");
             stacked.Children.Add(icon);
             stacked.Children.Add(part == MenuPart.MenuOnly ? WithCaret(label, button) : label);
             button.Content = stacked;
@@ -1592,9 +1686,9 @@ public partial class Ribbon : ContentControl
         var inline = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 4,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        Sized(inline, StackPanel.SpacingProperty, "BSpaceXs");
         inline.Children.Add(icon);
         inline.Children.Add(label);
         if (part == MenuPart.MenuOnly) inline.Children.Add(Caret(button));
@@ -1661,7 +1755,7 @@ public partial class Ribbon : ContentControl
     /// <summary>The ▾ that marks a menu: smaller and muted, as b-ribbon's <c>.ribbon-caret</c>.</summary>
     private static TextBlock Caret(Control owner)
     {
-        var caret = new TextBlock { Text = "▾", FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
+        var caret = Sized(new TextBlock { Text = "▾", VerticalAlignment = VerticalAlignment.Center }, TextBlock.FontSizeProperty, "BRibbonCaretSize");
         caret.Bind(TextBlock.ForegroundProperty, owner.GetResourceObservable("BTextMutedBrush"));
         global::Avalonia.Automation.AutomationProperties.SetAccessibilityView(caret, global::Avalonia.Automation.AccessibilityView.Raw);
         return caret;
@@ -1669,7 +1763,7 @@ public partial class Ribbon : ContentControl
 
     private static Control WithCaret(Control content, Control owner)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center };
+        var row = Sized(new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center }, StackPanel.SpacingProperty, "BRibbonSplitGap");
         row.Children.Add(content);
         row.Children.Add(Caret(owner));
         return row;
@@ -1699,16 +1793,16 @@ public partial class Ribbon : ContentControl
         {
             Tag = groupKey is null ? null : StopKey.Arrow(groupKey, item.Id),
             Background = Brushes.Transparent,
-            Padding = large ? new Thickness(6, 0, 6, 2) : new Thickness(2, 2),
             VerticalAlignment = VerticalAlignment.Stretch,
         };
+        Sized(arrow, PaddingProperty, large ? "BRibbonSplitArrowPaddingLarge" : "BRibbonSplitArrowPadding");
         arrow.Bind(ForegroundProperty, arrow.GetResourceObservable("BTextBrush"));
         AddFocusRing(arrow);
         Describe(arrow, more);
         AttachTip(arrow, more, null, null);
         if (large)
         {
-            var name = new TextBlock { Text = item.Label, FontSize = 11, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap };
+            var name = Sized(new TextBlock { Text = item.Label, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap }, TextBlock.FontSizeProperty, "BTextXs");
             global::Avalonia.Automation.AutomationProperties.SetAccessibilityView(name, global::Avalonia.Automation.AccessibilityView.Raw);
             arrow.Content = WithCaret(name, arrow);
             arrow.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -1717,7 +1811,7 @@ public partial class Ribbon : ContentControl
         arrow.Flyout = BuildMenu(item, tab, onInvoke);
 
         var divider = new Border { IsHitTestVisible = false, Background = Brushes.Transparent };
-        if (large) divider.Height = 1; else divider.Width = 1;
+        Sized(divider, large ? HeightProperty : WidthProperty, "BBorderWidth");
         var frame = new StackPanel { Orientation = large ? Orientation.Vertical : Orientation.Horizontal };
         if (large) main.HorizontalAlignment = HorizontalAlignment.Stretch;
         frame.Children.Add(main);
@@ -1858,7 +1952,8 @@ public partial class Ribbon : ContentControl
         // never shifts the row (b-ribbon draws it as an inset box-shadow).
         var inner = button.Content as Control;
         button.Content = null; // detached first: a control has one parent
-        button.Content = new Border { BorderThickness = new Thickness(1), Child = inner, CornerRadius = new CornerRadius(3) };
+        button.Content = Sized(SizedBy(new Border { Child = inner }, Border.BorderThicknessProperty, s => new Thickness(s.D("BBorderWidth")), "BBorderWidth"),
+            Border.CornerRadiusProperty, "BRibbonFrameRadius");
         if (!_toggleViews.TryGetValue(key, out var views)) _toggleViews[key] = views = new List<Button>();
         views.Add(button);
         ApplyPressedLook(button, PressedOf(key, item));
@@ -1889,7 +1984,7 @@ public partial class Ribbon : ContentControl
     /// also what lets the ribbon body stop scrolling entirely: there is always something narrower to become.
     /// </remarks>
     /// <summary>Border + padding a <c>FlyoutPresenter</c> adds around its content, measured from the theme.</summary>
-    private const double FlyoutChrome = 26;
+    private const double FlyoutChrome = 26; // size-ok: what the FlyoutPresenter theme adds, measured; never drawn
 
     private Control BuildChunk(RibbonGroup group, bool labelled = true, string? groupKey = null)
     {
@@ -1902,12 +1997,12 @@ public partial class Ribbon : ContentControl
         var label = new TextBlock
         {
             Text = group.Label + " ⌄",
-            FontSize = 11,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
         };
+        Sized(label, TextBlock.FontSizeProperty, "BTextXs");
 
-        var content = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        var content = Sized(new StackPanel { VerticalAlignment = VerticalAlignment.Center }, StackPanel.SpacingProperty, "BSpace2xs");
         content.Children.Add(icon);
         // The extreme: even a row of labelled chunk buttons can be too wide, because a chunk shows
         // its group NAME and a name has a minimum width. Dropping it takes the six-group minimum from
@@ -1923,8 +2018,8 @@ public partial class Ribbon : ContentControl
             // A compact chunk is already at the row's last resort, so it sheds every spare pixel: the
             // wrapper padding and the group separator below go too. Each one is multiplied by the group
             // count, so trimming ~20px per chunk moves the six-group floor by well over 100px.
-            Padding = labelled ? new Thickness(6, 4) : new Thickness(2, 4),
         };
+        Sized(button, PaddingProperty, labelled ? "BRibbonChunkPadding" : "BRibbonChunkPaddingCompact");
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
         button.Bind(TextBlock.FontSizeProperty, button.GetResourceObservable("BRibbonIconSmall"));
         if (labelled) button.Bind(MinWidthProperty, button.GetResourceObservable("BRibbonChunkWidth"));
@@ -1977,7 +2072,7 @@ public partial class Ribbon : ContentControl
         // b-ribbon's folded group is one full-height button.
         button.VerticalAlignment = VerticalAlignment.Stretch;
         button.VerticalContentAlignment = VerticalAlignment.Center;
-        return new Border { Padding = labelled ? new Thickness(8, 4) : new Thickness(1, 4), Child = button };
+        return Sized(new Border { Child = button }, Border.PaddingProperty, labelled ? "BRibbonChunkMargin" : "BRibbonChunkMarginCompact");
     }
 
     /// <summary>A compact folded group's initial: the first letter of its name in a small tile (TASK-751).</summary>
@@ -1990,12 +2085,13 @@ public partial class Ribbon : ContentControl
         var letter = new TextBlock
         {
             Text = initial,
-            FontSize = 11,
             FontWeight = FontWeight.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var tile = new Border { Child = letter, HorizontalAlignment = HorizontalAlignment.Center, Padding = new Thickness(2) };
+        Sized(letter, TextBlock.FontSizeProperty, "BTextXs");
+        var tile = SizedBy(new Border { Child = letter, HorizontalAlignment = HorizontalAlignment.Center },
+            Border.PaddingProperty, s => new Thickness(s.D("BSpace2xs")), "BSpace2xs");
         tile.Bind(Border.BackgroundProperty, tile.GetResourceObservable("BBgTertiaryBrush"));
         tile.Bind(Border.CornerRadiusProperty, tile.GetResourceObservable("BRadiusSm"));
         tile.Bind(MinWidthProperty, tile.GetResourceObservable("BRibbonIconSmall"));

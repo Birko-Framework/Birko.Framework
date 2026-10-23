@@ -259,7 +259,6 @@ public partial class Ribbon
         var text = new TextBlock
         {
             Text = letter,
-            FontSize = 11,
             FontWeight = FontWeight.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
@@ -271,8 +270,9 @@ public partial class Ribbon
             IsHitTestVisible = false,
             HorizontalAlignment = centred ? HorizontalAlignment.Center : HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = centred ? new Thickness(0, 0, 0, -8) : new Thickness(0, 0, -6, -6),
         };
+        Sized(text, TextBlock.FontSizeProperty, "BTextXs", from: owner);
+        Sized(badge, MarginProperty, centred ? "BRibbonKeytipOffsetTab" : "BRibbonKeytipOffset", from: owner);
         badge.Bind(Border.BackgroundProperty, owner.GetResourceObservable("BTooltipBgBrush"));
         badge.Bind(Border.CornerRadiusProperty, owner.GetResourceObservable("BRadiusSm"));
         badge.Bind(MinWidthProperty, owner.GetResourceObservable("BRibbonKeytipSize"));

@@ -112,15 +112,17 @@ public partial class Ribbon
         // The caption is decoration: the box carries the name, as the web's aria-hidden caption.
         global::Avalonia.Automation.AutomationProperties.SetAccessibilityView(text, global::Avalonia.Automation.AccessibilityView.Raw);
         if (caption == RibbonFieldCaption.Above)
-            return new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Children = { text, box } };
+            // Half the web's 2xs gap, as its calc(var(--b-space-2xs) / 2).
+            return SizedBy(new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Children = { text, box } },
+                StackPanel.SpacingProperty, s => s.D("BSpace2xs") / 2, "BSpace2xs");
         var beside = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Margin = new Thickness(0, 0, 4, 0);
+        SizedBy(text, MarginProperty, s => new Thickness(0, 0, s.D("BRibbonFieldCaptionGap"), 0), "BRibbonFieldCaptionGap");
         DockPanel.SetDock(text, Dock.Left);
         DockPanel.SetDock(box, Dock.Right);
         box.HorizontalAlignment = HorizontalAlignment.Right;
         beside.Children.Add(text);
         beside.Children.Add(box);
-        if (narrow) beside.Margin = new Thickness(16, 2, 16, 2);
+        if (narrow) Sized(beside, MarginProperty, "BRibbonNarrowFieldMargin");
         return beside;
     }
 
@@ -172,7 +174,7 @@ public partial class Ribbon
             {
                 if (e.NameScope.Find<TextBox>("PART_TextBox") is not { } inner) return;
                 inner.Bind(MinHeightProperty, inner.GetResourceObservable("BControlMinHeightSm"));
-                inner.Padding = new Thickness(6, 2);
+                Sized(inner, PaddingProperty, "BRibbonFieldBoxPadding");
             };
             auto.TextChanged += (_, _) => { if (!seeding) _fieldDraft[key] = ValueOf(auto.Text ?? ""); };
             bool picked = false;
@@ -197,10 +199,10 @@ public partial class Ribbon
         box.VerticalAlignment = VerticalAlignment.Center;
         // Left in its column, as the web's grid cell: a fixed-width box centred in a wider column wandered.
         box.HorizontalAlignment = HorizontalAlignment.Left;
-        if (box is TemplatedControl small) small.Padding = new Thickness(6, 2); // the web's size="sm" box
+        if (box is TemplatedControl) Sized(box, TemplatedControl.PaddingProperty, "BRibbonFieldBoxPadding"); // the web's size="sm" box
         int chars = System.Math.Clamp(f.Width, 2, 40);
         // Width in characters plus the box's own padding, as the web's calc(chars * 1ch + --b-ribbon-field-padding).
-        box.Bind(WidthProperty, box.GetResourceObservable("BRibbonFieldPadding", v => chars * 7.0 + (v is double pad ? pad : 32)));
+        SizedBy(box, WidthProperty, s => chars * s.D("BRibbonFieldCharWidth") + s.D("BRibbonFieldPadding"), "BRibbonFieldCharWidth", "BRibbonFieldPadding");
         box.Bind(MinHeightProperty, box.GetResourceObservable("BControlMinHeightSm"));
         ((TemplatedControl)box).Bind(TemplatedControl.FontSizeProperty, box.GetResourceObservable("BTextSm"));
         Describe(box, item.Label);
