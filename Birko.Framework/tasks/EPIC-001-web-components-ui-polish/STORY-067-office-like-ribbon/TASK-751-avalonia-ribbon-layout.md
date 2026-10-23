@@ -59,3 +59,12 @@ Groups one height with the divider running the full height; three equal command 
   - 8 fail on the code before. Birko.Xaml.Avalonia.Tests 218/218; the Gallery builds. Checked on headless
     screenshots: light and dark at 1100, 520 and 260px, and the compact initials.
 
+
+## Follow-up from your Gallery check (2026-10-23)
+
+- **Group names cut off at the bottom, fixed.** A TextBlock clips to its own box, and with the name's line box at the
+  font size its baseline falls about 1px under the box's bottom, so everything below the baseline was cut (the tail of
+  Clipboard's "p", the bottoms of round letters). The 3px margin kept for the descenders was there all along; the clip
+  hid them. The name is unclipped now, with no size change. The old test only checked the row's room, which is why it
+  passed while the names were cut; `Group_names_are_not_clipped_by_the_row` now also checks the name's own clip and
+  that the descender's ink stays in the row. Birko.Xaml.Avalonia.Tests 324/324.

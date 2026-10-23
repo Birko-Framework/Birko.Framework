@@ -106,6 +106,18 @@ public class RibbonLayoutTests
         // The text's ink reaches a few pixels below a line box that is exactly the font size; the row clips at its
         // bounds, so the name needs that room inside them.
         (panel.Bounds.Height - name.Bottom).Should().BeGreaterThanOrEqualTo(3, "room for the descenders inside the clip");
+
+        // And the name's own box must not clip them: the room above was there all along while the TextBlock clipped
+        // to its line box, whose bottom is above the baseline, so the "p" of Clipboard lost its tail (the user's Gallery
+        // check, 2026-10-23).
+        var text = panel.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Clipboard" && t.TranslatePoint(default, panel) is { X: > -1000 });
+        text.ClipToBounds.Should().BeFalse("the descenders draw below the name's line box");
+        var face = new global::Avalonia.Media.Typeface(text.FontFamily, text.FontStyle, text.FontWeight, text.FontStretch);
+        var formatted = new global::Avalonia.Media.FormattedText(text.Text!, System.Globalization.CultureInfo.CurrentUICulture,
+            global::Avalonia.Media.FlowDirection.LeftToRight, face, text.FontSize, global::Avalonia.Media.Brushes.Black);
+        double inkBottom = text.TranslatePoint(default, panel)!.Value.Y + text.TextLayout.TextLines[0].Baseline
+            + (formatted.BuildGeometry(default)!.Bounds.Bottom - formatted.Baseline);
+        inkBottom.Should().BeLessThanOrEqualTo(panel.Bounds.Height + 0.5, "the descender's ink stays inside the row's clip");
     }
 
     [AvaloniaTheory]

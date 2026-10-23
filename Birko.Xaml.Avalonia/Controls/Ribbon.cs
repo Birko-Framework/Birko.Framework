@@ -1470,6 +1470,11 @@ public partial class Ribbon : ContentControl
         {
             Text = group.Label,
             HorizontalAlignment = HorizontalAlignment.Center,
+            // A TextBlock clips to its box, and with the line box at the font size (below) the baseline falls ~1px under
+            // the box's bottom, so everything under the baseline was cut: the tail of Clipboard's "p" and the round
+            // letters' bottoms (seen by the user in the Gallery, 2026-10-23). Unclipped, the descenders draw into the
+            // 3px bottom margin kept for them.
+            ClipToBounds = false,
         };
         Sized(label, TextBlock.FontSizeProperty, "BTextXs");
         // b-ribbon's .ribbon-group-label is line-height: 1; the default line box added ~4px per group.
