@@ -7,9 +7,60 @@ the layer, and its opening request was never recorded verbatim. Its history live
 [CHANGELOG.md](../CHANGELOG.md), the decisions under [docs/features/](features/) and [docs/adr/](adr/), and the commit
 log.
 
+## Recovered from session history
+
+Backfilled 2026-10-21 from stored Claude Code sessions, which reach back only to 2026-09-20; earlier sessions are no
+longer stored, so this is partial.
+
+### 2026-09-30 — became TASK-508 (EPIC-018 / FEATURE-018)
+
+> [pasted: a framework task brief, "Framework task: add a multipart upload method to Birko.Web.Core's ApiClient." —
+> `postForm<T>(path, form, opts?)` with a per-call timeout, not queueable, sharing the 401 refresh; written for Symbio
+> TASK-839's photo upload]
+
+### 2026-09-30 — became TASK-509
+
+> i was thinking if birko.models shoudl not be outside the frammework
+
+> file is as a task for now
+
+### 2026-10-13 — became EPIC-020 (Birko.Security.Grants)
+
+> a qurstion to decide some of my projects like  reps,  presntation maybe other will  hang up on some login gating and acces so som part would not be  avaliabele for public (createm update delete operations etc) shoudl i buidl myself my oauth server for thise things?
+
+> that why it was a question   ok whith for example an external login how can igrand access who is admin who is some partial owner?
+
+> create a task for Birko.Security.Grants
+
+### 2026-10-14 — became TASK-592 (EPIC-001 / FEATURE-001)
+
+> 1-3 wor a question can the icons be easily changed?
+
+> file a task for option 1, the icon slot
+
+### 2026-10-16 — became TASK-652 (EPIC-015)
+
+> [pasted: "Add a HideNullMembers option to Birko.Xaml.Avalonia's ObjectTree" — a `StyledProperty<bool>`, default
+> false, that skips null named members (properties, dictionary and JsonObject entries) but never array items; written
+> for DesktopFinstatApiTester]
+
+### 2026-10-19 — became EPIC-021 (entity localization for catalogues)
+
+Asked in a Symbio session (its STORY-081: English catalogue and per-language slugs for the first storefront).
+
+> woudl liek to do it the framework way also add the methods we need to work with translations efectively
+
+> yes, file it like that
+
 ## Amendments
 
 <!-- Append-only. Each requirement-changing request made after adoption, verbatim, dated, naming the feature it became. -->
+
+<!-- Backfilled 2026-10-21 from stored Claude Code session history. -->
+
+### 2026-10-20 — became EPIC-022
+
+> firsly  WorkoutTracker. Its 20 string HasPrecision  did you checked other projects like symbio or dracode if thy are safe? secondly we added some  improvement to localization for sql providers how about other porviders?
 
 ### 2026-10-22 — became FEATURE-019 (Office-like `b-ribbon`)
 
