@@ -19,10 +19,19 @@ namespace Birko.Models.SQL.Mapping
             _maps[typeof(T)] = map;
         }
 
+        /// <summary>
+        /// Registers every non-abstract <see cref="IModelMapping{T}"/> implementation in <paramref name="assembly"/>.
+        /// </summary>
+        /// <remarks>
+        /// <b>Open generic mappings are skipped</b> (TASK-766): a type such as <c>EntityTranslationMapping&lt;TTranslation&gt;</c>
+        /// has no model type until it is closed, and cannot be instantiated. Register it closed, through
+        /// <see cref="Register{T}(IModelMapping{T})"/> or the owning project's helper (for the translation table,
+        /// <c>LocalizationSqlMappings.Register&lt;TTranslation&gt;(registry, table)</c>).
+        /// </remarks>
         public void RegisterFromAssembly(Assembly assembly)
         {
             var mappingTypes = assembly.GetTypes()
-                .Where(t => !t.IsAbstract && !t.IsInterface)
+                .Where(t => !t.IsAbstract && !t.IsInterface && !t.ContainsGenericParameters)
                 .SelectMany(t => t.GetInterfaces()
                     .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IModelMapping<>))
                     .Select(i => new { MappingType = t, ModelType = i.GetGenericArguments()[0], Interface = i }));

@@ -66,6 +66,7 @@ var registry = new ModelMapRegistry();
 
 // Register from assembly (scans for IModelMapping<T> implementations)
 registry.RegisterFromAssembly(typeof(Program).Assembly);
+// Open generic mappings (e.g. EntityTranslationMapping<TTranslation>) are skipped: register them closed
 
 // Or register individually
 registry.Register(new CustomerMapping());

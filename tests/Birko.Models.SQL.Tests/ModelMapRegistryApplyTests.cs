@@ -90,4 +90,40 @@ public class ModelMapRegistryApplyTests
         map!.TableName.Should().Be("test_widgets");
         map.Properties.Should().Contain(p => p.Name == "Code");
     }
+
+    // TASK-766: an open generic mapping, as EntityTranslationMapping<TTranslation> is. It sits in this assembly beside
+    // WidgetMap, so every RegisterFromAssembly scan of it meets one.
+    private sealed class OpenMap<T> : IModelMapping<T> where T : class
+    {
+        public void Configure(ModelMap<T> map) => map.ToTable("test_open_" + typeof(T).Name);
+    }
+
+    public class Gadget
+    {
+        [PrimaryField, NamedField]
+        public Guid? Guid { get; set; }
+    }
+
+    [Fact]
+    public void RegisterFromAssembly_skips_an_open_generic_mapping_and_registers_the_closed_one()
+    {
+        var registry = new ModelMapRegistry();
+
+        registry.Invoking(r => r.RegisterFromAssembly(typeof(OpenMap<>).Assembly)).Should().NotThrow();
+
+        registry.HasMap<Widget>().Should().BeTrue("the closed mapping beside the open one is still registered");
+        registry.HasMap(typeof(OpenMap<>).GetGenericArguments()[0]).Should().BeFalse("an open mapping has no model type");
+        registry.HasMap<Gadget>().Should().BeFalse("nothing closed OpenMap<> over Gadget");
+    }
+
+    [Fact]
+    public void An_open_generic_mapping_registers_once_closed()
+    {
+        var registry = new ModelMapRegistry();
+        registry.RegisterFromAssembly(typeof(OpenMap<>).Assembly);
+
+        registry.Register(new OpenMap<Gadget>());
+
+        registry.GetMap<Gadget>()!.TableName.Should().Be("test_open_Gadget");
+    }
 }

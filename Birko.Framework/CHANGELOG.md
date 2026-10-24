@@ -4,6 +4,14 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-20 — Broad matches on translated fields run in chunks
+
+[[TASK-686]]. A filter on a translated field matching more than 500 entities in its translation sets runs as several
+queries over at most 500 GUIDs each. It used to be one `IN` / `NOT IN` list, refused by SQL Server past about 2 100
+parameters. Reads concatenate, counts sum, ordered pages sort in memory, and updates and deletes cover every chunk. A
+plain `IStore` inner store keeps one query up to 2 000 GUIDs and refuses beyond. Measured with a 2 200-entity match on
+all four providers. **Breaking:** the wrappers' `RewriteFilter` is no longer visible to subclasses.
+
 ## 2026-10-20 — MySQL holds the translation key
 
 [[TASK-684]]. `EntityTranslationMapping` bounds `EntityType` and `FieldName` to 128 and `Culture` to 85, through the

@@ -55,7 +55,7 @@ public class StockItemMapping : IModelMapping<StockItem>
 
 // 2. Register and use
 var registry = new ModelMapRegistry();
-registry.RegisterFromAssembly(typeof(Program).Assembly);   // picks up every IModelMapping<T> in the consumer DLL
+registry.RegisterFromAssembly(typeof(Program).Assembly);   // picks up every IModelMapping<T> in the consumer DLL; open generics are skipped (TASK-766)
 var map = registry.GetMap<StockItem>();
 
 // 3. Apply to database (registers table names + field metadata)
