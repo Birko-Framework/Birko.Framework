@@ -103,7 +103,14 @@ store = new AsyncLocalizedStoreWrapper<...>(store, translationStore, locContext)
 Each wrapper has a three-parameter form taking the translation model: `AsyncLocalizedBulkStoreWrapper<TStore, T, TTranslation>`
 with `TTranslation : AbstractModel, IEntityTranslation` (its members public properties, not an explicit implementation — checked when the wrapper is built). A tenant-aware consumer implements `IEntityTranslation` on
 a model deriving from its tenant base, so its tenant filter, soft delete and purge apply to translations too. The
-two-parameter names are the same wrappers with `EntityTranslationModel`. For SQL, map the table and its unique key with
+two-parameter names are the same wrappers with `EntityTranslationModel`.
+
+**Which base model.** A translation model derives from `AbstractModel` or from anything built on it. A log model
+(`AbstractLogModel`, or SQL's `AbstractDatabaseLogModel`) works as it is: its `DateTime UpdatedAt` implements the
+interface's, so the model declares only `EntityGuid`, `EntityType`, `FieldName`, `Culture`, `Value` and `ValueHash`.
+`UpdatedAt` is `DateTime`, not `DateTime?` (TASK-767): a base model whose `UpdatedAt` is `DateTime?` cannot implement it,
+and hiding it with `new` is refused when the wrapper is built (the name becomes ambiguous). The wrappers stamp it on
+every write. For SQL, map the table and its unique key with
 [Birko.Data.Localization.SQL](../Birko.Data.Localization.SQL/README.md).
 
 When a store enforces the key, two writers saving one `(entity, type, field, culture)` at once leave one row: the second

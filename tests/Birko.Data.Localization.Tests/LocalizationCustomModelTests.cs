@@ -32,7 +32,7 @@ public class LocalizationCustomModelTests
         public string FieldName { get; set; } = string.Empty;
         public string Culture { get; set; } = string.Empty;
         public string Value { get; set; } = string.Empty;
-        public DateTime? UpdatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
         public string ValueHash { get; set; } = string.Empty;
     }
 
@@ -86,7 +86,7 @@ public class LocalizationCustomModelTests
         string IEntityTranslation.FieldName { get; set; } = string.Empty;
         string IEntityTranslation.Culture { get => Lang; set => Lang = value; }
         string IEntityTranslation.Value { get; set; } = string.Empty;
-        DateTime? IEntityTranslation.UpdatedAt { get; set; }
+        DateTime IEntityTranslation.UpdatedAt { get; set; }
         string IEntityTranslation.ValueHash { get; set; } = string.Empty;
     }
 

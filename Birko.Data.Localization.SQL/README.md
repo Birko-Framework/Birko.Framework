@@ -36,7 +36,9 @@ public sealed class ProductTranslation : TenantEntity, IEntityTranslation
     public string FieldName { get; set; } = string.Empty;
     public string Culture { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
-    public DateTime? UpdatedAt { get; set; }
+    public string ValueHash { get; set; } = string.Empty;
+    // UpdatedAt comes from the log model under TenantEntity: DateTime, as the interface declares (TASK-767).
+    // A base on a bare AbstractModel declares `public DateTime UpdatedAt { get; set; }` itself.
 }
 ```
 
@@ -83,6 +85,14 @@ To narrow them, for your table name:
      `ALTER TABLE [<table>] ALTER COLUMN EntityType NVARCHAR(128) NOT NULL`, and the same for `FieldName` (128) and
      `Culture` (85).
 3. The next schema-ensure creates the key, or recreates it.
+
+**A table created before TASK-767** keeps `UpdatedAt` nullable; the model now declares it `DateTime`, so the column is
+declared `NOT NULL`.
+- `DetectDrift` reports `UpdatedAt` as a nullability mismatch (measured on MySQL).
+- **A row whose `UpdatedAt` is NULL fails every read that includes it** (measured on MySQL: `InvalidCastException`,
+  `DBNull` to `DateTime`). The wrappers always stamp it, so only rows written around them can be NULL. Fill them:
+  `UPDATE <table> SET UpdatedAt = CURRENT_TIMESTAMP WHERE UpdatedAt IS NULL`. Making the column `NOT NULL` as well clears
+  the drift.
 
 ## Running tests
 

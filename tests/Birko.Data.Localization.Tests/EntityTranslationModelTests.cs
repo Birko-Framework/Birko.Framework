@@ -61,6 +61,6 @@ public class EntityTranslationModelTests
         model.FieldName.Should().BeEmpty();
         model.Culture.Should().BeEmpty();
         model.Value.Should().BeEmpty();
-        model.UpdatedAt.Should().BeNull();
+        model.UpdatedAt.Should().Be(default);
     }
 }

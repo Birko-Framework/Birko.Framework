@@ -303,8 +303,10 @@ store = new AsyncLocalizedStoreWrapper<...>(store, translationStore, locContext)
 ### 5. Your own translation model, and SQL
 
 The wrappers take any model implementing `IEntityTranslation` (`EntityGuid`, `EntityType`, `FieldName`, `Culture`,
-`Value`, `UpdatedAt`) — for instance one deriving from your tenant base, so tenant filtering and purge apply to
-translations too. `EntityTranslationModel` is the default, used by the two-parameter wrapper names.
+`Value`, `UpdatedAt`, `ValueHash`) — for instance one deriving from your tenant base, so tenant filtering and purge
+apply to translations too. `EntityTranslationModel` is the default, used by the two-parameter wrapper names. The model
+derives from `AbstractModel` or anything built on it, including a log model (`AbstractLogModel`,
+`AbstractDatabaseLogModel`), whose `DateTime UpdatedAt` implements the interface's (TASK-767).
 
 ```csharp
 public sealed class ProductTranslation : TenantEntity, IEntityTranslation { /* the six properties */ }
@@ -354,7 +356,7 @@ are bounded (128, 128 and 85 characters), so it fits on all four providers, MySQ
 | FieldName | string | Property name (e.g., "Name") |
 | Culture | string | Culture code (e.g., "sk") |
 | Value | string | Translated value |
-| UpdatedAt | DateTime? | Last modification |
+| UpdatedAt | DateTime | When the wrappers last wrote it (`DateTime` since TASK-767) |
 
 ### EntityTranslationFilter
 

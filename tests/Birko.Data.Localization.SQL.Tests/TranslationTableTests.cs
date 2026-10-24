@@ -34,7 +34,7 @@ public sealed class TenantTranslation : TenantBase, IEntityTranslation
     public string FieldName { get; set; } = string.Empty;
     public string Culture { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
-    public DateTime? UpdatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public string ValueHash { get; set; } = string.Empty;
 }
 
@@ -46,7 +46,7 @@ public sealed class LegacyTranslation : AbstractModel, IEntityTranslation
     public string FieldName { get; set; } = string.Empty;
     public string Culture { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
-    public DateTime? UpdatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public string ValueHash { get; set; } = string.Empty;
 }
 
@@ -58,9 +58,23 @@ public sealed class SoftTranslation : AbstractModel, IEntityTranslation, Birko.D
     public string FieldName { get; set; } = string.Empty;
     public string Culture { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
-    public DateTime? UpdatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public string ValueHash { get; set; } = string.Empty;
     public DateTime? DeletedAt { get; set; }
+}
+
+/// <summary>
+/// TASK-767: a translation model on the SQL log model, as a consumer's entity hierarchy is (Symbio's TenantEntity). Its
+/// <c>UpdatedAt</c> is the log model's <c>DateTime</c>; it declares only the members the log model does not have.
+/// </summary>
+public sealed class LogTranslation : AbstractDatabaseLogModel, IEntityTranslation
+{
+    public Guid EntityGuid { get; set; }
+    public string EntityType { get; set; } = string.Empty;
+    public string FieldName { get; set; } = string.Empty;
+    public string Culture { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public string ValueHash { get; set; } = string.Empty;
 }
 
 public sealed class Product : AbstractModel, ILocalizable
@@ -75,6 +89,7 @@ public static class TestModels
     public const string LegacyTable = "BirkoTestLegacyTranslations";
     public const string TenantTable = "BirkoTestTenantTranslations";
     public const string SoftTable = "BirkoTestSoftTranslations";
+    public const string LogTable = "BirkoTestLogTranslations";
     public const string ProductTable = "BirkoTestLocalizedProducts";
 }
 
@@ -554,6 +569,34 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
         (await translations.CountAsync(t => t.EntityGuid == translated || t.EntityGuid == other)).Should().Be(0);
     }
 
+    /// <summary>
+    /// TASK-767: a translation model deriving from the SQL log model (<c>DateTime UpdatedAt</c>) passes the model check
+    /// and serves the explicit api end to end. Before, it could not implement the interface's <c>DateTime?</c>.
+    /// </summary>
+    [Fact]
+    public async Task TASK767_a_translation_model_on_a_log_model_sets_reads_and_removes_translations()
+    {
+        if (!RequireServer()) return;
+        LocalizedTranslationRows.RequireQueryableModel<LogTranslation>();
+        var context = new Context { CurrentCulture = new CultureInfo("en"), DefaultCulture = new CultureInfo("en") };
+        var products = Store<SqlProduct>();
+        var translations = Store<LogTranslation>();
+        var run = Guid.NewGuid().ToString("N")[..8];
+        var product = await products.CreateAsync(new SqlProduct { Name = $"chair-{run}", Code = run });
+        var api = new EntityTranslations<SqlProduct, LogTranslation>(products, translations, context);
+        var sk = new CultureInfo("sk");
+
+        await api.SetAsync(product, sk, new Dictionary<string, string?> { ["Name"] = $"stolicka-{run}" });
+
+        (await api.GetAsync(new[] { product }, sk))[product]["Name"].Should().Be($"stolicka-{run}");
+        var row = (await translations.ReadAsync(t => t.EntityGuid == product, null, null, null)).Single();
+        row.Value.Should().Be($"stolicka-{run}");
+        row.UpdatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(5), "the writers stamp it");
+
+        await api.RemoveEntitiesAsync(new[] { product });
+        (await translations.CountAsync(t => t.EntityGuid == product)).Should().Be(0);
+    }
+
     [Fact]
     public async Task The_explicit_api_finds_with_fallback_and_checks_uniqueness_on_the_provider()
     {
@@ -943,8 +986,12 @@ public abstract class TranslationTableTests<DB> : IDisposable where DB : Abstrac
                 (Birko.Data.SQL.SchemaDrift.ColumnDriftKind.TypeMismatch, "entitytype"),
                 (Birko.Data.SQL.SchemaDrift.ColumnDriftKind.TypeMismatch, "fieldname"),
                 (Birko.Data.SQL.SchemaDrift.ColumnDriftKind.TypeMismatch, "culture"),
-            }, "only the bounded key columns differ from TASK-680's shape");
+                // TASK-767: UpdatedAt became DateTime (decided by the user), so the column is now declared NOT NULL; a
+                // table created before keeps it nullable, and that is reported too.
+                (Birko.Data.SQL.SchemaDrift.ColumnDriftKind.NullabilityMismatch, "updatedat"),
+            }, "only the bounded key columns and UpdatedAt's nullability differ from TASK-680's shape");
         (await ColumnLengthsAsync(connector, TestModels.LegacyTable))["culture"].Should().Be(255, "schema-ensure never alters a column");
+
     }
 
     /// <summary>
@@ -1373,6 +1420,7 @@ internal static class TranslationMappings
             LocalizationSqlMappings.Register<TenantTranslation>(registry, TestModels.TenantTable);
             LocalizationSqlMappings.Register<LegacyTranslation>(registry, TestModels.LegacyTable);
             LocalizationSqlMappings.Register<SoftTranslation>(registry, TestModels.SoftTable);
+            LocalizationSqlMappings.Register<LogTranslation>(registry, TestModels.LogTable);
             registry.Register(new SqlProductMapping());
             registry.ApplyToDatabase();
             _applied = true;

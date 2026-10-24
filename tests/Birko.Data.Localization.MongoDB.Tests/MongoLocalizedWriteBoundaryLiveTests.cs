@@ -42,7 +42,7 @@ public sealed class SyncMongoTranslation : MongoDBModel, IEntityTranslation
     public string FieldName { get; set; } = string.Empty;
     public string Culture { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
-    public DateTime? UpdatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public string ValueHash { get; set; } = string.Empty;
 }
 

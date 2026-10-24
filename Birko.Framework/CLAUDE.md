@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A translation model can derive from a log model (2026-10-24)
+[[TASK-767]]. `IEntityTranslation.UpdatedAt` is now `DateTime`, as on `AbstractLogModel` (decided by the user), so a
+model on a log model implements it by inheritance (Symbio's `TenantEntity`). **Breaking:** `EntityTranslationModel` and
+your own models declare `DateTime`. An older SQL table reports `UpdatedAt` nullability drift, and a NULL there fails the
+read (measured on MySQL); fill it with an `UPDATE` (README). Measured on all four SQL providers.
 ### RegisterFromAssembly skips open generic mappings (2026-10-24)
 [[TASK-766]]. `ModelMapRegistry.RegisterFromAssembly` threw on any assembly holding `EntityTranslationMapping<TTranslation>`:
 it instantiated every `IModelMapping<>` type, and an open generic cannot be. A consumer compiling
@@ -364,13 +369,6 @@ have the two columns altered first (README).
 uniqueness. Before, a second call replaced the first silently, and `HasUniqueIndex` made a later index on the column
 UNIQUE. One index twice on a column is refused. New `FieldDescriptor.Indexes`; `IndexName` and the rest read the first.
 Split from [[TASK-693]], which needs `ResourceType` in two Grants.SQL indexes.
-### A unique refusal inside a caller's transaction stays typed (2026-10-20)
-[[TASK-685]]. Inside a `SqlUnitOfWork` on PostgreSQL, a slug or default decorator's refused write threw the raw
-`25P02` error: the refusal aborts the transaction, so the re-check failed. The re-check now runs through
-`StoreException.ProbeAfterRefusal(Async)`, and the caller gets `StoreUniqueViolationException` naming the failure.
-Measured live: SQL Server retries in place; MySQL's snapshot hides the other commit, so the refusal stands. Savepoints
-that would let PostgreSQL retry are [[TASK-694]]. Sync decorators that swallowed a failed re-check now surface it the
-same way.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

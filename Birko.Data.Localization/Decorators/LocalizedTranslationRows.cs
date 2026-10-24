@@ -543,7 +543,7 @@ internal static class LocalizedTranslationRows
                 retry.Creates.Add(row);
                 continue;
             }
-            retry.Update(held, row.Value, row.UpdatedAt ?? DateTime.UtcNow);
+            retry.Update(held, row.Value, row.UpdatedAt);
         }
         return retry.UpdateCount == 0 ? null : retry;
     }

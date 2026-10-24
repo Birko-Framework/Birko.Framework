@@ -25,7 +25,7 @@ public class EntityTranslationModel : AbstractModel, IEntityTranslation
     public string Value { get; set; } = string.Empty;
 
     /// <summary>When the translation was last updated.</summary>
-    public DateTime? UpdatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 
     /// <summary>
     /// Computed from <see cref="Value"/> (TASK-681): always correct, however the row was written. The setter exists for

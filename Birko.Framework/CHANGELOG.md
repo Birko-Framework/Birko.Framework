@@ -12,6 +12,15 @@ parameters. Reads concatenate, counts sum, ordered pages sort in memory, and upd
 plain `IStore` inner store keeps one query up to 2 000 GUIDs and refuses beyond. Measured with a 2 200-entity match on
 all four providers. **Breaking:** the wrappers' `RewriteFilter` is no longer visible to subclasses.
 
+## 2026-10-20 — A unique refusal inside a caller's transaction stays typed
+
+[[TASK-685]]. Inside a `SqlUnitOfWork` on PostgreSQL, a slug or default decorator's refused write threw the raw
+`25P02` error: the refusal aborts the transaction, so the re-check failed. The re-check now runs through
+`StoreException.ProbeAfterRefusal(Async)`, and the caller gets `StoreUniqueViolationException` naming the failure.
+Measured live: SQL Server retries in place; MySQL's snapshot hides the other commit, so the refusal stands. Savepoints
+that would let PostgreSQL retry are [[TASK-694]]. Sync decorators that swallowed a failed re-check now surface it the
+same way.
+
 ## 2026-10-20 — MySQL holds the translation key
 
 [[TASK-684]]. `EntityTranslationMapping` bounds `EntityType` and `FieldName` to 128 and `Culture` to 85, through the

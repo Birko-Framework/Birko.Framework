@@ -10,7 +10,7 @@ Entity-level localization for Birko.Data stores. Provides transparent translatio
 
 ### Models (`Models/`)
 - **ILocalizable** — Interface for entities with translatable fields. Returns `IReadOnlyList<string>` of property names.
-- **IEntityTranslation** — The translation row contract the wrappers are generic over (`TTranslation : AbstractModel, IEntityTranslation`, TASK-680); a consumer's own model (e.g. a tenant entity) implements it, with the members as public properties (checked at construction). Rows are created through the store's `CreateInstance()`.
+- **IEntityTranslation** — The translation row contract the wrappers are generic over (`TTranslation : AbstractModel, IEntityTranslation`, TASK-680); a consumer's own model (e.g. a tenant entity) implements it, with the members as public properties (checked at construction). `UpdatedAt` is `DateTime` (TASK-767), so a model on a log model (`AbstractLogModel` / `AbstractDatabaseLogModel`) implements it by inheritance. Rows are created through the store's `CreateInstance()`.
 - **EntityTranslationModel** — The default `IEntityTranslation`, persisted translation entity: `EntityGuid`, `EntityType`, `FieldName`, `Culture`, `Value`, `UpdatedAt`. Extends `AbstractModel`.
 - **IEntityLocalizationContext** — Provides `CurrentCulture` and `DefaultCulture` for determining which language to read/write.
 

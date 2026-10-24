@@ -25,7 +25,11 @@ public interface IEntityTranslation
 
     string Value { get; set; }
 
-    DateTime? UpdatedAt { get; set; }
+    /// <summary>
+    /// When the wrappers last wrote the row; they stamp it on every create and update. <c>DateTime</c>, as on
+    /// <c>AbstractLogModel</c> and <c>ITimestamped</c>, so a translation model can derive from a log model (TASK-767).
+    /// </summary>
+    DateTime UpdatedAt { get; set; }
 
     /// <summary>
     /// <see cref="LocalizedValueHash.Of"/> of <see cref="Value"/> — what an exact-value lookup selects rows by (TASK-681).
