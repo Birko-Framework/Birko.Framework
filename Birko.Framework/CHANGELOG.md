@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-20 — Grants.SQL's lookup indexes are buildable on MySQL and SQL Server
+
+[[TASK-693]]. `GrantSqlIndexes.EnsureAsync` threw on both: the indexed `ResourceType` and `Email` were `LONGTEXT` /
+`NVARCHAR(MAX)`, which neither can index. The mappings now declare the three indexes, so schema-ensure creates them and
+bounds those columns at 255. Measured live on PostgreSQL, MySQL and SQL Server. An older MySQL or SQL Server table must
+have the two columns altered first (README).
+
 ## 2026-10-20 — A fluent column can belong to several indexes
 
 [[TASK-695]]. Call `HasIndex` / `HasUniqueIndex` once per index, and a column joins each with its own order and

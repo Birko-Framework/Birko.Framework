@@ -74,4 +74,106 @@
     </Style>
   </ControlTheme>
 
+  <!-- ── Expander — the Birko look for the built-in expandable section (web b-accordion; FEATURE-020 / TASK-775) ──
+       A bordered surface; the header is a full-width row with a chevron that turns when open, the panel sits under a
+       divider. The behaviour is Avalonia's own: IsExpanded, all four ExpandDirections, keyboard on the header. -->
+  <ControlTheme x:Key="BExpanderHeader" TargetType="ToggleButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="PART_Root"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                Padding="{TemplateBinding Padding}">
+          <Grid ColumnDefinitions="Auto,*" VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+            <Path x:Name="PART_Chevron" Width="12" Height="12" Stretch="None" VerticalAlignment="Center"
+                  Data="M 4,2 L 8,6 L 4,10" StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                  Stroke="{DynamicResource BTextMutedBrush}" RenderTransformOrigin="50%,50%" />
+            <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1" Margin="8,0,0,0"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              Foreground="{TemplateBinding Foreground}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="Center" />
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{DynamicResource BBgSecondaryBrush}" />
+    </Style>
+    <Style Selector="^:checked /template/ Path#PART_Chevron">
+      <Setter Property="RenderTransform" Value="rotate(90deg)" />
+    </Style>
+    <Style Selector="^:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource BBorderFocusBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource BTextMutedBrush}" />
+      <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type Expander}" TargetType="Expander">
+    <Setter Property="Background" Value="{DynamicResource BBgBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadius}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                ClipToBounds="True">
+          <DockPanel>
+            <ToggleButton x:Name="ExpanderHeader" DockPanel.Dock="Top"
+                          Theme="{StaticResource BExpanderHeader}"
+                          Content="{TemplateBinding Header}"
+                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                          IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
+                          IsEnabled="{TemplateBinding IsEnabled}" />
+            <Border x:Name="PART_Panel" BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,1,0,0"
+                    IsVisible="{TemplateBinding IsExpanded}">
+              <ContentPresenter x:Name="PART_ContentPresenter"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                Padding="{TemplateBinding Padding}"
+                                Foreground="{TemplateBinding Foreground}"
+                                HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+            </Border>
+          </DockPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <!-- The other three directions move the header to the far side, and the divider with it. -->
+    <Style Selector="^:up /template/ ToggleButton#ExpanderHeader"><Setter Property="DockPanel.Dock" Value="Bottom" /></Style>
+    <Style Selector="^:up /template/ Border#PART_Panel"><Setter Property="BorderThickness" Value="0,0,0,1" /></Style>
+    <Style Selector="^:left /template/ ToggleButton#ExpanderHeader"><Setter Property="DockPanel.Dock" Value="Right" /></Style>
+    <Style Selector="^:left /template/ Border#PART_Panel"><Setter Property="BorderThickness" Value="0,0,1,0" /></Style>
+    <Style Selector="^:right /template/ ToggleButton#ExpanderHeader"><Setter Property="DockPanel.Dock" Value="Left" /></Style>
+    <Style Selector="^:right /template/ Border#PART_Panel"><Setter Property="BorderThickness" Value="1,0,0,0" /></Style>
+  </ControlTheme>
+
 </ResourceDictionary>

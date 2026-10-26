@@ -25,7 +25,7 @@ Decisions: [FEATURE-020](../../../docs/features/FEATURE-020-xaml-diff-and-parity
 4. [TASK-772](TASK-772-xaml-json-diff-viewer-tree.md) — diff viewer control, tree view (D6, D12) — **built, awaiting verification**
 5. [TASK-773](TASK-773-xaml-json-diff-viewer-side-by-side.md) — diff viewer, side-by-side view (D7, D12) — **built, awaiting verification**
 6. [TASK-774](TASK-774-xaml-tag-input.md) — tag input control (D8, D12) — **built, awaiting verification**
-7. [TASK-775](TASK-775-xaml-expander-theme.md) — Birko Expander theme (D10, D12)
+7. [TASK-775](TASK-775-xaml-expander-theme.md) — Birko Expander theme (D10, D12) — **built, awaiting verification**
 
 TASK-774 and TASK-775 depend on nothing and can run in any order. TASK-768 (the `PasswordChar` defect) came from the same
 request but is not part of this story.

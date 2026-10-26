@@ -48,6 +48,19 @@ themes.SetTheme("neon");                             // false if neon wasn't shi
 restart. `Available` is **detected** from the dictionaries you actually merged, so the switcher never
 offers a theme whose tokens are missing; pass `available:` to the constructor to override.
 
+## Expander (the accordion look)
+
+Avalonia's own `Expander` takes the Birko look of `b-accordion` (FEATURE-020): a bordered surface, a full-width header
+row whose chevron turns when open, the panel under a divider. Nothing to opt into — it is the `Expander` theme once the
+Birko theme is merged. All four `ExpandDirection`s work (the header moves to the far side). A group where opening one
+section closes the others is not part of it (deferred, FEATURE-020 D11).
+
+```xml
+<Expander Header="Production — 31 differences" IsExpanded="True">
+  <TextBlock Text="Items[2].Revenue: 1000 → 1007" />
+</Expander>
+```
+
 ## Tag input
 
 `Controls.TagInput` (FEATURE-020, the port of `b-tag-input`) is a list of short values typed as removable chips — what

@@ -296,7 +296,7 @@ Both engines run one set of shared vectors (`Birko.Web.Core/src/diff/diff-vector
 [[TASK-769]]); all 39 JSON cases pass on both. New `diff-parity.yml` runs the C# side in CI.
 `XmlTree.ToTree` / `ToLines` read XML as the web does ([[TASK-771]], 37 cases). Birko.Xaml.Avalonia's new `JsonDiffViewer`
 shows the result as `b-json-diff`'s tree or side by side ([[TASK-772]], [[TASK-773]]); new `TagInput` ports `b-tag-input`, and the
-Form's Tags field uses it, so a duplicate tag is refused ([[TASK-774]]). All three await visual sign-off.
+Form's Tags field uses it, so a duplicate tag is refused ([[TASK-774]]). `Expander` takes `b-accordion`'s look ([[TASK-775]]). All await sign-off.
 ### A translation model can derive from a log model (2026-10-24)
 [[TASK-767]]. `IEntityTranslation.UpdatedAt` is now `DateTime`, as on `AbstractLogModel` (decided by the user), so a
 model on a log model implements it by inheritance (Symbio's `TenantEntity`). **Breaking:** `EntityTranslationModel` and
@@ -367,11 +367,6 @@ a write's cost inside a transaction.
 and `ApplyToDatabase` throws on a string `HasPrecision`. The framework's 74 such calls were converted, so those columns get
 their declared length; existing tables report drift until altered. WorkoutTracker converted; FisData.Stock skipped (decided
 by the user). Measured on MySQL.
-### Grants.SQL's lookup indexes are buildable on MySQL and SQL Server (2026-10-20)
-[[TASK-693]]. `GrantSqlIndexes.EnsureAsync` threw on both: the indexed `ResourceType` and `Email` were `LONGTEXT` /
-`NVARCHAR(MAX)`, which neither can index. The mappings now declare the three indexes, so schema-ensure creates them and
-bounds those columns at 255. Measured live on PostgreSQL, MySQL and SQL Server. An older MySQL or SQL Server table must
-have the two columns altered first (README).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
