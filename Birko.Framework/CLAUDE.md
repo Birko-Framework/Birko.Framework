@@ -330,47 +330,6 @@ everywhere: nothing refuses it, and a chunk query costs 4–181 ms of operations
 [[TASK-703]]. Every filter on a translated field threw `NotSupportedException` on ElasticSearch: the localized wrappers
 render `x.Guid != null && guids.Contains(x.Guid.Value)`, and the translator refused the nullable `.Value`. It now reads
 `x.Nullable.Value` on the entity's own member as that member's field. Measured live; found by [[TASK-701]].
-### RavenDB: localized writes in one session, and stores join a unit of work (2026-10-20)
-[[TASK-700]]. New `RavenLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.RavenDB):
-on one database, both stores write into one cluster-wide session, so a failed translation write discards the entity
-write. A `RavenDbUnitOfWork` now publishes its session; an async store on its database in the same flow joins it. A
-race surfaces at save and is re-run once. Measured on RavenDB 7.2. Cosmos DB stays best effort: a batch holds one
-container's partition.
-### RavenDB: updates inside a unit of work work on cluster-written documents (2026-10-20)
-[[TASK-702]]. An update inside a `RavenDbUnitOfWork` of a document a unit of work had written failed at commit with
-`ClusterTransactionConcurrencyException`. The stores evicted the loaded document and stored yours, which lost its
-cluster guard. They now copy your values onto the loaded document: public fields and properties with any setter.
-Measured on RavenDB 7.2, async and sync, single and collection. Found while building [[TASK-700]]'s RavenDB boundary.
-### MongoDB: localized writes in one transaction, and stores join a unit of work (2026-10-20)
-[[TASK-700]]. New `MongoLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.MongoDB):
-on one database of a replica set, a failed translation write rolls the entity write back. A `MongoDbUnitOfWork` now
-publishes its session, so a store on its database in the same flow joins it, as on SQL. A failed joined write makes
-`CommitAsync` throw `TransactionRollbackOnlyException`. Measured: a race inside a transaction is a write conflict, never
-a duplicate key, and is re-run once. New `AmbientSession<TSession>` and `IMongoConnectedStore`. RavenDB follows.
-### Birko.Data.Localization.MongoDB: the translation indexes (2026-10-20)
-[[TASK-699]]. New project. `LocalizationMongoIndexes.EnsureAsync(store)` creates the unique key over `(EntityGuid,
-EntityType, FieldName, Culture)` and the `ValueHash` index, idempotently. Measured live: a value lookup went from a
-`COLLSCAN` to an `IXSCAN`. A race against a writer that does not derive the key Guid (TASK-698) left two rows without
-the key index and one with it. A collection already holding a duplicate is refused. Async store only.
-### Translation races leave one row on every provider (2026-10-20)
-[[TASK-698]]. A new translation row's Guid is derived from its key (`LocalizedTranslationRows.KeyGuid`), so a racing
-writer's create is refused and retried as an update on every store, not only behind SQL's unique key. Measured live on
-InMemory, JSON, XML, MongoDB, ElasticSearch, RavenDB and Cosmos DB, where a race used to store two rows. ElasticSearch
-and RavenDB re-read by Guid through the new `IAsyncRealtimeReadStore`. Old rows are untouched. **Breaking:** a soft-delete-wrapped
-translation store is refused, and so is a tenant-scoped one over shared entities. `ISoftDeleteStoreWrapper` moved to the
-`Birko.Data.Stores` namespace.
-### PostgreSQL retries a unique refusal inside a caller's transaction (2026-10-20)
-[[TASK-694]]. The slug and default decorators and the translation upsert run the write they retry through
-`RetryableWrite`. Beneath them, a SQL store runs it in a savepoint where a refusal aborts the transaction
-(`AbortsTransactionOnError`, PostgreSQL), so the re-check and the retry run in it. Measured live: PostgreSQL now retries
-in place, as SQL Server does, and MySQL still refuses. Other writes take no savepoint (decided by the user): one doubled
-a write's cost inside a transaction.
-### Fluent HasPrecision / HasScale reach a decimal, and are refused on a string (2026-10-20)
-[[TASK-692]]. Both were accepted and dropped: a decimal got `(22,6)`, and a string's `HasPrecision(n)` stayed `LONGTEXT` /
-`NVARCHAR(MAX)`. Now a decimal gets them, and any other type is refused. **Breaking:** a string's length is `HasMaxLength(n)`,
-and `ApplyToDatabase` throws on a string `HasPrecision`. The framework's 74 such calls were converted, so those columns get
-their declared length; existing tables report drift until altered. WorkoutTracker converted; FisData.Stock skipped (decided
-by the user). Measured on MySQL.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

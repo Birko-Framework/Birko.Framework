@@ -4,6 +4,61 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-20 — RavenDB: localized writes in one session, and stores join a unit of work
+
+[[TASK-700]]. New `RavenLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.RavenDB):
+on one database, both stores write into one cluster-wide session, so a failed translation write discards the entity
+write. A `RavenDbUnitOfWork` now publishes its session; an async store on its database in the same flow joins it. A
+race surfaces at save and is re-run once. Measured on RavenDB 7.2. Cosmos DB stays best effort: a batch holds one
+container's partition.
+
+## 2026-10-20 — RavenDB: updates inside a unit of work work on cluster-written documents
+
+[[TASK-702]]. An update inside a `RavenDbUnitOfWork` of a document a unit of work had written failed at commit with
+`ClusterTransactionConcurrencyException`. The stores evicted the loaded document and stored yours, which lost its
+cluster guard. They now copy your values onto the loaded document: public fields and properties with any setter.
+Measured on RavenDB 7.2, async and sync, single and collection. Found while building [[TASK-700]]'s RavenDB boundary.
+
+## 2026-10-20 — MongoDB: localized writes in one transaction, and stores join a unit of work
+
+[[TASK-700]]. New `MongoLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.MongoDB):
+on one database of a replica set, a failed translation write rolls the entity write back. A `MongoDbUnitOfWork` now
+publishes its session, so a store on its database in the same flow joins it, as on SQL. A failed joined write makes
+`CommitAsync` throw `TransactionRollbackOnlyException`. Measured: a race inside a transaction is a write conflict, never
+a duplicate key, and is re-run once. New `AmbientSession<TSession>` and `IMongoConnectedStore`. RavenDB follows.
+
+## 2026-10-20 — Birko.Data.Localization.MongoDB: the translation indexes
+
+[[TASK-699]]. New project. `LocalizationMongoIndexes.EnsureAsync(store)` creates the unique key over `(EntityGuid,
+EntityType, FieldName, Culture)` and the `ValueHash` index, idempotently. Measured live: a value lookup went from a
+`COLLSCAN` to an `IXSCAN`. A race against a writer that does not derive the key Guid (TASK-698) left two rows without
+the key index and one with it. A collection already holding a duplicate is refused. Async store only.
+
+## 2026-10-20 — Translation races leave one row on every provider
+
+[[TASK-698]]. A new translation row's Guid is derived from its key (`LocalizedTranslationRows.KeyGuid`), so a racing
+writer's create is refused and retried as an update on every store, not only behind SQL's unique key. Measured live on
+InMemory, JSON, XML, MongoDB, ElasticSearch, RavenDB and Cosmos DB, where a race used to store two rows. ElasticSearch
+and RavenDB re-read by Guid through the new `IAsyncRealtimeReadStore`. Old rows are untouched. **Breaking:** a soft-delete-wrapped
+translation store is refused, and so is a tenant-scoped one over shared entities. `ISoftDeleteStoreWrapper` moved to the
+`Birko.Data.Stores` namespace.
+
+## 2026-10-20 — PostgreSQL retries a unique refusal inside a caller's transaction
+
+[[TASK-694]]. The slug and default decorators and the translation upsert run the write they retry through
+`RetryableWrite`. Beneath them, a SQL store runs it in a savepoint where a refusal aborts the transaction
+(`AbortsTransactionOnError`, PostgreSQL), so the re-check and the retry run in it. Measured live: PostgreSQL now retries
+in place, as SQL Server does, and MySQL still refuses. Other writes take no savepoint (decided by the user): one doubled
+a write's cost inside a transaction.
+
+## 2026-10-20 — Fluent HasPrecision / HasScale reach a decimal, and are refused on a string
+
+[[TASK-692]]. Both were accepted and dropped: a decimal got `(22,6)`, and a string's `HasPrecision(n)` stayed `LONGTEXT` /
+`NVARCHAR(MAX)`. Now a decimal gets them, and any other type is refused. **Breaking:** a string's length is `HasMaxLength(n)`,
+and `ApplyToDatabase` throws on a string `HasPrecision`. The framework's 74 such calls were converted, so those columns get
+their declared length; existing tables report drift until altered. WorkoutTracker converted; FisData.Stock skipped (decided
+by the user). Measured on MySQL.
+
 ## 2026-10-20 — Grants.SQL's lookup indexes are buildable on MySQL and SQL Server
 
 [[TASK-693]]. `GrantSqlIndexes.EnsureAsync` threw on both: the indexed `ResourceType` and `Email` were `LONGTEXT` /
