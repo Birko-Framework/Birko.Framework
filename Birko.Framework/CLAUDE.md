@@ -295,7 +295,7 @@ for the FinStat desktop tester: changes by path, a merged tree and counts, with 
 index, unordered, by key). Both engines run one set of shared vectors (`Birko.Web.Core/src/diff/diff-vectors.json`,
 [[TASK-769]]); all 39 JSON cases pass on both. New `diff-parity.yml` runs the C# side in CI.
 `XmlTree.ToTree` / `ToLines` read XML as the web does ([[TASK-771]], 37 cases). Birko.Xaml.Avalonia's new `JsonDiffViewer`
-shows the result as `b-json-diff`'s tree ([[TASK-772]], awaiting visual sign-off).
+shows the result as `b-json-diff`'s tree or side by side ([[TASK-772]], [[TASK-773]], awaiting visual sign-off).
 ### A translation model can derive from a log model (2026-10-24)
 [[TASK-767]]. `IEntityTranslation.UpdatedAt` is now `DateTime`, as on `AbstractLogModel` (decided by the user), so a
 model on a log model implements it by inheritance (Symbio's `TenantEntity`). **Breaking:** `EntityTranslationModel` and

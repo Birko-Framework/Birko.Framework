@@ -6,6 +6,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -16,6 +17,22 @@ namespace Birko.Xaml.Avalonia.Controls;
 
 /// <summary>How <see cref="JsonDiffViewer"/> reads a string body.</summary>
 public enum JsonDiffFormat { Json, Xml }
+
+/// <summary>Which view <see cref="JsonDiffViewer"/> shows.</summary>
+public enum JsonDiffView
+{
+    /// <summary>The merged tree of differences.</summary>
+    Tree,
+
+    /// <summary>Both bodies whole, side by side, with the changed lines tinted (TASK-773).</summary>
+    SideBySide,
+}
+
+/// <summary>A side-by-side line's tint: what happened to the path it shows, on its own side.</summary>
+public enum DiffLineMark { None, Added, Removed, Changed, Ignored }
+
+/// <summary>One line of a side-by-side pane: its text and its tint.</summary>
+public sealed record DiffLine(string Text, DiffLineMark Mark);
 
 /// <summary>
 /// Compares two bodies — side A ("old") and side B ("new") — and shows the differences as a tree (the XAML port of
@@ -44,6 +61,7 @@ public class JsonDiffViewer : ContentControl
     public static readonly StyledProperty<string?> LabelBProperty = AvaloniaProperty.Register<JsonDiffViewer, string?>(nameof(LabelB));
     public static readonly StyledProperty<string?> TitleProperty = AvaloniaProperty.Register<JsonDiffViewer, string?>(nameof(Title));
     public static readonly StyledProperty<bool> OnlyChangesProperty = AvaloniaProperty.Register<JsonDiffViewer, bool>(nameof(OnlyChanges));
+    public static readonly StyledProperty<JsonDiffView> ViewProperty = AvaloniaProperty.Register<JsonDiffViewer, JsonDiffView>(nameof(View));
     public static readonly StyledProperty<JsonDiffOptions?> OptionsProperty = AvaloniaProperty.Register<JsonDiffViewer, JsonDiffOptions?>(nameof(Options));
     public static readonly StyledProperty<XmlTreeOptions?> XmlOptionsProperty = AvaloniaProperty.Register<JsonDiffViewer, XmlTreeOptions?>(nameof(XmlOptions));
 
@@ -54,7 +72,7 @@ public class JsonDiffViewer : ContentControl
     {
         foreach (var p in new AvaloniaProperty[] { RawAProperty, RawBProperty, FormatProperty, OptionsProperty, XmlOptionsProperty })
             p.Changed.AddClassHandler<JsonDiffViewer>((v, _) => v.Recompute());
-        foreach (var p in new AvaloniaProperty[] { LabelAProperty, LabelBProperty, TitleProperty, OnlyChangesProperty })
+        foreach (var p in new AvaloniaProperty[] { LabelAProperty, LabelBProperty, TitleProperty, OnlyChangesProperty, ViewProperty })
             p.Changed.AddClassHandler<JsonDiffViewer>((v, _) => v.Render());
     }
 
@@ -94,7 +112,10 @@ public class JsonDiffViewer : ContentControl
     /// <summary>The header title (default "JSON diff" / "XML diff", following <see cref="Format"/>).</summary>
     public string? Title { get => GetValue(TitleProperty); set => SetValue(TitleProperty, value); }
 
-    /// <summary>Hides equal and ignored branches.</summary>
+    /// <summary>Tree (default) or side by side. The toolbar switches it too.</summary>
+    public JsonDiffView View { get => GetValue(ViewProperty); set => SetValue(ViewProperty, value); }
+
+    /// <summary>Hides equal and ignored branches (tree view; the side-by-side view always shows both bodies whole, as on the web).</summary>
     public bool OnlyChanges { get => GetValue(OnlyChangesProperty); set => SetValue(OnlyChangesProperty, value); }
 
     /// <summary>The comparison's options (ignored paths, normalizers, array pairing). A malformed pattern is shown, not thrown.</summary>
@@ -148,7 +169,7 @@ public class JsonDiffViewer : ContentControl
         Render();
     }
 
-    private sealed record Side(JsonNode? Data, string? Error, bool NotXml);
+    private sealed record Side(JsonNode? Data, string? Error, bool NotXml, string Raw);
 
     private bool _batching;
     private Side? _a;
@@ -167,14 +188,14 @@ public class JsonDiffViewer : ContentControl
     {
         if (raw is null) return null;
         if (Format == JsonDiffFormat.Xml)
-            return XmlTree.TryToTree(raw, out var tree, XmlOptions) ? new Side(tree, null, false) : new Side(null, "not XML", true);
+            return XmlTree.TryToTree(raw, out var tree, XmlOptions) ? new Side(tree, null, false, raw) : new Side(null, "not XML", true, raw);
         try
         {
-            return new Side(JsonNode.Parse(raw), null, false);
+            return new Side(JsonNode.Parse(raw), null, false, raw);
         }
         catch (JsonException e)
         {
-            return new Side(null, e.Message, false);
+            return new Side(null, e.Message, false, raw);
         }
     }
 
@@ -249,15 +270,28 @@ public class JsonDiffViewer : ContentControl
         var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 6) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         DockPanel.SetDock(actions, Dock.Right);
-        var only = Themed(new ToggleButton { Content = L("bxaml.jsonDiff.onlyChanges", "Only changes"), IsChecked = OnlyChanges, Classes = { "only-changes" } }, "BToolbarToggle");
-        only.IsCheckedChanged += (_, _) => OnlyChanges = only.IsChecked == true;
-        var expand = Themed(new Button { Content = L("bxaml.common.expand", "Expand"), Classes = { "expand-all" } }, "BToolbarButton");
-        expand.Click += (_, _) => ExpandAll();
-        var collapse = Themed(new Button { Content = L("bxaml.common.collapse", "Collapse"), Classes = { "collapse-all" } }, "BToolbarButton");
-        collapse.Click += (_, _) => CollapseAll();
-        actions.Children.Add(only);
-        actions.Children.Add(expand);
-        actions.Children.Add(collapse);
+        var split = View == JsonDiffView.SideBySide;
+        ToggleButton ViewToggle(string label, string cls, JsonDiffView view)
+        {
+            var t = Themed(new ToggleButton { Content = label, IsChecked = View == view, Classes = { cls } }, "BToolbarToggle");
+            // A pressed view button stays pressed: clicking the current view does nothing, as on the web.
+            t.IsCheckedChanged += (_, _) => { if (t.IsChecked == true) View = view; else if (View == view) t.IsChecked = true; };
+            return t;
+        }
+        actions.Children.Add(ViewToggle(L("bxaml.jsonDiff.viewTree", "Tree"), "view-tree", JsonDiffView.Tree));
+        actions.Children.Add(ViewToggle(L("bxaml.jsonDiff.viewSplit", "Side by side"), "view-split", JsonDiffView.SideBySide));
+        if (!split)
+        {
+            var only = Themed(new ToggleButton { Content = L("bxaml.jsonDiff.onlyChanges", "Only changes"), IsChecked = OnlyChanges, Classes = { "only-changes" } }, "BToolbarToggle");
+            only.IsCheckedChanged += (_, _) => OnlyChanges = only.IsChecked == true;
+            var expand = Themed(new Button { Content = L("bxaml.common.expand", "Expand"), Classes = { "expand-all" } }, "BToolbarButton");
+            expand.Click += (_, _) => ExpandAll();
+            var collapse = Themed(new Button { Content = L("bxaml.common.collapse", "Collapse"), Classes = { "collapse-all" } }, "BToolbarButton");
+            collapse.Click += (_, _) => CollapseAll();
+            actions.Children.Add(only);
+            actions.Children.Add(expand);
+            actions.Children.Add(collapse);
+        }
         header.Children.Add(actions);
 
         var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
@@ -266,13 +300,20 @@ public class JsonDiffViewer : ContentControl
         titleRow.Children.Add(Summary());
         header.Children.Add(titleRow);
 
-        var body = new StackPanel { Spacing = 4, Classes = { "body" } };
-        body.Bind(TextElement.FontFamilyProperty, body.GetResourceObservable("BFontMono"));
-        foreach (var c in BodyContent()) body.Children.Add(c);
-
         var root = new DockPanel();
         DockPanel.SetDock(header, Dock.Top);
         root.Children.Add(header);
+        if (split)
+        {
+            var splitView = SplitView();
+            splitView.Bind(TextElement.FontFamilyProperty, splitView.GetResourceObservable("BFontMono"));
+            root.Children.Add(splitView);
+            Content = root;
+            return;
+        }
+        var body = new StackPanel { Spacing = 4, Classes = { "body" } };
+        body.Bind(TextElement.FontFamilyProperty, body.GetResourceObservable("BFontMono"));
+        foreach (var c in BodyContent()) body.Children.Add(c);
         root.Children.Add(new ScrollViewer
         {
             Content = body,
@@ -280,6 +321,167 @@ public class JsonDiffViewer : ContentControl
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         });
         Content = root;
+    }
+
+    // ── Side-by-side view (TASK-773) ──
+
+    private Control SplitView()
+    {
+        if (_a is null || _b is null) return Message(L("bxaml.jsonDiff.noData", "Nothing to compare"));
+        var (marksA, marksB) = Marks();
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,12,*"), Classes = { "split" } };
+        var paneA = Pane(SideA, _a, marksA, "pane-a");
+        var paneB = Pane(SideB, _b, marksB, "pane-b");
+        Grid.SetColumn(paneB.Root, 2);
+        grid.Children.Add(paneA.Root);
+        grid.Children.Add(paneB.Root);
+        SyncScroll(paneA.Scroller, paneB.Scroller);
+        if (_optionsError is null) return grid;
+        var withError = new DockPanel();
+        var error = Error(_optionsError);
+        DockPanel.SetDock(error, Dock.Top);
+        withError.Children.Add(error);
+        withError.Children.Add(grid);
+        return withError;
+    }
+
+    /// <summary>The paths each side marks, as the web's <c>_renderSplit</c>: A by its own (side-A) paths, B by side B's.</summary>
+    private (Dictionary<string, DiffLineMark> A, Dictionary<string, DiffLineMark> B) Marks()
+    {
+        var a = new Dictionary<string, DiffLineMark>(StringComparer.Ordinal);
+        var b = new Dictionary<string, DiffLineMark>(StringComparer.Ordinal);
+        if (Result is null) return (a, b);
+        void Walk(JsonDiffNode n)
+        {
+            var pathA = n.OldSegments is null ? n.Path : JsonPath.Format(n.OldSegments);
+            if (n.Status is JsonDiffStatus.Removed or JsonDiffStatus.Changed or JsonDiffStatus.Ignored && n.HasOld)
+                a[pathA] = n.Status switch { JsonDiffStatus.Ignored => DiffLineMark.Ignored, JsonDiffStatus.Changed => DiffLineMark.Changed, _ => DiffLineMark.Removed };
+            if (n.Status is JsonDiffStatus.Added or JsonDiffStatus.Changed or JsonDiffStatus.Ignored && n.HasNew)
+                b[n.Path] = n.Status switch { JsonDiffStatus.Ignored => DiffLineMark.Ignored, JsonDiffStatus.Changed => DiffLineMark.Changed, _ => DiffLineMark.Added };
+            if (n.Children is null) return;
+            foreach (var c in n.Children) Walk(c);
+        }
+        Walk(Result.Tree);
+        return (a, b);
+    }
+
+    private sealed record PaneParts(Control Root, ScrollViewer Scroller);
+
+    private PaneParts Pane(string label, Side side, Dictionary<string, DiffLineMark> marks, string cls)
+    {
+        var heading = Text(label.ToUpperInvariant(), "BTextMutedBrush", "pane-label");
+        heading.FontSize = 11;
+        heading.FontWeight = FontWeight.SemiBold;
+        heading.Margin = new Thickness(0, 0, 0, 4);
+        var top = new StackPanel();
+        top.Children.Add(heading);
+        if (side.Error is not null) top.Children.Add(Error(ParseError(label, side)));
+
+        IReadOnlyList<DiffLine> lines = side.Error is not null
+            ? side.Raw.Split('\n').Select(l => new DiffLine(l.TrimEnd('\r'), DiffLineMark.None)).ToList()
+            : Format == JsonDiffFormat.Xml ? XmlLines(side.Raw, marks) : JsonLines(side.Data, marks);
+
+        // Virtualized: only the lines in view are built, so a long body stays cheap to show and to scroll.
+        var items = new ItemsControl
+        {
+            ItemsSource = lines,
+            ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel()),
+            ItemTemplate = new FuncDataTemplate<DiffLine>((line, _) => LineView(line), supportsRecycling: false),
+            Classes = { "lines" },
+        };
+        var scroller = new ScrollViewer
+        {
+            Content = items,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Classes = { "pane-scroll" },
+        };
+        var root = new DockPanel { Classes = { "pane", cls } };
+        DockPanel.SetDock(top, Dock.Top);
+        root.Children.Add(top);
+        root.Children.Add(scroller);
+        AutomationProperties.SetName(root, label);
+        return new PaneParts(root, scroller);
+    }
+
+    private static Control LineView(DiffLine? line)
+    {
+        if (line is null) return new Control();
+        var text = Text(line.Text.Length == 0 ? " " : line.Text, "BTextBrush");
+        var border = new Border { Child = text, Padding = new Thickness(4, 0), Classes = { "line" } };
+        var tint = line.Mark switch
+        {
+            DiffLineMark.Added => "BColorSuccessAlphaBgBrush",
+            DiffLineMark.Removed => "BColorDangerAlphaBgBrush",
+            DiffLineMark.Changed => "BColorWarningAlphaBgBrush",
+            _ => null,
+        };
+        if (line.Mark != DiffLineMark.None) border.Classes.Add("mk-" + line.Mark.ToString().ToLowerInvariant());
+        if (tint is not null) border.Bind(Border.BackgroundProperty, border.GetResourceObservable(tint));
+        if (line.Mark == DiffLineMark.Ignored) border.Opacity = 0.6;
+        return border;
+    }
+
+    /// <summary>Scrolling one pane scrolls the other — the desktop addition to the web view (FEATURE-020 D7).</summary>
+    private static void SyncScroll(ScrollViewer a, ScrollViewer b)
+    {
+        var busy = false;
+        void Follow(ScrollViewer from, ScrollViewer to)
+        {
+            if (busy) return;
+            busy = true;
+            try { to.Offset = from.Offset; }
+            finally { busy = false; }
+        }
+        a.ScrollChanged += (_, _) => Follow(a, b);
+        b.ScrollChanged += (_, _) => Follow(b, a);
+    }
+
+    /// <summary>
+    /// A body pretty-printed one line per value, two spaces per level, each line marked by the path it belongs to or the
+    /// nearest marked container around it — the web's <c>_prettyLines</c>. Keys follow the engine's order.
+    /// </summary>
+    public static IReadOnlyList<DiffLine> JsonLines(JsonNode? value, IReadOnlyDictionary<string, DiffLineMark> marks)
+    {
+        var o = new List<DiffLine>();
+        void Walk(JsonNode? v, List<JsonPathSegment> segs, string indent, string prefix, string comma, DiffLineMark inherited)
+        {
+            var mark = marks.TryGetValue(JsonPath.Format(segs), out var m) ? m : inherited;
+            if (v is JsonObject or JsonArray)
+            {
+                var entries = v is JsonArray arr
+                    ? arr.Select((item, i) => ((JsonPathSegment)i, item, "")).ToList()
+                    : JsonDiff.OwnKeys((JsonObject)v).Select(k => ((JsonPathSegment)k, v[k], JsonSerializer.Serialize(k, InlineJson) + ": ")).ToList();
+                var (open, close) = v is JsonArray ? ("[", "]") : ("{", "}");
+                if (entries.Count == 0) { o.Add(new DiffLine($"{indent}{prefix}{open}{close}{comma}", mark)); return; }
+                o.Add(new DiffLine($"{indent}{prefix}{open}", mark));
+                for (var i = 0; i < entries.Count; i++)
+                {
+                    var (k, item, keyText) = entries[i];
+                    segs.Add(k);
+                    Walk(item, segs, indent + "  ", keyText, i < entries.Count - 1 ? "," : "", mark);
+                    segs.RemoveAt(segs.Count - 1);
+                }
+                o.Add(new DiffLine($"{indent}{close}{comma}", mark));
+                return;
+            }
+            o.Add(new DiffLine($"{indent}{prefix}{(v is null ? "null" : v.ToJsonString(InlineJson))}{comma}", mark));
+        }
+        Walk(value, [], "", "", "", DiffLineMark.None);
+        return o;
+    }
+
+    /// <summary>The original XML, pretty-printed by <see cref="XmlTree.ToLines"/>, each line taking the mark of the nearest marked path it shows — the web's <c>_xmlLines</c>.</summary>
+    private IReadOnlyList<DiffLine> XmlLines(string xml, IReadOnlyDictionary<string, DiffLineMark> marks)
+    {
+        var lines = XmlTree.ToLines(xml, XmlOptions) ?? [];
+        DiffLineMark MarkOf(IReadOnlyList<JsonPathSegment> segs)
+        {
+            for (var n = segs.Count; n >= 0; n--)
+                if (marks.TryGetValue(JsonPath.Format(segs.Take(n)), out var m)) return m;
+            return DiffLineMark.None;
+        }
+        return lines.Select(l => new DiffLine(l.Text, l.Paths.Select(MarkOf).FirstOrDefault(m => m != DiffLineMark.None))).ToList();
     }
 
     private Control Summary()
@@ -321,12 +523,24 @@ public class JsonDiffViewer : ContentControl
         // The root container is not drawn as a row: its children are the top level.
         var rootIsContainer = tree.Children is not null && tree.Type != JsonNodeType.Value
             && tree.Status is not (JsonDiffStatus.Changed or JsonDiffStatus.Ignored);
-        var list = new StackPanel { Classes = { "tree" } };
+        var rows = new List<TreeRow>();
+        if (rootIsContainer) AddChildRows(tree, 0, OnlyChanges, rows);
+        else AddNodeRows(tree, 0, OnlyChanges, rows);
+        // Virtualized over the flattened visible rows: an open array of thousands of records builds only the rows in
+        // view (TASK-773 measured 4.1 s for 3 000 records when every row was built up front).
+        var list = new ItemsControl
+        {
+            ItemsSource = rows,
+            ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel()),
+            ItemTemplate = new FuncDataTemplate<TreeRow>((row, _) => RowView(row), supportsRecycling: false),
+            Classes = { "tree" },
+        };
         AutomationProperties.SetName(list, TitleText);
-        if (rootIsContainer) foreach (var c in ChildRows(tree, OnlyChanges)) list.Children.Add(c);
-        else list.Children.Add(NodeView(tree, OnlyChanges));
         yield return list;
     }
+
+    /// <summary>A visible tree row: a node at a depth, or (no node) the "(empty)" note under an open container.</summary>
+    private sealed record TreeRow(JsonDiffNode? Node, int Depth);
 
     private List<Control>? Problem()
     {
@@ -350,16 +564,47 @@ public class JsonDiffViewer : ContentControl
         return legend;
     }
 
-    private IEnumerable<Control> ChildRows(JsonDiffNode node, bool onlyChanges)
+    private void AddChildRows(JsonDiffNode node, int depth, bool onlyChanges, List<TreeRow> rows)
     {
-        var kids = (node.Children ?? []).Where(c => !onlyChanges || c.Status is not (JsonDiffStatus.Equal or JsonDiffStatus.Ignored)).ToList();
-        if (kids.Count == 0) return [Message(L("bxaml.jsonDiff.empty", "(empty)"))];
-        return kids.Select(c => NodeView(c, onlyChanges));
+        var any = false;
+        foreach (var c in node.Children ?? [])
+        {
+            if (onlyChanges && c.Status is JsonDiffStatus.Equal or JsonDiffStatus.Ignored) continue;
+            any = true;
+            AddNodeRows(c, depth, onlyChanges, rows);
+        }
+        if (!any) rows.Add(new TreeRow(null, depth));
     }
 
-    private Control NodeView(JsonDiffNode node, bool onlyChanges)
+    private static bool IsExpandable(JsonDiffNode node) =>
+        node.Type != JsonNodeType.Value && node.Status != JsonDiffStatus.Changed && node.Children is { Count: > 0 };
+
+    private void AddNodeRows(JsonDiffNode node, int depth, bool onlyChanges, List<TreeRow> rows)
     {
-        var expandable = node.Type != JsonNodeType.Value && node.Status != JsonDiffStatus.Changed && node.Children is { Count: > 0 };
+        rows.Add(new TreeRow(node, depth));
+        if (!IsExpandable(node) || !_expanded.Contains(NodeKey(node))) return;
+        // Inside a container that holds changes, "only changes" keeps filtering; inside anything else it shows all.
+        AddChildRows(node, depth + 1, onlyChanges && node.Status == JsonDiffStatus.Modified, rows);
+    }
+
+    private Control RowView(TreeRow? r)
+    {
+        if (r is null) return new Control();
+        var indent = new Thickness(r.Depth * 18, 0, 0, 0);
+        if (r.Node is null)
+        {
+            var empty = Message(L("bxaml.jsonDiff.empty", "(empty)"));
+            empty.Margin = new Thickness(r.Depth * 18 + 30, 0, 0, 0);
+            return empty;
+        }
+        var row = NodeView(r.Node);
+        row.Margin = indent;
+        return row;
+    }
+
+    private StackPanel NodeView(JsonDiffNode node)
+    {
+        var expandable = IsExpandable(node);
         var key = NodeKey(node);
         var open = expandable && _expanded.Contains(key);
 
@@ -404,15 +649,7 @@ public class JsonDiffViewer : ContentControl
         var status = StatusText(node.Status);
         var name = string.Join(" ", new[] { status, node.Path.Length > 0 ? node.Path : null }.Where(s => !string.IsNullOrEmpty(s)));
         if (name.Length > 0) AutomationProperties.SetName(row, name);
-
-        if (!open) return row;
-        var children = new StackPanel { Classes = { "children" }, Margin = new Thickness(18, 0, 0, 0) };
-        // Inside a container that holds changes, "only changes" keeps filtering; inside anything else it shows all.
-        foreach (var c in ChildRows(node, onlyChanges && node.Status == JsonDiffStatus.Modified)) children.Children.Add(c);
-        var group = new StackPanel { Classes = { "node" } };
-        group.Children.Add(row);
-        group.Children.Add(children);
-        return group;
+        return row;
     }
 
     private IEnumerable<Control> ValueViews(JsonDiffNode node, bool expandable)

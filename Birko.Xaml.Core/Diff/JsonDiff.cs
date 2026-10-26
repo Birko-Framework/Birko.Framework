@@ -274,7 +274,7 @@ public static class JsonDiff
     /// JavaScript's own-key order for an object parsed from JSON: keys that are canonical array indices (up to
     /// 2^32 − 2) first, in ascending numeric order, then every other key in insertion order.
     /// </summary>
-    internal static IEnumerable<string> OwnKeys(JsonObject obj)
+    public static IEnumerable<string> OwnKeys(JsonObject obj)
     {
         List<(uint Index, string Key)>? indexKeys = null;
         List<string>? rest = null;

@@ -65,13 +65,21 @@ var viewer = new JsonDiffViewer
 };
 viewer.SetData(baselineBody, otherBody);         // or bind RawA / RawB
 viewer.DiffComputed += (_, r) => status.Text = $"{r.Summary.Total} differences";
-viewer.ExpandAll(); viewer.CollapseAll();        // also on its toolbar
+viewer.ExpandAll(); viewer.CollapseAll();        // tree view; also on its toolbar
+viewer.View = JsonDiffView.SideBySide;           // or the toolbar's Tree / Side by side
 ```
 
 `Result` is the last `JsonDiffResult` (null while a side does not parse or an option is malformed — that is shown,
 never thrown). Rows carry `st-{status}` classes and state their status as their automation name. Strings are
 `bxaml.jsonDiff.*` in `I18n.Instance`, English by default. The toolbar uses the new `BToolbarButton` /
-`BToolbarToggle` themes and the chevrons `BTreeNodeToggle` (`Controls/DataViewers.axaml`), reusable by any viewer.
+`BToolbarToggle` themes and the chevrons `BTreeNodeToggle` (`Controls/DataViewers.axaml`), reusable by any viewer;
+they arrive with `Controls.axaml`, so merging either `BirkoTheme.axaml` or `BirkoTheme.Core.axaml` is enough.
+
+**Side by side** (TASK-773) is the web view: two labelled panes, each its whole body line by line (JSON pretty-printed
+in the engine's key order, XML as the original document), with added / removed / changed lines tinted and ignored ones
+dimmed. The sides are not lined up, as on the web; the one desktop addition is that the panes scroll together. "Only
+changes" and expand / collapse belong to the tree view. Both views are virtualized: a 373 KB body (3 000 records)
+opens side by side in about 0.5 s and as a tree in about 0.2 s (headless, measured in `JsonDiffViewerSplitTests`).
 
 ## Object / JSON viewer
 

@@ -70,3 +70,7 @@ side-by-side view as a second mode of the same control, not a second control.
   by a person yet.
 - Gallery (Birko\Consumers\Birko.Xaml.Gallery): Viewers tab, "JSON / XML diff": two editable sides, JSON / XML
   samples, a format picker; Url ignored and Items paired by Id, as the web demo.
+- 2026-10-26 — Changed while in verify, by TASK-773's measurement: an open container of 3 000 records took 4.1 s to
+  show because every row was built up front. The tree now flattens its visible rows into a virtualized `ItemsControl`
+  (166 ms for the same body); rows, classes, toggles and the Human test plan are unchanged. This task's 15 tests pass
+  unchanged.
