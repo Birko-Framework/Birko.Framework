@@ -58,7 +58,7 @@ It is a defect, not a decision, so it is its own task ([TASK-768](../../../tasks
 | Q1 | Should the comparison engine be ported to the desktop at all, or should the tester call out to the web one? | decision | — | resolved → D1 | — |
 | Q2 | Where does the engine live — the desktop core library, or a new library with no UI? | decision | Q1 | resolved → D2 | — |
 | Q3 | Should the engine later move into a library with no UI, so server-side code can use it? | decision | Q2 | resolved → D3 | — |
-| Q4 | Does the web engine already have tests the port could reuse? | research | — | resolved — no: the web engine has no tests at all | — |
+| Q4 | Does the web engine already have tests the port could reuse? | research | — | resolved — yes: browser checks in the web playground (corrected 2026-10-26; the grill first answered "none" — see D5's history) | — |
 | Q5 | How are the web and desktop engines kept in agreement? | decision | Q4 | resolved → D4 | — |
 | Q6 | Where do the shared test examples live, and how does the web side run them? | decision | Q5 | resolved → D5 | — |
 | Q7 | How much of the diff viewer comes in the first version? | decision | Q1 | resolved → D6, D7 | — |

@@ -13,17 +13,17 @@ generated: 2026-10-26
 
 | State | Count |
 |-------|-------|
-| ✅ approved | 9 |
-| ✏️ changed | 0 |
+| ✅ approved | 8 |
+| ✏️ changed | 1 |
 | ⏸️ deferred | 2 |
 | ❌ removed | 1 |
 | 💭 proposed (undecided) | 0 |
 
 ## Build progress
 
-0 / 7 tasks done.
+1 / 7 tasks done.
 
-- TASK-769 — one shared set of test examples for the comparison, run by the web engine
+- TASK-769 — one shared set of test examples for the comparison, run by the web playground — **done**
 - TASK-770 — the comparison engine on the desktop (the tester is waiting on this one)
 - TASK-771 — turning XML into the shape the comparison reads
 - TASK-772 — the diff viewer, tree view
@@ -41,4 +41,4 @@ Skipped — a port of an engine and controls whose behaviour and look are alread
 
 ## Next step
 
-Build the comparison engine first: shared test examples (TASK-769), then the engine (TASK-770) — the desktop tester is waiting on it. The tag input and the accordion look can be built in parallel.
+The shared test examples are in place (TASK-769). Next: the comparison engine on the desktop (TASK-770) — the desktop tester is waiting on it. The tag input and the accordion look can be built in parallel.

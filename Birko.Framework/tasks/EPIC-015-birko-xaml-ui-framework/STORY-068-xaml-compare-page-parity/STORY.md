@@ -1,7 +1,7 @@
 ---
 id: STORY-068
 parent: EPIC-015
-status: planned
+status: in-progress
 created: 2026-10-26
 feature: FEATURE-020
 affects: [Birko.Xaml.Core, Birko.Xaml.Avalonia, Birko.Web.Core]
@@ -19,7 +19,7 @@ Decisions: [FEATURE-020](../../../docs/features/FEATURE-020-xaml-diff-and-parity
 
 ## Tasks (build order)
 
-1. [TASK-769](TASK-769-shared-json-diff-vectors.md) — shared diff test vectors + a Node runner in Birko.Web (D4, D5)
+1. [TASK-769](TASK-769-shared-json-diff-vectors.md) — shared diff test vectors in Birko.Web, run by the Playground (D4, D5) — **done**
 2. [TASK-770](TASK-770-xaml-core-json-diff-engine.md) — the JSON diff engine in Birko.Xaml.Core (D1, D2) — **the consumer's blocker; report the API to clientapi-csharp-d1 when usable**
 3. [TASK-771](TASK-771-xaml-core-xml-tree.md) — `xmlToTree` / `xmlToLines` in Birko.Xaml.Core (D1, D2)
 4. [TASK-772](TASK-772-xaml-json-diff-viewer-tree.md) — diff viewer control, tree view (D6, D12)
