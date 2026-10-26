@@ -3,7 +3,7 @@ id: TASK-768
 parent: EPIC-015
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-26
@@ -50,7 +50,7 @@ Related: FEATURE-020 (filed from the same request) — not a decision of it.
 
 - [x] 1. Run the Birko.Xaml Gallery, open a form with a password field, type into it under each theme (Light, Dark, Neon,
    Finstat): only `●` characters show.
-- [ ] 2. In the desktop tester, open Settings and check that "Private Key" is masked.
+- [x] 2. In the desktop tester, open Settings and check that "Private Key" is masked.
 - [x] 3. Gallery: a placeholder shows in an empty text box (the ribbon's "Sheet name", the tag input's "IČO") and disappears
    once you type.
 - [x] 4. Select text in any text box: the selection is highlighted, in each theme.
@@ -81,3 +81,5 @@ Related: FEATURE-020 (filed from the same request) — not a decision of it.
   and Dark (masked password, placeholder, highlighted selection), plus the form modal and ribbon fields for regressions.
 - 2026-10-26 — Human test plan run by František Bereň in the Gallery: steps 1, 3, 4, 5 passed. Step 2 (the desktop
   tester's Settings "Private Key", new build) not run yet, so the task stays at **verify** until it is.
+- 2026-10-26 — Step 2 passed: František Bereň confirmed "Private Key" masked in the desktop tester's Settings, on a build
+  whose Birko.Xaml.Avalonia.dll (11:37:22) postdates this fix (43b00437, 11:36:36). Closed (verify → done).

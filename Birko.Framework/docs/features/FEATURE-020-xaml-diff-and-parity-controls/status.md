@@ -33,8 +33,7 @@ generated: 2026-10-26
 
 ## What can be tested now
 
-Everything here has been checked. Still open nearby, outside this feature: the password-field fix (TASK-768) needs one
-check in the desktop tester's Settings ("Private Key" masked).
+Everything here has been checked, and so has the password-field fix filed with the same request (TASK-768).
 
 ## Prototype
 
