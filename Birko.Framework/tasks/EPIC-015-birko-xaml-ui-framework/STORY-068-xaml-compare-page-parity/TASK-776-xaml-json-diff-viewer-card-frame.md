@@ -42,7 +42,7 @@ with no frame of their own — the user chose web parity there over a divider or
    line under it; the tree is inset from the card's edge.
 - [ ] 2. Switch to Side by side: both panes are inside the same card, a gap apart, no frame around each.
 - [ ] 3. Repeat under Dark, Neon and Finstat: the card's border and the header bar stay visible.
-- [ ] 4. The FinStat desktop tester's Compare window, rebuilt on this commit: the diff reads as its own framed block.
+- [x] 4. The FinStat desktop tester's Compare window, rebuilt on this commit: the diff reads as its own framed block.
 
 ## Review log
 
@@ -53,3 +53,6 @@ with no frame of their own — the user chose web parity there over a divider or
 - Tests: `JsonDiffViewerFrameTests` 6 + 2 screenshots. **Proved they can fail:** `IsFramed` defaulting to `false` and
   the header without its divider failed 5 of 6. Avalonia suite 403/403.
 - Looked at (headless, Light and Dark): both views read as the web's card.
+- 2026-10-26 — Human test plan step 4 passed: the user checked the framed viewer in the desktop tester's Compare window,
+  rebuilt on `327bd9d4` ("looks good", relayed by the tester session). Steps 1–3 (Gallery, every theme) not run yet;
+  stays at verify.
