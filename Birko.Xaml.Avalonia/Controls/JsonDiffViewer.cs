@@ -64,6 +64,7 @@ public class JsonDiffViewer : ContentControl
     public static readonly StyledProperty<JsonDiffView> ViewProperty = AvaloniaProperty.Register<JsonDiffViewer, JsonDiffView>(nameof(View));
     public static readonly StyledProperty<JsonDiffOptions?> OptionsProperty = AvaloniaProperty.Register<JsonDiffViewer, JsonDiffOptions?>(nameof(Options));
     public static readonly StyledProperty<XmlTreeOptions?> XmlOptionsProperty = AvaloniaProperty.Register<JsonDiffViewer, XmlTreeOptions?>(nameof(XmlOptions));
+    public static readonly StyledProperty<bool> IsFramedProperty = AvaloniaProperty.Register<JsonDiffViewer, bool>(nameof(IsFramed), true);
 
     public static readonly DirectProperty<JsonDiffViewer, JsonDiffResult?> ResultProperty =
         AvaloniaProperty.RegisterDirect<JsonDiffViewer, JsonDiffResult?>(nameof(Result), v => v.Result);
@@ -72,7 +73,7 @@ public class JsonDiffViewer : ContentControl
     {
         foreach (var p in new AvaloniaProperty[] { RawAProperty, RawBProperty, FormatProperty, OptionsProperty, XmlOptionsProperty })
             p.Changed.AddClassHandler<JsonDiffViewer>((v, _) => v.Recompute());
-        foreach (var p in new AvaloniaProperty[] { LabelAProperty, LabelBProperty, TitleProperty, OnlyChangesProperty, ViewProperty })
+        foreach (var p in new AvaloniaProperty[] { LabelAProperty, LabelBProperty, TitleProperty, OnlyChangesProperty, ViewProperty, IsFramedProperty })
             p.Changed.AddClassHandler<JsonDiffViewer>((v, _) => v.Render());
     }
 
@@ -117,6 +118,12 @@ public class JsonDiffViewer : ContentControl
 
     /// <summary>Hides equal and ignored branches (tree view; the side-by-side view always shows both bodies whole, as on the web).</summary>
     public bool OnlyChanges { get => GetValue(OnlyChangesProperty); set => SetValue(OnlyChangesProperty, value); }
+
+    /// <summary>
+    /// Shows the viewer in the web's data-viewer card (default): a bordered, rounded card, a header bar with a divider under it,
+    /// and a padded body. <c>false</c> leaves the bare header and body, for a host that frames the viewer itself.
+    /// </summary>
+    public bool IsFramed { get => GetValue(IsFramedProperty); set => SetValue(IsFramedProperty, value); }
 
     /// <summary>The comparison's options (ignored paths, normalizers, array pairing). A malformed pattern is shown, not thrown.</summary>
     public JsonDiffOptions? Options { get => GetValue(OptionsProperty); set => SetValue(OptionsProperty, value); }
@@ -267,7 +274,8 @@ public class JsonDiffViewer : ContentControl
 
     private void Render()
     {
-        var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 6) };
+        var framed = IsFramed;
+        var header = new DockPanel { LastChildFill = true, Margin = framed ? default : new Thickness(0, 0, 0, 6) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         DockPanel.SetDock(actions, Dock.Right);
         var split = View == JsonDiffView.SideBySide;
@@ -301,17 +309,19 @@ public class JsonDiffViewer : ContentControl
         header.Children.Add(titleRow);
 
         var root = new DockPanel();
-        DockPanel.SetDock(header, Dock.Top);
-        root.Children.Add(header);
+        Control top = framed ? CardHeader(header) : header;
+        DockPanel.SetDock(top, Dock.Top);
+        root.Children.Add(top);
         if (split)
         {
             var splitView = SplitView();
             splitView.Bind(TextElement.FontFamilyProperty, splitView.GetResourceObservable("BFontMono"));
+            if (framed) splitView.Margin = new Thickness(BodyPadding);
             root.Children.Add(splitView);
-            Content = root;
+            Content = framed ? Card(root) : root;
             return;
         }
-        var body = new StackPanel { Spacing = 4, Classes = { "body" } };
+        var body = new StackPanel { Spacing = 4, Classes = { "body" }, Margin = framed ? new Thickness(BodyPadding) : default };
         body.Bind(TextElement.FontFamilyProperty, body.GetResourceObservable("BFontMono"));
         foreach (var c in BodyContent()) body.Children.Add(c);
         root.Children.Add(new ScrollViewer
@@ -320,7 +330,29 @@ public class JsonDiffViewer : ContentControl
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         });
-        Content = root;
+        Content = framed ? Card(root) : root;
+    }
+
+    /// <summary>The web's <c>.body</c> padding (<c>--b-space-md</c>).</summary>
+    private const double BodyPadding = 12;
+
+    /// <summary>The web's <c>.data-viewer-card</c>: tertiary background, border, radius, content clipped to the corners.</summary>
+    private static Border Card(Control content)
+    {
+        var card = new Border { Child = content, BorderThickness = new Thickness(1), ClipToBounds = true, Classes = { "card" } };
+        card.Bind(Border.BackgroundProperty, card.GetResourceObservable("BBgTertiaryBrush"));
+        card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("BBorderBrush"));
+        card.Bind(Border.CornerRadiusProperty, card.GetResourceObservable("BRadius"));
+        return card;
+    }
+
+    /// <summary>The web's <c>.data-viewer-header</c>: page background, xs / md padding, a divider under it.</summary>
+    private static Border CardHeader(Control content)
+    {
+        var bar = new Border { Child = content, Padding = new Thickness(BodyPadding, 4), BorderThickness = new Thickness(0, 0, 0, 1), Classes = { "card-header" } };
+        bar.Bind(Border.BackgroundProperty, bar.GetResourceObservable("BBgBrush"));
+        bar.Bind(Border.BorderBrushProperty, bar.GetResourceObservable("BBorderBrush"));
+        return bar;
     }
 
     // ── Side-by-side view (TASK-773) ──

@@ -97,6 +97,7 @@ viewer.SetData(baselineBody, otherBody);         // or bind RawA / RawB
 viewer.DiffComputed += (_, r) => status.Text = $"{r.Summary.Total} differences";
 viewer.ExpandAll(); viewer.CollapseAll();        // tree view; also on its toolbar
 viewer.View = JsonDiffView.SideBySide;           // or the toolbar's Tree / Side by side
+viewer.IsFramed = false;                         // drop the web's card frame (on by default)
 ```
 
 `Result` is the last `JsonDiffResult` (null while a side does not parse or an option is malformed — that is shown,
