@@ -18,5 +18,6 @@
     <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/Nav.axaml" />
     <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/Blocks.axaml" />
     <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/Ribbon.axaml" />
+    <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/DataViewers.axaml" />
   </ResourceDictionary.MergedDictionaries>
 </ResourceDictionary>

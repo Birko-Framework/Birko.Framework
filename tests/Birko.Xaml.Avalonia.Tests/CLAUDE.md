@@ -25,6 +25,7 @@ Tier-1 controls, Tier-2 composites, the shell/ribbon/mobile views, and the schem
 - `FormModalTests` — the `FormModal` page-shape (Modal + Form + Save/Cancel): hosts the form, Save runs the command then closes, Cancel closes without saving.
 - `CommandPaletteTests` — the `CommandPalette`: filter by search text, invoke-and-close, shows-all-when-empty.
 - `ObjectTreeTests` / `XmlViewerTests` — the JSON/object tree and XML tree viewers render structure and fall back to a raw leaf on invalid input; `ObjectTree` selection (`SelectedValue`/`SelectedPath`) and `HideNullMembers` (named nulls hidden, `[i]` items kept, counts match, toggle rebuilds).
+- `JsonDiffViewerTests` (TASK-772) — the diff viewer's tree: statuses as row classes and automation names, summary and legend, seeded expansion, only-changes, expand/collapse all, a node toggle, parse and option errors shown not thrown, XML mode and a format switch re-reading the bodies, options recomputing; `Capture_json_diff_screenshot` writes all four themes to `BIRKO_SHOTS`.
 - `KanbanTests` — the `Kanban` board renders columns/cards and reflects observable-collection card moves.
 - `MarkdownEditorTests` — the `MarkdownRenderer`/`MarkdownEditor`: headings/lists/code blocks, bold/italic inlines, and a live preview.
 - `ChartTests` — the `BChart` over LiveCharts2 configures a series per model entry and maps `ChartKind` to Line/Column series.

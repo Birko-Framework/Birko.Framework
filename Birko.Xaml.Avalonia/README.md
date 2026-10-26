@@ -48,6 +48,31 @@ themes.SetTheme("neon");                             // false if neon wasn't shi
 restart. `Available` is **detected** from the dictionaries you actually merged, so the switcher never
 offers a theme whose tokens are missing; pass `available:` to the constructor to override.
 
+## JSON / XML diff viewer
+
+`Controls.JsonDiffViewer` (FEATURE-020, the port of `b-json-diff`) compares two bodies with
+`Birko.Xaml.Core.Diff.JsonDiff` and shows the differences as a tree: added / removed / changed values in the
+success / danger / warning colours with old → new, containers holding a change open with their change count,
+everything else closed. A side that does not parse shows its error instead.
+
+```csharp
+var viewer = new JsonDiffViewer
+{
+    LabelA = "production", LabelB = "localhost",
+    Format = JsonDiffFormat.Json,                // or Xml: bodies read with XmlTree
+    OnlyChanges = false,                         // hide equal and ignored branches
+    Options = new JsonDiffOptions { Ignore = ["**.RequestId"], Arrays = [new JsonArrayRule("Items") { Key = "Id" }] },
+};
+viewer.SetData(baselineBody, otherBody);         // or bind RawA / RawB
+viewer.DiffComputed += (_, r) => status.Text = $"{r.Summary.Total} differences";
+viewer.ExpandAll(); viewer.CollapseAll();        // also on its toolbar
+```
+
+`Result` is the last `JsonDiffResult` (null while a side does not parse or an option is malformed — that is shown,
+never thrown). Rows carry `st-{status}` classes and state their status as their automation name. Strings are
+`bxaml.jsonDiff.*` in `I18n.Instance`, English by default. The toolbar uses the new `BToolbarButton` /
+`BToolbarToggle` themes and the chevrons `BTreeNodeToggle` (`Controls/DataViewers.axaml`), reusable by any viewer.
+
 ## Object / JSON viewer
 
 `Controls.ObjectTree` renders an object graph (`Source`) or a JSON string (`Json`) as a tree.

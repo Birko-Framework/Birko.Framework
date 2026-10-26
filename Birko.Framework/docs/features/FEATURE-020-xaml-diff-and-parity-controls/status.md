@@ -26,14 +26,14 @@ generated: 2026-10-26
 - TASK-769 — one shared set of test examples for the comparison, run by the web playground — **done**
 - TASK-770 — the comparison engine on the desktop — **done**, handed to the desktop tester
 - TASK-771 — turning XML into the shape the comparison reads — **done**
-- TASK-772 — the diff viewer, tree view
+- TASK-772 — the diff viewer, tree view — **built, waiting for a person to check it**
 - TASK-773 — the diff viewer, side by side
 - TASK-774 — the tag input
 - TASK-775 — the accordion look
 
 ## What can be tested now
 
-Nothing yet. Once built, the diff viewer (TASK-772, TASK-773), the tag input (TASK-774) and the accordion look (TASK-775) each have a Gallery walkthrough to run under every theme.
+The diff viewer's tree view (TASK-772) can be checked now in the desktop Gallery (Viewers tab, "JSON / XML diff"): load both samples, switch "only changes", break one side, and repeat under each theme. Still to come: the side-by-side view (TASK-773), the tag input (TASK-774) and the accordion look (TASK-775) each have a Gallery walkthrough to run under every theme.
 
 ## Prototype
 
@@ -41,4 +41,4 @@ Skipped — a port of an engine and controls whose behaviour and look are alread
 
 ## Next step
 
-The comparison engine reads JSON and XML on the desktop (TASK-769–771). Next: the diff viewer (TASK-772, TASK-773). The tag input and the accordion look can be built in parallel.
+The comparison engine reads JSON and XML on the desktop (TASK-769–771), and the diff viewer's tree view is built (TASK-772) — it needs a person to check it in the Gallery. Next: the side-by-side view (TASK-773). The tag input and the accordion look can be built in parallel.

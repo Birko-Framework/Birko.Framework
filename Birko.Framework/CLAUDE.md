@@ -289,12 +289,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
-### Birko.Xaml.Core compares JSON and XML as the web does (2026-10-26)
+### Birko.Xaml compares JSON and XML as the web does (2026-10-26)
 [[TASK-770]] (FEATURE-020). New `Birko.Xaml.Core.Diff`: `JsonDiff.Diff(a, b, options)` ports Birko.Web.Core's `diffJson`
 for the FinStat desktop tester: changes by path, a merged tree and counts, with ignore, normalize and array pairing (by
 index, unordered, by key). Both engines run one set of shared vectors (`Birko.Web.Core/src/diff/diff-vectors.json`,
 [[TASK-769]]); all 39 JSON cases pass on both. New `diff-parity.yml` runs the C# side in CI.
-`XmlTree.ToTree` / `ToLines` read XML as the web does ([[TASK-771]], 37 cases).
+`XmlTree.ToTree` / `ToLines` read XML as the web does ([[TASK-771]], 37 cases). Birko.Xaml.Avalonia's new `JsonDiffViewer`
+shows the result as `b-json-diff`'s tree ([[TASK-772]], awaiting visual sign-off).
 ### A translation model can derive from a log model (2026-10-24)
 [[TASK-767]]. `IEntityTranslation.UpdatedAt` is now `DateTime`, as on `AbstractLogModel` (decided by the user), so a
 model on a log model implements it by inheritance (Symbio's `TenantEntity`). **Breaking:** `EntityTranslationModel` and

@@ -1,0 +1,111 @@
+<!--
+  Data-viewer chrome (FEATURE-020 / TASK-772): the small header-toolbar buttons and the tree's node toggle, the XAML
+  counterpart of Birko.Web.Components' shared toolbarBtnSheet. Used by JsonDiffViewer; reusable by any viewer card.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ── BToolbarButton — a quiet, bordered header action (web .toolbar-btn) ── -->
+  <ControlTheme x:Key="BToolbarButton" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextSecondaryBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadiusSm}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ContentPresenter x:Name="PART_ContentPresenter"
+                          Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          Foreground="{TemplateBinding Foreground}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          Padding="{TemplateBinding Padding}"
+                          Content="{TemplateBinding Content}" />
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{DynamicResource BBgSecondaryBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    </Style>
+    <Style Selector="^:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource BBorderFocusBrush}" />
+    </Style>
+  </ControlTheme>
+
+  <!-- ── BToolbarToggle — the same, pressed state shown as the primary tint (web aria-pressed="true") ── -->
+  <ControlTheme x:Key="BToolbarToggle" TargetType="ToggleButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextSecondaryBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadiusSm}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ContentPresenter x:Name="PART_ContentPresenter"
+                          Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          Foreground="{TemplateBinding Foreground}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          Padding="{TemplateBinding Padding}"
+                          Content="{TemplateBinding Content}" />
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{DynamicResource BBgSecondaryBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    </Style>
+    <Style Selector="^:checked">
+      <Setter Property="Background" Value="{DynamicResource BColorPrimaryLightBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource BColorPrimaryTextBrush}" />
+    </Style>
+    <Style Selector="^:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource BBorderFocusBrush}" />
+    </Style>
+  </ControlTheme>
+
+  <!-- ── BTreeNodeToggle — a chevron with no chrome; open/closed is the glyph, not a pressed look ── -->
+  <ControlTheme x:Key="BTreeNodeToggle" TargetType="ToggleButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextMutedBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Width" Value="16" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadiusSm}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ContentPresenter x:Name="PART_ContentPresenter"
+                          Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          Foreground="{TemplateBinding Foreground}"
+                          CornerRadius="{TemplateBinding CornerRadius}"
+                          HorizontalContentAlignment="Center"
+                          VerticalContentAlignment="Center"
+                          Content="{TemplateBinding Content}" />
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    </Style>
+    <Style Selector="^:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource BBorderFocusBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>
