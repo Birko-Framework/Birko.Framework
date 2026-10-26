@@ -71,3 +71,17 @@ Asked in a Symbio session (its STORY-081: English catalogue and per-language slu
 Answered one item at a time in the session's picker: the full layout fix (equal-height groups, aligned rows, labels at
 the bottom), and every one of the eight Office behaviours (with the Quick Access Toolbar and rich tooltips, and with
 toggle buttons, galleries and inputs). Web first, with the Avalonia ribbon's parity filed for later.
+
+### 2026-10-26 — became FEATURE-020 (Birko.Xaml comparison engine, diff viewer, tag input, accordion look) and TASK-768
+
+Asked in the ClientApi.CSharp session (the FinStat desktop tester) and relayed here by that session; the user's own words
+stay in that session's history. The relay, as received:
+
+> new Birko.Xaml parity components needed by the FinStat desktop tester — please run them through your feature lifecycle.
+> The user (František) asked for this in my session and chose "full lifecycle" for the framework part (feature + tasks +
+> tests in Birko.Xaml.Avalonia.Tests + Gallery demo + CHANGELOG)
+
+It named the diff engine (`diffJson`, `xmlToTree` / `xmlToLines`), the `b-json-diff` viewer, `b-tag-input`, `b-accordion`
+(an Expander look on Avalonia), and the `FieldType.Password` plain-text bug, which became TASK-768. Grill answers from the
+user in this session: engine in Birko.Xaml.Core; shared test vectors, owned by Birko.Web; both viewer views as two tasks;
+strict tag-input parity; Expander theme only.
