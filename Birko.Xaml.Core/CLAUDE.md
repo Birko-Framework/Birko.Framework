@@ -64,6 +64,14 @@ skins reference one shared assembly. Not in the `Birko.Framework.csproj` aggrega
   the port (refresh mirror on read, fall back offline, evict on 404), with an observable `SyncStatus`.
 - **Device (EPIC-016 / TASK-045, 048):** `Device.IWakeLock`, `Device.IAudioCue` (+ `AudioCueOptions`) —
   neutral device-capability contracts; Avalonia implementations live in `Birko.Xaml.Avalonia`.
+- **JSON diff (FEATURE-020 / TASK-770):** `Diff.JsonDiff.Diff(a, b, options)` + `Diff.JsonPath` + the result types
+  in `Diff/JsonDiffModels.cs` — a port of Birko.Web.Core's `diffJson`, which stays the engine of record. **Do not
+  change behaviour here first:** change the web engine and a vector in `Birko.Web.Core/src/diff/diff-vectors.json`,
+  then follow here; `JsonDiffVectorTests` and the Playground's `diff-vectors-smoke` run the same file, and
+  `diff-parity.yml` runs the C# side in CI (the vectors test skips wherever no `Birko\Web` checkout sits beside the
+  framework). Reproduced on purpose: JavaScript's own-key order (`OwnKeys`) and double-valued number equality.
+  `JsonPathSegment` keeps a key `"0"` apart from an index `0`; mind that a `null` in a `JsonPathSegment?` ternary
+  converts through the implicit `string` operator unless cast.
 
 ## The `ICrudDataSource<T>` port — why not `IAsyncBulkStore<T>` directly
 

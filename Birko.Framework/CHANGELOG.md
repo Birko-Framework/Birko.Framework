@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-20 — A fluent column can belong to several indexes
+
+[[TASK-695]]. Call `HasIndex` / `HasUniqueIndex` once per index, and a column joins each with its own order and
+uniqueness. Before, a second call replaced the first silently, and `HasUniqueIndex` made a later index on the column
+UNIQUE. One index twice on a column is refused. New `FieldDescriptor.Indexes`; `IndexName` and the rest read the first.
+Split from [[TASK-693]], which needs `ResourceType` in two Grants.SQL indexes.
+
 ## 2026-10-20 — Broad matches on translated fields run in chunks
 
 [[TASK-686]]. A filter on a translated field matching more than 500 entities in its translation sets runs as several

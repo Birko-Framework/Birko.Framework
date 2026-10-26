@@ -17,6 +17,8 @@ xUnit + FluentAssertions tests for [`Birko.Xaml.Core`](../Birko.Xaml.Core).
   tracking across `Navigate`, `Back`, and `NavigateCommand`.
 - **`MirrorDataSourceTests`** — `MirrorDataSource<T>` online pass-through + mirror population, offline fallback,
   remote-404 eviction, and online `GetAsync` upsert, asserting `SyncStatus`.
+- **`JsonDiffVectorTests`** / **`JsonDiffTests`** — the JSON diff engine against the shared vectors in Birko.Web.Core
+  (`diff-vectors.json`, skipped without a `Birko\Web` checkout), plus function normalizers / key selectors and the .NET surface.
 
 ## Test framework
 

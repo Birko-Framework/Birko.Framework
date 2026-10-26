@@ -21,10 +21,10 @@ generated: 2026-10-26
 
 ## Build progress
 
-1 / 7 tasks done.
+2 / 7 tasks done.
 
 - TASK-769 — one shared set of test examples for the comparison, run by the web playground — **done**
-- TASK-770 — the comparison engine on the desktop (the tester is waiting on this one)
+- TASK-770 — the comparison engine on the desktop — **done**, handed to the desktop tester
 - TASK-771 — turning XML into the shape the comparison reads
 - TASK-772 — the diff viewer, tree view
 - TASK-773 — the diff viewer, side by side
@@ -41,4 +41,4 @@ Skipped — a port of an engine and controls whose behaviour and look are alread
 
 ## Next step
 
-The shared test examples are in place (TASK-769). Next: the comparison engine on the desktop (TASK-770) — the desktop tester is waiting on it. The tag input and the accordion look can be built in parallel.
+The comparison engine is on the desktop and handed to the tester (TASK-769, TASK-770). Next: reading XML responses the same way (TASK-771), then the diff viewer. The tag input and the accordion look can be built in parallel.

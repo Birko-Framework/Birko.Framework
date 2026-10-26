@@ -289,6 +289,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Birko.Xaml.Core compares JSON as the web does (2026-10-26)
+[[TASK-770]] (FEATURE-020). New `Birko.Xaml.Core.Diff`: `JsonDiff.Diff(a, b, options)` ports Birko.Web.Core's `diffJson`
+for the FinStat desktop tester: changes by path, a merged tree and counts, with ignore, normalize and array pairing (by
+index, unordered, by key). Both engines run one set of shared vectors (`Birko.Web.Core/src/diff/diff-vectors.json`,
+[[TASK-769]]); all 39 JSON cases pass on both. New `diff-parity.yml` runs the C# side in CI. XML follows ([[TASK-771]]).
 ### A translation model can derive from a log model (2026-10-24)
 [[TASK-767]]. `IEntityTranslation.UpdatedAt` is now `DateTime`, as on `AbstractLogModel` (decided by the user), so a
 model on a log model implements it by inheritance (Symbio's `TenantEntity`). **Breaking:** `EntityTranslationModel` and
@@ -364,11 +369,6 @@ by the user). Measured on MySQL.
 `NVARCHAR(MAX)`, which neither can index. The mappings now declare the three indexes, so schema-ensure creates them and
 bounds those columns at 255. Measured live on PostgreSQL, MySQL and SQL Server. An older MySQL or SQL Server table must
 have the two columns altered first (README).
-### A fluent column can belong to several indexes (2026-10-20)
-[[TASK-695]]. Call `HasIndex` / `HasUniqueIndex` once per index, and a column joins each with its own order and
-uniqueness. Before, a second call replaced the first silently, and `HasUniqueIndex` made a later index on the column
-UNIQUE. One index twice on a column is refused. New `FieldDescriptor.Indexes`; `IndexName` and the rest read the first.
-Split from [[TASK-693]], which needs `ResourceType` in two Grants.SQL indexes.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

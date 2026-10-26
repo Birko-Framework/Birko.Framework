@@ -27,6 +27,11 @@ view-models, and `MirrorDataSource`).
   modules in order and its live active-surface tracking across `Navigate`, `Back`, and `NavigateCommand`.
 - `MirrorDataSourceTests` — `MirrorDataSource<T>` online/offline sync: pass-through with mirror population,
   offline fallback to the mirror, remote-404 eviction, and online `GetAsync` upsert, with `SyncStatus` assertions.
+- `JsonDiffVectorTests` — `Diff.JsonDiff` / `JsonPath` against Birko.Web.Core's shared `diff-vectors.json` (read from the
+  sibling `Birko\Web` checkout via `BIRKO_SRC` or a walk up; skips when absent, fails under `BIRKO_REQUIRE_LIVE`), every
+  failing case named. `DiffVectors` maps the file's named normalizer ops and compares as the web runner does.
+- `JsonDiffTests` — what the vectors cannot hold: function normalizers and key selectors, presence flags, segments,
+  CLR-backed values, untouched inputs.
 
 ## Conventions
 

@@ -39,6 +39,47 @@ sealed class StoreAdapter<T>(IAsyncBulkStore<T> store) : ICrudDataSource<T> wher
 }
 ```
 
+### Comparing JSON (FEATURE-020 / TASK-770)
+- **`Diff.JsonDiff.Diff(a, b, options?)`** — structural diff of two `System.Text.Json.Nodes.JsonNode` values, a port of
+  Birko.Web.Core's `diffJson`. The result carries the comparison three ways: a flat `Changes` list keyed by path, the
+  merged `Tree` of both sides (each node `Equal` / `Added` / `Removed` / `Changed` / `Modified` / `Ignored`), and
+  `Summary` counts. Side A is the "old" value, side B the "new" one.
+
+```csharp
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using Birko.Xaml.Core.Diff;
+
+var hosts = new Regex(@"https?://[a-z0-9.-]*finstat\.sk");
+var r = JsonDiff.Diff(JsonNode.Parse(baselineBody), JsonNode.Parse(otherBody), new JsonDiffOptions
+{
+    Ignore = ["**.RequestId", "Items[*].Ref"],
+    Normalize = [new JsonNormalizer("**", (v, _) =>
+        v is JsonValue s && s.TryGetValue<string>(out var str) ? JsonValue.Create(hosts.Replace(str, "{sk}")) : v)],
+    Arrays = [new JsonArrayRule("Items") { Key = "Id" }, new JsonArrayRule("Tags") { Match = JsonArrayMatch.Unordered }],
+});
+
+r.Equal;                       // false
+r.Summary;                     // JsonDiffSummary { Added = 1, Removed = 0, Changed = 2 }, .Total = 3
+foreach (var c in r.Changes)   // c.Kind, c.Path ("Items[1].Price"), c.OldPath (side A's, when paired elsewhere),
+    Console.WriteLine(c);      // c.OldValue / c.NewValue as received, c.HasOldValue / c.HasNewValue
+```
+
+- **Paths** read like property access: `Items[2].Ref`; a key that is not an identifier is quoted (`["a.b"]`); the root
+  is `""`. **Patterns** (in `Ignore`, `Normalize`, `Arrays`) add `*` (any one segment), `[*]` (any one index) and `**`
+  (any number of segments, including none), and match the **whole** path. A malformed pattern throws
+  `FormatException`. `Diff.JsonPath.Format` / `Matches` are public for callers that build their own rules.
+- `Normalize` maps a value on both sides before comparing (chained in order); changes still report the values as
+  received. Return a new node; never modify the one you are given.
+- `Arrays`: item n with item n by default; `Match = Unordered` pairs equal items; `Key = "Id"` (or `KeySelector`) pairs
+  records by key, falling back to unordered for items without one. A pair is reported at its side-B index, with
+  `OldPath` / `OldSegments` giving its side-A position; a removed item is listed under its side-A index.
+- **Parity:** the web engine is the engine of record. Both run the shared vectors in
+  `Birko.Web.Core/src/diff/diff-vectors.json` (`JsonDiffVectorTests` here, `diff-vectors-smoke` in the Playground;
+  `diff-parity.yml` in CI). Two JavaScript behaviours are reproduced because they are observable: object keys are
+  visited in JavaScript's own-key order (integer-like keys first, ascending), and numbers compare as doubles (`1` equals
+  `1.0`).
+
 Everything else (HTTP, data, sync, config) is delegated to existing `Birko.*` projects, not re-implemented.
 
 ## Convention note

@@ -1,0 +1,51 @@
+# Diff engine parity gate (TASK-770, FEATURE-020).
+#
+# Birko.Web.Core's diffJson is the engine of record; Birko.Xaml.Core.Diff is its C# port. Both run the shared
+# vectors in Birko.Web.Core/src/diff/diff-vectors.json: the web side in the Playground's diff-vectors-smoke, the
+# C# side in JsonDiffVectorTests. Those tests SKIP when no Birko\Web checkout sits beside the framework, which is
+# the case in build-and-test.yml — so without this job the C# side of the parity is never checked in CI, and a
+# skip reads as green. Here the Web repo is checked out and BIRKO_REQUIRE_LIVE turns a missing file into a failure.
+#
+# A change to the vectors lands in the OTHER repo and does not trigger this workflow; run it by hand
+# (workflow_dispatch) after one, as the README of Birko.Web.Core asks.
+
+name: diff-parity
+
+on:
+  push:
+    paths:
+      - 'Birko.Xaml.Core/Diff/**'
+      - 'tests/Birko.Xaml.Core.Tests/**'
+      - '.github/workflows/diff-parity.yml'
+  pull_request:
+    paths:
+      - 'Birko.Xaml.Core/Diff/**'
+      - 'tests/Birko.Xaml.Core.Tests/**'
+      - '.github/workflows/diff-parity.yml'
+  workflow_dispatch:
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the framework (the C# port and its suite)
+        uses: actions/checkout@v4
+        with:
+          path: birko/Framework
+
+      - name: Check out Birko.Web (the vectors)
+        uses: actions/checkout@v4
+        with:
+          repository: Birko-Framework/Birko.Web
+          path: birko/Web
+          token: ${{ secrets.BIRKO_CI_TOKEN || github.token }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: The C# diff engine passes every shared vector
+        env:
+          BIRKO_SRC: ${{ github.workspace }}/birko/Framework
+          BIRKO_REQUIRE_LIVE: '1'
+        run: dotnet test birko/Framework/tests/Birko.Xaml.Core.Tests --nologo --filter "FullyQualifiedName~JsonDiff"
