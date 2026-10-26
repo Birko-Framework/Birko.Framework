@@ -12,19 +12,60 @@
     <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
     <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+    <!-- This theme replaces Fluent's, so its selection / caret setters are gone too: without these the presenter has no
+         brush to draw a selection with (TASK-768). -->
+    <Setter Property="SelectionBrush" Value="{DynamicResource BColorPrimaryLightBrush}" />
+    <Setter Property="SelectionForegroundBrush" Value="{DynamicResource BColorPrimaryTextBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource BTextBrush}" />
+    <!-- A single line scrolls sideways without a bar and never vertically; multiline scrolls vertically (below). -->
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Hidden" />
+    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
     <Setter Property="Template">
       <ControlTemplate>
         <Border Background="{TemplateBinding Background}"
                 BorderBrush="{TemplateBinding BorderBrush}"
                 BorderThickness="{TemplateBinding BorderThickness}"
                 CornerRadius="{TemplateBinding CornerRadius}">
-          <!-- Foreground inherits from the TextBox (TextElement.Foreground). -->
-          <TextPresenter x:Name="PART_TextPresenter"
-                         Text="{TemplateBinding Text, Mode=TwoWay}"
-                         Margin="{TemplateBinding Padding}"
-                         TextWrapping="{TemplateBinding TextWrapping}"
-                         TextAlignment="{TemplateBinding TextAlignment}"
-                         VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+          <!-- Foreground inherits from the TextBox (TextElement.Foreground).
+               TASK-768: the presenter is what masks, draws the caret and the selection, so every such TextBox property
+               is passed on, as Avalonia's own template does. Before, only Text / wrapping / alignment were: a password
+               field showed its value, no selection or caret position reached the screen, and Watermark had nowhere to
+               show. TextBoxThemeTests pins each one.
+               The ScrollViewer is Avalonia's own template's too: without it a value longer than the box (a private key)
+               ran past it and the caret left the box, and a multiline box could not scroll. -->
+          <ScrollViewer x:Name="PART_ScrollViewer"
+                        Margin="{TemplateBinding Padding}"
+                        HorizontalScrollBarVisibility="{TemplateBinding (ScrollViewer.HorizontalScrollBarVisibility)}"
+                        VerticalScrollBarVisibility="{TemplateBinding (ScrollViewer.VerticalScrollBarVisibility)}"
+                        IsScrollChainingEnabled="{TemplateBinding (ScrollViewer.IsScrollChainingEnabled)}"
+                        VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}">
+          <Panel>
+            <TextBlock x:Name="PART_Watermark"
+                       Text="{TemplateBinding Watermark}"
+                       Foreground="{DynamicResource BTextMutedBrush}"
+                       TextWrapping="{TemplateBinding TextWrapping}"
+                       TextAlignment="{TemplateBinding TextAlignment}"
+                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                       IsHitTestVisible="False"
+                       IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+            <TextPresenter x:Name="PART_TextPresenter"
+                           Text="{TemplateBinding Text, Mode=TwoWay}"
+                           CaretIndex="{TemplateBinding CaretIndex}"
+                           SelectionStart="{TemplateBinding SelectionStart}"
+                           SelectionEnd="{TemplateBinding SelectionEnd}"
+                           PasswordChar="{TemplateBinding PasswordChar}"
+                           RevealPassword="{TemplateBinding RevealPassword}"
+                           CaretBrush="{TemplateBinding CaretBrush}"
+                           CaretBlinkInterval="{TemplateBinding CaretBlinkInterval}"
+                           SelectionBrush="{TemplateBinding SelectionBrush}"
+                           SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
+                           LineHeight="{TemplateBinding LineHeight}"
+                           LetterSpacing="{TemplateBinding LetterSpacing}"
+                           TextWrapping="{TemplateBinding TextWrapping}"
+                           TextAlignment="{TemplateBinding TextAlignment}"
+                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Panel>
+          </ScrollViewer>
         </Border>
       </ControlTemplate>
     </Setter>
@@ -38,6 +79,7 @@
     <Style Selector="^[AcceptsReturn=True]">
       <Setter Property="VerticalContentAlignment" Value="Top" />
       <Setter Property="MinHeight" Value="80" />
+      <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
     </Style>
   </ControlTheme>
 

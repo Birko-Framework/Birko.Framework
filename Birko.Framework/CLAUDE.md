@@ -289,6 +289,10 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Birko text boxes mask passwords, show placeholders and selections (2026-10-26)
+[[TASK-768]]. The Birko Avalonia `TextBox` template passed its presenter only the text, so every password field showed
+its value (the FinStat tester's "Private Key"), no placeholder showed, selections were not drawn, and a long value ran
+out of the box. It now passes what Avalonia's own template does, with a watermark and a scroll viewer.
 ### Birko.Xaml compares JSON and XML as the web does (2026-10-26)
 [[TASK-770]] (FEATURE-020). New `Birko.Xaml.Core.Diff`: `JsonDiff.Diff(a, b, options)` ports Birko.Web.Core's `diffJson`
 for the FinStat desktop tester: changes by path, a merged tree and counts, with ignore, normalize and array pairing.

@@ -33,7 +33,7 @@ generated: 2026-10-26
 
 ## What can be tested now
 
-Both views of the diff viewer (TASK-772, TASK-773) can be checked now in the desktop Gallery (Viewers tab, "JSON / XML diff"): load both samples, switch between Tree and Side by side, try "only changes" and scrolling, break one side, and repeat under each theme. The tag input (TASK-774) can be checked in the Gallery's Forms & data tab: type and paste IČOs, try a duplicate and a sixth. Its placeholder does not show yet — a known gap in the desktop text box, tracked separately. The accordion look (TASK-775) is in the Gallery's Composites tab: open and close the sections, use the keyboard, and compare with the web playground's accordion.
+Both views of the diff viewer (TASK-772, TASK-773) can be checked now in the desktop Gallery (Viewers tab, "JSON / XML diff"): load both samples, switch between Tree and Side by side, try "only changes" and scrolling, break one side, and repeat under each theme. The tag input (TASK-774) can be checked in the Gallery's Forms & data tab: type and paste IČOs, try a duplicate and a sixth. Its placeholder shows too, since the desktop text box fix (TASK-768). The accordion look (TASK-775) is in the Gallery's Composites tab: open and close the sections, use the keyboard, and compare with the web playground's accordion.
 
 ## Prototype
 

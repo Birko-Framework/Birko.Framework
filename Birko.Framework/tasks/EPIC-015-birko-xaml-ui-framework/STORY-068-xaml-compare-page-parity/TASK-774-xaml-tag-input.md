@@ -77,3 +77,5 @@ editor; keep its behaviour for existing forms or record any visible difference.
   Birko `TextBox` template has no watermark presenter, the same gap as TASK-768's `PasswordChar`. Recorded there, not
   fixed here (it affects every Birko text box). The Human test plan's placeholder step stays, and will fail until then.
 - Gallery: Forms & data tab, "Tag input": up to 5 IČOs, separators `,; ` + newline / tab, last event shown below.
+- 2026-10-26 — TASK-768 fixed the Birko `TextBox` template: the placeholder now shows, and the chip row was centred so
+  it sits mid-field. The Human test plan's placeholder step can pass now.

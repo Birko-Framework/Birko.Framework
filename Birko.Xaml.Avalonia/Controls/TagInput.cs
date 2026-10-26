@@ -59,7 +59,7 @@ public class TagInput : ContentControl
 
     private readonly List<string> _tags = new();
     private readonly TextBox _input;
-    private readonly WrapPanel _wrap = new() { Orientation = Orientation.Horizontal };
+    private readonly WrapPanel _wrap = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     private readonly Border _container;
     private bool _syncing;
 

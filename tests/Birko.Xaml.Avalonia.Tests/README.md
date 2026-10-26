@@ -17,6 +17,7 @@ xUnit + FluentAssertions (Avalonia headless) tests for [`Birko.Xaml.Avalonia`](.
 - **`JsonDiffViewerTests`** / **`JsonDiffViewerSplitTests`** — the JSON / XML diff viewer's tree and side-by-side views (FEATURE-020), with screenshots and a large-body timing.
 - **`TagInputTests`** — the tag input (FEATURE-020): separators, duplicates, max count, keys, paste, binding.
 - **`ExpanderThemeTests`** — the Birko look for `Expander` (FEATURE-020): template, toggling, directions, tokens.
+- **`TextBoxThemeTests`** — the Birko `TextBox` template: password masking, placeholder, selection, caret, scrolling.
 - **`KanbanTests`** — the kanban board columns/cards and reactive card moves.
 - **`MarkdownEditorTests`** — the markdown renderer/editor (blocks, inlines, live preview).
 - **`ChartTests`** — the `BChart` over LiveCharts2 (series per entry, Line/Column kinds).
