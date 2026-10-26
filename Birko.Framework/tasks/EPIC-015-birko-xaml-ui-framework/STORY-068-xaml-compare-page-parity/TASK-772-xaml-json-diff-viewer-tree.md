@@ -3,7 +3,7 @@ id: TASK-772
 parent: STORY-068
 feature: FEATURE-020
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-26
@@ -43,12 +43,12 @@ side-by-side view as a second mode of the same control, not a second control.
 
 ## Human test plan
 
-1. Open the Gallery's diff viewer page. Load the JSON sample: added, removed and changed values show in their colours,
+- [x] 1. Open the Gallery's diff viewer page. Load the JSON sample: added, removed and changed values show in their colours,
    modified containers are marked, and the counts match what you can see.
-2. Toggle "only changes": unchanged branches disappear; toggle back: they return.
-3. Switch to the XML sample: a repeated element shows as a list; a nil element shows as empty.
-4. Paste invalid JSON into one side: an error message shows instead of a crash.
-5. Repeat 1 under each theme (Light, Dark, Neon, Finstat): every status colour stays readable.
+- [x] 2. Toggle "only changes": unchanged branches disappear; toggle back: they return.
+- [x] 3. Switch to the XML sample: a repeated element shows as a list; a nil element shows as empty.
+- [x] 4. Paste invalid JSON into one side: an error message shows instead of a crash.
+- [x] 5. Repeat 1 under each theme (Light, Dark, Neon, Finstat): every status colour stays readable.
 
 ## Implementation plan
 
@@ -74,3 +74,4 @@ side-by-side view as a second mode of the same control, not a second control.
   show because every row was built up front. The tree now flattens its visible rows into a virtualized `ItemsControl`
   (166 ms for the same body); rows, classes, toggles and the Human test plan are unchanged. This task's 15 tests pass
   unchanged.
+- 2026-10-26 — Human test plan run by František Bereň in the Birko.Xaml Gallery: every step passed. Closed (verify → done).

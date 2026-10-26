@@ -300,7 +300,7 @@ Both engines run one set of shared vectors (`Birko.Web.Core/src/diff/diff-vector
 [[TASK-769]]); all 39 JSON cases pass on both. New `diff-parity.yml` runs the C# side in CI.
 `XmlTree.ToTree` / `ToLines` read XML as the web does ([[TASK-771]], 37 cases). Birko.Xaml.Avalonia's new `JsonDiffViewer`
 shows the result as `b-json-diff`'s tree or side by side ([[TASK-772]], [[TASK-773]]); new `TagInput` ports `b-tag-input`, and the
-Form's Tags field uses it, so a duplicate tag is refused ([[TASK-774]]). `Expander` takes `b-accordion`'s look ([[TASK-775]]). All await sign-off.
+Form's Tags field uses it, so a duplicate tag is refused ([[TASK-774]]). `Expander` takes `b-accordion`'s look ([[TASK-775]]). Signed off in the Gallery.
 ### A translation model can derive from a log model (2026-10-24)
 [[TASK-767]]. `IEntityTranslation.UpdatedAt` is now `DateTime`, as on `AbstractLogModel` (decided by the user), so a
 model on a log model implements it by inheritance (Symbio's `TenantEntity`). **Breaking:** `EntityTranslationModel` and

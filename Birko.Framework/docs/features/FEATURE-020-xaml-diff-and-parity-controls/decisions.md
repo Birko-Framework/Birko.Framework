@@ -54,3 +54,12 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   the web's exactly (two whole bodies, changed lines tinted, not lined up; "only changes" stays a tree-view switch),
   plus one desktop addition — the two panes scroll together. The task's first draft had asked for lined-up rows with
   blank partners, which the web view does not do.
+- 2026-10-26 — Review. Gate A: all seven tasks built on `main` (TASK-769–775), every approved and changed decision
+  built (D1, D2 → TASK-770/771; D4, D5 → TASK-769/770; D6 → TASK-772; D7 → TASK-773; D8 → TASK-774; D10 → TASK-775;
+  D12 → the four Gallery pages and the changelog entry). The fidelity pass was done inline, against each decision.
+  **no spec surface** (by decision, not omission): `Birko.Xaml.*` is excluded from this repo's spec map ("own tree",
+  TASK-689), and the web engine and its shared examples live in the Birko.Web repo.
+- 2026-10-26 — Gate B: the Human test plans of TASK-772–775 run by František Bereň in the desktop Gallery, every step
+  passed; the accordion look was checked in the Gallery only, not side by side with the web playground.
+- 2026-10-26 — FEATURE-020 signed off by František Bereň (maintainer) after review. TASK-768 (the password-field
+  defect filed with this request, not part of the feature) stays at verify until it is checked in the desktop tester.

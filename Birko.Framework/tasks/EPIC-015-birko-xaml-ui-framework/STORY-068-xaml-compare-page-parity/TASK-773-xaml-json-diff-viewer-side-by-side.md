@@ -3,7 +3,7 @@ id: TASK-773
 parent: STORY-068
 feature: FEATURE-020
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-26
@@ -50,14 +50,14 @@ record it; the lines are virtualized so only the visible ones are built.
 
 ## Human test plan
 
-1. Gallery diff viewer page, Side by side, JSON sample: on the left, `"gone": true` is tinted red and the `"v": 1`
+- [x] 1. Gallery diff viewer page, Side by side, JSON sample: on the left, `"gone": true` is tinted red and the `"v": 1`
    inside the item whose Id is 1 amber; on the right, `"extra": 1` green and `"v": 5` amber; `Url` dimmed on both.
-2. Scroll one pane: the other follows.
-3. XML sample: the original XML (with its attributes) is shown; `<Count>` lines amber, `<New>` green, the removed
+- [x] 2. Scroll one pane: the other follows.
+- [x] 3. XML sample: the original XML (with its attributes) is shown; `<Count>` lines amber, `<New>` green, the removed
    `<CzNace>` (Code 30) red on the left.
-4. Break one side's JSON: that pane shows the error and the raw text; the other pane still shows its body.
-5. Switch back to Tree: "only changes", Expand and Collapse are back.
-6. Repeat 1 under each theme.
+- [x] 4. Break one side's JSON: that pane shows the error and the raw text; the other pane still shows its body.
+- [x] 5. Switch back to Tree: "only changes", Expand and Collapse are back.
+- [x] 6. Repeat 1 under each theme.
 
 ## Implementation plan
 
@@ -79,3 +79,4 @@ record it; the lines are virtualized so only the visible ones are built.
   non-virtualized tree failed 5 of 9. `Birko.Xaml.Avalonia.Tests` 354/354. Screenshots looked at (Light, Dark, XML):
   tints on the right lines on each side, the key-paired item's `"v": 1` marked at its side-A position.
 - Gallery: no change needed — the demo's viewer carries its own Tree / Side by side toggles.
+- 2026-10-26 — Human test plan run by František Bereň in the Birko.Xaml Gallery: every step passed. Closed (verify → done).

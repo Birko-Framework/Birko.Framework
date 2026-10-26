@@ -48,13 +48,13 @@ Related: FEATURE-020 (filed from the same request) — not a decision of it.
 
 ## Human test plan
 
-1. Run the Birko.Xaml Gallery, open a form with a password field, type into it under each theme (Light, Dark, Neon,
+- [x] 1. Run the Birko.Xaml Gallery, open a form with a password field, type into it under each theme (Light, Dark, Neon,
    Finstat): only `●` characters show.
-2. In the desktop tester, open Settings and check that "Private Key" is masked.
-3. Gallery: a placeholder shows in an empty text box (the ribbon's "Sheet name", the tag input's "IČO") and disappears
+- [ ] 2. In the desktop tester, open Settings and check that "Private Key" is masked.
+- [x] 3. Gallery: a placeholder shows in an empty text box (the ribbon's "Sheet name", the tag input's "IČO") and disappears
    once you type.
-4. Select text in any text box: the selection is highlighted, in each theme.
-5. Type a value longer than the box (or paste a long key into "Private Key"): the text scrolls so the caret stays
+- [x] 4. Select text in any text box: the selection is highlighted, in each theme.
+- [x] 5. Type a value longer than the box (or paste a long key into "Private Key"): the text scrolls so the caret stays
    visible; a multiline box with many lines scrolls vertically.
 
 ## Implementation plan
@@ -79,3 +79,5 @@ Related: FEATURE-020 (filed from the same request) — not a decision of it.
   placeholder sits in the middle of the field.
 - Tests: `TextBoxThemeTests` 11 (+ 2 screenshots); Avalonia suite 395/395, Core 88/88. Screenshots looked at in Light
   and Dark (masked password, placeholder, highlighted selection), plus the form modal and ribbon fields for regressions.
+- 2026-10-26 — Human test plan run by František Bereň in the Gallery: steps 1, 3, 4, 5 passed. Step 2 (the desktop
+  tester's Settings "Private Key", new build) not run yet, so the task stays at **verify** until it is.

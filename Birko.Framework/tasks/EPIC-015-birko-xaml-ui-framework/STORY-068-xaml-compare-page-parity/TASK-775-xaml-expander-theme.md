@@ -3,7 +3,7 @@ id: TASK-775
 parent: STORY-068
 feature: FEATURE-020
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 priority: P3
 assignee: ai
 created: 2026-10-26
@@ -37,10 +37,11 @@ borders, spacing, hover/focus. Exclusive single-open groups are deferred (D11).
 
 ## Human test plan
 
-1. Gallery expander page: compare with the web Playground's `b-accordion` side by side — header, chevron and spacing
+- [x] 1. Gallery expander page: compare with the web Playground's `b-accordion` side by side — header, chevron and spacing
    look alike.
-2. Click and keyboard-toggle a section: it opens and closes, the chevron turns.
-3. Check under each theme.
+   Checked in the Gallery only (2026-10-26, by the user): not put side by side with the web Playground.
+- [x] 2. Click and keyboard-toggle a section: it opens and closes, the chevron turns.
+- [x] 3. Check under each theme.
 
 ## Implementation plan
 
@@ -60,3 +61,4 @@ borders, spacing, hover/focus. Exclusive single-open groups are deferred (D11).
 - Gallery: Composites tab, "Expander — the b-accordion look": open, closed, upward and disabled sections.
 - Recent Updates: folded into the same-day entry; the oldest entry ("Grants.SQL's lookup indexes…") rolled into
   CHANGELOG.md to stay under 10 KB, as earlier today.
+- 2026-10-26 — Human test plan run by František Bereň in the Birko.Xaml Gallery: every step passed. Closed (verify → done).

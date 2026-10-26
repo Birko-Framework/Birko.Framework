@@ -3,7 +3,7 @@ id: TASK-774
 parent: STORY-068
 feature: FEATURE-020
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-26
@@ -47,13 +47,13 @@ editor; keep its behaviour for existing forms or record any visible difference.
 
 ## Human test plan
 
-1. Gallery tag input page: type `12345678,` — a chip appears; type the same value again — it is rejected and the
+- [x] 1. Gallery tag input page: type `12345678,` — a chip appears; type the same value again — it is rejected and the
    page shows the reason.
-2. Paste a list of IDs separated by commas, semicolons and spaces (per the configured separators): each becomes a chip.
-3. With a max count of 3, try a fourth: rejected with the max-count reason.
-4. Backspace in the empty box removes the last chip; the × on a chip removes that chip.
-5. Open a form with a Tags field: it behaves the same way.
-6. Check under each theme.
+- [x] 2. Paste a list of IDs separated by commas, semicolons and spaces (per the configured separators): each becomes a chip.
+- [x] 3. With a max count of 3, try a fourth: rejected with the max-count reason.
+- [x] 4. Backspace in the empty box removes the last chip; the × on a chip removes that chip.
+- [x] 5. Open a form with a Tags field: it behaves the same way.
+- [x] 6. Check under each theme.
 
 ## Implementation plan
 
@@ -79,3 +79,4 @@ editor; keep its behaviour for existing forms or record any visible difference.
 - Gallery: Forms & data tab, "Tag input": up to 5 IČOs, separators `,; ` + newline / tab, last event shown below.
 - 2026-10-26 — TASK-768 fixed the Birko `TextBox` template: the placeholder now shows, and the chip row was centred so
   it sits mid-field. The Human test plan's placeholder step can pass now.
+- 2026-10-26 — Human test plan run by František Bereň in the Birko.Xaml Gallery: every step passed. Closed (verify → done).
