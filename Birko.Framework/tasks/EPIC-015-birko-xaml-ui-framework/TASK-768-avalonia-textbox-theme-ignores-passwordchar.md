@@ -38,6 +38,9 @@ Related: FEATURE-020 (filed from the same request) — not a decision of it.
 - [ ] A `Form` `FieldType.Password` field is covered the same way.
 - [ ] Check the other properties Avalonia's own template passes to the presenter (caret / selection brushes,
       `LineHeight`, `LetterSpacing`) and list any further gaps here rather than widening this fix silently.
+- [ ] **Found 2026-10-26 by TASK-774:** the template has no watermark presenter either, so `Watermark` never shows on any
+      Birko `TextBox` (TagInput's and the Form's placeholders included). Decide here whether it is fixed with
+      `PasswordChar` or filed separately; it is the same template.
 
 ## Out of scope
 

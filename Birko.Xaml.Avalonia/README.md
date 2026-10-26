@@ -48,6 +48,23 @@ themes.SetTheme("neon");                             // false if neon wasn't shi
 restart. `Available` is **detected** from the dictionaries you actually merged, so the switcher never
 offers a theme whose tokens are missing; pass `available:` to the constructor to override.
 
+## Tag input
+
+`Controls.TagInput` (FEATURE-020, the port of `b-tag-input`) is a list of short values typed as removable chips — what
+the `FieldType.Tags` form field renders too. A separator (comma, newline, tab by default) commits the text before it;
+Enter, Tab and leaving the field commit the rest; Backspace in the empty box removes the last tag; pasting text with a
+separator adds every part.
+
+```csharp
+var icos = new TagInput { Placeholder = "IČO", Separators = ",; \n", MaxCount = 50 };
+icos.TagRejected += (_, e) => status.Text = $"{e.Tag}: {e.Reason}";   // Duplicate or MaxCount, as the web's reject
+icos.TagsChanged += (_, _) => Run(icos.Tags);                          // the user changed the list
+icos.SetTags(saved);                                                   // no events; duplicates and the limit still apply
+```
+
+`Tags` binds two-way (`IReadOnlyList<string>`); `Value` is the comma-joined string. `AllowDuplicates`, `IsReadOnly`
+and `HasError` (danger border) mirror the web attributes.
+
 ## JSON / XML diff viewer
 
 `Controls.JsonDiffViewer` (FEATURE-020, the port of `b-json-diff`) compares two bodies with

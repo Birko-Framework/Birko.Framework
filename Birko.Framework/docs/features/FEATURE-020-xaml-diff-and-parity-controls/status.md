@@ -28,12 +28,12 @@ generated: 2026-10-26
 - TASK-771 — turning XML into the shape the comparison reads — **done**
 - TASK-772 — the diff viewer, tree view — **built, waiting for a person to check it**
 - TASK-773 — the diff viewer, side by side — **built, waiting for a person to check it**
-- TASK-774 — the tag input
+- TASK-774 — the tag input — **built, waiting for a person to check it**
 - TASK-775 — the accordion look
 
 ## What can be tested now
 
-Both views of the diff viewer (TASK-772, TASK-773) can be checked now in the desktop Gallery (Viewers tab, "JSON / XML diff"): load both samples, switch between Tree and Side by side, try "only changes" and scrolling, break one side, and repeat under each theme. Still to come: the tag input (TASK-774) and the accordion look (TASK-775) each have a Gallery walkthrough to run under every theme.
+Both views of the diff viewer (TASK-772, TASK-773) can be checked now in the desktop Gallery (Viewers tab, "JSON / XML diff"): load both samples, switch between Tree and Side by side, try "only changes" and scrolling, break one side, and repeat under each theme. The tag input (TASK-774) can be checked in the Gallery's Forms & data tab: type and paste IČOs, try a duplicate and a sixth. Its placeholder does not show yet — a known gap in the desktop text box, tracked separately. Still to come: the accordion look (TASK-775).
 
 ## Prototype
 
@@ -41,4 +41,4 @@ Skipped — a port of an engine and controls whose behaviour and look are alread
 
 ## Next step
 
-The comparison engine reads JSON and XML on the desktop (TASK-769–771), and both views of the diff viewer are built (TASK-772, TASK-773) — they need a person to check them in the Gallery. Next: the tag input (TASK-774) and the accordion look (TASK-775).
+The comparison engine reads JSON and XML on the desktop (TASK-769–771), and both views of the diff viewer are built (TASK-772, TASK-773) — they need a person to check them in the Gallery. The tag input is built too (TASK-774). Next: the accordion look (TASK-775).

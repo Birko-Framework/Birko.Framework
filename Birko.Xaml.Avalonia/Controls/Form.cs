@@ -258,7 +258,8 @@ public class Form : ContentControl
         return list;
     }
 
-    // Freeform tags: a WrapPanel of removable chips + a text box (Enter adds, Backspace removes the last).
+    // Freeform tags: the TagInput control (FEATURE-020 / TASK-774, b-tag-input's port) over the model's IList<string>.
+    // Separators, Enter, Backspace and paste behave as TagInput documents; a duplicate is refused, as on the web.
     private Control BuildTags(FormField field)
     {
         var prop = Model!.GetType().GetProperty(field.Name);
@@ -269,64 +270,16 @@ public class Form : ContentControl
             try { prop.SetValue(Model, tags); } catch { tags = null; }
         }
 
-        var wrap = new WrapPanel();
-        var input = new TextBox { Watermark = field.Placeholder, MinWidth = 90, IsReadOnly = field.ReadOnly, BorderThickness = new Thickness(0) };
-
-        void Rebuild()
+        var input = new TagInput { Placeholder = field.Placeholder, IsReadOnly = field.ReadOnly || tags is null };
+        if (tags is not null) input.SetTags(tags);
+        input.TagsChanged += (_, _) =>
         {
-            wrap.Children.Clear();
-            if (tags is not null)
-            {
-                foreach (var t in tags.ToList())
-                {
-                    var value = t;
-                    var chip = new Border
-                    {
-                        CornerRadius = new CornerRadius(4),
-                        Padding = new Thickness(8, 2),
-                        Margin = new Thickness(0, 0, 4, 4),
-                    };
-                    Themed(chip, Border.BackgroundProperty, "BColorPrimaryLightBrush");
-                    var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-                    row.Children.Add(new TextBlock { Text = value, VerticalAlignment = VerticalAlignment.Center });
-                    if (!field.ReadOnly)
-                    {
-                        var x = new Button { Content = "✕", Background = null, BorderThickness = new Thickness(0), Padding = new Thickness(2, 0), FontSize = 11 };
-                        // A glyph is not a name: this announced as "✕" with no clue WHICH tag it removes, and
-                        // a tag list renders one per tag. Found sweeping the skin after the ribbon's commands
-                        // turned out to be anonymous (see this project's CLAUDE.md § Accessibility gotchas).
-                        global::Avalonia.Automation.AutomationProperties.SetName(x, $"Remove {value}");
-                        ToolTip.SetTip(x, $"Remove {value}");
-                        x.Click += (_, _) => { tags!.Remove(value); Rebuild(); };
-                        row.Children.Add(x);
-                    }
-                    chip.Child = row;
-                    wrap.Children.Add(chip);
-                }
-            }
-            wrap.Children.Add(input);
-        }
-
-        if (!field.ReadOnly && tags is not null)
-        {
-            input.KeyDown += (_, e) =>
-            {
-                if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(input.Text))
-                {
-                    tags.Add(input.Text.Trim());
-                    input.Text = string.Empty;
-                    Rebuild();
-                }
-                else if (e.Key == Key.Back && string.IsNullOrEmpty(input.Text) && tags.Count > 0)
-                {
-                    tags.RemoveAt(tags.Count - 1);
-                    Rebuild();
-                }
-            };
-        }
-
-        Rebuild();
-        return wrap;
+            if (tags is null) return;
+            // The model owns the list instance: refill it rather than replacing it.
+            tags.Clear();
+            foreach (var t in input.Tags) tags.Add(t);
+        };
+        return input;
     }
 
     // File pick: a read-only path box (bound to a string prop) + a Browse button using the platform StorageProvider.
