@@ -21,13 +21,19 @@ generated: 2026-10-26
 
 ## Build progress
 
-0 / 0 tasks done.
+0 / 7 tasks done.
 
-No tasks yet — the approved decisions have not been broken into work.
+- TASK-769 — one shared set of test examples for the comparison, run by the web engine
+- TASK-770 — the comparison engine on the desktop (the tester is waiting on this one)
+- TASK-771 — turning XML into the shape the comparison reads
+- TASK-772 — the diff viewer, tree view
+- TASK-773 — the diff viewer, side by side
+- TASK-774 — the tag input
+- TASK-775 — the accordion look
 
 ## What can be tested now
 
-Nothing yet.
+Nothing yet. Once built, the diff viewer (TASK-772, TASK-773), the tag input (TASK-774) and the accordion look (TASK-775) each have a Gallery walkthrough to run under every theme.
 
 ## Prototype
 
@@ -35,4 +41,4 @@ Skipped — a port of an engine and controls whose behaviour and look are alread
 
 ## Next step
 
-Break the 9 approved decisions into tasks (`/feature decompose FEATURE-020`); the comparison engine comes first, as the desktop tester is waiting on it.
+Build the comparison engine first: shared test examples (TASK-769), then the engine (TASK-770) — the desktop tester is waiting on it. The tag input and the accordion look can be built in parallel.

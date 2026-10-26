@@ -183,6 +183,10 @@ Decomposed into 8 stories (dependency-ordered):
     is the scaling model, not the CSS: `RibbonGroupMetrics.Widths` keys one width per group per
     variant, which stops naming a configuration once items size independently. Opens with an explicit
     design decision (TASK-119) before any code.
+12. **STORY-068** — Parity for the web tester's compare page ([FEATURE-020](../../docs/features/FEATURE-020-xaml-diff-and-parity-controls/idea.md)):
+    the `diffJson` / `xmlToTree` engine ported to `Birko.Xaml.Core` against test vectors shared with Birko.Web, a
+    `JsonDiffViewer` (tree, then side-by-side), a `TagInput` and a Birko `Expander` theme. Requested by the FinStat
+    desktop tester (ClientApi.CSharp); the engine (TASK-770) is its blocker.
 
 ## WPF addendum — adding WPF after Avalonia
 
