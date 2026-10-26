@@ -48,4 +48,4 @@ jobs:
         env:
           BIRKO_SRC: ${{ github.workspace }}/birko/Framework
           BIRKO_REQUIRE_LIVE: '1'
-        run: dotnet test birko/Framework/tests/Birko.Xaml.Core.Tests --nologo --filter "FullyQualifiedName~JsonDiff"
+        run: dotnet test birko/Framework/tests/Birko.Xaml.Core.Tests --nologo --filter "FullyQualifiedName~JsonDiff|FullyQualifiedName~XmlTree"

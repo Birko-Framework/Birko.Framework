@@ -21,7 +21,7 @@ Decisions: [FEATURE-020](../../../docs/features/FEATURE-020-xaml-diff-and-parity
 
 1. [TASK-769](TASK-769-shared-json-diff-vectors.md) — shared diff test vectors in Birko.Web, run by the Playground (D4, D5) — **done**
 2. [TASK-770](TASK-770-xaml-core-json-diff-engine.md) — the JSON diff engine in Birko.Xaml.Core (D1, D2) — **done**, API sent to clientapi-csharp-d1
-3. [TASK-771](TASK-771-xaml-core-xml-tree.md) — `xmlToTree` / `xmlToLines` in Birko.Xaml.Core (D1, D2)
+3. [TASK-771](TASK-771-xaml-core-xml-tree.md) — `xmlToTree` / `xmlToLines` in Birko.Xaml.Core (D1, D2) — **done**
 4. [TASK-772](TASK-772-xaml-json-diff-viewer-tree.md) — diff viewer control, tree view (D6, D12)
 5. [TASK-773](TASK-773-xaml-json-diff-viewer-side-by-side.md) — diff viewer, side-by-side view (D7, D12)
 6. [TASK-774](TASK-774-xaml-tag-input.md) — tag input control (D8, D12)

@@ -72,6 +72,11 @@ skins reference one shared assembly. Not in the `Birko.Framework.csproj` aggrega
   framework). Reproduced on purpose: JavaScript's own-key order (`OwnKeys`) and double-valued number equality.
   `JsonPathSegment` keeps a key `"0"` apart from an index `0`; mind that a `null` in a `JsonPathSegment?` ternary
   converts through the implicit `string` operator unless cast.
+- **XML (TASK-771):** `Diff.XmlTree.ToTree` / `TryToTree` / `ToLines` + `XmlTreeOptions`, `XmlLine` — a port of
+  `xml-tree.ts` on `System.Xml.Linq`. The web one runs on the browser's `DOMParser`; here a DTD is ignored and never
+  resolved (`DtdProcessing.Ignore`, no resolver), so a document using entities a DTD declares is refused rather than
+  expanded — the one deliberate difference. `ToTree` returns null for both "not XML" and a nil root, as the web does;
+  `TryToTree` tells them apart.
 
 ## The `ICrudDataSource<T>` port — why not `IAsyncBulkStore<T>` directly
 

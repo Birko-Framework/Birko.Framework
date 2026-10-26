@@ -80,6 +80,29 @@ foreach (var c in r.Changes)   // c.Kind, c.Path ("Items[1].Price"), c.OldPath (
   visited in JavaScript's own-key order (integer-like keys first, ascending), and numbers compare as doubles (`1` equals
   `1.0`).
 
+### Comparing XML (TASK-771)
+- **`Diff.XmlTree.ToTree(text, options?)`** reads an XML body as the JSON-like tree `JsonDiff` compares, so XML diffs
+  by path too. It returns `null` when the text is not XML (and for a nil root, as on the web); **`TryToTree`** tells the
+  two apart. **`ToLines`** pretty-prints the same body, one element per line, each `XmlLine` carrying the tree paths it
+  shows, so a viewer can mark the original XML with a diff's changes.
+
+```csharp
+var r = JsonDiff.Diff(XmlTree.ToTree(baselineXml), XmlTree.ToTree(otherXml));
+// <R><Ico>1</Ico><Nil xsi:nil="true"/><Contacts><Contact><Type>Phone</Type></Contact></Contacts><Price currency="EUR">10</Price></R>
+//   → { "Ico": "1", "Nil": null, "Contacts": [{ "Type": "Phone" }], "Price": { "@currency": "EUR", "#text": "10" } }
+var changedPaths = r.Changes.Select(c => c.Path).ToHashSet();
+var marked = XmlTree.ToLines(otherXml)!.Where(l => l.Paths.Any(p => changedPaths.Contains(JsonPath.Format(p))));
+```
+
+- The tree is the **root element's content**. A text-only element is a string, an empty one `""`, `xsi:nil="true"`
+  `null`; attributes are `@name`; namespace declarations and `xsi:*` attributes are dropped; text beside attributes or
+  children is kept under `#text`. A **list** is an element whose children all share one name and are several, complex,
+  or a simple item name (`string`, `int`, … — XmlSerializer's arrays). A name repeated among other fields keeps every
+  occurrence, as an array. **Every value is a string**: compare XML with XML.
+- `XmlTreeOptions`: `SimpleItemNames`, `NilAsNull` (default `true`), `AttributePrefix` (`"@"`), `TextKey` (`"#text"`).
+- A DTD is ignored and never resolved, so no external entity is ever fetched; a document relying on DTD-declared
+  entities is refused (`null`).
+
 Everything else (HTTP, data, sync, config) is delegated to existing `Birko.*` projects, not re-implemented.
 
 ## Convention note

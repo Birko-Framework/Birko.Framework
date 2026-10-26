@@ -32,6 +32,8 @@ view-models, and `MirrorDataSource`).
   failing case named. `DiffVectors` maps the file's named normalizer ops and compares as the web runner does.
 - `JsonDiffTests` — what the vectors cannot hold: function normalizers and key selectors, presence flags, segments,
   CLR-backed values, untouched inputs.
+- `XmlTreeVectorTests` / `XmlTreeTests` — `Diff.XmlTree` against the vectors' `xmlTree` (27) and `xmlLines` (10) sections, plus
+  non-XML input, `TryToTree` on a nil root, an ignored (never resolved) DTD, and an XML diff marking its lines.
 
 ## Conventions
 
