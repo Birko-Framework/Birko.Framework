@@ -1,7 +1,7 @@
 ---
 id: TASK-777
 parent: EPIC-001
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-27
@@ -80,3 +80,13 @@ Playground `e116e6c`, keyboard-check +4, all with real input:
 - a Tab after the click shows it again.
 
 keyboard-check 222/222, verify.mjs 0 failing, entry-points 409/409, tsc clean. Back to FlowerFur for round 2.
+
+## Human test, round 2 (2026-10-27, FlowerFur hero on v0.1.20): PASSED
+
+The user re-ran every step on FlowerFur's home hero with `rotation-control="hover"`, reported by the FlowerFur
+session (its TASK-167):
+- steps 1, 3b and 3 pass: hidden at rest; hover shows it; hover, click stop with the mouse, move away, and it hides;
+  Tab out hides it;
+- step 2 passes: Tab in shows it with a focus ring, and Enter starts / stops the rotation.
+
+Step 4 (default still shown at rest) is covered by carousel-smoke's "default: the control is shown at rest". Closed.
