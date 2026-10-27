@@ -292,7 +292,7 @@ immediately).
 ### The Birko.Xaml diff viewer is framed as on the web (2026-10-26)
 [[TASK-776]] (FEATURE-020 D6, changed). `JsonDiffViewer` now sits in `b-json-diff`'s card: a bordered, rounded card, a
 header bar with a line under it, a padded body; side-by-side panes stay a gap apart. On by default; `IsFramed = false`
-turns it off for a host that frames the viewer itself. Asked for by the FinStat desktop tester.
+turns it off for a host that frames the viewer itself. Asked for by the FinStat desktop tester. Signed off in the Gallery and the tester.
 ### Birko text boxes mask passwords, show placeholders and selections (2026-10-26)
 [[TASK-768]]. The Birko Avalonia `TextBox` template passed its presenter only the text, so every password field showed
 its value (the FinStat tester's "Private Key"), no placeholder showed, selections were not drawn, and a long value ran

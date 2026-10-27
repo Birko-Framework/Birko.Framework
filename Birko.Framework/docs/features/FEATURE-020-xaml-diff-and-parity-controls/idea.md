@@ -3,7 +3,7 @@ id: FEATURE-020
 created: 2026-10-26
 owner: both
 # status — one of: idea, review (built, sign-off pending), done, dropped, superseded
-status: review
+status: done
 ---
 
 # Birko.Xaml — JSON/XML comparison, a diff viewer, a tag input and an accordion look

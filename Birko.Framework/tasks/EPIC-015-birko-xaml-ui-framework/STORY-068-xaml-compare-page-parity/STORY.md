@@ -1,7 +1,7 @@
 ---
 id: STORY-068
 parent: EPIC-015
-status: in-progress
+status: done
 created: 2026-10-26
 feature: FEATURE-020
 affects: [Birko.Xaml.Core, Birko.Xaml.Avalonia, Birko.Web.Core]
@@ -26,7 +26,7 @@ Decisions: [FEATURE-020](../../../docs/features/FEATURE-020-xaml-diff-and-parity
 5. [TASK-773](TASK-773-xaml-json-diff-viewer-side-by-side.md) — diff viewer, side-by-side view (D7, D12) — **done**
 6. [TASK-774](TASK-774-xaml-tag-input.md) — tag input control (D8, D12) — **done**
 7. [TASK-775](TASK-775-xaml-expander-theme.md) — Birko Expander theme (D10, D12) — **done**
-8. [TASK-776](TASK-776-xaml-json-diff-viewer-card-frame.md) — the diff viewer in the web's card frame (D6, changed after sign-off) — **verify**
+8. [TASK-776](TASK-776-xaml-json-diff-viewer-card-frame.md) — the diff viewer in the web's card frame (D6, changed after sign-off) — **done**
 
 TASK-774 and TASK-775 depend on nothing and can run in any order. TASK-768 (the `PasswordChar` defect) came from the same
 request but is not part of this story.

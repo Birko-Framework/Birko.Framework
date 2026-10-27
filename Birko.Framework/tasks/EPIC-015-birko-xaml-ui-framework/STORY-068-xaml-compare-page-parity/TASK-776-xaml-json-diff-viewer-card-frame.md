@@ -3,7 +3,7 @@ id: TASK-776
 parent: STORY-068
 feature: FEATURE-020
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-26
@@ -38,10 +38,10 @@ with no frame of their own — the user chose web parity there over a divider or
 
 ## Human test plan
 
-- [ ] 1. Gallery, diff viewer page: the viewer is a bordered, rounded card; the header bar has its own background and a
+- [x] 1. Gallery, diff viewer page: the viewer is a bordered, rounded card; the header bar has its own background and a
    line under it; the tree is inset from the card's edge.
-- [ ] 2. Switch to Side by side: both panes are inside the same card, a gap apart, no frame around each.
-- [ ] 3. Repeat under Dark, Neon and Finstat: the card's border and the header bar stay visible.
+- [x] 2. Switch to Side by side: both panes are inside the same card, a gap apart, no frame around each.
+- [x] 3. Repeat under Dark, Neon and Finstat: the card's border and the header bar stay visible.
 - [x] 4. The FinStat desktop tester's Compare window, rebuilt on this commit: the diff reads as its own framed block.
 
 ## Review log
@@ -56,3 +56,5 @@ with no frame of their own — the user chose web parity there over a divider or
 - 2026-10-26 — Human test plan step 4 passed: the user checked the framed viewer in the desktop tester's Compare window,
   rebuilt on `327bd9d4` ("looks good", relayed by the tester session). Steps 1–3 (Gallery, every theme) not run yet;
   stays at verify.
+- 2026-10-27 — Steps 1–3 run by František Bereň in the Birko.Xaml Gallery (Viewers tab, every theme): all passed.
+  Closed (verify → done).

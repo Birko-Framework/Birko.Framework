@@ -69,3 +69,5 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   or a frame per pane. Not built yet, so the feature went back to idea and the change became TASK-776.
 - 2026-10-26 — TASK-776 built and checked headlessly: the feature is back at review until the frame is seen in the
   Gallery and in the desktop tester.
+- 2026-10-27 — TASK-776's test plan passed: the user saw the framed viewer in the desktop tester's Compare window and
+  in the desktop Gallery, both views, every theme. FEATURE-020 signed off again by František Bereň (maintainer).
