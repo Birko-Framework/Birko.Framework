@@ -33,7 +33,7 @@ decided). The default stays as it is: always visible.
 - [x] Hidden, it takes no pointer input (`pointer-events: none`), so a tap on its spot reaches the slide
 - [x] Unchanged: no autoplay under `prefers-reduced-motion`, pause on hover, stop for good on focus
 - [x] Playground carousel-smoke + keyboard-check (real Tab and mouse) cover it; API.md, ACCESSIBILITY.md, CHANGELOG
-- [ ] Commit reported back to the FlowerFur session
+- [x] Commit reported back to the FlowerFur session (2026-10-27, after pushing Birko.Web 506d9f9 + v0.1.19)
 
 ## Human test plan
 
