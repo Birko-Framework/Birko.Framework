@@ -26,6 +26,11 @@ central login: it has no OIDC, and the risky part of auth is the login itself, w
 Out of scope at the epic level: authentication / identity providers, OIDC in the OAuth server, and
 admin UIs (consumer work).
 
+> **Boundary moved 2026-10-28 (decided by the user, in the Presenter session):** OpenID Connect *sign-in* (verifying a
+> provider's `id_token`) is now the framework's: `Birko.Communication.OAuth.OpenIdConnect`, [[TASK-778]]. Presenter,
+> Reps and Symbio verify an `id_token` with one tested implementation instead of each writing it. Policy stays in the
+> apps (who may sign in, user provisioning, cookies and session), and OIDC in the OAuth *server* stays out of scope.
+
 ## Success criteria
 
 - A consumer can wire external login + global admins + per-resource owners/editors + invitations

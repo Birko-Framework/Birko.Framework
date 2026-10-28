@@ -47,6 +47,7 @@
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.*" />                                 <!-- Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems -->
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.*" />                   <!-- Birko.Messaging.Razor\Birko.Messaging.Razor.projitems -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" /> <!-- Birko.Data.Repositories\Birko.Data.Repositories.projitems -->
+    <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.*" />                 <!-- Birko.Communication.OAuth.OpenIdConnect\Birko.Communication.OAuth.OpenIdConnect.projitems -->
     <PackageVersion Include="MongoDB.Driver" Version="3.*" />                                         <!-- Birko.Data.MongoDB\Birko.Data.MongoDB.projitems -->
     <PackageVersion Include="MQTTnet" Version="4.*" />                                                <!-- Birko.MessageQueue.MQTT\Birko.MessageQueue.MQTT.projitems -->
     <PackageVersion Include="MySqlConnector" Version="2.*" />                                         <!-- Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems -->

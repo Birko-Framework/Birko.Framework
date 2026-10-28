@@ -920,6 +920,7 @@ ignore:
   - "../Birko.Communication.REST/**"
   - "../Birko.Communication.OAuth/**"
   - "../Birko.Communication.OAuth.Providers/**"
+  - "../Birko.Communication.OAuth.OpenIdConnect/**"
   - "../Birko.Security.NFC/**"
   # domain model POCOs and their mappings (Birko.Models.SQL, the mapping engine, is in schema-index-and-ddl)
   - "../Birko.Models/**"

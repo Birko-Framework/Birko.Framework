@@ -289,6 +289,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### OpenID Connect sign-in with Google and Microsoft (2026-10-28)
+[[TASK-778]], for Presenter. New `Birko.Communication.OAuth.OpenIdConnect`: `OpenIdSignIn` runs the sign-in (PKCE,
+nonce, a state bound to the browser) and returns a status. `IdTokenValidator` checks the `id_token` against the
+provider's published keys. Google and Microsoft factories. The framework now owns OIDC sign-in (EPIC-020's boundary,
+moved by the user); who may sign in stays in the app. New package `Microsoft.IdentityModel.JsonWebTokens` 8.*: CPM
+consumers add it. [[TASK-779]]: a PKCE code exchange now also sends the client secret, which Google and Microsoft require.
 ### The Birko.Xaml diff viewer is framed as on the web (2026-10-26)
 [[TASK-776]] (FEATURE-020 D6, changed). `JsonDiffViewer` now sits in `b-json-diff`'s card: a bordered, rounded card, a
 header bar with a line under it, a padded body; side-by-side panes stay a gap apart. On by default; `IsFramed = false`

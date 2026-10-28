@@ -95,6 +95,7 @@ Birko.Security.OAuth.Server (OAuthServer, endpoint handlers, store interfaces �
 
 Birko.Communication.OAuth (IOAuthClient, OAuthClient, OAuthSettings)
   -> Birko.Communication.OAuth.Providers (GitHubOAuthProvider — pre-configured device flow)
+  -> Birko.Communication.OAuth.OpenIdConnect (OpenIdSignIn, IdTokenValidator, Google / Microsoft) <- Microsoft.IdentityModel.JsonWebTokens
 
 Birko.Communication.GraphQL (IGraphQLClient, GraphQLClient, GraphQLSettings — queries, mutations, subscriptions over HttpClient + ClientWebSocket)
 
@@ -283,6 +284,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.AI.Resilience.Data** - `StoreCircuitBreakerStore` / `StoreUsageRepository`: the two resilience interfaces over any `IAsyncBulkStore<T>`; usage totals by the store's `AggregateAsync`
 - **Birko.AI.Orchestration** - ITaskDispatcher + DirectTaskDispatcher, AgentTaskRecord (status, dependencies, retry tracking), ImplementationPlan/ImplementationStep (lifecycle, retry decision, current step, per-worker assignment, metrics, execution log; status enums pinned), StepDependencyAnalyzer (parallel groups, topological sort, ordering validation, reorder), Validation (IStepValidator: files created / modified, ExpectedContent present), EscalationAlert (worker id, escalation types, reflection entries)
 - **Birko.Communication.OAuth.Providers** - GitHubOAuthProvider (pre-configured OAuthSettings factory for GitHub Device Code flow, uses Birko.Communication.OAuth)
+- **Birko.Communication.OAuth.OpenIdConnect** - OpenIdSignIn (authorization code + PKCE + nonce + browser-bound state, status-enum result), IdTokenValidator (RS256 against the provider's keys, issuer, audience/azp, lifetime, nonce), Google and Microsoft provider factories (TASK-778)
 
 ## Web (TypeScript)
 - **Birko.Web.Core** - Minimal Web Component framework (Shadow DOM base class, reactive state, HTTP/SSE clients, hash router, unified i18n: `i18n` singleton, `t()`, `useI18n()`, `onI18nChange()`, `BaseComponent.label()` helper)

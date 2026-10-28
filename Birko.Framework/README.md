@@ -196,6 +196,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Communication.IR | Consumer IR (NEC, Samsung, RC5 protocols, pluggable transports) |
 | Birko.Communication.NFC | NFC/RFID tag reading (ISO 14443A, NDEF, Serial/HTTP/HID transports) |
 | Birko.Communication.OAuth.Providers | Pre-configured OAuth providers (e.g. GitHubOAuthProvider for Device Code flow) |
+| Birko.Communication.OAuth.OpenIdConnect | OpenID Connect web sign-in (Google, Microsoft, any OIDC provider) with a verified id_token |
 | Birko.Communication.GraphQL | GraphQL client (queries, mutations, subscriptions over HttpClient + ClientWebSocket, zero external deps) |
 | Birko.Communication.gRPC | gRPC client (channel pool, typed client factory, auth interceptor, settings over Grpc.Net.Client) |
 | Birko.Communication.gRPC.Server | gRPC server (AddBirkoGrpc DI wiring, server auth interceptor over Grpc.AspNetCore) |

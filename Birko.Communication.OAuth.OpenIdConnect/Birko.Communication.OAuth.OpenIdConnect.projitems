@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>406b8251-8eaf-4e60-b612-d486e2f110b6</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.OAuth.OpenIdConnect</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Two forms, one dependency: under Central Package Management a PackageReference must NOT carry a Version
+         (NU1008), so the consumer's Directory.Packages.props owns it (Birko.Packages.props carries the entry).
+
+         This project owns Microsoft.IdentityModel.JsonWebTokens (JsonWebTokenHandler, and with it
+         Microsoft.IdentityModel.Tokens' JsonWebKeySet). Not Microsoft.IdentityModel.Protocols.OpenIdConnect: the
+         discovery document and key set are fetched and cached here, on an injected TimeProvider, instead of by its
+         ConfigurationManager (TASK-778). It lives apart from Birko.Communication.OAuth.Providers so a GitHub-only or
+         Copilot consumer does not receive it. Floats within its major, as Birko.Security.Jwt's
+         System.IdentityModel.Tokens.Jwt does; importing both resolves one JsonWebTokens. -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)OpenIdProviderOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GoogleOpenIdProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MicrosoftOpenIdProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OpenIdMetadataCache.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IdTokenValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OpenIdSignIn.cs" />
+  </ItemGroup>
+</Project>

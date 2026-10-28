@@ -74,7 +74,34 @@ login CSRF), and `OAuthCodeExchanger` (`IOAuthCodeExchanger`) exchanges the call
 `Birko.Communication.OAuth.Providers` adds `GitHubOAuthProvider.CreateWebFlowSettings` and `GitHubUserClient` (the user
 by stable numeric id, plus the verified primary email). `OAuthClient` asks for JSON, treats a 2xx response carrying
 `error` as an error (GitHub answers errors with 200, which broke its device-flow polling), and no longer reconfigures a
-borrowed HttpClient.
+borrowed HttpClient. With PKCE it still sends a configured client secret (TASK-779).
+
+### Birko.Communication.OAuth.OpenIdConnect
+OpenID Connect web sign-in with a verified `id_token` (TASK-778): Google and Microsoft first, any OIDC provider by
+options. `OpenIdSignIn` (`IOpenIdSignIn`, one per provider, a singleton) does the authorization-code flow with PKCE, a
+`nonce`, and a `state` bound to the browser through `IOAuthStateStore`:
+
+```csharp
+var google = new OpenIdSignIn(
+    GoogleOpenIdProvider.Create(clientId, clientSecret, "https://app.example/signin/google"),
+    stateStore, httpClient);
+
+// /signin/google: set a random HttpOnly, SameSite=Lax cookie, then redirect
+var start = await google.BeginAsync(binding: cookieValue, data: returnUrl);   // start.AuthorizationUrl
+
+// /signin/google callback
+var result = await google.CompleteAsync(new OpenIdCallback(q["state"], q["code"], q["error"], q["error_description"]), cookieValue);
+if (result.Succeeded) { /* result.Identity: Provider, Subject, Issuer, Email, EmailVerified, Name, TenantId */ }
+```
+
+`CompleteAsync` answers a status (`Succeeded`, `InvalidState`, `ProviderRefused`, `CodeRejected`, `InvalidIdToken`,
+`ProviderUnavailable`), never throws for a refused sign-in. The `id_token` check (`IdTokenValidator`, usable alone): an
+RS256 signature by the provider's published keys (one rate-limited refresh when a key is unknown), the issuer, the
+audience (and `azp` when there are several), `exp` / `nbf` on an injectable `TimeProvider`, the `nonce`, a non-empty
+`sub`. Google's two issuers are both accepted. Microsoft's `common` / `organizations` issuer holds `{tenantid}`, which
+is matched with the token's own `tid` (a GUID); `allowedTenantIds` admits only some organizations. `EmailVerified` is
+true only when the provider says so (`email_verified`, or Microsoft's optional `xms_edov`). Who may sign in, creating
+users, and the app's session stay in the app. Depends on `Microsoft.IdentityModel.JsonWebTokens` 8.*.
 
 > Issuing tokens (not just consuming them)? See `Birko.Security.OAuth.Server` for the authorization-server side — full /token, /authorize, /device_authorization, and dynamic client registration endpoints. Documented in [docs/security.md](security.md#oauth2-authorization-server-birkosecurityoauthserver).
 

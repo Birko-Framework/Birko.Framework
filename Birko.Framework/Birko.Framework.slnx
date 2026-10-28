@@ -48,6 +48,7 @@
     <Project Path="../Birko.Communication.REST.Server/Birko.Communication.REST.Server.shproj" />
     <Project Path="../Birko.Communication.AspNetCore/Birko.Communication.AspNetCore.shproj" />
     <Project Path="../Birko.Communication.OAuth.Providers/Birko.Communication.OAuth.Providers.shproj" />
+    <Project Path="../Birko.Communication.OAuth.OpenIdConnect/Birko.Communication.OAuth.OpenIdConnect.shproj" />
     <Project Path="../Birko.Communication.GraphQL/Birko.Communication.GraphQL.shproj" />
     <Project Path="../Birko.Communication.gRPC/Birko.Communication.gRPC.shproj" />
     <Project Path="../Birko.Communication.gRPC.Server/Birko.Communication.gRPC.Server.shproj" />
@@ -323,6 +324,7 @@
     <Project Path="../tests/Birko.Caching.Redis.Tests/Birko.Caching.Redis.Tests.csproj" />
     <Project Path="../tests/Birko.Communication.Tests/Birko.Communication.Tests.csproj" />
     <Project Path="../tests/Birko.Communication.OAuth.Providers.Tests/Birko.Communication.OAuth.Providers.Tests.csproj" />
+    <Project Path="../tests/Birko.Communication.OAuth.OpenIdConnect.Tests/Birko.Communication.OAuth.OpenIdConnect.Tests.csproj" />
     <Project Path="../tests/Birko.Communication.Bluetooth.Tests/Birko.Communication.Bluetooth.Tests.csproj" />
     <Project Path="../tests/Birko.Communication.Network.Tests/Birko.Communication.Network.Tests.csproj" />
     <Project Path="../tests/Birko.Communication.REST.Server.Tests/Birko.Communication.REST.Server.Tests.csproj" />

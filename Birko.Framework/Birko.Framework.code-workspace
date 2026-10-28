@@ -133,6 +133,10 @@
 			"path": "../Birko.Communication.OAuth"
 		},
 		{
+			"name": "Communication / Birko.Communication.OAuth.OpenIdConnect",
+			"path": "../Birko.Communication.OAuth.OpenIdConnect"
+		},
+		{
 			"name": "Communication / Birko.Communication.OAuth.Providers",
 			"path": "../Birko.Communication.OAuth.Providers"
 		},
@@ -931,6 +935,10 @@
 		{
 			"name": "Tests / Birko.Communication.Tests",
 			"path": "../tests/Birko.Communication.Tests"
+		},
+		{
+			"name": "Tests / Birko.Communication.OAuth.OpenIdConnect.Tests",
+			"path": "../tests/Birko.Communication.OAuth.OpenIdConnect.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.OAuth.Providers.Tests",
