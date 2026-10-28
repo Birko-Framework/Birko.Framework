@@ -3,7 +3,7 @@
 Lightweight REST server built on `HttpListener` with route registration, middleware pipeline, and optional API-key/Bearer authentication.
 
 ## Project Location
-`C:\Source\Birko.Communication.REST.Server\` — shared project (.shproj)
+`Birko.Communication.REST.Server/` at the root of the Birko.Framework repository — shared project (.shproj)
 
 ## Components
 

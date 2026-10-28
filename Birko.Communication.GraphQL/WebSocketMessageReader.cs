@@ -13,7 +13,7 @@ namespace Birko.Communication.GraphQL
     /// </summary>
     internal static class WebSocketMessageReader
     {
-        public static async Task<WsMessage> ReceiveTextAsync(WebSocket socket, CancellationToken ct)
+        public static async Task<WsMessage> ReceiveTextAsync(System.Net.WebSockets.WebSocket socket, CancellationToken ct)
         {
             using var ms = new MemoryStream();
             var buffer = new byte[8192];

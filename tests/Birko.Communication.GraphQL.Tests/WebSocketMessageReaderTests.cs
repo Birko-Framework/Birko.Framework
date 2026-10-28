@@ -16,7 +16,7 @@ namespace Birko.Communication.GraphQL.Tests;
 /// </summary>
 public class WebSocketMessageReaderTests
 {
-    private sealed class ScriptedWebSocket : WebSocket
+    private sealed class ScriptedWebSocket : System.Net.WebSockets.WebSocket
     {
         private readonly Queue<(byte[] Data, bool End, WebSocketMessageType Type)> _frames;
         public ScriptedWebSocket(IEnumerable<(byte[], bool, WebSocketMessageType)> frames) => _frames = new(frames);
