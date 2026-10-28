@@ -59,7 +59,8 @@ On the published page (after the push) or `node build.js` and serve `wwwroot/`:
 4. Hover or Tab to ⓘ on a few cards (Button, JSON diff, Ribbon, a Lab card): the tooltip opens to the left, on screen,
    and reads sensibly — no cut-off sentence, no task numbers.
 5. Ribbon → Appearance: switch Dark / Neon / Inverse and CS — the gallery restyles, the pressed button follows. Design
-   tokens opens the drawer, Generate CSS the modal.
+   tokens opens the drawer, Generate CSS the modal. Pick SK and reload: still SK (Quantity stepper shows 1,5 and
+   "Znížiť"), SK pressed.
 6. Ribbon → Lab: the banner and the four harnesses; Gallery returns to the category you left. "Run smoke suites" opens
    `?smoke=1` in a new tab.
 7. Ribbon → Help: About, Tour (three steps, replays every time), and the four docs links open in new tabs.
@@ -74,4 +75,5 @@ plugin. verify.mjs, subpath-check.mjs and theme-roundtrip-check.mjs dispatch the
 removed `#pg-nav` / `#open-tokens`. The header ribbon turns off its page-wide Ctrl+F1 and key-tip shortcuts, which
 otherwise took them from the gallery's Ribbon card (keyboard-check found it: 7 FAIL, then 222/222). Also fixed: the
 gallery's `b-tour` demo called `el.start()`, which `BTour` does not have (`start` is the `tour` manager's).
-Checked in Chrome on localhost (light and dark, tooltips, Lab, About, both tours). Human sign-off pending.
+The Locale pick now persists under `pg-locale` (asked for after review: it reset to English on reload), written
+only by the ribbon click and skipped under `?smoke` / `?kb`. Checked in Chrome on localhost (light and dark, tooltips, Lab, About, both tours). Human sign-off pending.
