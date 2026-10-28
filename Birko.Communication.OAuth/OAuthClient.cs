@@ -138,11 +138,11 @@ public class OAuthClient : IOAuthClient
         if (!string.IsNullOrEmpty(_settings.RedirectUri))
             parameters["redirect_uri"] = _settings.RedirectUri;
 
-        // Confidential clients send client_secret
-        if (!string.IsNullOrEmpty(_settings.ClientSecret) && codeVerifier == null)
+        // A confidential client sends its secret, with or without PKCE (TASK-779): RFC 7636 adds the verifier, it does not
+        // replace client authentication, and Google and Microsoft refuse a web client's exchange without the secret.
+        if (!string.IsNullOrEmpty(_settings.ClientSecret))
             parameters["client_secret"] = _settings.ClientSecret;
 
-        // PKCE flow sends code_verifier instead of client_secret
         if (codeVerifier != null)
             parameters["code_verifier"] = codeVerifier;
 

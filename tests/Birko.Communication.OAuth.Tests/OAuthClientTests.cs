@@ -180,7 +180,23 @@ public class OAuthClientTests
 
         token.AccessToken.Should().Be("pkce-token");
         handler.LastRequestBody.Should().Contain("code_verifier=my-verifier");
-        handler.LastRequestBody.Should().NotContain("client_secret"); // PKCE doesn't send client_secret
+        // TASK-779: a confidential web client using PKCE still authenticates. Google and Microsoft refuse the exchange
+        // without the secret ("client_secret is missing", AADSTS7000218); RFC 7636 allows both together.
+        handler.LastRequestBody.Should().Contain("client_secret=test-secret");
+    }
+
+    [Fact]
+    public async Task ExchangeCodeAsync_WithPkce_AndNoSecret_SendsNoSecret()
+    {
+        var handler = new FakeHttpHandler(JsonSerializer.Serialize(new { access_token = "t", expires_in = 3600 }), HttpStatusCode.OK);
+        var settings = CreateSettings(OAuthGrantType.AuthorizationCodePkce);
+        settings.ClientSecret = "";
+
+        using var client = new OAuthClient(settings, new HttpClient(handler));
+        await client.ExchangeCodeAsync("auth-code", codeVerifier: "my-verifier");
+
+        handler.LastRequestBody.Should().Contain("code_verifier=my-verifier");
+        handler.LastRequestBody.Should().NotContain("client_secret", "a public client has no secret to send");
     }
 
     [Fact]

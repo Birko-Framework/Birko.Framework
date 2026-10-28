@@ -26,6 +26,9 @@ OAuth2 client library providing multiple grant type flows with automatic token c
   both used to throw `KeyNotFoundException`, TASK-521).
 - `TimeoutSeconds` sets `HttpClient.Timeout` only on a client it owns. A borrowed client gets the timeout per request
   and is never reconfigured (setting it threw once the client had sent a request, TASK-521).
+- `ExchangeCodeAsync` sends `client_secret` whenever one is configured, with or without a PKCE verifier (TASK-779).
+  It used to drop the secret under PKCE, and Google and Microsoft refuse a web client's exchange without it
+  (`client_secret is missing`, `AADSTS7000218`). A public client configures no secret and sends none.
 
 ### OAuthDelegatingHandler.cs
 - **OAuthDelegatingHandler** — DelegatingHandler that auto-attaches Bearer tokens from IOAuthClient. Retries once with fresh token on 401 Unauthorized.
