@@ -2,7 +2,7 @@
 id: TASK-778
 parent: null
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-28
@@ -108,4 +108,12 @@ nothing for the new project. EPIC-020's boundary is recorded in its EPIC.md.
 No health check: whether an identity provider is up is not something a host monitors; it surfaces as
 `ProviderUnavailable`.
 
-Stays at `verify` until Presenter TASK-058 runs the human test plan (a real Google sign-in).
+
+## Human test (2026-10-28, Presenter TASK-058 on framework bfd151dd): PASSED
+
+Reported by the Presenter session. The user signed in with their Google account at `http://localhost:5080`, came back
+signed in, stayed signed in after a reload, and signed out. That is the human test plan.
+
+**Not yet exercised against the real provider: Microsoft.** The user has not registered the Entra app. The Microsoft
+paths (the `{tenantid}` issuer, `tid`, allowed tenants) are covered only by the fake-provider tests. A defect found
+on the first real Microsoft sign-in comes back as a new task, not a reopening of this one.
