@@ -85,3 +85,15 @@ It named the diff engine (`diffJson`, `xmlToTree` / `xmlToLines`), the `b-json-d
 (an Expander look on Avalonia), and the `FieldType.Password` plain-text bug, which became TASK-768. Grill answers from the
 user in this session: engine in Birko.Xaml.Core; shared test vectors, owned by Birko.Web; both viewer views as two tasks;
 strict tag-input parity; Expander theme only.
+
+### 2026-10-29 — became TASK-782 (Slovak and Czech translations shipped with Birko.Web.Components)
+
+Asked while testing TASK-781's Playground on the published page:
+
+> 5 do we have the tokens localized to sk/cz or it uses en fallback? i cannot see a component that shows sk or cz texts
+
+Answered: English fallback — Birko.Web.Components ships only `locales/en.json` (200 strings); the Playground's own
+partial cs/sk bundles (21 strings each) are almost all screen-reader labels. Offered the library-level fix, and asked
+whether to start it or file it:
+
+> fiel as a task

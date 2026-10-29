@@ -2,7 +2,7 @@
 id: TASK-781
 parent: null
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-28
@@ -97,3 +97,11 @@ Back at verify for round 2: steps 3 and 5.
 
 Note for step 5: only the quantity stepper, carousel, gallery and the Close label have CS / SK text in the Playground's
 partial bundles; the playground's own copy (ribbon, card lines) is English.
+
+## Human test round 2 (2026-10-29, the user) — closed
+
+Step 3 passed. Step 5: the switch now loads its bundle on the published page (verified there: SK → "Znížiť Fabric",
+`1,5`, kept after a reload, no failed request), but almost nothing visible changes — Birko.Web.Components ships only
+English, and the Playground's partial cs/sk bundles are screen-reader labels. That is the library's missing
+translations, not this task's switch: filed as [[TASK-782]] at the user's request. Closed: every step passed or, for step
+5, was re-scoped to TASK-782.
