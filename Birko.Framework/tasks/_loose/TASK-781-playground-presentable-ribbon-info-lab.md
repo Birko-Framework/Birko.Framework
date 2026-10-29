@@ -77,3 +77,23 @@ otherwise took them from the gallery's Ribbon card (keyboard-check found it: 7 F
 gallery's `b-tour` demo called `el.start()`, which `BTour` does not have (`start` is the `tour` manager's).
 The Locale pick now persists under `pg-locale` (asked for after review: it reset to English on reload), written
 only by the ribbon click and skipped under `?smoke` / `?kb`. Checked in Chrome on localhost (light and dark, tooltips, Lab, About, both tours). Human sign-off pending.
+
+## Human test round 1 (2026-10-29, the user, on the published page)
+
+Steps 1, 2, 4, 6, 7, 8, 9 passed. Two failed:
+
+- **Step 5 — locale did nothing on the published page.** The console showed `GET
+  https://birko-framework.github.io/locales/cs.json 404`: I18n's default base path is the absolute `/locales`, so at
+  `/Birko.Web.Playground/` it asked the site root. Number formats changed (1,5), no text did. Present before this task
+  (the old header switch did the same); invisible on localhost, where the app is at the root. Fixed with
+  `getI18n().setBasePath('locales')` at boot. `subpath-check.mjs` now switches to SK through the ribbon under the
+  subpath and requires the stepper's Slovak label: on the code before, it FAILs with `/locales/sk.json,
+  /locales/en.json` 404ed and the button reading "Decrease Fabric"; after, PASS.
+- **Step 3 — Clear left the text in the box, and filtering waited for Enter.** The filter now follows the field's
+  composed `input` event as you type, and Clear also empties the box (`setFieldValue`). Measured with trusted typing:
+  26 cards, "date" typed without Enter → 3, Clear → 26 and an empty box.
+
+Back at verify for round 2: steps 3 and 5.
+
+Note for step 5: only the quantity stepper, carousel, gallery and the Close label have CS / SK text in the Playground's
+partial bundles; the playground's own copy (ribbon, card lines) is English.
