@@ -1,7 +1,7 @@
 ---
 id: TASK-784
 parent: EPIC-001
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-29
@@ -56,4 +56,4 @@ Birko.Xaml was checked as well and has no such defect: an Avalonia `TextBlock` d
 - Gate: whitespace-smoke 9/9 (1/9 without the component changes), verify.mjs 0 failing (json-diff-smoke 76/76,
   xml-diff-smoke 40/40), entry-points 409/409. `tsc -p .` in the Playground reports one error in
   `sync-interrupt-smoke.ts`, a file this task does not touch.
-- Stays at `verify` until the human test plan is run.
+- Human test, round 1 (2026-10-29): passed. Run in Chrome on the Playground (localhost:5181, v0.1.21): JSON viewer spaces, a line break and a long wrapping string; XML viewer attribute, text, comment and pretty-printed text on one row; JSON diff tree (equal, changed) and side by side unchanged. The diff tree cuts a long value at 120 characters by design, so its wrap was not seen. The user: "looks good".
